@@ -1055,7 +1055,7 @@
                                         Test Tier 3 LLM fallback system connectivity and performance
                                     </p>
                                 </div>
-                                <button onclick="window.aiGatewayManager && window.aiGatewayManager.testOpenAIConnection ? window.aiGatewayManager.testOpenAIConnection() : alert('AI Gateway not initialized')" 
+                                <button onclick="testOpenAIConnection()" 
                                         id="test-openai-btn"
                                         class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all flex items-center gap-2 text-sm shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
                                     <i class="fas fa-vial"></i>
@@ -3500,211 +3500,7 @@
                  V1 embedded console deleted. Use standalone V2: /admin/llm-learning-v2
                  ======================================================================== -->
 
-            <!-- AI Gateway Sub-Tab Content -->
-            <!-- REMOVED: AI Gateway content section - legacy analytics system deleted -->
-            <!-- <div id="overview-ai-gateway-content" class="overview-subtab-content hidden"> -->
-                
-                <!-- ========================================================================
-                     AI GATEWAY - LLM HEALTH MONITORING & SUGGESTION QUEUE
-                     ======================================================================== -->
-                
-                <div class="mb-6">
-                    <h2 class="text-2xl font-bold text-gray-900 mb-2">
-                        <i class="fas fa-network-wired text-purple-600 mr-2"></i>
-                        AI Gateway - LLM Health & Suggestion System
-                    </h2>
-                    <p class="text-gray-600">
-                        Real-time health monitoring and LLM-generated suggestions to improve template performance and reduce costs.
-                    </p>
-                </div>
-
-                <!-- ==================== SYSTEM HEALTH DASHBOARD ==================== -->
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-                    <div class="flex items-center justify-between mb-6">
-                        <h3 class="text-lg font-bold text-gray-900">
-                            <i class="fas fa-heartbeat text-red-500 mr-2"></i>
-                            System Health Status
-                        </h3>
-                        <div class="flex gap-2">
-                            <button id="ai-gateway-test-openai-btn" onclick="window.aiGatewayManager && window.aiGatewayManager.testOpenAIConnection()" class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded hover:bg-green-700 transition-colors">
-                                <i class="fas fa-vial mr-2"></i>
-                                Run Health Check
-                            </button>
-                            <button onclick="window.aiGatewayManager && window.aiGatewayManager.loadHealthStatus()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors">
-                                <i class="fas fa-heartbeat mr-2"></i>
-                                Refresh Health Status
-                            </button>
-                            <button onclick="window.aiGatewayManager && window.aiGatewayManager.loadSuggestions()" class="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded hover:bg-gray-700 transition-colors">
-                                <i class="fas fa-sync-alt mr-2"></i>
-                                Refresh Suggestions
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Health Cards Grid -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        
-                        <!-- LLM Connection Card -->
-                        <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
-                            <div class="flex items-center justify-between mb-2">
-                                <h4 class="text-sm font-bold text-gray-700">LLM Connection</h4>
-                                <span id="llm-status-indicator" class="w-3 h-3 bg-gray-400 rounded-full animate-pulse"></span>
-                            </div>
-                            <p id="llm-status-text" class="text-gray-600 text-sm mb-1">Checking...</p>
-                            <p id="llm-response-time" class="text-gray-500 text-xs">Response time: --ms</p>
-                        </div>
-
-                        <!-- MongoDB Card -->
-                        <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
-                            <div class="flex items-center justify-between mb-2">
-                                <h4 class="text-sm font-bold text-gray-700">MongoDB</h4>
-                                <span id="db-status-indicator" class="w-3 h-3 bg-gray-400 rounded-full animate-pulse"></span>
-                            </div>
-                            <p id="db-status-text" class="text-gray-600 text-sm mb-1">Checking...</p>
-                            <p id="db-query-time" class="text-gray-500 text-xs">Query time: --ms</p>
-                        </div>
-
-                        <!-- Redis Cache Card -->
-                        <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-200">
-                            <div class="flex items-center justify-between mb-2">
-                                <h4 class="text-sm font-bold text-gray-700">Redis Cache</h4>
-                                <span id="redis-status-indicator" class="w-3 h-3 bg-gray-400 rounded-full animate-pulse"></span>
-                            </div>
-                            <p id="redis-status-text" class="text-gray-600 text-sm mb-1">Checking...</p>
-                            <p id="redis-latency" class="text-gray-500 text-xs">Latency: --ms</p>
-                        </div>
-
-                        <!-- 3-Tier System Card -->
-                        <div class="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-4 border border-yellow-200">
-                            <div class="flex items-center justify-between mb-2">
-                                <h4 class="text-sm font-bold text-gray-700">3-Tier System</h4>
-                                <span id="tier-system-indicator" class="w-3 h-3 bg-gray-400 rounded-full"></span>
-                            </div>
-                            <p id="tier-system-text" class="text-gray-600 text-sm mb-1">Checking...</p>
-                            <p id="tier-system-info" class="text-gray-500 text-xs">Status: Unknown</p>
-                        </div>
-
-                    </div>
-                </div>
-
-                <!-- ==================== HEALTH CHECK LOGS ==================== -->
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-bold text-gray-900">
-                            <i class="fas fa-file-medical-alt text-red-500 mr-2"></i>
-                            📊 Health Check Logs
-                        </h3>
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs text-gray-500">Last 10 tests</span>
-                            <button onclick="window.aiGatewayManager && window.aiGatewayManager.loadHealthLogs()" class="text-blue-600 hover:text-blue-800 text-sm">
-                                <i class="fas fa-sync-alt"></i> Refresh
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Health Logs Table -->
-                    <div id="health-logs-container" class="overflow-x-auto">
-                        <!-- Loading Skeleton -->
-                        <div id="health-logs-loading" class="space-y-2">
-                            <div class="animate-pulse bg-gray-200 rounded h-12"></div>
-                            <div class="animate-pulse bg-gray-200 rounded h-12"></div>
-                            <div class="animate-pulse bg-gray-200 rounded h-12"></div>
-                        </div>
-
-                        <!-- Empty State -->
-                        <div id="health-logs-empty" class="hidden text-center py-8">
-                            <i class="fas fa-inbox text-gray-400 text-4xl mb-3"></i>
-                            <p class="text-gray-600">No health checks run yet</p>
-                            <button onclick="window.aiGatewayManager && window.aiGatewayManager.testOpenAIConnection()" class="mt-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-                                Run First Health Check
-                            </button>
-                        </div>
-
-                        <!-- Logs Table (populated by JS) -->
-                        <table id="health-logs-table" class="hidden min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Systems</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="health-logs-tbody" class="bg-white divide-y divide-gray-200">
-                                <!-- Logs will be populated here by JS -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- ==================== KNOWLEDGE BASE - AI SUGGESTIONS QUEUE ==================== -->
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-                    <div class="flex items-center justify-between mb-6">
-                        <div>
-                            <h3 class="text-lg font-bold text-gray-900 mb-1">
-                                <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
-                                📚 KNOWLEDGE BASE - AI Suggestions Queue
-                            </h3>
-                            <p class="text-sm text-gray-600">LLM-generated improvements from production call analysis</p>
-                        </div>
-                        <!-- Template Filter -->
-                        <div class="flex items-center gap-4">
-                            <div class="flex items-center gap-2">
-                                <label class="text-sm font-medium text-gray-700">Filter by Template:</label>
-                                    <option value="">All Templates</option>
-                                    <!-- Templates will be loaded here -->
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Stats Bar -->
-                    <div id="suggestions-stats-bar" class="flex items-center gap-6 mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <div class="flex items-center gap-2">
-                            <span class="text-purple-600 font-bold text-lg">🟣</span>
-                            <span class="text-sm font-medium text-gray-700"><span id="suggestions-pending-count">0</span> Pending</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-green-600 font-bold text-lg">🟢</span>
-                            <span class="text-sm font-medium text-gray-700"><span id="suggestions-applied-count">0</span> Applied</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-red-600 font-bold text-lg">🔴</span>
-                            <span class="text-sm font-medium text-gray-700"><span id="suggestions-ignored-count">0</span> Ignored</span>
-                        </div>
-                    </div>
-
-                    <!-- Suggestions Container -->
-                    <div id="suggestions-container" class="space-y-4">
-                        <!-- Loading Skeleton (shown initially) -->
-                        <div id="suggestions-loading-skeleton" class="space-y-4">
-                            <div class="animate-pulse bg-gray-200 rounded-lg h-32"></div>
-                            <div class="animate-pulse bg-gray-200 rounded-lg h-32"></div>
-                            <div class="animate-pulse bg-gray-200 rounded-lg h-32"></div>
-                        </div>
-
-                        <!-- Empty State (shown when no suggestions) -->
-                        <div id="suggestions-empty-state" class="hidden text-center py-12">
-                            <i class="fas fa-inbox text-gray-400 text-5xl mb-4"></i>
-                            <p class="text-gray-600 text-lg mb-2">No suggestions yet</p>
-                            <p class="text-gray-500 text-sm">Production call data will appear here once LLM analyzes calls.</p>
-                        </div>
-
-                        <!-- Suggestions will be rendered here by AIGatewayManager.js -->
-                    </div>
-
-                    <!-- Load More Button -->
-                    <div id="suggestions-load-more-container" class="hidden mt-6 text-center">
-                        <button onclick="window.aiGatewayManager && window.aiGatewayManager.loadSuggestions()" class="px-6 py-2 bg-blue-600 text-white font-medium rounded hover:bg-blue-700 transition-colors">
-                            <i class="fas fa-arrow-down mr-2"></i>
-                            Load More Suggestions...
-                        </button>
-                    </div>
-                </div>
-
-            <!-- </div> END AI Gateway (removed) -->
+            <!-- AI Gateway Sub-Tab - REMOVED (2025-12-03) - Legacy orphaned UI deleted -->
 
             <!-- Templates Sub-Tab Content -->
             <div id="overview-templates-content" class="overview-subtab-content hidden">
@@ -20083,11 +19879,57 @@ Timestamp: ${new Date(timestamp).toISOString()}
             console.log('🔄 [DIAGNOSTICS] Refreshing system diagnostics...');
             showNotification('Running system diagnostics...', 'info');
             
-            // Trigger a full health check
-            if (window.aiGatewayManager && window.aiGatewayManager.testOpenAIConnection) {
-                await window.aiGatewayManager.testOpenAIConnection();
-            } else {
-                showNotification('AI Gateway not initialized', 'error');
+            // Trigger OpenAI health check via API
+            await testOpenAIConnection();
+        }
+        
+        // Test OpenAI connection using the admin intelligence API
+        async function testOpenAIConnection() {
+            const btn = document.getElementById('test-openai-btn');
+            const statusContainer = document.getElementById('openai-status-container');
+            const statusContent = document.getElementById('openai-status-content');
+            
+            try {
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+                }
+                
+                const token = getAuthToken();
+                const response = await fetch('/api/admin/intelligence/openai-health', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                console.log('🧠 [OPENAI TEST] Response:', data);
+                
+                if (statusContainer && statusContent) {
+                    statusContainer.classList.remove('hidden');
+                    
+                    const isHealthy = data.status === 'HEALTHY';
+                    statusContent.className = `p-4 rounded-lg ${isHealthy ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`;
+                    statusContent.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <i class="fas ${isHealthy ? 'fa-check-circle text-green-600' : 'fa-exclamation-circle text-red-600'} text-2xl"></i>
+                            <div>
+                                <div class="font-semibold ${isHealthy ? 'text-green-800' : 'text-red-800'}">${data.status}</div>
+                                <div class="text-sm ${isHealthy ? 'text-green-600' : 'text-red-600'}">${data.message || (isHealthy ? 'OpenAI API is operational' : 'Connection failed')}</div>
+                                ${data.responseTime ? `<div class="text-xs text-gray-500 mt-1">Response time: ${data.responseTime}ms</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                showNotification(isHealthy ? '✅ OpenAI connection healthy' : '❌ OpenAI connection failed', isHealthy ? 'success' : 'error');
+                
+            } catch (error) {
+                console.error('🔴 [OPENAI TEST] Error:', error);
+                showNotification('Failed to test OpenAI connection: ' + error.message, 'error');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-vial"></i> Test Connection';
+                }
             }
         }
         
