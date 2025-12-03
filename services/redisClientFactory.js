@@ -26,47 +26,20 @@ const { createClient } = require('redis');
 const logger = require('../utils/logger');
 
 // ============================================================================
-// ENVIRONMENT VALIDATION - BRUTAL LOGGING FOR DEBUGGING
+// ENVIRONMENT VALIDATION - SIMPLE, BRUTAL LOGGING
 // ============================================================================
 const REDIS_URL = process.env.REDIS_URL;
 
-console.log('════════════════════════════════════════════════════════════════════');
-console.log('🔴 [REDIS FACTORY] STARTUP - CHECKING REDIS_URL');
-console.log('════════════════════════════════════════════════════════════════════');
-
 if (!REDIS_URL) {
-  console.error('🔴 [REDIS FACTORY] ❌ REDIS_URL is NOT SET');
-  console.error('🔴 [REDIS FACTORY] ❌ process.env.REDIS_URL =', process.env.REDIS_URL);
-  console.error('🔴 [REDIS FACTORY] ❌ This will cause Redis to be unavailable');
-  console.error('🔴 [REDIS FACTORY] ❌ Set REDIS_URL in Render environment variables');
-  logger.error('🔴 [REDIS FACTORY] REDIS_URL environment variable is missing');
+  console.error('[REDIS] ❌ REDIS_URL is NOT SET – failing hard.');
+  console.error('[REDIS] ❌ Set REDIS_URL in Render environment variables');
+  logger.error('[REDIS] REDIS_URL environment variable is missing');
 } else {
   // Sanitize URL for logging (hide password if present)
   const sanitizedUrl = REDIS_URL.replace(/:([^@]+)@/, ':***@');
-  
-  console.log('🔴 [REDIS FACTORY] ✅ REDIS_URL IS SET');
-  console.log(`🔴 [REDIS FACTORY] URL (sanitized): ${sanitizedUrl}`);
-  console.log(`🔴 [REDIS FACTORY] URL length: ${REDIS_URL.length} chars`);
-  console.log(`🔴 [REDIS FACTORY] Protocol: ${REDIS_URL.startsWith('rediss://') ? 'rediss:// (TLS)' : 'redis://'}`);
-  console.log(`🔴 [REDIS FACTORY] Has .internal: ${REDIS_URL.includes('.internal') ? 'YES ✅' : 'NO ⚠️ (might be wrong!)'}`);
-  console.log(`🔴 [REDIS FACTORY] Has password (@): ${REDIS_URL.includes('@') ? 'YES' : 'NO'}`);
-  
-  // CRITICAL WARNING: Check if URL looks like Render internal format
-  if (!REDIS_URL.includes('.internal') && !REDIS_URL.includes('localhost')) {
-    console.warn('🔴 [REDIS FACTORY] ⚠️ WARNING: URL does not contain .internal');
-    console.warn('🔴 [REDIS FACTORY] ⚠️ Render internal URLs usually look like: redis://red-xxxxx.internal:6379');
-    console.warn('🔴 [REDIS FACTORY] ⚠️ Double-check you copied the URL from Render Redis service page');
-  }
-  
-  logger.info('🔴 [REDIS FACTORY] Redis URL configured', { 
-    urlLength: REDIS_URL.length,
-    protocol: REDIS_URL.startsWith('rediss://') ? 'rediss (TLS)' : 'redis',
-    hasInternal: REDIS_URL.includes('.internal'),
-    hasPassword: REDIS_URL.includes('@')
-  });
+  console.log('[REDIS] ✅ Using REDIS_URL:', sanitizedUrl);
+  logger.info('[REDIS] Redis URL configured', { urlLength: REDIS_URL.length });
 }
-
-console.log('════════════════════════════════════════════════════════════════════');
 
 // ============================================================================
 // IOREDIS CLIENT FACTORY
