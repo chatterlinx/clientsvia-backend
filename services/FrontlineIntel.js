@@ -138,6 +138,19 @@ class FrontlineIntel {
             };
         }
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // VARIABLE SUBSTITUTION: Replace {companyName}, {serviceAreas}, etc.
+        // ═══════════════════════════════════════════════════════════════════════
+        const originalLength = scriptText.length;
+        scriptText = replacePlaceholders(scriptText, company);
+        
+        logger.info('🎯 [FRONTLINE-INTEL] Variable substitution complete', {
+            originalLength,
+            newLength: scriptText.length,
+            companyId: company._id?.toString(),
+            companyName: company.companyName || company.businessName
+        });
+        
         logger.info('🎯 [FRONTLINE-INTEL] ENABLED - Processing call with AI receptionist');
         
         try {
@@ -174,13 +187,16 @@ class FrontlineIntel {
                     useV23Template: true,
                     triageRules: v23PromptData.triageRules,
                     activeScenarios: v23PromptData.activeScenarios,
-                    useMicroPrompt: config.params?.useMicroPrompt || false
+                    useMicroPrompt: config.params?.useMicroPrompt || false,
+                    frontlineScript: scriptText  // Pass the pre-processed script with variables substituted
                 });
                 
                 logger.info(`🚀 [FRONTLINE-INTEL V23] Prompt assembled with ${v23PromptData.triageRules.length} rules, ${v23PromptData.activeScenarios.length} scenarios`);
             } else {
-                // Legacy mode
-                systemPrompt = this.buildSystemPrompt(company);
+                // Legacy mode - pass the pre-processed script
+                systemPrompt = this.buildSystemPrompt(company, {
+                    frontlineScript: scriptText  // Pass the pre-processed script with variables substituted
+                });
             }
             
             // Step 3: Call OpenAI with timeout and retry logic
@@ -352,16 +368,24 @@ class FrontlineIntel {
         }
         
         // ═══════════════════════════════════════════════════════════
-        // LEGACY: Variable replacement for backward compatibility
+        // USE PRE-PROCESSED SCRIPT (variables already substituted)
         // ═══════════════════════════════════════════════════════════
-        let frontlineIntel = company?.aiAgentSettings?.cheatSheet?.frontlineIntel || '';
+        // Priority: options.frontlineScript (pre-processed) > legacy location
+        let frontlineIntel = options.frontlineScript || 
+                            company?.aiAgentSettings?.cheatSheet?.frontlineIntel || '';
         
-        if (frontlineIntel) {
-            logger.info('🔄 [FRONTLINE-INTEL] Replacing variables in Frontline-Intel text...');
-            const originalLength = frontlineIntel.length;
+        // Only apply variable replacement if we got script from legacy location
+        // (options.frontlineScript already has variables substituted)
+        if (!options.frontlineScript && frontlineIntel) {
+            logger.info('🔄 [FRONTLINE-INTEL] Using legacy script, applying variable replacement...');
             frontlineIntel = replacePlaceholders(frontlineIntel, company);
-            logger.info(`✅ [FRONTLINE-INTEL] Variables replaced: ${originalLength} → ${frontlineIntel.length} chars`);
         }
+        
+        logger.info('📜 [FRONTLINE-INTEL] Script ready', {
+            source: options.frontlineScript ? 'CheatSheetRuntimeService' : 'legacy',
+            scriptLength: frontlineIntel.length,
+            preview: frontlineIntel.substring(0, 100) + (frontlineIntel.length > 100 ? '...' : '')
+        });
         
         return `You are the Frontline-Intel for ${companyName}.
 
