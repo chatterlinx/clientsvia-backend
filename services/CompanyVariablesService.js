@@ -163,13 +163,8 @@ async function updateVariablesForCompany(companyId, updates) {
         throw error;
     }
     
-    // Initialize variables Map if it doesn't exist
-    if (!company.aiAgentSettings.variables) {
-        company.aiAgentSettings.variables = new Map();
-    }
-    
-    // Build the variables object for update
-    const currentVars = company.aiAgentSettings?.variables || {};
+    // Build the variables object for update (convert Map to plain object if needed)
+    const currentVars = mapToObj(company.aiAgentSettings?.variables);
     const updatedVars = { ...currentVars };
     
     Object.entries(validation.formatted).forEach(([key, value]) => {
