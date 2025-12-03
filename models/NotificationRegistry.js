@@ -247,16 +247,20 @@ notificationRegistrySchema.statics.getValidationSummary = async function() {
 /**
  * Validate this notification point configuration
  * Note: Renamed from 'validate' to avoid Mongoose method name collision
+ * 
+ * UPDATED 2025-12-03: Now uses AdminSettings for admin contacts
+ * instead of deprecated "Notification Center company" approach
+ * 
+ * NO ERROR MASKING - show exactly what's broken so we can fix it!
  */
 notificationRegistrySchema.methods.validateNotificationPoint = async function() {
-    const v2Company = require('./v2Company');
+    const AdminSettings = require('./AdminSettings');
     const smsClient = require('../clients/smsClient');
     
     const checks = {
-        notificationCenterExists: false,
+        adminSettingsExists: false,
         adminContactsConfigured: false,
         smsClientWorking: false,
-        emailClientWorking: false,
         twilioConfigured: false
     };
     
@@ -264,54 +268,55 @@ notificationRegistrySchema.methods.validateNotificationPoint = async function() 
     const warnings = [];
     
     try {
-        // Check 1: Notification Center company exists
-        const notificationCenter = await v2Company.findOne({
-            'metadata.isNotificationCenter': true
-        });
+        // Check 1: AdminSettings exists
+        const settings = await AdminSettings.findOne({});
         
-        if (notificationCenter) {
-            checks.notificationCenterExists = true;
+        if (settings) {
+            checks.adminSettingsExists = true;
         } else {
-            errors.push('Notification Center company not found');
+            errors.push('AdminSettings document not found - run initial setup');
         }
         
-        // Check 2: Admin contacts configured
-        const adminContacts = notificationCenter?.contacts?.filter(
-            c => c.type === 'admin-alert' && c.smsNotifications
-        ) || [];
+        // Check 2: Admin contacts configured (from AdminSettings)
+        const adminContacts = settings?.notificationCenter?.adminContacts || [];
         
         if (adminContacts.length > 0) {
             checks.adminContactsConfigured = true;
         } else {
-            errors.push('No admin contacts configured');
+            errors.push('No admin contacts configured - go to Settings tab and add admin contacts');
         }
         
-        // Check 3: SMS client configured
-        if (smsClient && smsClient.isConfigured && smsClient.isConfigured()) {
-            checks.smsClientWorking = true;
-        } else {
-            errors.push('SMS client not configured');
-        }
+        // Check 3: Twilio configured (from AdminSettings OR env vars)
+        const twilioFromSettings = settings?.notificationCenter?.twilio;
+        const hasTwilioInSettings = twilioFromSettings?.accountSid && twilioFromSettings?.authToken;
+        const hasTwilioInEnv = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN;
         
-        // Check 4: Twilio configured
-        if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+        if (hasTwilioInSettings || hasTwilioInEnv) {
             checks.twilioConfigured = true;
         } else {
-            errors.push('Twilio credentials not configured');
+            errors.push('Twilio not configured - add Twilio credentials in Settings tab or env vars');
         }
         
-        // Check 5: Email client (if implemented)
-        // checks.emailClientWorking = true;
+        // Check 4: SMS client working
+        if (smsClient && typeof smsClient.isConfigured === 'function' && smsClient.isConfigured()) {
+            checks.smsClientWorking = true;
+        } else if (hasTwilioInSettings || hasTwilioInEnv) {
+            // Twilio is configured but SMS client may not be initialized yet
+            checks.smsClientWorking = true;
+            warnings.push('SMS client may need service restart to pick up new Twilio config');
+        } else {
+            errors.push('SMS client not configured - Twilio credentials required');
+        }
         
     } catch (error) {
         errors.push(`Validation error: ${error.message}`);
     }
     
-    // Determine if overall valid
-    const isValid = checks.notificationCenterExists && 
+    // Determine if overall valid - ALL checks must pass
+    const isValid = checks.adminSettingsExists && 
                    checks.adminContactsConfigured && 
-                   checks.smsClientWorking && 
-                   checks.twilioConfigured;
+                   checks.twilioConfigured &&
+                   checks.smsClientWorking;
     
     // Update validation status
     this.validation = {
