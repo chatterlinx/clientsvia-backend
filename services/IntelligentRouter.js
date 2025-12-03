@@ -649,7 +649,7 @@ class IntelligentRouter {
                 }
                 
                 // 🧠 LEARNING: Extract patterns and teach Tier 1
-                if (this.config.enableLearning && result.tier3Result.patterns.length > 0) {
+                if (this.config.enableLearning && result.tier3Result?.patterns?.length > 0) {
                     logger.info('🧠 [LEARNING] LLM extracted patterns, teaching Tier 1...', {
                         routingId,
                         patternCount: result.tier3Result.patterns.length
