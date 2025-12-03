@@ -1747,9 +1747,10 @@ STEP 3: Check CORS
 ${packet.actions.length ? packet.actions.map((a, i) => `${i + 1}. ${a}`).join('\n') : 'None - all systems operational'}
 
 ═══════════════════════════════════════════════════════════════════════════════
-💾 REDIS STATUS:
+💾 REDIS STATUS: ${packet.redis.healthLevel || 'UNKNOWN'}
 ═══════════════════════════════════════════════════════════════════════════════
 
+Health: ${packet.redis.healthLevel === 'HEALTHY' ? '✅' : packet.redis.healthLevel === 'WARNING' ? '⚠️' : '❌'} ${packet.redis.healthDetail || 'No classification'}
 SET/GET/DEL Test: ${packet.redis.setGetDelOk ? '✅ PASS' : '❌ FAIL'}
 Round Trip Time: ${packet.redis.roundTripMs || 'N/A'}ms
 Memory Usage: ${packet.redis.usedMemoryPercent || 0}% (${packet.redis.usedMemoryBytes || 0} bytes)
