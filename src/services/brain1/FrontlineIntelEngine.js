@@ -279,9 +279,14 @@ async function runTurn({ companyId, callId, text, callState }) {
  */
 async function makeBrain1Decision({ normalizedText, callState, config, emotion, companyId, callId, turn }) {
     
-    // Check for obvious cases first (no LLM needed)
-    const quickDecision = checkQuickDecisions(normalizedText, callState, emotion);
+    // Check for obvious cases first (no LLM needed) - TIER 1 TRIAGE
+    const quickDecision = checkQuickDecisions(normalizedText, callState, emotion, config);
     if (quickDecision) {
+        logger.info('[BRAIN-1] ⚡ Quick decision made - skipping LLM', {
+            action: quickDecision.action,
+            triageTag: quickDecision.triageTag,
+            confidence: quickDecision.confidence
+        });
         return quickDecision;
     }
     
@@ -321,10 +326,10 @@ async function makeBrain1Decision({ normalizedText, callState, config, emotion, 
 /**
  * Check for obvious cases that don't need LLM
  */
-function checkQuickDecisions(text, callState, emotion) {
+function checkQuickDecisions(text, callState, emotion, config) {
     const lowerText = text.toLowerCase();
     
-    // Emergency detection
+    // Emergency detection (highest priority)
     const emergencyPatterns = [
         'gas leak', 'smell gas', 'carbon monoxide', 'fire', 'flooding',
         'sparks', 'smoke', 'emergency', 'help now', 'immediate'
@@ -382,6 +387,77 @@ function checkQuickDecisions(text, callState, emotion) {
             entities: {},
             flags: { isFrustrated: true, wantsHuman: true }
         };
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // TIER 1: TRIAGE CARD MATCHING (INSTANT - NO LLM NEEDED!)
+    // ════════════════════════════════════════════════════════════════════════════
+    const scenarios = config?.scenarios || [];
+    
+    if (scenarios.length > 0) {
+        let bestMatch = null;
+        let bestScore = 0;
+        
+        for (const scenario of scenarios) {
+            if (!scenario.isEnabled) continue;
+            
+            // Check triggers
+            const triggers = scenario.triggers || [];
+            for (const trigger of triggers) {
+                const triggerLower = trigger.toLowerCase();
+                if (lowerText.includes(triggerLower)) {
+                    const score = triggerLower.length / lowerText.length; // Longer match = better
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMatch = scenario;
+                    }
+                }
+            }
+            
+            // Check synonyms too
+            const synonyms = scenario.synonyms || [];
+            for (const synonym of synonyms) {
+                const synLower = synonym.toLowerCase();
+                if (lowerText.includes(synLower)) {
+                    const score = (synLower.length / lowerText.length) * 0.9; // Slightly lower than triggers
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMatch = scenario;
+                    }
+                }
+            }
+        }
+        
+        // If we found a match with reasonable confidence
+        if (bestMatch && bestScore > 0.1) {
+            const routing = bestMatch.routing || 'MESSAGE_ONLY';
+            const action = routing === 'BOOK' || routing === 'SCHEDULE' ? 'BOOK' :
+                          routing === 'TRANSFER' ? 'TRANSFER' :
+                          routing === 'ROUTE_TO_SCENARIO' ? 'ROUTE_TO_SCENARIO' :
+                          'MESSAGE_ONLY';
+            
+            logger.info('[BRAIN-1] ⚡ FAST TRIAGE MATCH - No LLM needed!', {
+                matchedCard: bestMatch.name,
+                score: bestScore.toFixed(2),
+                action,
+                source: bestMatch.source || 'unknown'
+            });
+            
+            return {
+                action,
+                triageTag: bestMatch.name?.toUpperCase()?.replace(/\s+/g, '_') || 'MATCHED',
+                intentTag: bestMatch.category || 'triage',
+                confidence: Math.min(0.9, 0.6 + bestScore),
+                reasoning: `Triage card match: ${bestMatch.name}`,
+                matchedScenario: bestMatch,
+                response: bestMatch.response || null,
+                entities: {},
+                flags: { 
+                    triageMatched: true,
+                    readyToBook: action === 'BOOK'
+                }
+            };
+        }
     }
     
     return null; // No quick decision, needs LLM
