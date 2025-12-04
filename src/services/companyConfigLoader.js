@@ -357,7 +357,7 @@ function buildSynonyms(company) {
 }
 
 /**
- * Build scenario summary from templates
+ * Build scenario summary from templates AND CheatSheet Triage Cards
  * @param {Object} company
  * @param {Array} templates
  * @returns {Array} Scenarios array
@@ -376,7 +376,7 @@ function buildScenarioSummary(company, templates) {
       });
     }
     
-    // Extract scenarios from templates
+    // 1. Extract scenarios from templates (GlobalInstantResponseTemplate)
     templates.forEach(template => {
       if (template.scenarios && Array.isArray(template.scenarios)) {
         template.scenarios.forEach(scenario => {
@@ -391,14 +391,47 @@ function buildScenarioSummary(company, templates) {
             category: scenario.category || 'uncategorized',
             triggers: scenario.triggers || [],
             synonyms: scenario.synonyms || [],
-            isEnabled
+            isEnabled,
+            source: 'template'
           });
         });
       }
     });
     
+    // 2. Extract Triage Cards from CheatSheet (V2 primary source)
+    const cheatSheetConfig = company.cheatSheets?.[0]?.config || 
+                             company.aiAgentSettings?.cheatSheet || 
+                             {};
+    
+    const triageCards = cheatSheetConfig.triageCards || [];
+    
+    if (triageCards.length > 0) {
+      logger.info(`[COMPANY CONFIG LOADER] Loading ${triageCards.length} Triage Cards from CheatSheet`);
+      
+      triageCards.forEach(card => {
+        // Skip if disabled
+        if (card.isEnabled === false || card.enabled === false) return;
+        
+        const cardId = card._id ? card._id.toString() : (card.id || `triage-${card.title || card.name}`);
+        
+        scenarios.push({
+          id: cardId,
+          name: card.title || card.name || 'Unnamed Card',
+          category: card.category || card.scenarioCategory || 'triage',
+          triggers: card.triggers || card.keywords || [],
+          synonyms: card.synonyms || [],
+          response: card.response || card.quickResponse || card.fullResponse || '',
+          routing: card.routing || card.action || 'MESSAGE_ONLY',
+          isEnabled: true,
+          source: 'cheatsheet'
+        });
+      });
+    }
+    
     logger.debug(`[COMPANY CONFIG LOADER] Built scenario summary`, {
       count: scenarios.length,
+      fromTemplates: scenarios.filter(s => s.source === 'template').length,
+      fromCheatSheet: scenarios.filter(s => s.source === 'cheatsheet').length,
       enabled: scenarios.filter(s => s.isEnabled).length
     });
     
