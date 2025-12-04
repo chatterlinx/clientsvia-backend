@@ -486,72 +486,97 @@ class V2AIAgentRuntime {
             //        OR: company.agentSettings.brain1Enabled
             // ═════════════════════════════════════════════════════════════════
             
-            const adminSettings = await AdminSettings.findOne({}).lean();
-            // Brain-1 / LLM-0 is enabled if:
-            // 1. Global admin setting enables it
-            // 2. Company-specific setting enables it
-            // 3. Company uses LLM-0 Enhanced orchestration mode (default for all companies)
-            const orchestrationMode = company?.aiAgentSettings?.orchestrationMode || 'LLM0_ENHANCED';
-            const brain1Enabled = adminSettings?.globalProductionIntelligence?.brain1Enabled === true ||
-                                  company?.agentSettings?.brain1Enabled === true ||
-                                  orchestrationMode.includes('LLM0');
+            // ═════════════════════════════════════════════════════════════════
+            // 🚨 SINGLE VOICE ARCHITECTURE - BRAIN-1 IS ALWAYS ENABLED
+            // ═════════════════════════════════════════════════════════════════
+            // Brain-1 is the MANDATORY GATEWAY. Legacy path is DEAD.
+            // This ensures single voice through ResponseConstructor.
+            // 
+            // DO NOT add fallback to legacy path here.
+            // If Brain-1 fails, return error through ResponseConstructor.
+            // ═════════════════════════════════════════════════════════════════
+            const { buildSimpleResponse } = require('./ResponseConstructor');
             
-            logger.debug('[V2 AGENT] Brain-1 check', {
+            logger.info('[V2 AGENT] 🧠 Using Brain-1 Runtime (MANDATORY - single voice architecture)', {
                 companyId: companyID,
-                orchestrationMode,
-                brain1Enabled,
-                globalSetting: adminSettings?.globalProductionIntelligence?.brain1Enabled,
-                companySetting: company?.agentSettings?.brain1Enabled
+                callId,
+                turn: (callState?.turnCount || 0) + 1
             });
             
-            if (brain1Enabled) {
-                logger.info('[V2 AGENT] 🧠 Using Brain-1 Runtime (new architecture)', {
+            try {
+                const brain1Result = await brain1ProcessTurn(
+                    companyID,
+                    callId,
+                    userInput,
+                    callState
+                );
+                
+                logger.info('[V2 AGENT] ✅ Brain-1 turn complete', {
                     companyId: companyID,
                     callId,
-                    turn: (callState?.turnCount || 0) + 1
+                    action: brain1Result.action,
+                    shouldTransfer: brain1Result.shouldTransfer,
+                    shouldHangup: brain1Result.shouldHangup,
+                    responseLength: brain1Result.text?.length
                 });
                 
-                try {
-                    const brain1Result = await brain1ProcessTurn(
-                        companyID,
-                        callId,
-                        userInput,
-                        callState
-                    );
-                    
-                    logger.info('[V2 AGENT] ✅ Brain-1 turn complete', {
-                        companyId: companyID,
-                        callId,
-                        action: brain1Result.action,
-                        shouldTransfer: brain1Result.shouldTransfer,
-                        shouldHangup: brain1Result.shouldHangup,
-                        responseLength: brain1Result.text?.length
-                    });
-                    
-                    // Return Brain-1 result directly
-                    return {
-                        text: brain1Result.text,
-                        response: brain1Result.text,
-                        action: brain1Result.action,
-                        shouldTransfer: brain1Result.shouldTransfer,
-                        shouldHangup: brain1Result.shouldHangup,
-                        callState: brain1Result.callState
-                    };
-                    
-                } catch (brain1Error) {
-                    logger.error('[V2 AGENT] ❌ Brain-1 failed, falling back to legacy', {
-                        companyId: companyID,
-                        callId,
-                        error: brain1Error.message
-                    });
-                    // Fall through to legacy path
-                }
-            } else {
-                logger.info('[V2 AGENT] 🧠 Using legacy orchestration (Brain-1 disabled)', {
+                // Return Brain-1 result directly (already built via ResponseConstructor)
+                return {
+                    text: brain1Result.text,
+                    response: brain1Result.text,
+                    ssml: brain1Result.ssml,
+                    action: brain1Result.action,
+                    shouldTransfer: brain1Result.shouldTransfer,
+                    shouldHangup: brain1Result.shouldHangup,
+                    callState: brain1Result.callState
+                };
+                
+            } catch (brain1Error) {
+                // ═════════════════════════════════════════════════════════════════
+                // 🚨 BRAIN-1 FAILED - Return error via ResponseConstructor
+                // DO NOT fall back to legacy path!
+                // ═════════════════════════════════════════════════════════════════
+                logger.error('[V2 AGENT] ❌ Brain-1 failed - returning error response (NO LEGACY FALLBACK)', {
                     companyId: companyID,
-                    callId
+                    callId,
+                    error: brain1Error.message,
+                    stack: brain1Error.stack
                 });
+                
+                const errorResponse = buildSimpleResponse({
+                    context: { callId, companyId: companyID, turnNumber: (callState?.turnCount || 0) + 1 },
+                    text: "I'm here to help. Could you please tell me more about what you need?",
+                    source: 'brain1.error.fallback'
+                });
+                
+                return {
+                    text: errorResponse.text,
+                    response: errorResponse.text,
+                    ssml: errorResponse.ssml,
+                    action: 'continue',
+                    shouldTransfer: false,
+                    shouldHangup: false,
+                    callState: {
+                        ...callState,
+                        turnCount: (callState?.turnCount || 0) + 1,
+                        lastError: brain1Error.message
+                    }
+                };
             }
+            
+            // ═════════════════════════════════════════════════════════════════
+            // 🚨 LEGACY PATH BELOW IS DEAD CODE - KEPT FOR REFERENCE ONLY
+            // ═════════════════════════════════════════════════════════════════
+            // The code below this point should NEVER execute.
+            // It remains for reference during transition period only.
+            // TODO: Remove after confirming Brain-1 is stable in production.
+            // ═════════════════════════════════════════════════════════════════
+            
+            /* LEGACY PATH - DEAD CODE - DO NOT EXECUTE
+            logger.warn('[V2 AGENT] ⚠️ LEGACY PATH REACHED - This should not happen!', {
+                companyId: companyID,
+                callId
+            });
             
             // ═════════════════════════════════════════════════════════════════
             // 🎯 V22 TRIAGE: QUICK RULES (Brain-1 Tier-0 pre-check)
@@ -927,6 +952,7 @@ class V2AIAgentRuntime {
                 cheatSheetMeta,
                 behaviorMeta // V23: Behavior Engine metadata (tone, styleInstructions, signals)
             };
+            END OF LEGACY PATH - DEAD CODE */
 
         } catch (error) {
             // Enhanced error reporting with company context

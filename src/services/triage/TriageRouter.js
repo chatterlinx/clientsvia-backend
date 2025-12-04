@@ -62,6 +62,7 @@ async function route(decision, company) {
             matchedCardName: 'EMERGENCY_OVERRIDE',
             scenarioHint: null,
             transferConfig: { type: 'emergency', priority: 'high' },
+            openingLine: null, // Emergency = go straight to transfer
             reason: 'Emergency flag detected - immediate transfer'
         };
     }
@@ -87,6 +88,7 @@ async function route(decision, company) {
             matchedCardName: null,
             scenarioHint: decision.triageTag,
             transferConfig: decision.action === 'TRANSFER' ? { type: 'standard' } : null,
+            openingLine: null, // Direct action = no triage card opening line
             reason: `Direct action mapping: ${decision.action}`
         };
     }
@@ -101,11 +103,20 @@ async function route(decision, company) {
             if (triageCard) {
                 const cardRoute = cardActionToRoute(triageCard.quickRuleConfig?.action);
                 
+                // ════════════════════════════════════════════════════════════
+                // openingLine is metadata ONLY - spoken by ResponseConstructor
+                // on first turn of this scenario. NEVER spoken directly here.
+                // ════════════════════════════════════════════════════════════
+                const openingLine = triageCard.frontlinePlaybook?.openingLine ||
+                                    triageCard.quickRuleConfig?.acknowledgment ||
+                                    null;
+                
                 logger.info('[TRIAGE] Matched triage card', {
                     companyId,
                     cardName: triageCard.displayName || triageCard.triageLabel,
                     cardAction: triageCard.quickRuleConfig?.action,
-                    route: cardRoute
+                    route: cardRoute,
+                    hasOpeningLine: !!openingLine
                 });
                 
                 return {
@@ -114,6 +125,7 @@ async function route(decision, company) {
                     matchedCardName: triageCard.displayName || triageCard.triageLabel,
                     scenarioHint: triageCard.linkedScenario?.scenarioKey || decision.triageTag,
                     transferConfig: cardRoute === 'TRANSFER' ? triageCard.actionPlaybooks?.escalateToHuman : null,
+                    openingLine, // Metadata for ResponseConstructor - NEVER spoken directly
                     reason: `Matched triage card: ${triageCard.displayName || triageCard.triageLabel}`
                 };
             }
@@ -135,6 +147,7 @@ async function route(decision, company) {
             matchedCardName: null,
             scenarioHint: decision.triageTag,
             transferConfig: null,
+            openingLine: null, // No card match = no opening line
             reason: 'Default routing to scenario engine for knowledge search'
         };
     }
@@ -148,6 +161,7 @@ async function route(decision, company) {
         matchedCardName: null,
         scenarioHint: null,
         transferConfig: null,
+        openingLine: null,
         reason: 'Fallback to message only'
     };
 }

@@ -32,6 +32,12 @@ const { route } = require('../triage/TriageRouter');
 const AIBrain3tierllm = require('../../../services/AIBrain3tierllm');
 const Company = require('../../../models/v2Company');
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SINGLE VOICE ARCHITECTURE - ResponseConstructor is THE ONLY SPEAKER
+// ═══════════════════════════════════════════════════════════════════════════
+const { buildFinalResponse, buildSimpleResponse } = require('../../../services/ResponseConstructor');
+const { analyzeBehavior, getDefaultBehavior } = require('../../../services/LLM0BehaviorAnalyzer');
+
 /**
  * ============================================================================
  * MAIN ENTRYPOINT: Process a complete turn through the brain architecture
@@ -73,6 +79,42 @@ async function processTurn(companyId, callId, userInput, callState) {
         }
         
         // ====================================================================
+        // STEP 2.5: LLM-0 BEHAVIOR ANALYSIS (Parallel with Triage in future)
+        // ====================================================================
+        // LLM-0 analyzes caller mood, tone, and suggests fillers.
+        // It NEVER generates business content - that's Brain-2's job.
+        // ====================================================================
+        const behaviorStart = Date.now();
+        let llm0Behavior;
+        try {
+            llm0Behavior = await analyzeBehavior({
+                context: {
+                    callId,
+                    companyId,
+                    turnNumber: (callState?.turnCount || 0) + 1,
+                    callerUtterance: userInput
+                },
+                previousBehavior: callState?.llm0Behavior || null
+            });
+            trace.llm0 = {
+                analyzed: true,
+                mood: llm0Behavior.mood.current,
+                tone: llm0Behavior.style.tone,
+                suggestedFiller: llm0Behavior.suggestedFiller,
+                analysisMs: Date.now() - behaviorStart
+            };
+        } catch (behaviorErr) {
+            logger.warn('[BRAIN-1 RUNTIME] LLM-0 behavior analysis failed (using defaults)', {
+                companyId,
+                callId,
+                error: behaviorErr.message
+            });
+            llm0Behavior = getDefaultBehavior();
+            trace.llm0 = { analyzed: false, error: behaviorErr.message };
+        }
+        trace.performance.llm0Ms = Date.now() - behaviorStart;
+        
+        // ====================================================================
         // STEP 3: ROUTE THROUGH TRIAGE
         // ====================================================================
         const triageStart = Date.now();
@@ -97,13 +139,13 @@ async function processTurn(companyId, callId, userInput, callState) {
         });
         
         // ====================================================================
-        // STEP 4: EXECUTE BASED ON ROUTE
+        // STEP 4: EXECUTE BASED ON ROUTE (Handlers return content, not final text)
         // ====================================================================
-        let result;
+        let handlerResult;
         
         switch (triageResult.route) {
             case 'SCENARIO_ENGINE':
-                result = await handleScenarioEngine({
+                handlerResult = await handleScenarioEngine({
                     company,
                     callState: updatedCallState,
                     userInput,
@@ -114,7 +156,7 @@ async function processTurn(companyId, callId, userInput, callState) {
                 break;
                 
             case 'TRANSFER':
-                result = await handleTransfer({
+                handlerResult = await handleTransfer({
                     company,
                     callState: updatedCallState,
                     decision,
@@ -123,7 +165,7 @@ async function processTurn(companyId, callId, userInput, callState) {
                 break;
                 
             case 'BOOKING_FLOW':
-                result = await handleBooking({
+                handlerResult = await handleBooking({
                     company,
                     callState: updatedCallState,
                     decision
@@ -131,14 +173,14 @@ async function processTurn(companyId, callId, userInput, callState) {
                 break;
                 
             case 'END_CALL':
-                result = handleEndCall({
+                handlerResult = handleEndCall({
                     decision,
                     callState: updatedCallState
                 });
                 break;
             
             case 'VENDOR_HANDLING':
-                result = await handleVendorCall({
+                handlerResult = await handleVendorCall({
                     company,
                     callState: updatedCallState,
                     decision,
@@ -148,7 +190,7 @@ async function processTurn(companyId, callId, userInput, callState) {
                 
             case 'MESSAGE_ONLY':
             default:
-                result = handleMessageOnly({
+                handlerResult = handleMessageOnly({
                     decision,
                     callState: updatedCallState
                 });
@@ -156,12 +198,61 @@ async function processTurn(companyId, callId, userInput, callState) {
         }
         
         // ====================================================================
-        // STEP 5: APPLY GUARDRAILS
+        // STEP 5: BUILD FINAL RESPONSE VIA RESPONSECONSTRUCTOR
+        // ====================================================================
+        // ResponseConstructor is THE ONLY place that builds spoken text.
+        // It combines: LLM-0 filler + Triage openingLine + Handler content
+        // ====================================================================
+        const isFirstTurnForScenario = !callState?.currentScenarioId || 
+            callState.currentScenarioId !== handlerResult.scenarioId;
+        
+        const finalResponse = buildFinalResponse({
+            context: {
+                callId,
+                companyId,
+                turnNumber: (callState?.turnCount || 0) + 1
+            },
+            llm0Behavior,
+            triage: triageResult,
+            scenario: {
+                response: {
+                    full: handlerResult.text
+                },
+                scenarioId: handlerResult.scenarioId || triageResult.matchedCardId,
+                scenarioName: handlerResult.scenarioName || triageResult.matchedCardName
+            },
+            isFirstTurnForScenario
+        });
+        
+        // Build result with ResponseConstructor output
+        const result = {
+            text: finalResponse.text,
+            ssml: finalResponse.ssml,
+            action: handlerResult.action,
+            shouldTransfer: handlerResult.shouldTransfer,
+            shouldHangup: handlerResult.shouldHangup,
+            callState: {
+                ...handlerResult.callState,
+                llm0Behavior,
+                currentScenarioId: handlerResult.scenarioId || triageResult.matchedCardId
+            }
+        };
+        
+        logger.info('[BRAIN-1 RUNTIME] 🎯 Response built via ResponseConstructor', {
+            companyId,
+            callId,
+            textLength: result.text.length,
+            sources: finalResponse.meta.sources,
+            constructionMs: finalResponse.meta.constructionMs
+        });
+        
+        // ====================================================================
+        // STEP 5.5: APPLY GUARDRAILS TO FINAL TEXT
         // ====================================================================
         result.text = applyGuardrails(result.text, company);
         
         // ====================================================================
-        // STEP 5.5: VARIABLE SUBSTITUTION (Call Center V2)
+        // STEP 5.6: VARIABLE SUBSTITUTION (Call Center V2)
         // ====================================================================
         // Replace {customerName}, {companyName}, etc. with actual values
         // Combines: company placeholders + customer context variables
@@ -252,9 +343,16 @@ async function processTurn(companyId, callId, userInput, callState) {
             stack: error.stack
         });
         
-        // Emergency fallback
-        return {
+        // Emergency fallback via ResponseConstructor
+        const errorResponse = buildSimpleResponse({
+            context: { callId, companyId, turnNumber: (callState?.turnCount || 0) + 1 },
             text: "I'm here to help. Could you please tell me more about what you need?",
+            source: 'brain1.error.fallback'
+        });
+        
+        return {
+            text: errorResponse.text,
+            ssml: errorResponse.ssml,
             action: 'continue',
             shouldTransfer: false,
             shouldHangup: false,
@@ -320,12 +418,14 @@ async function handleScenarioEngine({ company, callState, userInput, decision, t
             responseLength: brain2Result.response?.length
         });
         
-        // Use Brain-2 response
+        // Use Brain-2 response - this will be passed to ResponseConstructor
         const responseText = brain2Result.response || 
             "I can help you with that. Could you tell me a bit more about what's happening?";
         
         return {
             text: responseText,
+            scenarioId: brain2Result.metadata?.scenarioId || null,
+            scenarioName: brain2Result.metadata?.scenarioName || null,
             action: 'continue',
             shouldTransfer: false,
             shouldHangup: false,
