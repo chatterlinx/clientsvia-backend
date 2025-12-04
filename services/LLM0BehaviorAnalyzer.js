@@ -26,9 +26,32 @@
  */
 
 const logger = require('../utils/logger');
+const openaiClient = require('../config/openai');
 
-// Will be wired to OpenAI later
-// const openaiClient = require('../config/openai');
+// Feature flag: Use LLM for behavior analysis (can be toggled)
+const USE_LLM_BEHAVIOR = process.env.LLM0_BEHAVIOR_ENABLED !== 'false';
+
+// Ultra-tight prompt for behavior analysis - optimized for speed
+const BEHAVIOR_SYSTEM_PROMPT = `You are a behavior analyzer for a phone receptionist. Analyze the caller's utterance and return ONLY a JSON object.
+
+RULES:
+- NEVER answer questions about services, pricing, or scheduling
+- ONLY analyze mood, tone, and suggest response style
+- Keep response under 100 tokens
+- Return valid JSON only
+
+OUTPUT FORMAT:
+{
+  "mood": "neutral|frustrated|confused|happy|anxious",
+  "tone": "professional|warm|calming|direct",
+  "pace": "normal|slow|fast",
+  "flags": {
+    "isSmallTalk": false,
+    "isConfused": false,
+    "isUrgent": false
+  },
+  "filler": "Okay,|Alright,|I understand.|null"
+}`;
 
 /**
  * @typedef {Object} LLM0Behavior
@@ -63,28 +86,52 @@ const logger = require('../utils/logger');
  */
 async function analyzeBehavior({ context, previousBehavior }) {
     const startTime = Date.now();
+    const utterance = (context?.callerUtterance || '').trim();
     
     logger.debug('[LLM-0 BEHAVIOR] Analyzing caller behavior', {
         callId: context?.callId,
         turnNumber: context?.turnNumber,
-        utteranceLength: context?.callerUtterance?.length || 0,
-        hasPreviousBehavior: !!previousBehavior
+        utteranceLength: utterance.length,
+        hasPreviousBehavior: !!previousBehavior,
+        useLLM: USE_LLM_BEHAVIOR
     });
     
     // ========================================================================
-    // STUB IMPLEMENTATION
+    // HYBRID APPROACH: Rules first, LLM for edge cases
     // ========================================================================
-    // For now, return a static sensible default.
-    // Later, this will call GPT-mini with an ultra-tight prompt.
-    // 
-    // The stub ensures the contract is stable and ResponseConstructor
-    // can be wired without waiting for the full LLM-0 implementation.
+    // 1. Try fast rule-based detection first (0ms)
+    // 2. If rules detect clear signal, use that (skip LLM)
+    // 3. If ambiguous, call GPT-mini for nuanced analysis (50-150ms)
     // ========================================================================
     
-    const utterance = (context?.callerUtterance || '').toLowerCase();
+    const ruleBehavior = detectBehaviorFromText(utterance.toLowerCase(), previousBehavior);
     
-    // Simple rule-based analysis for stub (will be replaced with LLM)
-    const behavior = detectBehaviorFromText(utterance, previousBehavior);
+    // Check if rules detected a clear signal (non-neutral mood or flags set)
+    const rulesFoundSignal = ruleBehavior.mood.current !== 'neutral' ||
+                             ruleBehavior.flags.isSmallTalk ||
+                             ruleBehavior.flags.isConfused;
+    
+    let behavior;
+    let source = 'rules';
+    
+    if (rulesFoundSignal || !USE_LLM_BEHAVIOR) {
+        // Rules found a signal OR LLM disabled - use rule-based result
+        behavior = ruleBehavior;
+        source = rulesFoundSignal ? 'rules' : 'rules-fallback';
+    } else {
+        // Ambiguous - call LLM for nuanced analysis
+        try {
+            behavior = await callLLMBehaviorAnalysis(utterance, previousBehavior, context);
+            source = 'llm';
+        } catch (llmError) {
+            logger.warn('[LLM-0 BEHAVIOR] LLM call failed, using rules fallback', {
+                callId: context?.callId,
+                error: llmError.message
+            });
+            behavior = ruleBehavior;
+            source = 'rules-fallback';
+        }
+    }
     
     const analysisMs = Date.now() - startTime;
     
@@ -94,10 +141,94 @@ async function analyzeBehavior({ context, previousBehavior }) {
         mood: behavior.mood.current,
         tone: behavior.style.tone,
         filler: behavior.suggestedFiller,
+        source,
         analysisMs
     });
     
     return behavior;
+}
+
+/**
+ * Call GPT-mini for nuanced behavior analysis
+ * Ultra-fast, low-token call for edge cases
+ * 
+ * @param {string} utterance - Caller utterance
+ * @param {LLM0Behavior|null} previousBehavior - Previous behavior
+ * @param {Object} context - Call context
+ * @returns {Promise<LLM0Behavior>}
+ */
+async function callLLMBehaviorAnalysis(utterance, previousBehavior, context) {
+    const startTime = Date.now();
+    
+    // Build context hint from previous behavior
+    let contextHint = '';
+    if (previousBehavior) {
+        contextHint = `\nPrevious mood: ${previousBehavior.mood?.current || 'neutral'}`;
+    }
+    
+    const userPrompt = `Caller said: "${utterance}"${contextHint}\n\nAnalyze behavior:`;
+    
+    const response = await openaiClient.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+            { role: 'system', content: BEHAVIOR_SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt }
+        ],
+        max_tokens: 100,
+        temperature: 0.1, // Low temp for consistent behavior detection
+        response_format: { type: 'json_object' }
+    });
+    
+    const llmMs = Date.now() - startTime;
+    
+    logger.debug('[LLM-0 BEHAVIOR] LLM response', {
+        callId: context?.callId,
+        llmMs,
+        tokens: response.usage?.total_tokens || 0
+    });
+    
+    // Parse LLM response
+    const content = response.choices[0]?.message?.content || '{}';
+    const parsed = JSON.parse(content);
+    
+    // Map LLM response to our standard behavior object
+    return {
+        personality: {
+            type: mapMoodToPersonality(parsed.mood),
+            confidence: 0.85
+        },
+        mood: {
+            current: parsed.mood || 'neutral',
+            trend: previousBehavior?.mood?.current === parsed.mood ? 'stable' :
+                   parsed.mood === 'frustrated' ? 'declining' : 'stable'
+        },
+        style: {
+            tone: parsed.tone || 'professional',
+            pace: parsed.pace || 'normal',
+            formality: 'professional'
+        },
+        flags: {
+            isSmallTalk: parsed.flags?.isSmallTalk || false,
+            isConfused: parsed.flags?.isConfused || false,
+            needsRedirect: false,
+            isInterrupting: false
+        },
+        suggestedFiller: parsed.filler === 'null' ? null : (parsed.filler || 'Okay,')
+    };
+}
+
+/**
+ * Map mood to personality type
+ */
+function mapMoodToPersonality(mood) {
+    const moodMap = {
+        'frustrated': 'frustrated',
+        'confused': 'confused',
+        'happy': 'friendly',
+        'anxious': 'business',
+        'neutral': 'neutral'
+    };
+    return moodMap[mood] || 'neutral';
 }
 
 /**
@@ -250,6 +381,8 @@ function getDefaultBehavior() {
 module.exports = {
     analyzeBehavior,
     getDefaultBehavior,
-    detectBehaviorFromText // Exported for testing
+    detectBehaviorFromText, // Exported for testing
+    callLLMBehaviorAnalysis, // Exported for direct LLM calls if needed
+    USE_LLM_BEHAVIOR // Exported for diagnostics
 };
 

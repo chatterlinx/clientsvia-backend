@@ -49,6 +49,27 @@ const getModels = () => {
 
 class FrontlineIntel {
     /**
+     * ═══════════════════════════════════════════════════════════════════════════
+     * ⚠️ LEGACY SERVICE - DO NOT USE FOR NEW CODE
+     * ═══════════════════════════════════════════════════════════════════════════
+     * 
+     * This service is DEPRECATED as of the Single Voice Architecture refactor.
+     * 
+     * NEW ARCHITECTURE:
+     * - Brain-1: src/services/brain1/FrontlineIntelEngine.js (decision only)
+     * - Triage: src/services/triage/TriageRouter.js (routing metadata)
+     * - Response: services/ResponseConstructor.js (THE ONLY VOICE)
+     * 
+     * This legacy service is kept for:
+     * - Backward compatibility during transition
+     * - Fallback if Brain-1 is explicitly disabled
+     * - Reference for migration
+     * 
+     * DO NOT call this service directly for Twilio calls.
+     * All calls should go through v2AIAgentRuntime → Brain1Runtime.
+     * 
+     * ═══════════════════════════════════════════════════════════════════════════
+     * 
      * Process caller input through Frontline-Intel
      * 
      * @param {string} userInput - Raw caller speech (from Twilio)
@@ -56,9 +77,20 @@ class FrontlineIntel {
      * @param {string} callerPhone - Caller's phone number
      * @param {Object} options - Processing options
      * @returns {Promise<Object>} Frontline-Intel output
+     * @deprecated Use Brain1Runtime.processTurn() instead
      */
     static async run(userInput, company, callerPhone, options = {}) {
         const startTime = Date.now();
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // DEPRECATION WARNING
+        // ═══════════════════════════════════════════════════════════════════════════
+        logger.warn('[FRONTLINE-INTEL] ⚠️ DEPRECATED SERVICE CALLED', {
+            companyId: company?._id?.toString() || 'unknown',
+            caller: callerPhone,
+            inputLength: userInput?.length || 0,
+            note: 'This service is deprecated. Use Brain1Runtime.processTurn() instead.'
+        });
         
         // Get config from company's callFlowConfig, or use default (enabled: true)
         const defaultCallFlowConfig = require('../config/defaultCallFlowConfig');

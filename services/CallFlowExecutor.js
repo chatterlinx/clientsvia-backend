@@ -36,7 +36,19 @@ class CallFlowExecutor {
     
     /**
      * ═════════════════════════════════════════════════════════════════════
-     * EXECUTE CALL FLOW
+     * ⚠️ LEGACY EXECUTOR - DO NOT USE FOR NEW CODE
+     * ═════════════════════════════════════════════════════════════════════
+     * 
+     * This executor is DEPRECATED as of the Single Voice Architecture refactor.
+     * 
+     * NEW ARCHITECTURE:
+     * - All calls go through: v2AIAgentRuntime → Brain1Runtime
+     * - Response built by: ResponseConstructor.js (THE ONLY VOICE)
+     * 
+     * This legacy executor is kept for backward compatibility only.
+     * The v2AIAgentRuntime.js has been updated to skip this executor
+     * and always use Brain-1 path.
+     * 
      * ═════════════════════════════════════════════════════════════════════
      * Execute steps in order defined by callFlowConfig
      * 
@@ -48,9 +60,19 @@ class CallFlowExecutor {
      * @param {string} params.companyID - Company ID
      * @param {Function} params.generateV2Response - Response generator function
      * @returns {Object} Execution result
+     * @deprecated Use Brain1Runtime.processTurn() instead
      */
     static async execute(params) {
         const { userInput, company, callState, callId, companyID, generateV2Response } = params;
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // DEPRECATION WARNING
+        // ═══════════════════════════════════════════════════════════════════════════
+        logger.warn('[CALL FLOW EXECUTOR] ⚠️ DEPRECATED EXECUTOR CALLED', {
+            companyId: companyID,
+            callId,
+            note: 'This executor is deprecated. Use Brain1Runtime.processTurn() instead.'
+        });
         
         // Load call flow configuration
         const callFlowConfig = company.aiAgentSettings?.callFlowConfig || defaultCallFlowConfig;

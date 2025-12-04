@@ -79,63 +79,107 @@ async function processTurn(companyId, callId, userInput, callState) {
         }
         
         // ====================================================================
-        // STEP 2.5: LLM-0 BEHAVIOR ANALYSIS (Parallel with Triage in future)
+        // STEP 2.5 + 3: PARALLEL EXECUTION - Behavior + Triage simultaneously
         // ====================================================================
-        // LLM-0 analyzes caller mood, tone, and suggests fillers.
-        // It NEVER generates business content - that's Brain-2's job.
+        // CRITICAL OPTIMIZATION: These two operations don't depend on each other
+        // - LLM-0 Behavior: analyzes caller mood (50-150ms if LLM, 0ms if rules)
+        // - Triage Router: routes decision to handler (1-5ms typically)
+        // 
+        // Running in parallel saves 50-150ms per turn!
         // ====================================================================
-        const behaviorStart = Date.now();
-        let llm0Behavior;
-        try {
-            llm0Behavior = await analyzeBehavior({
-                context: {
-                    callId,
-                    companyId,
-                    turnNumber: (callState?.turnCount || 0) + 1,
-                    callerUtterance: userInput
-                },
-                previousBehavior: callState?.llm0Behavior || null
-            });
-            trace.llm0 = {
-                analyzed: true,
-                mood: llm0Behavior.mood.current,
-                tone: llm0Behavior.style.tone,
-                suggestedFiller: llm0Behavior.suggestedFiller,
-                analysisMs: Date.now() - behaviorStart
-            };
-        } catch (behaviorErr) {
-            logger.warn('[BRAIN-1 RUNTIME] LLM-0 behavior analysis failed (using defaults)', {
-                companyId,
-                callId,
-                error: behaviorErr.message
-            });
-            llm0Behavior = getDefaultBehavior();
-            trace.llm0 = { analyzed: false, error: behaviorErr.message };
-        }
-        trace.performance.llm0Ms = Date.now() - behaviorStart;
+        const parallelStart = Date.now();
         
-        // ====================================================================
-        // STEP 3: ROUTE THROUGH TRIAGE
-        // ====================================================================
-        const triageStart = Date.now();
-        const triageResult = await route(decision, company);
-        const triageMs = Date.now() - triageStart;
+        // Wrap behavior analysis in a function that handles errors
+        const behaviorPromise = (async () => {
+            const behaviorStart = Date.now();
+            try {
+                const result = await analyzeBehavior({
+                    context: {
+                        callId,
+                        companyId,
+                        turnNumber: (callState?.turnCount || 0) + 1,
+                        callerUtterance: userInput
+                    },
+                    previousBehavior: callState?.llm0Behavior || null
+                });
+                return { 
+                    behavior: result, 
+                    success: true, 
+                    ms: Date.now() - behaviorStart 
+                };
+            } catch (err) {
+                logger.warn('[BRAIN-1 RUNTIME] LLM-0 behavior analysis failed (using defaults)', {
+                    companyId,
+                    callId,
+                    error: err.message
+                });
+                return { 
+                    behavior: getDefaultBehavior(), 
+                    success: false, 
+                    error: err.message,
+                    ms: Date.now() - behaviorStart 
+                };
+            }
+        })();
+        
+        // Wrap triage in a function
+        const triagePromise = (async () => {
+            const triageStart = Date.now();
+            const result = await route(decision, company);
+            return { 
+                triage: result, 
+                ms: Date.now() - triageStart 
+            };
+        })();
+        
+        // Execute both in parallel
+        const [behaviorResult, triageResultData] = await Promise.all([
+            behaviorPromise,
+            triagePromise
+        ]);
+        
+        const parallelMs = Date.now() - parallelStart;
+        
+        // Extract results
+        const llm0Behavior = behaviorResult.behavior;
+        const triageResult = triageResultData.triage;
+        
+        // Update trace with behavior result
+        trace.llm0 = behaviorResult.success ? {
+            analyzed: true,
+            mood: llm0Behavior.mood.current,
+            tone: llm0Behavior.style.tone,
+            suggestedFiller: llm0Behavior.suggestedFiller,
+            analysisMs: behaviorResult.ms
+        } : {
+            analyzed: false,
+            error: behaviorResult.error,
+            analysisMs: behaviorResult.ms
+        };
+        trace.performance.llm0Ms = behaviorResult.ms;
         
         // Update trace with triage result
         trace.triage = {
             route: triageResult.route,
             matchedCardId: triageResult.matchedCardId,
             matchedCardName: triageResult.matchedCardName,
+            openingLine: triageResult.openingLine || null,
             reason: triageResult.reason
         };
-        trace.performance.triageMs = triageMs;
+        trace.performance.triageMs = triageResultData.ms;
+        trace.performance.parallelMs = parallelMs;
         
-        logger.info('[BRAIN-1 RUNTIME] Triage result', {
+        logger.info('[BRAIN-1 RUNTIME] ⚡ Parallel execution complete', {
             companyId,
             callId,
+            behaviorMs: behaviorResult.ms,
+            triageMs: triageResultData.ms,
+            parallelMs,
+            savedMs: Math.max(behaviorResult.ms, triageResultData.ms) < parallelMs ? 0 : 
+                     behaviorResult.ms + triageResultData.ms - parallelMs,
             route: triageResult.route,
             matchedCard: triageResult.matchedCardName,
-            reason: triageResult.reason
+            mood: llm0Behavior.mood.current
         });
         
         // ====================================================================

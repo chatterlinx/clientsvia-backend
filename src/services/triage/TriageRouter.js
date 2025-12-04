@@ -104,19 +104,25 @@ async function route(decision, company) {
                 const cardRoute = cardActionToRoute(triageCard.quickRuleConfig?.action);
                 
                 // ════════════════════════════════════════════════════════════
+                // STANDARDIZED OPENING LINE EXTRACTION
                 // openingLine is metadata ONLY - spoken by ResponseConstructor
                 // on first turn of this scenario. NEVER spoken directly here.
+                // 
+                // Sources (in priority order):
+                // 1. frontlinePlaybook.openingLines[0] - explicit opening
+                // 2. actionPlaybooks.explainAndPush.explanationLines[0] - for push actions
+                // 3. actionPlaybooks.escalateToHuman.preTransferLines[0] - for transfers
+                // 4. quickRuleConfig.explanation - fallback explanation
                 // ════════════════════════════════════════════════════════════
-                const openingLine = triageCard.frontlinePlaybook?.openingLine ||
-                                    triageCard.quickRuleConfig?.acknowledgment ||
-                                    null;
+                const openingLine = extractOpeningLine(triageCard, cardRoute);
                 
                 logger.info('[TRIAGE] Matched triage card', {
                     companyId,
                     cardName: triageCard.displayName || triageCard.triageLabel,
                     cardAction: triageCard.quickRuleConfig?.action,
                     route: cardRoute,
-                    hasOpeningLine: !!openingLine
+                    hasOpeningLine: !!openingLine,
+                    openingLineSource: openingLine ? 'extracted' : 'none'
                 });
                 
                 return {
@@ -229,7 +235,81 @@ function cardActionToRoute(cardAction) {
     return cardRouteMap[cardAction] || 'SCENARIO_ENGINE';
 }
 
+/**
+ * ============================================================================
+ * STANDARDIZED OPENING LINE EXTRACTION
+ * ============================================================================
+ * Extract the appropriate opening line from a triage card based on route type.
+ * This is METADATA ONLY - ResponseConstructor speaks it, not TriageRouter.
+ * 
+ * @param {Object} triageCard - Full triage card document
+ * @param {string} cardRoute - The determined route type
+ * @returns {string|null} - Opening line or null
+ */
+function extractOpeningLine(triageCard, cardRoute) {
+    if (!triageCard) return null;
+    
+    // Priority 1: Explicit frontline opening lines
+    const frontlineOpening = triageCard.frontlinePlaybook?.openingLines?.[0];
+    if (frontlineOpening && frontlineOpening.trim()) {
+        return frontlineOpening.trim();
+    }
+    
+    // Priority 2: Route-specific playbook lines
+    const actionPlaybooks = triageCard.actionPlaybooks || {};
+    
+    switch (cardRoute) {
+        case 'TRANSFER':
+            // Use pre-transfer line for escalation
+            const preTransfer = actionPlaybooks.escalateToHuman?.preTransferLines?.[0];
+            if (preTransfer && preTransfer.trim()) {
+                return preTransfer.trim();
+            }
+            break;
+            
+        case 'SCENARIO_ENGINE':
+            // Use explain-and-push explanation for scenario routes
+            const explanation = actionPlaybooks.explainAndPush?.explanationLines?.[0];
+            if (explanation && explanation.trim()) {
+                return explanation.trim();
+            }
+            break;
+            
+        case 'MESSAGE_ONLY':
+            // Use take-message intro
+            const intro = actionPlaybooks.takeMessage?.introLines?.[0];
+            if (intro && intro.trim()) {
+                return intro.trim();
+            }
+            break;
+            
+        case 'END_CALL':
+            // Use end-call closing
+            const closing = actionPlaybooks.endCallPolite?.closingLines?.[0];
+            if (closing && closing.trim()) {
+                return closing.trim();
+            }
+            break;
+    }
+    
+    // Priority 3: Generic explanation from quickRuleConfig
+    const genericExplanation = triageCard.quickRuleConfig?.explanation;
+    if (genericExplanation && genericExplanation.trim()) {
+        return genericExplanation.trim();
+    }
+    
+    // Priority 4: Frontline goal as last resort
+    const frontlineGoal = triageCard.frontlinePlaybook?.frontlineGoal;
+    if (frontlineGoal && frontlineGoal.trim() && frontlineGoal.length < 100) {
+        // Only use if it's short enough to be spoken
+        return frontlineGoal.trim();
+    }
+    
+    return null;
+}
+
 module.exports = {
-    route
+    route,
+    extractOpeningLine // Exported for testing/reuse
 };
 
