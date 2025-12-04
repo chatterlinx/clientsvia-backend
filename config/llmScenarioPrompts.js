@@ -247,6 +247,7 @@ const DEFAULT_LLM_ENTERPRISE_SETTINGS = {
   
   defaults: {
     activeProfile: DEFAULT_PROFILE_KEY,
+    modelOverride: null, // 🚀 User can override model: 'gpt-4o', 'gpt-4-turbo', 'o1-mini', etc.
     generationMode: 'single', // 'single' | 'multi'
     defaultVariantCount: 1,
     maxVariantCount: 15
@@ -468,7 +469,13 @@ function getEffectiveModelParams(settings = {}) {
   let temperature = profile.temperature;
   let topP = profile.topP;
   let maxTokens = profile.maxTokens;
-  const model = profile.model;
+  
+  // 🚀 Model Override: User can select any model they want
+  const validModels = ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'o1-mini', 'o1-preview'];
+  const modelOverride = merged.defaults.modelOverride;
+  const model = (modelOverride && validModels.includes(modelOverride)) 
+    ? modelOverride 
+    : profile.model;
 
   // Apply admin overrides if present
   if (typeof overrides.temperature === 'number') temperature = overrides.temperature;

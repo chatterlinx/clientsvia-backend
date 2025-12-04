@@ -6010,7 +6010,53 @@ Just checking in..."></textarea>
                 <i class="fas fa-sliders-h mr-2 text-orange-600"></i>Advanced Model Tuning
               </div>
               <div style="font-size:13px; color:#6b7280; margin-bottom:16px; line-height:1.5;">
-                Optional overrides for temperature, top_p, and max_tokens per profile. Leave blank to use profile defaults. Compliance-Safe values are clamped server-side.
+                Choose your preferred model and fine-tune parameters. Changes apply to the Scenario Architect and AI generators.
+              </div>
+
+              <!-- 🚀 MODEL SELECTOR - User's requested feature -->
+              <div style="border:2px solid #6366f1; border-radius:10px; padding:16px; background:linear-gradient(135deg, #eef2ff 0%, #ffffff 100%); margin-bottom:16px;">
+                <div style="font-size:15px; font-weight:700; margin-bottom:10px; color:#4f46e5;">
+                  <i class="fas fa-microchip mr-2"></i>Model Selection
+                  <span style="font-size:11px; font-weight:500; background:#6366f1; color:white; padding:2px 8px; border-radius:12px; margin-left:8px;">Override Profile Default</span>
+                </div>
+                <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start;">
+                  <div style="flex:1; min-width:280px;">
+                    <label style="font-size:12px; font-weight:600; color:#111827; display:block; margin-bottom:6px;">
+                      <i class="fas fa-robot mr-1 text-indigo-600"></i>Select GPT Model
+                    </label>
+                    <select id="llm-model-override" style="width:100%; padding:10px 12px; font-size:13px; border-radius:8px; border:2px solid #c7d2fe; background:white; cursor:pointer; font-weight:500;">
+                      <option value="">📋 Use Profile Default</option>
+                      <optgroup label="🚀 Fast & Economical">
+                        <option value="gpt-4o-mini">⚡ GPT-4o Mini — Fast, cheap ($0.15/1M tokens)</option>
+                      </optgroup>
+                      <optgroup label="🧠 Smart & Capable">
+                        <option value="gpt-4o">🧠 GPT-4o — Smart, balanced ($2.50/1M tokens)</option>
+                        <option value="gpt-4-turbo">🔥 GPT-4 Turbo — 128K context, powerful ($10/1M tokens)</option>
+                      </optgroup>
+                      <optgroup label="🎯 Reasoning Models">
+                        <option value="o1-mini">🎯 O1-Mini — Advanced reasoning ($3/1M tokens)</option>
+                        <option value="o1-preview">🏆 O1-Preview — Best reasoning ($15/1M tokens)</option>
+                      </optgroup>
+                    </select>
+                    <div style="font-size:11px; color:#6b7280; margin-top:6px; line-height:1.4;">
+                      💡 <strong>Tip:</strong> Use GPT-4o or GPT-4 Turbo for building complex scenarios. Use GPT-4o-mini for quick drafts.
+                    </div>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:8px; padding:10px; background:#f5f3ff; border-radius:8px; min-width:200px;">
+                    <div style="font-size:11px; font-weight:600; color:#4f46e5;">Current Selection:</div>
+                    <div id="llm-model-display" style="font-size:13px; font-weight:700; color:#111827;">
+                      <i class="fas fa-check-circle text-green-500 mr-1"></i>Using Profile Default
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Per-profile overrides -->
+              <div style="font-size:14px; font-weight:600; color:#6b7280; margin-bottom:12px;">
+                <i class="fas fa-cog mr-1"></i>Per-Profile Parameter Overrides
+              </div>
+              <div style="font-size:12px; color:#9ca3af; margin-bottom:12px;">
+                Leave blank to use profile defaults. Compliance-Safe values are clamped server-side.
               </div>
 
               <div id="llm-advanced-profiles" style="display:flex; flex-direction:column; gap:12px;">
@@ -20523,6 +20569,15 @@ ${JSON.stringify(healthData, null, 2)}
                 document.getElementById('llm-adv-creative-topP').value = oCreative.topP ?? profileDefaults.creative_exploration.topP;
                 document.getElementById('llm-adv-creative-maxTokens').value = oCreative.maxTokens ?? profileDefaults.creative_exploration.maxTokens;
 
+                // 🚀 Model Override - Apply user's model selection
+                const modelOverride = this.state.defaults?.modelOverride || '';
+                const modelSelect = document.getElementById('llm-model-override');
+                if (modelSelect) {
+                    modelSelect.value = modelOverride;
+                    console.log('🚀 [LLM SETTINGS] Model override loaded:', modelOverride || 'Using profile default');
+                }
+                this._updateModelDisplay(modelOverride);
+
                 // Populate Prompt Editor textareas (use state.promptText for saved data, promptParts as fallback)
                 const promptParts = this.promptParts || this.getFallbackPrompts();
                 const promptText = this.state.promptText || {};
@@ -20906,7 +20961,15 @@ Safety:
 
             async saveAdvanced() {
                 console.log('💾 [LLM SETTINGS] Saving advanced tuning...');
+                
+                // 🚀 Get model override selection
+                const modelOverrideEl = document.getElementById('llm-model-override');
+                const modelOverride = modelOverrideEl?.value || null;
+                
                 const payload = {
+                    defaults: {
+                        modelOverride: modelOverride === '' ? null : modelOverride
+                    },
                     overrides: {
                         compliance_safe: {
                             temperature: this._readNumberOrNull('llm-adv-compliance-temp'),
@@ -20925,7 +20988,31 @@ Safety:
                         }
                     }
                 };
+                
+                console.log('🚀 [LLM SETTINGS] Model override:', modelOverride || 'Using profile default');
                 await this.save(payload, 'Advanced tuning saved successfully');
+                
+                // Update display
+                this._updateModelDisplay(modelOverride);
+            },
+            
+            _updateModelDisplay(modelOverride) {
+                const displayEl = document.getElementById('llm-model-display');
+                if (!displayEl) return;
+                
+                const modelLabels = {
+                    'gpt-4o-mini': '⚡ GPT-4o Mini',
+                    'gpt-4o': '🧠 GPT-4o',
+                    'gpt-4-turbo': '🔥 GPT-4 Turbo',
+                    'o1-mini': '🎯 O1-Mini',
+                    'o1-preview': '🏆 O1-Preview'
+                };
+                
+                if (modelOverride && modelLabels[modelOverride]) {
+                    displayEl.innerHTML = `<i class="fas fa-rocket text-indigo-500 mr-1"></i>${modelLabels[modelOverride]}`;
+                } else {
+                    displayEl.innerHTML = `<i class="fas fa-check-circle text-green-500 mr-1"></i>Using Profile Default`;
+                }
             },
 
             _readNumberOrNull(id) {
@@ -21325,6 +21412,17 @@ Safety:
                 }
             });
             console.log('✅ [PROMPT EDITOR] Character counters wired');
+            
+            // 🚀 Model Override - Live preview on change
+            const modelSelect = document.getElementById('llm-model-override');
+            if (modelSelect) {
+                modelSelect.addEventListener('change', (e) => {
+                    const value = e.target.value;
+                    LLMSettingsPage._updateModelDisplay(value);
+                    console.log('🚀 [LLM SETTINGS] Model preview updated:', value || 'Using profile default');
+                });
+                console.log('✅ [LLM SETTINGS] Model selector wired');
+            }
 
             console.log('✅ [LLM SETTINGS] All event listeners initialized');
         });

@@ -105,6 +105,11 @@ async function resetSettings(scope = GLOBAL_SCOPE, section = 'all') {
       break;
     case 'advanced':
       settings.overrides = DEFAULT_LLM_SETTINGS.overrides;
+      // Also reset model override to use profile default
+      settings.defaults = {
+        ...settings.defaults,
+        modelOverride: null
+      };
       break;
     case 'promptText':
       // Reset all prompt text to defaults
