@@ -80,7 +80,53 @@ async function route(decision, company) {
         'END': 'END_CALL'
     };
     
-    // If action clearly maps to a route, use it
+    // ========================================================================
+    // PRIORITY 2.5: If we have a triageTag, look up the card for content
+    // ========================================================================
+    // FrontlineIntelEngine may have done a fast match and returned a triageTag.
+    // We need to look up that card to get its response content (openingLine).
+    // This applies to MESSAGE_ONLY, ASK_FOLLOWUP, and other quick actions.
+    // ========================================================================
+    if (decision.triageTag && companyId) {
+        try {
+            const triageCard = await matchTriageCardByTag(decision.triageTag, companyId);
+            
+            if (triageCard) {
+                const cardRoute = actionRouteMap[decision.action] || 
+                                  cardActionToRoute(triageCard.quickRuleConfig?.action) ||
+                                  'MESSAGE_ONLY';
+                
+                const openingLine = extractOpeningLine(triageCard, cardRoute);
+                
+                logger.info('[TRIAGE] ✅ Found card by triageTag', {
+                    companyId,
+                    triageTag: decision.triageTag,
+                    cardName: triageCard.displayName || triageCard.triageLabel,
+                    route: cardRoute,
+                    hasOpeningLine: !!openingLine,
+                    openingLinePreview: openingLine?.substring(0, 50)
+                });
+                
+                return {
+                    route: cardRoute,
+                    matchedCardId: triageCard._id.toString(),
+                    matchedCardName: triageCard.displayName || triageCard.triageLabel,
+                    scenarioHint: triageCard.linkedScenario?.scenarioKey || decision.triageTag,
+                    transferConfig: cardRoute === 'TRANSFER' ? triageCard.actionPlaybooks?.escalateToHuman : null,
+                    openingLine, // Card's response content for ResponseConstructor
+                    reason: `Matched triage card by tag: ${decision.triageTag}`
+                };
+            }
+        } catch (error) {
+            logger.warn('[TRIAGE] Error looking up card by triageTag', {
+                companyId,
+                triageTag: decision.triageTag,
+                error: error.message
+            });
+        }
+    }
+    
+    // If action clearly maps to a route but no card found, use generic
     if (actionRouteMap[decision.action] && decision.action !== 'ROUTE_TO_SCENARIO') {
         return {
             route: actionRouteMap[decision.action],
@@ -88,8 +134,8 @@ async function route(decision, company) {
             matchedCardName: null,
             scenarioHint: decision.triageTag,
             transferConfig: decision.action === 'TRANSFER' ? { type: 'standard' } : null,
-            openingLine: null, // Direct action = no triage card opening line
-            reason: `Direct action mapping: ${decision.action}`
+            openingLine: null, // No card = no opening line
+            reason: `Direct action mapping (no card): ${decision.action}`
         };
     }
     
@@ -175,6 +221,62 @@ async function route(decision, company) {
 /**
  * Match Brain-1 decision against triage cards
  */
+/**
+ * Match a triage card by its triageLabel (tag)
+ * Used when FrontlineIntelEngine already identified the card during fast match.
+ * 
+ * @param {string} triageTag - The card's triageLabel identifier
+ * @param {string} companyId - Company ID
+ * @returns {Promise<Object|null>} - Full triage card document or null
+ */
+async function matchTriageCardByTag(triageTag, companyId) {
+    if (!triageTag || !companyId) return null;
+    
+    const normalizedTag = triageTag.toLowerCase().trim();
+    
+    // Try exact match first
+    let card = await TriageCard.findOne({
+        companyId,
+        isActive: true,
+        $or: [
+            { triageLabel: { $regex: new RegExp(`^${normalizedTag}$`, 'i') } },
+            { displayName: { $regex: new RegExp(`^${normalizedTag}$`, 'i') } },
+            { 'quickRuleConfig.scenarioKey': { $regex: new RegExp(`^${normalizedTag}$`, 'i') } }
+        ]
+    }).lean();
+    
+    if (card) {
+        logger.debug('[TRIAGE] Matched card by exact tag', {
+            companyId,
+            triageTag,
+            cardId: card._id,
+            cardName: card.displayName || card.triageLabel
+        });
+        return card;
+    }
+    
+    // Try partial match as fallback
+    card = await TriageCard.findOne({
+        companyId,
+        isActive: true,
+        $or: [
+            { triageLabel: { $regex: new RegExp(normalizedTag, 'i') } },
+            { displayName: { $regex: new RegExp(normalizedTag, 'i') } }
+        ]
+    }).lean();
+    
+    if (card) {
+        logger.debug('[TRIAGE] Matched card by partial tag', {
+            companyId,
+            triageTag,
+            cardId: card._id,
+            cardName: card.displayName || card.triageLabel
+        });
+    }
+    
+    return card;
+}
+
 async function matchTriageCard(decision, companyId) {
     // Load active triage cards sorted by priority
     const cards = await TriageCard.find({
@@ -249,13 +351,47 @@ function cardActionToRoute(cardAction) {
 function extractOpeningLine(triageCard, cardRoute) {
     if (!triageCard) return null;
     
-    // Priority 1: Explicit frontline opening lines
+    // Priority 1: Explicit frontline opening line (singular - common pattern)
+    const openingLine = triageCard.frontlinePlaybook?.openingLine;
+    if (openingLine && openingLine.trim()) {
+        logger.debug('[TRIAGE] Using frontlinePlaybook.openingLine', { 
+            cardId: triageCard._id,
+            preview: openingLine.substring(0, 50) 
+        });
+        return openingLine.trim();
+    }
+    
+    // Priority 2: Explicit frontline opening lines array
     const frontlineOpening = triageCard.frontlinePlaybook?.openingLines?.[0];
     if (frontlineOpening && frontlineOpening.trim()) {
+        logger.debug('[TRIAGE] Using frontlinePlaybook.openingLines[0]', { 
+            cardId: triageCard._id,
+            preview: frontlineOpening.substring(0, 50) 
+        });
         return frontlineOpening.trim();
     }
     
-    // Priority 2: Route-specific playbook lines
+    // Priority 3: quickRuleConfig.acknowledgment (very common field)
+    const acknowledgment = triageCard.quickRuleConfig?.acknowledgment;
+    if (acknowledgment && acknowledgment.trim()) {
+        logger.debug('[TRIAGE] Using quickRuleConfig.acknowledgment', { 
+            cardId: triageCard._id,
+            preview: acknowledgment.substring(0, 50) 
+        });
+        return acknowledgment.trim();
+    }
+    
+    // Priority 4: Direct response field (legacy)
+    const directResponse = triageCard.response;
+    if (directResponse && directResponse.trim()) {
+        logger.debug('[TRIAGE] Using triageCard.response', { 
+            cardId: triageCard._id,
+            preview: directResponse.substring(0, 50) 
+        });
+        return directResponse.trim();
+    }
+    
+    // Priority 5: Route-specific playbook lines
     const actionPlaybooks = triageCard.actionPlaybooks || {};
     
     switch (cardRoute) {
@@ -292,18 +428,26 @@ function extractOpeningLine(triageCard, cardRoute) {
             break;
     }
     
-    // Priority 3: Generic explanation from quickRuleConfig
+    // Priority 6: Generic explanation from quickRuleConfig
     const genericExplanation = triageCard.quickRuleConfig?.explanation;
     if (genericExplanation && genericExplanation.trim()) {
         return genericExplanation.trim();
     }
     
-    // Priority 4: Frontline goal as last resort
+    // Priority 7: Frontline goal as last resort
     const frontlineGoal = triageCard.frontlinePlaybook?.frontlineGoal;
     if (frontlineGoal && frontlineGoal.trim() && frontlineGoal.length < 100) {
         // Only use if it's short enough to be spoken
         return frontlineGoal.trim();
     }
+    
+    logger.warn('[TRIAGE] No opening line found for card', {
+        cardId: triageCard._id,
+        cardName: triageCard.displayName || triageCard.triageLabel,
+        hasPlaybook: !!triageCard.frontlinePlaybook,
+        hasQuickRule: !!triageCard.quickRuleConfig,
+        hasResponse: !!triageCard.response
+    });
     
     return null;
 }

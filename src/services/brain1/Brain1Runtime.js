@@ -236,7 +236,8 @@ async function processTurn(companyId, callId, userInput, callState) {
             default:
                 handlerResult = handleMessageOnly({
                     decision,
-                    callState: updatedCallState
+                    callState: updatedCallState,
+                    triageResult  // Pass triage result to use matched card's content
                 });
                 break;
         }
@@ -644,10 +645,39 @@ function handleEndCall({ decision, callState }) {
 /**
  * Handle MESSAGE_ONLY route
  */
-function handleMessageOnly({ decision, callState }) {
-    // For ASK_FOLLOWUP, generate appropriate follow-up question
-    let responseText;
+function handleMessageOnly({ decision, callState, triageResult }) {
+    let responseText = '';
     
+    // ========================================================================
+    // PRIORITY 1: Use matched Triage Card's opening line/response
+    // ========================================================================
+    // If a card was matched, its openingLine IS the response. 
+    // ResponseConstructor will use triageResult.openingLine as the main content.
+    // We return empty here to avoid duplication.
+    // ========================================================================
+    if (triageResult?.matchedCardId && triageResult?.openingLine) {
+        logger.debug('[MESSAGE_ONLY] Using triage card response', {
+            cardId: triageResult.matchedCardId,
+            cardName: triageResult.matchedCardName,
+            openingLine: triageResult.openingLine?.substring(0, 50)
+        });
+        
+        // Return empty - ResponseConstructor will use triageResult.openingLine
+        // This prevents "double-talk" (card response + generic acknowledgment)
+        return {
+            text: '',  // Empty! ResponseConstructor uses openingLine instead
+            action: 'continue',
+            shouldTransfer: false,
+            shouldHangup: false,
+            scenarioId: triageResult.matchedCardId,
+            scenarioName: triageResult.matchedCardName,
+            callState
+        };
+    }
+    
+    // ========================================================================
+    // FALLBACK: No card matched - use contextual follow-up questions
+    // ========================================================================
     if (decision.action === 'ASK_FOLLOWUP') {
         // Generate contextual follow-up based on what we know
         const hasAnyInfo = callState.extracted?.contact?.name || 
@@ -661,9 +691,14 @@ function handleMessageOnly({ decision, callState }) {
             responseText = "I understand. Is there anything else you'd like to tell me about the issue?";
         }
     } else {
-        // MESSAGE_ONLY - just acknowledge
+        // MESSAGE_ONLY without card match - just acknowledge
         responseText = "I understand. How can I help you with that?";
     }
+    
+    logger.debug('[MESSAGE_ONLY] Using fallback response (no card matched)', {
+        action: decision.action,
+        responsePreview: responseText.substring(0, 50)
+    });
     
     return {
         text: responseText,
