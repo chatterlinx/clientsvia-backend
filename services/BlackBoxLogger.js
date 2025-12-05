@@ -370,30 +370,101 @@ async function finalizeCall({ callId, companyId, endedAt, callOutcome, performan
 function computePerformance(events, performanceData = {}) {
   // Count turns from GATHER_FINAL events
   const gatherEvents = events.filter(e => e.type === 'GATHER_FINAL');
+  const responseEvents = events.filter(e => e.type === 'AGENT_RESPONSE_BUILT');
   const totalTurns = gatherEvents.length;
   
-  // Calculate turn times from performanceData if provided
+  // ════════════════════════════════════════════════════════════════════════════
+  // TURN-LEVEL PERFORMANCE BREAKDOWN
+  // ════════════════════════════════════════════════════════════════════════════
+  // For each turn, calculate:
+  // - STT ms (from GATHER_PARTIAL to GATHER_FINAL)
+  // - Brain-1 ms (from GATHER_FINAL to INTENT_DETECTED)
+  // - 3-Tier ms (from TIER3_ENTERED to TIER3_EXIT)
+  // - LLM ms (if TIER3_LLM_FALLBACK_CALLED)
+  // - TTS ms (TTS_GENERATED timing)
+  // ════════════════════════════════════════════════════════════════════════════
+  const turnBreakdowns = [];
+  
+  for (let i = 0; i < gatherEvents.length; i++) {
+    const gather = gatherEvents[i];
+    const turnNum = i + 1;
+    
+    // Find events for this turn
+    const nextGather = gatherEvents[i + 1];
+    const turnEndTime = nextGather?.t || Infinity;
+    
+    const turnEvents = events.filter(e => e.t >= gather.t && e.t < turnEndTime);
+    
+    // Find specific events in this turn
+    const intentEvent = turnEvents.find(e => e.type === 'INTENT_DETECTED');
+    const tier3Enter = turnEvents.find(e => e.type === 'TIER3_ENTERED');
+    const tier3Exit = turnEvents.find(e => e.type === 'TIER3_EXIT');
+    const llmFallback = turnEvents.find(e => e.type === 'TIER3_LLM_FALLBACK_CALLED');
+    const ttsEvent = turnEvents.find(e => e.type === 'TTS_GENERATED');
+    const responseEvent = turnEvents.find(e => e.type === 'AGENT_RESPONSE_BUILT');
+    
+    const breakdown = {
+      turn: turnNum,
+      totalMs: responseEvent ? (responseEvent.t - gather.t) : 0,
+      sttMs: 0, // Would need GATHER_PARTIAL timing
+      brain1Ms: intentEvent ? (intentEvent.t - gather.t) : 0,
+      tier3Ms: (tier3Enter && tier3Exit) ? (tier3Exit.t - tier3Enter.t) : 0,
+      llmMs: llmFallback?.data?.ms || 0,
+      ttsMs: ttsEvent?.data?.ms || 0,
+      bottleneck: 'UNKNOWN'
+    };
+    
+    // Determine bottleneck
+    const maxComponent = Math.max(breakdown.brain1Ms, breakdown.tier3Ms, breakdown.llmMs, breakdown.ttsMs);
+    if (maxComponent === breakdown.llmMs && breakdown.llmMs > 0) {
+      breakdown.bottleneck = 'LLM';
+    } else if (maxComponent === breakdown.ttsMs && breakdown.ttsMs > 0) {
+      breakdown.bottleneck = 'TTS';
+    } else if (maxComponent === breakdown.tier3Ms && breakdown.tier3Ms > 0) {
+      breakdown.bottleneck = 'TIER3';
+    } else if (breakdown.brain1Ms > 0) {
+      breakdown.bottleneck = 'BRAIN1';
+    }
+    
+    turnBreakdowns.push(breakdown);
+  }
+  
+  // Calculate averages and find slowest
   let avgTurnTimeMs = 0;
   let slowestTurn = { turnNumber: 0, totalMs: 0, bottleneck: 'UNKNOWN' };
   
-  if (performanceData.turnTimes && performanceData.turnTimes.length > 0) {
-    const turnTimes = performanceData.turnTimes;
-    avgTurnTimeMs = Math.round(turnTimes.reduce((a, b) => a + b.totalMs, 0) / turnTimes.length);
+  if (turnBreakdowns.length > 0) {
+    avgTurnTimeMs = Math.round(
+      turnBreakdowns.reduce((sum, t) => sum + t.totalMs, 0) / turnBreakdowns.length
+    );
     
-    const slowest = turnTimes.reduce((max, t) => t.totalMs > max.totalMs ? t : max, turnTimes[0]);
+    const slowest = turnBreakdowns.reduce(
+      (max, t) => t.totalMs > max.totalMs ? t : max, 
+      turnBreakdowns[0]
+    );
     slowestTurn = {
       turnNumber: slowest.turn,
       totalMs: slowest.totalMs,
-      bottleneck: slowest.bottleneck || 'UNKNOWN'
+      bottleneck: slowest.bottleneck,
+      breakdown: {
+        brain1Ms: slowest.brain1Ms,
+        tier3Ms: slowest.tier3Ms,
+        llmMs: slowest.llmMs,
+        ttsMs: slowest.ttsMs
+      }
     };
   }
   
-  // Count LLM calls
-  const llmEvents = events.filter(e => e.type === 'LLM_FALLBACK');
+  // Count LLM calls (both Brain-1 and Tier-3)
+  const brain1LlmEvents = events.filter(e => e.type === 'LLM_RESPONSE');
+  const tier3LlmEvents = events.filter(e => e.type === 'TIER3_LLM_FALLBACK_CALLED');
+  const allLlmEvents = [...brain1LlmEvents, ...tier3LlmEvents];
+  
   const llmCalls = {
-    count: llmEvents.length,
-    totalMs: llmEvents.reduce((sum, e) => sum + (e.data?.ms || 0), 0),
-    totalCostUsd: llmEvents.reduce((sum, e) => sum + (e.data?.cost || 0), 0)
+    count: allLlmEvents.length,
+    totalMs: allLlmEvents.reduce((sum, e) => sum + (e.data?.ms || 0), 0),
+    brain1Count: brain1LlmEvents.length,
+    tier3Count: tier3LlmEvents.length
   };
   
   // TTS total
@@ -404,6 +475,7 @@ function computePerformance(events, performanceData = {}) {
     totalTurns,
     avgTurnTimeMs,
     slowestTurn,
+    turnBreakdowns,
     llmCalls,
     ttsTotalMs
   };
@@ -422,9 +494,58 @@ function computeFlags(events, recording) {
     bookingIgnored: false
   };
   
-  // Check for slow responses (any turn > 8s)
+  // ════════════════════════════════════════════════════════════════════════════
+  // BOOKING IGNORED DETECTION
+  // ════════════════════════════════════════════════════════════════════════════
+  // bookingIgnored = TRUE when:
+  // 1. Booking intent was detected with confidence >= 0.65
+  // 2. BUT system never entered BOOKING_MODE_ACTIVATED
+  // 3. AND we asked 2+ more questions after booking intent
+  // ════════════════════════════════════════════════════════════════════════════
+  const intentEvents = events.filter(e => e.type === 'INTENT_DETECTED');
+  const bookingActivated = events.find(e => e.type === 'BOOKING_MODE_ACTIVATED');
+  
+  // Find first clear booking intent
+  const firstBookingIntent = intentEvents.find(e => {
+    const intent = (e.data?.intent || '').toLowerCase();
+    const confidence = e.data?.confidence || 0;
+    const isBookingIntent = intent.includes('book') || 
+                            intent.includes('schedule') || 
+                            intent.includes('appointment');
+    return isBookingIntent && confidence >= 0.65;
+  });
+  
+  if (firstBookingIntent && !bookingActivated) {
+    // Booking intent detected but never locked - count questions after
+    const gatherAfterIntent = events.filter(e => 
+      e.type === 'GATHER_FINAL' && 
+      e.t > firstBookingIntent.t
+    );
+    
+    if (gatherAfterIntent.length >= 1) {
+      // Customer had to answer another question after clear booking intent
+      flags.bookingIgnored = true;
+    }
+  }
+  
+  // ════════════════════════════════════════════════════════════════════════════
+  // SLOW RESPONSE DETECTION
+  // ════════════════════════════════════════════════════════════════════════════
+  // Check for any turn taking > 8 seconds (exceptionally slow)
   const responseEvents = events.filter(e => e.type === 'AGENT_RESPONSE_BUILT');
-  // TODO: Calculate actual turn times from events
+  const gatherEvents = events.filter(e => e.type === 'GATHER_FINAL');
+  
+  for (let i = 0; i < gatherEvents.length; i++) {
+    const gather = gatherEvents[i];
+    const nextResponse = responseEvents.find(r => r.t > gather.t);
+    if (nextResponse) {
+      const turnMs = nextResponse.t - gather.t;
+      if (turnMs > 8000) {
+        flags.slowResponse = true;
+        break;
+      }
+    }
+  }
   
   return flags;
 }
@@ -467,15 +588,45 @@ function computeDiagnosis(events, flags, booking, performance) {
     severity: 'INFO'
   };
   
-  // Booking ignored is CRITICAL
+  // ════════════════════════════════════════════════════════════════════════════
+  // BOOKING IGNORED is the HIGHEST priority issue
+  // ════════════════════════════════════════════════════════════════════════════
+  if (flags.bookingIgnored) {
+    // Find the first booking intent for details
+    const firstBookingIntent = events.find(e => {
+      const intent = (e.data?.intent || '').toLowerCase();
+      const confidence = e.data?.confidence || 0;
+      return (intent.includes('book') || intent.includes('schedule') || intent.includes('appointment')) 
+             && confidence >= 0.65;
+    });
+    
+    // Check what route was taken instead
+    const triageAfterBooking = events.find(e => 
+      e.type === 'TRIAGE_DECISION' && 
+      e.t > (firstBookingIntent?.t || 0)
+    );
+    
+    diagnosis.primaryBottleneck = 'BOOKING_IGNORED';
+    diagnosis.rootCause = `Booking intent detected (${firstBookingIntent?.data?.intent || 'booking'}, ` +
+      `confidence=${(firstBookingIntent?.data?.confidence || 0).toFixed(2)}) at ` +
+      `${((firstBookingIntent?.t || 0) / 1000).toFixed(1)}s, but system routed to ` +
+      `${triageAfterBooking?.data?.route || 'MESSAGE_ONLY'} instead of BOOKING_FLOW.`;
+    diagnosis.suggestedFix = 'Check BOOKING_INTENT_THRESHOLD in FrontlineIntelEngine.js. ' +
+      'Current threshold is 0.65. If booking intent confidence was above this but still not ' +
+      'routed to BOOK, check if the triage router is overriding the action.';
+    diagnosis.severity = 'CRITICAL';
+    return diagnosis;
+  }
+  
+  // Booking delayed (we eventually got to booking, but asked too many questions first)
   if (booking.firstIntentDetectedAtMs && 
       booking.intentLockedAtMs && 
       booking.questionsAskedBeforeLock >= 3) {
-    diagnosis.primaryBottleneck = 'BOOKING_LOOP';
+    diagnosis.primaryBottleneck = 'BOOKING_DELAYED';
     diagnosis.rootCause = `Customer asked to book at ${(booking.firstIntentDetectedAtMs / 1000).toFixed(1)}s, ` +
       `but system asked ${booking.questionsAskedBeforeLock} more questions before committing at ` +
       `${(booking.intentLockedAtMs / 1000).toFixed(1)}s.`;
-    diagnosis.suggestedFix = 'Tighten booking behavior rules - when booking intent confidence > 0.8, ' +
+    diagnosis.suggestedFix = 'Tighten booking behavior rules - when booking intent confidence > 0.65, ' +
       'enter booking flow immediately without additional troubleshooting.';
     diagnosis.severity = 'CRITICAL';
     return diagnosis;

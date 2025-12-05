@@ -269,23 +269,28 @@ Performance:
 - totalTurns: ${recording.performance?.totalTurns || 0}
 - avgTurnTimeMs: ${recording.performance?.avgTurnTimeMs || 0}
 - slowestTurn: #${recording.performance?.slowestTurn?.turnNumber || '?'} (${recording.performance?.slowestTurn?.totalMs || 0}ms, bottleneck=${recording.performance?.slowestTurn?.bottleneck || '?'})
-- llmCalls: { count: ${recording.performance?.llmCalls?.count || 0}, totalMs: ${recording.performance?.llmCalls?.totalMs || 0} }
+  └─ breakdown: brain1=${recording.performance?.slowestTurn?.breakdown?.brain1Ms || 0}ms, tier3=${recording.performance?.slowestTurn?.breakdown?.tier3Ms || 0}ms, llm=${recording.performance?.slowestTurn?.breakdown?.llmMs || 0}ms, tts=${recording.performance?.slowestTurn?.breakdown?.ttsMs || 0}ms
+- llmCalls: { count: ${recording.performance?.llmCalls?.count || 0}, brain1: ${recording.performance?.llmCalls?.brain1Count || 0}, tier3: ${recording.performance?.llmCalls?.tier3Count || 0}, totalMs: ${recording.performance?.llmCalls?.totalMs || 0} }
 - ttsTotalMs: ${recording.performance?.ttsTotalMs || 0}
 
 Key Timeline:
 `;
 
-  // Add key events
+  // Add key events - include all significant decision points
   const keyEvents = (recording.events || [])
     .filter(e => [
       'GREETING_SENT', 'GATHER_FINAL', 'INTENT_DETECTED', 'TRIAGE_DECISION',
+      'TIER3_ENTERED', 'TIER3_FAST_MATCH', 'TIER3_EMBEDDING_MATCH',
+      'TIER3_LLM_FALLBACK_CALLED', 'TIER3_LLM_FALLBACK_RESPONSE', 'TIER3_EXIT',
+      'BOOKING_MODE_ACTIVATED', 'BOOKING_STEP', 'BOOKING_INTENT_OVERRIDE',
       'AGENT_RESPONSE_BUILT', 'LOOP_DETECTED', 'BAILOUT_TRIGGERED', 
       'TRANSFER_INITIATED', 'CALL_END'
     ].includes(e.type))
-    .slice(0, 20);
+    .slice(0, 30);
   
   for (const event of keyEvents) {
     const time = formatTime(event.t || 0);
+    const source = event.data?.source ? ` (source=${event.data.source})` : '';
     let detail = '';
     
     switch (event.type) {
@@ -296,22 +301,50 @@ Key Timeline:
         detail = `CALLER "${(event.data?.text || '').substring(0, 50)}..."`;
         break;
       case 'INTENT_DETECTED':
-        detail = `${event.data?.intent || '?'} (${event.data?.confidence?.toFixed(2) || '?'})`;
+        detail = `${event.data?.intent || '?'} (${event.data?.confidence?.toFixed(2) || '?'})${source}`;
         break;
       case 'TRIAGE_DECISION':
-        detail = `${event.data?.route || event.data?.cardName || '?'}`;
+        detail = `${event.data?.route || event.data?.cardName || '?'} intent=${event.data?.intentTag || '?'}${source}`;
         break;
       case 'AGENT_RESPONSE_BUILT':
-        detail = `"${(event.data?.text || '').substring(0, 50)}..."`;
+        detail = `"${(event.data?.text || '').substring(0, 50)}..."${source}`;
         break;
       case 'BAILOUT_TRIGGERED':
-        detail = `type=${event.data?.type} reason=${event.data?.reason}`;
+        detail = `type=${event.data?.bailoutType || event.data?.type} reason=${event.data?.reason}`;
         break;
       case 'TRANSFER_INITIATED':
         detail = `target=${event.data?.target}`;
         break;
       case 'CALL_END':
         detail = `outcome=${event.data?.outcome}`;
+        break;
+      case 'TIER3_ENTERED':
+        detail = `reason=${event.data?.reason || '?'}`;
+        break;
+      case 'TIER3_FAST_MATCH':
+      case 'TIER3_EMBEDDING_MATCH':
+        detail = `${event.data?.nodeName || event.data?.nodeKey || '?'} (source=${event.data?.source || '?'})`;
+        break;
+      case 'TIER3_LLM_FALLBACK_CALLED':
+        detail = `model=${event.data?.model || '?'} prompt=${event.data?.promptType || '?'}`;
+        break;
+      case 'TIER3_LLM_FALLBACK_RESPONSE':
+        detail = `"${(event.data?.finalText || '').substring(0, 40)}..."`;
+        break;
+      case 'TIER3_EXIT':
+        detail = `outcome=${event.data?.outcome || '?'} route=${event.data?.routedTo || '?'}`;
+        break;
+      case 'BOOKING_MODE_ACTIVATED':
+        detail = `reason=${event.data?.reason || '?'}`;
+        break;
+      case 'BOOKING_STEP':
+        detail = `${event.data?.stepKey || '?'} status=${event.data?.status || '?'}`;
+        break;
+      case 'BOOKING_INTENT_OVERRIDE':
+        detail = `originalAction=${event.data?.originalAction} → BOOK (${event.data?.confidence?.toFixed(2) || '?'})`;
+        break;
+      case 'LOOP_DETECTED':
+        detail = `pattern=${event.data?.pattern || '?'}`;
         break;
       default:
         detail = JSON.stringify(event.data || {}).substring(0, 50);

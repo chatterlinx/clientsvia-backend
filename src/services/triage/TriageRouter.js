@@ -166,7 +166,9 @@ async function route(decision, company, options = {}) {
                             matched: true,
                             cardId: result.matchedCardId,
                             cardName: result.matchedCardName,
-                            triageTag: decision.triageTag
+                            triageTag: decision.triageTag,
+                            intentTag: decision.intentTag,
+                            source: 'TRIAGE_CARD_MATCH'
                         }
                     }).catch(() => {});
                 }
@@ -193,8 +195,30 @@ async function route(decision, company, options = {}) {
     
     // If action clearly maps to a route but no card found, use generic
     if (actionRouteMap[decision.action] && decision.action !== 'ROUTE_TO_SCENARIO') {
+        const directRoute = actionRouteMap[decision.action];
+        
+        // 📼 BLACK BOX: Log direct action mapping (no card match)
+        if (BlackBoxLogger && callId) {
+            BlackBoxLogger.logEvent({
+                callId,
+                companyId,
+                type: 'TRIAGE_DECISION',
+                turn,
+                data: {
+                    route: directRoute,
+                    matched: false,
+                    cardId: null,
+                    cardName: null,
+                    triageTag: decision.triageTag,
+                    intentTag: decision.intentTag,
+                    action: decision.action,
+                    source: 'DIRECT_ACTION_MAP'
+                }
+            }).catch(() => {});
+        }
+        
         return {
-            route: actionRouteMap[decision.action],
+            route: directRoute,
             matchedCardId: null,
             matchedCardName: null,
             scenarioHint: decision.triageTag,

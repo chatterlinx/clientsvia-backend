@@ -473,6 +473,7 @@
         <button class="tab-btn" data-tab="decision">Decision Tree</button>
         <button class="tab-btn" data-tab="timeline">Timeline</button>
         <button class="tab-btn" data-tab="transcript">Transcript</button>
+        <button class="tab-btn" data-tab="raw" style="color: #f97316;">Raw Events</button>
     </div>
 
     <!-- Tab Content -->
@@ -482,6 +483,7 @@
     <div id="tabDecision" class="tab-content"></div>
     <div id="tabTimeline" class="tab-content"></div>
     <div id="tabTranscript" class="tab-content"></div>
+    <div id="tabRaw" class="tab-content"></div>
 
     <script>
         // ═══════════════════════════════════════════════════════════════════
@@ -562,6 +564,7 @@
             renderDecisionTree();
             renderTimeline();
             renderTranscript();
+            renderRawEvents();
         }
 
         function renderHeader() {
@@ -829,6 +832,80 @@
                     `).join('')}
                 </div>
             `;
+        }
+
+        function renderRawEvents() {
+            const container = document.getElementById('tabRaw');
+            const events = recording.events || [];
+            
+            if (events.length === 0) {
+                container.innerHTML = '<div class="loading-state"><p>No raw events available</p></div>';
+                return;
+            }
+            
+            // JSON syntax highlighting
+            function syntaxHighlight(json) {
+                if (typeof json !== 'string') {
+                    json = JSON.stringify(json, null, 2);
+                }
+                return json
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, (match) => {
+                        let cls = 'json-number';
+                        if (/^"/.test(match)) {
+                            if (/:$/.test(match)) {
+                                cls = 'json-key';
+                            } else {
+                                cls = 'json-string';
+                            }
+                        } else if (/true|false/.test(match)) {
+                            cls = 'json-boolean';
+                        } else if (/null/.test(match)) {
+                            cls = 'json-null';
+                        }
+                        return '<span class="' + cls + '">' + match + '</span>';
+                    });
+            }
+            
+            container.innerHTML = `
+                <div style="margin-bottom: 16px; display: flex; gap: 12px; align-items: center;">
+                    <button onclick="copyRawEvents()" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                        📋 Copy All Events
+                    </button>
+                    <span style="color: #94a3b8; font-size: 13px;">${events.length} events</span>
+                </div>
+                <div style="background: #0f172a; border-radius: 8px; padding: 16px; overflow: auto; max-height: 600px;">
+                    <style>
+                        .json-key { color: #93c5fd; }
+                        .json-string { color: #86efac; }
+                        .json-number { color: #fde68a; }
+                        .json-boolean { color: #f472b6; }
+                        .json-null { color: #f87171; }
+                        .event-block { 
+                            border-left: 3px solid #334155; 
+                            padding-left: 12px; 
+                            margin-bottom: 8px;
+                            font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', monospace;
+                            font-size: 12px;
+                            line-height: 1.5;
+                        }
+                        .event-block:hover { border-left-color: #f97316; background: rgba(249, 115, 22, 0.05); }
+                    </style>
+                    ${events.map((event, idx) => `
+                        <div class="event-block">
+                            <pre style="margin: 0; white-space: pre-wrap; word-break: break-all;">${syntaxHighlight(event)}</pre>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+        
+        function copyRawEvents() {
+            const events = recording.events || [];
+            const json = JSON.stringify(events, null, 2);
+            navigator.clipboard.writeText(json).then(() => {
+                alert('✅ Raw events copied to clipboard!');
+            });
         }
 
         // ═══════════════════════════════════════════════════════════════════
