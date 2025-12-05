@@ -443,9 +443,12 @@ function checkQuickDecisions(text, callState, emotion, config) {
                 source: bestMatch.source || 'unknown'
             });
             
+            // Use canonical normalizeTag for consistency with TriageRouter
+            const tagToEmit = normalizeTag(bestMatch.name || bestMatch.triageLabel || bestMatch.id);
+            
             return {
                 action,
-                triageTag: bestMatch.name?.toUpperCase()?.replace(/\s+/g, '_') || 'MATCHED',
+                triageTag: tagToEmit || 'MATCHED',
                 intentTag: bestMatch.category || 'triage',
                 confidence: Math.min(0.9, 0.6 + bestScore),
                 reasoning: `Triage card match: ${bestMatch.name}`,
@@ -464,11 +467,41 @@ function checkQuickDecisions(text, callState, emotion, config) {
 }
 
 /**
+ * Normalize a tag to canonical format: "NO_COOL", "no-cool", "No Cool" → "NO_COOL"
+ * MUST match the normalizeTag() function in TriageRouter.js
+ */
+function normalizeTag(raw) {
+    if (!raw) return null;
+    return String(raw)
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '_')   // everything non-alphanumeric → underscore
+        .replace(/^_+|_+$/g, '');      // trim leading/trailing underscores
+}
+
+/**
  * Build Brain-1 LLM prompt
  */
 function buildBrain1Prompt({ normalizedText, callState, config, emotion }) {
     const companyName = config?.name || 'the company';
     const trade = config?.trade || 'service';
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // MULTI-TENANT: Build allowed tags from THIS COMPANY's triage cards
+    // No hardcoded industry-specific tags! Each tenant has their own set.
+    // ════════════════════════════════════════════════════════════════════════════
+    const scenarios = config?.scenarios || [];
+    const allowedTags = [...new Set(
+        scenarios
+            .filter(s => s.isEnabled !== false)
+            .map(s => normalizeTag(s.name || s.triageLabel || s.id))
+            .filter(Boolean)
+    )];
+    
+    // Add some generic tags that apply to all businesses
+    const genericTags = ['GENERAL_INQUIRY', 'PRICING', 'HOURS', 'LOCATION', 'CALLBACK', 'VENDOR_CALL', 'EMERGENCY', 'WRONG_NUMBER'];
+    const allTags = [...new Set([...allowedTags, ...genericTags])];
+    const tagsForPrompt = allTags.slice(0, 30).join('|'); // Limit to 30 to keep prompt size reasonable
     
     // ════════════════════════════════════════════════════════════════════════════
     // CALL CENTER V2: Build customer context section
@@ -555,10 +588,13 @@ CURRENT CALL STATE:
 
 CALLER SAID: "${normalizedText}"
 
+AVAILABLE TRIAGE TAGS FOR THIS COMPANY:
+${tagsForPrompt}
+
 RESPOND WITH ONLY VALID JSON:
 {
   "action": "ROUTE_TO_SCENARIO|TRANSFER|BOOK|ASK_FOLLOWUP|MESSAGE_ONLY|ROUTE_TO_VENDOR|END",
-  "triageTag": "SMELL_OF_GAS|NO_COOL|NO_HEAT|MAINTENANCE|PRICING|HOURS|VENDOR_CALL|...",
+  "triageTag": "ONE_OF_THE_TAGS_ABOVE",
   "intentTag": "emergency|booking|troubleshooting|info|billing|greeting|vendor|callback|other",
   "confidence": 0.0-1.0,
   "reasoning": "brief explanation",
