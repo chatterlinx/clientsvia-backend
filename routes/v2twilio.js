@@ -1153,17 +1153,27 @@ router.post('/voice', async (req, res) => {
       console.log('Full Path:', `/api/twilio/v2-agent-respond/${company._id}`);
       console.log('═'.repeat(80));
       
+      // Build business-relevant hints from company trade/services
+      const tradeHints = company.trade ? [company.trade.toLowerCase()] : [];
+      const serviceHints = (company.aiAgentSettings?.serviceTypes || [])
+        .map(s => s.name?.toLowerCase())
+        .filter(Boolean)
+        .slice(0, 10); // Limit to 10 most important
+      const defaultHints = ['appointment', 'schedule', 'emergency', 'question', 'help'];
+      const hints = [...new Set([...tradeHints, ...serviceHints, ...defaultHints])].join(', ');
+      
       const gather = twiml.gather({
         input: 'speech',
         action: actionUrl,
         method: 'POST',
         bargeIn: speechDetection.bargeIn ?? false,
         timeout: speechDetection.initialTimeout ?? 5,
-        speechTimeout: (speechDetection.speechTimeout ?? 3).toString(), // Configurable: 1-10 seconds (default: 3s)
+        speechTimeout: (speechDetection.speechTimeout ?? 3).toString(),
         enhanced: speechDetection.enhancedRecognition ?? true,
         speechModel: speechDetection.speechModel ?? 'phone_call',
-        hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually', // Help recognize common filler words and pauses
-        partialResultCallback: `https://${req.get('host')}/api/twilio/v2-agent-partial/${company._id}`
+        hints: hints,
+        partialResultCallback: `https://${req.get('host')}/api/twilio/v2-agent-partial/${company._id}`,
+        partialResultCallbackMethod: 'POST'
       });
 
       // Use V2 Voice Settings for TTS
@@ -3666,6 +3676,56 @@ router.post('/status-callback/:companyId', async (req, res) => {
     });
     res.status(200).send('OK');
   }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
+// 🧪 MINIMAL TEST-GATHER ROUTE - Proves Twilio → Server → Action works
+// ════════════════════════════════════════════════════════════════════════════════
+// Use this to isolate whether the problem is:
+//   A) Twilio can't reach your server at all, OR
+//   B) Something specific to your v2 agent TwiML/flow
+//
+// To test: Point a Twilio phone number to /api/twilio/test-gather-twiml
+// Or use TwiML Bin with the XML below.
+// ════════════════════════════════════════════════════════════════════════════════
+
+// Step 1: Returns minimal TwiML that triggers Gather → action
+router.post('/test-gather-twiml', (req, res) => {
+  const twiml = new twilio.twiml.VoiceResponse();
+  const actionUrl = `https://${req.get('host')}/api/twilio/test-gather`;
+  
+  console.log('════════════════════════════════════════════════════════════════════════════════');
+  console.log('🧪 [TEST-GATHER-TWIML] Sending minimal TwiML');
+  console.log('Action URL:', actionUrl);
+  console.log('════════════════════════════════════════════════════════════════════════════════');
+  
+  const gather = twiml.gather({
+    input: 'speech',
+    action: actionUrl,
+    method: 'POST',
+    timeout: 5,
+    speechTimeout: 'auto'
+  });
+  gather.say('Say anything after this message, then wait.');
+  
+  twiml.say("We didn't get anything. Goodbye.");
+  
+  res.type('text/xml').send(twiml.toString());
+});
+
+// Step 2: Receives speech result - if this logs, Twilio → action path works
+router.post('/test-gather', (req, res) => {
+  console.log('════════════════════════════════════════════════════════════════════════════════');
+  console.log('🔥 /test-gather HIT! Twilio successfully called action URL!');
+  console.log('CallSid:', req.body.CallSid);
+  console.log('SpeechResult:', req.body.SpeechResult);
+  console.log('From:', req.body.From);
+  console.log('To:', req.body.To);
+  console.log('════════════════════════════════════════════════════════════════════════════════');
+  
+  const twiml = new twilio.twiml.VoiceResponse();
+  twiml.say(`We heard: ${req.body.SpeechResult || 'nothing'}. Goodbye.`);
+  res.type('text/xml').send(twiml.toString());
 });
 
 logger.info('🚀 [V2TWILIO] ========== EXPORTING ROUTER (FILE LOADED SUCCESSFULLY) ==========');
