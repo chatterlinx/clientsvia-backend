@@ -88,6 +88,12 @@ async function route(decision, company) {
     // This applies to MESSAGE_ONLY, ASK_FOLLOWUP, and other quick actions.
     // ========================================================================
     if (decision.triageTag && companyId) {
+        logger.info('[TRIAGE] 🔍 STEP 2.5: Looking for card by triageTag', {
+            companyId,
+            searchingFor: decision.triageTag,
+            action: decision.action
+        });
+        
         try {
             const triageCard = await matchTriageCardByTag(decision.triageTag, companyId);
             
@@ -101,10 +107,12 @@ async function route(decision, company) {
                 logger.info('[TRIAGE] ✅ Found card by triageTag', {
                     companyId,
                     triageTag: decision.triageTag,
+                    cardId: triageCard._id.toString(),
                     cardName: triageCard.displayName || triageCard.triageLabel,
+                    triageLabel: triageCard.triageLabel,
                     route: cardRoute,
                     hasOpeningLine: !!openingLine,
-                    openingLinePreview: openingLine?.substring(0, 50)
+                    openingLinePreview: openingLine?.substring(0, 80)
                 });
                 
                 return {
@@ -116,12 +124,21 @@ async function route(decision, company) {
                     openingLine, // Card's response content for ResponseConstructor
                     reason: `Matched triage card by tag: ${decision.triageTag}`
                 };
+            } else {
+                // ⚠️ NO MATCH - Log what we searched for vs what exists
+                logger.warn('[TRIAGE] ⚠️ NO CARD FOUND for triageTag - will use fallback', {
+                    companyId,
+                    searchedFor: decision.triageTag,
+                    action: decision.action,
+                    hint: 'Run GET /api/company/:companyId/triage-cards/diagnose-content to see available cards'
+                });
             }
         } catch (error) {
-            logger.warn('[TRIAGE] Error looking up card by triageTag', {
+            logger.error('[TRIAGE] ❌ Error looking up card by triageTag', {
                 companyId,
                 triageTag: decision.triageTag,
-                error: error.message
+                error: error.message,
+                stack: error.stack
             });
         }
     }
@@ -230,9 +247,32 @@ async function route(decision, company) {
  * @returns {Promise<Object|null>} - Full triage card document or null
  */
 async function matchTriageCardByTag(triageTag, companyId) {
-    if (!triageTag || !companyId) return null;
+    if (!triageTag || !companyId) {
+        logger.warn('[TRIAGE MATCH] Missing triageTag or companyId', { triageTag, companyId });
+        return null;
+    }
     
     const normalizedTag = triageTag.toLowerCase().trim();
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // DIAGNOSTIC: List ALL active cards for this company
+    // ═══════════════════════════════════════════════════════════════════════
+    const allCards = await TriageCard.find({
+        companyId,
+        isActive: true
+    }).select('triageLabel displayName quickRuleConfig.scenarioKey').lean();
+    
+    logger.info('[TRIAGE MATCH] 🔍 SEARCHING for card', {
+        companyId,
+        searchingFor: triageTag,
+        normalizedSearch: normalizedTag,
+        totalActiveCards: allCards.length,
+        availableLabels: allCards.map(c => ({
+            triageLabel: c.triageLabel,
+            displayName: c.displayName,
+            scenarioKey: c.quickRuleConfig?.scenarioKey
+        })).slice(0, 15) // Show first 15 to avoid log overflow
+    });
     
     // Try exact match first
     let card = await TriageCard.findOne({
@@ -246,11 +286,12 @@ async function matchTriageCardByTag(triageTag, companyId) {
     }).lean();
     
     if (card) {
-        logger.debug('[TRIAGE] Matched card by exact tag', {
+        logger.info('[TRIAGE MATCH] ✅ EXACT MATCH found', {
             companyId,
-            triageTag,
-            cardId: card._id,
-            cardName: card.displayName || card.triageLabel
+            searchedFor: triageTag,
+            matchedTriageLabel: card.triageLabel,
+            matchedDisplayName: card.displayName,
+            cardId: card._id.toString()
         });
         return card;
     }
@@ -266,15 +307,34 @@ async function matchTriageCardByTag(triageTag, companyId) {
     }).lean();
     
     if (card) {
-        logger.debug('[TRIAGE] Matched card by partial tag', {
+        logger.info('[TRIAGE MATCH] ✅ PARTIAL MATCH found', {
             companyId,
-            triageTag,
-            cardId: card._id,
-            cardName: card.displayName || card.triageLabel
+            searchedFor: triageTag,
+            matchedTriageLabel: card.triageLabel,
+            matchedDisplayName: card.displayName,
+            cardId: card._id.toString()
         });
+        return card;
     }
     
-    return card;
+    // ═══════════════════════════════════════════════════════════════════════
+    // NO MATCH - Show what we compared
+    // ═══════════════════════════════════════════════════════════════════════
+    logger.warn('[TRIAGE MATCH] ❌ NO MATCH FOUND', {
+        companyId,
+        searchedFor: triageTag,
+        normalizedSearch: normalizedTag,
+        totalActiveCards: allCards.length,
+        comparisonDetails: allCards.slice(0, 10).map(c => ({
+            triageLabel: c.triageLabel,
+            normalizedLabel: c.triageLabel?.toLowerCase()?.trim(),
+            wouldMatch: c.triageLabel?.toLowerCase()?.trim() === normalizedTag ||
+                       c.displayName?.toLowerCase()?.trim() === normalizedTag
+        })),
+        suggestion: 'Brain-1 returned a triageTag that does not match any card\'s triageLabel. Update Brain-1 or card labels to match.'
+    });
+    
+    return null;
 }
 
 async function matchTriageCard(decision, companyId) {
