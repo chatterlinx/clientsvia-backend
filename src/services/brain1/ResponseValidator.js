@@ -1,16 +1,35 @@
 /**
  * ============================================================================
- * RESPONSE VALIDATOR - QUALITY GATE
+ * RESPONSE VALIDATOR - QUALITY GATE (TURN-AWARE)
  * ============================================================================
  * 
  * Validates that AI responses are usable before sending to caller.
  * Part of the "No Silence Ever" runtime contract.
  * 
+ * ════════════════════════════════════════════════════════════════════════════
+ * CRITICAL FIX (2025-12-05):
+ * ════════════════════════════════════════════════════════════════════════════
+ * 
+ * Dead-end patterns MUST be turn-aware. Example:
+ * 
+ *   Turn 1: "Is there anything else you'd like to tell me about the issue?"
+ *   → This is a VALID follow-up question asking for more details!
+ *   
+ *   Turn 5: "Is there anything else I can help you with today?"
+ *   → This is a dead-end closing phrase.
+ * 
+ * The difference:
+ * - "tell me about the issue" = asking for info (VALID)
+ * - "help you with today" = wrapping up (DEAD-END)
+ * 
+ * Solution: Only apply dead-end detection on Turn 3+, and use specific
+ * patterns that target actual closing phrases, not follow-up questions.
+ * 
+ * ============================================================================
  * MULTI-TENANT SAFE:
  * - Uses only generic English patterns (no domain terms)
  * - All patterns are configurable, not hardcoded
  * - No HVAC, dental, barber, or any trade-specific logic
- * 
  * ============================================================================
  */
 
@@ -18,71 +37,55 @@ const logger = require('../../../utils/logger');
 const LoopDetector = require('./LoopDetector');
 
 // ════════════════════════════════════════════════════════════════════════════
-// CONFIGURABLE PATTERNS (Generic English only - no domain terms)
-// ════════════════════════════════════════════════════════════════════════════
-// 
-// These patterns detect "dead-end" responses that don't move conversation forward.
-// They are trade-agnostic - work for HVAC, dental, legal, barber, etc.
-// 
-// To adjust: Modify this array or load from environment/config
+// DEAD-END PATTERNS - SPLIT BY WHEN THEY APPLY
 // ════════════════════════════════════════════════════════════════════════════
 
-const DEFAULT_DEAD_END_PATTERNS = [
-    // Generic non-helpful responses
-    /^i understand\.?\s*$/i,
-    /^okay\.?\s*$/i,
-    /^i see\.?\s*$/i,
-    /^got it\.?\s*$/i,
+// ALWAYS dead-ends (even on Turn 1) - response has zero substance
+const ALWAYS_DEAD_END_PATTERNS = [
+    /^i understand\.?\s*$/i,           // Just "I understand." and nothing else
+    /^okay\.?\s*$/i,                   // Just "Okay." and nothing else
+    /^i see\.?\s*$/i,                  // Just "I see." and nothing else
+    /^got it\.?\s*$/i,                 // Just "Got it." and nothing else
+    /^sure\.?\s*$/i,                   // Just "Sure." and nothing else
+    /^alright\.?\s*$/i,                // Just "Alright." and nothing else
+];
+
+// LATE-TURN dead-ends (Turn 3+) - typical closing/wrap-up phrases
+// These are FINE on early turns when asking for more info
+const LATE_TURN_DEAD_END_PATTERNS = [
+    // Closing phrases that wrap up calls
+    /anything else (i|we) can (help|assist) (you )?(with|today)/i,
+    /is there anything else for you today/i,
+    /anything else before (i|we) (go|wrap|finish)/i,
+    /will that be all/i,
+    /is that everything/i,
     
-    // Dead-end follow-ups that don't probe for info
-    /how can i help you\??$/i,
-    /what can i help you with\??$/i,
-    /is there anything else/i,
-    /can you tell me more\??$/i,
-    /let me get some details/i,
-    /i'm here to help/i,
-    /i'd be happy to help/i,
-    
-    // Repetitive acknowledgments without substance
-    /i understand\.\s*how can i/i,
-    /okay,?\s*i understand/i,
-    
-    // Too vague to be useful
-    /what would you like to do/i,
-    /what do you need/i,
+    // Generic dead-ends with no context
+    /^how can i help you\??$/i,        // ONLY if it's the entire response
+    /^what can i help you with\??$/i,  // ONLY if it's the entire response
 ];
 
 // Configurable thresholds
 const CONFIG = {
-    minResponseLength: 25,          // Minimum chars for a response to be considered
-    maxLoopCount: 2,                // Same response N times = stuck
-    patterns: DEFAULT_DEAD_END_PATTERNS,
+    minResponseLength: 20,              // Minimum chars for a response (lowered from 25)
+    minTurnForDeadEndCheck: 3,         // Only check late-turn patterns on Turn 3+
+    patterns: {
+        always: ALWAYS_DEAD_END_PATTERNS,
+        lateTurn: LATE_TURN_DEAD_END_PATTERNS
+    }
 };
-
-/**
- * Load patterns from environment if available
- * Allows runtime configuration without code changes
- */
-function getPatterns() {
-    // Future: Could load from process.env.DEAD_END_PATTERNS_JSON
-    // For now, use defaults
-    return CONFIG.patterns;
-}
 
 /**
  * Check if a response is usable (not empty, not dead-end, not looping)
  * 
+ * NOW TURN-AWARE: Dead-end patterns only apply on later turns.
+ * 
  * @param {string} responseText - The AI response text
  * @param {string} callId - The call SID for loop detection
+ * @param {number} turnNumber - Current turn in the conversation (1-indexed)
  * @returns {Object} { usable: boolean, reason: string|null, details: Object }
  */
-function isUsable(responseText, callId) {
-    const result = {
-        usable: true,
-        reason: null,
-        details: {}
-    };
-    
+function isUsable(responseText, callId, turnNumber = 1) {
     // ════════════════════════════════════════════════════════════════════════════
     // CHECK 1: Not empty or null
     // ════════════════════════════════════════════════════════════════════════════
@@ -112,19 +115,51 @@ function isUsable(responseText, callId) {
     }
     
     // ════════════════════════════════════════════════════════════════════════════
-    // CHECK 3: Not a dead-end pattern (generic English only)
+    // CHECK 3A: ALWAYS dead-end patterns (zero-substance responses)
     // ════════════════════════════════════════════════════════════════════════════
-    const patterns = getPatterns();
-    for (const pattern of patterns) {
+    for (const pattern of CONFIG.patterns.always) {
         if (pattern.test(trimmed)) {
             return {
                 usable: false,
                 reason: 'DEAD_END_PATTERN',
                 details: { 
                     matchedPattern: pattern.toString(),
-                    text: trimmed.substring(0, 50)
+                    text: trimmed.substring(0, 50),
+                    patternType: 'always'
                 }
             };
+        }
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // CHECK 3B: LATE-TURN dead-end patterns (only on Turn 3+)
+    // ════════════════════════════════════════════════════════════════════════════
+    // 
+    // CRITICAL: On early turns (1-2), phrases like "is there anything else you'd 
+    // like to tell me about the issue?" are VALID follow-up questions!
+    // We only treat them as dead-ends on later turns when they become wrap-ups.
+    // ════════════════════════════════════════════════════════════════════════════
+    
+    if (turnNumber >= CONFIG.minTurnForDeadEndCheck) {
+        for (const pattern of CONFIG.patterns.lateTurn) {
+            if (pattern.test(trimmed)) {
+                logger.info('[RESPONSE VALIDATOR] Late-turn dead-end detected', {
+                    callId: callId?.substring(0, 12),
+                    turnNumber,
+                    pattern: pattern.toString().substring(0, 40)
+                });
+                
+                return {
+                    usable: false,
+                    reason: 'DEAD_END_PATTERN',
+                    details: { 
+                        matchedPattern: pattern.toString(),
+                        text: trimmed.substring(0, 50),
+                        patternType: 'lateTurn',
+                        turnNumber
+                    }
+                };
+            }
         }
     }
     
@@ -139,7 +174,8 @@ function isUsable(responseText, callId) {
                 reason: 'LOOP_DETECTED',
                 details: {
                     loopCount: loopCheck.loopCount,
-                    signature: loopCheck.signature?.substring(0, 30)
+                    signature: loopCheck.signature?.substring(0, 30),
+                    turnNumber
                 }
             };
         }
@@ -151,32 +187,35 @@ function isUsable(responseText, callId) {
     return {
         usable: true,
         reason: null,
-        details: { length: trimmed.length }
+        details: { length: trimmed.length, turnNumber }
     };
 }
 
 /**
- * Validate a response and log the result
+ * Validate a response and log the result (TURN-AWARE)
  * 
  * @param {string} responseText - The AI response text
  * @param {string} callId - The call SID
  * @param {string} context - Where this is being called from (for logging)
+ * @param {number} turnNumber - Current turn in the conversation
  * @returns {Object} Validation result
  */
-function validateAndLog(responseText, callId, context = 'unknown') {
-    const result = isUsable(responseText, callId);
+function validateAndLog(responseText, callId, context = 'unknown', turnNumber = 1) {
+    const result = isUsable(responseText, callId, turnNumber);
     
     if (!result.usable) {
         logger.warn('[RESPONSE VALIDATOR] ⚠️ Response failed validation', {
             callId: callId?.substring(0, 12),
             context,
             reason: result.reason,
+            turnNumber,
             details: result.details
         });
     } else {
         logger.debug('[RESPONSE VALIDATOR] ✅ Response passed validation', {
             callId: callId?.substring(0, 12),
             context,
+            turnNumber,
             length: result.details.length
         });
     }
@@ -194,16 +233,17 @@ function updateConfig(newConfig) {
     if (newConfig.minResponseLength !== undefined) {
         CONFIG.minResponseLength = newConfig.minResponseLength;
     }
-    if (newConfig.maxLoopCount !== undefined) {
-        CONFIG.maxLoopCount = newConfig.maxLoopCount;
+    if (newConfig.minTurnForDeadEndCheck !== undefined) {
+        CONFIG.minTurnForDeadEndCheck = newConfig.minTurnForDeadEndCheck;
     }
     if (newConfig.patterns !== undefined) {
         CONFIG.patterns = newConfig.patterns;
     }
     logger.info('[RESPONSE VALIDATOR] Config updated', { 
         minResponseLength: CONFIG.minResponseLength,
-        maxLoopCount: CONFIG.maxLoopCount,
-        patternCount: CONFIG.patterns.length
+        minTurnForDeadEndCheck: CONFIG.minTurnForDeadEndCheck,
+        alwaysPatternsCount: CONFIG.patterns.always.length,
+        lateTurnPatternsCount: CONFIG.patterns.lateTurn.length
     });
 }
 
@@ -213,8 +253,9 @@ function updateConfig(newConfig) {
 function getConfig() {
     return {
         minResponseLength: CONFIG.minResponseLength,
-        maxLoopCount: CONFIG.maxLoopCount,
-        patternCount: CONFIG.patterns.length
+        minTurnForDeadEndCheck: CONFIG.minTurnForDeadEndCheck,
+        alwaysPatternsCount: CONFIG.patterns.always.length,
+        lateTurnPatternsCount: CONFIG.patterns.lateTurn.length
     };
 }
 
@@ -224,6 +265,6 @@ module.exports = {
     updateConfig,
     getConfig,
     // Expose for testing
-    DEFAULT_DEAD_END_PATTERNS
+    ALWAYS_DEAD_END_PATTERNS,
+    LATE_TURN_DEAD_END_PATTERNS
 };
-

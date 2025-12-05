@@ -424,7 +424,9 @@ async function processTurn(companyId, callId, userInput, callState) {
         // If validation fails, we go down the fallback ladder
         // ════════════════════════════════════════════════════════════════════════════
         
-        const validation = validateAndLog(result.text, callId, 'processTurn.normal');
+        // Pass turnNumber so validator knows not to trigger dead-end patterns on early turns
+        const turnNumber = updatedCallState.turnCount || 1;
+        const validation = validateAndLog(result.text, callId, 'processTurn.normal', turnNumber);
         
         if (!validation.usable) {
             logger.warn('[BRAIN-1 RUNTIME] ⚠️ RESPONSE VALIDATION FAILED - Entering fallback ladder', {
@@ -457,11 +459,12 @@ async function processTurn(companyId, callId, userInput, callState) {
                 });
                 
                 if (clarifierResult.success && clarifierResult.text) {
-                    // Validate the clarifier's output too
+                    // Validate the clarifier's output too (same turn-awareness)
                     const clarifierValidation = validateAndLog(
                         clarifierResult.text, 
                         callId, 
-                        'processTurn.tier3Clarifier'
+                        'processTurn.tier3Clarifier',
+                        turnNumber
                     );
                     
                     if (clarifierValidation.usable) {
