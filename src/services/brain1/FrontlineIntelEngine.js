@@ -394,12 +394,28 @@ function checkQuickDecisions(text, callState, emotion, config) {
     // ════════════════════════════════════════════════════════════════════════════
     const scenarios = config?.scenarios || [];
     
+    // Diagnostic: Log what we're matching against
+    const enabledScenarios = scenarios.filter(s => s.isEnabled !== false);
+    const scenariosWithTriggers = enabledScenarios.filter(s => (s.triggers?.length || 0) > 0 || (s.synonyms?.length || 0) > 0);
+    
+    logger.info('[BRAIN-1] 🔍 FAST MATCH DIAGNOSTIC', {
+        inputText: lowerText.substring(0, 50),
+        totalScenarios: scenarios.length,
+        enabledScenarios: enabledScenarios.length,
+        scenariosWithTriggers: scenariosWithTriggers.length,
+        sampleTriggers: scenariosWithTriggers.slice(0, 5).map(s => ({
+            name: s.name || s.triageLabel,
+            triggers: (s.triggers || []).slice(0, 3),
+            synonyms: (s.synonyms || []).slice(0, 3)
+        }))
+    });
+    
     if (scenarios.length > 0) {
         let bestMatch = null;
         let bestScore = 0;
         
         for (const scenario of scenarios) {
-            if (!scenario.isEnabled) continue;
+            if (!scenario.isEnabled && scenario.isEnabled !== undefined) continue;
             
             // Check triggers
             const triggers = scenario.triggers || [];
@@ -410,6 +426,7 @@ function checkQuickDecisions(text, callState, emotion, config) {
                     if (score > bestScore) {
                         bestScore = score;
                         bestMatch = scenario;
+                        logger.info('[BRAIN-1] 🎯 Trigger matched!', { trigger: triggerLower, scenario: scenario.name, score: score.toFixed(2) });
                     }
                 }
             }
@@ -423,6 +440,7 @@ function checkQuickDecisions(text, callState, emotion, config) {
                     if (score > bestScore) {
                         bestScore = score;
                         bestMatch = scenario;
+                        logger.info('[BRAIN-1] 🎯 Synonym matched!', { synonym: synLower, scenario: scenario.name, score: score.toFixed(2) });
                     }
                 }
             }
@@ -502,6 +520,15 @@ function buildBrain1Prompt({ normalizedText, callState, config, emotion }) {
     const genericTags = ['GENERAL_INQUIRY', 'PRICING', 'HOURS', 'LOCATION', 'CALLBACK', 'VENDOR_CALL', 'EMERGENCY', 'WRONG_NUMBER'];
     const allTags = [...new Set([...allowedTags, ...genericTags])];
     const tagsForPrompt = allTags.slice(0, 30).join('|'); // Limit to 30 to keep prompt size reasonable
+    
+    // Diagnostic: Log what tags are available to the LLM
+    logger.info('[BRAIN-1] 🏷️ LLM ALLOWED TAGS', {
+        companyId: config?._id || config?.id,
+        scenarioCount: scenarios.length,
+        allowedTagCount: allowedTags.length,
+        sampleTags: allTags.slice(0, 10),
+        promptTagsLength: tagsForPrompt.length
+    });
     
     // ════════════════════════════════════════════════════════════════════════════
     // CALL CENTER V2: Build customer context section
@@ -653,6 +680,15 @@ async function callBrain1LLM(prompt, metadata) {
         if (!validActions.includes(decision.action)) {
             decision.action = 'ASK_FOLLOWUP';
         }
+        
+        // Diagnostic: Log what LLM returned
+        logger.info('[BRAIN-1] 🤖 LLM RESPONSE', {
+            action: decision.action,
+            triageTag: decision.triageTag,
+            intentTag: decision.intentTag,
+            confidence: decision.confidence,
+            reasoning: decision.reasoning?.substring(0, 100)
+        });
         
         return decision;
         
