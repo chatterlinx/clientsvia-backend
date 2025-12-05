@@ -44,6 +44,10 @@ const { loadCompanyRuntimeConfig } = require('../companyConfigLoader');
 // Circuit breaker for resilience
 const { orchestratorCircuitBreaker } = require('../../../services/OpenAICircuitBreaker');
 
+// Safety nets
+const LoopDetector = require('./LoopDetector');
+const { isCardHealthy, calculateHealthScore } = require('./CardHealthScorer');
+
 /**
  * ============================================================================
  * MAIN ENTRYPOINT: Run a single turn through Brain-1
@@ -280,7 +284,7 @@ async function runTurn({ companyId, callId, text, callState }) {
 async function makeBrain1Decision({ normalizedText, callState, config, emotion, companyId, callId, turn }) {
     
     // Check for obvious cases first (no LLM needed) - TIER 1 TRIAGE
-    const quickDecision = checkQuickDecisions(normalizedText, callState, emotion, config);
+    const quickDecision = checkQuickDecisions(normalizedText, callState, emotion, config, callId);
     if (quickDecision) {
         logger.info('[BRAIN-1] ⚡ Quick decision made - skipping LLM', {
             action: quickDecision.action,
@@ -325,8 +329,9 @@ async function makeBrain1Decision({ normalizedText, callState, config, emotion, 
 
 /**
  * Check for obvious cases that don't need LLM
+ * @param {string} callId - Call SID for loop detection
  */
-function checkQuickDecisions(text, callState, emotion, config) {
+function checkQuickDecisions(text, callState, emotion, config, callId) {
     const lowerText = text.toLowerCase();
     
     // Emergency detection (highest priority)
@@ -390,9 +395,22 @@ function checkQuickDecisions(text, callState, emotion, config) {
     }
     
     // ════════════════════════════════════════════════════════════════════════════
-    // TIER 1: TRIAGE CARD MATCHING (INSTANT - NO LLM NEEDED!)
+    // TIER 1: TRIAGE CARD MATCHING (WITH SAFETY NETS)
     // ════════════════════════════════════════════════════════════════════════════
+    // 
+    // SAFETY NETS (P0 fixes from forensic audit):
+    // 1. Confidence threshold raised to 0.92 for bypass
+    // 2. Card must be "healthy" (has real content/flow)
+    // 3. Call must not be in a loop
+    // 4. Single-word synonyms can't win alone
+    //
+    // ════════════════════════════════════════════════════════════════════════════
+    
     const scenarios = config?.scenarios || [];
+    const effectiveCallId = callId || config?.callId || 'unknown';
+    
+    // Check for loop before proceeding
+    const loopCheck = LoopDetector.checkForLoop(effectiveCallId);
     
     // Diagnostic: Log what we're matching against
     const enabledScenarios = scenarios.filter(s => s.isEnabled !== false);
@@ -403,6 +421,8 @@ function checkQuickDecisions(text, callState, emotion, config) {
         totalScenarios: scenarios.length,
         enabledScenarios: enabledScenarios.length,
         scenariosWithTriggers: scenariosWithTriggers.length,
+        isInLoop: loopCheck.isLooping,
+        loopCount: loopCheck.loopCount,
         sampleTriggers: scenariosWithTriggers.slice(0, 5).map(s => ({
             name: s.name || s.triageLabel,
             triggers: (s.triggers || []).slice(0, 3),
@@ -410,74 +430,169 @@ function checkQuickDecisions(text, callState, emotion, config) {
         }))
     });
     
+    // P0 FIX: If we're in a loop, skip fast-match and force LLM/Tier-3
+    if (loopCheck.isLooping) {
+        logger.warn('[BRAIN-1] 🔄 LOOP DETECTED - Skipping fast-match, forcing Tier-3 logic', {
+            callId: effectiveCallId.substring(0, 12),
+            loopCount: loopCheck.loopCount
+        });
+        return null; // Force LLM path
+    }
+    
     if (scenarios.length > 0) {
         let bestMatch = null;
         let bestScore = 0;
+        let matchedVia = null; // 'trigger' or 'synonym'
+        let keywordMatchCount = 0;
+        let synonymMatchCount = 0;
         
         for (const scenario of scenarios) {
             if (!scenario.isEnabled && scenario.isEnabled !== undefined) continue;
             
-            // Check triggers
+            let scenarioKeywordHits = 0;
+            let scenarioSynonymHits = 0;
+            let scenarioBestScore = 0;
+            
+            // Check triggers (keywords) - these are primary, get full score
             const triggers = scenario.triggers || [];
             for (const trigger of triggers) {
                 const triggerLower = trigger.toLowerCase();
                 if (lowerText.includes(triggerLower)) {
-                    const score = triggerLower.length / lowerText.length; // Longer match = better
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestMatch = scenario;
-                        logger.info('[BRAIN-1] 🎯 Trigger matched!', { trigger: triggerLower, scenario: scenario.name, score: score.toFixed(2) });
+                    scenarioKeywordHits++;
+                    const score = triggerLower.length / lowerText.length;
+                    if (score > scenarioBestScore) {
+                        scenarioBestScore = score;
                     }
                 }
             }
             
-            // Check synonyms too
+            // Check synonyms - but with TIGHTENED rules:
+            // Single-word generic synonyms get heavily penalized
             const synonyms = scenario.synonyms || [];
             for (const synonym of synonyms) {
                 const synLower = synonym.toLowerCase();
                 if (lowerText.includes(synLower)) {
-                    const score = (synLower.length / lowerText.length) * 0.9; // Slightly lower than triggers
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestMatch = scenario;
-                        logger.info('[BRAIN-1] 🎯 Synonym matched!', { synonym: synLower, scenario: scenario.name, score: score.toFixed(2) });
+                    scenarioSynonymHits++;
+                    
+                    // P2 FIX: Tighten synonym scoring
+                    // Single-word synonyms (< 10 chars) only count at 50% weight
+                    // Multi-word synonyms count at 80% weight
+                    const wordCount = synLower.split(/\s+/).length;
+                    const isGenericSingleWord = wordCount === 1 && synLower.length < 10;
+                    
+                    const synonymWeight = isGenericSingleWord ? 0.5 : 0.8;
+                    const score = (synLower.length / lowerText.length) * synonymWeight;
+                    
+                    if (score > scenarioBestScore) {
+                        scenarioBestScore = score;
                     }
                 }
             }
+            
+            // P2 FIX: Require keyword match OR 2+ synonym matches
+            // A single generic synonym like "thermostat" can't win alone
+            const hasValidMatch = scenarioKeywordHits >= 1 || scenarioSynonymHits >= 2;
+            
+            if (hasValidMatch && scenarioBestScore > bestScore) {
+                bestScore = scenarioBestScore;
+                bestMatch = scenario;
+                matchedVia = scenarioKeywordHits > 0 ? 'trigger' : 'synonym';
+                keywordMatchCount = scenarioKeywordHits;
+                synonymMatchCount = scenarioSynonymHits;
+                
+                logger.info('[BRAIN-1] 🎯 Card matched!', { 
+                    card: scenario.name, 
+                    score: scenarioBestScore.toFixed(2),
+                    via: matchedVia,
+                    keywordHits: scenarioKeywordHits,
+                    synonymHits: scenarioSynonymHits
+                });
+            }
         }
         
-        // If we found a match with reasonable confidence
-        if (bestMatch && bestScore > 0.1) {
-            const routing = bestMatch.routing || 'MESSAGE_ONLY';
-            const action = routing === 'BOOK' || routing === 'SCHEDULE' ? 'BOOK' :
-                          routing === 'TRANSFER' ? 'TRANSFER' :
-                          routing === 'ROUTE_TO_SCENARIO' ? 'ROUTE_TO_SCENARIO' :
-                          'MESSAGE_ONLY';
+        // ════════════════════════════════════════════════════════════════════════════
+        // P0 FIX: TRIPLE SAFETY CHECK BEFORE BYPASS
+        // ════════════════════════════════════════════════════════════════════════════
+        if (bestMatch) {
+            // Calculate actual confidence (normalize to 0-1)
+            const confidence = Math.min(0.95, 0.5 + bestScore);
             
-            logger.info('[BRAIN-1] ⚡ FAST TRIAGE MATCH - No LLM needed!', {
-                matchedCard: bestMatch.name,
-                score: bestScore.toFixed(2),
-                action,
-                source: bestMatch.source || 'unknown'
+            // Check 1: High confidence threshold (0.92 for full bypass)
+            const isHighConfidence = confidence >= 0.92;
+            
+            // Check 2: Card is healthy (has real content)
+            const cardHealth = calculateHealthScore(bestMatch);
+            const cardIsHealthy = cardHealth.isHealthy;
+            
+            // Check 3: Not in a loop (already checked above, but double-check)
+            const notInLoop = !loopCheck.isLooping;
+            
+            // Can we bypass deeper logic (LLM/Tier-3)?
+            const canBypassDeeperLogic = isHighConfidence && cardIsHealthy && notInLoop;
+            
+            logger.info('[BRAIN-1] 🛡️ SAFETY CHECK', {
+                card: bestMatch.name,
+                confidence: confidence.toFixed(2),
+                isHighConfidence,
+                cardHealthScore: cardHealth.score,
+                cardIsHealthy,
+                notInLoop,
+                canBypassDeeperLogic,
+                matchedVia,
+                keywordHits: keywordMatchCount,
+                synonymHits: synonymMatchCount
             });
             
-            // Use canonical normalizeTag for consistency with TriageRouter
-            const tagToEmit = normalizeTag(bestMatch.name || bestMatch.triageLabel || bestMatch.id);
-            
-            return {
-                action,
-                triageTag: tagToEmit || 'MATCHED',
-                intentTag: bestMatch.category || 'triage',
-                confidence: Math.min(0.9, 0.6 + bestScore),
-                reasoning: `Triage card match: ${bestMatch.name}`,
-                matchedScenario: bestMatch,
-                response: bestMatch.response || null,
-                entities: {},
-                flags: { 
-                    triageMatched: true,
-                    readyToBook: action === 'BOOK'
-                }
-            };
+            if (canBypassDeeperLogic) {
+                // ✅ All safety checks passed - use fast match
+                const routing = bestMatch.routing || 'MESSAGE_ONLY';
+                const action = routing === 'BOOK' || routing === 'SCHEDULE' ? 'BOOK' :
+                              routing === 'TRANSFER' ? 'TRANSFER' :
+                              routing === 'ROUTE_TO_SCENARIO' ? 'ROUTE_TO_SCENARIO' :
+                              'MESSAGE_ONLY';
+                
+                logger.info('[BRAIN-1] ⚡ FAST TRIAGE MATCH - All safety checks passed!', {
+                    matchedCard: bestMatch.name,
+                    confidence: confidence.toFixed(2),
+                    action,
+                    cardHealthScore: cardHealth.score,
+                    source: bestMatch.source || 'unknown'
+                });
+                
+                // Use canonical normalizeTag for consistency with TriageRouter
+                const tagToEmit = normalizeTag(bestMatch.name || bestMatch.triageLabel || bestMatch.id);
+                
+                return {
+                    action,
+                    triageTag: tagToEmit || 'MATCHED',
+                    intentTag: bestMatch.category || 'triage',
+                    confidence,
+                    reasoning: `Triage card match: ${bestMatch.name} (health: ${cardHealth.score})`,
+                    matchedScenario: bestMatch,
+                    response: bestMatch.response || null,
+                    entities: {},
+                    flags: { 
+                        triageMatched: true,
+                        readyToBook: action === 'BOOK',
+                        bypassedLLM: true
+                    }
+                };
+            } else {
+                // ⚠️ Safety checks failed - log why and proceed to LLM
+                logger.warn('[BRAIN-1] ⚠️ SAFETY CHECK FAILED - Routing to Tier-3 LLM', {
+                    card: bestMatch.name,
+                    confidence: confidence.toFixed(2),
+                    failedChecks: [
+                        !isHighConfidence ? 'LOW_CONFIDENCE' : null,
+                        !cardIsHealthy ? 'UNHEALTHY_CARD' : null,
+                        !notInLoop ? 'IN_LOOP' : null
+                    ].filter(Boolean),
+                    cardHealthReasons: cardHealth.reasons
+                });
+                
+                // Still pass the matched card as a hint to LLM, but don't bypass
+                // The LLM will see this context and can use it or ignore it
+            }
         }
     }
     

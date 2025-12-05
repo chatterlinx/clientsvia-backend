@@ -38,6 +38,11 @@ const Company = require('../../../models/v2Company');
 const { buildFinalResponse, buildSimpleResponse } = require('../../../services/ResponseConstructor');
 const { analyzeBehavior, getDefaultBehavior } = require('../../../services/LLM0BehaviorAnalyzer');
 
+// ═══════════════════════════════════════════════════════════════════════════
+// LOOP DETECTOR - Safety net to prevent infinite generic response loops
+// ═══════════════════════════════════════════════════════════════════════════
+const LoopDetector = require('./LoopDetector');
+
 /**
  * ============================================================================
  * MAIN ENTRYPOINT: Process a complete turn through the brain architecture
@@ -304,6 +309,12 @@ async function processTurn(companyId, callId, userInput, callState) {
         const { fullSubstitution, buildSubstitutionContext } = require('../../../utils/responseVariableSubstitution');
         const substitutionContext = buildSubstitutionContext(updatedCallState, company);
         result.text = fullSubstitution(result.text, substitutionContext);
+        
+        // ====================================================================
+        // STEP 5.7: RECORD RESPONSE FOR LOOP DETECTION
+        // ====================================================================
+        // P0 FIX: Track responses to detect infinite loops
+        LoopDetector.recordResponse(callId, result.text);
         
         // ====================================================================
         // STEP 6: UPDATE TRACE AND PERSIST
