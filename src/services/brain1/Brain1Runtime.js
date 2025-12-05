@@ -499,26 +499,66 @@ async function processTurn(companyId, callId, userInput, callState) {
             }
             
             // ════════════════════════════════════════════════════════════════════════════
-            // FALLBACK LADDER STEP 2: Hard Bailout (only if Tier-3 also failed)
+            // FALLBACK LADDER STEP 2: Bailout (only if Tier-3 also failed)
+            // ════════════════════════════════════════════════════════════════════════════
+            // 
+            // Two types of bailout:
+            // - HARD: LOOP_DETECTED or DEAD_END_PATTERN → Transfer to human
+            // - SOFT: EMPTY or TOO_SHORT → Try to recover the conversation
             // ════════════════════════════════════════════════════════════════════════════
             
             if (!tier3Success) {
-                const bailoutMessage = company?.settings?.bailoutMessage || DEFAULT_BAILOUT_MESSAGE;
-                const bailoutAction = company?.settings?.bailoutAction || DEFAULT_BAILOUT_ACTION;
+                const isHardFailure = (validation.reason === 'LOOP_DETECTED' || validation.reason === 'DEAD_END_PATTERN');
                 
-                logger.warn('[BRAIN-1 RUNTIME] 🚨 BAILOUT TRIGGERED (Tier-3 failed)', {
-                    companyId,
-                    callId,
-                    originalReason: validation.reason,
-                    bailoutAction
-                });
-                
-                result.text = bailoutMessage;
-                result.action = bailoutAction === 'TRANSFER' ? 'transfer' : 'take_message';
-                result.shouldTransfer = bailoutAction === 'TRANSFER';
-                result.shouldHangup = false;
-                result.bailoutTriggered = true;
-                result.bailoutReason = validation.reason;
+                if (isHardFailure) {
+                    // ════════════════════════════════════════════════════════════════════════════
+                    // HARD BAILOUT: Logic failure → Transfer to human
+                    // ════════════════════════════════════════════════════════════════════════════
+                    const bailoutMessage = company?.settings?.bailoutMessage || DEFAULT_BAILOUT_MESSAGE;
+                    const bailoutAction = company?.settings?.bailoutAction || DEFAULT_BAILOUT_ACTION;
+                    
+                    logger.warn('[BRAIN-1 RUNTIME] 🚨 HARD BAILOUT (Loop/Dead-end)', {
+                        companyId,
+                        callId,
+                        reason: validation.reason,
+                        turnNumber,
+                        bailoutAction
+                    });
+                    
+                    result.text = bailoutMessage;
+                    result.action = bailoutAction === 'TRANSFER' ? 'transfer' : 'take_message';
+                    result.shouldTransfer = bailoutAction === 'TRANSFER';
+                    result.shouldHangup = false;
+                    result.bailoutTriggered = true;
+                    result.bailoutReason = validation.reason;
+                    result.bailoutType = 'hard';
+                } else {
+                    // ════════════════════════════════════════════════════════════════════════════
+                    // SOFT BAILOUT: Generation failure → Try to recover conversation
+                    // ════════════════════════════════════════════════════════════════════════════
+                    // 
+                    // IMPORTANT: Don't say "I can't hear you" - that blames the caller.
+                    // The AI generated garbage, not an audio problem.
+                    // Say "let me rephrase" or "could you tell me more" instead.
+                    // ════════════════════════════════════════════════════════════════════════════
+                    
+                    logger.warn('[BRAIN-1 RUNTIME] ⚠️ SOFT BAILOUT (Empty/Short)', {
+                        companyId,
+                        callId,
+                        reason: validation.reason,
+                        turnNumber,
+                        originalLength: result.text?.length
+                    });
+                    
+                    // Honest recovery message - admits we need to retry
+                    result.text = "Let me try that again. Could you tell me a little more about what you need help with?";
+                    result.action = 'continue';  // Keep the call alive
+                    result.shouldTransfer = false;
+                    result.shouldHangup = false;
+                    result.bailoutTriggered = true;
+                    result.bailoutReason = validation.reason;
+                    result.bailoutType = 'soft';
+                }
             }
         }
         
