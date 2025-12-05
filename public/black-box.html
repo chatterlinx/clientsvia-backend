@@ -415,11 +415,11 @@
 <body>
     <!-- Navigation Bar -->
     <nav class="nav-bar">
-        <a href="#" class="nav-back" onclick="goBack()">← Back to Profile</a>
-        <a href="control-plane-v2.html" id="navControlPlane">ClientsVia Control Plane</a>
-        <a href="ai-core-center.html" id="navAiCore">AiCore Control Center</a>
-        <a href="companyops-console.html" id="navCompanyOps">CompanyOps Console</a>
-        <a href="black-box.html" id="navBlackBox" class="active">Black Box Recorder</a>
+        <a href="#" class="nav-back" id="navBack">← Back to Profile</a>
+        <a href="#" id="navControlPlane">ClientsVia Control Plane</a>
+        <a href="#" id="navAiCore">AiCore Control Center</a>
+        <a href="#" id="navCompanyOps">CompanyOps Console</a>
+        <a href="#" id="navBlackBox" class="active">Black Box Recorder</a>
     </nav>
 
     <!-- Page Header -->
@@ -546,14 +546,20 @@
         });
 
         function updateNavLinks() {
+            // Back to Profile - goes to company profile page
+            document.getElementById('navBack').href = `company-profile.html?companyId=${companyId}`;
+            
+            // Control Plane V2 - main control plane
             document.getElementById('navControlPlane').href = `control-plane-v2.html?companyId=${companyId}`;
-            document.getElementById('navAiCore').href = `ai-core-center.html?companyId=${companyId}`;
-            document.getElementById('navCompanyOps').href = `companyops-console.html?companyId=${companyId}`;
+            
+            // AiCore Control Center - it's a tab within Control Plane V2
+            document.getElementById('navAiCore').href = `control-plane-v2.html?companyId=${companyId}&tab=aicore`;
+            
+            // CompanyOps Console - it's a tab within Control Plane V2
+            document.getElementById('navCompanyOps').href = `control-plane-v2.html?companyId=${companyId}&tab=companyops`;
+            
+            // Black Box Recorder - current page
             document.getElementById('navBlackBox').href = `black-box.html?companyId=${companyId}`;
-        }
-
-        function goBack() {
-            window.location.href = `v2profile.html?companyId=${companyId}`;
         }
 
         // ═══════════════════════════════════════════════════════════════════
