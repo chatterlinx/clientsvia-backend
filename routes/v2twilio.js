@@ -85,6 +85,20 @@ async function getRedis() {
 const { stripMarkdown, cleanTextForTTS } = require('../utils/textUtils');
 // Legacy personality system removed - using modern AI Agent Logic responseCategories
 
+// ════════════════════════════════════════════════════════════════════════════════
+// 🔒 HTTPS URL HELPER
+// ════════════════════════════════════════════════════════════════════════════════
+// Render (and most reverse proxies) terminate SSL, so req.protocol returns 'http'.
+// This helper forces HTTPS in production to ensure Twilio can fetch our audio files.
+// Without this, <Play> URLs will fail and Gather will never complete.
+// ════════════════════════════════════════════════════════════════════════════════
+function getSecureBaseUrl(req) {
+  const host = req.get('host');
+  // Force HTTPS in production (behind Render proxy)
+  const protocol = process.env.NODE_ENV === 'production' ? 'https' : req.protocol;
+  return `${protocol}://${host}`;
+}
+
 // ============================================================================
 // 🧠 3-TIER SELF-IMPROVEMENT SYSTEM CONFIGURATION
 // ============================================================================
@@ -1184,7 +1198,7 @@ router.post('/voice', async (req, res) => {
           if (!fs.existsSync(audioDir)) {fs.mkdirSync(audioDir, { recursive: true });}
           const filePath = path.join(audioDir, fileName);
           fs.writeFileSync(filePath, buffer);
-          gather.play(`${req.protocol}://${req.get('host')}/audio/${fileName}`);
+          gather.play(`${getSecureBaseUrl(req)}/audio/${fileName}`);
         } catch (err) {
           logger.error('❌ AI Agent Logic TTS failed, using Say:', err);
           logger.error('❌ Error details:', err.message);
@@ -2158,7 +2172,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           if (!fs.existsSync(audioDir)) { fs.mkdirSync(audioDir, { recursive: true }); }
           const filePath = path.join(audioDir, fileName);
           fs.writeFileSync(filePath, buffer);
-          const audioUrl = `http://${req.get('host')}/audio/${fileName}`;
+          const audioUrl = `${getSecureBaseUrl(req)}/audio/${fileName}`;
           twiml.play(audioUrl);
           logger.info(`🎤 V2 ELEVENLABS: Transfer message audio generated: ${audioUrl}`);
         } catch (err) {
@@ -2298,7 +2312,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             }
             const filePath = path.join(audioDir, fileName);
             fs.writeFileSync(filePath, audioBuffer);
-            audioUrl = `http://${req.get('host')}/audio/${fileName}`;
+            audioUrl = `${getSecureBaseUrl(req)}/audio/${fileName}`;
             storageMethod = 'Disk (Redis unavailable)';
             logger.warn(`⚠️ V2 ELEVENLABS: Redis unavailable, saved to disk at ${audioUrl}`);
           }
