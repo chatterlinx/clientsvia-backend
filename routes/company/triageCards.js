@@ -548,6 +548,104 @@ router.get('/compiled/config', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DIAGNOSTIC: Check response content of all triage cards
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/company/:companyId/triage-cards/diagnose-content
+// Returns analysis of which cards have response content and which don't
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/diagnose-content', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    
+    logger.info('[TRIAGE CARDS API] Running content diagnostic', { companyId });
+    
+    const cards = await TriageCard.find({ 
+      companyId,
+      isActive: true 
+    }).lean();
+    
+    const analysis = {
+      companyId,
+      totalActiveCards: cards.length,
+      cardsWithContent: [],
+      cardsWithoutContent: [],
+      contentSourcesSummary: {}
+    };
+    
+    for (const card of cards) {
+      const sources = [];
+      
+      // Check all possible response sources
+      const checks = [
+        { field: 'frontlinePlaybook.openingLines[0]', value: card.frontlinePlaybook?.openingLines?.[0] },
+        { field: 'frontlinePlaybook.openingLine', value: card.frontlinePlaybook?.openingLine },
+        { field: 'frontlinePlaybook.frontlineGoal', value: card.frontlinePlaybook?.frontlineGoal },
+        { field: 'quickRuleConfig.explanation', value: card.quickRuleConfig?.explanation },
+        { field: 'quickRuleConfig.acknowledgment', value: card.quickRuleConfig?.acknowledgment },
+        { field: 'actionPlaybooks.explainAndPush.explanationLines[0]', value: card.actionPlaybooks?.explainAndPush?.explanationLines?.[0] },
+        { field: 'actionPlaybooks.takeMessage.introLines[0]', value: card.actionPlaybooks?.takeMessage?.introLines?.[0] },
+        { field: 'actionPlaybooks.escalateToHuman.preTransferLines[0]', value: card.actionPlaybooks?.escalateToHuman?.preTransferLines?.[0] },
+        { field: 'response', value: card.response },
+      ];
+      
+      for (const check of checks) {
+        if (check.value && check.value.trim()) {
+          sources.push({
+            field: check.field,
+            preview: check.value.substring(0, 80) + (check.value.length > 80 ? '...' : '')
+          });
+          analysis.contentSourcesSummary[check.field] = (analysis.contentSourcesSummary[check.field] || 0) + 1;
+        }
+      }
+      
+      const cardInfo = {
+        id: card._id.toString(),
+        triageLabel: card.triageLabel,
+        displayName: card.displayName,
+        action: card.quickRuleConfig?.action,
+        sources
+      };
+      
+      if (sources.length > 0) {
+        analysis.cardsWithContent.push(cardInfo);
+      } else {
+        analysis.cardsWithoutContent.push(cardInfo);
+      }
+    }
+    
+    // Add recommendations
+    analysis.recommendations = [];
+    if (analysis.cardsWithoutContent.length > 0) {
+      analysis.recommendations.push({
+        severity: 'warning',
+        message: `${analysis.cardsWithoutContent.length} cards have NO response content - they will use generic fallback`,
+        fix: 'Add frontlinePlaybook.openingLines or quickRuleConfig.explanation to these cards'
+      });
+    }
+    
+    logger.info('[TRIAGE CARDS API] Content diagnostic complete', {
+      companyId,
+      totalCards: cards.length,
+      withContent: analysis.cardsWithContent.length,
+      withoutContent: analysis.cardsWithoutContent.length
+    });
+    
+    res.json({
+      success: true,
+      diagnostic: analysis
+    });
+    
+  } catch (error) {
+    logger.error('[TRIAGE CARDS API] Content diagnostic failed', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // HELPER: Explain what happens for each action
 // ─────────────────────────────────────────────────────────────────────────────
 
