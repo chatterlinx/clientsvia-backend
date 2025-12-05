@@ -16,6 +16,16 @@ const V2Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 const logger = require('../../utils/logger');
 
+// TriageCard model for loading company-specific triage cards
+let TriageCard;
+try {
+  TriageCard = require('../../models/TriageCard');
+} catch (err) {
+  logger.warn('[COMPANY CONFIG LOADER] TriageCard model not found', {
+    error: err.message
+  });
+}
+
 // Knowledgebase models (check if they exist in your codebase)
 let CompanyQnA, TradeQnA;
 try {
@@ -59,8 +69,8 @@ async function loadCompanyRuntimeConfig({ companyId }) {
     // 5. Build synonyms
     const synonyms = buildSynonyms(company);
     
-    // 6. Build scenario summary
-    const scenarios = buildScenarioSummary(company, templateInfo.templates);
+    // 6. Build scenario summary (now async to load TriageCards from DB)
+    const scenarios = await buildScenarioSummary(company, templateInfo.templates);
     
     // 7. Load knowledgebase summary
     const knowledgebase = await loadKnowledgebaseSummary(company);
@@ -357,13 +367,14 @@ function buildSynonyms(company) {
 }
 
 /**
- * Build scenario summary from templates AND CheatSheet Triage Cards
+ * Build scenario summary from templates AND TriageCard model
  * @param {Object} company
  * @param {Array} templates
- * @returns {Array} Scenarios array
+ * @returns {Promise<Array>} Scenarios array
  */
-function buildScenarioSummary(company, templates) {
+async function buildScenarioSummary(company, templates) {
   const scenarios = [];
+  const companyId = company._id.toString();
   
   try {
     // Get scenario controls from aiAgentSettings
@@ -396,20 +407,78 @@ function buildScenarioSummary(company, templates) {
           });
         });
       }
+      
+      // Also check template categories with nested scenarios
+      if (template.categories && Array.isArray(template.categories)) {
+        template.categories.forEach(category => {
+          if (category.scenarios && Array.isArray(category.scenarios)) {
+            category.scenarios.forEach(scenario => {
+              const scenarioId = scenario._id ? scenario._id.toString() : scenario.scenarioKey || scenario.id;
+              const isEnabled = scenarioControls[scenarioId] !== undefined 
+                ? scenarioControls[scenarioId]
+                : (scenario.isEnabled !== false);
+              
+              scenarios.push({
+                id: scenarioId,
+                name: scenario.name || scenario.scenarioKey || 'Unnamed Scenario',
+                category: category.name || category.categoryName || 'uncategorized',
+                triggers: scenario.triggers || scenario.keywords || [],
+                synonyms: scenario.synonyms || [],
+                response: scenario.responses?.[0]?.fullReply || scenario.response || '',
+                isEnabled,
+                source: 'template-category'
+              });
+            });
+          }
+        });
+      }
     });
     
-    // 2. Extract Triage Cards from CheatSheet (V2 primary source)
+    // 2. Load TriageCards from the TriageCard MODEL (primary source for runtime)
+    if (TriageCard) {
+      const triageCards = await TriageCard.find({
+        companyId,
+        isActive: { $ne: false }
+      }).lean().exec();
+      
+      if (triageCards.length > 0) {
+        logger.info(`[COMPANY CONFIG LOADER] Loading ${triageCards.length} TriageCards from database for company ${companyId}`);
+        
+        triageCards.forEach(card => {
+          const cardId = card._id.toString();
+          
+          // Extract keywords from quickRuleConfig
+          const keywords = card.quickRuleConfig?.keywordsMustHave || [];
+          
+          scenarios.push({
+            id: cardId,
+            name: card.triageLabel || card.displayName || 'Unnamed Card',
+            category: card.trade || 'triage',
+            triggers: keywords,
+            synonyms: card.generatedSynonyms || [],
+            response: card.frontlinePlaybook?.openingLines?.[0] || '',
+            routing: card.quickRuleConfig?.action || 'DIRECT_TO_3TIER',
+            linkedScenario: card.linkedScenario?.scenarioKey || null,
+            isEnabled: card.isActive !== false,
+            source: 'triagecard-model'
+          });
+        });
+      } else {
+        logger.warn(`[COMPANY CONFIG LOADER] No TriageCards found in database for company ${companyId}`);
+      }
+    }
+    
+    // 3. Fallback: Check embedded triage cards in CheatSheet config
     const cheatSheetConfig = company.cheatSheets?.[0]?.config || 
                              company.aiAgentSettings?.cheatSheet || 
                              {};
     
-    const triageCards = cheatSheetConfig.triageCards || [];
+    const embeddedCards = cheatSheetConfig.triageCards || [];
     
-    if (triageCards.length > 0) {
-      logger.info(`[COMPANY CONFIG LOADER] Loading ${triageCards.length} Triage Cards from CheatSheet`);
+    if (embeddedCards.length > 0 && scenarios.filter(s => s.source === 'triagecard-model').length === 0) {
+      logger.info(`[COMPANY CONFIG LOADER] Loading ${embeddedCards.length} embedded Triage Cards from CheatSheet`);
       
-      triageCards.forEach(card => {
-        // Skip if disabled
+      embeddedCards.forEach(card => {
         if (card.isEnabled === false || card.enabled === false) return;
         
         const cardId = card._id ? card._id.toString() : (card.id || `triage-${card.title || card.name}`);
@@ -423,21 +492,24 @@ function buildScenarioSummary(company, templates) {
           response: card.response || card.quickResponse || card.fullResponse || '',
           routing: card.routing || card.action || 'MESSAGE_ONLY',
           isEnabled: true,
-          source: 'cheatsheet'
+          source: 'cheatsheet-embedded'
         });
       });
     }
     
     logger.debug(`[COMPANY CONFIG LOADER] Built scenario summary`, {
-      count: scenarios.length,
+      total: scenarios.length,
       fromTemplates: scenarios.filter(s => s.source === 'template').length,
-      fromCheatSheet: scenarios.filter(s => s.source === 'cheatsheet').length,
+      fromTemplateCategories: scenarios.filter(s => s.source === 'template-category').length,
+      fromTriageCardModel: scenarios.filter(s => s.source === 'triagecard-model').length,
+      fromCheatSheet: scenarios.filter(s => s.source === 'cheatsheet-embedded').length,
       enabled: scenarios.filter(s => s.isEnabled).length
     });
     
   } catch (error) {
     logger.error(`[COMPANY CONFIG LOADER] Error building scenarios`, {
-      error: error.message
+      error: error.message,
+      stack: error.stack
     });
   }
   
