@@ -847,6 +847,24 @@ async function handleTransfer({ company, callState, decision, triageResult }) {
  */
 async function handleBooking({ company, callState, decision }) {
     const entities = decision.entities || {};
+    const callId = callState?.callId;
+    const companyId = company?._id?.toString();
+    const turnNumber = callState?.turnCount || 1;
+    
+    // 📼 BLACK BOX: Log booking mode activation (first time entering booking flow)
+    const wasInBookingFlow = !!callState?.bookingState;
+    if (BlackBoxLogger && callId && !wasInBookingFlow) {
+        BlackBoxLogger.logEvent({
+            callId,
+            companyId,
+            type: 'BOOKING_MODE_ACTIVATED',
+            turn: turnNumber,
+            data: {
+                reason: decision.intentTag || 'BOOKING_REQUEST',
+                intentConfidence: decision.confidence || 0
+            }
+        }).catch(() => {});
+    }
     
     // Check what info we have
     const hasName = !!entities.contact?.name;
@@ -854,8 +872,22 @@ async function handleBooking({ company, callState, decision }) {
     const hasAddress = !!entities.location?.addressLine1;
     const hasPreferredTime = !!entities.scheduling?.preferredDate || !!entities.scheduling?.preferredWindow;
     
+    // Helper to log booking steps
+    const logBookingStep = (stepKey, status) => {
+        if (BlackBoxLogger && callId) {
+            BlackBoxLogger.logEvent({
+                callId,
+                companyId,
+                type: 'BOOKING_STEP',
+                turn: turnNumber,
+                data: { stepKey, status }
+            }).catch(() => {});
+        }
+    };
+    
     // Determine what to ask for
     if (!hasName) {
+        logBookingStep('ASK_NAME', 'ASKED');
         return {
             text: "I'd be happy to schedule that for you. May I have your name please?",
             action: 'continue',
@@ -869,6 +901,7 @@ async function handleBooking({ company, callState, decision }) {
     }
     
     if (!hasPhone) {
+        logBookingStep('ASK_PHONE', 'ASKED');
         return {
             text: "Thanks, " + entities.contact.name + ". And what's the best phone number to reach you?",
             action: 'continue',
@@ -882,6 +915,7 @@ async function handleBooking({ company, callState, decision }) {
     }
     
     if (!hasAddress) {
+        logBookingStep('ASK_ADDRESS', 'ASKED');
         return {
             text: "Great. What's the service address?",
             action: 'continue',
@@ -895,6 +929,7 @@ async function handleBooking({ company, callState, decision }) {
     }
     
     if (!hasPreferredTime) {
+        logBookingStep('ASK_TIME', 'ASKED');
         return {
             text: "When would be a good time for us to come out?",
             action: 'continue',
@@ -908,6 +943,7 @@ async function handleBooking({ company, callState, decision }) {
     }
     
     // Have all info - confirm booking
+    logBookingStep('CONFIRM_BOOKING', 'CONFIRMED');
     const timeText = entities.scheduling.preferredDate || entities.scheduling.preferredWindow || 'soon';
     return {
         text: `Perfect! I have ${entities.contact.name} at ${entities.location.addressLine1} for ${timeText}. I'll get that scheduled and someone will confirm with you shortly. Is there anything else I can help you with?`,

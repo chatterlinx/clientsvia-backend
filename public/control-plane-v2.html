@@ -109,6 +109,7 @@
     <button class="js-aicore-tab" data-aicore-target="call-flow">Call Flow</button>
     <button class="js-aicore-tab" data-aicore-target="knowledgebase">AiCore Knowledgebase</button>
     <button class="js-aicore-tab" data-aicore-target="observability">Observability (AI Metrics)</button>
+    <button class="js-aicore-tab" data-aicore-target="black-box" style="color: #f97316;">📼 Black Box</button>
     <button class="js-aicore-tab" data-aicore-target="llm-cortex-intel">LLM-0 Cortex-Intel</button>
     <button class="js-aicore-tab" id="agent-status-tab" data-aicore-target="agent-status">
       <span id="agent-status-indicator">⚪</span> Live Agent Status
@@ -256,6 +257,55 @@
               <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
               <p>Loading metrics...</p>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AICORE: BLACK BOX RECORDER -->
+      <div class="panel" data-aicore-panel="black-box">
+        <div class="card">
+          <h2>📼 Black Box Call Recorder</h2>
+          <p class="muted">Enterprise-grade call flight recorder. Every decision point, every turn, visualized.</p>
+          
+          <div style="margin-top: 20px; padding: 20px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #f97316;">
+            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px;">
+              <div style="font-size: 48px;">📼</div>
+              <div>
+                <h3 style="margin: 0; color: #f97316; font-size: 20px;">Call Flight Recorder</h3>
+                <p style="margin: 4px 0 0; color: #94a3b8; font-size: 14px;">
+                  View complete call journeys: STT, intent detection, triage routing, 3-tier decisions, bailouts, and more.
+                </p>
+              </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px;">
+              <div style="background: #0f172a; padding: 16px; border-radius: 8px; text-align: center; border: 1px solid #334155;">
+                <div style="font-size: 24px; color: #22c55e; font-weight: bold;">Timeline</div>
+                <div style="color: #64748b; font-size: 12px;">Every event with timestamps</div>
+              </div>
+              <div style="background: #0f172a; padding: 16px; border-radius: 8px; text-align: center; border: 1px solid #334155;">
+                <div style="font-size: 24px; color: #3b82f6; font-weight: bold;">Waterfall</div>
+                <div style="color: #64748b; font-size: 12px;">Performance per turn</div>
+              </div>
+              <div style="background: #0f172a; padding: 16px; border-radius: 8px; text-align: center; border: 1px solid #334155;">
+                <div style="font-size: 24px; color: #a78bfa; font-weight: bold;">Diagnosis</div>
+                <div style="color: #64748b; font-size: 12px;">Auto-detected issues</div>
+              </div>
+            </div>
+            
+            <a href="#" id="open-black-box-btn" 
+               style="display: inline-flex; align-items: center; gap: 8px; background: #f97316; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.2s;"
+               onmouseover="this.style.background='#ea580c'" onmouseout="this.style.background='#f97316'">
+              <span>Open Black Box Recorder</span>
+              <span style="font-size: 18px;">→</span>
+            </a>
+          </div>
+          
+          <div style="margin-top: 16px; padding: 12px; background: #fef3c7; border-radius: 8px; border: 1px solid #f59e0b;">
+            <p style="margin: 0; color: #92400e; font-size: 13px;">
+              <strong>💡 Tip:</strong> After a test call, open Black Box to see exactly what happened at each step. 
+              Click "Copy for Engineering" to get a snapshot you can paste directly into this chat.
+            </p>
           </div>
         </div>
       </div>
@@ -518,6 +568,32 @@
     // ═══════════════════════════════════════════════════════════════════════
     // ═══════════════════════════════════════════════════════════════════════════
     // CALL CENTER - Opens in new tab
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BLACK BOX RECORDER - Open in new tab
+    // ═══════════════════════════════════════════════════════════════════════════
+    function openBlackBox() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const companyId = urlParams.get('companyId');
+      
+      if (!companyId) {
+        alert('No company ID found. Please select a company first.');
+        return;
+      }
+      
+      window.open(`/black-box.html?companyId=${companyId}`, '_blank');
+    }
+    
+    // Wire up Black Box button after DOM loads
+    document.addEventListener('DOMContentLoaded', () => {
+      const blackBoxBtn = document.getElementById('open-black-box-btn');
+      if (blackBoxBtn) {
+        blackBoxBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          openBlackBox();
+        });
+      }
+    });
+    
     // ═══════════════════════════════════════════════════════════════════════════
     function openCallCenter() {
       const urlParams = new URLSearchParams(window.location.search);
