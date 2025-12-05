@@ -85,6 +85,21 @@ async function getRedis() {
 const { stripMarkdown, cleanTextForTTS } = require('../utils/textUtils');
 // Legacy personality system removed - using modern AI Agent Logic responseCategories
 
+// ============================================================================
+// 📼 BLACK BOX RECORDER - Enterprise Call Flight Recorder
+// ============================================================================
+// Records every decision point for debugging. No more Render log archaeology.
+// See: black-box.html for visualization and analysis.
+// ============================================================================
+let BlackBoxLogger;
+try {
+    BlackBoxLogger = require('../services/BlackBoxLogger');
+    logger.info('[V2TWILIO] ✅ Black Box Recorder loaded successfully');
+} catch (err) {
+    logger.warn('[V2TWILIO] ⚠️ Black Box Recorder not available', { error: err.message });
+    BlackBoxLogger = null;
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // 🔒 HTTPS URL HELPER
 // ════════════════════════════════════════════════════════════════════════════════
@@ -1073,6 +1088,30 @@ router.post('/voice', async (req, res) => {
     }
     // ════════════════════════════════════════════════════════════════════════════
     
+    // ════════════════════════════════════════════════════════════════════════════
+    // 📼 BLACK BOX: Initialize call recording
+    // ════════════════════════════════════════════════════════════════════════════
+    if (BlackBoxLogger) {
+      try {
+        await BlackBoxLogger.initCall({
+          callId: req.body.CallSid,
+          companyId: company._id,
+          from: req.body.From,
+          to: req.body.To,
+          customerId: callContext?.customerId || null,
+          customerContext: callContext?.customerContext ? {
+            isReturning: callContext.isReturning || false,
+            totalCalls: callContext.customerContext.totalCalls || 1,
+            customerName: callContext.customerContext.name || null
+          } : null
+        });
+      } catch (bbErr) {
+        // Non-blocking: Don't let black box failures kill the call
+        logger.warn('[BLACK BOX] Init failed (non-blocking)', { error: bbErr.message });
+      }
+    }
+    // ════════════════════════════════════════════════════════════════════════════
+    
     // 🚀 USE NEW V2 AI AGENT SYSTEM
     try {
       // Import V2 AI Agent Runtime - BRAND NEW SYSTEM
@@ -1209,6 +1248,16 @@ router.post('/voice', async (req, res) => {
           const filePath = path.join(audioDir, fileName);
           fs.writeFileSync(filePath, buffer);
           gather.play(`${getSecureBaseUrl(req)}/audio/${fileName}`);
+          
+          // 📼 BLACK BOX: Log greeting sent
+          if (BlackBoxLogger) {
+            BlackBoxLogger.QuickLog.greetingSent(
+              req.body.CallSid,
+              company._id,
+              initResult.greeting,
+              ttsTime
+            ).catch(() => {}); // Fire and forget
+          }
         } catch (err) {
           logger.error('❌ AI Agent Logic TTS failed, using Say:', err);
           logger.error('❌ Error details:', err.message);
@@ -1981,6 +2030,28 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       timestamp: new Date().toISOString()
     });
     
+    // 📼 BLACK BOX: Log caller speech
+    const turnCount = (req.session?.callState?.turnCount || 0) + 1;
+    if (BlackBoxLogger) {
+      BlackBoxLogger.QuickLog.gatherFinal(
+        callSid,
+        companyID,
+        turnCount,
+        speechResult,
+        parseFloat(req.body.Confidence) || 0
+      ).catch(() => {});
+      
+      // Also add to transcript
+      BlackBoxLogger.addTranscript({
+        callId: callSid,
+        companyId: companyID,
+        speaker: 'caller',
+        turn: turnCount,
+        text: speechResult,
+        confidence: parseFloat(req.body.Confidence) || 0
+      }).catch(() => {});
+    }
+    
     logger.debug('🎯 CHECKPOINT 12: Processing AI Agent Response');
     logger.debug(`🏢 Company ID: ${companyID}`);
     
@@ -2144,12 +2215,76 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       timestamp: new Date().toISOString()
     });
     
+    // 📼 BLACK BOX: Log agent response
+    if (BlackBoxLogger) {
+      const responseText = result.response || result.text || '';
+      
+      BlackBoxLogger.QuickLog.responseBuilt(
+        callSid,
+        companyID,
+        turnCount,
+        responseText,
+        result.matchSource || result.tier || 'unknown'
+      ).catch(() => {});
+      
+      // Add to transcript
+      BlackBoxLogger.addTranscript({
+        callId: callSid,
+        companyId: companyID,
+        speaker: 'agent',
+        turn: turnCount,
+        text: responseText,
+        source: result.matchSource || result.tier || 'unknown'
+      }).catch(() => {});
+      
+      // Log key events based on result
+      if (result.triageCardMatched) {
+        BlackBoxLogger.QuickLog.triageDecision(
+          callSid, companyID, turnCount,
+          result.action || 'MESSAGE_ONLY',
+          result.triageCardId,
+          result.triageCardMatched
+        ).catch(() => {});
+      }
+      
+      if (result.shouldTransfer) {
+        BlackBoxLogger.QuickLog.transferInitiated(
+          callSid, companyID, turnCount,
+          result.transferTarget || 'unknown',
+          result.transferReason || 'user request'
+        ).catch(() => {});
+      }
+      
+      if (result.loopDetected) {
+        BlackBoxLogger.QuickLog.loopDetected(
+          callSid, companyID, turnCount
+        ).catch(() => {});
+      }
+      
+      if (result.bailout) {
+        BlackBoxLogger.QuickLog.bailoutTriggered(
+          callSid, companyID, turnCount,
+          result.bailoutType || 'unknown',
+          result.bailoutReason || 'no usable response'
+        ).catch(() => {});
+      }
+    }
+    
     // Handle different response types
     if (result.shouldHangup) {
       logger.info('🎯 CHECKPOINT 17: AI decided to hang up');
       logger.info(`🗣️ Final message: "${result.text}"`);
       twiml.say(escapeTwiML(result.text));
       twiml.hangup();
+      
+      // 📼 BLACK BOX: Finalize call on hangup
+      if (BlackBoxLogger) {
+        BlackBoxLogger.finalizeCall({
+          callId: callSid,
+          companyId: companyID,
+          callOutcome: 'COMPLETED'
+        }).catch(() => {});
+      }
     } else if (result.shouldTransfer) {
       logger.info('🎯 CHECKPOINT 18: AI decided to transfer call');
       logger.info(`🗣️ Transfer message: "${result.text}"`);
@@ -2197,6 +2332,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       logger.info('🎯 CHECKPOINT 19: Calling handleTransfer function');
       // Pass null for fallbackMessage since we already spoke the transfer message above
       handleTransfer(twiml, company, null, companyID);
+      
+      // 📼 BLACK BOX: Finalize call on transfer
+      if (BlackBoxLogger) {
+        BlackBoxLogger.finalizeCall({
+          callId: callSid,
+          companyId: companyID,
+          callOutcome: 'TRANSFERRED'
+        }).catch(() => {});
+      }
     } else {
       logger.info('🎯 CHECKPOINT 20: AI continuing conversation');
       logger.info(`🗣️ AI Response: "${result.response}"`);
