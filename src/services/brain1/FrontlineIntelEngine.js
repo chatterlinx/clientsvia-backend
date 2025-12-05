@@ -29,6 +29,17 @@
 const logger = require('../../../utils/logger');
 const Brain1Trace = require('../../../models/Brain1Trace');
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 📼 BLACK BOX RECORDER - Enterprise Call Flight Recorder
+// ═══════════════════════════════════════════════════════════════════════════
+let BlackBoxLogger;
+try {
+    BlackBoxLogger = require('../../../services/BlackBoxLogger');
+} catch (err) {
+    BlackBoxLogger = null;
+    logger.warn('[BRAIN-1] BlackBoxLogger not available', { error: err.message });
+}
+
 // Preprocessing
 const { 
     preprocessing: { FillerStripper, TranscriptNormalizer },
@@ -284,14 +295,59 @@ async function runTurn({ companyId, callId, text, callState }) {
 async function makeBrain1Decision({ normalizedText, callState, config, emotion, companyId, callId, turn }) {
     
     // Check for obvious cases first (no LLM needed) - TIER 1 TRIAGE
-    const quickDecision = checkQuickDecisions(normalizedText, callState, emotion, config, callId);
+    const quickDecision = checkQuickDecisions(normalizedText, callState, emotion, config, callId, companyId, turn);
     if (quickDecision) {
         logger.info('[BRAIN-1] ⚡ Quick decision made - skipping LLM', {
             action: quickDecision.action,
             triageTag: quickDecision.triageTag,
             confidence: quickDecision.confidence
         });
+        
+        // 📼 BLACK BOX: Log fast match
+        if (BlackBoxLogger && quickDecision.flags?.triageMatched) {
+            BlackBoxLogger.logEvent({
+                callId,
+                companyId,
+                type: 'FAST_MATCH_HIT',
+                turn,
+                data: {
+                    intent: quickDecision.intentTag,
+                    cardName: quickDecision.matchedScenario?.name || quickDecision.triageTag,
+                    confidence: quickDecision.confidence,
+                    matchedKeywords: quickDecision.matchedKeywords || [],
+                    source: 'FRONTLINE_RULES'
+                }
+            }).catch(() => {});
+        }
+        
+        // 📼 BLACK BOX: Log intent detected
+        if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+                callId,
+                companyId,
+                type: 'INTENT_DETECTED',
+                turn,
+                data: {
+                    intent: quickDecision.intentTag || quickDecision.triageTag,
+                    confidence: quickDecision.confidence,
+                    source: 'FRONTLINE_RULES'
+                }
+            }).catch(() => {});
+        }
+        
         return quickDecision;
+    }
+    
+    // 📼 BLACK BOX: Log LLM fallback (fast match didn't work)
+    const llmStart = Date.now();
+    if (BlackBoxLogger) {
+        BlackBoxLogger.logEvent({
+            callId,
+            companyId,
+            type: 'LLM_FALLBACK',
+            turn,
+            data: { reason: 'No fast match found' }
+        }).catch(() => {});
     }
     
     // Build LLM prompt
@@ -315,6 +371,37 @@ async function makeBrain1Decision({ normalizedText, callState, config, emotion, 
             { companyId, callId }
         );
         
+        const llmMs = Date.now() - llmStart;
+        
+        // 📼 BLACK BOX: Log LLM response timing
+        if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+                callId,
+                companyId,
+                type: 'LLM_RESPONSE',
+                turn,
+                data: {
+                    ms: llmMs,
+                    intent: llmResult.intentTag,
+                    action: llmResult.action,
+                    confidence: llmResult.confidence
+                }
+            }).catch(() => {});
+            
+            // Also log intent detected from LLM
+            BlackBoxLogger.logEvent({
+                callId,
+                companyId,
+                type: 'INTENT_DETECTED',
+                turn,
+                data: {
+                    intent: llmResult.intentTag || llmResult.triageTag,
+                    confidence: llmResult.confidence,
+                    source: 'LLM_BRAIN1'
+                }
+            }).catch(() => {});
+        }
+        
         return llmResult;
         
     } catch (error) {
@@ -323,6 +410,17 @@ async function makeBrain1Decision({ normalizedText, callState, config, emotion, 
             turn,
             error: error.message
         });
+        
+        // 📼 BLACK BOX: Log LLM error
+        if (BlackBoxLogger) {
+            BlackBoxLogger.appendError({
+                callId,
+                companyId,
+                source: 'BRAIN1_LLM',
+                error
+            }).catch(() => {});
+        }
+        
         return fallbackDecision();
     }
 }
@@ -330,8 +428,10 @@ async function makeBrain1Decision({ normalizedText, callState, config, emotion, 
 /**
  * Check for obvious cases that don't need LLM
  * @param {string} callId - Call SID for loop detection
+ * @param {string} companyId - Company ID for logging
+ * @param {number} turn - Turn number for logging
  */
-function checkQuickDecisions(text, callState, emotion, config, callId) {
+function checkQuickDecisions(text, callState, emotion, config, callId, companyId, turn) {
     const lowerText = text.toLowerCase();
     
     // Emergency detection (highest priority)
@@ -436,6 +536,22 @@ function checkQuickDecisions(text, callState, emotion, config, callId) {
             callId: effectiveCallId.substring(0, 12),
             loopCount: loopCheck.loopCount
         });
+        
+        // 📼 BLACK BOX: Log loop detected
+        if (BlackBoxLogger && companyId) {
+            BlackBoxLogger.logEvent({
+                callId: effectiveCallId,
+                companyId,
+                type: 'LOOP_DETECTED',
+                turn,
+                data: {
+                    loopCount: loopCheck.loopCount,
+                    pattern: loopCheck.pattern || null,
+                    action: 'FORCING_TIER3'
+                }
+            }).catch(() => {});
+        }
+        
         return null; // Force LLM path
     }
     

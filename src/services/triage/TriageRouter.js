@@ -21,6 +21,16 @@ const logger = require('../../../utils/logger');
 const TriageCard = require('../../../models/TriageCard');
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 📼 BLACK BOX RECORDER - Enterprise Call Flight Recorder
+// ═══════════════════════════════════════════════════════════════════════════
+let BlackBoxLogger;
+try {
+    BlackBoxLogger = require('../../../services/BlackBoxLogger');
+} catch (err) {
+    BlackBoxLogger = null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CANONICAL TAG NORMALIZATION
 // ═══════════════════════════════════════════════════════════════════════════
 // CRITICAL: Use this function on BOTH sides of any tag comparison.
@@ -54,11 +64,15 @@ function normalizeTag(raw) {
  * @param {string} decision.intentTag - e.g. 'emergency', 'booking'
  * @param {Object} decision.flags - flags like needsKnowledgeSearch
  * @param {Object} company - Company document
+ * @param {Object} options - Additional options
+ * @param {string} options.callId - Call SID for logging
+ * @param {number} options.turn - Turn number for logging
  * @returns {Promise<TriageResult>}
  */
-async function route(decision, company) {
+async function route(decision, company, options = {}) {
     const companyId = company?._id?.toString();
     const startTime = Date.now();
+    const { callId, turn } = options;
     
     logger.debug('[TRIAGE] Routing decision', {
         companyId,
@@ -130,7 +144,7 @@ async function route(decision, company) {
                     openingLinePreview: openingLine?.substring(0, 80)
                 });
                 
-                return {
+                const result = {
                     route: cardRoute,
                     matchedCardId: triageCard._id.toString(),
                     matchedCardName: triageCard.displayName || triageCard.triageLabel,
@@ -139,6 +153,25 @@ async function route(decision, company) {
                     openingLine, // Card's response content for ResponseConstructor
                     reason: `Matched triage card by tag: ${decision.triageTag}`
                 };
+                
+                // 📼 BLACK BOX: Log triage decision
+                if (BlackBoxLogger && callId) {
+                    BlackBoxLogger.logEvent({
+                        callId,
+                        companyId,
+                        type: 'TRIAGE_DECISION',
+                        turn,
+                        data: {
+                            route: result.route,
+                            matched: true,
+                            cardId: result.matchedCardId,
+                            cardName: result.matchedCardName,
+                            triageTag: decision.triageTag
+                        }
+                    }).catch(() => {});
+                }
+                
+                return result;
             } else {
                 // ⚠️ NO MATCH - Log what we searched for vs what exists
                 logger.warn('[TRIAGE] ⚠️ NO CARD FOUND for triageTag - will use fallback', {

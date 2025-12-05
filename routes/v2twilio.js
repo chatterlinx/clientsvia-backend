@@ -1721,6 +1721,21 @@ router.post('/handle-speech', async (req, res) => {
         
         const audioUrl = `https://${req.get('host')}/api/twilio/audio/ai/${callSid}`;
         gather.play(audioUrl);
+        
+        // 📼 BLACK BOX: Log TTS generation
+        if (BlackBoxLogger) {
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId,
+            type: 'TTS_GENERATED',
+            data: {
+              engine: 'ElevenLabs',
+              ms: ttsTime,
+              textLength: strippedAnswer.length,
+              audioUrl
+            }
+          }).catch(() => {});
+        }
 
       } catch (err) {
         logger.error('ElevenLabs synthesis failed, falling back to native TTS:', err.message);
@@ -2654,6 +2669,21 @@ router.post('/v2-agent-partial/:companyId', async (req, res) => {
         stability: Stability,
         sequence: SequenceNumber
       });
+      
+      // 📼 BLACK BOX: Log partial speech (useful for STT debugging)
+      if (BlackBoxLogger) {
+        BlackBoxLogger.logEvent({
+          callId: CallSid,
+          companyId,
+          type: 'GATHER_PARTIAL',
+          data: {
+            text: StableSpeechResult,
+            unstableText: UnstableSpeechResult || null,
+            confidence: parseFloat(Stability) || 0,
+            sequence: parseInt(SequenceNumber) || 0
+          }
+        }).catch(() => {}); // Fire and forget
+      }
     }
     
     // Return EMPTY TwiML - do NOT interrupt the call, do NOT greet

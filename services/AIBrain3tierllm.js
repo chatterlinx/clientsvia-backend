@@ -36,6 +36,16 @@ const logger = require('../utils/logger');
 const { replacePlaceholders } = require('../utils/placeholderReplacer');
 const ResponseEngine = require('./ResponseEngine');
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 📼 BLACK BOX RECORDER - Enterprise Call Flight Recorder
+// ═══════════════════════════════════════════════════════════════════════════
+let BlackBoxLogger;
+try {
+    BlackBoxLogger = require('./BlackBoxLogger');
+} catch (err) {
+    BlackBoxLogger = null;
+}
+
 class AIBrain3tierllm {
     constructor() {
         this.performanceMetrics = {
@@ -117,6 +127,82 @@ class AIBrain3tierllm {
             if (tierUsed === 1) this.performanceMetrics.tier1Hits++;
             if (tierUsed === 2) this.performanceMetrics.tier2Hits++;
             if (tierUsed === 3) this.performanceMetrics.tier3Hits++;
+            
+            // 📼 BLACK BOX: Log 3-Tier decision
+            const callId = context.callId || context.callState?.callId;
+            if (BlackBoxLogger && callId) {
+                // Log TIER3_ENTERED when entering 3-Tier system
+                BlackBoxLogger.logEvent({
+                    callId,
+                    companyId,
+                    type: 'TIER3_ENTERED',
+                    data: {
+                        reason: 'BRAIN2_QUERY',
+                        queryPreview: query.substring(0, 50)
+                    }
+                }).catch(() => {});
+                
+                // Log which tier was used
+                if (tierUsed === 1) {
+                    BlackBoxLogger.logEvent({
+                        callId,
+                        companyId,
+                        type: 'TIER3_FAST_MATCH',
+                        data: {
+                            source: 'RULES',
+                            confidence: result.confidence,
+                            scenarioName: result.metadata?.scenarioName || null,
+                            ms: perfCheckpoints.aiBrainQuery || 0
+                        }
+                    }).catch(() => {});
+                } else if (tierUsed === 2) {
+                    BlackBoxLogger.logEvent({
+                        callId,
+                        companyId,
+                        type: 'TIER3_EMBEDDING_MATCH',
+                        data: {
+                            confidence: result.confidence,
+                            scenarioName: result.metadata?.scenarioName || null,
+                            ms: perfCheckpoints.aiBrainQuery || 0
+                        }
+                    }).catch(() => {});
+                } else if (tierUsed === 3) {
+                    const cost = result.metadata?.trace?.cost?.total || 0;
+                    BlackBoxLogger.logEvent({
+                        callId,
+                        companyId,
+                        type: 'TIER3_LLM_FALLBACK_CALLED',
+                        data: {
+                            model: result.metadata?.model || 'unknown',
+                            confidence: result.confidence,
+                            ms: perfCheckpoints.aiBrainQuery || 0,
+                            costUsd: cost
+                        }
+                    }).catch(() => {});
+                    
+                    BlackBoxLogger.logEvent({
+                        callId,
+                        companyId,
+                        type: 'TIER3_LLM_FALLBACK_RESPONSE',
+                        data: {
+                            responsePreview: (result.response || '').substring(0, 100),
+                            scenarioName: result.metadata?.scenarioName || null
+                        }
+                    }).catch(() => {});
+                }
+                
+                // Log exit
+                BlackBoxLogger.logEvent({
+                    callId,
+                    companyId,
+                    type: 'TIER3_EXIT',
+                    data: {
+                        outcome: result.response ? 'ANSWERED' : 'NO_ANSWER',
+                        tierUsed,
+                        confidence: result.confidence
+                    }
+                }).catch(() => {});
+            }
 
             // 🎯 PERFORMANCE SUMMARY - Crystal clear visibility
             const tierEmoji = tierUsed === 1 ? '⚡' : tierUsed === 2 ? '🧠' : tierUsed === 3 ? '🤖' : '❓';

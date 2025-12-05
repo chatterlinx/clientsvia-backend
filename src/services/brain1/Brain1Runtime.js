@@ -54,6 +54,17 @@ const AIBrain3tierllm = require('../../../services/AIBrain3tierllm');
 const Company = require('../../../models/v2Company');
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 📼 BLACK BOX RECORDER - Enterprise Call Flight Recorder
+// ═══════════════════════════════════════════════════════════════════════════
+let BlackBoxLogger;
+try {
+    BlackBoxLogger = require('../../../services/BlackBoxLogger');
+} catch (err) {
+    BlackBoxLogger = null;
+    logger.warn('[BRAIN-1 RUNTIME] BlackBoxLogger not available', { error: err.message });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // SINGLE VOICE ARCHITECTURE - ResponseConstructor is THE ONLY SPEAKER
 // ═══════════════════════════════════════════════════════════════════════════
 const { buildFinalResponse, buildSimpleResponse } = require('../../../services/ResponseConstructor');
@@ -185,7 +196,8 @@ async function processTurn(companyId, callId, userInput, callState) {
         // Wrap triage in a function
         const triagePromise = (async () => {
             const triageStart = Date.now();
-            const result = await route(decision, company);
+            const currentTurn = (callState?.turnCount || 0) + 1;
+            const result = await route(decision, company, { callId, turn: currentTurn });
             return { 
                 triage: result, 
                 ms: Date.now() - triageStart 
@@ -446,6 +458,21 @@ async function processTurn(companyId, callId, userInput, callState) {
         const turnNumber = updatedCallState.turnCount || 1;
         const validation = validateAndLog(result.text, callId, 'processTurn.normal', turnNumber);
         
+        // 📼 BLACK BOX: Log response validation result
+        if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+                callId,
+                companyId,
+                type: 'AGENT_RESPONSE_VALIDATED',
+                turn: turnNumber,
+                data: {
+                    usable: validation.usable,
+                    reason: validation.reason,
+                    responseLength: result.text?.length || 0
+                }
+            }).catch(() => {});
+        }
+        
         if (!validation.usable) {
             logger.warn('[BRAIN-1 RUNTIME] ⚠️ RESPONSE VALIDATION FAILED - Entering fallback ladder', {
                 companyId,
@@ -556,6 +583,21 @@ async function processTurn(companyId, callId, userInput, callState) {
                     result.bailoutTriggered = true;
                     result.bailoutReason = validation.reason;
                     result.bailoutType = 'hard';
+                    
+                    // 📼 BLACK BOX: Log hard bailout
+                    if (BlackBoxLogger) {
+                        BlackBoxLogger.logEvent({
+                            callId,
+                            companyId,
+                            type: 'BAILOUT_TRIGGERED',
+                            turn: turnNumber,
+                            data: {
+                                bailoutType: 'HARD',
+                                reason: validation.reason,
+                                action: bailoutAction
+                            }
+                        }).catch(() => {});
+                    }
                 } else {
                     // ════════════════════════════════════════════════════════════════════════════
                     // SOFT BAILOUT: Generation failure → Try to recover conversation
@@ -582,6 +624,21 @@ async function processTurn(companyId, callId, userInput, callState) {
                     result.bailoutTriggered = true;
                     result.bailoutReason = validation.reason;
                     result.bailoutType = 'soft';
+                    
+                    // 📼 BLACK BOX: Log soft bailout
+                    if (BlackBoxLogger) {
+                        BlackBoxLogger.logEvent({
+                            callId,
+                            companyId,
+                            type: 'BAILOUT_TRIGGERED',
+                            turn: turnNumber,
+                            data: {
+                                bailoutType: 'SOFT',
+                                reason: validation.reason,
+                                action: 'continue'
+                            }
+                        }).catch(() => {});
+                    }
                 }
             }
         }
