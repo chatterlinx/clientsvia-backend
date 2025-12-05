@@ -47,13 +47,48 @@ class LLM0TurnHandler {
         const startTime = Date.now();
         const companyId = company._id?.toString() || company.companyId;
         const callId = callState?.callId || callState?.CallSid;
+        const turnNumber = (callState?.turnCount || 0) + 1;
         
         logger.info('[LLM0 TURN HANDLER] Processing turn', {
             companyId,
             callId,
             action: decision.action,
-            intentTag: decision.intentTag
+            intentTag: decision.intentTag,
+            bookingModeLocked: !!callState?.bookingModeLocked
         });
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🔒 BOOKING HARD LOCK - MUST BE FIRST CHECK
+        // ════════════════════════════════════════════════════════════════════════════
+        // Once bookingModeLocked = true, we BYPASS:
+        //   - LLM-0 decision (already analyzed, ignore it)
+        //   - Triage routing (booking owns the conversation)
+        //   - All other handlers
+        // 
+        // We go STRAIGHT to BookingSlotFill for simple extraction.
+        // This prevents troubleshooting from hijacking the booking flow.
+        // ════════════════════════════════════════════════════════════════════════════
+        if (callState?.bookingModeLocked && callState?.bookingState) {
+            logger.info('[LLM0 TURN HANDLER] 🔒 BOOKING HARD LOCK ACTIVE - Bypassing all routing', {
+                companyId,
+                callId,
+                turn: turnNumber,
+                bookingState: callState.bookingState,
+                currentStep: callState.currentBookingStep,
+                ignoredDecision: decision.action
+            });
+            
+            // Go straight to slot-filling - no triage, no Brain-2
+            const bookingResult = await this.handleBookingSlotFill({
+                companyId,
+                callId,
+                userInput,
+                callState,
+                turnNumber
+            });
+            
+            return bookingResult;
+        }
         
         // ====================================================================
         // STEP 1: Route through Triage
@@ -325,58 +360,237 @@ class LLM0TurnHandler {
         const hasMinimumInfo = contact.name && (contact.phone || contact.email) &&
                               location.addressLine1 && scheduling.preferredDate;
         
-        if (!hasMinimumInfo) {
-            // Need more info for booking
-            const missing = [];
-            if (!contact.name) missing.push('your name');
-            if (!contact.phone && !contact.email) missing.push('a phone number');
-            if (!location.addressLine1) missing.push('the service address');
-            if (!scheduling.preferredDate) missing.push('when you\'d like us to come');
-            
-            const prompt = missing.length > 0 
-                ? `I just need ${missing.join(' and ')} to get that scheduled for you.`
-                : decision.nextPrompt || "Let me get that scheduled for you.";
-            
-            return {
-                text: prompt,
-                action: 'continue',
-                shouldTransfer: false,
-                shouldHangup: false,
-                callState: {
-                    ...callState,
-                    bookingInProgress: true,
-                    missingFields: missing
-                },
-                debug: {
-                    route: 'BOOKING',
-                    missingInfo: missing,
-                    hasMinimum: false
-                }
-            };
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🔒 CRITICAL: Set HARD LOCK immediately upon entering booking
+        // This prevents ALL subsequent turns from going through triage/Brain-1
+        // ════════════════════════════════════════════════════════════════════════════
+        
+        // Determine which slot to ask for next
+        let currentStep = 'ASK_NAME';
+        let prompt = "I'd be happy to schedule that for you. May I have your name please?";
+        
+        // Build initial collected data
+        const bookingCollected = {
+            name: contact.name || null,
+            phone: contact.phone || null,
+            address: location.addressLine1 || null,
+            time: scheduling.preferredDate || scheduling.preferredWindow || null
+        };
+        
+        // Determine next step based on what we have
+        if (!contact.name) {
+            currentStep = 'ASK_NAME';
+            prompt = "I'd be happy to schedule that for you. May I have your name please?";
+        } else if (!contact.phone) {
+            currentStep = 'ASK_PHONE';
+            prompt = `Thanks, ${contact.name}. And what's the best phone number to reach you?`;
+        } else if (!location.addressLine1) {
+            currentStep = 'ASK_ADDRESS';
+            prompt = "Great. What's the service address?";
+        } else if (!scheduling.preferredDate && !scheduling.preferredWindow) {
+            currentStep = 'ASK_TIME';
+            prompt = "When would be a good time for us to come out?";
+        } else {
+            currentStep = 'CONFIRM';
+            const timeText = scheduling.preferredDate || scheduling.preferredWindow || 'soon';
+            prompt = `Perfect! I have ${contact.name} at ${location.addressLine1} for ${timeText}. I'll get that scheduled and someone will confirm with you shortly. Is there anything else I can help you with?`;
         }
         
-        // We have enough info - confirm and proceed
-        // TODO: Integrate with actual booking service
-        const confirmationPrompt = decision.nextPrompt || 
-            `Perfect! I have ${contact.name} at ${location.addressLine1} for ${scheduling.preferredDate}. Let me confirm that booking for you.`;
+        const slotsRemaining = [
+            !bookingCollected.name,
+            !bookingCollected.phone,
+            !bookingCollected.address,
+            !bookingCollected.time
+        ].filter(Boolean).length;
+        
+        logger.info('[LLM0 TURN HANDLER] 🔒 BOOKING HARD LOCK ENGAGED', {
+            companyId,
+            callId,
+            currentStep,
+            slotsRemaining,
+            collected: Object.keys(bookingCollected).filter(k => bookingCollected[k])
+        });
         
         return {
-            text: confirmationPrompt,
+            text: prompt,
             action: 'continue',
             shouldTransfer: false,
             shouldHangup: false,
             callState: {
                 ...callState,
-                bookingInProgress: true,
-                bookingReady: true
+                // 🔒 THE HARD LOCK
+                bookingModeLocked: true,
+                bookingState: currentStep,
+                currentBookingStep: currentStep,
+                bookingCollected,
+                bookingReady: currentStep === 'CONFIRM'
             },
             debug: {
                 route: 'BOOKING',
-                hasMinimum: true,
-                contact: contact.name,
-                location: location.addressLine1
+                hardLocked: true,
+                currentStep,
+                slotsRemaining
             }
         };
+    }
+    
+    /**
+     * ════════════════════════════════════════════════════════════════════════════
+     * 🔒 HARD LOCK SLOT-FILL (Bypasses EVERYTHING)
+     * ════════════════════════════════════════════════════════════════════════════
+     * 
+     * This is called when bookingModeLocked = true.
+     * NO Brain-1, NO triage, NO troubleshooting.
+     * Just simple extraction and slot progression.
+     * 
+     * @private
+     */
+    static async handleBookingSlotFill({ companyId, callId, userInput, callState, turnNumber }) {
+        const currentStep = callState.currentBookingStep || callState.bookingState;
+        const collected = { ...callState.bookingCollected } || {};
+        
+        logger.info('[LLM0 TURN HANDLER] 🔒 SLOT-FILL (Hard Lock Active)', {
+            companyId,
+            callId,
+            turn: turnNumber,
+            currentStep,
+            userInput: userInput?.substring(0, 50)
+        });
+        
+        // Simple extraction based on current step - NO LLM, NO INTENT
+        let newCollected = { ...collected };
+        let nextStep = currentStep;
+        let responseText = '';
+        
+        switch (currentStep) {
+            case 'ASK_NAME':
+            case 'collecting_name':
+                const extractedName = this.extractName(userInput);
+                if (extractedName) {
+                    newCollected.name = extractedName;
+                    nextStep = 'ASK_PHONE';
+                    responseText = `Thanks, ${extractedName}. And what's the best phone number to reach you?`;
+                } else {
+                    responseText = "I didn't quite catch that. Could you please tell me your name?";
+                }
+                break;
+                
+            case 'ASK_PHONE':
+            case 'collecting_phone':
+                const extractedPhone = this.extractPhone(userInput);
+                if (extractedPhone) {
+                    newCollected.phone = extractedPhone;
+                    nextStep = 'ASK_ADDRESS';
+                    responseText = "Great. What's the service address?";
+                } else {
+                    responseText = "I need your phone number so we can reach you. What's the best number?";
+                }
+                break;
+                
+            case 'ASK_ADDRESS':
+            case 'collecting_address':
+                const extractedAddress = this.extractAddress(userInput);
+                if (extractedAddress) {
+                    newCollected.address = extractedAddress;
+                    nextStep = 'ASK_TIME';
+                    responseText = "When would be a good time for us to come out?";
+                } else {
+                    responseText = "Could you please repeat the service address?";
+                }
+                break;
+                
+            case 'ASK_TIME':
+            case 'collecting_time':
+                const extractedTime = this.extractTime(userInput);
+                if (extractedTime) {
+                    newCollected.time = extractedTime;
+                    nextStep = 'CONFIRM';
+                    responseText = `Perfect! I have ${newCollected.name || 'you'} at ${newCollected.address || 'your location'} for ${extractedTime}. I'll get that scheduled and someone will confirm with you shortly. Is there anything else I can help you with?`;
+                } else {
+                    responseText = "What day and time works best for you?";
+                }
+                break;
+                
+            case 'CONFIRM':
+            case 'confirmed':
+                responseText = "Is there anything else I can help you with today?";
+                nextStep = 'COMPLETE';
+                break;
+                
+            default:
+                responseText = "I'd be happy to schedule that for you. May I have your name please?";
+                nextStep = 'ASK_NAME';
+        }
+        
+        const isComplete = nextStep === 'CONFIRM' || nextStep === 'COMPLETE';
+        
+        return {
+            text: responseText,
+            action: 'continue',
+            shouldTransfer: false,
+            shouldHangup: false,
+            callState: {
+                ...callState,
+                turnCount: turnNumber,
+                // 🔒 Keep lock active until complete
+                bookingModeLocked: !isComplete,
+                bookingState: nextStep,
+                currentBookingStep: nextStep,
+                bookingCollected: newCollected,
+                bookingReady: isComplete
+            },
+            debug: {
+                route: 'BOOKING_SLOT_FILL',
+                hardLocked: !isComplete,
+                currentStep: nextStep,
+                extracted: Object.keys(newCollected).filter(k => newCollected[k] && !collected[k])
+            }
+        };
+    }
+    
+    // Simple extraction helpers (no LLM, just patterns)
+    static extractName(input) {
+        if (!input) return null;
+        const cleaned = input.replace(/^(my name is|i'm|i am|it's|this is|hi i'm|hey i'm)\s*/i, '').trim();
+        const words = cleaned.split(/\s+/).slice(0, 3);
+        if (words.length > 0 && words[0].length > 1) {
+            return words.join(' ');
+        }
+        return null;
+    }
+    
+    static extractPhone(input) {
+        if (!input) return null;
+        const digits = input.replace(/\D/g, '');
+        if (digits.length >= 10 && digits.length <= 11) {
+            return digits.length === 11 ? digits : '1' + digits;
+        }
+        return null;
+    }
+    
+    static extractAddress(input) {
+        if (!input) return null;
+        if (/\d/.test(input) && input.length > 5) return input.trim();
+        if (/\b(street|st|road|rd|avenue|ave|lane|ln|drive|dr|court|ct|way|place|pl)\b/i.test(input)) {
+            return input.trim();
+        }
+        if (input.length > 10) return input.trim();
+        return null;
+    }
+    
+    static extractTime(input) {
+        if (!input) return null;
+        const patterns = [
+            /\b(morning|afternoon|evening|tonight|tomorrow|today|asap|as soon as possible)\b/i,
+            /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+            /\d{1,2}(:\d{2})?\s*(am|pm)?/i,
+            /\b(next week|this week|anytime)\b/i
+        ];
+        for (const pattern of patterns) {
+            if (pattern.test(input)) return input.trim();
+        }
+        if (input.length > 3) return input.trim();
+        return null;
     }
     
     /**

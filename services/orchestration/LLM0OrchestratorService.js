@@ -63,8 +63,35 @@ class LLM0OrchestratorService {
             companyId,
             callId,
             userInputLength: userInput?.length || 0,
-            turnNumber: turnHistory?.length || 0
+            turnNumber: turnHistory?.length || 0,
+            bookingModeLocked: !!callState?.bookingModeLocked
         });
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🔒 BOOKING HARD LOCK - SKIP BRAIN-1 ENTIRELY
+        // ════════════════════════════════════════════════════════════════════════════
+        // When bookingModeLocked = true, we should NOT run any intent detection.
+        // Just return a dummy decision - LLM0TurnHandler will intercept and 
+        // route directly to slot-filling.
+        // ════════════════════════════════════════════════════════════════════════════
+        if (callState?.bookingModeLocked && callState?.bookingState) {
+            logger.info('[LLM-0] 🔒 BOOKING HARD LOCK - Skipping Brain-1 entirely', {
+                companyId,
+                callId,
+                bookingState: callState.bookingState,
+                currentStep: callState.currentBookingStep
+            });
+            
+            // Return a minimal decision - LLM0TurnHandler will handle it
+            const bypassDecision = createEmptyDecision();
+            bypassDecision.action = 'BOOK';  // Signal to handler
+            bypassDecision.intentTag = 'booking_slot_fill';
+            bypassDecision.confidence = 1.0;
+            bypassDecision.flags.bookingLocked = true;
+            bypassDecision.debug.reasoning = 'Booking mode locked - bypassed Brain-1';
+            bypassDecision.debug.processingTimeMs = Date.now() - startTime;
+            return bypassDecision;
+        }
         
         // ====================================================================
         // STEP 1: INPUT VALIDATION
