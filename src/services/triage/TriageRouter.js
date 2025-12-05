@@ -20,6 +20,21 @@
 const logger = require('../../../utils/logger');
 const TriageCard = require('../../../models/TriageCard');
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CANONICAL TAG NORMALIZATION
+// ═══════════════════════════════════════════════════════════════════════════
+// CRITICAL: Use this function on BOTH sides of any tag comparison.
+// This ensures "NO_COOL", "no-cool", "No Cool", "no  cool" all become "NO_COOL"
+// ═══════════════════════════════════════════════════════════════════════════
+function normalizeTag(raw) {
+    if (!raw) return null;
+    return String(raw)
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '_')   // everything non-alphanumeric → underscore
+        .replace(/^_+|_+$/g, '');      // trim leading/trailing underscores
+}
+
 /**
  * @typedef {Object} TriageResult
  * @property {'SCENARIO_ENGINE'|'TRANSFER'|'MESSAGE_ONLY'|'BOOKING_FLOW'|'END_CALL'} route
@@ -240,9 +255,9 @@ async function route(decision, company) {
  */
 /**
  * Match a triage card by its triageLabel (tag)
- * Used when FrontlineIntelEngine already identified the card during fast match.
+ * Uses CANONICAL NORMALIZATION: "NO_COOL", "no-cool", "No Cool" all become "NO_COOL"
  * 
- * @param {string} triageTag - The card's triageLabel identifier
+ * @param {string} triageTag - The card's triageLabel identifier from Brain-1
  * @param {string} companyId - Company ID
  * @returns {Promise<Object|null>} - Full triage card document or null
  */
@@ -252,86 +267,85 @@ async function matchTriageCardByTag(triageTag, companyId) {
         return null;
     }
     
-    const normalizedTag = triageTag.toLowerCase().trim();
+    // ═══════════════════════════════════════════════════════════════════════
+    // CANONICAL NORMALIZATION - Same rule on BOTH sides
+    // "NO_COOL", "no-cool", "No Cool", "no  cool" → "NO_COOL"
+    // ═══════════════════════════════════════════════════════════════════════
+    const normalizedSearch = normalizeTag(triageTag);
     
-    // ═══════════════════════════════════════════════════════════════════════
-    // DIAGNOSTIC: List ALL active cards for this company
-    // ═══════════════════════════════════════════════════════════════════════
+    // Load ALL active cards for this company
     const allCards = await TriageCard.find({
         companyId,
         isActive: true
-    }).select('triageLabel displayName quickRuleConfig.scenarioKey').lean();
+    }).lean();
     
-    logger.info('[TRIAGE MATCH] 🔍 SEARCHING for card', {
-        companyId,
-        searchingFor: triageTag,
-        normalizedSearch: normalizedTag,
-        totalActiveCards: allCards.length,
-        availableLabels: allCards.map(c => ({
-            triageLabel: c.triageLabel,
-            displayName: c.displayName,
-            scenarioKey: c.quickRuleConfig?.scenarioKey
-        })).slice(0, 15) // Show first 15 to avoid log overflow
+    // Build comparison details with NORMALIZED labels
+    const comparisonDetails = allCards.map(card => {
+        const label = card.triageLabel || '';
+        const normalizedLabel = normalizeTag(label);
+        const displayNormalized = normalizeTag(card.displayName);
+        const scenarioKeyNormalized = normalizeTag(card.quickRuleConfig?.scenarioKey);
+        
+        return {
+            cardId: card._id.toString(),
+            triageLabel: label,
+            displayName: card.displayName,
+            normalizedLabel,
+            displayNormalized,
+            wouldMatch: normalizedLabel === normalizedSearch ||
+                       displayNormalized === normalizedSearch ||
+                       scenarioKeyNormalized === normalizedSearch
+        };
     });
     
-    // Try exact match first
-    let card = await TriageCard.findOne({
+    logger.info('[TRIAGE MATCH] 🔍 SEARCHING with canonical normalization', {
         companyId,
-        isActive: true,
-        $or: [
-            { triageLabel: { $regex: new RegExp(`^${normalizedTag}$`, 'i') } },
-            { displayName: { $regex: new RegExp(`^${normalizedTag}$`, 'i') } },
-            { 'quickRuleConfig.scenarioKey': { $regex: new RegExp(`^${normalizedTag}$`, 'i') } }
-        ]
-    }).lean();
+        raw: triageTag,
+        normalizedSearch,
+        totalActiveCards: allCards.length,
+        comparisonSample: comparisonDetails.slice(0, 10).map(c => ({
+            label: c.triageLabel,
+            normalized: c.normalizedLabel,
+            wouldMatch: c.wouldMatch
+        }))
+    });
     
-    if (card) {
-        logger.info('[TRIAGE MATCH] ✅ EXACT MATCH found', {
+    // ═══════════════════════════════════════════════════════════════════════
+    // FIND MATCH using normalized comparison
+    // ═══════════════════════════════════════════════════════════════════════
+    const matchedCard = allCards.find(card => {
+        const labelNorm = normalizeTag(card.triageLabel);
+        const displayNorm = normalizeTag(card.displayName);
+        const scenarioKeyNorm = normalizeTag(card.quickRuleConfig?.scenarioKey);
+        
+        return labelNorm === normalizedSearch ||
+               displayNorm === normalizedSearch ||
+               scenarioKeyNorm === normalizedSearch;
+    });
+    
+    if (matchedCard) {
+        logger.info('[TRIAGE MATCH] ✅ MATCH FOUND via canonical normalization', {
             companyId,
             searchedFor: triageTag,
-            matchedTriageLabel: card.triageLabel,
-            matchedDisplayName: card.displayName,
-            cardId: card._id.toString()
+            normalizedSearch,
+            matchedTriageLabel: matchedCard.triageLabel,
+            matchedNormalized: normalizeTag(matchedCard.triageLabel),
+            matchedDisplayName: matchedCard.displayName,
+            cardId: matchedCard._id.toString()
         });
-        return card;
-    }
-    
-    // Try partial match as fallback
-    card = await TriageCard.findOne({
-        companyId,
-        isActive: true,
-        $or: [
-            { triageLabel: { $regex: new RegExp(normalizedTag, 'i') } },
-            { displayName: { $regex: new RegExp(normalizedTag, 'i') } }
-        ]
-    }).lean();
-    
-    if (card) {
-        logger.info('[TRIAGE MATCH] ✅ PARTIAL MATCH found', {
-            companyId,
-            searchedFor: triageTag,
-            matchedTriageLabel: card.triageLabel,
-            matchedDisplayName: card.displayName,
-            cardId: card._id.toString()
-        });
-        return card;
+        return matchedCard;
     }
     
     // ═══════════════════════════════════════════════════════════════════════
-    // NO MATCH - Show what we compared
+    // NO MATCH - Show detailed comparison
     // ═══════════════════════════════════════════════════════════════════════
-    logger.warn('[TRIAGE MATCH] ❌ NO MATCH FOUND', {
+    logger.warn('[TRIAGE MATCH] ❌ NO MATCH FOUND even after normalization', {
         companyId,
         searchedFor: triageTag,
-        normalizedSearch: normalizedTag,
+        normalizedSearch,
         totalActiveCards: allCards.length,
-        comparisonDetails: allCards.slice(0, 10).map(c => ({
-            triageLabel: c.triageLabel,
-            normalizedLabel: c.triageLabel?.toLowerCase()?.trim(),
-            wouldMatch: c.triageLabel?.toLowerCase()?.trim() === normalizedTag ||
-                       c.displayName?.toLowerCase()?.trim() === normalizedTag
-        })),
-        suggestion: 'Brain-1 returned a triageTag that does not match any card\'s triageLabel. Update Brain-1 or card labels to match.'
+        availableNormalizedLabels: comparisonDetails.slice(0, 15).map(c => c.normalizedLabel),
+        suggestion: `Brain-1 returned "${triageTag}" (normalized: "${normalizedSearch}") but no card has a matching normalized label. Available: ${comparisonDetails.slice(0, 5).map(c => c.normalizedLabel).join(', ')}`
     });
     
     return null;
