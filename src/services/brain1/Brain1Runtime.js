@@ -122,15 +122,78 @@ function getBailoutMessage(company, action) {
  */
 async function processTurn(companyId, callId, userInput, callState) {
     const startTime = Date.now();
+    const turnNumber = (callState?.turnCount || 0) + 1;
     
     logger.info('[BRAIN-1 RUNTIME] Processing turn', {
         companyId,
         callId,
         inputLength: userInput?.length,
-        turn: (callState?.turnCount || 0) + 1
+        turn: turnNumber,
+        bookingModeLocked: !!callState?.bookingModeLocked
     });
     
     try {
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🔒 BOOKING HARD LOCK - CRITICAL STATE MACHINE FIX
+        // ════════════════════════════════════════════════════════════════════════════
+        // Once bookingModeLocked = true, we BYPASS:
+        //   - Brain-1 (no intent detection)
+        //   - Triage (no routing decisions)
+        //   - Troubleshooting cards
+        //   - MESSAGE_ONLY responses
+        // 
+        // We go STRAIGHT to BookingHandler for slot-filling.
+        // This prevents the "stop troubleshooting, just book" problem.
+        // 
+        // ONLY exit booking lock if:
+        //   - Booking completes successfully
+        //   - Caller explicitly says they don't want to book
+        // ════════════════════════════════════════════════════════════════════════════
+        if (callState?.bookingModeLocked && callState?.bookingState) {
+            logger.info('[BRAIN-1 RUNTIME] 🔒 BOOKING HARD LOCK ACTIVE - Bypassing Brain-1/Triage', {
+                companyId,
+                callId,
+                turn: turnNumber,
+                bookingState: callState.bookingState,
+                bookingStep: callState.currentBookingStep
+            });
+            
+            // Load company for bailout config
+            const company = await Company.findById(companyId).lean();
+            
+            // Go straight to slot-filling - no intent detection
+            const bookingResult = await handleBookingSlotFill({
+                companyId: company?._id?.toString(),
+                callId,
+                userInput,
+                callState,
+                turnNumber
+            });
+            
+            // 📼 BLACK BOX: Log that we bypassed Brain-1
+            if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                    callId,
+                    companyId,
+                    type: 'AGENT_RESPONSE_BUILT',
+                    turn: turnNumber,
+                    data: {
+                        text: bookingResult.text?.substring(0, 100),
+                        source: 'BOOKING_HANDLER_LOCKED',
+                        bypassedBrain1: true
+                    }
+                }).catch(() => {});
+            }
+            
+            return {
+                text: bookingResult.text,
+                action: bookingResult.action || 'continue',
+                shouldTransfer: bookingResult.shouldTransfer || false,
+                shouldHangup: bookingResult.shouldHangup || false,
+                callState: bookingResult.callState
+            };
+        }
+        
         // ====================================================================
         // STEP 1: RUN BRAIN-1 (FrontlineIntelEngine)
         // ====================================================================
@@ -842,8 +905,205 @@ async function handleTransfer({ company, callState, decision, triageResult }) {
     };
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// 🔒 BOOKING SLOT-FILL (BYPASSES BRAIN-1/TRIAGE ENTIRELY)
+// ════════════════════════════════════════════════════════════════════════════
+// This is called when bookingModeLocked = true.
+// It extracts slot values from user input WITHOUT running intent detection.
+// This prevents troubleshooting from hijacking the booking flow.
+// ════════════════════════════════════════════════════════════════════════════
+
+async function handleBookingSlotFill({ companyId, callId, userInput, callState, turnNumber }) {
+    const currentStep = callState.currentBookingStep || callState.bookingState;
+    const collected = callState.bookingCollected || {};
+    
+    logger.info('[BOOKING SLOT-FILL] 🔒 Processing locked booking turn', {
+        callId,
+        turnNumber,
+        currentStep,
+        collected: Object.keys(collected).filter(k => collected[k])
+    });
+    
+    // 📼 BLACK BOX: Log slot-fill attempt
+    if (BlackBoxLogger) {
+        BlackBoxLogger.logEvent({
+            callId,
+            companyId,
+            type: 'BOOKING_STEP',
+            turn: turnNumber,
+            data: { stepKey: currentStep, status: 'PROCESSING', userInput: userInput?.substring(0, 50) }
+        }).catch(() => {});
+    }
+    
+    // Simple extraction based on current step - NO INTENT DETECTION
+    let newCollected = { ...collected };
+    let nextStep = currentStep;
+    let responseText = '';
+    
+    switch (currentStep) {
+        case 'collecting_name':
+        case 'ASK_NAME':
+            // Extract name from input (simple: just take the input as name)
+            const extractedName = extractName(userInput);
+            if (extractedName) {
+                newCollected.name = extractedName;
+                nextStep = 'collecting_phone';
+                responseText = `Thanks, ${extractedName}. And what's the best phone number to reach you?`;
+                
+                // 📼 BLACK BOX: Log slot filled
+                if (BlackBoxLogger) {
+                    BlackBoxLogger.QuickLog.bookingSlotFilled(callId, companyId, turnNumber, 'name', extractedName);
+                }
+            } else {
+                responseText = "I didn't quite catch that. Could you please tell me your name?";
+            }
+            break;
+            
+        case 'collecting_phone':
+        case 'ASK_PHONE':
+            const extractedPhone = extractPhone(userInput);
+            if (extractedPhone) {
+                newCollected.phone = extractedPhone;
+                nextStep = 'collecting_address';
+                responseText = "Great. What's the service address?";
+                
+                if (BlackBoxLogger) {
+                    BlackBoxLogger.QuickLog.bookingSlotFilled(callId, companyId, turnNumber, 'phone', extractedPhone);
+                }
+            } else {
+                responseText = "I need your phone number so we can reach you. What's the best number?";
+            }
+            break;
+            
+        case 'collecting_address':
+        case 'ASK_ADDRESS':
+            const extractedAddress = extractAddress(userInput);
+            if (extractedAddress) {
+                newCollected.address = extractedAddress;
+                nextStep = 'collecting_time';
+                responseText = "When would be a good time for us to come out?";
+                
+                if (BlackBoxLogger) {
+                    BlackBoxLogger.QuickLog.bookingSlotFilled(callId, companyId, turnNumber, 'address', extractedAddress);
+                }
+            } else {
+                responseText = "Could you please repeat the service address?";
+            }
+            break;
+            
+        case 'collecting_time':
+        case 'ASK_TIME':
+            const extractedTime = extractTime(userInput);
+            if (extractedTime) {
+                newCollected.time = extractedTime;
+                nextStep = 'confirmed';
+                responseText = `Perfect! I have ${newCollected.name || 'you'} at ${newCollected.address || 'your location'} for ${extractedTime}. I'll get that scheduled and someone will confirm with you shortly. Is there anything else I can help you with?`;
+                
+                if (BlackBoxLogger) {
+                    BlackBoxLogger.QuickLog.bookingSlotFilled(callId, companyId, turnNumber, 'time', extractedTime);
+                    BlackBoxLogger.QuickLog.bookingComplete(callId, companyId, turnNumber, newCollected);
+                }
+            } else {
+                responseText = "What day and time works best for you?";
+            }
+            break;
+            
+        case 'confirmed':
+            // Booking already complete, handle follow-up
+            responseText = "Is there anything else I can help you with today?";
+            nextStep = 'completed';
+            break;
+            
+        default:
+            responseText = "I'd be happy to schedule that for you. May I have your name please?";
+            nextStep = 'collecting_name';
+    }
+    
+    // Build new call state with booking lock preserved
+    const isComplete = nextStep === 'confirmed' || nextStep === 'completed';
+    
+    return {
+        text: responseText,
+        action: 'continue',
+        shouldTransfer: false,
+        shouldHangup: false,
+        callState: {
+            ...callState,
+            turnCount: turnNumber,
+            bookingModeLocked: !isComplete, // Unlock only when complete
+            bookingState: nextStep,
+            currentBookingStep: nextStep,
+            bookingCollected: newCollected,
+            bookingReady: isComplete
+        }
+    };
+}
+
+// Simple extraction helpers (no LLM, just pattern matching)
+function extractName(input) {
+    if (!input) return null;
+    // Remove common prefixes
+    const cleaned = input.replace(/^(my name is|i'm|i am|it's|this is|hi i'm|hey i'm)\s*/i, '').trim();
+    // Take first 2-3 words as name
+    const words = cleaned.split(/\s+/).slice(0, 3);
+    if (words.length > 0 && words[0].length > 1) {
+        return words.join(' ');
+    }
+    return null;
+}
+
+function extractPhone(input) {
+    if (!input) return null;
+    // Extract digits
+    const digits = input.replace(/\D/g, '');
+    // Valid US phone has 10 or 11 digits
+    if (digits.length >= 10 && digits.length <= 11) {
+        return digits.length === 11 ? digits : '1' + digits;
+    }
+    return null;
+}
+
+function extractAddress(input) {
+    if (!input) return null;
+    // If input has numbers and words, likely an address
+    if (/\d/.test(input) && input.length > 5) {
+        return input.trim();
+    }
+    // Or if it mentions street/road/lane etc
+    if (/\b(street|st|road|rd|avenue|ave|lane|ln|drive|dr|court|ct|way|place|pl)\b/i.test(input)) {
+        return input.trim();
+    }
+    // Accept any input over 10 chars as potential address
+    if (input.length > 10) {
+        return input.trim();
+    }
+    return null;
+}
+
+function extractTime(input) {
+    if (!input) return null;
+    // Accept common time expressions
+    const timePatterns = [
+        /\b(morning|afternoon|evening|tonight|tomorrow|today|asap|as soon as possible)\b/i,
+        /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+        /\d{1,2}(:\d{2})?\s*(am|pm)?/i,
+        /\b(next week|this week|anytime)\b/i
+    ];
+    
+    for (const pattern of timePatterns) {
+        if (pattern.test(input)) {
+            return input.trim();
+        }
+    }
+    // Accept any non-trivial input as time preference
+    if (input.length > 3) {
+        return input.trim();
+    }
+    return null;
+}
+
 /**
- * Handle BOOKING_FLOW route
+ * Handle BOOKING_FLOW route (initial entry point - sets the HARD LOCK)
  */
 async function handleBooking({ company, callState, decision }) {
     const entities = decision.entities || {};
@@ -862,6 +1122,18 @@ async function handleBooking({ company, callState, decision }) {
             data: {
                 reason: decision.intentTag || 'BOOKING_REQUEST',
                 intentConfidence: decision.confidence || 0
+            }
+        }).catch(() => {});
+        
+        // 📼 BLACK BOX: Log HARD LOCK activation
+        BlackBoxLogger.logEvent({
+            callId,
+            companyId,
+            type: 'BOOKING_MODE_LOCKED',
+            turn: turnNumber,
+            data: {
+                intentConfidence: decision.confidence || 0,
+                locked: true
             }
         }).catch(() => {});
     }
@@ -885,6 +1157,14 @@ async function handleBooking({ company, callState, decision }) {
         }
     };
     
+    // Build initial collected data from entities
+    const initialCollected = {
+        name: entities.contact?.name || null,
+        phone: entities.contact?.phone || null,
+        address: entities.location?.addressLine1 || null,
+        time: entities.scheduling?.preferredDate || entities.scheduling?.preferredWindow || null
+    };
+    
     // Determine what to ask for
     if (!hasName) {
         logBookingStep('ASK_NAME', 'ASKED');
@@ -895,7 +1175,10 @@ async function handleBooking({ company, callState, decision }) {
             shouldHangup: false,
             callState: {
                 ...callState,
-                bookingState: 'collecting_name'
+                bookingModeLocked: true,  // 🔒 HARD LOCK
+                bookingState: 'collecting_name',
+                currentBookingStep: 'ASK_NAME',
+                bookingCollected: initialCollected
             }
         };
     }
@@ -909,7 +1192,10 @@ async function handleBooking({ company, callState, decision }) {
             shouldHangup: false,
             callState: {
                 ...callState,
-                bookingState: 'collecting_phone'
+                bookingModeLocked: true,  // 🔒 HARD LOCK
+                bookingState: 'collecting_phone',
+                currentBookingStep: 'ASK_PHONE',
+                bookingCollected: initialCollected
             }
         };
     }
@@ -923,7 +1209,10 @@ async function handleBooking({ company, callState, decision }) {
             shouldHangup: false,
             callState: {
                 ...callState,
-                bookingState: 'collecting_address'
+                bookingModeLocked: true,  // 🔒 HARD LOCK
+                bookingState: 'collecting_address',
+                currentBookingStep: 'ASK_ADDRESS',
+                bookingCollected: initialCollected
             }
         };
     }
@@ -937,7 +1226,10 @@ async function handleBooking({ company, callState, decision }) {
             shouldHangup: false,
             callState: {
                 ...callState,
-                bookingState: 'collecting_time'
+                bookingModeLocked: true,  // 🔒 HARD LOCK
+                bookingState: 'collecting_time',
+                currentBookingStep: 'ASK_TIME',
+                bookingCollected: initialCollected
             }
         };
     }

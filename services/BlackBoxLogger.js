@@ -589,7 +589,62 @@ function computeDiagnosis(events, flags, booking, performance) {
   };
   
   // ════════════════════════════════════════════════════════════════════════════
-  // BOOKING IGNORED is the HIGHEST priority issue
+  // BOOKING OVERRIDDEN - THE #1 STATE MACHINE CONFLICT
+  // ════════════════════════════════════════════════════════════════════════════
+  // Check if booking was activated but then another module hijacked the conversation
+  const bookingActivated = events.filter(e => e.type === 'BOOKING_MODE_ACTIVATED');
+  const bookingOverridden = events.filter(e => e.type === 'BOOKING_OVERRIDDEN');
+  const bookingLocked = events.find(e => e.type === 'BOOKING_MODE_LOCKED');
+  
+  // Multiple BOOKING_MODE_ACTIVATED events = booking isn't staying locked
+  if (bookingActivated.length > 1) {
+    diagnosis.primaryBottleneck = 'STATE_MACHINE_CONFLICT';
+    diagnosis.rootCause = `Booking mode activated ${bookingActivated.length} times - this means bookingMode ` +
+      `is not persistent. Each time customer speaks, booking resets instead of staying locked.`;
+    diagnosis.suggestedFix = 'Implement BOOKING_MODE_LOCKED as a hard lock in callState. ' +
+      'Once locked, bypass Brain-1 and triage entirely - go straight to BookingHandler for slot-filling.';
+    diagnosis.severity = 'CRITICAL';
+    return diagnosis;
+  }
+  
+  // Booking overridden by triage/troubleshooting
+  if (bookingOverridden.length > 0) {
+    const firstOverride = bookingOverridden[0];
+    diagnosis.primaryBottleneck = 'BOOKING_OVERRIDDEN';
+    diagnosis.rootCause = `Booking was active but ${firstOverride.data?.overriddenBy || 'another module'} ` +
+      `hijacked the conversation at ${((firstOverride.t || 0) / 1000).toFixed(1)}s. ` +
+      `Booking step was: ${firstOverride.data?.bookingStep || 'unknown'}. ` +
+      `Agent said: "${firstOverride.data?.responseText || '?'}" instead of continuing booking.`;
+    diagnosis.suggestedFix = 'Implement hard booking lock: once bookingModeLocked=true, ' +
+      'slot-filling should NOT go through Brain-1 or triage. Only BookingHandler should speak. ' +
+      'Intent detection during booking = the bug.';
+    diagnosis.severity = 'CRITICAL';
+    return diagnosis;
+  }
+  
+  // Booking activated but never locked (weak state)
+  if (bookingActivated.length === 1 && !bookingLocked) {
+    // Check if troubleshooting happened after booking
+    const bookingTime = bookingActivated[0].t || 0;
+    const troubleshootingAfter = events.find(e => 
+      e.t > bookingTime && 
+      (e.type === 'TRIAGE_DECISION' && e.data?.route !== 'BOOKING_FLOW')
+    );
+    
+    if (troubleshootingAfter) {
+      diagnosis.primaryBottleneck = 'BOOKING_OVERRIDDEN';
+      diagnosis.rootCause = `Booking was activated at ${(bookingTime / 1000).toFixed(1)}s but never LOCKED. ` +
+        `Triage then routed to ${troubleshootingAfter.data?.route || 'MESSAGE_ONLY'} at ` +
+        `${((troubleshootingAfter.t || 0) / 1000).toFixed(1)}s, hijacking the booking flow.`;
+      diagnosis.suggestedFix = 'After BOOKING_MODE_ACTIVATED, immediately set BOOKING_MODE_LOCKED. ' +
+        'All subsequent turns should bypass intent detection and go straight to BookingHandler.';
+      diagnosis.severity = 'CRITICAL';
+      return diagnosis;
+    }
+  }
+  
+  // ════════════════════════════════════════════════════════════════════════════
+  // BOOKING IGNORED - Never entered booking at all
   // ════════════════════════════════════════════════════════════════════════════
   if (flags.bookingIgnored) {
     // Find the first booking intent for details
@@ -932,8 +987,8 @@ const QuickLog = {
   intentDetected: (callId, companyId, turn, intent, confidence, source) =>
     logEvent({ callId, companyId, type: 'INTENT_DETECTED', turn, data: { intent, confidence, source } }),
     
-  triageDecision: (callId, companyId, turn, route, cardId, cardName) =>
-    logEvent({ callId, companyId, type: 'TRIAGE_DECISION', turn, data: { route, cardId, cardName } }),
+  triageDecision: (callId, companyId, turn, route, cardId, cardName, source) =>
+    logEvent({ callId, companyId, type: 'TRIAGE_DECISION', turn, data: { route, cardId, cardName, source } }),
     
   responseBuilt: (callId, companyId, turn, text, source) =>
     logEvent({ callId, companyId, type: 'AGENT_RESPONSE_BUILT', turn, data: { text: truncate(text, 100), source } }),
@@ -948,8 +1003,81 @@ const QuickLog = {
     logEvent({ callId, companyId, type: 'BAILOUT_TRIGGERED', turn, data: { type, reason } }),
     
   transferInitiated: (callId, companyId, turn, target, reason) =>
-    logEvent({ callId, companyId, type: 'TRANSFER_INITIATED', turn, data: { target, reason } })
+    logEvent({ callId, companyId, type: 'TRANSFER_INITIATED', turn, data: { target, reason } }),
+    
+  // ════════════════════════════════════════════════════════════════════════════
+  // BOOKING PROGRESS EVENTS
+  // ════════════════════════════════════════════════════════════════════════════
+  
+  bookingModeLocked: (callId, companyId, turn, intentConfidence) =>
+    logEvent({ callId, companyId, type: 'BOOKING_MODE_LOCKED', turn, data: { intentConfidence, locked: true } }),
+    
+  bookingSlotFilled: (callId, companyId, turn, slot, value) =>
+    logEvent({ callId, companyId, type: 'BOOKING_SLOT_FILLED', turn, data: { slot, value: truncate(value, 50) } }),
+    
+  bookingOverridden: (callId, companyId, turn, overriddenBy, bookingStep, responseText) =>
+    logEvent({ callId, companyId, type: 'BOOKING_OVERRIDDEN', turn, data: { 
+      overriddenBy, 
+      bookingStep, 
+      responseText: truncate(responseText, 60) 
+    }}),
+    
+  bookingComplete: (callId, companyId, turn, collected) =>
+    logEvent({ callId, companyId, type: 'BOOKING_COMPLETE', turn, data: { collected } })
 };
+
+// ============================================================================
+// UPDATE BOOKING PROGRESS (called during booking flow)
+// ============================================================================
+
+async function updateBookingProgress(callId, companyId, progress) {
+  try {
+    await BlackBoxRecording.updateOne(
+      { callId, companyId },
+      { $set: { bookingProgress: progress } }
+    );
+  } catch (error) {
+    logger.error('[BLACK BOX] Failed to update booking progress', { callId, error: error.message });
+  }
+}
+
+// ============================================================================
+// LOG BOOKING CONFLICT (when booking is overridden by another module)
+// ============================================================================
+
+async function logBookingConflict(callId, companyId, conflictData) {
+  try {
+    const { t, overriddenBy, bookingStep, responseText } = conflictData;
+    
+    await BlackBoxRecording.updateOne(
+      { callId, companyId },
+      {
+        $inc: { 'conflicts.bookingOverriddenCount': 1 },
+        $set: {
+          'conflicts.bookingVsTriage': overriddenBy === 'TRIAGE',
+          'conflicts.bookingVsTroubleshooting': ['TROUBLESHOOTING', 'MESSAGE_ONLY'].includes(overriddenBy)
+        },
+        $push: {
+          'conflicts.overrideEvents': {
+            t,
+            overriddenBy,
+            bookingStep,
+            responseText: truncate(responseText, 60)
+          }
+        }
+      }
+    );
+    
+    logger.warn('[BLACK BOX] ⚠️ BOOKING CONFLICT DETECTED', {
+      callId,
+      overriddenBy,
+      bookingStep
+    });
+    
+  } catch (error) {
+    logger.error('[BLACK BOX] Failed to log booking conflict', { callId, error: error.message });
+  }
+}
 
 // ============================================================================
 // EXPORT
@@ -961,6 +1089,8 @@ module.exports = {
   appendError,
   addTranscript,
   finalizeCall,
+  updateBookingProgress,
+  logBookingConflict,
   QuickLog
 };
 

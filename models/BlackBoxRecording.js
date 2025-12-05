@@ -34,12 +34,24 @@ const EVENT_TYPES = [
   'GATHER_FINAL',             // Final STT text from caller
   'FAST_MATCH_HIT',           // Triage keywords matched - no LLM needed
   'LLM_FALLBACK',             // Fast match failed - calling LLM
+  'LLM_RESPONSE',             // LLM response with timing
   'INTENT_DETECTED',          // LLM-0 / Brain-1 decision
+  'BOOKING_INTENT_OVERRIDE',  // Forced action to BOOK due to clear intent
   'TRIAGE_DECISION',          // Triage router result
   'CARD_MATCHED',             // Which triage card matched
-  'TIER3_DECISION',           // 3-tier router decision
-  'BOOKING_MODE_ACTIVATED',   // Committed to booking flow
-  'BOOKING_STEP',             // Each booking step
+  'TIER3_ENTERED',            // Entered 3-tier processing
+  'TIER3_FAST_MATCH',         // 3-tier rule-based match
+  'TIER3_EMBEDDING_MATCH',    // 3-tier semantic match
+  'TIER3_LLM_FALLBACK_CALLED', // 3-tier LLM fallback initiated
+  'TIER3_LLM_FALLBACK_RESPONSE', // 3-tier LLM response received
+  'TIER3_EXIT',               // Exited 3-tier with result
+  'TIER3_DECISION',           // 3-tier router decision (legacy)
+  'BOOKING_MODE_ACTIVATED',   // Entered booking flow
+  'BOOKING_MODE_LOCKED',      // HARD LOCK - booking owns conversation
+  'BOOKING_STEP',             // Each booking step (ASK_NAME, ASK_ADDRESS, etc.)
+  'BOOKING_SLOT_FILLED',      // Customer provided booking info
+  'BOOKING_OVERRIDDEN',       // ⚠️ Another module hijacked booking
+  'BOOKING_COMPLETE',         // Booking finished successfully
   'AGENT_RESPONSE_BUILT',     // Full response text ready
   'AGENT_RESPONSE_VALIDATED', // ResponseValidator verdict
   'TTS_GENERATED',            // TTS complete with timing
@@ -112,8 +124,49 @@ const BlackBoxRecordingSchema = new Schema({
     completed: Boolean,
     failureReason: {
       type: String,
-      enum: ['CUSTOMER_REFUSED', 'NO_AVAILABILITY', 'LOGIC_ERROR', 'TRANSFER_INSTEAD', 'CALL_ENDED', null]
+      enum: ['CUSTOMER_REFUSED', 'NO_AVAILABILITY', 'LOGIC_ERROR', 'TRANSFER_INSTEAD', 'CALL_ENDED', 'BOOKING_OVERRIDDEN', null]
     }
+  },
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // BOOKING PROGRESS SNAPSHOT (real-time state during call)
+  // ─────────────────────────────────────────────────────────────────────────
+  bookingProgress: {
+    modeActive: { type: Boolean, default: false },
+    modeLocked: { type: Boolean, default: false },  // HARD LOCK - no other module can override
+    lockThreshold: { type: Number, default: 0.65 },
+    currentStep: {
+      type: String,
+      enum: ['NONE', 'ASK_NAME', 'ASK_ADDRESS', 'ASK_PHONE', 'ASK_TIME', 'CONFIRM', 'COMPLETE', null]
+    },
+    collected: {
+      name: String,
+      address: String,
+      phone: String,
+      time: String
+    },
+    slotsRemaining: { type: Number, default: 4 },
+    lastStepAskedAtMs: Number,
+    timeline: [{
+      t: Number,           // ms offset
+      event: String,       // 'INTENT_DETECTED', 'ASK_NAME', 'GOT_NAME', 'OVERRIDDEN'
+      detail: String
+    }]
+  },
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // CONFLICT DETECTOR (critical for debugging booking vs other modules)
+  // ─────────────────────────────────────────────────────────────────────────
+  conflicts: {
+    bookingVsTriage: { type: Boolean, default: false },          // Triage spoke during booking
+    bookingVsTroubleshooting: { type: Boolean, default: false }, // Troubleshooting hijacked booking
+    bookingOverriddenCount: { type: Number, default: 0 },        // How many times booking was overridden
+    overrideEvents: [{
+      t: Number,           // ms offset when override happened
+      overriddenBy: String, // 'TRIAGE', 'TROUBLESHOOTING', 'MESSAGE_ONLY', 'LLM_FALLBACK'
+      bookingStep: String,  // Which booking step was active
+      responseText: String  // What the agent said instead (truncated)
+    }]
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -156,7 +209,8 @@ const BlackBoxRecordingSchema = new Schema({
   diagnosis: {
     primaryBottleneck: {
       type: String,
-      enum: ['TRIAGE_MISS', 'LLM_SLOW', 'BOOKING_LOOP', 'BEHAVIOR_RULE', 'TTS', 'UNKNOWN', null]
+      enum: ['TRIAGE_MISS', 'LLM_SLOW', 'BOOKING_LOOP', 'BOOKING_IGNORED', 'BOOKING_OVERRIDDEN', 
+             'BEHAVIOR_RULE', 'TTS', 'STATE_MACHINE_CONFLICT', 'UNKNOWN', null]
     },
     rootCause: String,        // Human-readable explanation
     suggestedFix: String,     // Actionable fix

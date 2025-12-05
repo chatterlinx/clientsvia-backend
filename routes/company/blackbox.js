@@ -234,6 +234,9 @@ function generateEngineeringSnapshot(recording) {
     return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
   
+  const bp = recording.bookingProgress || {};
+  const conflicts = recording.conflicts || {};
+  
   let snapshot = `[BLACK BOX SNAPSHOT]
 
 Company: ${recording.companyId}
@@ -250,6 +253,27 @@ Intent:
 - questionsAskedBeforeLock: ${recording.booking?.questionsAskedBeforeLock || 0}
 - completed: ${recording.booking?.completed ?? 'N/A'}
 - failureReason: ${recording.booking?.failureReason || 'N/A'}
+
+Booking Progress:
+- modeActive: ${bp.modeActive || false}
+- modeLocked: ${bp.modeLocked || false}  ← CRITICAL: Must be TRUE to prevent overrides
+- lockThreshold: ${bp.lockThreshold || 0.65}
+- currentStep: ${bp.currentStep || 'NONE'}
+- collected:
+    name: ${bp.collected?.name ? `"${bp.collected.name}"` : 'null'}
+    address: ${bp.collected?.address ? `"${bp.collected.address}"` : 'null'}
+    phone: ${bp.collected?.phone ? `"${bp.collected.phone}"` : 'null'}
+    time: ${bp.collected?.time ? `"${bp.collected.time}"` : 'null'}
+- slotsRemaining: ${bp.slotsRemaining ?? 4}
+- lastStepAskedAtMs: ${bp.lastStepAskedAtMs || 'N/A'}
+
+Conflict Detector:
+- bookingVsTriage: ${conflicts.bookingVsTriage || false}
+- bookingVsTroubleshooting: ${conflicts.bookingVsTroubleshooting || false}
+- bookingOverriddenCount: ${conflicts.bookingOverriddenCount || 0}
+${conflicts.overrideEvents?.length > 0 ? conflicts.overrideEvents.map(e => 
+  `- OVERRIDE at ${formatTime(e.t || 0)}: ${e.overriddenBy} hijacked ${e.bookingStep} → "${e.responseText}"`
+).join('\n') : '- (no overrides)'}
 
 Flags:
 - loopDetected: ${recording.flags?.loopDetected || false}
@@ -282,11 +306,13 @@ Key Timeline:
       'GREETING_SENT', 'GATHER_FINAL', 'INTENT_DETECTED', 'TRIAGE_DECISION',
       'TIER3_ENTERED', 'TIER3_FAST_MATCH', 'TIER3_EMBEDDING_MATCH',
       'TIER3_LLM_FALLBACK_CALLED', 'TIER3_LLM_FALLBACK_RESPONSE', 'TIER3_EXIT',
-      'BOOKING_MODE_ACTIVATED', 'BOOKING_STEP', 'BOOKING_INTENT_OVERRIDE',
+      'BOOKING_MODE_ACTIVATED', 'BOOKING_MODE_LOCKED', 'BOOKING_STEP', 
+      'BOOKING_SLOT_FILLED', 'BOOKING_OVERRIDDEN', 'BOOKING_COMPLETE',
+      'BOOKING_INTENT_OVERRIDE',
       'AGENT_RESPONSE_BUILT', 'LOOP_DETECTED', 'BAILOUT_TRIGGERED', 
       'TRANSFER_INITIATED', 'CALL_END'
     ].includes(e.type))
-    .slice(0, 30);
+    .slice(0, 35);
   
   for (const event of keyEvents) {
     const time = formatTime(event.t || 0);
@@ -337,8 +363,20 @@ Key Timeline:
       case 'BOOKING_MODE_ACTIVATED':
         detail = `reason=${event.data?.reason || '?'}`;
         break;
+      case 'BOOKING_MODE_LOCKED':
+        detail = `🔒 HARD LOCK (confidence=${event.data?.intentConfidence?.toFixed(2) || '?'})`;
+        break;
       case 'BOOKING_STEP':
         detail = `${event.data?.stepKey || '?'} status=${event.data?.status || '?'}`;
+        break;
+      case 'BOOKING_SLOT_FILLED':
+        detail = `${event.data?.slot || '?'} = "${event.data?.value || '?'}"`;
+        break;
+      case 'BOOKING_OVERRIDDEN':
+        detail = `⚠️ ${event.data?.overriddenBy} hijacked ${event.data?.bookingStep} → "${event.data?.responseText || '?'}"`;
+        break;
+      case 'BOOKING_COMPLETE':
+        detail = `✅ name=${event.data?.collected?.name || '?'}, phone=${event.data?.collected?.phone || '?'}`;
         break;
       case 'BOOKING_INTENT_OVERRIDE':
         detail = `originalAction=${event.data?.originalAction} → BOOK (${event.data?.confidence?.toFixed(2) || '?'})`;
