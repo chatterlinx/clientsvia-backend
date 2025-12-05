@@ -1886,6 +1886,18 @@ router.post('/voice/:companyID', async (req, res) => {
 
 // V2 AI Agent response handler - NEW SYSTEM
 router.post('/v2-agent-respond/:companyID', async (req, res) => {
+  // ════════════════════════════════════════════════════════════════════════════════
+  // 🚨🚨🚨 CRITICAL ENTRY POINT - v2-agent-respond HIT 🚨🚨🚨
+  // ════════════════════════════════════════════════════════════════════════════════
+  console.log('════════════════════════════════════════════════════════════════════════════════');
+  console.log('🚨🚨🚨 [v2-agent-respond] ENDPOINT HIT! Twilio Gather COMPLETED! 🚨🚨🚨');
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('CallSid:', req.body.CallSid);
+  console.log('SpeechResult:', req.body.SpeechResult);
+  console.log('Confidence:', req.body.Confidence);
+  console.log('From:', req.body.From);
+  console.log('════════════════════════════════════════════════════════════════════════════════');
+  
   const callSid = req.body.CallSid || 'UNKNOWN';
   const fromNumber = req.body.From || 'UNKNOWN';
   const speechResult = req.body.SpeechResult || '';
@@ -2429,9 +2441,22 @@ router.post('/ai-agent-partial/:companyID', async (req, res) => {
 router.post('/v2-agent-partial/:companyId', async (req, res) => {
   try {
     const { companyId } = req.params;
-    const { UnstableSpeechResult, StableSpeechResult, CallSid, Stability } = req.body;
+    const { UnstableSpeechResult, StableSpeechResult, CallSid, Stability, SequenceNumber } = req.body;
     
-    logger.debug(`[V2 PARTIAL] Company: ${companyId}, CallSid: ${CallSid}, Stable: "${StableSpeechResult || ''}", Unstable: "${UnstableSpeechResult || ''}", Stability: ${Stability}`);
+    // 🔍 SPEECH TRACKING: Log what caller is saying in real-time
+    const hasContent = Boolean(StableSpeechResult || UnstableSpeechResult);
+    console.log(`📢 [PARTIAL #${SequenceNumber || '?'}] CallSid: ${CallSid?.slice(-8)}, Stable: "${StableSpeechResult || '-'}", Unstable: "${UnstableSpeechResult || '-'}", Stability: ${Stability || '?'}`);
+    
+    // Log cumulative speech for debugging
+    if (StableSpeechResult) {
+      logger.info('[V2 PARTIAL] 🎤 STABLE speech fragment detected', {
+        companyId,
+        callSid: CallSid?.slice(-8),
+        stableSpeech: StableSpeechResult,
+        stability: Stability,
+        sequence: SequenceNumber
+      });
+    }
     
     // Return EMPTY TwiML - do NOT interrupt the call, do NOT greet
     // This is just for logging/monitoring real-time speech
