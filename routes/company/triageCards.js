@@ -661,5 +661,181 @@ router.explainAction = function(action) {
   return explanations[action] || 'Unknown action';
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DIAGNOSTIC: Test phrase matching against triage cards
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/company/:companyId/triage-cards/diagnostic/match-test
+// Body: { phrases: ["I need AC service", "my air conditioner is broken"] }
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post('/diagnostic/match-test', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { phrases } = req.body;
+    
+    // Default test phrases if none provided
+    const testPhrases = phrases?.length > 0 ? phrases : [
+      "I need AC service",
+      "my air conditioner is not cooling",
+      "AC not working",
+      "need to schedule appointment",
+      "I want to book a technician",
+      "my heater is broken",
+      "furnace isn't working",
+      "thermostat problem",
+      "cooling issue",
+      "I have an emergency"
+    ];
+    
+    logger.info('[TRIAGE CARDS API] Running match diagnostic', { 
+      companyId, 
+      phraseCount: testPhrases.length 
+    });
+    
+    // Load all active triage cards
+    const cards = await TriageCard.find({ 
+      companyId,
+      isActive: { $ne: false }
+    }).lean();
+    
+    const results = {
+      companyId,
+      totalCards: cards.length,
+      cardsWithKeywords: 0,
+      cardsWithSynonyms: 0,
+      allKeywords: [],
+      allSynonyms: [],
+      phraseTests: [],
+      recommendations: []
+    };
+    
+    // Collect all keywords and synonyms
+    cards.forEach(card => {
+      const keywords = card.quickRuleConfig?.keywordsMustHave || [];
+      const synonyms = card.generatedSynonyms || [];
+      
+      if (keywords.length > 0) {
+        results.cardsWithKeywords++;
+        keywords.forEach(kw => {
+          results.allKeywords.push({
+            keyword: kw,
+            card: card.triageLabel || card.displayName
+          });
+        });
+      }
+      
+      if (synonyms.length > 0) {
+        results.cardsWithSynonyms++;
+        synonyms.slice(0, 10).forEach(syn => {
+          results.allSynonyms.push({
+            synonym: syn,
+            card: card.triageLabel || card.displayName
+          });
+        });
+      }
+    });
+    
+    // Test each phrase
+    for (const phrase of testPhrases) {
+      const lowerPhrase = phrase.toLowerCase();
+      const matches = [];
+      
+      for (const card of cards) {
+        const keywords = card.quickRuleConfig?.keywordsMustHave || [];
+        const synonyms = card.generatedSynonyms || [];
+        
+        // Check keywords
+        for (const keyword of keywords) {
+          if (lowerPhrase.includes(keyword.toLowerCase())) {
+            matches.push({
+              cardId: card._id.toString(),
+              cardName: card.triageLabel || card.displayName,
+              matchType: 'keyword',
+              matched: keyword,
+              action: card.quickRuleConfig?.action || 'unknown'
+            });
+          }
+        }
+        
+        // Check synonyms
+        for (const synonym of synonyms) {
+          if (lowerPhrase.includes(synonym.toLowerCase())) {
+            matches.push({
+              cardId: card._id.toString(),
+              cardName: card.triageLabel || card.displayName,
+              matchType: 'synonym',
+              matched: synonym,
+              action: card.quickRuleConfig?.action || 'unknown'
+            });
+          }
+        }
+      }
+      
+      results.phraseTests.push({
+        phrase,
+        matchCount: matches.length,
+        wouldFallToLLM: matches.length === 0,
+        matches
+      });
+    }
+    
+    // Generate recommendations
+    const noMatchPhrases = results.phraseTests.filter(p => p.wouldFallToLLM);
+    if (noMatchPhrases.length > 0) {
+      results.recommendations.push({
+        severity: 'critical',
+        message: `${noMatchPhrases.length}/${testPhrases.length} phrases would fall to LLM (SLOW!)`,
+        affectedPhrases: noMatchPhrases.map(p => p.phrase),
+        fix: 'Add these keywords to your triage cards: AC, air conditioning, service, heater, cooling, etc.'
+      });
+    }
+    
+    if (results.cardsWithKeywords === 0) {
+      results.recommendations.push({
+        severity: 'critical',
+        message: 'NO cards have keywords! Every call falls to LLM (7-12 second delay)',
+        fix: 'Add keywordsMustHave to quickRuleConfig in each triage card'
+      });
+    }
+    
+    // Suggest missing common keywords
+    const commonKeywords = ['ac', 'air conditioning', 'cooling', 'heating', 'hvac', 
+                           'thermostat', 'furnace', 'heat pump', 'service', 'repair', 
+                           'maintenance', 'appointment', 'schedule', 'emergency'];
+    const existingKeywords = results.allKeywords.map(k => k.keyword.toLowerCase());
+    const missingKeywords = commonKeywords.filter(kw => 
+      !existingKeywords.some(ek => ek.includes(kw))
+    );
+    
+    if (missingKeywords.length > 0) {
+      results.recommendations.push({
+        severity: 'warning',
+        message: 'Missing common keywords for HVAC business',
+        missingKeywords,
+        fix: 'Add these keywords to appropriate triage cards'
+      });
+    }
+    
+    logger.info('[TRIAGE CARDS API] Match diagnostic complete', {
+      companyId,
+      totalCards: cards.length,
+      matchingPhrases: testPhrases.length - noMatchPhrases.length,
+      fallingToLLM: noMatchPhrases.length
+    });
+    
+    res.json({
+      success: true,
+      diagnostic: results
+    });
+    
+  } catch (error) {
+    logger.error('[TRIAGE CARDS API] Match diagnostic failed', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
 
