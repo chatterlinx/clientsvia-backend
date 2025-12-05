@@ -70,6 +70,11 @@ const LoopDetector = require('./LoopDetector');
 const { validateAndLog } = require('./ResponseValidator');
 
 // ═══════════════════════════════════════════════════════════════════════════
+// TIER-3 CLARIFIER - Fallback ladder step 1: Generate contextual question
+// ═══════════════════════════════════════════════════════════════════════════
+const { generateClarifyingQuestion } = require('./Tier3Clarifier');
+
+// ═══════════════════════════════════════════════════════════════════════════
 // DEFAULT BAILOUT - Used when all else fails (can be overridden per company)
 // ═══════════════════════════════════════════════════════════════════════════
 const DEFAULT_BAILOUT_MESSAGE = "I'm having a bit of trouble on my end. Let me connect you with someone who can help you right away.";
@@ -432,28 +437,86 @@ async function processTurn(companyId, callId, userInput, callState) {
             // ════════════════════════════════════════════════════════════════════════════
             // FALLBACK LADDER STEP 1: Try Tier-3 Clarifier
             // ════════════════════════════════════════════════════════════════════════════
-            // TODO: Phase 2 - Implement Tier3Clarifier.generateClarifyingQuestion()
-            // For now, go directly to bailout
+            // Uses company data (trade, serviceTypes) to generate contextual question
+            // No hardcoded business logic - all meaning from DB
+            
+            let tier3Success = false;
+            
+            try {
+                logger.info('[BRAIN-1 RUNTIME] 🔄 Attempting Tier-3 Clarifier...', {
+                    companyId,
+                    callId,
+                    reason: validation.reason
+                });
+                
+                const clarifierResult = await generateClarifyingQuestion({
+                    userText: userInput,
+                    company,
+                    callId,
+                    turnNumber: updatedCallState.turnCount
+                });
+                
+                if (clarifierResult.success && clarifierResult.text) {
+                    // Validate the clarifier's output too
+                    const clarifierValidation = validateAndLog(
+                        clarifierResult.text, 
+                        callId, 
+                        'processTurn.tier3Clarifier'
+                    );
+                    
+                    if (clarifierValidation.usable) {
+                        logger.info('[BRAIN-1 RUNTIME] ✅ Tier-3 Clarifier succeeded', {
+                            companyId,
+                            callId,
+                            question: clarifierResult.text.substring(0, 50),
+                            source: clarifierResult.source,
+                            elapsedMs: clarifierResult.elapsedMs
+                        });
+                        
+                        result.text = clarifierResult.text;
+                        result.action = 'continue';
+                        result.shouldTransfer = false;
+                        result.shouldHangup = false;
+                        result.tier3Clarified = true;
+                        result.tier3Source = clarifierResult.source;
+                        tier3Success = true;
+                    } else {
+                        logger.warn('[BRAIN-1 RUNTIME] ⚠️ Tier-3 Clarifier output also failed validation', {
+                            callId,
+                            clarifierOutput: clarifierResult.text?.substring(0, 50),
+                            reason: clarifierValidation.reason
+                        });
+                    }
+                }
+            } catch (clarifierError) {
+                logger.warn('[BRAIN-1 RUNTIME] ⚠️ Tier-3 Clarifier failed', {
+                    callId,
+                    error: clarifierError.message
+                });
+            }
             
             // ════════════════════════════════════════════════════════════════════════════
-            // FALLBACK LADDER STEP 2: Hard Bailout
+            // FALLBACK LADDER STEP 2: Hard Bailout (only if Tier-3 also failed)
             // ════════════════════════════════════════════════════════════════════════════
-            const bailoutMessage = company?.settings?.bailoutMessage || DEFAULT_BAILOUT_MESSAGE;
-            const bailoutAction = company?.settings?.bailoutAction || DEFAULT_BAILOUT_ACTION;
             
-            logger.warn('[BRAIN-1 RUNTIME] 🚨 BAILOUT TRIGGERED', {
-                companyId,
-                callId,
-                reason: validation.reason,
-                bailoutAction
-            });
-            
-            result.text = bailoutMessage;
-            result.action = bailoutAction === 'TRANSFER' ? 'transfer' : 'take_message';
-            result.shouldTransfer = bailoutAction === 'TRANSFER';
-            result.shouldHangup = false;
-            result.bailoutTriggered = true;
-            result.bailoutReason = validation.reason;
+            if (!tier3Success) {
+                const bailoutMessage = company?.settings?.bailoutMessage || DEFAULT_BAILOUT_MESSAGE;
+                const bailoutAction = company?.settings?.bailoutAction || DEFAULT_BAILOUT_ACTION;
+                
+                logger.warn('[BRAIN-1 RUNTIME] 🚨 BAILOUT TRIGGERED (Tier-3 failed)', {
+                    companyId,
+                    callId,
+                    originalReason: validation.reason,
+                    bailoutAction
+                });
+                
+                result.text = bailoutMessage;
+                result.action = bailoutAction === 'TRANSFER' ? 'transfer' : 'take_message';
+                result.shouldTransfer = bailoutAction === 'TRANSFER';
+                result.shouldHangup = false;
+                result.bailoutTriggered = true;
+                result.bailoutReason = validation.reason;
+            }
         }
         
         // ════════════════════════════════════════════════════════════════════════════
