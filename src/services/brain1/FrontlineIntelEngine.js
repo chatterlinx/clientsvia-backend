@@ -912,12 +912,59 @@ async function callBrain1LLM(prompt, metadata) {
             decision.action = 'ASK_FOLLOWUP';
         }
         
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🎯 BOOKING INTENT OVERRIDE
+        // ════════════════════════════════════════════════════════════════════════════
+        // CRITICAL FIX: When customer clearly wants to book, STOP troubleshooting!
+        // 
+        // If LLM detected "booking" intent with decent confidence (≥0.65), force
+        // action to BOOK. Don't ask more troubleshooting questions - start collecting
+        // name, phone, address, time.
+        // 
+        // Exception: Don't override TRANSFER (emergencies should still transfer).
+        // ════════════════════════════════════════════════════════════════════════════
+        const BOOKING_INTENT_THRESHOLD = 0.65;
+        const isBookingIntent = decision.intentTag === 'booking' || 
+                               decision.intentTag === 'schedule' ||
+                               decision.intentTag === 'appointment';
+        const hasDecentConfidence = (decision.confidence || 0) >= BOOKING_INTENT_THRESHOLD;
+        const notAlreadyHandled = decision.action !== 'BOOK' && decision.action !== 'TRANSFER';
+        
+        if (isBookingIntent && hasDecentConfidence && notAlreadyHandled) {
+            logger.info('[BRAIN-1] 🎯 BOOKING INTENT OVERRIDE - Forcing BOOK action', {
+                originalAction: decision.action,
+                intentTag: decision.intentTag,
+                confidence: decision.confidence,
+                threshold: BOOKING_INTENT_THRESHOLD
+            });
+            
+            // 📼 BLACK BOX: Log booking intent override
+            if (BlackBoxLogger && metadata.callId) {
+                BlackBoxLogger.logEvent({
+                    callId: metadata.callId,
+                    companyId: metadata.companyId,
+                    type: 'BOOKING_INTENT_OVERRIDE',
+                    data: {
+                        originalAction: decision.action,
+                        intentTag: decision.intentTag,
+                        confidence: decision.confidence
+                    }
+                }).catch(() => {});
+            }
+            
+            decision.action = 'BOOK';
+            decision.flags = decision.flags || {};
+            decision.flags.bookingIntentOverride = true;
+            decision.flags.readyToBook = true;
+        }
+        
         // Diagnostic: Log what LLM returned
         logger.info('[BRAIN-1] 🤖 LLM RESPONSE', {
             action: decision.action,
             triageTag: decision.triageTag,
             intentTag: decision.intentTag,
             confidence: decision.confidence,
+            bookingOverride: decision.flags?.bookingIntentOverride || false,
             reasoning: decision.reasoning?.substring(0, 100)
         });
         
