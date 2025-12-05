@@ -5,6 +5,24 @@
  * 
  * THE SINGLE RUNTIME ENTRYPOINT FOR ALL CALL TURNS
  * 
+ * ════════════════════════════════════════════════════════════════════════════
+ * RUNTIME CONTRACT (NON-NEGOTIABLE):
+ * ════════════════════════════════════════════════════════════════════════════
+ * 
+ *   INPUT:  Non-empty transcript string from caller
+ *   OUTPUT: Non-empty response.text AND an action
+ *   
+ *   IT IS ILLEGAL FOR THIS FUNCTION TO RETURN EMPTY TEXT.
+ *   
+ *   If normal logic fails, we go down the fallback ladder:
+ *     1. Normal path (LLM-0 + Triage + Scenario + ResponseConstructor)
+ *     2. Tier-3 clarifier (if response fails validation)
+ *     3. Hard bailout (company bailout message + transfer/message)
+ *   
+ *   SILENCE IS A BUG. This runtime enforces "no dead air, ever."
+ * 
+ * ════════════════════════════════════════════════════════════════════════════
+ * 
  * This ties together:
  * 1. FrontlineIntelEngine (Brain-1 decision making)
  * 2. TriageRouter (routing Brain-1 decisions)
@@ -12,13 +30,16 @@
  * 4. Transfer Handler
  * 5. Booking Handler
  * 6. Guardrails
+ * 7. ResponseValidator (quality gate)
  * 
  * FLOW:
  *   Caller → Brain-1 (FrontlineIntelEngine.runTurn())
  *         → Triage Router
  *         → Brain-2 (if SCENARIO_ENGINE) OR Transfer/Booking/End
  *         → Guardrails
- *         → Response
+ *         → ResponseValidator (quality check)
+ *         → Fallback ladder if needed
+ *         → Response (ALWAYS non-empty)
  * 
  * CALLED BY: v2AIAgentRuntime.processUserInput()
  * 
@@ -42,6 +63,17 @@ const { analyzeBehavior, getDefaultBehavior } = require('../../../services/LLM0B
 // LOOP DETECTOR - Safety net to prevent infinite generic response loops
 // ═══════════════════════════════════════════════════════════════════════════
 const LoopDetector = require('./LoopDetector');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RESPONSE VALIDATOR - Quality gate enforcing "no silence, no dead-ends"
+// ═══════════════════════════════════════════════════════════════════════════
+const { validateAndLog } = require('./ResponseValidator');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT BAILOUT - Used when all else fails (can be overridden per company)
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_BAILOUT_MESSAGE = "I'm having a bit of trouble on my end. Let me connect you with someone who can help you right away.";
+const DEFAULT_BAILOUT_ACTION = 'TRANSFER';
 
 /**
  * ============================================================================
@@ -380,13 +412,77 @@ async function processTurn(companyId, callId, userInput, callState) {
             }
         }
         
+        // ════════════════════════════════════════════════════════════════════════════
+        // STEP 7: RESPONSE VALIDATION GATE
+        // ════════════════════════════════════════════════════════════════════════════
+        // Enforce the runtime contract: no silence, no dead-ends, no loops
+        // If validation fails, we go down the fallback ladder
+        // ════════════════════════════════════════════════════════════════════════════
+        
+        const validation = validateAndLog(result.text, callId, 'processTurn.normal');
+        
+        if (!validation.usable) {
+            logger.warn('[BRAIN-1 RUNTIME] ⚠️ RESPONSE VALIDATION FAILED - Entering fallback ladder', {
+                companyId,
+                callId,
+                reason: validation.reason,
+                originalText: result.text?.substring(0, 50)
+            });
+            
+            // ════════════════════════════════════════════════════════════════════════════
+            // FALLBACK LADDER STEP 1: Try Tier-3 Clarifier
+            // ════════════════════════════════════════════════════════════════════════════
+            // TODO: Phase 2 - Implement Tier3Clarifier.generateClarifyingQuestion()
+            // For now, go directly to bailout
+            
+            // ════════════════════════════════════════════════════════════════════════════
+            // FALLBACK LADDER STEP 2: Hard Bailout
+            // ════════════════════════════════════════════════════════════════════════════
+            const bailoutMessage = company?.settings?.bailoutMessage || DEFAULT_BAILOUT_MESSAGE;
+            const bailoutAction = company?.settings?.bailoutAction || DEFAULT_BAILOUT_ACTION;
+            
+            logger.warn('[BRAIN-1 RUNTIME] 🚨 BAILOUT TRIGGERED', {
+                companyId,
+                callId,
+                reason: validation.reason,
+                bailoutAction
+            });
+            
+            result.text = bailoutMessage;
+            result.action = bailoutAction === 'TRANSFER' ? 'transfer' : 'take_message';
+            result.shouldTransfer = bailoutAction === 'TRANSFER';
+            result.shouldHangup = false;
+            result.bailoutTriggered = true;
+            result.bailoutReason = validation.reason;
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // FINAL GATE: ABSOLUTE NO-SILENCE ENFORCEMENT
+        // ════════════════════════════════════════════════════════════════════════════
+        // This is the last line of defense. If ANYTHING got through with empty text,
+        // we override it here. This should never happen, but we're bulletproof.
+        // ════════════════════════════════════════════════════════════════════════════
+        
+        if (!result.text || result.text.trim() === '') {
+            logger.error('[BRAIN-1 RUNTIME] ⛔ CRITICAL: Empty response at final gate!', {
+                companyId,
+                callId,
+                shouldNeverHappen: true
+            });
+            result.text = DEFAULT_BAILOUT_MESSAGE;
+            result.shouldTransfer = true;
+            result.bailoutTriggered = true;
+            result.bailoutReason = 'FINAL_GATE_EMPTY';
+        }
+        
         logger.info('[BRAIN-1 RUNTIME] ✅ Turn complete', {
             companyId,
             callId,
             route: triageResult.route,
             action: result.action,
             totalMs: Date.now() - startTime,
-            brain2Called: trace.brain2?.called
+            brain2Called: trace.brain2?.called,
+            bailoutTriggered: result.bailoutTriggered || false
         });
         
         return result;
@@ -399,19 +495,22 @@ async function processTurn(companyId, callId, userInput, callState) {
             stack: error.stack
         });
         
-        // Emergency fallback via ResponseConstructor
+        // Emergency fallback via ResponseConstructor - ALSO must be non-empty
         const errorResponse = buildSimpleResponse({
             context: { callId, companyId, turnNumber: (callState?.turnCount || 0) + 1 },
-            text: "I'm here to help. Could you please tell me more about what you need?",
+            text: DEFAULT_BAILOUT_MESSAGE,  // Use bailout, not a dead-end question
             source: 'brain1.error.fallback'
         });
         
+        // Error response also enforces no-silence contract
         return {
-            text: errorResponse.text,
+            text: errorResponse.text || DEFAULT_BAILOUT_MESSAGE,
             ssml: errorResponse.ssml,
-            action: 'continue',
-            shouldTransfer: false,
+            action: 'transfer',  // Route to human on error
+            shouldTransfer: true,
             shouldHangup: false,
+            bailoutTriggered: true,
+            bailoutReason: 'FATAL_ERROR',
             callState: {
                 ...callState,
                 turnCount: (callState?.turnCount || 0) + 1,
