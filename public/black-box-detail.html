@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Black Box Detail | ClientsVia</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a24;
+            --bg-hover: #22222e;
+            --border-color: #2a2a38;
+            --text-primary: #e5e5e5;
+            --text-secondary: #a0a0b0;
+            --text-muted: #6b6b7b;
+            --accent-red: #ef4444;
+            --accent-orange: #f97316;
+            --accent-yellow: #eab308;
+            --accent-green: #22c55e;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-pink: #ec4899;
+            --accent-cyan: #06b6d4;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* Navigation */
+        .nav-bar {
+            background: #000;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            height: 56px;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-bar a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            padding: 16px 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .nav-back {
+            background: var(--accent-blue) !important;
+            color: white !important;
+            border-radius: 6px;
+            padding: 8px 16px !important;
+            margin-right: auto;
+        }
+
+        .nav-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary { background: var(--accent-blue); color: white; }
+        .btn-secondary { background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border-color); }
+        .btn-danger { background: var(--accent-red); color: white; }
+
+        /* Call Header */
+        .call-header {
+            padding: 24px 40px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .call-title {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .call-title h1 {
+            font-size: 20px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .call-outcome {
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .outcome-COMPLETED { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
+        .outcome-TRANSFERRED { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
+        .outcome-HUNG_UP, .outcome-ERROR { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+
+        .call-meta {
+            display: flex;
+            gap: 32px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .call-meta strong { color: var(--text-primary); }
+
+        .call-flags {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .flag-chip {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .flag-loopDetected { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); }
+        .flag-bailoutTriggered { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+        .flag-bookingIgnored { background: rgba(234, 179, 8, 0.2); color: var(--accent-yellow); }
+        .flag-slowResponse { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+
+        /* Tabs */
+        .tabs-bar {
+            display: flex;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 40px;
+        }
+
+        .tab-btn {
+            padding: 16px 24px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover { color: var(--text-primary); }
+        .tab-btn.active {
+            color: var(--accent-blue);
+            border-bottom-color: var(--accent-blue);
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            padding: 32px 40px;
+            min-height: calc(100vh - 250px);
+        }
+
+        .tab-content.active { display: block; }
+
+        /* Overview Tab */
+        .overview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 24px;
+        }
+
+        .info-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 24px;
+        }
+
+        .info-card h3 {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .info-row:last-child { border-bottom: none; }
+
+        .info-label { color: var(--text-secondary); }
+        .info-value { 
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-primary);
+        }
+
+        .diagnosis-card {
+            border-left: 4px solid var(--accent-red);
+        }
+
+        .diagnosis-card.warning { border-left-color: var(--accent-orange); }
+        .diagnosis-card.info { border-left-color: var(--accent-blue); }
+
+        .diagnosis-text {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            margin-top: 12px;
+        }
+
+        .diagnosis-fix {
+            margin-top: 16px;
+            padding: 12px;
+            background: rgba(34, 197, 94, 0.1);
+            border-radius: 6px;
+            font-size: 13px;
+            color: var(--accent-green);
+        }
+
+        /* Sequence Diagram Tab */
+        .mermaid-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 32px;
+            overflow-x: auto;
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Waterfall Tab */
+        .waterfall-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .waterfall-turn {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .waterfall-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .waterfall-bar {
+            position: relative;
+            height: 32px;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .segment {
+            position: absolute;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 600;
+            color: white;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            padding: 0 4px;
+        }
+
+        .segment-STT { background: #22d3ee; }
+        .segment-Brain-1 { background: #f59e0b; }
+        .segment-Triage { background: #a78bfa; }
+        .segment-Brain-2 { background: #3b82f6; }
+        .segment-TTS { background: #ec4899; }
+        .segment-slow { background: repeating-linear-gradient(45deg, #f59e0b, #f59e0b 5px, #d97706 5px, #d97706 10px); }
+        .segment-failed { background: #ef4444; }
+
+        .waterfall-legend {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            margin-top: 24px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+
+        /* Timeline Tab */
+        .timeline-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 24px;
+        }
+
+        .timeline-event {
+            display: flex;
+            gap: 16px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .timeline-event:last-child { border-bottom: none; }
+
+        .timeline-time {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--text-muted);
+            min-width: 60px;
+        }
+
+        .timeline-type {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 4px;
+            min-width: 140px;
+            text-align: center;
+        }
+
+        .type-CALL_START, .type-CALL_END { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
+        .type-GREETING_SENT { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
+        .type-GATHER_FINAL { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+        .type-FAST_MATCH_HIT { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
+        .type-LLM_FALLBACK { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); }
+        .type-INTENT_DETECTED { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
+        .type-TRIAGE_DECISION { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
+        .type-BAILOUT_TRIGGERED { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+        .type-LOOP_DETECTED { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); }
+        .type-TRANSFER_INITIATED { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
+
+        .timeline-data {
+            flex: 1;
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Transcript Tab */
+        .transcript-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 24px;
+        }
+
+        .transcript-turn {
+            display: flex;
+            gap: 16px;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .transcript-turn:last-child { border-bottom: none; }
+
+        .transcript-speaker {
+            font-weight: 600;
+            font-size: 12px;
+            padding: 4px 12px;
+            border-radius: 4px;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .speaker-caller {
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--accent-blue);
+        }
+
+        .speaker-agent {
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--accent-green);
+        }
+
+        .transcript-text {
+            flex: 1;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .transcript-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Loading State */
+        .loading-state {
+            text-align: center;
+            padding: 80px;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav-bar">
+        <a href="#" class="nav-back" onclick="goBack()">← Back to List</a>
+        <div class="nav-actions">
+            <button class="btn btn-secondary" onclick="copySnapshot()">📋 Copy for Engineering</button>
+            <button class="btn btn-secondary" onclick="exportJSON()">📥 Export JSON</button>
+        </div>
+    </nav>
+
+    <!-- Call Header -->
+    <div class="call-header" id="callHeader">
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading recording...</p>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-bar">
+        <button class="tab-btn active" data-tab="overview">Overview</button>
+        <button class="tab-btn" data-tab="sequence">Sequence Diagram</button>
+        <button class="tab-btn" data-tab="waterfall">Waterfall</button>
+        <button class="tab-btn" data-tab="decision">Decision Tree</button>
+        <button class="tab-btn" data-tab="timeline">Timeline</button>
+        <button class="tab-btn" data-tab="transcript">Transcript</button>
+    </div>
+
+    <!-- Tab Content -->
+    <div id="tabOverview" class="tab-content active"></div>
+    <div id="tabSequence" class="tab-content"></div>
+    <div id="tabWaterfall" class="tab-content"></div>
+    <div id="tabDecision" class="tab-content"></div>
+    <div id="tabTimeline" class="tab-content"></div>
+    <div id="tabTranscript" class="tab-content"></div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════════
+        // STATE
+        // ═══════════════════════════════════════════════════════════════════
+        let companyId = null;
+        let callId = null;
+        let recording = null;
+        let snapshot = null;
+
+        // ═══════════════════════════════════════════════════════════════════
+        // INITIALIZATION
+        // ═══════════════════════════════════════════════════════════════════
+        mermaid.initialize({ 
+            startOnLoad: false, 
+            theme: 'dark',
+            themeVariables: {
+                primaryColor: '#3b82f6',
+                primaryTextColor: '#e5e5e5',
+                primaryBorderColor: '#2a2a38',
+                lineColor: '#6b6b7b',
+                secondaryColor: '#1a1a24',
+                tertiaryColor: '#12121a'
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const params = new URLSearchParams(window.location.search);
+            companyId = params.get('companyId');
+            callId = params.get('callId');
+
+            if (!companyId || !callId) {
+                showError('Missing companyId or callId');
+                return;
+            }
+
+            await loadRecording();
+            setupTabs();
+        });
+
+        function goBack() {
+            window.location.href = `black-box.html?companyId=${companyId}`;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // DATA LOADING
+        // ═══════════════════════════════════════════════════════════════════
+        async function loadRecording() {
+            try {
+                const token = localStorage.getItem('adminToken');
+                const response = await fetch(`/api/company/${companyId}/blackbox/call/${callId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to load recording');
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    recording = data.recording;
+                    snapshot = data.snapshot;
+                    renderAll();
+                }
+            } catch (error) {
+                console.error('Failed to load recording:', error);
+                showError('Failed to load recording: ' + error.message);
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // RENDERING
+        // ═══════════════════════════════════════════════════════════════════
+        function renderAll() {
+            renderHeader();
+            renderOverview();
+            renderSequenceDiagram();
+            renderWaterfall();
+            renderDecisionTree();
+            renderTimeline();
+            renderTranscript();
+        }
+
+        function renderHeader() {
+            const startDate = new Date(recording.startedAt);
+            const duration = recording.durationMs ? formatDuration(recording.durationMs) : '-';
+            
+            const flags = [];
+            if (recording.flags?.loopDetected) flags.push({ key: 'loopDetected', label: '🔄 LOOP' });
+            if (recording.flags?.bailoutTriggered) flags.push({ key: 'bailoutTriggered', label: '🚨 BAILOUT' });
+            if (recording.flags?.bookingIgnored) flags.push({ key: 'bookingIgnored', label: '📅 BOOKING IGNORED' });
+            if (recording.flags?.slowResponse) flags.push({ key: 'slowResponse', label: '🐢 SLOW' });
+
+            document.getElementById('callHeader').innerHTML = `
+                <div class="call-title">
+                    <h1>📼 ${recording.callId}</h1>
+                    <span class="call-outcome outcome-${recording.callOutcome}">${recording.callOutcome}</span>
+                </div>
+                <div class="call-meta">
+                    <span>📞 <strong>${formatPhone(recording.from)}</strong> → <strong>${formatPhone(recording.to)}</strong></span>
+                    <span>📅 ${startDate.toLocaleDateString()} ${startDate.toLocaleTimeString()}</span>
+                    <span>⏱️ ${duration}</span>
+                    <span>🔄 ${recording.performance?.totalTurns || 0} turns</span>
+                </div>
+                ${flags.length > 0 ? `
+                    <div class="call-flags">
+                        ${flags.map(f => `<span class="flag-chip flag-${f.key}">${f.label}</span>`).join('')}
+                    </div>
+                ` : ''}
+            `;
+        }
+
+        function renderOverview() {
+            const booking = recording.booking || {};
+            const perf = recording.performance || {};
+            const diag = recording.diagnosis || {};
+
+            document.getElementById('tabOverview').innerHTML = `
+                <div class="overview-grid">
+                    <div class="info-card">
+                        <h3>🎯 Intent & Booking</h3>
+                        <div class="info-row">
+                            <span class="info-label">Primary Intent</span>
+                            <span class="info-value">${recording.primaryIntent || 'unknown'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Confidence</span>
+                            <span class="info-value">${recording.primaryIntentConfidence ? (recording.primaryIntentConfidence * 100).toFixed(0) + '%' : '-'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">First Booking Intent</span>
+                            <span class="info-value">${booking.firstIntentDetectedAtMs ? (booking.firstIntentDetectedAtMs / 1000).toFixed(1) + 's' : 'N/A'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Intent Locked At</span>
+                            <span class="info-value">${booking.intentLockedAtMs ? (booking.intentLockedAtMs / 1000).toFixed(1) + 's' : 'N/A'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Questions Before Lock</span>
+                            <span class="info-value">${booking.questionsAskedBeforeLock || 0}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Booking Completed</span>
+                            <span class="info-value">${booking.completed ? '✅ Yes' : '❌ No'}</span>
+                        </div>
+                    </div>
+
+                    <div class="info-card">
+                        <h3>⚡ Performance</h3>
+                        <div class="info-row">
+                            <span class="info-label">Total Turns</span>
+                            <span class="info-value">${perf.totalTurns || 0}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Avg Turn Time</span>
+                            <span class="info-value">${perf.avgTurnTimeMs ? (perf.avgTurnTimeMs / 1000).toFixed(1) + 's' : '-'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Slowest Turn</span>
+                            <span class="info-value">#${perf.slowestTurn?.turnNumber || '?'} (${perf.slowestTurn?.totalMs || 0}ms)</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Bottleneck</span>
+                            <span class="info-value">${perf.slowestTurn?.bottleneck || '-'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">LLM Calls</span>
+                            <span class="info-value">${perf.llmCalls?.count || 0} (${((perf.llmCalls?.totalMs || 0) / 1000).toFixed(1)}s)</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">TTS Total</span>
+                            <span class="info-value">${((perf.ttsTotalMs || 0) / 1000).toFixed(1)}s</span>
+                        </div>
+                    </div>
+
+                    <div class="info-card diagnosis-card ${diag.severity?.toLowerCase() || 'info'}">
+                        <h3>🔍 Diagnosis</h3>
+                        <div class="info-row">
+                            <span class="info-label">Primary Bottleneck</span>
+                            <span class="info-value">${diag.primaryBottleneck || 'NONE'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Severity</span>
+                            <span class="info-value">${diag.severity || 'INFO'}</span>
+                        </div>
+                        ${diag.rootCause ? `<p class="diagnosis-text">${diag.rootCause}</p>` : ''}
+                        ${diag.suggestedFix ? `<div class="diagnosis-fix">💡 <strong>Fix:</strong> ${diag.suggestedFix}</div>` : ''}
+                    </div>
+
+                    <div class="info-card">
+                        <h3>👤 Customer</h3>
+                        <div class="info-row">
+                            <span class="info-label">Returning</span>
+                            <span class="info-value">${recording.customerContext?.isReturning ? '✅ Yes' : '❌ No'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Total Calls</span>
+                            <span class="info-value">${recording.customerContext?.totalCalls || 1}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Name</span>
+                            <span class="info-value">${recording.customerContext?.customerName || '-'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function renderSequenceDiagram() {
+            const container = document.getElementById('tabSequence');
+            const diagram = recording.visualization?.sequenceDiagram;
+            
+            if (!diagram) {
+                container.innerHTML = '<div class="loading-state"><p>No sequence diagram available</p></div>';
+                return;
+            }
+
+            container.innerHTML = `<div class="mermaid-container"><div class="mermaid">${diagram}</div></div>`;
+            
+            try {
+                await mermaid.run();
+            } catch (e) {
+                console.error('Mermaid render error:', e);
+            }
+        }
+
+        function renderWaterfall() {
+            const container = document.getElementById('tabWaterfall');
+            const waterfall = recording.visualization?.waterfall || [];
+            
+            if (waterfall.length === 0) {
+                container.innerHTML = '<div class="loading-state"><p>No waterfall data available</p></div>';
+                return;
+            }
+
+            let html = '<div class="waterfall-container">';
+            
+            for (const turn of waterfall) {
+                const maxMs = Math.max(...turn.segments.map(s => s.startMs + s.durationMs));
+                
+                html += `
+                    <div class="waterfall-turn">
+                        <div class="waterfall-header">
+                            <span><strong>Turn ${turn.turn}</strong></span>
+                            <span>Total: ${(turn.totalMs / 1000).toFixed(1)}s</span>
+                        </div>
+                        <div class="waterfall-bar">
+                            ${turn.segments.map(seg => {
+                                const left = (seg.startMs / maxMs) * 100;
+                                const width = (seg.durationMs / maxMs) * 100;
+                                const statusClass = seg.status === 'slow' ? 'segment-slow' : 
+                                                   seg.status === 'failed' ? 'segment-failed' : 
+                                                   `segment-${seg.name.split(' ')[0]}`;
+                                return `<div class="segment ${statusClass}" 
+                                            style="left: ${left}%; width: ${width}%;" 
+                                            title="${seg.name}: ${seg.durationMs}ms - ${seg.detail || ''}">${seg.name}</div>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += `
+                <div class="waterfall-legend">
+                    <div class="legend-item"><div class="legend-color" style="background: #22d3ee;"></div> STT</div>
+                    <div class="legend-item"><div class="legend-color" style="background: #f59e0b;"></div> Brain-1</div>
+                    <div class="legend-item"><div class="legend-color" style="background: #a78bfa;"></div> Triage</div>
+                    <div class="legend-item"><div class="legend-color" style="background: #3b82f6;"></div> Brain-2</div>
+                    <div class="legend-item"><div class="legend-color" style="background: #ec4899;"></div> TTS</div>
+                </div>
+            </div>`;
+            
+            container.innerHTML = html;
+        }
+
+        async function renderDecisionTree() {
+            const container = document.getElementById('tabDecision');
+            const diagram = recording.visualization?.decisionTree;
+            
+            if (!diagram) {
+                container.innerHTML = '<div class="loading-state"><p>No decision tree available</p></div>';
+                return;
+            }
+
+            container.innerHTML = `<div class="mermaid-container"><div class="mermaid">${diagram}</div></div>`;
+            
+            try {
+                await mermaid.run();
+            } catch (e) {
+                console.error('Mermaid render error:', e);
+            }
+        }
+
+        function renderTimeline() {
+            const container = document.getElementById('tabTimeline');
+            const events = recording.events || [];
+            
+            if (events.length === 0) {
+                container.innerHTML = '<div class="loading-state"><p>No timeline events available</p></div>';
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="timeline-container">
+                    ${events.map(event => `
+                        <div class="timeline-event">
+                            <span class="timeline-time">${formatTime(event.t || 0)}</span>
+                            <span class="timeline-type type-${event.type}">${event.type}</span>
+                            <span class="timeline-data">${formatEventData(event)}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderTranscript() {
+            const container = document.getElementById('tabTranscript');
+            const callerTurns = recording.transcript?.callerTurns || [];
+            const agentTurns = recording.transcript?.agentTurns || [];
+            
+            // Merge and sort by time
+            const allTurns = [
+                ...callerTurns.map(t => ({ ...t, speaker: 'caller' })),
+                ...agentTurns.map(t => ({ ...t, speaker: 'agent' }))
+            ].sort((a, b) => (a.t || 0) - (b.t || 0));
+            
+            if (allTurns.length === 0) {
+                container.innerHTML = '<div class="loading-state"><p>No transcript available</p></div>';
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="transcript-container">
+                    ${allTurns.map(turn => `
+                        <div class="transcript-turn">
+                            <span class="transcript-speaker speaker-${turn.speaker}">${turn.speaker === 'caller' ? '👤 Caller' : '🤖 Agent'}</span>
+                            <div class="transcript-text">
+                                "${turn.text}"
+                                <div class="transcript-meta">
+                                    Turn ${turn.turn} • ${formatTime(turn.t || 0)}
+                                    ${turn.confidence ? ` • Confidence: ${(turn.confidence * 100).toFixed(0)}%` : ''}
+                                    ${turn.source ? ` • Source: ${turn.source}` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // TABS
+        // ═══════════════════════════════════════════════════════════════════
+        function setupTabs() {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // Update buttons
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    // Update content
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    document.getElementById('tab' + capitalize(btn.dataset.tab)).classList.add('active');
+                });
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // ACTIONS
+        // ═══════════════════════════════════════════════════════════════════
+        async function copySnapshot() {
+            if (snapshot) {
+                await navigator.clipboard.writeText(snapshot);
+                alert('✅ Engineering snapshot copied to clipboard!');
+            }
+        }
+
+        function exportJSON() {
+            const blob = new Blob([JSON.stringify(recording, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `blackbox-${callId}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // HELPERS
+        // ═══════════════════════════════════════════════════════════════════
+        function formatPhone(phone) {
+            if (!phone) return '-';
+            const digits = phone.replace(/\D/g, '');
+            if (digits.length === 11 && digits.startsWith('1')) {
+                return `+1 ${digits.slice(1,4)}-${digits.slice(4,7)}-${digits.slice(7)}`;
+            }
+            return phone;
+        }
+
+        function formatDuration(ms) {
+            const seconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${minutes}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function formatTime(ms) {
+            const seconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function formatEventData(event) {
+            const data = event.data || {};
+            switch (event.type) {
+                case 'GREETING_SENT':
+                case 'AGENT_RESPONSE_BUILT':
+                    return `"${(data.text || '').substring(0, 60)}..."`;
+                case 'GATHER_FINAL':
+                    return `"${(data.text || '').substring(0, 60)}..."`;
+                case 'INTENT_DETECTED':
+                    return `${data.intent || '?'} (${data.confidence?.toFixed(2) || '?'})`;
+                case 'TRIAGE_DECISION':
+                    return `${data.route || data.cardName || '?'}`;
+                case 'LLM_FALLBACK':
+                    return `${data.ms || '?'}ms`;
+                case 'BAILOUT_TRIGGERED':
+                    return `${data.type} - ${data.reason}`;
+                default:
+                    return JSON.stringify(data).substring(0, 80);
+            }
+        }
+
+        function capitalize(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        function showError(message) {
+            document.getElementById('callHeader').innerHTML = `
+                <div class="loading-state">
+                    <h3>❌ Error</h3>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
+
