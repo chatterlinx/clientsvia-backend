@@ -692,12 +692,245 @@
             `;
         }
 
+        // ═══════════════════════════════════════════════════════════════════
+        // CLIENT-SIDE VISUALIZATION GENERATORS (fallback for older recordings)
+        // ═══════════════════════════════════════════════════════════════════
+        
+        function generateSequenceDiagramFromEvents(events) {
+            if (!events || events.length === 0) return null;
+            
+            let mermaid = `sequenceDiagram
+    participant C as Caller
+    participant T as Twilio
+    participant B1 as Brain-1
+    participant TR as Triage
+    participant B2 as Brain-2
+    participant TTS as TTS
+`;
+            
+            for (const event of events) {
+                const time = `${((event.t || 0) / 1000).toFixed(0)}s`;
+                const truncText = (text, len) => text ? (text.length > len ? text.substring(0, len) + '...' : text) : '';
+                
+                switch (event.type) {
+                    case 'CALL_START':
+                        mermaid += `    Note over C,TTS: CALL START\n`;
+                        break;
+                    case 'GREETING_SENT':
+                        mermaid += `    TTS-->>C: ${time} Greeting\n`;
+                        break;
+                    case 'GATHER_FINAL':
+                        mermaid += `    C->>T: ${time} "${truncText(event.data?.text, 25)}"\n`;
+                        mermaid += `    T->>B1: Process\n`;
+                        break;
+                    case 'FAST_MATCH_HIT':
+                        mermaid += `    B1->>TR: ✅ Fast Match\n`;
+                        break;
+                    case 'LLM_FALLBACK':
+                        mermaid += `    Note over B1: ⚠️ LLM Fallback\n`;
+                        break;
+                    case 'INTENT_DETECTED':
+                        mermaid += `    B1->>TR: Intent: ${event.data?.intent || '?'}\n`;
+                        break;
+                    case 'TRIAGE_DECISION':
+                        mermaid += `    TR->>B2: Route: ${event.data?.route || 'MESSAGE_ONLY'}\n`;
+                        break;
+                    case 'AGENT_RESPONSE_BUILT':
+                        mermaid += `    B2->>TTS: Response ready\n`;
+                        break;
+                    case 'TTS_GENERATED':
+                        mermaid += `    TTS-->>C: ${time} Audio\n`;
+                        break;
+                    case 'LOOP_DETECTED':
+                        mermaid += `    Note over B1: 🔄 LOOP\n`;
+                        break;
+                    case 'BAILOUT_TRIGGERED':
+                        mermaid += `    Note over B1: 🚨 BAILOUT\n`;
+                        break;
+                    case 'TRANSFER_INITIATED':
+                        mermaid += `    B1->>T: TRANSFER\n`;
+                        break;
+                }
+            }
+            
+            mermaid += `    Note over C,TTS: CALL END`;
+            return mermaid;
+        }
+        
+        function generateDecisionTreeFromEvents(events) {
+            if (!events || events.length === 0) return null;
+            
+            const fastMatch = events.find(e => e.type === 'FAST_MATCH_HIT');
+            const llmFallback = events.find(e => e.type === 'LLM_FALLBACK');
+            const intentDetected = events.find(e => e.type === 'INTENT_DETECTED');
+            const triageDecision = events.find(e => e.type === 'TRIAGE_DECISION');
+            const bookingActivated = events.find(e => e.type === 'BOOKING_MODE_ACTIVATED');
+            const bailout = events.find(e => e.type === 'BAILOUT_TRIGGERED');
+            const transfer = events.find(e => e.type === 'TRANSFER_INITIATED');
+            
+            let mermaid = `flowchart TD
+    A["📞 Caller Input"] --> B{Fast Match?}
+`;
+            
+            if (fastMatch) {
+                mermaid += `    B -->|"✅ Yes"| C["Card Matched"]
+    style C fill:#22c55e,color:#fff
+`;
+            } else if (llmFallback) {
+                mermaid += `    B -->|"❌ No"| E["LLM Fallback"]
+    style E fill:#f59e0b,color:#000
+`;
+            }
+            
+            if (intentDetected) {
+                const source = fastMatch ? 'C' : 'E';
+                mermaid += `    ${source} --> F["Intent: ${intentDetected.data?.intent || '?'}"]
+`;
+            }
+            
+            if (triageDecision) {
+                mermaid += `    F --> D["Route: ${triageDecision.data?.route || 'MESSAGE_ONLY'}"]
+`;
+            }
+            
+            if (bookingActivated) {
+                mermaid += `    D --> G["📅 Booking Flow"]
+    style G fill:#3b82f6,color:#fff
+`;
+            }
+            
+            if (recording.flags?.loopDetected) {
+                mermaid += `    D --> H["🔄 LOOP DETECTED"]
+    style H fill:#f97316,color:#fff
+`;
+            }
+            
+            if (bailout) {
+                mermaid += `    D --> I["🚨 BAILOUT"]
+    style I fill:#ef4444,color:#fff
+`;
+            }
+            
+            if (transfer) {
+                mermaid += `    I --> J["📞 TRANSFER"]
+    style J fill:#8b5cf6,color:#fff
+`;
+            }
+            
+            return mermaid;
+        }
+        
+        function generateWaterfallFromEvents(events) {
+            if (!events || events.length === 0) return [];
+            
+            const waterfall = [];
+            const gatherEvents = events.filter(e => e.type === 'GATHER_FINAL');
+            
+            gatherEvents.forEach((gatherEvent, index) => {
+                const turn = index + 1;
+                const turnStart = gatherEvent.t || 0;
+                
+                // Find next gather or end of events
+                const nextGather = gatherEvents[index + 1];
+                const turnEnd = nextGather ? nextGather.t : (events[events.length - 1]?.t || turnStart + 5000);
+                
+                const turnEvents = events.filter(e => (e.t || 0) >= turnStart && (e.t || 0) < turnEnd);
+                
+                const segments = [];
+                let currentOffset = 0;
+                
+                // STT segment
+                segments.push({
+                    name: 'STT',
+                    startMs: currentOffset,
+                    durationMs: 300,
+                    status: 'ok',
+                    detail: `Speech received`
+                });
+                currentOffset += 300;
+                
+                // Brain-1 segment
+                const fastMatch = turnEvents.find(e => e.type === 'FAST_MATCH_HIT');
+                const llmResponse = turnEvents.find(e => e.type === 'LLM_RESPONSE');
+                
+                if (fastMatch) {
+                    segments.push({
+                        name: 'Brain-1',
+                        startMs: currentOffset,
+                        durationMs: 50,
+                        status: 'ok',
+                        detail: 'Fast match'
+                    });
+                    currentOffset += 50;
+                } else if (llmResponse) {
+                    const llmMs = llmResponse.data?.ms || 2000;
+                    segments.push({
+                        name: 'Brain-1',
+                        startMs: currentOffset,
+                        durationMs: llmMs,
+                        status: llmMs > 3000 ? 'slow' : 'ok',
+                        detail: `LLM: ${llmMs}ms`
+                    });
+                    currentOffset += llmMs;
+                } else {
+                    segments.push({
+                        name: 'Brain-1',
+                        startMs: currentOffset,
+                        durationMs: 500,
+                        status: 'ok',
+                        detail: 'Processing'
+                    });
+                    currentOffset += 500;
+                }
+                
+                // Triage segment
+                const triage = turnEvents.find(e => e.type === 'TRIAGE_DECISION');
+                if (triage) {
+                    segments.push({
+                        name: 'Triage',
+                        startMs: currentOffset,
+                        durationMs: 50,
+                        status: 'ok',
+                        detail: `Route: ${triage.data?.route || 'MESSAGE_ONLY'}`
+                    });
+                    currentOffset += 50;
+                }
+                
+                // TTS segment
+                const tts = turnEvents.find(e => e.type === 'TTS_GENERATED');
+                if (tts) {
+                    const ttsMs = tts.data?.ms || 400;
+                    segments.push({
+                        name: 'TTS',
+                        startMs: currentOffset,
+                        durationMs: ttsMs,
+                        status: ttsMs > 1000 ? 'slow' : 'ok',
+                        detail: `TTS: ${ttsMs}ms`
+                    });
+                    currentOffset += ttsMs;
+                }
+                
+                waterfall.push({
+                    turn,
+                    totalMs: currentOffset,
+                    segments
+                });
+            });
+            
+            return waterfall;
+        }
+
         async function renderSequenceDiagram() {
             const container = document.getElementById('tabSequence');
-            const diagram = recording.visualization?.sequenceDiagram;
+            let diagram = recording.visualization?.sequenceDiagram;
+            
+            // Fallback: generate from events if not stored
+            if (!diagram && recording.events?.length > 0) {
+                diagram = generateSequenceDiagramFromEvents(recording.events);
+            }
             
             if (!diagram) {
-                container.innerHTML = '<div class="loading-state"><p>No sequence diagram available</p></div>';
+                container.innerHTML = '<div class="loading-state"><p>No sequence diagram available (no events recorded)</p></div>';
                 return;
             }
 
@@ -707,22 +940,28 @@
                 await mermaid.run();
             } catch (e) {
                 console.error('Mermaid render error:', e);
+                container.innerHTML = `<div class="loading-state"><p>Diagram render error. Raw Mermaid:</p><pre style="text-align:left;font-size:11px;overflow:auto;max-height:400px;">${diagram}</pre></div>`;
             }
         }
 
         function renderWaterfall() {
             const container = document.getElementById('tabWaterfall');
-            const waterfall = recording.visualization?.waterfall || [];
+            let waterfall = recording.visualization?.waterfall;
             
-            if (waterfall.length === 0) {
-                container.innerHTML = '<div class="loading-state"><p>No waterfall data available</p></div>';
+            // Fallback: generate from events if not stored
+            if ((!waterfall || waterfall.length === 0) && recording.events?.length > 0) {
+                waterfall = generateWaterfallFromEvents(recording.events);
+            }
+            
+            if (!waterfall || waterfall.length === 0) {
+                container.innerHTML = '<div class="loading-state"><p>No waterfall data available (no turns recorded)</p></div>';
                 return;
             }
 
             let html = '<div class="waterfall-container">';
             
             for (const turn of waterfall) {
-                const maxMs = Math.max(...turn.segments.map(s => s.startMs + s.durationMs));
+                const maxMs = Math.max(...turn.segments.map(s => s.startMs + s.durationMs), 1);
                 
                 html += `
                     <div class="waterfall-turn">
@@ -733,7 +972,7 @@
                         <div class="waterfall-bar">
                             ${turn.segments.map(seg => {
                                 const left = (seg.startMs / maxMs) * 100;
-                                const width = (seg.durationMs / maxMs) * 100;
+                                const width = Math.max((seg.durationMs / maxMs) * 100, 5); // min 5% width
                                 const statusClass = seg.status === 'slow' ? 'segment-slow' : 
                                                    seg.status === 'failed' ? 'segment-failed' : 
                                                    `segment-${seg.name.split(' ')[0]}`;
@@ -761,10 +1000,15 @@
 
         async function renderDecisionTree() {
             const container = document.getElementById('tabDecision');
-            const diagram = recording.visualization?.decisionTree;
+            let diagram = recording.visualization?.decisionTree;
+            
+            // Fallback: generate from events if not stored
+            if (!diagram && recording.events?.length > 0) {
+                diagram = generateDecisionTreeFromEvents(recording.events);
+            }
             
             if (!diagram) {
-                container.innerHTML = '<div class="loading-state"><p>No decision tree available</p></div>';
+                container.innerHTML = '<div class="loading-state"><p>No decision tree available (no events recorded)</p></div>';
                 return;
             }
 
@@ -774,6 +1018,7 @@
                 await mermaid.run();
             } catch (e) {
                 console.error('Mermaid render error:', e);
+                container.innerHTML = `<div class="loading-state"><p>Diagram render error. Raw Mermaid:</p><pre style="text-align:left;font-size:11px;overflow:auto;max-height:400px;">${diagram}</pre></div>`;
             }
         }
 
