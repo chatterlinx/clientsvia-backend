@@ -101,6 +101,36 @@ logger.info('🧠 [3-TIER SYSTEM] Configuration loaded from database (per-reques
 const router = express.Router();
 logger.info('🚀 [V2TWILIO] ========== EXPRESS ROUTER CREATED ==========');
 
+// ════════════════════════════════════════════════════════════════════════════════
+// 🔍 GLOBAL TWILIO REQUEST LOGGER
+// ════════════════════════════════════════════════════════════════════════════════
+// This middleware runs on EVERY request to /api/twilio/* BEFORE any handler.
+// If a Twilio request hits our server, we log it here - even if the handler
+// fails, throws, or never logs anything.
+//
+// If you see "📥 TWILIO INBOUND" but never see handler logs → middleware killed it.
+// If you don't even see "📥 TWILIO INBOUND" → Twilio never called that URL.
+// ════════════════════════════════════════════════════════════════════════════════
+router.use((req, res, next) => {
+    const now = new Date().toISOString();
+    const isTwilioRequest = req.headers['user-agent']?.includes('Twilio') || 
+                            req.headers['x-twilio-signature'];
+    
+    // Only log Twilio requests loudly
+    if (isTwilioRequest) {
+        console.log('════════════════════════════════════════════════════════════════════════════════');
+        console.log(`📥 TWILIO INBOUND @ ${now}`);
+        console.log(`   Path:   ${req.method} ${req.path}`);
+        console.log(`   Full:   ${req.originalUrl}`);
+        console.log(`   CallSid: ${req.body?.CallSid || 'N/A'}`);
+        console.log(`   From:   ${req.body?.From || 'N/A'}`);
+        console.log(`   Speech: "${(req.body?.SpeechResult || '').substring(0, 50)}${(req.body?.SpeechResult?.length > 50) ? '...' : ''}"`);
+        console.log('════════════════════════════════════════════════════════════════════════════════');
+    }
+    
+    next();
+});
+
 // ============================================
 // 🧪 TEST RESULTS STORAGE (In-Memory)
 // ============================================

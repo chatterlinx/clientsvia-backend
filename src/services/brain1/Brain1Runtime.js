@@ -77,8 +77,26 @@ const { generateClarifyingQuestion } = require('./Tier3Clarifier');
 // ═══════════════════════════════════════════════════════════════════════════
 // DEFAULT BAILOUT - Used when all else fails (can be overridden per company)
 // ═══════════════════════════════════════════════════════════════════════════
-const DEFAULT_BAILOUT_MESSAGE = "I'm having a bit of trouble on my end. Let me connect you with someone who can help you right away.";
+// Action-aligned messages: say what you're actually doing, never lie to the caller
+const DEFAULT_BAILOUT_MESSAGES = {
+    TRANSFER: "I'm having a bit of trouble on my end. Let me connect you with someone who can help you right away.",
+    MESSAGE: "Let me take down a quick message so someone from the team can follow up with you.",
+    HANGUP: "I'm going to end the call now. Thank you for contacting us."
+};
 const DEFAULT_BAILOUT_ACTION = 'TRANSFER';
+
+/**
+ * Get the appropriate bailout message for the action
+ * If company set a custom message, use it. Otherwise, use action-aligned default.
+ */
+function getBailoutMessage(company, action) {
+    // If company has a custom message, always use it (they know what they're saying)
+    if (company?.settings?.bailoutMessage) {
+        return company.settings.bailoutMessage;
+    }
+    // Otherwise, use the action-aligned default
+    return DEFAULT_BAILOUT_MESSAGES[action] || DEFAULT_BAILOUT_MESSAGES.TRANSFER;
+}
 
 /**
  * ============================================================================
@@ -512,23 +530,29 @@ async function processTurn(companyId, callId, userInput, callState) {
                 
                 if (isHardFailure) {
                     // ════════════════════════════════════════════════════════════════════════════
-                    // HARD BAILOUT: Logic failure → Transfer to human
+                    // HARD BAILOUT: Logic failure → Transfer to human (or take message)
                     // ════════════════════════════════════════════════════════════════════════════
-                    const bailoutMessage = company?.settings?.bailoutMessage || DEFAULT_BAILOUT_MESSAGE;
                     const bailoutAction = company?.settings?.bailoutAction || DEFAULT_BAILOUT_ACTION;
+                    const bailoutMessage = getBailoutMessage(company, bailoutAction);
+                    
+                    // Map action to internal values
+                    let action = 'take_message';
+                    if (bailoutAction === 'TRANSFER') action = 'transfer';
+                    else if (bailoutAction === 'HANGUP') action = 'hangup';
                     
                     logger.warn('[BRAIN-1 RUNTIME] 🚨 HARD BAILOUT (Loop/Dead-end)', {
                         companyId,
                         callId,
                         reason: validation.reason,
                         turnNumber,
-                        bailoutAction
+                        bailoutAction,
+                        message: bailoutMessage.substring(0, 50)
                     });
                     
                     result.text = bailoutMessage;
-                    result.action = bailoutAction === 'TRANSFER' ? 'transfer' : 'take_message';
-                    result.shouldTransfer = bailoutAction === 'TRANSFER';
-                    result.shouldHangup = false;
+                    result.action = action;
+                    result.shouldTransfer = (action === 'transfer');
+                    result.shouldHangup = (action === 'hangup');
                     result.bailoutTriggered = true;
                     result.bailoutReason = validation.reason;
                     result.bailoutType = 'hard';
@@ -570,13 +594,20 @@ async function processTurn(companyId, callId, userInput, callState) {
         // ════════════════════════════════════════════════════════════════════════════
         
         if (!result.text || result.text.trim() === '') {
+            // Use action-aligned message for the emergency transfer
+            const emergencyAction = company?.settings?.bailoutAction || DEFAULT_BAILOUT_ACTION;
+            const emergencyMessage = getBailoutMessage(company, emergencyAction);
+            
             logger.error('[BRAIN-1 RUNTIME] ⛔ CRITICAL: Empty response at final gate!', {
                 companyId,
                 callId,
-                shouldNeverHappen: true
+                shouldNeverHappen: true,
+                emergencyAction
             });
-            result.text = DEFAULT_BAILOUT_MESSAGE;
-            result.shouldTransfer = true;
+            
+            result.text = emergencyMessage;
+            result.action = emergencyAction === 'TRANSFER' ? 'transfer' : 'take_message';
+            result.shouldTransfer = emergencyAction === 'TRANSFER';
             result.bailoutTriggered = true;
             result.bailoutReason = 'FINAL_GATE_EMPTY';
         }
@@ -601,20 +632,24 @@ async function processTurn(companyId, callId, userInput, callState) {
             stack: error.stack
         });
         
+        // Use action-aligned message for error fallback
+        const errorAction = company?.settings?.bailoutAction || DEFAULT_BAILOUT_ACTION;
+        const errorMessage = getBailoutMessage(company, errorAction);
+        
         // Emergency fallback via ResponseConstructor - ALSO must be non-empty
         const errorResponse = buildSimpleResponse({
             context: { callId, companyId, turnNumber: (callState?.turnCount || 0) + 1 },
-            text: DEFAULT_BAILOUT_MESSAGE,  // Use bailout, not a dead-end question
+            text: errorMessage,
             source: 'brain1.error.fallback'
         });
         
         // Error response also enforces no-silence contract
         return {
-            text: errorResponse.text || DEFAULT_BAILOUT_MESSAGE,
+            text: errorResponse.text || errorMessage,
             ssml: errorResponse.ssml,
-            action: 'transfer',  // Route to human on error
-            shouldTransfer: true,
-            shouldHangup: false,
+            action: errorAction === 'TRANSFER' ? 'transfer' : 'take_message',
+            shouldTransfer: errorAction === 'TRANSFER',
+            shouldHangup: errorAction === 'HANGUP',
             bailoutTriggered: true,
             bailoutReason: 'FATAL_ERROR',
             callState: {
