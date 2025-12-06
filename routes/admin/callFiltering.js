@@ -455,7 +455,8 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
     try {
         const { companyId } = req.params;
 
-        logger.security(`⚙️ [CALL FILTERING] Fetching settings for company: ${companyId}`);
+        // Reduced logging - only log on debug level to prevent spam
+        logger.debug(`⚙️ [CALL FILTERING] Fetching settings for company: ${companyId}`);
 
         const company = await v2Company.findById(companyId).lean();
         if (!company) {
@@ -465,14 +466,22 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
             });
         }
 
-        // 🔍 DEBUG: Log what's in the database
-        logger.debug(`🔍 [CALL FILTERING] Raw callFiltering from DB:`, {
-            exists: Boolean(company.callFiltering),
-            enabled: company.callFiltering?.enabled,
-            settings: company.callFiltering?.settings,
-            settingsKeys: company.callFiltering?.settings ? Object.keys(company.callFiltering.settings) : []
-        });
-        logger.security(`🔍 [CALL FILTERING] Full settings object from MongoDB:`, JSON.stringify(company.callFiltering?.settings, null, 2));
+        // ========================================================================
+        // 🔧 DATA CORRUPTION FIX: Handle string-stored settings
+        // ========================================================================
+        // Bug introduced pre-Dec 2025: settings sometimes stored as JSON string
+        // instead of object. This parses it back to object if needed.
+        // ========================================================================
+        let rawSettings = company.callFiltering?.settings;
+        if (typeof rawSettings === 'string') {
+            try {
+                rawSettings = JSON.parse(rawSettings);
+                logger.warn(`⚠️ [CALL FILTERING] Settings were stored as string - parsed back to object for company: ${companyId}`);
+            } catch (e) {
+                logger.error(`❌ [CALL FILTERING] Failed to parse string settings: ${e.message}`);
+                rawSettings = {};
+            }
+        }
 
         // ✅ FIX #2: Transform blacklist/whitelist to string arrays for frontend
         const callFiltering = company.callFiltering || {
@@ -499,7 +508,8 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
         // 2. Remove old schema keys from Mongoose model (models/v2Company.js:1758-1760)
         // 3. Update this to just: const migratedSettings = callFiltering.settings || {};
         // ========================================================================
-        const oldSettings = callFiltering.settings || {};
+        // Use rawSettings (already parsed if was string) instead of callFiltering.settings
+        const oldSettings = rawSettings || {};
         
         // Priority: NEW schema names ALWAYS win if they exist (even if false/undefined from user save)
         // Only use old schema names if NEW names have NEVER been saved
@@ -519,11 +529,10 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
             enableRobocallDetection: oldSettings.blockRobocalls
         };
 
-        logger.info(`🔧 [CALL FILTERING] Schema detected: ${hasNewSchema ? 'NEW' : 'OLD'}`);
+        // Only log schema migration once per company (not every request)
         if (!hasNewSchema) {
-            logger.info(`⚠️ [CALL FILTERING] Company ${companyId} still using OLD schema - will be migrated on next save`);
+            logger.debug(`⚠️ [CALL FILTERING] Company ${companyId} using OLD schema - will be migrated on next save`);
         }
-        logger.security(`🔧 [CALL FILTERING] Migrated settings:`, migratedSettings);
 
         const transformedData = {
             enabled: callFiltering.enabled,
@@ -541,10 +550,8 @@ router.get('/admin/call-filtering/:companyId/settings', authenticateJWT, require
             stats: callFiltering.stats || {}
         };
 
-        logger.info(`✅ [CALL FILTERING] Sending to frontend:`, {
-            enabled: transformedData.enabled,
-            settings: transformedData.settings
-        });
+        // Debug level to reduce log spam on every request
+        logger.debug(`✅ [CALL FILTERING] Sending to frontend - enabled: ${transformedData.enabled}`);
 
         res.json({
             success: true,

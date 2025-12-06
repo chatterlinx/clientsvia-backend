@@ -61,13 +61,8 @@ async function authenticateJWT(req, res, next) {
       });
     }
     
-    // Log admin access (for audit purposes)
-    if (user.role === 'admin' && !user.companyId) {
-      logger.security('✅ AUTH: Platform admin access granted (no company required)', {
-        userId: user._id.toString(),
-        email: user.email
-      });
-    }
+    // NOTE: Admin access logging moved to debug level to prevent log spam
+    // For security audit, use separate audit log or query-based reporting
 
     // Attach user to request
     req.user = user;
@@ -195,13 +190,7 @@ async function authenticateSingleSession(req, res, next) {
       });
     }
     
-    // Log admin access (for audit purposes)
-    if (user.role === 'admin' && !user.companyId) {
-      logger.security('✅ Single-session auth: Platform admin access granted (no company required)', {
-        userId: user._id.toString(),
-        email: user.email
-      });
-    }
+    // NOTE: Admin access logging removed to prevent log spam
 
     // Attach user and session info to request
     req.user = user;
