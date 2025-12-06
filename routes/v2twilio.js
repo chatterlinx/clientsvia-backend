@@ -2091,8 +2091,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     let redisLoadError = null;
     
     try {
-      const { getRedisClient } = require('../services/redisClientFactory');
-      const redisClient = await getRedisClient();
+      const { getSharedRedisClient } = require('../services/redisClientFactory');
+      const redisClient = await getSharedRedisClient();
       
       if (redisClient) {
         const stateKey = `callState:${callSid}`;
@@ -2293,8 +2293,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     let redisSaveError = null;
     
     try {
-      const { getRedisClient } = require('../services/redisClientFactory');
-      const redisClient = await getRedisClient();
+      const { getSharedRedisClient } = require('../services/redisClientFactory');
+      const redisClient = await getSharedRedisClient();
       
       if (redisClient) {
         const stateKey = `callState:${callSid}`;
