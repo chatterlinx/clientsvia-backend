@@ -13,19 +13,24 @@
 // ============================================================================
 
 class LLM0ControlsManager {
-    constructor(companyId) {
+    constructor(companyId, containerElement = null) {
         this.companyId = companyId;
         this.controls = null;
         this.defaults = null;
-        this.container = null;
+        // Accept either DOM element directly or null (will use init() with containerId)
+        this.container = containerElement;
         this.hasChanges = false;
+        console.log('[LLM-0 CONTROLS] Manager constructed for company:', companyId);
     }
 
     // ========================================================================
     // INITIALIZATION
     // ========================================================================
     async init(containerId) {
-        this.container = document.getElementById(containerId);
+        // If container wasn't passed to constructor, find it by ID
+        if (!this.container) {
+            this.container = document.getElementById(containerId);
+        }
         if (!this.container) {
             console.error('[LLM-0 CONTROLS] Container not found:', containerId);
             return;
@@ -958,12 +963,17 @@ class LLM0ControlsManager {
     }
 }
 
+// Export class to window for Control Plane lazy loading
+window.LLM0ControlsManager = LLM0ControlsManager;
+
 // Global instance
 window.llm0ControlsManager = null;
 
-// Initialize function
+// Initialize function (legacy support)
 window.initLLM0Controls = function(companyId, containerId) {
     window.llm0ControlsManager = new LLM0ControlsManager(companyId);
     window.llm0ControlsManager.init(containerId);
 };
+
+console.log('✅ [LLM-0 CONTROLS] Manager loaded and exported to window.LLM0ControlsManager');
 
