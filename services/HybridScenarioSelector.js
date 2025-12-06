@@ -1015,8 +1015,8 @@ class HybridScenarioSelector {
         // ENHANCED NORMALIZATION PIPELINE (3 stages)
         // ============================================
         // Stage 1: Synonym translation (colloquial → technical)
-        // Stage 2: Filler removal (noise removal)
-        // Stage 3: Standard normalization (lowercase, punctuation, spacing)
+        // Stage 2: Standard normalization (lowercase, punctuation, spacing)
+        // Stage 3: Filler removal (noise removal)
         
         // Stage 1: Apply synonym translation
         const synonymResult = this.applySynonymTranslation(phrase);
@@ -1031,7 +1031,28 @@ class HybridScenarioSelector {
             .trim();
         
         // Stage 3: Remove filler words (after normalization for better matching)
-        processed = this.removeFillerWords(processed);
+        const fillerResult = this.removeFillerWords(processed);
+        processed = fillerResult.filtered;
+        
+        // Build pipeline diagnostic
+        this.lastPipelineDiagnostic = {
+            input: phrase,
+            stages: {
+                synonyms: {
+                    applied: synonymResult.replacements || [],
+                    mapSize: this.synonymMap?.size || 0
+                },
+                normalized: {
+                    afterSynonyms: synonymResult.translated,
+                    afterPunctuation: processed
+                },
+                fillers: {
+                    removed: fillerResult.removedFillers || [],
+                    listSize: fillerResult.fillerSetSize || 0
+                }
+            },
+            output: processed
+        };
         
         return processed;
     }
@@ -1428,6 +1449,14 @@ class HybridScenarioSelector {
     }
     
     /**
+     * Get the FULL pipeline diagnostic (for Black Box MATCHING_PIPELINE event)
+     * Call this after selectScenario() to get complete visibility
+     */
+    getFullPipelineDiagnostic() {
+        return this.lastPipelineDiagnostic || null;
+    }
+    
+    /**
      * Helper: Escape special regex characters
      */
     escapeRegex(str) {
@@ -1446,23 +1475,40 @@ class HybridScenarioSelector {
      */
     removeFillerWords(phrase) {
         if (!phrase || this.fillerWords.size === 0) {
-            return phrase;
+            return { filtered: phrase, removedFillers: [], fillerSetSize: this.fillerWords.size };
         }
         
         const words = phrase.toLowerCase().split(/\s+/);
-        const filtered = words.filter(word => !this.fillerWords.has(word.trim()));
+        const removedFillers = [];
+        const filtered = words.filter(word => {
+            const trimmed = word.trim();
+            if (this.fillerWords.has(trimmed)) {
+                removedFillers.push(trimmed);
+                return false;
+            }
+            return true;
+        });
         
         const result = filtered.join(' ').trim();
         
-        if (result !== phrase.toLowerCase()) {
+        if (removedFillers.length > 0) {
             logger.debug('🔇 [FILLER REMOVAL] Applied', {
                 original: phrase.substring(0, 80),
                 filtered: result.substring(0, 80),
-                removed: words.length - filtered.length
+                removed: removedFillers.length,
+                fillers: removedFillers.slice(0, 10)
             });
         }
         
-        return result;
+        // Store for diagnostics
+        this.lastFillerRemoval = {
+            original: phrase,
+            filtered: result,
+            removedFillers,
+            fillerSetSize: this.fillerWords.size
+        };
+        
+        return { filtered: result, removedFillers, fillerSetSize: this.fillerWords.size };
     }
     
     /**

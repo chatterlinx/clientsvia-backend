@@ -131,7 +131,45 @@ class AIBrain3tierllm {
             // 📼 BLACK BOX: Log 3-Tier decision
             const callId = context.callId || context.callState?.callId;
             if (BlackBoxLogger && callId) {
-                // Log SYNONYM_TRANSLATION if any translations occurred
+                // Log MATCHING_PIPELINE - Full diagnostic of the matching process
+                const pipeline = result.metadata?.trace?.pipelineDiagnostic;
+                if (pipeline) {
+                    BlackBoxLogger.logEvent({
+                        callId,
+                        companyId,
+                        type: 'MATCHING_PIPELINE',
+                        data: {
+                            input: pipeline.input?.substring(0, 100),
+                            output: pipeline.output?.substring(0, 100),
+                            stages: {
+                                synonyms: {
+                                    applied: (pipeline.stages?.synonyms?.applied || []).map(r => `"${r.from}"→"${r.to}"`),
+                                    count: pipeline.stages?.synonyms?.applied?.length || 0,
+                                    mapSize: pipeline.stages?.synonyms?.mapSize || 0
+                                },
+                                fillers: {
+                                    removed: (pipeline.stages?.fillers?.removed || []).slice(0, 10),
+                                    count: pipeline.stages?.fillers?.removed?.length || 0,
+                                    listSize: pipeline.stages?.fillers?.listSize || 0
+                                }
+                            },
+                            matching: {
+                                scenariosChecked: pipeline.matching?.scenariosChecked || 0,
+                                topMatches: (pipeline.matching?.topCandidates || []).slice(0, 3).map(c => ({
+                                    name: c.name,
+                                    score: c.score,
+                                    blocked: c.blocked,
+                                    blockedBy: c.blockedBy
+                                })),
+                                selected: pipeline.matching?.selected?.name || null,
+                                decision: pipeline.matching?.decision || 'UNKNOWN',
+                                fallbackReason: pipeline.matching?.fallbackReason
+                            }
+                        }
+                    }).catch(() => {});
+                }
+                
+                // Log SYNONYM_TRANSLATION if any translations occurred (kept for backwards compat)
                 const synonymInfo = result.metadata?.trace?.synonymTranslation;
                 if (synonymInfo && synonymInfo.replacements && synonymInfo.replacements.length > 0) {
                     BlackBoxLogger.logEvent({

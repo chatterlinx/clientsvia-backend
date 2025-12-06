@@ -839,8 +839,32 @@ class IntelligentRouter {
             // Match
             const match = await selector.selectScenario(callerInput, allScenarios);
             
-            // Get synonym translation info for Black Box logging
+            // Get full pipeline diagnostic for Black Box logging
+            const pipelineDiagnostic = selector.getFullPipelineDiagnostic();
             const synonymTranslation = selector.getLastSynonymTranslation();
+            
+            // Enhance pipeline diagnostic with match results
+            if (pipelineDiagnostic) {
+                pipelineDiagnostic.matching = {
+                    scenariosChecked: allScenarios.length,
+                    topCandidates: (match.trace?.topCandidates || []).slice(0, 5).map(c => ({
+                        name: c.name,
+                        score: parseFloat(c.score) || c.score,
+                        confidence: parseFloat(c.confidence) || c.confidence,
+                        triggersHit: c.breakdown?.triggerHits || [],
+                        blocked: c.blocked || false,
+                        blockedBy: c.blockedBy || null
+                    })),
+                    selected: match.scenario ? {
+                        name: match.scenario.name,
+                        scenarioId: match.scenario.scenarioId,
+                        score: match.score,
+                        confidence: match.confidence
+                    } : null,
+                    decision: match.scenario ? 'FAST_MATCH' : 'NO_MATCH',
+                    fallbackReason: match.scenario ? null : (match.trace?.selectionReason || 'BELOW_THRESHOLD')
+                };
+            }
             
             const responseTime = Date.now() - startTime;
             
@@ -851,7 +875,8 @@ class IntelligentRouter {
                 responseTime,
                 response: match.scenario?.quickReplies?.[0] || null,
                 reasoning: match.reasoning || 'Rule-based matching',
-                synonymTranslation: synonymTranslation.replacements?.length > 0 ? synonymTranslation : null
+                synonymTranslation: synonymTranslation.replacements?.length > 0 ? synonymTranslation : null,
+                pipelineDiagnostic
             };
             
         } catch (error) {

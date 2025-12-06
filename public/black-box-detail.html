@@ -553,6 +553,7 @@
         .type-GATHER_FINAL { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
         .type-FAST_MATCH_HIT { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
         .type-SYNONYM_TRANSLATION { background: rgba(236, 72, 153, 0.2); color: var(--accent-pink); }
+        .type-MATCHING_PIPELINE { background: rgba(6, 182, 212, 0.2); color: var(--accent-cyan); }
         .type-LLM_FALLBACK { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); }
         .type-INTENT_DETECTED { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
         .type-TRIAGE_DECISION { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
@@ -920,6 +921,16 @@
                     case 'SYNONYM_TRANSLATION':
                         const synCount = event.data?.count || event.data?.replacements?.length || 0;
                         mermaid += `    Note over T: 🗣️ Slang Translated (${synCount})\n`;
+                        break;
+                    case 'MATCHING_PIPELINE':
+                        const mp = event.data?.matching || {};
+                        const mpDecision = mp.decision || '?';
+                        const mpSelected = mp.selected || 'none';
+                        if (mpDecision === 'FAST_MATCH') {
+                            mermaid += `    Note over B1: 🔬 Pipeline: ${mpSelected}\n`;
+                        } else {
+                            mermaid += `    Note over B1: ⚠️ Pipeline: ${mp.fallbackReason || 'NO_MATCH'}\n`;
+                        }
                         break;
                     case 'FAST_MATCH_HIT':
                         mermaid += `    B1->>TR: ✅ Fast Match\n`;
@@ -2268,6 +2279,12 @@
                 case 'SYNONYM_TRANSLATION':
                     const reps = data.replacements || [];
                     return `🗣️ ${reps.length > 0 ? reps.slice(0, 2).join(', ') : 'none'}`;
+                case 'MATCHING_PIPELINE':
+                    const m = data.matching || {};
+                    const decision = m.decision || '?';
+                    const selected = m.selected || 'none';
+                    const reason = m.fallbackReason ? ` (${m.fallbackReason})` : '';
+                    return `🔬 ${decision}: ${selected}${reason}`;
                 default:
                     return JSON.stringify(data).substring(0, 80);
             }
