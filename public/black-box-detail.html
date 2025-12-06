@@ -1670,10 +1670,74 @@
             `;
         }
         
+        // Detect slang, colloquialisms, and regional dialect terms
+        function detectSlangAndSynonyms(text) {
+            const slangMappings = {
+                // Equipment slang
+                'thingy': ['unit', 'system', 'device', 'equipment'],
+                'thing': ['unit', 'system', 'device'],
+                'box': ['unit', 'condenser', 'system'],
+                'the box outside': ['outdoor unit', 'condenser', 'outside unit', 'AC unit'],
+                'the thing on the wall': ['thermostat', 'wall unit', 'control panel'],
+                'thingy on the wall': ['thermostat', 'wall unit', 'control panel'],
+                'that dial': ['thermostat', 'control'],
+                'the motor': ['compressor', 'blower motor', 'fan motor'],
+                'the spinny thing': ['fan', 'blower', 'motor'],
+                'thing that spins': ['fan', 'blower', 'fan blade'],
+                
+                // Problem description slang
+                'on the fritz': ['not working', 'broken', 'malfunctioning'],
+                'busted': ['broken', 'not working', 'damaged'],
+                'acting up': ['malfunctioning', 'not working properly', 'having issues'],
+                'acting funny': ['malfunctioning', 'not working right', 'behaving oddly'],
+                'went out': ['stopped working', 'failed', 'broke down'],
+                'conked out': ['stopped working', 'died', 'failed'],
+                'gave out': ['stopped working', 'failed', 'broke'],
+                'crapped out': ['broke', 'stopped working', 'failed'],
+                'done broke': ['broken', 'stopped working'],
+                'ain\'t working': ['not working', 'broken', 'won\'t work'],
+                'won\'t kick on': ['won\'t start', 'won\'t turn on', 'not starting'],
+                'won\'t fire up': ['won\'t start', 'won\'t ignite', 'not starting'],
+                'making a racket': ['making noise', 'loud', 'noisy'],
+                'making a ruckus': ['making noise', 'loud sounds', 'noisy'],
+                
+                // Action slang  
+                'come take a look': ['inspect', 'diagnose', 'check out'],
+                'come check it out': ['inspect', 'diagnose', 'service'],
+                'come fix it': ['repair', 'service', 'fix'],
+                'y\'all': ['you', 'your company'],
+                'gonna': ['going to', 'will'],
+                'wanna': ['want to', 'would like to'],
+                'gotta': ['need to', 'have to'],
+                
+                // Temperature/comfort slang
+                'freezing': ['very cold', 'too cold', 'extremely cold'],
+                'burning up': ['very hot', 'too hot', 'overheating'],
+                'roasting': ['very hot', 'too warm', 'sweltering'],
+                'sweating bullets': ['very hot', 'no cooling', 'AC not working']
+            };
+            
+            const detected = [];
+            const lowerText = text.toLowerCase();
+            
+            for (const [slang, meanings] of Object.entries(slangMappings)) {
+                if (lowerText.includes(slang)) {
+                    detected.push({
+                        original: slang,
+                        meanings: meanings,
+                        context: text
+                    });
+                }
+            }
+            
+            return detected;
+        }
+        
         // Generate full production-ready scenario content
         function generateFullScenarioContent(gap) {
             const text = gap.text.toLowerCase();
             const keywords = extractKeywords(gap.text);
+            const detectedSlang = detectSlangAndSynonyms(gap.text);
             
             // Detect intent type
             const isBooking = /schedule|book|appointment|technician|come out|send someone/i.test(text);
@@ -1827,6 +1891,8 @@
                 fullReplies,
                 followUpMode,
                 triageTag: scenarioName.toUpperCase().replace(/\s+/g, '_'),
+                // Detected slang/dialect terms
+                detectedSlang,
                 // Advanced settings
                 scenarioType,
                 replyStrategy,
@@ -1859,6 +1925,12 @@
             window.copyData[`${dataId}_opening`] = content.fullReplies[0].split('.')[0] + '.';
             window.copyData[`${dataId}_keywords`] = content.triggers.slice(0, 5).join(', ');
             
+            // Store synonyms for Quick Add button
+            content.detectedSlang.forEach((s, sIdx) => {
+                window.copyData[`${dataId}_slang_${sIdx}`] = s.original;
+                window.copyData[`${dataId}_meanings_${sIdx}`] = s.meanings.join(', ');
+            });
+            
             const safeText = (gap.text || '').replace(/"/g, '&quot;').substring(0, 40);
             
             return `
@@ -1877,6 +1949,47 @@
                             <span class="issue-chip ${issue.severity}">${issue.type.replace(/_/g, ' ')}</span>
                         `).join('')}
                     </div>
+                    
+                    ${content.detectedSlang.length > 0 ? `
+                    <!-- SLANG/DIALECT DETECTION - Matches Effective Synonyms UI -->
+                    <div style="padding: 16px 20px; background: linear-gradient(135deg, rgba(236, 72, 153, 0.15), rgba(139, 92, 246, 0.15)); border-bottom: 1px solid var(--border-color);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 18px;">🗣️</span>
+                                <span style="font-weight: 600; color: var(--accent-pink);">New Synonyms Detected!</span>
+                                <span style="background: var(--accent-pink); color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${content.detectedSlang.length} mappings</span>
+                            </div>
+                            <span style="color: var(--accent-green); font-size: 12px; font-weight: 500;">+ Quick Add</span>
+                        </div>
+                        <p style="color: var(--text-secondary); font-size: 12px; margin-bottom: 12px;">
+                            Add these to <strong>Effective Synonyms</strong> in your scenario's Inherited Configuration section:
+                        </p>
+                        ${content.detectedSlang.map((s, sIdx) => `
+                            <div style="background: rgba(139, 92, 246, 0.1); padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid var(--accent-purple);">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                                    <div>
+                                        <div style="color: var(--accent-purple); font-weight: 600; font-size: 14px; margin-bottom: 4px;">${s.meanings[0]}</div>
+                                        <div style="color: var(--text-muted); font-size: 12px; font-family: 'JetBrains Mono', monospace;">
+                                            ${s.original}, ${s.meanings.slice(1).join(', ')}
+                                        </div>
+                                    </div>
+                                    <button class="copy-btn" onclick="copyFromStore('${dataId}_meanings_${sIdx}', this)" style="background: var(--accent-purple); white-space: nowrap;">📋 Copy</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                        <div style="margin-top: 12px; padding: 12px; background: rgba(34, 197, 94, 0.1); border-radius: 6px; border-left: 3px solid var(--accent-green);">
+                            <div style="color: var(--accent-green); font-size: 12px; margin-bottom: 8px;">
+                                <strong>📍 Where to add:</strong>
+                            </div>
+                            <ol style="color: var(--text-secondary); font-size: 12px; margin: 0; padding-left: 20px; line-height: 1.8;">
+                                <li>Open the related Scenario (or create the new one above)</li>
+                                <li>Scroll to <strong>Inherited Configuration</strong> → <strong>Effective Synonyms</strong></li>
+                                <li>Click <strong>+ Quick Add</strong></li>
+                                <li>Paste the base term and its synonyms</li>
+                            </ol>
+                        </div>
+                    </div>
+                    ` : ''}
                     
                     <!-- CATEGORY WARNING -->
                     <div style="padding: 12px 20px; background: rgba(234, 179, 8, 0.1); border-bottom: 1px solid var(--border-color);">
