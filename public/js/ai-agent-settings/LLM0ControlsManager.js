@@ -1,0 +1,969 @@
+// ============================================================================
+// LLM-0 CONTROLS MANAGER
+// ============================================================================
+// 📋 PURPOSE: Frontend manager for LLM-0 (Brain-1) behavior settings
+// 🎯 FEATURES:
+//    - Silence handling configuration
+//    - Loop detection settings
+//    - Spam filter (Layer 3) with telemarketer phrase management
+//    - Customer patience mode
+//    - Bailout rules
+//    - Confidence thresholds
+// 🔌 API: /api/admin/llm0-controls/:companyId
+// ============================================================================
+
+class LLM0ControlsManager {
+    constructor(companyId) {
+        this.companyId = companyId;
+        this.controls = null;
+        this.defaults = null;
+        this.container = null;
+        this.hasChanges = false;
+    }
+
+    // ========================================================================
+    // INITIALIZATION
+    // ========================================================================
+    async init(containerId) {
+        this.container = document.getElementById(containerId);
+        if (!this.container) {
+            console.error('[LLM-0 CONTROLS] Container not found:', containerId);
+            return;
+        }
+
+        this.renderLoading();
+        await this.load();
+    }
+
+    renderLoading() {
+        this.container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #6b7280;">
+                <div class="spinner" style="width: 40px; height: 40px; border: 3px solid #e5e7eb; border-top-color: #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+                <p>Loading LLM-0 Controls...</p>
+            </div>
+        `;
+    }
+
+    // ========================================================================
+    // DATA LOADING
+    // ========================================================================
+    async load() {
+        try {
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            const response = await fetch(`/api/admin/llm0-controls/${this.companyId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                this.controls = result.data;
+                this.defaults = result.defaults;
+                this.render();
+            } else {
+                this.renderError(result.message || 'Failed to load settings');
+            }
+        } catch (error) {
+            console.error('[LLM-0 CONTROLS] Load error:', error);
+            this.renderError('Network error: ' + error.message);
+        }
+    }
+
+    renderError(message) {
+        this.container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #ef4444;">
+                <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+                <h3 style="margin-bottom: 8px;">Error Loading Controls</h3>
+                <p>${message}</p>
+                <button onclick="window.llm0ControlsManager.load()" style="margin-top: 16px; padding: 8px 24px; background: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                    Retry
+                </button>
+            </div>
+        `;
+    }
+
+    // ========================================================================
+    // MAIN RENDER
+    // ========================================================================
+    render() {
+        const c = this.controls;
+        
+        this.container.innerHTML = `
+            <style>
+                .llm0-panel {
+                    background: #ffffff;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 12px;
+                    margin-bottom: 20px;
+                    overflow: hidden;
+                }
+                .llm0-panel-header {
+                    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+                    color: white;
+                    padding: 16px 20px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+                .llm0-panel-title {
+                    font-size: 16px;
+                    font-weight: 600;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                }
+                .llm0-panel-toggle {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                .llm0-toggle {
+                    position: relative;
+                    width: 48px;
+                    height: 26px;
+                    background: rgba(255,255,255,0.3);
+                    border-radius: 13px;
+                    cursor: pointer;
+                    transition: background 0.2s;
+                }
+                .llm0-toggle.active {
+                    background: #22c55e;
+                }
+                .llm0-toggle-knob {
+                    position: absolute;
+                    top: 3px;
+                    left: 3px;
+                    width: 20px;
+                    height: 20px;
+                    background: white;
+                    border-radius: 50%;
+                    transition: left 0.2s;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                }
+                .llm0-toggle.active .llm0-toggle-knob {
+                    left: 25px;
+                }
+                .llm0-panel-body {
+                    padding: 20px;
+                }
+                .llm0-field {
+                    margin-bottom: 16px;
+                }
+                .llm0-label {
+                    display: block;
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: #374151;
+                    margin-bottom: 6px;
+                }
+                .llm0-hint {
+                    font-size: 11px;
+                    color: #9ca3af;
+                    margin-top: 4px;
+                }
+                .llm0-input {
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    transition: border-color 0.2s;
+                }
+                .llm0-input:focus {
+                    outline: none;
+                    border-color: #8b5cf6;
+                    box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+                }
+                .llm0-select {
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    background: white;
+                    cursor: pointer;
+                }
+                .llm0-number {
+                    width: 100px;
+                    text-align: center;
+                }
+                .llm0-slider-container {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+                .llm0-slider {
+                    flex: 1;
+                    height: 6px;
+                    -webkit-appearance: none;
+                    background: #e5e7eb;
+                    border-radius: 3px;
+                    outline: none;
+                }
+                .llm0-slider::-webkit-slider-thumb {
+                    -webkit-appearance: none;
+                    width: 18px;
+                    height: 18px;
+                    background: #8b5cf6;
+                    border-radius: 50%;
+                    cursor: pointer;
+                }
+                .llm0-row {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 16px;
+                }
+                .llm0-phrases {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    margin-bottom: 12px;
+                }
+                .llm0-phrase {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    background: #fef3c7;
+                    color: #92400e;
+                    padding: 4px 10px;
+                    border-radius: 16px;
+                    font-size: 12px;
+                }
+                .llm0-phrase-remove {
+                    cursor: pointer;
+                    opacity: 0.7;
+                }
+                .llm0-phrase-remove:hover {
+                    opacity: 1;
+                }
+                .llm0-add-phrase {
+                    display: flex;
+                    gap: 8px;
+                }
+                .llm0-actions {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 20px;
+                    background: #f9fafb;
+                    border-top: 1px solid #e5e7eb;
+                }
+                .llm0-btn {
+                    padding: 10px 24px;
+                    border-radius: 6px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+                .llm0-btn-primary {
+                    background: linear-gradient(135deg, #8b5cf6, #6366f1);
+                    color: white;
+                    border: none;
+                }
+                .llm0-btn-primary:hover {
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 12px rgba(139,92,246,0.4);
+                }
+                .llm0-btn-secondary {
+                    background: white;
+                    color: #6b7280;
+                    border: 1px solid #d1d5db;
+                }
+                .llm0-btn-secondary:hover {
+                    background: #f3f4f6;
+                }
+                .llm0-section-divider {
+                    height: 1px;
+                    background: #e5e7eb;
+                    margin: 20px 0;
+                }
+                .llm0-checkbox-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    margin-bottom: 12px;
+                }
+                .llm0-checkbox {
+                    width: 18px;
+                    height: 18px;
+                    accent-color: #8b5cf6;
+                }
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+            </style>
+
+            <div style="margin-bottom: 24px;">
+                <h2 style="font-size: 24px; font-weight: 600; color: #1f2937; display: flex; align-items: center; gap: 12px;">
+                    🧠 LLM-0 Intelligence Controls
+                    <span style="background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;">ENTERPRISE</span>
+                </h2>
+                <p style="color: #6b7280; margin-top: 8px;">
+                    Configure how the AI brain handles edge cases: silence, loops, spam detection, and customer patience.
+                </p>
+            </div>
+
+            <!-- SILENCE HANDLING -->
+            ${this.renderSilencePanel(c.silenceHandling)}
+
+            <!-- LOOP DETECTION -->
+            ${this.renderLoopPanel(c.loopDetection)}
+
+            <!-- SPAM FILTER -->
+            ${this.renderSpamPanel(c.spamFilter)}
+
+            <!-- CUSTOMER PATIENCE -->
+            ${this.renderPatiencePanel(c.customerPatience)}
+
+            <!-- BAILOUT RULES -->
+            ${this.renderBailoutPanel(c.bailoutRules)}
+
+            <!-- CONFIDENCE THRESHOLDS -->
+            ${this.renderConfidencePanel(c.confidenceThresholds)}
+
+            <!-- ACTIONS -->
+            <div class="llm0-actions">
+                <button class="llm0-btn llm0-btn-secondary" onclick="window.llm0ControlsManager.resetToDefaults()">
+                    🔄 Reset to Defaults
+                </button>
+                <div style="display: flex; gap: 12px;">
+                    <button class="llm0-btn llm0-btn-secondary" onclick="window.llm0ControlsManager.load()">
+                        ↩️ Discard Changes
+                    </button>
+                    <button class="llm0-btn llm0-btn-primary" onclick="window.llm0ControlsManager.save()">
+                        💾 Save Changes
+                    </button>
+                </div>
+            </div>
+        `;
+
+        this.attachEventListeners();
+    }
+
+    // ========================================================================
+    // PANEL RENDERERS
+    // ========================================================================
+    renderSilencePanel(s) {
+        return `
+            <div class="llm0-panel">
+                <div class="llm0-panel-header">
+                    <div class="llm0-panel-title">
+                        <span>🤫</span> Silence Handling
+                    </div>
+                    <div class="llm0-panel-toggle">
+                        <span style="font-size: 12px;">Enabled</span>
+                        <div class="llm0-toggle ${s.enabled ? 'active' : ''}" data-section="silenceHandling" data-field="enabled">
+                            <div class="llm0-toggle-knob"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="llm0-panel-body">
+                    <p style="color: #6b7280; margin-bottom: 16px;">
+                        How the AI responds when a caller goes silent. Gentle prompts help customers who need time.
+                    </p>
+                    
+                    <div class="llm0-row">
+                        <div class="llm0-field">
+                            <label class="llm0-label">Silence Threshold (seconds)</label>
+                            <input type="number" class="llm0-input llm0-number" value="${s.thresholdSeconds}" 
+                                   data-section="silenceHandling" data-field="thresholdSeconds" min="2" max="30">
+                            <div class="llm0-hint">Wait this long before prompting</div>
+                        </div>
+                        <div class="llm0-field">
+                            <label class="llm0-label">Max Prompts</label>
+                            <input type="number" class="llm0-input llm0-number" value="${s.maxPrompts}" 
+                                   data-section="silenceHandling" data-field="maxPrompts" min="1" max="5">
+                            <div class="llm0-hint">Number of gentle prompts before callback offer</div>
+                        </div>
+                    </div>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">First Prompt</label>
+                        <input type="text" class="llm0-input" value="${this.escapeHtml(s.firstPrompt)}" 
+                               data-section="silenceHandling" data-field="firstPrompt">
+                    </div>
+                    <div class="llm0-field">
+                        <label class="llm0-label">Second Prompt</label>
+                        <input type="text" class="llm0-input" value="${this.escapeHtml(s.secondPrompt)}" 
+                               data-section="silenceHandling" data-field="secondPrompt">
+                    </div>
+                    <div class="llm0-field">
+                        <label class="llm0-label">Third Prompt</label>
+                        <input type="text" class="llm0-input" value="${this.escapeHtml(s.thirdPrompt)}" 
+                               data-section="silenceHandling" data-field="thirdPrompt">
+                    </div>
+                    
+                    <div class="llm0-section-divider"></div>
+                    
+                    <div class="llm0-checkbox-row">
+                        <input type="checkbox" class="llm0-checkbox" id="silence-callback" ${s.offerCallback ? 'checked' : ''}
+                               data-section="silenceHandling" data-field="offerCallback">
+                        <label for="silence-callback" style="font-size: 14px; color: #374151;">Offer callback after max prompts</label>
+                    </div>
+                    <div class="llm0-field">
+                        <label class="llm0-label">Callback Offer Message</label>
+                        <input type="text" class="llm0-input" value="${this.escapeHtml(s.callbackMessage)}" 
+                               data-section="silenceHandling" data-field="callbackMessage">
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    renderLoopPanel(l) {
+        return `
+            <div class="llm0-panel">
+                <div class="llm0-panel-header" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                    <div class="llm0-panel-title">
+                        <span>🔄</span> Loop Detection
+                    </div>
+                    <div class="llm0-panel-toggle">
+                        <span style="font-size: 12px;">Enabled</span>
+                        <div class="llm0-toggle ${l.enabled ? 'active' : ''}" data-section="loopDetection" data-field="enabled">
+                            <div class="llm0-toggle-knob"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="llm0-panel-body">
+                    <p style="color: #6b7280; margin-bottom: 16px;">
+                        Detect when the conversation is stuck in a loop and take action.
+                    </p>
+                    
+                    <div class="llm0-row">
+                        <div class="llm0-field">
+                            <label class="llm0-label">Max Repeated Responses</label>
+                            <input type="number" class="llm0-input llm0-number" value="${l.maxRepeatedResponses}" 
+                                   data-section="loopDetection" data-field="maxRepeatedResponses" min="2" max="10">
+                            <div class="llm0-hint">Similar responses before triggering</div>
+                        </div>
+                        <div class="llm0-field">
+                            <label class="llm0-label">Detection Window (turns)</label>
+                            <input type="number" class="llm0-input llm0-number" value="${l.detectionWindow}" 
+                                   data-section="loopDetection" data-field="detectionWindow" min="3" max="15">
+                            <div class="llm0-hint">Look back this many turns</div>
+                        </div>
+                    </div>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">On Loop Detected</label>
+                        <select class="llm0-select" data-section="loopDetection" data-field="onLoopAction">
+                            <option value="escalate" ${l.onLoopAction === 'escalate' ? 'selected' : ''}>Escalate to human</option>
+                            <option value="bailout" ${l.onLoopAction === 'bailout' ? 'selected' : ''}>Bailout (polite end)</option>
+                            <option value="callback_offer" ${l.onLoopAction === 'callback_offer' ? 'selected' : ''}>Offer callback</option>
+                            <option value="transfer" ${l.onLoopAction === 'transfer' ? 'selected' : ''}>Transfer to number</option>
+                        </select>
+                    </div>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Escalation Message</label>
+                        <input type="text" class="llm0-input" value="${this.escapeHtml(l.escalationMessage)}" 
+                               data-section="loopDetection" data-field="escalationMessage">
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    renderSpamPanel(sp) {
+        const phrases = sp.telemarketerPhrases || [];
+        return `
+            <div class="llm0-panel">
+                <div class="llm0-panel-header" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
+                    <div class="llm0-panel-title">
+                        <span>🚫</span> Spam Filter (Layer 3 Detection)
+                    </div>
+                    <div class="llm0-panel-toggle">
+                        <span style="font-size: 12px;">Enabled</span>
+                        <div class="llm0-toggle ${sp.enabled ? 'active' : ''}" data-section="spamFilter" data-field="enabled">
+                            <div class="llm0-toggle-knob"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="llm0-panel-body">
+                    <p style="color: #6b7280; margin-bottom: 16px;">
+                        LLM-0 detects telemarketer patterns that got past Edge Cases. Learn new patterns → add to Edge Cases for FREE blocking.
+                    </p>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Telemarketer Trigger Phrases</label>
+                        <div class="llm0-phrases" id="spam-phrases">
+                            ${phrases.map(p => `
+                                <div class="llm0-phrase">
+                                    ${this.escapeHtml(p)}
+                                    <span class="llm0-phrase-remove" onclick="window.llm0ControlsManager.removePhrase('${this.escapeHtml(p)}')">×</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="llm0-add-phrase">
+                            <input type="text" class="llm0-input" id="new-spam-phrase" placeholder="Add new phrase...">
+                            <button class="llm0-btn llm0-btn-primary" style="padding: 10px 16px;" onclick="window.llm0ControlsManager.addPhrase()">+ Add</button>
+                        </div>
+                        <div class="llm0-hint">Phrases that indicate telemarketer/robocall</div>
+                    </div>
+                    
+                    <div class="llm0-section-divider"></div>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">On Spam Detected</label>
+                        <select class="llm0-select" data-section="spamFilter" data-field="onSpamDetected">
+                            <option value="polite_dismiss" ${sp.onSpamDetected === 'polite_dismiss' ? 'selected' : ''}>Polite dismiss (recommended)</option>
+                            <option value="silent_hangup" ${sp.onSpamDetected === 'silent_hangup' ? 'selected' : ''}>Silent hangup</option>
+                            <option value="flag_only" ${sp.onSpamDetected === 'flag_only' ? 'selected' : ''}>Flag only (continue call)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Dismiss Message</label>
+                        <input type="text" class="llm0-input" value="${this.escapeHtml(sp.dismissMessage)}" 
+                               data-section="spamFilter" data-field="dismissMessage">
+                    </div>
+                    
+                    <div class="llm0-checkbox-row">
+                        <input type="checkbox" class="llm0-checkbox" id="spam-auto-blacklist" ${sp.autoAddToBlacklist ? 'checked' : ''}
+                               data-section="spamFilter" data-field="autoAddToBlacklist">
+                        <label for="spam-auto-blacklist" style="font-size: 14px; color: #374151;">Auto-add caller to blacklist</label>
+                    </div>
+                    <div class="llm0-checkbox-row">
+                        <input type="checkbox" class="llm0-checkbox" id="spam-log-blackbox" ${sp.logToBlackBox ? 'checked' : ''}
+                               data-section="spamFilter" data-field="logToBlackBox">
+                        <label for="spam-log-blackbox" style="font-size: 14px; color: #374151;">Log to Black Box for learning</label>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    renderPatiencePanel(p) {
+        return `
+            <div class="llm0-panel">
+                <div class="llm0-panel-header" style="background: linear-gradient(135deg, #22c55e, #16a34a);">
+                    <div class="llm0-panel-title">
+                        <span>💚</span> Customer Patience Mode
+                    </div>
+                    <div class="llm0-panel-toggle">
+                        <span style="font-size: 12px;">Enabled</span>
+                        <div class="llm0-toggle ${p.enabled ? 'active' : ''}" data-section="customerPatience" data-field="enabled">
+                            <div class="llm0-toggle-knob"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="llm0-panel-body">
+                    <p style="color: #6b7280; margin-bottom: 16px;">
+                        <strong>NEVER lose a real customer!</strong> Be patient with callers who need time. Always offer alternatives.
+                    </p>
+                    
+                    <div class="llm0-checkbox-row">
+                        <input type="checkbox" class="llm0-checkbox" id="patience-never-hangup" ${p.neverAutoHangup ? 'checked' : ''}
+                               data-section="customerPatience" data-field="neverAutoHangup">
+                        <label for="patience-never-hangup" style="font-size: 14px; color: #374151; font-weight: 500;">
+                            🛡️ Never auto-hangup on potential customer
+                        </label>
+                    </div>
+                    
+                    <div class="llm0-checkbox-row">
+                        <input type="checkbox" class="llm0-checkbox" id="patience-always-callback" ${p.alwaysOfferCallback ? 'checked' : ''}
+                               data-section="customerPatience" data-field="alwaysOfferCallback">
+                        <label for="patience-always-callback" style="font-size: 14px; color: #374151;">
+                            Always offer callback option
+                        </label>
+                    </div>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Max Patience Prompts</label>
+                        <input type="number" class="llm0-input llm0-number" value="${p.maxPatiencePrompts}" 
+                               data-section="customerPatience" data-field="maxPatiencePrompts" min="2" max="10">
+                        <div class="llm0-hint">Gentle prompts before escalating</div>
+                    </div>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Patience Message</label>
+                        <input type="text" class="llm0-input" value="${this.escapeHtml(p.patienceMessage)}" 
+                               data-section="customerPatience" data-field="patienceMessage">
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    renderBailoutPanel(b) {
+        return `
+            <div class="llm0-panel">
+                <div class="llm0-panel-header" style="background: linear-gradient(135deg, #6366f1, #4f46e5);">
+                    <div class="llm0-panel-title">
+                        <span>🚨</span> Bailout Rules
+                    </div>
+                    <div class="llm0-panel-toggle">
+                        <span style="font-size: 12px;">Enabled</span>
+                        <div class="llm0-toggle ${b.enabled ? 'active' : ''}" data-section="bailoutRules" data-field="enabled">
+                            <div class="llm0-toggle-knob"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="llm0-panel-body">
+                    <p style="color: #6b7280; margin-bottom: 16px;">
+                        When the AI can't help, gracefully transfer to a human.
+                    </p>
+                    
+                    <div class="llm0-row">
+                        <div class="llm0-field">
+                            <label class="llm0-label">Max Turns Before Escalation</label>
+                            <input type="number" class="llm0-input llm0-number" value="${b.maxTurnsBeforeEscalation}" 
+                                   data-section="bailoutRules" data-field="maxTurnsBeforeEscalation" min="5" max="30">
+                        </div>
+                        <div class="llm0-field">
+                            <label class="llm0-label">Confusion Threshold</label>
+                            <div class="llm0-slider-container">
+                                <input type="range" class="llm0-slider" value="${b.confusionThreshold * 100}" 
+                                       data-section="bailoutRules" data-field="confusionThreshold" 
+                                       min="10" max="50" id="confusion-slider">
+                                <span id="confusion-value">${(b.confusionThreshold * 100).toFixed(0)}%</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="llm0-checkbox-row">
+                        <input type="checkbox" class="llm0-checkbox" id="bailout-escalate" ${b.escalateOnBailout ? 'checked' : ''}
+                               data-section="bailoutRules" data-field="escalateOnBailout">
+                        <label for="bailout-escalate" style="font-size: 14px; color: #374151;">
+                            Transfer to human on bailout
+                        </label>
+                    </div>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Bailout Message</label>
+                        <input type="text" class="llm0-input" value="${this.escapeHtml(b.bailoutMessage)}" 
+                               data-section="bailoutRules" data-field="bailoutMessage">
+                    </div>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Transfer Target (phone number)</label>
+                        <input type="text" class="llm0-input" value="${b.transferTarget || ''}" 
+                               data-section="bailoutRules" data-field="transferTarget" placeholder="+1 555-123-4567">
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    renderConfidencePanel(ct) {
+        return `
+            <div class="llm0-panel">
+                <div class="llm0-panel-header" style="background: linear-gradient(135deg, #0ea5e9, #0284c7);">
+                    <div class="llm0-panel-title">
+                        <span>📊</span> Confidence Thresholds
+                    </div>
+                </div>
+                <div class="llm0-panel-body">
+                    <p style="color: #6b7280; margin-bottom: 16px;">
+                        How confident the AI must be before taking action. Higher = more certain.
+                    </p>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">High Confidence (fast match)</label>
+                        <div class="llm0-slider-container">
+                            <input type="range" class="llm0-slider" value="${ct.highConfidence * 100}" 
+                                   data-section="confidenceThresholds" data-field="highConfidence" 
+                                   min="50" max="100" id="high-conf-slider">
+                            <span id="high-conf-value">${(ct.highConfidence * 100).toFixed(0)}%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Medium Confidence</label>
+                        <div class="llm0-slider-container">
+                            <input type="range" class="llm0-slider" value="${ct.mediumConfidence * 100}" 
+                                   data-section="confidenceThresholds" data-field="mediumConfidence" 
+                                   min="30" max="90" id="med-conf-slider">
+                            <span id="med-conf-value">${(ct.mediumConfidence * 100).toFixed(0)}%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Low Confidence</label>
+                        <div class="llm0-slider-container">
+                            <input type="range" class="llm0-slider" value="${ct.lowConfidence * 100}" 
+                                   data-section="confidenceThresholds" data-field="lowConfidence" 
+                                   min="10" max="70" id="low-conf-slider">
+                            <span id="low-conf-value">${(ct.lowConfidence * 100).toFixed(0)}%</span>
+                        </div>
+                    </div>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Fallback to LLM (below this, use LLM)</label>
+                        <div class="llm0-slider-container">
+                            <input type="range" class="llm0-slider" value="${ct.fallbackToLLM * 100}" 
+                                   data-section="confidenceThresholds" data-field="fallbackToLLM" 
+                                   min="10" max="60" id="fallback-slider">
+                            <span id="fallback-value">${(ct.fallbackToLLM * 100).toFixed(0)}%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // ========================================================================
+    // EVENT LISTENERS
+    // ========================================================================
+    attachEventListeners() {
+        // Toggle switches
+        this.container.querySelectorAll('.llm0-toggle').forEach(toggle => {
+            toggle.addEventListener('click', () => {
+                toggle.classList.toggle('active');
+                this.hasChanges = true;
+            });
+        });
+
+        // All inputs
+        this.container.querySelectorAll('input, select').forEach(input => {
+            input.addEventListener('change', () => {
+                this.hasChanges = true;
+            });
+        });
+
+        // Slider value display updates
+        const sliders = [
+            { id: 'confusion-slider', display: 'confusion-value', suffix: '%' },
+            { id: 'high-conf-slider', display: 'high-conf-value', suffix: '%' },
+            { id: 'med-conf-slider', display: 'med-conf-value', suffix: '%' },
+            { id: 'low-conf-slider', display: 'low-conf-value', suffix: '%' },
+            { id: 'fallback-slider', display: 'fallback-value', suffix: '%' }
+        ];
+
+        sliders.forEach(s => {
+            const slider = document.getElementById(s.id);
+            const display = document.getElementById(s.display);
+            if (slider && display) {
+                slider.addEventListener('input', () => {
+                    display.textContent = slider.value + s.suffix;
+                });
+            }
+        });
+
+        // New phrase input - enter key
+        const newPhraseInput = document.getElementById('new-spam-phrase');
+        if (newPhraseInput) {
+            newPhraseInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.addPhrase();
+                }
+            });
+        }
+    }
+
+    // ========================================================================
+    // PHRASE MANAGEMENT
+    // ========================================================================
+    async addPhrase() {
+        const input = document.getElementById('new-spam-phrase');
+        const phrase = input.value.trim().toLowerCase();
+        
+        if (phrase.length < 3) {
+            this.showToast('error', 'Phrase must be at least 3 characters');
+            return;
+        }
+
+        try {
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            const response = await fetch(`/api/admin/llm0-controls/${this.companyId}/spam-phrase`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ phrase })
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showToast('success', `Added "${phrase}" to spam filter`);
+                input.value = '';
+                await this.load(); // Reload to show new phrase
+            } else {
+                this.showToast('error', result.message || 'Failed to add phrase');
+            }
+        } catch (error) {
+            this.showToast('error', 'Network error: ' + error.message);
+        }
+    }
+
+    async removePhrase(phrase) {
+        if (!confirm(`Remove "${phrase}" from spam filter?`)) return;
+
+        try {
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            const response = await fetch(`/api/admin/llm0-controls/${this.companyId}/spam-phrase`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ phrase })
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showToast('success', `Removed "${phrase}"`);
+                await this.load();
+            } else {
+                this.showToast('error', result.message);
+            }
+        } catch (error) {
+            this.showToast('error', 'Network error: ' + error.message);
+        }
+    }
+
+    // ========================================================================
+    // SAVE / RESET
+    // ========================================================================
+    collectFormData() {
+        const data = {
+            silenceHandling: {},
+            loopDetection: {},
+            spamFilter: {},
+            customerPatience: {},
+            bailoutRules: {},
+            confidenceThresholds: {}
+        };
+
+        // Collect toggle states
+        this.container.querySelectorAll('.llm0-toggle').forEach(toggle => {
+            const section = toggle.dataset.section;
+            const field = toggle.dataset.field;
+            if (section && field) {
+                data[section][field] = toggle.classList.contains('active');
+            }
+        });
+
+        // Collect inputs
+        this.container.querySelectorAll('input[data-section], select[data-section]').forEach(input => {
+            const section = input.dataset.section;
+            const field = input.dataset.field;
+            if (!section || !field) return;
+
+            let value;
+            if (input.type === 'checkbox') {
+                value = input.checked;
+            } else if (input.type === 'number' || input.type === 'range') {
+                value = parseFloat(input.value);
+                // Sliders for percentages need to be divided by 100
+                if (input.type === 'range' && (field.includes('Confidence') || field.includes('Threshold') || field === 'confusionThreshold')) {
+                    value = value / 100;
+                }
+            } else {
+                value = input.value;
+            }
+
+            data[section][field] = value;
+        });
+
+        return data;
+    }
+
+    async save() {
+        const data = this.collectFormData();
+        
+        try {
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            const response = await fetch(`/api/admin/llm0-controls/${this.companyId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showToast('success', 'LLM-0 controls saved successfully!');
+                this.hasChanges = false;
+                await this.load();
+            } else {
+                this.showToast('error', result.message || 'Failed to save');
+            }
+        } catch (error) {
+            this.showToast('error', 'Network error: ' + error.message);
+        }
+    }
+
+    async resetToDefaults() {
+        if (!confirm('Reset all LLM-0 controls to defaults? This cannot be undone.')) return;
+
+        try {
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            const response = await fetch(`/api/admin/llm0-controls/${this.companyId}/reset`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showToast('success', 'Reset to defaults complete');
+                await this.load();
+            } else {
+                this.showToast('error', result.message);
+            }
+        } catch (error) {
+            this.showToast('error', 'Network error: ' + error.message);
+        }
+    }
+
+    // ========================================================================
+    // UTILITIES
+    // ========================================================================
+    escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;')
+                  .replace(/'/g, '&#039;');
+    }
+
+    showToast(type, message) {
+        const existing = document.querySelector('.llm0-toast');
+        if (existing) existing.remove();
+
+        const colors = {
+            success: '#22c55e',
+            error: '#ef4444',
+            info: '#3b82f6'
+        };
+
+        const toast = document.createElement('div');
+        toast.className = 'llm0-toast';
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            background: ${colors[type] || colors.info};
+            color: white;
+            border-radius: 8px;
+            font-weight: 500;
+            z-index: 10000;
+            animation: slideIn 0.3s ease;
+            max-width: 400px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        `;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        setTimeout(() => toast.remove(), 4000);
+    }
+}
+
+// Global instance
+window.llm0ControlsManager = null;
+
+// Initialize function
+window.initLLM0Controls = function(companyId, containerId) {
+    window.llm0ControlsManager = new LLM0ControlsManager(companyId);
+    window.llm0ControlsManager.init(containerId);
+};
+

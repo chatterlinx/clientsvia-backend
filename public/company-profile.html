@@ -1197,6 +1197,11 @@
                                         Call Logs
                                         <span style="font-size: 10px; background: #6c757d; color: white; padding: 2px 6px; border-radius: 8px; margin-left: 4px;">Soon</span>
                                     </button>
+                                    <button class="voicecore-tab" data-voicecore-tab="llm0-controls">
+                                        <i class="fas fa-brain"></i>
+                                        LLM-0 Controls
+                                        <span style="font-size: 10px; background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; padding: 2px 6px; border-radius: 8px; margin-left: 4px;">Enterprise</span>
+                                    </button>
                                 </nav>
                                 
                                 <!-- Tab 1: Dashboard (Twilio Control Center) -->
@@ -1232,6 +1237,17 @@
                                         <i class="fas fa-list"></i>
                                         <h4>Call Logs Coming Soon</h4>
                                         <p>Detailed call history, transcripts, and analytics will be available here</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Tab 4: LLM-0 Controls (Enterprise) -->
+                                <div class="voicecore-tab-content" id="tab-llm0-controls">
+                                    <div id="llm0-controls-container">
+                                        <!-- LLM0ControlsManager will render here -->
+                                        <div style="text-align: center; padding: 40px; color: #6b7280;">
+                                            <div style="width: 40px; height: 40px; border: 3px solid #e5e7eb; border-top-color: #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+                                            <p>Loading LLM-0 Controls...</p>
+                                        </div>
                                     </div>
                                 </div>
                                 
@@ -1482,10 +1498,11 @@
                         <script src="/js/ai-agent-settings/AIAgentSettingsManager.js?v=5.3"></script>
                         <script src="/js/ai-agent-settings/DiagnosticModal.js?v=1.0"></script>
                         <script src="/js/ai-agent-settings/SystemDiagnostics.js?v=1.0"></script>
-                        <script src="/js/ai-agent-settings/VoiceCoreTabManager.js?v=6.0"></script>
+                        <script src="/js/ai-agent-settings/VoiceCoreTabManager.js?v=7.0"></script>
                         <script src="/js/ai-agent-settings/TwilioControlCenter.js?v=5.0"></script>
                         <script src="/js/ai-agent-settings/ConnectionMessagesManager.js?v=13.0"></script>
                         <script src="/js/ai-agent-settings/SpamFilterManager.js?v=1.0"></script>
+                        <script src="/js/ai-agent-settings/LLM0ControlsManager.js?v=1.0"></script>
                         <!-- V2 Navigator - for diagnostic "Fix Now" buttons -->
                         <script src="/js/control-plane-v2-navigator.js?v=1.0"></script>
                         
