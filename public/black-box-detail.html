@@ -1634,21 +1634,150 @@
             `;
         }
         
+        // Generate full production-ready scenario content
+        function generateFullScenarioContent(gap) {
+            const text = gap.text.toLowerCase();
+            const keywords = extractKeywords(gap.text);
+            
+            // Detect intent type
+            const isBooking = /schedule|book|appointment|technician|come out|send someone/i.test(text);
+            const isTroubleshooting = /not working|broken|issue|problem|won't|doesn't/i.test(text);
+            const isEmergency = /emergency|urgent|leak|flood|no heat|gas smell/i.test(text);
+            
+            let scenarioName, category, triggers, negativeTriggers, quickReplies, fullReplies, followUpMode;
+            
+            if (isBooking) {
+                scenarioName = 'Service Appointment Request';
+                category = 'Booking';
+                triggers = [
+                    gap.text,
+                    'schedule service',
+                    'book an appointment',
+                    'need a technician',
+                    'send someone out',
+                    'set up a service call',
+                    'schedule a tech',
+                    'book a service visit',
+                    'need someone to come out',
+                    'make an appointment'
+                ];
+                negativeTriggers = [
+                    'cancel my appointment',
+                    'reschedule my appointment', 
+                    'what time is my appointment',
+                    'when is the technician coming',
+                    'change my booking'
+                ];
+                quickReplies = [
+                    'Got it, I can help you schedule that.',
+                    'Sure, let me help you book an appointment.',
+                    'Absolutely, I can set that up for you.',
+                    'No problem, let\\'s get you scheduled.',
+                    'Of course, I\\'ll help you with that right away.'
+                ];
+                fullReplies = [
+                    'I\\'d be happy to help you schedule a service appointment with {companyName}. May I start with your name?',
+                    'Let me get you set up with one of our technicians. To schedule your appointment, I\\'ll need your name, phone number, and the best time that works for you. What\\'s your name?',
+                    'Sure thing! {companyName} can definitely help with that. I\\'ll need to collect a few details to book your service call. Can I get your name please?',
+                    'No problem at all. I can schedule a technician to come out and take a look. First, may I have your name so I can pull up your account or create a new one?',
+                    'Absolutely, I\\'ll get that scheduled for you. {companyName} services the {serviceArea} area. Let\\'s start with your name and the address where you need service.'
+                ];
+                followUpMode = 'ASK_FOLLOWUP_QUESTION';
+            } else if (isEmergency) {
+                scenarioName = 'Emergency Service Request';
+                category = 'Emergency';
+                triggers = [
+                    gap.text,
+                    'emergency',
+                    'urgent',
+                    'no heat',
+                    'no cooling',
+                    'water leak',
+                    'gas smell',
+                    'flooding',
+                    'smoke',
+                    'sparking'
+                ];
+                negativeTriggers = [
+                    'not an emergency',
+                    'no rush',
+                    'whenever you can',
+                    'at your convenience'
+                ];
+                quickReplies = [
+                    'I understand this is urgent. Let me help you right away.',
+                    'I\\'m so sorry to hear that. Let me get you help immediately.',
+                    'That sounds serious. I\\'ll prioritize this right now.',
+                    'I completely understand. Let\\'s handle this as a priority.',
+                    'Don\\'t worry, we\\'ll take care of this urgently.'
+                ];
+                fullReplies = [
+                    'I understand this is urgent. {companyName} treats emergencies as our top priority. Let me get a technician dispatched to you as soon as possible. What\\'s your name and address?',
+                    'I\\'m so sorry you\\'re dealing with this. For emergencies, {companyName} offers priority service. To get someone out to you quickly, I need your name, address, and phone number.',
+                    'That definitely sounds like an emergency. Let me connect you with our emergency dispatch right away. Before I do, can I get your name and the service address?',
+                    'I understand, and {companyName} takes this seriously. We have technicians on call for situations like this. What\\'s your name and where is the emergency?',
+                    'Don\\'t worry, we\\'ll get this handled. {companyName} has emergency technicians available. To dispatch someone immediately, I need your name, phone number, and address.'
+                ];
+                followUpMode = 'TRANSFER';
+            } else {
+                // Troubleshooting or General
+                scenarioName = keywords.slice(0, 3).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') + ' Issue';
+                category = 'Troubleshooting';
+                triggers = [
+                    gap.text,
+                    ...keywords.map(k => k + ' not working'),
+                    ...keywords.map(k => k + ' problem'),
+                    ...keywords.slice(0, 3).map(k => 'issue with ' + k)
+                ].slice(0, 10);
+                negativeTriggers = [
+                    'just checking',
+                    'how much does it cost',
+                    'what are your hours',
+                    'general question',
+                    'pricing'
+                ];
+                quickReplies = [
+                    'I can help troubleshoot that with you.',
+                    'Let me help you figure out what\\'s going on.',
+                    'I understand, let\\'s see what we can do.',
+                    'No problem, I can assist with that.',
+                    'Got it, let me help you with that issue.'
+                ];
+                fullReplies = [
+                    'I can help troubleshoot that with you. To better understand what\\'s happening, can you tell me when you first noticed the issue?',
+                    'Let me help you figure out what\\'s going on. Is the system making any unusual sounds or displaying any error codes?',
+                    'I understand how frustrating that can be. {companyName} can definitely help. Has anything changed recently that might have caused this?',
+                    'No problem, I can assist with that. Can you describe exactly what\\'s happening? Is the unit running at all?',
+                    'Got it. To help diagnose the issue, can you tell me if the problem started suddenly or has been getting worse over time?'
+                ];
+                followUpMode = 'ASK_FOLLOWUP_QUESTION';
+            }
+            
+            return {
+                scenarioName,
+                category,
+                triggers,
+                negativeTriggers,
+                quickReplies,
+                fullReplies,
+                followUpMode,
+                triageTag: scenarioName.toUpperCase().replace(/\s+/g, '_')
+            };
+        }
+        
         function renderGapCard(gap, idx) {
             const severity = gap.issues.some(i => i.severity === 'critical') ? 'critical' : 
                             gap.issues.some(i => i.severity === 'error') ? 'error' : 'warning';
             
-            const card = gap.issues.find(i => i.cardSuggested)?.cardSuggested;
-            const keywords = gap.suggestions?.keywords || extractKeywords(gap.text);
+            // Generate full content
+            const content = generateFullScenarioContent(gap);
+            const escapeForCopy = (arr) => arr.join('\\n').replace(/'/g, "\\'");
             
             return `
                 <div class="todo-gap">
                     <div class="todo-gap-header ${severity}">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <span style="color: var(--text-secondary); font-size: 12px;">TURN ${gap.turn} • GAP #${idx + 1}</span>
-                            <button class="bb-btn bb-btn-success" style="padding: 6px 14px; font-size: 12px;" onclick="openScenarioBuilder(${idx})">
-                                ➕ Add Scenario & Card
-                            </button>
                         </div>
                         <div class="todo-gap-utterance" style="margin-top: 8px;">
                             "${gap.text}"
@@ -1661,91 +1790,120 @@
                         `).join('')}
                     </div>
                     
-                    ${card ? `
-                    <!-- STEP 1: CREATE SCENARIO -->
+                    <!-- CATEGORY WARNING -->
+                    <div style="padding: 12px 20px; background: rgba(234, 179, 8, 0.1); border-bottom: 1px solid var(--border-color);">
+                        <span style="color: var(--accent-yellow); font-size: 13px;">
+                            ⚠️ <strong>Required Category:</strong> "${content.category}" — Add this category in Scenario Builder if it doesn't exist.
+                        </span>
+                    </div>
+                    
+                    <!-- SCENARIO BUILDER FIELDS (Exact field names from form) -->
                     <div class="todo-step">
                         <div class="todo-step-title">
-                            <span>📌 STEP 1: CREATE SCENARIO</span>
+                            <span>📝 SCENARIO BUILDER — Copy these values</span>
                         </div>
-                        <div class="todo-step-instruction">
-                            Go to <strong>Scenario Builder</strong> → Click <strong>New Scenario</strong> → Fill in these fields:
+                        
+                        <table class="todo-field-table" style="margin-bottom: 16px;">
+                            <tr>
+                                <td style="background: rgba(139, 92, 246, 0.2); color: #a78bfa;">Name *</td>
+                                <td>${content.scenarioName} <button class="copy-btn" onclick="copyValue('${content.scenarioName}')">📋</button></td>
+                            </tr>
+                            <tr>
+                                <td style="background: rgba(139, 92, 246, 0.2); color: #a78bfa;">Category *</td>
+                                <td>${content.category} <span style="color: var(--text-muted);">(select from dropdown)</span></td>
+                            </tr>
+                        </table>
+                        
+                        <div style="margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-weight: 500; color: var(--accent-purple);">Triggers * <span style="font-weight: normal; color: var(--text-muted);">(one per line)</span></span>
+                                <button class="copy-btn" onclick="copyValue('${escapeForCopy(content.triggers)}')">📋 Copy All</button>
+                            </div>
+                            <div style="background: var(--bg-secondary); padding: 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.8; max-height: 150px; overflow-y: auto;">
+                                ${content.triggers.map(t => `<div>${t}</div>`).join('')}
+                            </div>
                         </div>
+                        
+                        <div style="margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-weight: 500; color: var(--accent-red);">Negative Triggers <span style="font-weight: normal; color: var(--text-muted);">(one per line)</span></span>
+                                <button class="copy-btn" onclick="copyValue('${escapeForCopy(content.negativeTriggers)}')">📋 Copy All</button>
+                            </div>
+                            <div style="background: var(--bg-secondary); padding: 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.8;">
+                                ${content.negativeTriggers.map(t => `<div>${t}</div>`).join('')}
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-weight: 500; color: var(--accent-cyan);">Quick Replies * <span style="font-weight: normal; color: var(--text-muted);">(5 short responses, one per line)</span></span>
+                                <button class="copy-btn" onclick="copyValue('${escapeForCopy(content.quickReplies)}')">📋 Copy All</button>
+                            </div>
+                            <div style="background: var(--bg-secondary); padding: 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.8;">
+                                ${content.quickReplies.map(t => `<div>${t}</div>`).join('')}
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-weight: 500; color: var(--accent-green);">Full Replies * <span style="font-weight: normal; color: var(--text-muted);">(5 complete responses, one per line)</span></span>
+                                <button class="copy-btn" onclick="copyValue('${escapeForCopy(content.fullReplies)}')">📋 Copy All</button>
+                            </div>
+                            <div style="background: var(--bg-secondary); padding: 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.8; max-height: 200px; overflow-y: auto;">
+                                ${content.fullReplies.map(t => `<div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed var(--border-color);">${t}</div>`).join('')}
+                            </div>
+                        </div>
+                        
                         <table class="todo-field-table">
                             <tr>
-                                <td>Scenario Name</td>
-                                <td>${card.name} <button class="copy-btn" onclick="copyValue('${card.name}')">📋 Copy</button></td>
-                            </tr>
-                            <tr>
-                                <td>Category</td>
-                                <td>${card.category} (select from dropdown)</td>
-                            </tr>
-                            <tr>
-                                <td>Intent Tag</td>
-                                <td>${card.triageTag.toLowerCase()} <button class="copy-btn" onclick="copyValue('${card.triageTag.toLowerCase()}')">📋 Copy</button></td>
+                                <td style="background: rgba(6, 182, 212, 0.2); color: #22d3ee;">Follow Up Mode</td>
+                                <td>${content.followUpMode} <span style="color: var(--text-muted);">(select from dropdown)</span></td>
                             </tr>
                         </table>
                     </div>
                     
-                    <!-- STEP 2: CREATE TRIAGE CARD -->
+                    <!-- TRIAGE CARD FIELDS -->
                     <div class="todo-step">
                         <div class="todo-step-title">
-                            <span>📌 STEP 2: CREATE TRIAGE CARD</span>
+                            <span>📋 TRIAGE CARD — Copy these values (after scenario is saved)</span>
                         </div>
-                        <div class="todo-step-instruction">
-                            Go to <strong>Triage Builder</strong> → Click <strong>New Card</strong> → Fill in these fields:
-                        </div>
+                        
                         <table class="todo-field-table">
                             <tr>
-                                <td>Card Name</td>
-                                <td>${card.name} <button class="copy-btn" onclick="copyValue('${card.name}')">📋 Copy</button></td>
+                                <td style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">Card Name *</td>
+                                <td>${content.scenarioName} <button class="copy-btn" onclick="copyValue('${content.scenarioName}')">📋</button></td>
                             </tr>
                             <tr>
-                                <td>Triage Tag</td>
-                                <td>${card.triageTag} <button class="copy-btn" onclick="copyValue('${card.triageTag}')">📋 Copy</button></td>
+                                <td style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">Triage Tag *</td>
+                                <td>${content.triageTag} <button class="copy-btn" onclick="copyValue('${content.triageTag}')">📋</button></td>
                             </tr>
                             <tr>
-                                <td>Category</td>
-                                <td>${card.category} (select from dropdown)</td>
+                                <td style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">Category *</td>
+                                <td>${content.category} <span style="color: var(--text-muted);">(select from dropdown)</span></td>
                             </tr>
                             <tr>
-                                <td>Opening Line</td>
-                                <td>${card.openingLine} <button class="copy-btn" onclick="copyValue('${card.openingLine}')">📋 Copy</button></td>
+                                <td style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">Opening Line *</td>
+                                <td>${content.fullReplies[0].split('.')[0]}. <button class="copy-btn" onclick="copyValue('${content.fullReplies[0].split('.')[0]}.')">📋</button></td>
                             </tr>
                             <tr>
-                                <td>Action</td>
-                                <td>${card.action} (select from dropdown)</td>
+                                <td style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">Action *</td>
+                                <td>${content.category === 'Booking' ? 'BOOK' : content.category === 'Emergency' ? 'TRANSFER' : 'ASK_FOLLOWUP'} <span style="color: var(--text-muted);">(select from dropdown)</span></td>
                             </tr>
                             <tr>
-                                <td>Linked Scenario</td>
-                                <td>${card.name} (select from dropdown after creating scenario)</td>
+                                <td style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">Keywords *</td>
+                                <td>${content.triggers.slice(0, 5).join(', ')} <button class="copy-btn" onclick="copyValue('${content.triggers.slice(0, 5).join(', ')}')">📋</button></td>
+                            </tr>
+                            <tr>
+                                <td style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">Linked Scenario</td>
+                                <td>${content.scenarioName} <span style="color: var(--text-muted);">(select after creating scenario)</span></td>
                             </tr>
                         </table>
-                    </div>
-                    ` : ''}
-                    
-                    <!-- STEP 3: ADD KEYWORDS -->
-                    <div class="todo-step">
-                        <div class="todo-step-title">
-                            <span>📌 ${card ? 'STEP 3' : 'ACTION'}: ADD KEYWORDS</span>
-                        </div>
-                        <div class="todo-step-instruction">
-                            ${card ? `In the Triage Card, scroll to <strong>Trigger Keywords</strong> section and add:` : 
-                            `Add these keywords to an existing card to improve fast-match:`}
-                        </div>
-                        <div class="keywords-list">
-                            ${keywords.map(kw => `
-                                <span class="keyword-chip" onclick="copyValue('${kw}')" title="Click to copy">${kw}</span>
-                            `).join('')}
-                        </div>
-                        <button class="copy-btn" style="margin-top: 12px; padding: 8px 16px;" onclick="copyValue('${keywords.join(', ')}')">
-                            📋 Copy All Keywords
-                        </button>
                     </div>
                     
                     <!-- RESULT -->
                     <div style="padding: 16px 20px; background: rgba(34, 197, 94, 0.1); border-top: 1px solid var(--border-color);">
                         <span style="color: var(--accent-green); font-size: 13px;">
-                            ✅ <strong>After adding:</strong> Callers saying "${gap.text.substring(0, 40)}..." will fast-match instantly (no LLM, 0ms vs ~5000ms)
+                            ✅ <strong>After adding both:</strong> Callers saying "${gap.text.substring(0, 40)}..." will fast-match instantly (0ms vs ~5000ms LLM)
                         </span>
                     </div>
                 </div>
