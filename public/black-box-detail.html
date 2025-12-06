@@ -1672,15 +1672,15 @@
                     'Got it, I can help you schedule that.',
                     'Sure, let me help you book an appointment.',
                     'Absolutely, I can set that up for you.',
-                    'No problem, let\\'s get you scheduled.',
-                    'Of course, I\\'ll help you with that right away.'
+                    'No problem, let\'s get you scheduled.',
+                    'Of course, I\'ll help you with that right away.'
                 ];
                 fullReplies = [
-                    'I\\'d be happy to help you schedule a service appointment with {companyName}. May I start with your name?',
-                    'Let me get you set up with one of our technicians. To schedule your appointment, I\\'ll need your name, phone number, and the best time that works for you. What\\'s your name?',
-                    'Sure thing! {companyName} can definitely help with that. I\\'ll need to collect a few details to book your service call. Can I get your name please?',
+                    'I\'d be happy to help you schedule a service appointment with {companyName}. May I start with your name?',
+                    'Let me get you set up with one of our technicians. To schedule your appointment, I\'ll need your name, phone number, and the best time that works for you. What\'s your name?',
+                    'Sure thing! {companyName} can definitely help with that. I\'ll need to collect a few details to book your service call. Can I get your name please?',
                     'No problem at all. I can schedule a technician to come out and take a look. First, may I have your name so I can pull up your account or create a new one?',
-                    'Absolutely, I\\'ll get that scheduled for you. {companyName} services the {serviceArea} area. Let\\'s start with your name and the address where you need service.'
+                    'Absolutely, I\'ll get that scheduled for you. {companyName} services the {serviceArea} area. Let\'s start with your name and the address where you need service.'
                 ];
                 followUpMode = 'ASK_FOLLOWUP_QUESTION';
             } else if (isEmergency) {
@@ -1706,17 +1706,17 @@
                 ];
                 quickReplies = [
                     'I understand this is urgent. Let me help you right away.',
-                    'I\\'m so sorry to hear that. Let me get you help immediately.',
-                    'That sounds serious. I\\'ll prioritize this right now.',
-                    'I completely understand. Let\\'s handle this as a priority.',
-                    'Don\\'t worry, we\\'ll take care of this urgently.'
+                    'I\'m so sorry to hear that. Let me get you help immediately.',
+                    'That sounds serious. I\'ll prioritize this right now.',
+                    'I completely understand. Let\'s handle this as a priority.',
+                    'Don\'t worry, we\'ll take care of this urgently.'
                 ];
                 fullReplies = [
-                    'I understand this is urgent. {companyName} treats emergencies as our top priority. Let me get a technician dispatched to you as soon as possible. What\\'s your name and address?',
-                    'I\\'m so sorry you\\'re dealing with this. For emergencies, {companyName} offers priority service. To get someone out to you quickly, I need your name, address, and phone number.',
+                    'I understand this is urgent. {companyName} treats emergencies as our top priority. Let me get a technician dispatched to you as soon as possible. What\'s your name and address?',
+                    'I\'m so sorry you\'re dealing with this. For emergencies, {companyName} offers priority service. To get someone out to you quickly, I need your name, address, and phone number.',
                     'That definitely sounds like an emergency. Let me connect you with our emergency dispatch right away. Before I do, can I get your name and the service address?',
-                    'I understand, and {companyName} takes this seriously. We have technicians on call for situations like this. What\\'s your name and where is the emergency?',
-                    'Don\\'t worry, we\\'ll get this handled. {companyName} has emergency technicians available. To dispatch someone immediately, I need your name, phone number, and address.'
+                    'I understand, and {companyName} takes this seriously. We have technicians on call for situations like this. What\'s your name and where is the emergency?',
+                    'Don\'t worry, we\'ll get this handled. {companyName} has emergency technicians available. To dispatch someone immediately, I need your name, phone number, and address.'
                 ];
                 followUpMode = 'TRANSFER';
             } else {
@@ -1738,16 +1738,16 @@
                 ];
                 quickReplies = [
                     'I can help troubleshoot that with you.',
-                    'Let me help you figure out what\\'s going on.',
-                    'I understand, let\\'s see what we can do.',
+                    'Let me help you figure out what\'s going on.',
+                    'I understand, let\'s see what we can do.',
                     'No problem, I can assist with that.',
                     'Got it, let me help you with that issue.'
                 ];
                 fullReplies = [
-                    'I can help troubleshoot that with you. To better understand what\\'s happening, can you tell me when you first noticed the issue?',
-                    'Let me help you figure out what\\'s going on. Is the system making any unusual sounds or displaying any error codes?',
+                    'I can help troubleshoot that with you. To better understand what\'s happening, can you tell me when you first noticed the issue?',
+                    'Let me help you figure out what\'s going on. Is the system making any unusual sounds or displaying any error codes?',
                     'I understand how frustrating that can be. {companyName} can definitely help. Has anything changed recently that might have caused this?',
-                    'No problem, I can assist with that. Can you describe exactly what\\'s happening? Is the unit running at all?',
+                    'No problem, I can assist with that. Can you describe exactly what\'s happening? Is the unit running at all?',
                     'Got it. To help diagnose the issue, can you tell me if the problem started suddenly or has been getting worse over time?'
                 ];
                 followUpMode = 'ASK_FOLLOWUP_QUESTION';
@@ -1771,7 +1771,7 @@
             
             // Generate full content
             const content = generateFullScenarioContent(gap);
-            const escapeForCopy = (arr) => arr.join('\\n').replace(/'/g, "\\'");
+            const escapeForCopy = (arr) => arr.join('\n').replace(/'/g, '&apos;');
             
             return `
                 <div class="todo-gap">
