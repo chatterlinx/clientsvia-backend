@@ -49,7 +49,7 @@ class LLM0ControlsManager {
     // ========================================================================
     async load() {
         try {
-            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            const token = localStorage.getItem('adminToken');
             const response = await fetch(`/api/admin/llm0-controls/${this.companyId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -764,7 +764,7 @@ class LLM0ControlsManager {
         }
 
         try {
-            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            const token = localStorage.getItem('adminToken');
             const response = await fetch(`/api/admin/llm0-controls/${this.companyId}/spam-phrase`, {
                 method: 'POST',
                 headers: {
@@ -792,7 +792,7 @@ class LLM0ControlsManager {
         if (!confirm(`Remove "${phrase}" from spam filter?`)) return;
 
         try {
-            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            const token = localStorage.getItem('adminToken');
             const response = await fetch(`/api/admin/llm0-controls/${this.companyId}/spam-phrase`, {
                 method: 'DELETE',
                 headers: {
@@ -866,7 +866,7 @@ class LLM0ControlsManager {
         const data = this.collectFormData();
         
         try {
-            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            const token = localStorage.getItem('adminToken');
             const response = await fetch(`/api/admin/llm0-controls/${this.companyId}`, {
                 method: 'PUT',
                 headers: {
@@ -894,7 +894,7 @@ class LLM0ControlsManager {
         if (!confirm('Reset all LLM-0 controls to defaults? This cannot be undone.')) return;
 
         try {
-            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            const token = localStorage.getItem('adminToken');
             const response = await fetch(`/api/admin/llm0-controls/${this.companyId}/reset`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
