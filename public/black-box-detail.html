@@ -1857,7 +1857,7 @@
                         <table class="todo-field-table" style="margin-bottom: 16px;">
                             <tr>
                                 <td style="background: rgba(139, 92, 246, 0.2); color: #a78bfa;">Name *</td>
-                                <td>${content.scenarioName} <button class="copy-btn" onclick="copyFromStore('${dataId}_name')">📋</button></td>
+                                <td>${content.scenarioName} <button class="copy-btn" onclick="copyFromStore('${dataId}_name', this)">📋</button></td>
                             </tr>
                             <tr>
                                 <td style="background: rgba(139, 92, 246, 0.2); color: #a78bfa;">Category *</td>
@@ -1868,7 +1868,7 @@
                         <div style="margin-bottom: 16px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <span style="font-weight: 500; color: var(--accent-purple);">Triggers * <span style="font-weight: normal; color: var(--text-muted);">(one per line)</span></span>
-                                <button class="copy-btn" onclick="copyFromStore('${dataId}_triggers')">📋 Copy All</button>
+                                <button class="copy-btn" onclick="copyFromStore('${dataId}_triggers', this)">📋 Copy All</button>
                             </div>
                             <div style="background: var(--bg-secondary); padding: 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.8; max-height: 150px; overflow-y: auto;">
                                 ${content.triggers.map(t => `<div>${t}</div>`).join('')}
@@ -1878,7 +1878,7 @@
                         <div style="margin-bottom: 16px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <span style="font-weight: 500; color: var(--accent-red);">Negative Triggers <span style="font-weight: normal; color: var(--text-muted);">(one per line)</span></span>
-                                <button class="copy-btn" onclick="copyFromStore('${dataId}_negative')">📋 Copy All</button>
+                                <button class="copy-btn" onclick="copyFromStore('${dataId}_negative', this)">📋 Copy All</button>
                             </div>
                             <div style="background: var(--bg-secondary); padding: 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.8;">
                                 ${content.negativeTriggers.map(t => `<div>${t}</div>`).join('')}
@@ -1888,7 +1888,7 @@
                         <div style="margin-bottom: 16px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <span style="font-weight: 500; color: var(--accent-cyan);">Quick Replies * <span style="font-weight: normal; color: var(--text-muted);">(5 short responses, one per line)</span></span>
-                                <button class="copy-btn" onclick="copyFromStore('${dataId}_quick')">📋 Copy All</button>
+                                <button class="copy-btn" onclick="copyFromStore('${dataId}_quick', this)">📋 Copy All</button>
                             </div>
                             <div style="background: var(--bg-secondary); padding: 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.8;">
                                 ${content.quickReplies.map(t => `<div>${t}</div>`).join('')}
@@ -1898,7 +1898,7 @@
                         <div style="margin-bottom: 16px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <span style="font-weight: 500; color: var(--accent-green);">Full Replies * <span style="font-weight: normal; color: var(--text-muted);">(5 complete responses, one per line)</span></span>
-                                <button class="copy-btn" onclick="copyFromStore('${dataId}_full')">📋 Copy All</button>
+                                <button class="copy-btn" onclick="copyFromStore('${dataId}_full', this)">📋 Copy All</button>
                             </div>
                             <div style="background: var(--bg-secondary); padding: 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.8; max-height: 200px; overflow-y: auto;">
                                 ${content.fullReplies.map(t => `<div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed var(--border-color);">${t}</div>`).join('')}
@@ -1922,11 +1922,11 @@
                         <table class="todo-field-table">
                             <tr>
                                 <td style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">Card Name *</td>
-                                <td>${content.scenarioName} <button class="copy-btn" onclick="copyFromStore('${dataId}_name')">📋</button></td>
+                                <td>${content.scenarioName} <button class="copy-btn" onclick="copyFromStore('${dataId}_name', this)">📋</button></td>
                             </tr>
                             <tr>
                                 <td style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">Triage Tag *</td>
-                                <td>${content.triageTag} <button class="copy-btn" onclick="copyFromStore('${dataId}_tag')">📋</button></td>
+                                <td>${content.triageTag} <button class="copy-btn" onclick="copyFromStore('${dataId}_tag', this)">📋</button></td>
                             </tr>
                             <tr>
                                 <td style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">Category *</td>
@@ -1934,7 +1934,7 @@
                             </tr>
                             <tr>
                                 <td style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">Opening Line *</td>
-                                <td>${content.fullReplies[0].split('.')[0]}. <button class="copy-btn" onclick="copyFromStore('${dataId}_opening')">📋</button></td>
+                                <td>${content.fullReplies[0].split('.')[0]}. <button class="copy-btn" onclick="copyFromStore('${dataId}_opening', this)">📋</button></td>
                             </tr>
                             <tr>
                                 <td style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">Action *</td>
@@ -1942,7 +1942,7 @@
                             </tr>
                             <tr>
                                 <td style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">Keywords *</td>
-                                <td>${content.triggers.slice(0, 5).join(', ')} <button class="copy-btn" onclick="copyFromStore('${dataId}_keywords')">📋</button></td>
+                                <td>${content.triggers.slice(0, 5).join(', ')} <button class="copy-btn" onclick="copyFromStore('${dataId}_keywords', this)">📋</button></td>
                             </tr>
                             <tr>
                                 <td style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">Linked Scenario</td>
@@ -1961,33 +1961,33 @@
             `;
         }
         
-        function copyValue(value) {
+        function copyValue(value, btn) {
             navigator.clipboard.writeText(value).then(() => {
-                // Brief visual feedback
-                const originalText = event.target.textContent;
-                event.target.textContent = '✓ Copied!';
-                event.target.style.background = 'var(--accent-green)';
-                event.target.style.color = 'white';
+                if (!btn) return;
+                const originalText = btn.textContent;
+                btn.textContent = '✓ Copied!';
+                btn.style.background = 'var(--accent-green)';
+                btn.style.color = 'white';
                 setTimeout(() => {
-                    event.target.textContent = originalText;
-                    event.target.style.background = '';
-                    event.target.style.color = '';
+                    btn.textContent = originalText;
+                    btn.style.background = '';
+                    btn.style.color = '';
                 }, 1000);
             });
         }
         
-        function copyFromStore(key) {
+        function copyFromStore(key, btn) {
             const value = window.copyData[key] || '';
             navigator.clipboard.writeText(value).then(() => {
-                // Brief visual feedback
-                const originalText = event.target.textContent;
-                event.target.textContent = '✓ Copied!';
-                event.target.style.background = 'var(--accent-green)';
-                event.target.style.color = 'white';
+                if (!btn) return;
+                const originalText = btn.textContent;
+                btn.textContent = '✓ Copied!';
+                btn.style.background = 'var(--accent-green)';
+                btn.style.color = 'white';
                 setTimeout(() => {
-                    event.target.textContent = originalText;
-                    event.target.style.background = '';
-                    event.target.style.color = '';
+                    btn.textContent = originalText;
+                    btn.style.background = '';
+                    btn.style.color = '';
                 }, 1000);
             });
         }
