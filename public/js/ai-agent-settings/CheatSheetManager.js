@@ -1402,9 +1402,11 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
     }
     
     const gap = Math.max(0, preFlightResult.scenarioCount - cardsCount);
-    const coverage = preFlightResult.scenarioCount > 0 
+    // Coverage caps at 100% - having more cards than scenarios is 100% coverage
+    const rawCoverage = preFlightResult.scenarioCount > 0 
       ? Math.round((cardsCount / preFlightResult.scenarioCount) * 100) 
       : 0;
+    const coverage = Math.min(100, rawCoverage); // Cap at 100%
     
     container.innerHTML = `
       <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
