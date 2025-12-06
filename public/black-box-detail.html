@@ -960,57 +960,93 @@
             const bookingActivated = events.find(e => e.type === 'BOOKING_MODE_ACTIVATED');
             const bailout = events.find(e => e.type === 'BAILOUT_TRIGGERED');
             const transfer = events.find(e => e.type === 'TRANSFER_INITIATED');
+            const agentResponse = events.find(e => e.type === 'AGENT_RESPONSE_BUILT');
             
-            let mermaid = `flowchart TD
-    A["📞 Caller Input"] --> B{Fast Match?}
-`;
+            // Sanitize text for Mermaid - remove special chars that break parsing
+            const sanitize = (str) => (str || '?').replace(/["\[\]{}|<>]/g, '').substring(0, 30);
             
+            // Build a simple linear flowchart that's always valid
+            let lines = [];
+            lines.push('flowchart TD');
+            lines.push('    A[Caller Input]');
+            
+            let lastNode = 'A';
+            let nodeId = 0;
+            const nextNode = () => 'N' + (++nodeId);
+            
+            // Fast match or LLM path
             if (fastMatch) {
-                mermaid += `    B -->|"✅ Yes"| C["Card Matched"]
-    style C fill:#22c55e,color:#fff
-`;
+                const n = nextNode();
+                lines.push(`    ${lastNode} --> ${n}[Fast Match Hit]`);
+                lines.push(`    style ${n} fill:#22c55e,color:#fff`);
+                lastNode = n;
             } else if (llmFallback) {
-                mermaid += `    B -->|"❌ No"| E["LLM Fallback"]
-    style E fill:#f59e0b,color:#000
-`;
+                const n = nextNode();
+                lines.push(`    ${lastNode} --> ${n}[LLM Fallback]`);
+                lines.push(`    style ${n} fill:#f59e0b,color:#000`);
+                lastNode = n;
+            } else {
+                const n = nextNode();
+                lines.push(`    ${lastNode} --> ${n}[Processing]`);
+                lastNode = n;
             }
             
+            // Intent detection
             if (intentDetected) {
-                const source = fastMatch ? 'C' : 'E';
-                mermaid += `    ${source} --> F["Intent: ${intentDetected.data?.intent || '?'}"]
-`;
+                const n = nextNode();
+                const intent = sanitize(intentDetected.data?.intent);
+                lines.push(`    ${lastNode} --> ${n}[Intent: ${intent}]`);
+                lastNode = n;
             }
             
+            // Triage decision
             if (triageDecision) {
-                mermaid += `    F --> D["Route: ${triageDecision.data?.route || 'MESSAGE_ONLY'}"]
-`;
+                const n = nextNode();
+                const route = sanitize(triageDecision.data?.route || 'MESSAGE_ONLY');
+                lines.push(`    ${lastNode} --> ${n}[Route: ${route}]`);
+                lastNode = n;
             }
             
+            // Booking flow
             if (bookingActivated) {
-                mermaid += `    D --> G["📅 Booking Flow"]
-    style G fill:#3b82f6,color:#fff
-`;
+                const n = nextNode();
+                lines.push(`    ${lastNode} --> ${n}[Booking Flow]`);
+                lines.push(`    style ${n} fill:#3b82f6,color:#fff`);
+                lastNode = n;
             }
             
+            // Loop detected
             if (recording.flags?.loopDetected) {
-                mermaid += `    D --> H["🔄 LOOP DETECTED"]
-    style H fill:#f97316,color:#fff
-`;
+                const n = nextNode();
+                lines.push(`    ${lastNode} --> ${n}[LOOP DETECTED]`);
+                lines.push(`    style ${n} fill:#f97316,color:#fff`);
+                lastNode = n;
             }
             
+            // Bailout
             if (bailout) {
-                mermaid += `    D --> I["🚨 BAILOUT"]
-    style I fill:#ef4444,color:#fff
-`;
+                const n = nextNode();
+                lines.push(`    ${lastNode} --> ${n}[BAILOUT]`);
+                lines.push(`    style ${n} fill:#ef4444,color:#fff`);
+                lastNode = n;
             }
             
+            // Transfer
             if (transfer) {
-                mermaid += `    I --> J["📞 TRANSFER"]
-    style J fill:#8b5cf6,color:#fff
-`;
+                const n = nextNode();
+                lines.push(`    ${lastNode} --> ${n}[TRANSFER]`);
+                lines.push(`    style ${n} fill:#8b5cf6,color:#fff`);
+                lastNode = n;
             }
             
-            return mermaid;
+            // Final response
+            if (agentResponse && !bailout && !transfer) {
+                const n = nextNode();
+                lines.push(`    ${lastNode} --> ${n}[Agent Response]`);
+                lines.push(`    style ${n} fill:#10b981,color:#fff`);
+            }
+            
+            return lines.join('\n');
         }
         
         function generateWaterfallFromEvents(events) {
