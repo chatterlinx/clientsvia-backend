@@ -189,6 +189,172 @@
             50% { opacity: 0.6; transform: scale(1.2); }
         }
 
+        /* Black Box Builder Modals */
+        .bb-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .bb-modal-overlay.active { display: flex; }
+        .bb-modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            width: 90%;
+            max-width: 700px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .bb-modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .bb-modal-header h2 {
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .bb-modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 24px;
+            cursor: pointer;
+        }
+        .bb-modal-close:hover { color: var(--text-primary); }
+        .bb-modal-body { padding: 24px; }
+        .bb-modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+        .bb-form-group {
+            margin-bottom: 20px;
+        }
+        .bb-form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+        .bb-form-input, .bb-form-textarea, .bb-form-select {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+        }
+        .bb-form-input:focus, .bb-form-textarea:focus, .bb-form-select:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+        .bb-form-textarea {
+            min-height: 100px;
+            resize: vertical;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+        }
+        .bb-form-hint {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+        .bb-btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+        .bb-btn-primary {
+            background: var(--accent-blue);
+            color: white;
+        }
+        .bb-btn-primary:hover { background: #2563eb; }
+        .bb-btn-secondary {
+            background: var(--bg-hover);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+        .bb-btn-secondary:hover { background: var(--bg-card); }
+        .bb-btn-success {
+            background: var(--accent-green);
+            color: white;
+        }
+        .bb-btn-success:hover { background: #16a34a; }
+        .bb-success-message {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        .bb-success-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        .bb-success-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--accent-green);
+        }
+        .bb-success-detail {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+        .bb-step-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .bb-step {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            background: var(--bg-hover);
+            color: var(--text-muted);
+        }
+        .bb-step.active {
+            background: var(--accent-blue);
+            color: white;
+        }
+        .bb-step.completed {
+            background: var(--accent-green);
+            color: white;
+        }
+        .bb-step-connector {
+            width: 40px;
+            height: 2px;
+            background: var(--border-color);
+            align-self: center;
+        }
+        .bb-step-connector.completed {
+            background: var(--accent-green);
+        }
+
         /* Tab Content */
         .tab-content {
             display: none;
@@ -1480,6 +1646,9 @@
                     <div class="todo-gap-header ${severity}">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <span style="color: var(--text-secondary); font-size: 12px;">TURN ${gap.turn} • GAP #${idx + 1}</span>
+                            <button class="bb-btn bb-btn-success" style="padding: 6px 14px; font-size: 12px;" onclick="openScenarioBuilder(${idx})">
+                                ➕ Add Scenario & Card
+                            </button>
                         </div>
                         <div class="todo-gap-utterance" style="margin-top: 8px;">
                             "${gap.text}"
@@ -1694,7 +1863,415 @@
                 </div>
             `;
         }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // BLACK BOX BUILDER - Create Scenario & Card from Gaps
+        // ═══════════════════════════════════════════════════════════════════
+        let currentGapData = null;
+        let createdScenarioId = null;
+        let builderStep = 1; // 1 = scenario, 2 = card, 3 = done
+
+        function openScenarioBuilder(gapIndex) {
+            const gaps = analyzeCoverageGaps();
+            currentGapData = gaps[gapIndex];
+            builderStep = 1;
+            createdScenarioId = null;
+            
+            // Pre-fill form
+            const suggestion = currentGapData.issues.find(i => i.cardSuggested)?.cardSuggested || 
+                              generateCardSuggestion(currentGapData.text, null);
+            const keywords = currentGapData.suggestions?.keywords || extractKeywords(currentGapData.text);
+            
+            document.getElementById('scenarioName').value = suggestion.name;
+            document.getElementById('scenarioCategory').value = suggestion.category;
+            document.getElementById('scenarioTriggers').value = [
+                currentGapData.text,
+                ...keywords.slice(0, 3).map(k => k + ' service'),
+                ...keywords.slice(0, 2).map(k => 'need ' + k)
+            ].join('\n');
+            document.getElementById('scenarioNegatives').value = 'cancel\nreschedule\nwhat time';
+            document.getElementById('scenarioQuickReplies').value = [
+                "Got it, let me help with that.",
+                "I can assist you with that.",
+                "Sure, let me help."
+            ].join('\n');
+            document.getElementById('scenarioFullReplies').value = [
+                suggestion.openingLine,
+                suggestion.openingLine.replace("I'd be happy to", "Let me help you"),
+                suggestion.openingLine.replace("I'd be happy to", "Sure, I can")
+            ].join('\n');
+            document.getElementById('scenarioFollowUp').value = 'ASK_FOLLOWUP_QUESTION';
+            
+            updateStepIndicator(1);
+            showModal('scenarioModal');
+        }
+
+        function showModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        function updateStepIndicator(step) {
+            document.querySelectorAll('.bb-step').forEach((el, idx) => {
+                el.classList.remove('active', 'completed');
+                if (idx + 1 < step) el.classList.add('completed');
+                if (idx + 1 === step) el.classList.add('active');
+            });
+            document.querySelectorAll('.bb-step-connector').forEach((el, idx) => {
+                el.classList.toggle('completed', idx + 1 < step);
+            });
+        }
+
+        async function saveScenario() {
+            const btn = document.getElementById('saveScenarioBtn');
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            
+            try {
+                const token = localStorage.getItem('adminToken');
+                
+                // Get the active template ID first
+                const templatesRes = await fetch('/api/admin/global-instant-responses', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const templatesData = await templatesRes.json();
+                const activeTemplate = templatesData.data?.find(t => t.isActive) || templatesData.data?.[0];
+                
+                if (!activeTemplate) {
+                    throw new Error('No active template found. Please create a template first.');
+                }
+                
+                // Find or create category
+                const category = document.getElementById('scenarioCategory').value;
+                let targetCategory = activeTemplate.categories?.find(c => 
+                    c.name.toLowerCase() === category.toLowerCase()
+                );
+                
+                if (!targetCategory && activeTemplate.categories?.length > 0) {
+                    targetCategory = activeTemplate.categories[0];
+                }
+                
+                if (!targetCategory) {
+                    throw new Error('No categories found in template. Please add a category first.');
+                }
+                
+                // Build scenario data
+                const scenarioData = {
+                    scenarioId: 'SCEN_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+                    name: document.getElementById('scenarioName').value,
+                    isActive: true,
+                    triggers: document.getElementById('scenarioTriggers').value.split('\n').filter(t => t.trim()),
+                    negativeTriggers: document.getElementById('scenarioNegatives').value.split('\n').filter(t => t.trim()),
+                    quickReplies: document.getElementById('scenarioQuickReplies').value.split('\n').filter(t => t.trim()),
+                    fullReplies: document.getElementById('scenarioFullReplies').value.split('\n').filter(t => t.trim()),
+                    followUpMode: document.getElementById('scenarioFollowUp').value,
+                    minConfidence: 0.70,
+                    priority: 0,
+                    categories: [category]
+                };
+                
+                // Save scenario
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate._id}/categories/${targetCategory.id}/scenarios`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(scenarioData)
+                });
+                
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error || 'Failed to save scenario');
+                }
+                
+                const result = await response.json();
+                createdScenarioId = scenarioData.scenarioId;
+                
+                // Show success and prepare for card creation
+                showScenarioSuccess(scenarioData.name);
+                
+            } catch (error) {
+                console.error('Failed to save scenario:', error);
+                alert('❌ Error: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '✅ Confirm & Save Scenario';
+            }
+        }
+
+        function showScenarioSuccess(scenarioName) {
+            builderStep = 2;
+            updateStepIndicator(2);
+            
+            const modalBody = document.querySelector('#scenarioModal .bb-modal-body');
+            modalBody.innerHTML = `
+                <div class="bb-success-message">
+                    <div class="bb-success-icon">✅</div>
+                    <div class="bb-success-title">Scenario Created!</div>
+                    <div class="bb-success-detail">"${scenarioName}" has been saved.</div>
+                    <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                        Now create the Triage Card to trigger this scenario when callers speak.
+                    </p>
+                    <button class="bb-btn bb-btn-success" onclick="openCardBuilder()">
+                        ➕ Create Triage Card
+                    </button>
+                </div>
+            `;
+            
+            // Hide footer save button
+            document.querySelector('#scenarioModal .bb-modal-footer').style.display = 'none';
+        }
+
+        function openCardBuilder() {
+            closeModal('scenarioModal');
+            
+            // Pre-fill card form from scenario
+            const scenarioName = document.getElementById('scenarioName')?.value || currentGapData?.issues.find(i => i.cardSuggested)?.cardSuggested?.name || 'New Card';
+            const suggestion = currentGapData?.issues.find(i => i.cardSuggested)?.cardSuggested || {};
+            const keywords = currentGapData?.suggestions?.keywords || extractKeywords(currentGapData?.text || '');
+            
+            document.getElementById('cardName').value = scenarioName;
+            document.getElementById('cardTriageTag').value = (suggestion.triageTag || scenarioName.toUpperCase().replace(/\s+/g, '_')).substring(0, 50);
+            document.getElementById('cardCategory').value = suggestion.category || 'general';
+            document.getElementById('cardAction').value = suggestion.action || 'ASK_FOLLOWUP';
+            document.getElementById('cardOpeningLine').value = suggestion.openingLine || "I can help you with that.";
+            document.getElementById('cardKeywords').value = keywords.join(', ');
+            
+            showModal('cardModal');
+        }
+
+        async function saveCard() {
+            const btn = document.getElementById('saveCardBtn');
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            
+            try {
+                const token = localStorage.getItem('adminToken');
+                
+                // Build card data
+                const cardData = {
+                    companyId: companyId,
+                    trade: 'hvac', // Default, could be made dynamic
+                    triageLabel: document.getElementById('cardName').value,
+                    triageTag: document.getElementById('cardTriageTag').value,
+                    category: document.getElementById('cardCategory').value,
+                    action: document.getElementById('cardAction').value,
+                    openingLine: document.getElementById('cardOpeningLine').value,
+                    keywords: document.getElementById('cardKeywords').value.split(',').map(k => k.trim()).filter(k => k),
+                    isActive: true,
+                    linkedScenarioId: createdScenarioId
+                };
+                
+                // Save card
+                const response = await fetch(`/api/company/${companyId}/triage-cards`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(cardData)
+                });
+                
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error || 'Failed to save card');
+                }
+                
+                // Show final success
+                showFinalSuccess(cardData.triageLabel);
+                
+            } catch (error) {
+                console.error('Failed to save card:', error);
+                alert('❌ Error: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '✅ Confirm & Save Card';
+            }
+        }
+
+        function showFinalSuccess(cardName) {
+            builderStep = 3;
+            updateStepIndicator(3);
+            
+            const modalBody = document.querySelector('#cardModal .bb-modal-body');
+            modalBody.innerHTML = `
+                <div class="bb-success-message">
+                    <div class="bb-success-icon">🎉</div>
+                    <div class="bb-success-title">Coverage Gap Resolved!</div>
+                    <div class="bb-success-detail">
+                        <p>✓ Scenario created</p>
+                        <p>✓ Triage Card "${cardName}" created</p>
+                        <p>✓ Keywords configured</p>
+                    </div>
+                    <p style="color: var(--accent-green); margin-bottom: 20px; font-weight: 500;">
+                        Next caller saying "${currentGapData?.text?.substring(0, 40)}..." will fast-match! 🚀
+                    </p>
+                    <div style="display: flex; gap: 12px; justify-content: center;">
+                        <button class="bb-btn bb-btn-secondary" onclick="closeModal('cardModal'); renderTodo();">
+                            🔙 Back to TODO
+                        </button>
+                        <button class="bb-btn bb-btn-primary" onclick="closeModal('cardModal'); window.location.reload();">
+                            🔄 Refresh Page
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.querySelector('#cardModal .bb-modal-footer').style.display = 'none';
+        }
     </script>
+
+    <!-- Scenario Builder Modal -->
+    <div id="scenarioModal" class="bb-modal-overlay">
+        <div class="bb-modal">
+            <div class="bb-modal-header">
+                <h2>📝 Create Scenario</h2>
+                <button class="bb-modal-close" onclick="closeModal('scenarioModal')">&times;</button>
+            </div>
+            <div class="bb-modal-body">
+                <!-- Step Indicator -->
+                <div class="bb-step-indicator">
+                    <div class="bb-step active">1</div>
+                    <div class="bb-step-connector"></div>
+                    <div class="bb-step">2</div>
+                    <div class="bb-step-connector"></div>
+                    <div class="bb-step">3</div>
+                </div>
+                
+                <div class="bb-form-group">
+                    <label class="bb-form-label">Scenario Name</label>
+                    <input type="text" id="scenarioName" class="bb-form-input" placeholder="e.g., Service Appointment Request">
+                </div>
+                
+                <div class="bb-form-group">
+                    <label class="bb-form-label">Category</label>
+                    <select id="scenarioCategory" class="bb-form-select">
+                        <option value="booking">Booking</option>
+                        <option value="troubleshooting">Troubleshooting</option>
+                        <option value="information">Information</option>
+                        <option value="emergency">Emergency</option>
+                        <option value="general">General</option>
+                    </select>
+                </div>
+                
+                <div class="bb-form-group">
+                    <label class="bb-form-label">Triggers (what caller says - one per line)</label>
+                    <textarea id="scenarioTriggers" class="bb-form-textarea" placeholder="schedule ac service
+book appointment
+need a technician"></textarea>
+                    <div class="bb-form-hint">These phrases will trigger this scenario</div>
+                </div>
+                
+                <div class="bb-form-group">
+                    <label class="bb-form-label">Negative Triggers (prevent false match - one per line)</label>
+                    <textarea id="scenarioNegatives" class="bb-form-textarea" placeholder="cancel
+reschedule
+what time is my appointment"></textarea>
+                    <div class="bb-form-hint">If caller says these, this scenario will NOT match</div>
+                </div>
+                
+                <div class="bb-form-group">
+                    <label class="bb-form-label">Quick Replies (3 short responses)</label>
+                    <textarea id="scenarioQuickReplies" class="bb-form-textarea" placeholder="Got it, let me help.
+I can assist with that.
+Sure, let me check."></textarea>
+                </div>
+                
+                <div class="bb-form-group">
+                    <label class="bb-form-label">Full Replies (3-5 complete responses)</label>
+                    <textarea id="scenarioFullReplies" class="bb-form-textarea" placeholder="I'd be happy to schedule that for you.
+Let me help you book an appointment.
+Sure, let's get you set up with a technician."></textarea>
+                </div>
+                
+                <div class="bb-form-group">
+                    <label class="bb-form-label">After Responding</label>
+                    <select id="scenarioFollowUp" class="bb-form-select">
+                        <option value="ASK_FOLLOWUP_QUESTION">Ask follow-up question</option>
+                        <option value="ASK_IF_BOOK">Ask if they want to book</option>
+                        <option value="TRANSFER">Transfer to human</option>
+                        <option value="NONE">End conversation</option>
+                    </select>
+                </div>
+            </div>
+            <div class="bb-modal-footer">
+                <button class="bb-btn bb-btn-secondary" onclick="closeModal('scenarioModal')">Cancel</button>
+                <button id="saveScenarioBtn" class="bb-btn bb-btn-success" onclick="saveScenario()">✅ Confirm & Save Scenario</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Triage Card Builder Modal -->
+    <div id="cardModal" class="bb-modal-overlay">
+        <div class="bb-modal">
+            <div class="bb-modal-header">
+                <h2>📋 Create Triage Card</h2>
+                <button class="bb-modal-close" onclick="closeModal('cardModal')">&times;</button>
+            </div>
+            <div class="bb-modal-body">
+                <!-- Step Indicator -->
+                <div class="bb-step-indicator">
+                    <div class="bb-step completed">1</div>
+                    <div class="bb-step-connector completed"></div>
+                    <div class="bb-step active">2</div>
+                    <div class="bb-step-connector"></div>
+                    <div class="bb-step">3</div>
+                </div>
+                
+                <div class="bb-form-group">
+                    <label class="bb-form-label">Card Name</label>
+                    <input type="text" id="cardName" class="bb-form-input" placeholder="e.g., Service Appointment Request">
+                </div>
+                
+                <div class="bb-form-group">
+                    <label class="bb-form-label">Triage Tag (auto-generated)</label>
+                    <input type="text" id="cardTriageTag" class="bb-form-input" placeholder="BOOKING_SERVICE_APPOINTMENT">
+                    <div class="bb-form-hint">Used internally for routing</div>
+                </div>
+                
+                <div class="bb-form-group">
+                    <label class="bb-form-label">Category</label>
+                    <select id="cardCategory" class="bb-form-select">
+                        <option value="booking">Booking</option>
+                        <option value="troubleshooting">Troubleshooting</option>
+                        <option value="information">Information</option>
+                        <option value="emergency">Emergency</option>
+                        <option value="general">General</option>
+                    </select>
+                </div>
+                
+                <div class="bb-form-group">
+                    <label class="bb-form-label">Action</label>
+                    <select id="cardAction" class="bb-form-select">
+                        <option value="BOOK">Start Booking Flow</option>
+                        <option value="ASK_FOLLOWUP">Ask Follow-up Question</option>
+                        <option value="TRANSFER">Transfer to Human</option>
+                        <option value="MESSAGE_ONLY">Take Message</option>
+                    </select>
+                </div>
+                
+                <div class="bb-form-group">
+                    <label class="bb-form-label">Opening Line</label>
+                    <input type="text" id="cardOpeningLine" class="bb-form-input" placeholder="I'd be happy to schedule that for you.">
+                    <div class="bb-form-hint">First thing AI says when this card matches</div>
+                </div>
+                
+                <div class="bb-form-group">
+                    <label class="bb-form-label">Keywords (comma separated)</label>
+                    <input type="text" id="cardKeywords" class="bb-form-input" placeholder="schedule, book, appointment, technician">
+                    <div class="bb-form-hint">Keywords that trigger fast-match (no LLM needed)</div>
+                </div>
+            </div>
+            <div class="bb-modal-footer">
+                <button class="bb-btn bb-btn-secondary" onclick="closeModal('cardModal')">Cancel</button>
+                <button id="saveCardBtn" class="bb-btn bb-btn-success" onclick="saveCard()">✅ Confirm & Save Card</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
 
