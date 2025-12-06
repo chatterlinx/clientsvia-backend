@@ -2087,6 +2087,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // Redis-based state keyed by CallSid is 100% reliable.
     // ════════════════════════════════════════════════════════════════════════════
     let callState;
+    let stateLoadSource = 'FRESH';  // Track where state came from
+    let redisLoadError = null;
+    
     try {
       const { getRedisClient } = require('../services/redisClientFactory');
       const redisClient = await getRedisClient();
@@ -2097,15 +2100,22 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         
         if (savedState) {
           callState = JSON.parse(savedState);
+          stateLoadSource = 'REDIS';
           logger.info('[CALL STATE] 🔒 Loaded from Redis', {
             callSid,
             bookingModeLocked: !!callState.bookingModeLocked,
             bookingState: callState.bookingState,
             turnCount: callState.turnCount
           });
+        } else {
+          stateLoadSource = 'REDIS_EMPTY';
         }
+      } else {
+        stateLoadSource = 'REDIS_NULL_CLIENT';
       }
     } catch (redisErr) {
+      stateLoadSource = 'REDIS_ERROR';
+      redisLoadError = redisErr.message;
       logger.warn('[CALL STATE] Redis load failed, using session fallback', { 
         callSid, 
         error: redisErr.message 
@@ -2114,17 +2124,40 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     
     // Fallback to session or create fresh state
     if (!callState) {
-      callState = req.session?.callState || {
+      if (req.session?.callState) {
+        callState = req.session.callState;
+        stateLoadSource = stateLoadSource === 'FRESH' ? 'SESSION' : stateLoadSource + '_SESSION_FALLBACK';
+      } else {
+        callState = {
+          callId: callSid,
+          from: fromNumber,
+          consecutiveSilences: 0,
+          failedAttempts: 0,
+          startTime: new Date(),
+          turnCount: 0
+        };
+      }
+    }
+    
+    // Increment turn count
+    callState.turnCount = (callState.turnCount || 0) + 1;
+    
+    // 📼 BLACK BOX: Log state load for diagnostics (visible in JSON!)
+    if (BlackBoxLogger) {
+      BlackBoxLogger.logEvent({
         callId: callSid,
-        from: fromNumber,
-        consecutiveSilences: 0,
-        failedAttempts: 0,
-        startTime: new Date()
-      };
-      logger.info('[CALL STATE] Initialized fresh state', { 
-        callSid, 
-        fromSession: !!req.session?.callState 
-      });
+        companyId: companyID,
+        type: 'STATE_LOADED',
+        turn: callState.turnCount,
+        data: {
+          source: stateLoadSource,
+          error: redisLoadError,
+          bookingModeLocked: !!callState.bookingModeLocked,
+          bookingState: callState.bookingState || null,
+          currentBookingStep: callState.currentBookingStep || null,
+          turnCount: callState.turnCount
+        }
+      }).catch(() => {});
     }
     
     // ────────────────────────────────────────────────────────────────
@@ -2249,12 +2282,16 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // This ensures bookingModeLocked persists between Twilio webhook calls!
     // ════════════════════════════════════════════════════════════════════════════
     const updatedCallState = result.callState || callState;
+    updatedCallState.turnCount = callState.turnCount; // Preserve turn count
     
     // Also save to session for backwards compatibility
     req.session = req.session || {};
     req.session.callState = updatedCallState;
     
     // 🔒 Save to Redis (primary persistence)
+    let stateSaveResult = 'PENDING';
+    let redisSaveError = null;
+    
     try {
       const { getRedisClient } = require('../services/redisClientFactory');
       const redisClient = await getRedisClient();
@@ -2263,6 +2300,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         const stateKey = `callState:${callSid}`;
         // Expire after 1 hour (calls shouldn't last longer)
         await redisClient.setEx(stateKey, 3600, JSON.stringify(updatedCallState));
+        stateSaveResult = 'REDIS_OK';
         
         logger.info('[CALL STATE] 🔒 Saved to Redis', {
           callSid,
@@ -2270,13 +2308,35 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           bookingState: updatedCallState.bookingState,
           turnCount: updatedCallState.turnCount
         });
+      } else {
+        stateSaveResult = 'REDIS_NULL_CLIENT';
       }
     } catch (redisErr) {
+      stateSaveResult = 'REDIS_ERROR';
+      redisSaveError = redisErr.message;
       logger.error('[CALL STATE] Redis save failed!', { 
         callSid, 
         error: redisErr.message,
         bookingModeLocked: !!updatedCallState.bookingModeLocked
       });
+    }
+    
+    // 📼 BLACK BOX: Log state save for diagnostics (visible in JSON!)
+    if (BlackBoxLogger) {
+      BlackBoxLogger.logEvent({
+        callId: callSid,
+        companyId: companyID,
+        type: 'STATE_SAVED',
+        turn: updatedCallState.turnCount,
+        data: {
+          result: stateSaveResult,
+          error: redisSaveError,
+          bookingModeLocked: !!updatedCallState.bookingModeLocked,
+          bookingState: updatedCallState.bookingState || null,
+          currentBookingStep: updatedCallState.currentBookingStep || null,
+          bookingCollected: updatedCallState.bookingCollected || null
+        }
+      }).catch(() => {});
     }
     
     logger.security('🎯 CHECKPOINT 16: Creating TwiML response');
