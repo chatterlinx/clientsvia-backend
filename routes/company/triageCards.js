@@ -493,7 +493,7 @@ router.post('/test-match', async (req, res) => {
           },
           matchedAtIndex: matchResult.ruleIndex,
           totalRulesChecked: compiledConfig.triageRules.length,
-          whatHappensNext: this.explainAction(matchResult.action)
+          whatHappensNext: router.explainAction(matchResult.action)
         }
       });
     } else {
