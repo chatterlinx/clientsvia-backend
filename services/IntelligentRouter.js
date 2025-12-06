@@ -302,7 +302,7 @@ class IntelligentRouter {
             // SMART WARMUP: Check if we should pre-warm LLM
             // ============================================
             let warmupHandle = null;
-            const companyId = company?._id || company?.companyId;
+            // Note: companyId already declared above for Black Box logging
             
             if (companyId) {
                 // Check if warmup should be triggered (before Tier 2 starts)
