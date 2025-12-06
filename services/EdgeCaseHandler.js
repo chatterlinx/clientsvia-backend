@@ -298,6 +298,11 @@ function runEdgeCaseChecks(context) {
 /**
  * Handle consecutive silences
  * Returns appropriate response based on silence count
+ * 
+ * 🧠 ENHANCED (Dec 2025): Uses LLM-0 Controls if available
+ * - Configurable prompts from company settings
+ * - Customer patience mode (never auto-hangup)
+ * - Callback offer support
  */
 function handleSilence(callState) {
   // Initialize counter if not present
@@ -307,6 +312,42 @@ function handleSilence(callState) {
   
   callState.consecutiveSilences++;
   
+  // 🧠 Check for LLM-0 Controls (configurable prompts)
+  const llm0Controls = callState?.llm0Controls;
+  const silenceSettings = llm0Controls?.silenceHandling;
+  const patienceSettings = llm0Controls?.customerPatience;
+  
+  // If LLM-0 Controls are available, use configurable prompts
+  if (silenceSettings?.enabled) {
+    const LLM0ControlsLoader = require('./LLM0ControlsLoader');
+    const prompt = LLM0ControlsLoader.getSilencePrompt(callState.consecutiveSilences, llm0Controls);
+    
+    // Customer patience mode: never auto-hangup
+    const shouldHangup = patienceSettings?.neverAutoHangup === true 
+      ? false 
+      : callState.consecutiveSilences > silenceSettings.maxPrompts;
+    
+    // After max prompts, offer callback if configured
+    const shouldOfferCallback = silenceSettings.offerCallback && 
+                                callState.consecutiveSilences >= silenceSettings.maxPrompts;
+    
+    logger.info('[EDGE CASE] Silence detected (LLM-0 Controls)', {
+      consecutiveSilences: callState.consecutiveSilences,
+      maxPrompts: silenceSettings.maxPrompts,
+      neverAutoHangup: patienceSettings?.neverAutoHangup,
+      offeringCallback: shouldOfferCallback,
+      action: shouldHangup ? 'hangup' : 'continue'
+    });
+    
+    return {
+      count: callState.consecutiveSilences,
+      text: prompt,
+      action: shouldHangup ? 'hangup' : 'continue',
+      offerCallback: shouldOfferCallback
+    };
+  }
+  
+  // Fallback: Default prompts if no LLM-0 Controls
   const silenceResponses = [
     { count: 1, text: "Are you still there?", action: 'continue' },
     { count: 2, text: "I haven't heard from you. Are you still on the line?", action: 'continue' },
@@ -316,7 +357,7 @@ function handleSilence(callState) {
   const response = silenceResponses.find(r => r.count === callState.consecutiveSilences) 
     || silenceResponses[silenceResponses.length - 1];
   
-  logger.info('[EDGE CASE] Silence detected', {
+  logger.info('[EDGE CASE] Silence detected (default)', {
     consecutiveSilences: callState.consecutiveSilences,
     action: response.action
   });

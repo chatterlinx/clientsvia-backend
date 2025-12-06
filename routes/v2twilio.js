@@ -2209,6 +2209,19 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const company = await Company.findById(companyID).lean();
       const adminSettings = await AdminSettings.findOne({}).lean();
       
+      // 🧠 LOAD LLM-0 CONTROLS (Dec 2025) - Configurable brain behavior
+      const LLM0ControlsLoader = require('../services/LLM0ControlsLoader');
+      const llm0Controls = await LLM0ControlsLoader.load(companyID, company);
+      callState.llm0Controls = llm0Controls;
+      
+      logger.debug('[LLM-0] Controls loaded for call', {
+        callId: callSid,
+        companyId: companyID,
+        silenceThreshold: llm0Controls.silenceHandling.thresholdSeconds,
+        spamPhraseCount: llm0Controls.spamFilter.telemarketerPhrases.length,
+        neverAutoHangup: llm0Controls.customerPatience.neverAutoHangup
+      });
+      
       const llm0Enabled = adminSettings?.globalProductionIntelligence?.llm0Enabled === true ||
                          company?.agentSettings?.llm0Enabled === true;
       

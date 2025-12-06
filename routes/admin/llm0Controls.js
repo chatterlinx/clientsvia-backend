@@ -216,9 +216,10 @@ router.put('/:companyId', authenticateJWT, requireRole('admin'), async (req, res
         company.markModified('aiAgentSettings.llm0Controls');
         await company.save();
 
-        // Clear Redis cache
+        // Clear Redis cache (both company cache and LLM-0 controls cache)
         try {
             await redisClient.del(`company:${companyId}`);
+            await redisClient.del(`llm0controls:${companyId}`);
             logger.debug(`✅ [LLM-0 CONTROLS] Redis cache cleared for company: ${companyId}`);
         } catch (cacheError) {
             logger.warn(`⚠️ [LLM-0 CONTROLS] Cache clear failed (non-critical):`, cacheError.message);
@@ -277,9 +278,10 @@ router.post('/:companyId/reset', authenticateJWT, requireRole('admin'), async (r
         company.markModified('aiAgentSettings.llm0Controls');
         await company.save();
 
-        // Clear Redis cache
+        // Clear Redis cache (both company cache and LLM-0 controls cache)
         try {
             await redisClient.del(`company:${companyId}`);
+            await redisClient.del(`llm0controls:${companyId}`);
         } catch (cacheError) {
             logger.warn(`⚠️ [LLM-0 CONTROLS] Cache clear failed:`, cacheError.message);
         }

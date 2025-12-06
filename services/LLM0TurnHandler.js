@@ -58,6 +58,75 @@ class LLM0TurnHandler {
         });
         
         // ════════════════════════════════════════════════════════════════════════════
+        // 🚫 SPAM DETECTION (Layer 3) - Check before any other processing
+        // ════════════════════════════════════════════════════════════════════════════
+        // Uses configurable LLM-0 Controls for spam phrase detection
+        // If spam detected: dismiss politely and log to Black Box
+        // ════════════════════════════════════════════════════════════════════════════
+        const llm0Controls = callState?.llm0Controls;
+        if (llm0Controls?.spamFilter?.enabled && userInput) {
+            const LLM0ControlsLoader = require('./LLM0ControlsLoader');
+            
+            if (LLM0ControlsLoader.isSpamPhrase(userInput, llm0Controls)) {
+                logger.info('[LLM0 TURN HANDLER] 🚫 SPAM DETECTED - Telemarketer phrase matched', {
+                    companyId,
+                    callId,
+                    turn: turnNumber,
+                    input: userInput.substring(0, 100),
+                    action: llm0Controls.spamFilter.onSpamDetected
+                });
+                
+                // Log to Black Box
+                if (llm0Controls.spamFilter.logToBlackBox) {
+                    try {
+                        const BlackBoxLogger = require('./BlackBoxLogger');
+                        await BlackBoxLogger.logEvent({
+                            callId,
+                            companyId,
+                            type: 'SPAM_DETECTED',
+                            turn: turnNumber,
+                            data: {
+                                input: userInput.substring(0, 200),
+                                action: llm0Controls.spamFilter.onSpamDetected,
+                                suggestion: 'Add to Edge Cases for Layer 2 blocking (FREE)'
+                            }
+                        });
+                    } catch (logErr) {
+                        logger.warn('[LLM0 TURN HANDLER] Failed to log spam to Black Box');
+                    }
+                }
+                
+                // Return spam response based on configured action
+                if (llm0Controls.spamFilter.onSpamDetected === 'polite_dismiss') {
+                    return {
+                        text: llm0Controls.spamFilter.dismissMessage,
+                        action: 'hangup',
+                        shouldHangup: true,
+                        shouldTransfer: false,
+                        callState: { ...callState, spamDetected: true },
+                        debug: {
+                            route: 'SPAM_FILTER',
+                            reason: 'Telemarketer phrase detected - polite dismiss'
+                        }
+                    };
+                } else if (llm0Controls.spamFilter.onSpamDetected === 'silent_hangup') {
+                    return {
+                        text: '',
+                        action: 'hangup',
+                        shouldHangup: true,
+                        shouldTransfer: false,
+                        callState: { ...callState, spamDetected: true },
+                        debug: {
+                            route: 'SPAM_FILTER',
+                            reason: 'Telemarketer phrase detected - silent hangup'
+                        }
+                    };
+                }
+                // 'flag_only' continues processing
+            }
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
         // 🔒 BOOKING HARD LOCK - MUST BE FIRST CHECK
         // ════════════════════════════════════════════════════════════════════════════
         // Once bookingModeLocked = true, we BYPASS:
