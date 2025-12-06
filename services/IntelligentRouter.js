@@ -49,6 +49,14 @@ const LLMLearningTask = require('../models/LLMLearningTask');  // 📋 Phase C.0
 const MemoryOptimizationEngine = require('./MemoryOptimizationEngine');  // 🧠 Brain-5: Optimization Engine
 const logger = require('../utils/logger');
 
+// 📦 Black Box Logger for diagnostic events
+let BlackBoxLogger;
+try {
+    BlackBoxLogger = require('./BlackBoxLogger');
+} catch (e) {
+    BlackBoxLogger = null;
+}
+
 class IntelligentRouter {
     constructor() {
         this.config = {
@@ -200,6 +208,48 @@ class IntelligentRouter {
             });
             
             result.performance.tier1Time = result.tier1Result.responseTime;
+            
+            // ═══════════════════════════════════════════════════════════════════════
+            // 📦 BLACK BOX DIAGNOSTIC LOGGING - Capture matching pipeline details
+            // ═══════════════════════════════════════════════════════════════════════
+            const companyId = company?._id?.toString() || company?.companyId;
+            if (BlackBoxLogger && callId && companyId) {
+                try {
+                    // Log SYNONYM_TRANSLATION if any synonyms were applied
+                    if (result.tier1Result.synonymTranslation?.replacements?.length > 0) {
+                        BlackBoxLogger.logEvent({
+                            callId,
+                            companyId,
+                            type: 'SYNONYM_TRANSLATION',
+                            data: {
+                                original: result.tier1Result.synonymTranslation.original,
+                                translated: result.tier1Result.synonymTranslation.translated,
+                                replacements: result.tier1Result.synonymTranslation.replacements,
+                                suggestion: 'Synonyms expanded caller vocabulary into technical terms'
+                            }
+                        });
+                    }
+                    
+                    // Log MATCHING_PIPELINE - full diagnostic of how matching worked
+                    if (result.tier1Result.pipelineDiagnostic) {
+                        BlackBoxLogger.logEvent({
+                            callId,
+                            companyId,
+                            type: 'MATCHING_PIPELINE',
+                            data: {
+                                input: callerInput,
+                                pipeline: result.tier1Result.pipelineDiagnostic,
+                                tier1Success: result.tier1Result.success,
+                                tier1Confidence: result.tier1Result.confidence,
+                                threshold: tier1Threshold,
+                                decision: result.tier1Result.success ? 'FAST_MATCH' : 'ESCALATE_TO_TIER2'
+                            }
+                        });
+                    }
+                } catch (logErr) {
+                    logger.debug('[INTELLIGENT ROUTER] Failed to log diagnostic to Black Box', { error: logErr.message });
+                }
+            }
             
             if (result.tier1Result.success && result.tier1Result.confidence >= tier1Threshold) {
                 // 🎯 PHASE A – STEP 2: Check minConfidence BEFORE accepting Tier 1 match
