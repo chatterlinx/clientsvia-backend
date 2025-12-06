@@ -168,6 +168,27 @@
             border-bottom-color: var(--accent-blue);
         }
 
+        /* TODO tab with notification dot */
+        .tab-btn-todo {
+            position: relative;
+        }
+        .todo-dot {
+            position: absolute;
+            top: 10px;
+            right: 8px;
+            width: 8px;
+            height: 8px;
+            background: var(--accent-red);
+            border-radius: 50%;
+            animation: pulse-dot 2s infinite;
+            display: none;
+        }
+        .todo-dot.active { display: block; }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.2); }
+        }
+
         /* Tab Content */
         .tab-content {
             display: none;
@@ -474,6 +495,10 @@
         <button class="tab-btn" data-tab="timeline">Timeline</button>
         <button class="tab-btn" data-tab="transcript">Transcript</button>
         <button class="tab-btn" data-tab="raw" style="color: #f97316;">Raw Events</button>
+        <button class="tab-btn tab-btn-todo" data-tab="todo">
+            📋 TODO
+            <span class="todo-dot" id="todoDot"></span>
+        </button>
     </div>
 
     <!-- Tab Content -->
@@ -484,6 +509,7 @@
     <div id="tabTimeline" class="tab-content"></div>
     <div id="tabTranscript" class="tab-content"></div>
     <div id="tabRaw" class="tab-content"></div>
+    <div id="tabTodo" class="tab-content"></div>
 
     <script>
         // ═══════════════════════════════════════════════════════════════════
@@ -565,6 +591,7 @@
             renderTimeline();
             renderTranscript();
             renderRawEvents();
+            renderTodo();
         }
 
         function renderHeader() {
@@ -1150,6 +1177,424 @@
             const json = JSON.stringify(events, null, 2);
             navigator.clipboard.writeText(json).then(() => {
                 alert('✅ Raw events copied to clipboard!');
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // TODO TAB - Coverage Gap Analysis
+        // ═══════════════════════════════════════════════════════════════════
+        function analyzeCoverageGaps() {
+            const events = recording.events || [];
+            const gaps = [];
+            
+            // Find all GATHER_FINAL events (caller utterances)
+            const callerUtterances = events.filter(e => e.type === 'GATHER_FINAL');
+            
+            for (const utterance of callerUtterances) {
+                const text = utterance.data?.text || '';
+                const turn = utterance.turn || 0;
+                
+                // Find events that happened after this utterance for this turn
+                const turnEvents = events.filter(e => 
+                    e.t >= utterance.t && 
+                    e.t <= (utterance.t + 10000) // Within 10 seconds
+                );
+                
+                // Check if this hit LLM fallback (no fast match)
+                const llmFallback = turnEvents.find(e => e.type === 'LLM_FALLBACK');
+                const fastMatch = turnEvents.find(e => e.type === 'FAST_MATCH_HIT');
+                const triageDecision = turnEvents.find(e => e.type === 'TRIAGE_DECISION');
+                const loopDetected = turnEvents.find(e => e.type === 'LOOP_DETECTED');
+                const llmResponse = turnEvents.find(e => e.type === 'LLM_RESPONSE');
+                
+                const gap = {
+                    text,
+                    turn,
+                    issues: [],
+                    suggestions: {}
+                };
+                
+                // Issue 1: No fast match (hit LLM)
+                if (llmFallback && !fastMatch) {
+                    gap.issues.push({
+                        type: 'NO_FAST_MATCH',
+                        severity: 'warning',
+                        description: 'No fast match - used LLM fallback',
+                        costImpact: `~$${(llmResponse?.data?.ms || 5000) / 1000 * 0.01} per call`
+                    });
+                    
+                    // Extract suggested keywords from the utterance
+                    const keywords = extractKeywords(text);
+                    gap.suggestions.keywords = keywords;
+                }
+                
+                // Issue 2: Triage didn't match a card
+                if (triageDecision && !triageDecision.data?.matched) {
+                    gap.issues.push({
+                        type: 'NO_TRIAGE_MATCH',
+                        severity: 'error',
+                        description: 'No triage card matched this intent',
+                        cardSuggested: generateCardSuggestion(text, triageDecision.data?.intentTag)
+                    });
+                }
+                
+                // Issue 3: Loop detected
+                if (loopDetected) {
+                    gap.issues.push({
+                        type: 'LOOP_DETECTED',
+                        severity: 'critical',
+                        description: 'Response looped - caller heard same thing twice'
+                    });
+                }
+                
+                // Issue 4: Booking intent but not handled
+                const intentDetected = turnEvents.find(e => e.type === 'INTENT_DETECTED');
+                const bookingActivated = turnEvents.find(e => e.type === 'BOOKING_MODE_ACTIVATED');
+                if (intentDetected?.data?.intent === 'booking' && !bookingActivated) {
+                    gap.issues.push({
+                        type: 'BOOKING_NOT_HANDLED',
+                        severity: 'critical',
+                        description: 'Booking intent detected but booking flow not activated'
+                    });
+                }
+                
+                if (gap.issues.length > 0) {
+                    gaps.push(gap);
+                }
+            }
+            
+            return gaps;
+        }
+        
+        function extractKeywords(text) {
+            // Common stop words to ignore
+            const stopWords = ['i', 'me', 'my', 'we', 'our', 'you', 'your', 'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'up', 'down', 'out', 'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'just', 'and', 'but', 'if', 'or', 'because', 'as', 'until', 'while', 'it', 'its', 'this', 'that', 'these', 'those', 'am', 'what', 'which', 'who', 'whom', 'need', 'want', 'like', 'think', 'know', 'yeah', 'yes', 'no', 'ok', 'okay', 'um', 'uh', 'well', 'dont', "don't"];
+            
+            const words = text.toLowerCase()
+                .replace(/[^\w\s]/g, ' ')
+                .split(/\s+/)
+                .filter(w => w.length > 2 && !stopWords.includes(w));
+            
+            // Deduplicate and return
+            return [...new Set(words)];
+        }
+        
+        function generateCardSuggestion(text, intentTag) {
+            const lowerText = text.toLowerCase();
+            
+            // Detect common patterns
+            if (lowerText.includes('schedule') || lowerText.includes('book') || lowerText.includes('appointment')) {
+                return {
+                    name: 'Service Appointment Request',
+                    triageTag: 'BOOKING_SERVICE_APPOINTMENT',
+                    category: 'booking',
+                    action: 'BOOK',
+                    openingLine: "I'd be happy to schedule that for you."
+                };
+            }
+            
+            if (lowerText.includes('thermostat') && (lowerText.includes('blank') || lowerText.includes('not working'))) {
+                return {
+                    name: 'Thermostat Issue',
+                    triageTag: 'THERMOSTAT_ISSUE',
+                    category: 'troubleshooting',
+                    action: 'ASK_FOLLOWUP',
+                    openingLine: "I can help with your thermostat issue."
+                };
+            }
+            
+            if (lowerText.includes('ac') || lowerText.includes('air condition') || lowerText.includes('cooling')) {
+                return {
+                    name: 'AC Service Request',
+                    triageTag: 'AC_SERVICE_REQUEST',
+                    category: 'service',
+                    action: 'ASK_FOLLOWUP',
+                    openingLine: "I can help with your AC service needs."
+                };
+            }
+            
+            // Generic fallback
+            const keywords = extractKeywords(text);
+            const tagName = keywords.slice(0, 3).join('_').toUpperCase() || 'NEW_CARD';
+            return {
+                name: `${keywords.slice(0, 3).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} Inquiry`,
+                triageTag: tagName,
+                category: 'general',
+                action: 'ASK_FOLLOWUP',
+                openingLine: 'I can help you with that.'
+            };
+        }
+        
+        function renderTodo() {
+            const container = document.getElementById('tabTodo');
+            const gaps = analyzeCoverageGaps();
+            const todoDot = document.getElementById('todoDot');
+            
+            // Show/hide notification dot
+            if (gaps.length > 0) {
+                todoDot.classList.add('active');
+            } else {
+                todoDot.classList.remove('active');
+            }
+            
+            if (gaps.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 60px; color: var(--text-secondary);">
+                        <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
+                        <h3 style="margin-bottom: 8px; color: var(--accent-green);">No Coverage Gaps Found</h3>
+                        <p>All caller utterances were handled by fast-match or matched triage cards.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = `
+                <style>
+                    .todo-gap {
+                        background: var(--bg-card);
+                        border: 1px solid var(--border-color);
+                        border-radius: 10px;
+                        margin-bottom: 24px;
+                        overflow: hidden;
+                    }
+                    .todo-gap-header {
+                        padding: 16px 20px;
+                        background: rgba(239, 68, 68, 0.1);
+                        border-bottom: 1px solid var(--border-color);
+                    }
+                    .todo-gap-header.warning { background: rgba(249, 115, 22, 0.1); }
+                    .todo-gap-header.critical { background: rgba(239, 68, 68, 0.2); }
+                    .todo-gap-utterance {
+                        font-family: 'JetBrains Mono', monospace;
+                        font-size: 14px;
+                        color: var(--text-primary);
+                    }
+                    .todo-issues {
+                        padding: 16px 20px;
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 8px;
+                    }
+                    .issue-chip {
+                        padding: 4px 12px;
+                        border-radius: 4px;
+                        font-size: 11px;
+                        font-weight: 600;
+                        text-transform: uppercase;
+                    }
+                    .issue-chip.warning { background: rgba(249, 115, 22, 0.2); color: #f97316; }
+                    .issue-chip.error { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+                    .issue-chip.critical { background: rgba(239, 68, 68, 0.3); color: #ef4444; }
+                    .todo-step {
+                        padding: 20px;
+                        border-top: 1px solid var(--border-color);
+                    }
+                    .todo-step-title {
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: var(--accent-blue);
+                        margin-bottom: 12px;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                    }
+                    .todo-step-instruction {
+                        font-size: 12px;
+                        color: var(--text-secondary);
+                        margin-bottom: 12px;
+                    }
+                    .todo-field-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                    }
+                    .todo-field-table td {
+                        padding: 8px 12px;
+                        border: 1px solid var(--border-color);
+                        font-size: 13px;
+                    }
+                    .todo-field-table td:first-child {
+                        width: 140px;
+                        background: rgba(59, 130, 246, 0.1);
+                        color: var(--accent-blue);
+                        font-weight: 500;
+                    }
+                    .todo-field-table td:last-child {
+                        font-family: 'JetBrains Mono', monospace;
+                        color: var(--text-primary);
+                    }
+                    .copy-btn {
+                        background: var(--bg-hover);
+                        border: 1px solid var(--border-color);
+                        color: var(--text-secondary);
+                        padding: 4px 8px;
+                        border-radius: 4px;
+                        font-size: 11px;
+                        cursor: pointer;
+                        margin-left: 8px;
+                    }
+                    .copy-btn:hover {
+                        background: var(--accent-blue);
+                        color: white;
+                    }
+                    .keywords-list {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 6px;
+                        margin-top: 8px;
+                    }
+                    .keyword-chip {
+                        background: rgba(34, 197, 94, 0.2);
+                        color: var(--accent-green);
+                        padding: 4px 10px;
+                        border-radius: 4px;
+                        font-size: 12px;
+                        font-family: 'JetBrains Mono', monospace;
+                        cursor: pointer;
+                    }
+                    .keyword-chip:hover { background: rgba(34, 197, 94, 0.3); }
+                </style>
+                
+                <div style="margin-bottom: 24px;">
+                    <h2 style="margin-bottom: 8px; display: flex; align-items: center; gap: 12px;">
+                        📋 Coverage Gaps Found
+                        <span style="background: var(--accent-red); color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px;">${gaps.length}</span>
+                    </h2>
+                    <p style="color: var(--text-secondary); font-size: 14px;">
+                        These caller utterances didn't fast-match or hit triage cards. Add the suggested content to improve coverage.
+                    </p>
+                </div>
+                
+                ${gaps.map((gap, idx) => renderGapCard(gap, idx)).join('')}
+            `;
+        }
+        
+        function renderGapCard(gap, idx) {
+            const severity = gap.issues.some(i => i.severity === 'critical') ? 'critical' : 
+                            gap.issues.some(i => i.severity === 'error') ? 'error' : 'warning';
+            
+            const card = gap.issues.find(i => i.cardSuggested)?.cardSuggested;
+            const keywords = gap.suggestions?.keywords || extractKeywords(gap.text);
+            
+            return `
+                <div class="todo-gap">
+                    <div class="todo-gap-header ${severity}">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="color: var(--text-secondary); font-size: 12px;">TURN ${gap.turn} • GAP #${idx + 1}</span>
+                        </div>
+                        <div class="todo-gap-utterance" style="margin-top: 8px;">
+                            "${gap.text}"
+                        </div>
+                    </div>
+                    
+                    <div class="todo-issues">
+                        ${gap.issues.map(issue => `
+                            <span class="issue-chip ${issue.severity}">${issue.type.replace(/_/g, ' ')}</span>
+                        `).join('')}
+                    </div>
+                    
+                    ${card ? `
+                    <!-- STEP 1: CREATE SCENARIO -->
+                    <div class="todo-step">
+                        <div class="todo-step-title">
+                            <span>📌 STEP 1: CREATE SCENARIO</span>
+                        </div>
+                        <div class="todo-step-instruction">
+                            Go to <strong>Scenario Builder</strong> → Click <strong>New Scenario</strong> → Fill in these fields:
+                        </div>
+                        <table class="todo-field-table">
+                            <tr>
+                                <td>Scenario Name</td>
+                                <td>${card.name} <button class="copy-btn" onclick="copyValue('${card.name}')">📋 Copy</button></td>
+                            </tr>
+                            <tr>
+                                <td>Category</td>
+                                <td>${card.category} (select from dropdown)</td>
+                            </tr>
+                            <tr>
+                                <td>Intent Tag</td>
+                                <td>${card.triageTag.toLowerCase()} <button class="copy-btn" onclick="copyValue('${card.triageTag.toLowerCase()}')">📋 Copy</button></td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <!-- STEP 2: CREATE TRIAGE CARD -->
+                    <div class="todo-step">
+                        <div class="todo-step-title">
+                            <span>📌 STEP 2: CREATE TRIAGE CARD</span>
+                        </div>
+                        <div class="todo-step-instruction">
+                            Go to <strong>Triage Builder</strong> → Click <strong>New Card</strong> → Fill in these fields:
+                        </div>
+                        <table class="todo-field-table">
+                            <tr>
+                                <td>Card Name</td>
+                                <td>${card.name} <button class="copy-btn" onclick="copyValue('${card.name}')">📋 Copy</button></td>
+                            </tr>
+                            <tr>
+                                <td>Triage Tag</td>
+                                <td>${card.triageTag} <button class="copy-btn" onclick="copyValue('${card.triageTag}')">📋 Copy</button></td>
+                            </tr>
+                            <tr>
+                                <td>Category</td>
+                                <td>${card.category} (select from dropdown)</td>
+                            </tr>
+                            <tr>
+                                <td>Opening Line</td>
+                                <td>${card.openingLine} <button class="copy-btn" onclick="copyValue('${card.openingLine}')">📋 Copy</button></td>
+                            </tr>
+                            <tr>
+                                <td>Action</td>
+                                <td>${card.action} (select from dropdown)</td>
+                            </tr>
+                            <tr>
+                                <td>Linked Scenario</td>
+                                <td>${card.name} (select from dropdown after creating scenario)</td>
+                            </tr>
+                        </table>
+                    </div>
+                    ` : ''}
+                    
+                    <!-- STEP 3: ADD KEYWORDS -->
+                    <div class="todo-step">
+                        <div class="todo-step-title">
+                            <span>📌 ${card ? 'STEP 3' : 'ACTION'}: ADD KEYWORDS</span>
+                        </div>
+                        <div class="todo-step-instruction">
+                            ${card ? `In the Triage Card, scroll to <strong>Trigger Keywords</strong> section and add:` : 
+                            `Add these keywords to an existing card to improve fast-match:`}
+                        </div>
+                        <div class="keywords-list">
+                            ${keywords.map(kw => `
+                                <span class="keyword-chip" onclick="copyValue('${kw}')" title="Click to copy">${kw}</span>
+                            `).join('')}
+                        </div>
+                        <button class="copy-btn" style="margin-top: 12px; padding: 8px 16px;" onclick="copyValue('${keywords.join(', ')}')">
+                            📋 Copy All Keywords
+                        </button>
+                    </div>
+                    
+                    <!-- RESULT -->
+                    <div style="padding: 16px 20px; background: rgba(34, 197, 94, 0.1); border-top: 1px solid var(--border-color);">
+                        <span style="color: var(--accent-green); font-size: 13px;">
+                            ✅ <strong>After adding:</strong> Callers saying "${gap.text.substring(0, 40)}..." will fast-match instantly (no LLM, 0ms vs ~5000ms)
+                        </span>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function copyValue(value) {
+            navigator.clipboard.writeText(value).then(() => {
+                // Brief visual feedback
+                const originalText = event.target.textContent;
+                event.target.textContent = '✓ Copied!';
+                event.target.style.background = 'var(--accent-green)';
+                event.target.style.color = 'white';
+                setTimeout(() => {
+                    event.target.textContent = originalText;
+                    event.target.style.background = '';
+                    event.target.style.color = '';
+                }, 1000);
             });
         }
 
