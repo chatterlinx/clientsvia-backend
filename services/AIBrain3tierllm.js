@@ -131,6 +131,22 @@ class AIBrain3tierllm {
             // 📼 BLACK BOX: Log 3-Tier decision
             const callId = context.callId || context.callState?.callId;
             if (BlackBoxLogger && callId) {
+                // Log SYNONYM_TRANSLATION if any translations occurred
+                const synonymInfo = result.metadata?.trace?.synonymTranslation;
+                if (synonymInfo && synonymInfo.replacements && synonymInfo.replacements.length > 0) {
+                    BlackBoxLogger.logEvent({
+                        callId,
+                        companyId,
+                        type: 'SYNONYM_TRANSLATION',
+                        data: {
+                            original: synonymInfo.original?.substring(0, 100),
+                            translated: synonymInfo.translated?.substring(0, 100),
+                            replacements: synonymInfo.replacements.map(r => `"${r.from}" → "${r.to}"`),
+                            count: synonymInfo.replacements.length
+                        }
+                    }).catch(() => {});
+                }
+                
                 // Log TIER3_ENTERED when entering 3-Tier system
                 BlackBoxLogger.logEvent({
                     callId,

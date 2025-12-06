@@ -839,6 +839,9 @@ class IntelligentRouter {
             // Match
             const match = await selector.selectScenario(callerInput, allScenarios);
             
+            // Get synonym translation info for Black Box logging
+            const synonymTranslation = selector.getLastSynonymTranslation();
+            
             const responseTime = Date.now() - startTime;
             
             return {
@@ -847,7 +850,8 @@ class IntelligentRouter {
                 confidence: match.confidence,
                 responseTime,
                 response: match.scenario?.quickReplies?.[0] || null,
-                reasoning: match.reasoning || 'Rule-based matching'
+                reasoning: match.reasoning || 'Rule-based matching',
+                synonymTranslation: synonymTranslation.replacements?.length > 0 ? synonymTranslation : null
             };
             
         } catch (error) {

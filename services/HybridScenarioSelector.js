@@ -1019,7 +1019,8 @@ class HybridScenarioSelector {
         // Stage 3: Standard normalization (lowercase, punctuation, spacing)
         
         // Stage 1: Apply synonym translation
-        let processed = this.applySynonymTranslation(phrase);
+        const synonymResult = this.applySynonymTranslation(phrase);
+        let processed = synonymResult.translated;
         
         // Stage 2: Standard normalization (punctuation + spacing)
         processed = processed
@@ -1378,7 +1379,7 @@ class HybridScenarioSelector {
      */
     applySynonymTranslation(phrase) {
         if (!phrase || this.synonymMap.size === 0) {
-            return phrase;
+            return { translated: phrase, replacements: [] };
         }
         
         let translatedPhrase = phrase.toLowerCase();
@@ -1402,14 +1403,28 @@ class HybridScenarioSelector {
         }
         
         if (replacements.length > 0) {
-            logger.debug('🔤 [SYNONYM TRANSLATION] Applied', {
+            logger.info('🔤 [SYNONYM TRANSLATION] Applied', {
                 original: phrase.substring(0, 100),
                 translated: translatedPhrase.substring(0, 100),
                 replacements: replacements.map(r => `"${r.from}" → "${r.to}"`).join(', ')
             });
         }
         
-        return translatedPhrase;
+        // Store last translation for external access
+        this.lastSynonymTranslation = {
+            original: phrase,
+            translated: translatedPhrase,
+            replacements
+        };
+        
+        return { translated: translatedPhrase, replacements };
+    }
+    
+    /**
+     * Get the last synonym translation result (for Black Box logging)
+     */
+    getLastSynonymTranslation() {
+        return this.lastSynonymTranslation || { original: '', translated: '', replacements: [] };
     }
     
     /**

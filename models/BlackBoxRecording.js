@@ -34,6 +34,7 @@ const EVENT_TYPES = [
   'GATHER_FINAL',             // Final STT text from caller
   'STATE_LOADED',             // 📊 Call state loaded (Redis/Session/Fresh)
   'STATE_SAVED',              // 📊 Call state saved (Redis status)
+  'SYNONYM_TRANSLATION',      // 🗣️ Colloquial term translated to technical
   'FAST_MATCH_HIT',           // Triage keywords matched - no LLM needed
   'LLM_FALLBACK',             // Fast match failed - calling LLM
   'LLM_RESPONSE',             // LLM response with timing

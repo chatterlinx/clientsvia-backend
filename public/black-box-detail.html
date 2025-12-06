@@ -552,6 +552,7 @@
         .type-GREETING_SENT { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
         .type-GATHER_FINAL { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
         .type-FAST_MATCH_HIT { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
+        .type-SYNONYM_TRANSLATION { background: rgba(236, 72, 153, 0.2); color: var(--accent-pink); }
         .type-LLM_FALLBACK { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); }
         .type-INTENT_DETECTED { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
         .type-TRIAGE_DECISION { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
@@ -915,6 +916,10 @@
                     case 'GATHER_FINAL':
                         mermaid += `    C->>T: ${time} "${truncText(event.data?.text, 25)}"\n`;
                         mermaid += `    T->>B1: Process\n`;
+                        break;
+                    case 'SYNONYM_TRANSLATION':
+                        const synCount = event.data?.count || event.data?.replacements?.length || 0;
+                        mermaid += `    Note over T: 🗣️ Slang Translated (${synCount})\n`;
                         break;
                     case 'FAST_MATCH_HIT':
                         mermaid += `    B1->>TR: ✅ Fast Match\n`;
@@ -2260,6 +2265,9 @@
                     return `${data.ms || '?'}ms`;
                 case 'BAILOUT_TRIGGERED':
                     return `${data.type} - ${data.reason}`;
+                case 'SYNONYM_TRANSLATION':
+                    const reps = data.replacements || [];
+                    return `🗣️ ${reps.length > 0 ? reps.slice(0, 2).join(', ') : 'none'}`;
                 default:
                     return JSON.stringify(data).substring(0, 80);
             }
