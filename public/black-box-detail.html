@@ -1789,6 +1789,35 @@
                 followUpMode = 'ASK_FOLLOWUP_QUESTION';
             }
             
+            // Advanced settings based on category
+            let scenarioType, replyStrategy, replySelection, priorityLevel, personality, handoffPolicy, cooldown;
+            
+            if (isBooking) {
+                scenarioType = 'ACTION_FLOW';
+                replyStrategy = 'FULL_ONLY';
+                replySelection = 'RANDOM';
+                priorityLevel = 90;  // High priority - booking is revenue
+                personality = 'PROFESSIONAL_WARM';
+                handoffPolicy = 'LOW_CONFIDENCE_ONLY';
+                cooldown = 0;
+            } else if (isEmergency) {
+                scenarioType = 'ACTION_FLOW';
+                replyStrategy = 'QUICK_THEN_FULL';
+                replySelection = 'SEQUENTIAL';
+                priorityLevel = 100;  // Highest priority - emergencies first
+                personality = 'EMPATHETIC_URGENT';
+                handoffPolicy = 'LOW_CONFIDENCE_ONLY';
+                cooldown = 0;
+            } else {
+                scenarioType = 'INFO_FAQ';
+                replyStrategy = 'AUTO';
+                replySelection = 'RANDOM';
+                priorityLevel = 50;  // Normal priority
+                personality = 'PROFESSIONAL_HELPFUL';
+                handoffPolicy = 'LOW_CONFIDENCE_ONLY';
+                cooldown = 0;
+            }
+            
             return {
                 scenarioName,
                 category,
@@ -1797,7 +1826,15 @@
                 quickReplies,
                 fullReplies,
                 followUpMode,
-                triageTag: scenarioName.toUpperCase().replace(/\s+/g, '_')
+                triageTag: scenarioName.toUpperCase().replace(/\s+/g, '_'),
+                // Advanced settings
+                scenarioType,
+                replyStrategy,
+                replySelection,
+                priorityLevel,
+                personality,
+                handoffPolicy,
+                cooldown
             };
         }
         
@@ -1905,12 +1942,51 @@
                             </div>
                         </div>
                         
-                        <table class="todo-field-table">
-                            <tr>
-                                <td style="background: rgba(6, 182, 212, 0.2); color: #22d3ee;">Follow Up Mode</td>
-                                <td>${content.followUpMode} <span style="color: var(--text-muted);">(select from dropdown)</span></td>
-                            </tr>
-                        </table>
+                        <!-- Replies & Flow Tab Settings -->
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border-color);">
+                            <div style="font-weight: 600; color: var(--accent-cyan); margin-bottom: 12px; font-size: 13px;">📝 Replies & Flow Tab</div>
+                            <table class="todo-field-table">
+                                <tr>
+                                    <td style="background: rgba(6, 182, 212, 0.2); color: #22d3ee;">Follow Up Mode</td>
+                                    <td>${content.followUpMode} <span style="color: var(--text-muted);">(Advanced Settings tab)</span></td>
+                                </tr>
+                                <tr>
+                                    <td style="background: rgba(6, 182, 212, 0.2); color: #22d3ee;">Reply Selection Strategy</td>
+                                    <td>🎲 ${content.replySelection} <span style="color: var(--text-muted);">(dropdown)</span></td>
+                                </tr>
+                                <tr>
+                                    <td style="background: rgba(6, 182, 212, 0.2); color: #22d3ee;">Scenario Type</td>
+                                    <td>🚀 ${content.scenarioType} <span style="color: var(--text-muted);">(dropdown)</span></td>
+                                </tr>
+                                <tr>
+                                    <td style="background: rgba(6, 182, 212, 0.2); color: #22d3ee;">Reply Strategy</td>
+                                    <td>🎯 ${content.replyStrategy} <span style="color: var(--text-muted);">(dropdown)</span></td>
+                                </tr>
+                            </table>
+                        </div>
+                        
+                        <!-- Advanced Settings Tab -->
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--border-color);">
+                            <div style="font-weight: 600; color: var(--accent-orange); margin-bottom: 12px; font-size: 13px;">⚙️ Advanced Settings Tab</div>
+                            <table class="todo-field-table">
+                                <tr>
+                                    <td style="background: rgba(249, 115, 22, 0.2); color: #fb923c;">Priority Level</td>
+                                    <td><strong style="color: ${content.priorityLevel >= 90 ? 'var(--accent-green)' : content.priorityLevel >= 70 ? 'var(--accent-yellow)' : 'var(--text-primary)'};">${content.priorityLevel}</strong> <span style="color: var(--text-muted);">(0-100, higher = matched first)</span></td>
+                                </tr>
+                                <tr>
+                                    <td style="background: rgba(249, 115, 22, 0.2); color: #fb923c;">Personality</td>
+                                    <td>${content.personality.replace(/_/g, ' ')} <span style="color: var(--text-muted);">(if available)</span></td>
+                                </tr>
+                                <tr>
+                                    <td style="background: rgba(249, 115, 22, 0.2); color: #fb923c;">Handoff Policy</td>
+                                    <td>${content.handoffPolicy.replace(/_/g, ' ')} <span style="color: var(--text-muted);">(dropdown)</span></td>
+                                </tr>
+                                <tr>
+                                    <td style="background: rgba(249, 115, 22, 0.2); color: #fb923c;">Cooldown</td>
+                                    <td>${content.cooldown} seconds <span style="color: var(--text-muted);">(prevent spam)</span></td>
+                                </tr>
+                            </table>
+                        </div>
                     </div>
                     
                     <!-- TRIAGE CARD FIELDS -->
