@@ -634,6 +634,10 @@
         }
 
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes slideIn { 
+            from { transform: translateX(100%); opacity: 0; } 
+            to { transform: translateX(0); opacity: 1; } 
+        }
     </style>
 </head>
 <body>
@@ -1543,19 +1547,357 @@
             };
         }
         
+        // ═══════════════════════════════════════════════════════════════════
+        // LEARNING LOOP FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════
+        
+        // Detect spam-related events in the recording
+        function detectSpamEvents() {
+            const events = recording?.events || [];
+            const spamEvents = [];
+            
+            // Look for spam-related events
+            events.forEach(event => {
+                if (event.type === 'SPAM_DETECTED' || event.type === 'SPAM_BLOCKED') {
+                    spamEvents.push(event);
+                }
+                // Check for bailout events that might be spam-related
+                if (event.type === 'BAILOUT_TRIGGERED' && event.data?.type === 'spam') {
+                    spamEvents.push(event);
+                }
+            });
+            
+            // Also check for telemarketer-like phrases in caller turns
+            const telemarkerPhrases = [
+                'google listing', 'google business', 'seo services', 'website ranking',
+                'business listing', 'verify your business', 'improve your ranking',
+                'marketing services', 'advertising opportunity', 'special offer',
+                'free consultation', 'press 1', 'press one', 'are you the owner',
+                'decision maker', 'person in charge', 'speak to the owner'
+            ];
+            
+            const callerTurns = recording?.transcript?.callerTurns || [];
+            callerTurns.forEach(turn => {
+                const text = (turn.text || '').toLowerCase();
+                telemarkerPhrases.forEach(phrase => {
+                    if (text.includes(phrase)) {
+                        spamEvents.push({
+                            type: 'TELEMARKETER_PHRASE_DETECTED',
+                            turn: turn.turn,
+                            data: {
+                                text: turn.text,
+                                phrase: phrase,
+                                suggestion: 'Add to Edge Cases for automatic blocking'
+                            }
+                        });
+                    }
+                });
+            });
+            
+            return spamEvents;
+        }
+        
+        // Render the Learning Loop quick-action section
+        function renderLearningLoopSection(spamEvents, callerPhone) {
+            const hasSpamEvents = spamEvents.length > 0;
+            const hasBailout = recording?.flags?.bailoutTriggered;
+            const hasPhone = callerPhone && callerPhone.length > 5;
+            
+            // Extract unique spam phrases
+            const spamPhrases = [...new Set(spamEvents
+                .filter(e => e.data?.phrase || e.data?.text)
+                .map(e => e.data?.phrase || (e.data?.text || '').substring(0, 50))
+            )];
+            
+            return `
+                <div style="margin-bottom: 32px;">
+                    <h2 style="margin-bottom: 8px; display: flex; align-items: center; gap: 12px;">
+                        🎓 Learning Loop
+                        <span style="background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px;">ENTERPRISE</span>
+                    </h2>
+                    <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 20px;">
+                        One-click actions to make your AI smarter. Additions go directly to Edge Cases or Blacklist — <strong>FREE blocking next time!</strong>
+                    </p>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+                        
+                        ${hasPhone ? `
+                        <!-- QUICK ADD TO BLACKLIST -->
+                        <div style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(249, 115, 22, 0.1)); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 20px;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                                <span style="font-size: 24px;">🚫</span>
+                                <div>
+                                    <div style="font-weight: 600; color: var(--accent-red);">Block This Number</div>
+                                    <div style="font-size: 12px; color: var(--text-muted);">Add to company blacklist (Layer 1)</div>
+                                </div>
+                            </div>
+                            <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                                <div style="font-family: 'JetBrains Mono', monospace; font-size: 16px; color: var(--text-primary);">${callerPhone}</div>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <select id="spamCategory" style="flex: 1; padding: 8px 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                    <option value="telemarketer">🤖 Telemarketer</option>
+                                    <option value="robocall">📞 Robocall</option>
+                                    <option value="harassment">⚠️ Harassment</option>
+                                    <option value="other">❌ Other</option>
+                                </select>
+                                <button onclick="quickAddToBlacklist('${callerPhone}')" style="padding: 8px 20px; background: linear-gradient(135deg, #ef4444, #f97316); border: none; border-radius: 6px; color: white; font-weight: 600; cursor: pointer; white-space: nowrap;">
+                                    ➕ Block Now
+                                </button>
+                            </div>
+                            <div style="margin-top: 12px; font-size: 11px; color: var(--accent-green);">
+                                ✓ Instant block • ✓ $0.00 cost • ✓ All future calls from this number rejected
+                            </div>
+                        </div>
+                        ` : ''}
+                        
+                        ${spamPhrases.length > 0 ? spamPhrases.slice(0, 3).map((phrase, idx) => `
+                        <!-- QUICK ADD EDGE CASE ${idx + 1} -->
+                        <div style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(59, 130, 246, 0.1)); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 12px; padding: 20px;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                                <span style="font-size: 24px;">🛡️</span>
+                                <div>
+                                    <div style="font-weight: 600; color: var(--accent-purple);">Block This Phrase</div>
+                                    <div style="font-size: 12px; color: var(--text-muted);">Add to Edge Cases (Layer 2)</div>
+                                </div>
+                            </div>
+                            <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                                <div style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--text-primary);">"${phrase}"</div>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <select id="edgeCaseAction_${idx}" style="flex: 1; padding: 8px 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                    <option value="polite_hangup">Polite Hangup</option>
+                                    <option value="override_response">Custom Response</option>
+                                    <option value="flag_only">Flag Only</option>
+                                </select>
+                                <button onclick="quickAddEdgeCase('${phrase.replace(/'/g, "\\'")}', ${idx})" style="padding: 8px 20px; background: linear-gradient(135deg, #8b5cf6, #3b82f6); border: none; border-radius: 6px; color: white; font-weight: 600; cursor: pointer; white-space: nowrap;">
+                                    ➕ Add Rule
+                                </button>
+                            </div>
+                            <div style="margin-top: 12px; font-size: 11px; color: var(--accent-green);">
+                                ✓ Instant protection • ✓ $0.00 cost • ✓ Handled before LLM
+                            </div>
+                        </div>
+                        `).join('') : ''}
+                        
+                        ${!hasPhone && spamPhrases.length === 0 && hasBailout ? `
+                        <!-- BAILOUT DETECTED - SUGGEST ACTIONS -->
+                        <div style="background: linear-gradient(135deg, rgba(234, 179, 8, 0.1), rgba(249, 115, 22, 0.1)); border: 1px solid rgba(234, 179, 8, 0.3); border-radius: 12px; padding: 20px; grid-column: 1 / -1;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                                <span style="font-size: 24px;">⚠️</span>
+                                <div>
+                                    <div style="font-weight: 600; color: var(--accent-yellow);">Bailout Triggered</div>
+                                    <div style="font-size: 12px; color: var(--text-muted);">This call triggered a bailout — review if this was spam or a real customer</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 12px; margin-top: 16px;">
+                                <button onclick="markAsSpam()" style="flex: 1; padding: 12px; background: rgba(239, 68, 68, 0.2); border: 1px solid var(--accent-red); border-radius: 8px; color: var(--accent-red); font-weight: 600; cursor: pointer;">
+                                    🚫 This was spam — Block number
+                                </button>
+                                <button onclick="markAsCustomer()" style="flex: 1; padding: 12px; background: rgba(34, 197, 94, 0.2); border: 1px solid var(--accent-green); border-radius: 8px; color: var(--accent-green); font-weight: 600; cursor: pointer;">
+                                    ✅ This was a real customer — Improve scenarios
+                                </button>
+                            </div>
+                        </div>
+                        ` : ''}
+                        
+                    </div>
+                    
+                    <!-- Learning Loop Stats -->
+                    <div style="margin-top: 20px; padding: 16px; background: rgba(34, 197, 94, 0.05); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px; color: var(--accent-green); font-size: 13px;">
+                            <span>💡</span>
+                            <strong>How it works:</strong>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 12px;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 24px;">1️⃣</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">You click "Add"</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 24px;">2️⃣</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">Rule saved to Layer 1/2</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 24px;">3️⃣</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">Next call: FREE blocking!</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Quick Add to Blacklist API call
+        async function quickAddToBlacklist(phoneNumber) {
+            const category = document.getElementById('spamCategory')?.value || 'telemarketer';
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = '⏳ Adding...';
+            
+            try {
+                const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+                const response = await fetch(`/api/admin/learning-loop/quick-add-blacklist/${companyId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        phoneNumber: phoneNumber,
+                        reason: `Flagged from Black Box call ${callId}`,
+                        sourceCallId: callId,
+                        spamCategory: category
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    btn.textContent = '✅ Blocked!';
+                    btn.style.background = 'var(--accent-green)';
+                    showToast('success', `Number ${phoneNumber} added to blacklist! Future calls will be blocked for FREE.`);
+                } else {
+                    btn.textContent = '❌ Failed';
+                    btn.style.background = 'var(--accent-red)';
+                    showToast('error', result.message || 'Failed to add to blacklist');
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.textContent = '➕ Block Now';
+                        btn.style.background = '';
+                    }, 2000);
+                }
+            } catch (error) {
+                btn.textContent = '❌ Error';
+                btn.style.background = 'var(--accent-red)';
+                showToast('error', 'Network error: ' + error.message);
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.textContent = '➕ Block Now';
+                    btn.style.background = '';
+                }, 2000);
+            }
+        }
+        
+        // Quick Add Edge Case API call
+        async function quickAddEdgeCase(phrase, idx) {
+            const actionType = document.getElementById(`edgeCaseAction_${idx}`)?.value || 'polite_hangup';
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = '⏳ Adding...';
+            
+            try {
+                const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+                const response = await fetch(`/api/admin/learning-loop/quick-add-edge-case/${companyId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        triggerPhrase: phrase,
+                        actionType: actionType,
+                        priority: 85,
+                        sourceCallId: callId,
+                        sourceEvent: 'BLACK_BOX_TODO',
+                        category: 'telemarketer'
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    btn.textContent = '✅ Added!';
+                    btn.style.background = 'var(--accent-green)';
+                    showToast('success', `Edge case added! "${phrase}" will now be handled automatically for FREE.`);
+                } else {
+                    btn.textContent = '❌ Failed';
+                    btn.style.background = 'var(--accent-red)';
+                    showToast('error', result.message || 'Failed to add edge case');
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.textContent = '➕ Add Rule';
+                        btn.style.background = '';
+                    }, 2000);
+                }
+            } catch (error) {
+                btn.textContent = '❌ Error';
+                btn.style.background = 'var(--accent-red)';
+                showToast('error', 'Network error: ' + error.message);
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.textContent = '➕ Add Rule';
+                    btn.style.background = '';
+                }, 2000);
+            }
+        }
+        
+        // Mark bailout as spam
+        function markAsSpam() {
+            const phone = recording?.callerNumber || recording?.metadata?.callerNumber;
+            if (phone) {
+                document.getElementById('spamCategory').value = 'telemarketer';
+                quickAddToBlacklist(phone);
+            } else {
+                showToast('error', 'No phone number available for this call');
+            }
+        }
+        
+        // Mark bailout as real customer (show coverage gaps)
+        function markAsCustomer() {
+            document.querySelector('[data-tab="todo"]').click();
+            showToast('info', 'Review the coverage gaps below to improve handling for this type of customer.');
+        }
+        
+        // Simple toast notification
+        function showToast(type, message) {
+            const existing = document.querySelector('.toast-notification');
+            if (existing) existing.remove();
+            
+            const colors = {
+                success: 'var(--accent-green)',
+                error: 'var(--accent-red)',
+                info: 'var(--accent-blue)'
+            };
+            
+            const toast = document.createElement('div');
+            toast.className = 'toast-notification';
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                padding: 16px 24px;
+                background: ${colors[type] || colors.info};
+                color: white;
+                border-radius: 8px;
+                font-weight: 500;
+                z-index: 10000;
+                animation: slideIn 0.3s ease;
+                max-width: 400px;
+            `;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => toast.remove(), 4000);
+        }
+        
         function renderTodo() {
             const container = document.getElementById('tabTodo');
             const gaps = analyzeCoverageGaps();
             const todoDot = document.getElementById('todoDot');
             
+            // Detect spam-related events for learning loop
+            const spamEvents = detectSpamEvents();
+            const callerPhone = recording?.callerNumber || recording?.metadata?.callerNumber || '';
+            
             // Show/hide notification dot
-            if (gaps.length > 0) {
+            if (gaps.length > 0 || spamEvents.length > 0) {
                 todoDot.classList.add('active');
             } else {
                 todoDot.classList.remove('active');
             }
             
-            if (gaps.length === 0) {
+            if (gaps.length === 0 && spamEvents.length === 0) {
                 container.innerHTML = `
                     <div style="text-align: center; padding: 60px; color: var(--text-secondary);">
                         <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
@@ -1564,6 +1906,12 @@
                     </div>
                 `;
                 return;
+            }
+            
+            // Build spam/learning loop section HTML
+            let learningLoopHTML = '';
+            if (spamEvents.length > 0 || (recording?.flags?.bailoutTriggered && callerPhone)) {
+                learningLoopHTML = renderLearningLoopSection(spamEvents, callerPhone);
             }
             
             container.innerHTML = `
@@ -1672,7 +2020,10 @@
                     .keyword-chip:hover { background: rgba(34, 197, 94, 0.3); }
                 </style>
                 
-                <div style="margin-bottom: 24px;">
+                ${learningLoopHTML}
+                
+                ${gaps.length > 0 ? `
+                <div style="margin-bottom: 24px; margin-top: 24px;">
                     <h2 style="margin-bottom: 8px; display: flex; align-items: center; gap: 12px;">
                         📋 Coverage Gaps Found
                         <span style="background: var(--accent-red); color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px;">${gaps.length}</span>
@@ -1683,6 +2034,7 @@
                 </div>
                 
                 ${gaps.map((gap, idx) => renderGapCard(gap, idx)).join('')}
+                ` : ''}
             `;
         }
         

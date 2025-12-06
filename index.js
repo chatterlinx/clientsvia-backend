@@ -208,6 +208,7 @@ async function loadAllRoutes() {
         routes.v2FillerFilterRoutes = await loadRouteWithTimeout('./routes/company/v2FillerFilter', 'v2FillerFilterRoutes');
         routes.callArchivesRoutes = await loadRouteWithTimeout('./routes/admin/callArchives', 'callArchivesRoutes');
         routes.callFilteringRoutes = await loadRouteWithTimeout('./routes/admin/callFiltering', 'callFilteringRoutes');
+        routes.learningLoopRoutes = await loadRouteWithTimeout('./routes/admin/learningLoop', 'learningLoopRoutes'); // 🎓 Learning Loop (Black Box → Edge Cases/Blacklist quick-add)
         routes.adminNotificationsRoutes = await loadRouteWithTimeout('./routes/admin/adminNotifications', 'adminNotificationsRoutes');
         routes.setupNotificationCenterRoutes = await loadRouteWithTimeout('./routes/admin/setup-notification-center', 'setupNotificationCenterRoutes');
         routes.adminGlobalAIBrainTestRoutes = await loadRouteWithTimeout('./routes/admin/adminGlobalAIBrainTest', 'adminGlobalAIBrainTestRoutes');
@@ -439,6 +440,7 @@ function registerRoutes(routes) {
     app.use('/api', routes.v2FillerFilterRoutes); // V2: AiCore Filler Filter (inherited + custom filler words management)
     app.use('/api', routes.callArchivesRoutes); // ADMIN: Call Archives (search transcripts, export call history)
     app.use('/api', routes.callFilteringRoutes); // ADMIN: Call Filtering (spam detection, blacklist/whitelist management)
+    app.use('/api/admin/learning-loop', routes.learningLoopRoutes); // 🎓 Learning Loop (Black Box → Edge Cases/Blacklist/Synonyms quick-add)
     app.use('/api/admin/notifications', routes.adminNotificationsRoutes); // ADMIN: Notification Center (platform alerts, SMS delivery, health checks)
     app.use('/api', routes.setupNotificationCenterRoutes); // ADMIN: One-time setup endpoint for Notification Center company
     app.use('/api/admin/settings/global-ai-brain-test', routes.adminGlobalAIBrainTestRoutes); // ADMIN: Global AI Brain Test Config (single Twilio test console for all templates)

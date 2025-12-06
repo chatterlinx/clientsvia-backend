@@ -50,6 +50,9 @@ const EVENT_TYPES = [
   'TIER3_LLM_FALLBACK_RESPONSE', // 3-tier LLM response received
   'TIER3_EXIT',               // Exited 3-tier with result
   'TIER3_DECISION',           // 3-tier router decision (legacy)
+  'SPAM_DETECTED',            // 🚫 LLM-0 detected spam (telemarketer/robocall)
+  'SPAM_BLOCKED',             // 🚫 SmartCallFilter blocked call at Layer 1
+  'LEARNING_SUGGESTION',      // 🎓 Suggested addition to Edge Cases/Blacklist
   'BOOKING_MODE_ACTIVATED',   // Entered booking flow
   'BOOKING_MODE_LOCKED',      // HARD LOCK - booking owns conversation
   'BOOKING_STEP',             // Each booking step (ASK_NAME, ASK_ADDRESS, etc.)
