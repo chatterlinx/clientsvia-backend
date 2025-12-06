@@ -2078,14 +2078,54 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     const perfCheckpoints = { requestReceived: 0 };
     
     logger.security('🎯 CHECKPOINT 13: Initializing call state');
-    // Get or initialize call state
-    const callState = req.session?.callState || {
-      callId: callSid,
-      from: fromNumber,
-      consecutiveSilences: 0,
-      failedAttempts: 0,
-      startTime: new Date()
-    };
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // 🔒 CRITICAL: Load call state from Redis (NOT express-session)
+    // ════════════════════════════════════════════════════════════════════════════
+    // Express-session with MemoryStore + sameSite:lax FAILS for Twilio webhooks!
+    // Twilio makes cross-origin POST requests, and cookies may not persist.
+    // Redis-based state keyed by CallSid is 100% reliable.
+    // ════════════════════════════════════════════════════════════════════════════
+    let callState;
+    try {
+      const { getRedisClient } = require('../services/redisClientFactory');
+      const redisClient = await getRedisClient();
+      
+      if (redisClient) {
+        const stateKey = `callState:${callSid}`;
+        const savedState = await redisClient.get(stateKey);
+        
+        if (savedState) {
+          callState = JSON.parse(savedState);
+          logger.info('[CALL STATE] 🔒 Loaded from Redis', {
+            callSid,
+            bookingModeLocked: !!callState.bookingModeLocked,
+            bookingState: callState.bookingState,
+            turnCount: callState.turnCount
+          });
+        }
+      }
+    } catch (redisErr) {
+      logger.warn('[CALL STATE] Redis load failed, using session fallback', { 
+        callSid, 
+        error: redisErr.message 
+      });
+    }
+    
+    // Fallback to session or create fresh state
+    if (!callState) {
+      callState = req.session?.callState || {
+        callId: callSid,
+        from: fromNumber,
+        consecutiveSilences: 0,
+        failedAttempts: 0,
+        startTime: new Date()
+      };
+      logger.info('[CALL STATE] Initialized fresh state', { 
+        callSid, 
+        fromSession: !!req.session?.callState 
+      });
+    }
     
     // ────────────────────────────────────────────────────────────────
     // 🛡️ SPAM CONTEXT: Pass spam data into agent brain
@@ -2203,9 +2243,41 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     logger.security('🎯 CHECKPOINT 15: AI Agent Runtime response received');
     logger.security('🤖 AI Response:', JSON.stringify(result, null, 2));
     
-    // Update call state
+    // ════════════════════════════════════════════════════════════════════════════
+    // 🔒 CRITICAL: Save call state to Redis (NOT just express-session)
+    // ════════════════════════════════════════════════════════════════════════════
+    // This ensures bookingModeLocked persists between Twilio webhook calls!
+    // ════════════════════════════════════════════════════════════════════════════
+    const updatedCallState = result.callState || callState;
+    
+    // Also save to session for backwards compatibility
     req.session = req.session || {};
-    req.session.callState = result.callState;
+    req.session.callState = updatedCallState;
+    
+    // 🔒 Save to Redis (primary persistence)
+    try {
+      const { getRedisClient } = require('../services/redisClientFactory');
+      const redisClient = await getRedisClient();
+      
+      if (redisClient) {
+        const stateKey = `callState:${callSid}`;
+        // Expire after 1 hour (calls shouldn't last longer)
+        await redisClient.setEx(stateKey, 3600, JSON.stringify(updatedCallState));
+        
+        logger.info('[CALL STATE] 🔒 Saved to Redis', {
+          callSid,
+          bookingModeLocked: !!updatedCallState.bookingModeLocked,
+          bookingState: updatedCallState.bookingState,
+          turnCount: updatedCallState.turnCount
+        });
+      }
+    } catch (redisErr) {
+      logger.error('[CALL STATE] Redis save failed!', { 
+        callSid, 
+        error: redisErr.message,
+        bookingModeLocked: !!updatedCallState.bookingModeLocked
+      });
+    }
     
     logger.security('🎯 CHECKPOINT 16: Creating TwiML response');
     const twiml = new twilio.twiml.VoiceResponse();

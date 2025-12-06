@@ -74,8 +74,20 @@ class LLM0OrchestratorService {
         // Just return a dummy decision - LLM0TurnHandler will intercept and 
         // route directly to slot-filling.
         // ════════════════════════════════════════════════════════════════════════════
+        
+        // 🔍 DEBUG: Log the exact booking state values
+        logger.info('[LLM-0] 🔍 LOCK CHECK - callState booking fields:', {
+            companyId,
+            callId,
+            bookingModeLocked: callState?.bookingModeLocked,
+            bookingState: callState?.bookingState,
+            currentBookingStep: callState?.currentBookingStep,
+            hasCallState: !!callState,
+            callStateKeys: callState ? Object.keys(callState).filter(k => k.includes('book')).join(',') : 'none'
+        });
+        
         if (callState?.bookingModeLocked && callState?.bookingState) {
-            logger.info('[LLM-0] 🔒 BOOKING HARD LOCK - Skipping Brain-1 entirely', {
+            logger.info('[LLM-0] 🔒 BOOKING HARD LOCK ACTIVE - Skipping Brain-1 entirely', {
                 companyId,
                 callId,
                 bookingState: callState.bookingState,
@@ -91,6 +103,14 @@ class LLM0OrchestratorService {
             bypassDecision.debug.reasoning = 'Booking mode locked - bypassed Brain-1';
             bypassDecision.debug.processingTimeMs = Date.now() - startTime;
             return bypassDecision;
+        } else if (callState?.bookingModeLocked) {
+            // Lock is set but bookingState is missing - something is wrong
+            logger.warn('[LLM-0] ⚠️ LOCK CHECK FAILED - bookingModeLocked=true but no bookingState!', {
+                companyId,
+                callId,
+                bookingModeLocked: callState.bookingModeLocked,
+                bookingState: callState.bookingState
+            });
         }
         
         // ====================================================================
