@@ -15,6 +15,7 @@
 
 const express = require('express');
 const router = express.Router({ mergeParams: true });
+const mongoose = require('mongoose');
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const BlackBoxRecording = require('../../models/BlackBoxRecording');
 const logger = require('../../utils/logger');
@@ -152,7 +153,7 @@ router.get('/stats', async (req, res) => {
     const stats = await BlackBoxRecording.aggregate([
       {
         $match: {
-          companyId: require('mongoose').Types.ObjectId(companyId),
+          companyId: new mongoose.Types.ObjectId(companyId),
           startedAt: { $gte: fromDate }
         }
       },
