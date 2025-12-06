@@ -21,6 +21,7 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
+const mongoose = require('mongoose');
 const CallSummary = require('../models/CallSummary');
 const CallDailyStats = require('../models/CallDailyStats');
 const Customer = require('../models/Customer');
@@ -146,7 +147,7 @@ class CallCenterMonitor {
     const stats = await CallSummary.aggregate([
       {
         $match: {
-          companyId: require('mongoose').Types.ObjectId(companyId),
+          companyId: new mongoose.Types.ObjectId(companyId),
           startedAt: { $gte: oneDayAgo }
         }
       },
@@ -283,7 +284,7 @@ class CallCenterMonitor {
       CallSummary.aggregate([
         {
           $match: {
-            companyId: require('mongoose').Types.ObjectId(companyId),
+            companyId: new mongoose.Types.ObjectId(companyId),
             startedAt: { $gte: oneDayAgo }
           }
         },

@@ -297,7 +297,7 @@ async function migrate() {
     // Build query
     const query = {};
     if (CONFIG.companyIds) {
-      query._id = { $in: CONFIG.companyIds.map(id => mongoose.Types.ObjectId(id)) };
+      query._id = { $in: CONFIG.companyIds.map(id => new mongoose.Types.ObjectId(id)) };
     }
     
     // Fetch companies
@@ -391,7 +391,7 @@ async function rollback() {
   
   for (const companyIdStr of CONFIG.companyIds) {
     try {
-      const companyId = mongoose.Types.ObjectId(companyIdStr);
+      const companyId = new mongoose.Types.ObjectId(companyIdStr);
       
       // Remove version
       await CheatSheetVersion.deleteMany({ companyId });
