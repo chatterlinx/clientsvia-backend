@@ -92,25 +92,7 @@ class VoiceCoreTabManager {
             }
         }
         
-        if (tabName === 'llm0-controls') {
-            // Initialize LLM-0 Controls Manager
-            const companyId = window.currentCompanyId || document.querySelector('[data-company-id]')?.dataset?.companyId;
-            if (companyId && window.initLLM0Controls) {
-                console.log('🧠 [VOICECORE TABS] Initializing LLM-0 Controls for company:', companyId);
-                window.initLLM0Controls(companyId, 'llm0-controls-container');
-            } else if (!companyId) {
-                console.warn('🧠 [VOICECORE TABS] No company ID found for LLM-0 Controls');
-                document.getElementById('llm0-controls-container').innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: #ef4444;">
-                        <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
-                        <h3>Company ID Required</h3>
-                        <p>Please select a company first.</p>
-                    </div>
-                `;
-            } else if (!window.initLLM0Controls) {
-                console.warn('🧠 [VOICECORE TABS] LLM0ControlsManager script not loaded');
-            }
-        }
+        // NOTE: LLM-0 Controls moved to Control Plane → Live Agent Status
     }
 
     /**
