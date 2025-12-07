@@ -543,6 +543,102 @@ class LLM0TurnHandler {
             hasScheduling: !!decision.entities?.scheduling
         });
         
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🔧 SERVICE TYPE CLARIFICATION - "Is this repair or maintenance?"
+        // ════════════════════════════════════════════════════════════════════════════
+        // CRITICAL: Companies may have DIFFERENT CALENDARS for repair vs maintenance
+        // We MUST know which type BEFORE we can properly book the appointment!
+        // ════════════════════════════════════════════════════════════════════════════
+        
+        const ServiceTypeClarifier = require('./ServiceTypeClarifier');
+        const stConfig = company?.aiAgentSettings?.serviceTypeClarification;
+        
+        // Check if service type already determined (from previous turn or clear keywords)
+        if (!callState?.serviceTypeDetected) {
+            const clarifyResult = ServiceTypeClarifier.shouldClarify(userInput, stConfig);
+            
+            if (clarifyResult.needsClarification) {
+                // Service type is ambiguous - ask for clarification
+                const question = ServiceTypeClarifier.getClarificationQuestion(stConfig);
+                
+                logger.info('[LLM0 TURN HANDLER] 🔧 SERVICE TYPE CLARIFICATION NEEDED', {
+                    companyId,
+                    callId,
+                    reason: clarifyResult.reason,
+                    matchedPhrase: clarifyResult.matchedPhrase
+                });
+                
+                // Log to Black Box
+                try {
+                    const BlackBoxLogger = require('./BlackBoxLogger');
+                    await BlackBoxLogger.logEvent({
+                        callId,
+                        companyId,
+                        type: 'SERVICE_TYPE_CLARIFICATION_ASKED',
+                        data: {
+                            userInput: userInput?.substring(0, 100),
+                            reason: clarifyResult.reason,
+                            matchedPhrase: clarifyResult.matchedPhrase
+                        }
+                    });
+                } catch (logErr) {
+                    logger.debug('[LLM0 TURN HANDLER] Black Box log failed');
+                }
+                
+                return {
+                    text: question,
+                    action: 'continue',
+                    shouldTransfer: false,
+                    shouldHangup: false,
+                    callState: {
+                        ...callState,
+                        // Mark that we're waiting for service type clarification
+                        serviceTypeClarificationAsked: true,
+                        bookingState: 'ASK_SERVICE_TYPE',
+                        currentBookingStep: 'ASK_SERVICE_TYPE'
+                    },
+                    debug: {
+                        route: 'BOOKING',
+                        awaitingServiceType: true,
+                        clarificationReason: clarifyResult.reason
+                    }
+                };
+            }
+            
+            // Check if we can detect service type from the input (clear keywords)
+            const detected = clarifyResult.detectedType || ServiceTypeClarifier.detectServiceType(userInput, stConfig);
+            if (detected) {
+                logger.info('[LLM0 TURN HANDLER] 🔧 SERVICE TYPE AUTO-DETECTED', {
+                    companyId,
+                    callId,
+                    serviceType: detected.key,
+                    matchedKeyword: detected.matchedKeyword
+                });
+                
+                // Store detected service type in callState
+                callState.serviceTypeDetected = detected;
+                
+                // Log to Black Box
+                try {
+                    const BlackBoxLogger = require('./BlackBoxLogger');
+                    await BlackBoxLogger.logEvent({
+                        callId,
+                        companyId,
+                        type: 'SERVICE_TYPE_DETECTED',
+                        data: {
+                            serviceType: detected.key,
+                            label: detected.label,
+                            matchedKeyword: detected.matchedKeyword,
+                            calendarId: detected.calendarId,
+                            source: 'auto_detection'
+                        }
+                    });
+                } catch (logErr) {
+                    logger.debug('[LLM0 TURN HANDLER] Black Box log failed');
+                }
+            }
+        }
+        
         // Check if we have minimum required info for booking
         const contact = decision.entities?.contact || {};
         const location = decision.entities?.location || {};
@@ -654,6 +750,68 @@ class LLM0TurnHandler {
         let responseText = '';
         
         switch (currentStep) {
+            // ════════════════════════════════════════════════════════════════════════════
+            // 🔧 SERVICE TYPE CLARIFICATION RESPONSE
+            // ════════════════════════════════════════════════════════════════════════════
+            case 'ASK_SERVICE_TYPE':
+            case 'service_type_clarification':
+                const ServiceTypeClarifier = require('./ServiceTypeClarifier');
+                // Get company config - need to load it fresh here
+                let stConfig = null;
+                try {
+                    const v2Company = require('../models/v2Company');
+                    const company = await v2Company.findById(companyId).lean();
+                    stConfig = company?.aiAgentSettings?.serviceTypeClarification;
+                } catch (e) {
+                    logger.warn('[LLM0 TURN HANDLER] Could not load company config for service type');
+                }
+                
+                const detectedServiceType = ServiceTypeClarifier.detectServiceType(userInput, stConfig);
+                
+                if (detectedServiceType) {
+                    // Service type detected from their response
+                    callState.serviceTypeDetected = detectedServiceType;
+                    newCollected.serviceType = detectedServiceType.key;
+                    nextStep = 'ASK_NAME';
+                    
+                    // Use appropriate response based on type
+                    const typeLabel = detectedServiceType.label || detectedServiceType.key;
+                    responseText = `Got it, I'll schedule a ${typeLabel.toLowerCase()} appointment. May I have your name please?`;
+                    
+                    logger.info('[LLM0 TURN HANDLER] 🔧 SERVICE TYPE CLARIFIED', {
+                        companyId,
+                        callId,
+                        serviceType: detectedServiceType.key,
+                        matchedKeyword: detectedServiceType.matchedKeyword,
+                        calendarId: detectedServiceType.calendarId
+                    });
+                    
+                    // Log to Black Box
+                    try {
+                        const BlackBoxLogger = require('./BlackBoxLogger');
+                        await BlackBoxLogger.logEvent({
+                            callId,
+                            companyId,
+                            type: 'SERVICE_TYPE_DETECTED',
+                            data: {
+                                serviceType: detectedServiceType.key,
+                                label: detectedServiceType.label,
+                                matchedKeyword: detectedServiceType.matchedKeyword,
+                                calendarId: detectedServiceType.calendarId,
+                                source: 'clarification_response'
+                            }
+                        });
+                    } catch (logErr) {
+                        logger.debug('[LLM0 TURN HANDLER] Black Box log failed');
+                    }
+                } else {
+                    // Still can't determine - ask again more directly
+                    responseText = "Just so I put you in the right spot, is this more of a repair issue or a routine maintenance visit?";
+                    // Stay on same step
+                    logger.debug('[LLM0 TURN HANDLER] Service type still unclear, asking again');
+                }
+                break;
+            
             case 'ASK_NAME':
             case 'collecting_name':
                 const extractedName = this.extractName(userInput);

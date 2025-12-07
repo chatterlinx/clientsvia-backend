@@ -1438,6 +1438,63 @@ const companySchema = new mongoose.Schema({
         },
         
         // -------------------------------------------------------------------
+        // SERVICE TYPE CLARIFICATION - "Is this repair or maintenance?"
+        // -------------------------------------------------------------------
+        // CRITICAL: Determines which CALENDAR to book into!
+        // "I need AC service" is AMBIGUOUS - could be repair or maintenance
+        // This system asks for clarification before routing to booking.
+        // 
+        // Template-level defaults are in ServiceTypeClarifier.js
+        // Company overrides are stored here.
+        // -------------------------------------------------------------------
+        serviceTypeClarification: {
+            // Master toggle
+            enabled: { type: Boolean, default: true },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // AMBIGUOUS PHRASES - Trigger clarification question
+            // ═══════════════════════════════════════════════════════════════
+            // When caller uses these WITHOUT clear repair/maintenance keywords
+            // e.g., "I need service" → ambiguous → ask which type
+            ambiguousPhrases: [{
+                type: String,
+                trim: true,
+                lowercase: true
+            }],
+            
+            // ═══════════════════════════════════════════════════════════════
+            // CLARIFICATION QUESTION - Asked when ambiguous
+            // ═══════════════════════════════════════════════════════════════
+            clarificationQuestion: {
+                type: String,
+                trim: true,
+                default: "Absolutely — is this for a repair issue, or routine maintenance and tune-up?"
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // SERVICE TYPES - Each type has keywords and calendar mapping
+            // ═══════════════════════════════════════════════════════════════
+            serviceTypes: [{
+                key: { type: String, required: true, trim: true, lowercase: true },
+                label: { type: String, required: true, trim: true },
+                keywords: [{
+                    type: String,
+                    trim: true,
+                    lowercase: true
+                }],
+                calendarId: { type: String, default: null, trim: true },
+                priority: { type: Number, default: 99 }, // Lower = higher priority
+                enabled: { type: Boolean, default: true }
+            }],
+            
+            // ═══════════════════════════════════════════════════════════════
+            // METADATA
+            // ═══════════════════════════════════════════════════════════════
+            lastUpdated: { type: Date, default: Date.now },
+            updatedBy: { type: String, default: null, trim: true }
+        },
+        
+        // -------------------------------------------------------------------
         // CHEAT SHEET META - Version Control Pointers (NEW ARCHITECTURE)
         // -------------------------------------------------------------------
         // LIGHTWEIGHT POINTERS ONLY - actual configs stored in CheatSheetVersion collection
