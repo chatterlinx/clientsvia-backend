@@ -237,11 +237,33 @@ class MissionCacheService {
      * 
      * @param {string} companyId - The company ID
      * @param {string} trade - Optional trade filter (e.g., 'hvac', 'plumbing')
-     * @returns {object} The rebuilt mission triggers
+     * @param {object} options - Optional settings { returnReport: boolean }
+     * @returns {object} The rebuilt mission triggers (or detailed report if returnReport=true)
      */
-    static async rebuildMissionCache(companyId, trade = '_default') {
+    static async rebuildMissionCache(companyId, trade = '_default', options = {}) {
         const startTime = Date.now();
+        const { returnReport = false } = options;
+        
         logger.info(`[MISSION CACHE] 🔄 Rebuilding cache for company ${companyId}, trade: ${trade}`);
+        
+        // ====================================================================
+        // SYNC REPORT - Track what we find for admin feedback
+        // ====================================================================
+        const syncReport = {
+            triageCardsScanned: 0,
+            scenariosScanned: 0,
+            extracted: {
+                booking: { fromTriage: 0, fromScenarios: 0, fromDefaults: 0 },
+                emergency: { fromTriage: 0, fromScenarios: 0, fromDefaults: 0 },
+                cancel: { fromTriage: 0, fromScenarios: 0, fromDefaults: 0 },
+                reschedule: { fromTriage: 0, fromScenarios: 0, fromDefaults: 0 },
+                transfer: { fromTriage: 0, fromScenarios: 0, fromDefaults: 0 },
+                message: { fromTriage: 0, fromScenarios: 0, fromDefaults: 0 }
+            },
+            totals: {},
+            newTriggersFound: 0,
+            sources: {}
+        };
         
         try {
             // Load all data in parallel
@@ -251,10 +273,18 @@ class MissionCacheService {
                 Company ? Company.findById(companyId).lean() : null
             ]);
             
+            syncReport.triageCardsScanned = triageCards.length;
+            syncReport.scenariosScanned = scenarios.length;
+            
             logger.debug(`[MISSION CACHE] Loaded: ${triageCards.length} triage cards, ${scenarios.length} scenarios`);
             
-            // Initialize mission structure
+            // Initialize mission structure (with universal defaults)
             const mission = createEmptyMission();
+            
+            // Count default triggers
+            for (const flowType of Object.keys(mission)) {
+                syncReport.extracted[flowType].fromDefaults = mission[flowType].auto.length;
+            }
             
             // ================================================================
             // 1. EXTRACT FROM TRIAGE CARDS
@@ -270,6 +300,9 @@ class MissionCacheService {
                 if (flowType && mission[flowType] && keywords.length > 0) {
                     // Add keywords to auto list
                     mission[flowType].auto.push(...keywords);
+                    
+                    // Track for sync report
+                    syncReport.extracted[flowType].fromTriage += keywords.length;
                     
                     // Track source for debugging
                     for (const kw of keywords) {
@@ -312,6 +345,9 @@ class MissionCacheService {
                 
                 if (flowType && mission[flowType] && triggers.length > 0) {
                     mission[flowType].auto.push(...triggers);
+                    
+                    // Track for sync report
+                    syncReport.extracted[flowType].fromScenarios += triggers.length;
                     
                     for (const trigger of triggers) {
                         const normalizedTrigger = normalizeKeyword(trigger);
@@ -389,6 +425,23 @@ class MissionCacheService {
             }
             
             const duration = Date.now() - startTime;
+            
+            // Build final totals for sync report
+            for (const flowType of Object.keys(finalMission)) {
+                syncReport.totals[flowType] = finalMission[flowType].all.length;
+                syncReport.sources[flowType] = {
+                    defaults: syncReport.extracted[flowType].fromDefaults,
+                    triage: syncReport.extracted[flowType].fromTriage,
+                    scenarios: syncReport.extracted[flowType].fromScenarios,
+                    total: finalMission[flowType].all.length
+                };
+            }
+            
+            // Calculate total new triggers found (from triage + scenarios)
+            syncReport.newTriggersFound = Object.keys(syncReport.extracted).reduce((sum, flowType) => {
+                return sum + syncReport.extracted[flowType].fromTriage + syncReport.extracted[flowType].fromScenarios;
+            }, 0);
+            
             logger.info(`[MISSION CACHE] ✅ Rebuilt in ${duration}ms`, {
                 companyId,
                 trade,
@@ -399,8 +452,19 @@ class MissionCacheService {
                     reschedule: finalMission.reschedule.all.length,
                     transfer: finalMission.transfer.all.length,
                     message: finalMission.message.all.length
-                }
+                },
+                newFromTriage: Object.values(syncReport.extracted).reduce((s, e) => s + e.fromTriage, 0),
+                newFromScenarios: Object.values(syncReport.extracted).reduce((s, e) => s + e.fromScenarios, 0)
             });
+            
+            // Return detailed report if requested (for UI feedback)
+            if (returnReport) {
+                return {
+                    missionTriggers: finalMission,
+                    ...syncReport,
+                    rebuildDurationMs: duration
+                };
+            }
             
             return finalMission;
             

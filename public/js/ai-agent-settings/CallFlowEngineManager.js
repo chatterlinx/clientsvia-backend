@@ -361,12 +361,125 @@ class CallFlowEngineManager {
             this.config.stats = result.data.stats;
             this.config.lastCacheRebuild = new Date().toISOString();
             
-            this.showNotification('✅ Triggers synced from Triage/Scenarios', 'success');
+            // Show detailed sync report popup
+            const report = result.data.syncReport;
+            if (report) {
+                this.showSyncReportModal(report);
+            } else {
+                this.showNotification('✅ Triggers synced from Triage/Scenarios', 'success');
+            }
+            
             this.render();
             
         } catch (error) {
             this.showNotification('Failed to sync: ' + error.message, 'error');
         }
+    }
+    
+    /**
+     * Show a detailed sync report modal
+     */
+    showSyncReportModal(report) {
+        // Remove existing modal
+        const existing = document.getElementById('cfe-sync-modal');
+        if (existing) existing.remove();
+        
+        const flowIcons = {
+            booking: '📅',
+            emergency: '🚨',
+            cancel: '❌',
+            reschedule: '📆',
+            transfer: '📞',
+            message: '💬'
+        };
+        
+        const flowLabels = {
+            booking: 'BOOKING',
+            emergency: 'EMERGENCY',
+            cancel: 'CANCEL',
+            reschedule: 'RESCHEDULE',
+            transfer: 'TRANSFER',
+            message: 'MESSAGE'
+        };
+        
+        // Build flow rows
+        let flowRows = '';
+        for (const [flowType, sources] of Object.entries(report.sources || {})) {
+            const icon = flowIcons[flowType] || '📌';
+            const label = flowLabels[flowType] || flowType.toUpperCase();
+            const fromTriage = sources.triage || 0;
+            const fromScenarios = sources.scenarios || 0;
+            const fromDefaults = sources.defaults || 0;
+            const total = sources.total || 0;
+            
+            // Highlight new triggers (from triage/scenarios)
+            const newCount = fromTriage + fromScenarios;
+            const newBadge = newCount > 0 
+                ? `<span style="background: #10b981; color: white; font-size: 11px; padding: 2px 6px; border-radius: 10px; margin-left: 8px;">+${newCount} new</span>`
+                : '';
+            
+            flowRows += `
+                <tr style="border-bottom: 1px solid #e5e7eb;">
+                    <td style="padding: 10px 0; font-weight: 600;">${icon} ${label}${newBadge}</td>
+                    <td style="padding: 10px 0; text-align: center; color: #6b7280;">${fromDefaults}</td>
+                    <td style="padding: 10px 0; text-align: center; color: ${fromTriage > 0 ? '#10b981' : '#9ca3af'}; font-weight: ${fromTriage > 0 ? '600' : '400'};">${fromTriage}</td>
+                    <td style="padding: 10px 0; text-align: center; color: ${fromScenarios > 0 ? '#6366f1' : '#9ca3af'}; font-weight: ${fromScenarios > 0 ? '600' : '400'};">${fromScenarios}</td>
+                    <td style="padding: 10px 0; text-align: center; font-weight: 700;">${total}</td>
+                </tr>
+            `;
+        }
+        
+        const totalNew = report.newTriggersFound || 0;
+        const summaryText = totalNew > 0
+            ? `<span style="color: #10b981; font-weight: 600;">Found ${totalNew} new triggers</span> from your Triage Cards & Scenarios!`
+            : `No new triggers found. All triggers are from universal defaults.`;
+        
+        const modal = document.createElement('div');
+        modal.id = 'cfe-sync-modal';
+        modal.innerHTML = `
+            <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;">
+                <div style="background: white; border-radius: 16px; padding: 24px; max-width: 600px; width: 90%; max-height: 85vh; overflow: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h2 style="margin: 0; font-size: 20px; font-weight: 700;">✅ Sync Complete</h2>
+                        <button onclick="document.getElementById('cfe-sync-modal').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280;">&times;</button>
+                    </div>
+                    
+                    <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+                        <p style="margin: 0; font-size: 14px;">${summaryText}</p>
+                    </div>
+                    
+                    <div style="background: #f9fafb; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                        <div style="display: flex; gap: 24px; font-size: 13px; color: #6b7280;">
+                            <span>📋 Scanned <strong>${report.scanned?.triageCards || 0}</strong> Triage Cards</span>
+                            <span>🎭 Scanned <strong>${report.scanned?.scenarios || 0}</strong> Scenarios</span>
+                        </div>
+                    </div>
+                    
+                    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                        <thead>
+                            <tr style="background: #f9fafb; border-bottom: 2px solid #e5e7eb;">
+                                <th style="padding: 10px 0; text-align: left; font-weight: 600;">Flow</th>
+                                <th style="padding: 10px 0; text-align: center; font-weight: 600; color: #6b7280;">Defaults</th>
+                                <th style="padding: 10px 0; text-align: center; font-weight: 600; color: #10b981;">From Triage</th>
+                                <th style="padding: 10px 0; text-align: center; font-weight: 600; color: #6366f1;">From Scenarios</th>
+                                <th style="padding: 10px 0; text-align: center; font-weight: 600;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${flowRows}
+                        </tbody>
+                    </table>
+                    
+                    <div style="margin-top: 20px; text-align: right;">
+                        <button onclick="document.getElementById('cfe-sync-modal').remove()" 
+                                style="background: #6366f1; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                            Got it!
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
     }
     
     async testSentence() {

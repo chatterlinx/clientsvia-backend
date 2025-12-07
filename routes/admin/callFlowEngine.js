@@ -223,15 +223,28 @@ router.post('/:companyId/rebuild', authenticateJWT, async (req, res) => {
         
         logger.info('[CALL FLOW ENGINE] Rebuilding mission cache for:', companyId);
         
-        const missionTriggers = await MissionCacheService.rebuildMissionCache(companyId, trade);
+        // Get the sync report with detailed statistics
+        const syncResult = await MissionCacheService.rebuildMissionCache(companyId, trade, { returnReport: true });
         const stats = await MissionCacheService.getStats(companyId, trade);
         
         res.json({
             success: true,
             message: 'Mission cache rebuilt successfully',
             data: {
-                missionTriggers,
-                stats
+                missionTriggers: syncResult.missionTriggers,
+                stats,
+                // Detailed sync report for admin feedback
+                syncReport: {
+                    timestamp: new Date().toISOString(),
+                    scanned: {
+                        triageCards: syncResult.triageCardsScanned || 0,
+                        scenarios: syncResult.scenariosScanned || 0
+                    },
+                    extracted: syncResult.extracted || {},
+                    totals: syncResult.totals || {},
+                    newTriggersFound: syncResult.newTriggersFound || 0,
+                    sources: syncResult.sources || {}
+                }
             }
         });
         
