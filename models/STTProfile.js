@@ -484,4 +484,110 @@ STTProfileSchema.statics.createDefaultForTemplate = async function(template) {
     });
 };
 
+/**
+ * Sync vocabulary from template (re-scan keywords from scenarios/triage cards)
+ * @param {ObjectId} templateId - Template ID
+ * @param {Object} template - Template document
+ * @returns {Object} Updated profile
+ */
+STTProfileSchema.statics.syncFromTemplate = async function(templateId, template) {
+    let profile = await this.findOne({ templateId });
+    
+    if (!profile) {
+        // Create new profile if doesn't exist
+        return this.createDefaultForTemplate(template);
+    }
+    
+    // Extract keywords from template
+    const boostedKeywords = [];
+    
+    // From scenarios
+    if (template.scenarios) {
+        for (const scenario of template.scenarios) {
+            if (scenario.keywords) {
+                for (const kw of scenario.keywords) {
+                    boostedKeywords.push({ 
+                        phrase: kw, 
+                        type: 'scenario', 
+                        source: scenario.name || 'Scenario', 
+                        boostWeight: 5, 
+                        enabled: true 
+                    });
+                }
+            }
+            if (scenario.triggers) {
+                for (const trigger of scenario.triggers) {
+                    boostedKeywords.push({ 
+                        phrase: trigger, 
+                        type: 'scenario', 
+                        source: scenario.name || 'Scenario', 
+                        boostWeight: 6, 
+                        enabled: true 
+                    });
+                }
+            }
+        }
+    }
+    
+    // From triage cards
+    if (template.categories) {
+        for (const category of template.categories) {
+            if (category.triageCards) {
+                for (const card of category.triageCards) {
+                    if (card.keywords) {
+                        for (const kw of card.keywords) {
+                            boostedKeywords.push({ 
+                                phrase: kw, 
+                                type: 'triage_card', 
+                                source: card.issue || category.name, 
+                                boostWeight: 7, 
+                                enabled: true 
+                            });
+                        }
+                    }
+                    if (card.issue) {
+                        boostedKeywords.push({ 
+                            phrase: card.issue, 
+                            type: 'triage_card', 
+                            source: category.name, 
+                            boostWeight: 7, 
+                            enabled: true 
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    // Deduplicate
+    const uniqueKeywords = [];
+    const seenPhrases = new Set();
+    for (const kw of boostedKeywords) {
+        const norm = kw.phrase.toLowerCase().trim();
+        if (!seenPhrases.has(norm)) {
+            seenPhrases.add(norm);
+            uniqueKeywords.push(kw);
+        }
+    }
+    
+    // Merge with existing manual keywords (preserve user-added ones)
+    const existingManual = (profile.vocabulary?.boostedKeywords || [])
+        .filter(k => k.type === 'manual');
+    
+    const allKeywords = [...uniqueKeywords, ...existingManual];
+    
+    // Update profile
+    profile.vocabulary.boostedKeywords = allKeywords;
+    profile.vocabulary.lastSyncAt = new Date();
+    profile.vocabulary.lastSyncStats = {
+        triageCardKeywords: uniqueKeywords.filter(k => k.type === 'triage_card').length,
+        scenarioKeywords: uniqueKeywords.filter(k => k.type === 'scenario').length,
+        technicianNames: 0,
+        serviceNames: 0
+    };
+    
+    await profile.save();
+    return profile;
+};
+
 module.exports = mongoose.model('STTProfile', STTProfileSchema);
