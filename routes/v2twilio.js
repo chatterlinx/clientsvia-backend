@@ -1580,7 +1580,7 @@ router.post('/handle-speech', async (req, res) => {
     logger.debug(`[LOW CONFIDENCE] ✅ Confidence ${confidencePercent.toFixed(1)}% passed threshold - proceeding with normal flow`);
 
     // Process QA matching using new Company Q&A system
-    const companyId = company._id.toString();
+    // companyId already declared above in Low Confidence Handler
     const qnaEntries = await CompanyQnA.find({ companyId, isActive: true });
     logger.debug(`[Q&A] Loaded ${qnaEntries.length} Company Q&A entries for company ${companyId}`);
     logger.debug(`[Q&A DEBUG] Loaded Company Q&A entries for company ${companyId}:`, qnaEntries.map(e => ({
