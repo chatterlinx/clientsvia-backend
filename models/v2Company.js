@@ -1172,6 +1172,60 @@ const companySchema = new mongoose.Schema({
                 lowConfidence: { type: Number, default: 0.45, min: 0.1, max: 0.7 },
                 fallbackToLLM: { type: Number, default: 0.4, min: 0.1, max: 0.6 }
             },
+            // SMART CONFIRMATION - Prevents wrong decisions on critical actions
+            smartConfirmation: {
+                enabled: { type: Boolean, default: true },
+                // When to ask for explicit confirmation
+                confirmTransfers: { type: Boolean, default: true },      // ALWAYS confirm transfers
+                confirmBookings: { type: Boolean, default: false },      // Optional for bookings
+                confirmEmergency: { type: Boolean, default: true },      // ALWAYS confirm emergencies
+                confirmCancellations: { type: Boolean, default: true },  // ALWAYS confirm cancellations
+                // Confidence-based confirmation
+                confirmBelowConfidence: { type: Number, default: 0.75, min: 0.5, max: 0.95 },
+                // Confirmation style
+                confirmationStyle: {
+                    type: String,
+                    enum: ['explicit', 'implicit', 'smart'],  // smart = based on severity
+                    default: 'smart'
+                },
+                // Custom phrases
+                transferConfirmPhrase: {
+                    type: String,
+                    default: "Before I transfer you, I want to make sure - you'd like to speak with a live agent, correct?",
+                    trim: true
+                },
+                bookingConfirmPhrase: {
+                    type: String,
+                    default: "Just to confirm, you'd like to schedule a service appointment, is that right?",
+                    trim: true
+                },
+                emergencyConfirmPhrase: {
+                    type: String,
+                    default: "This sounds like an emergency. I want to make sure - should I dispatch someone right away?",
+                    trim: true
+                },
+                lowConfidencePhrase: {
+                    type: String,
+                    default: "I want to make sure I understand correctly. You're looking for help with {detected_intent}, is that right?",
+                    trim: true
+                },
+                // Response handling
+                onYesResponse: {
+                    type: String,
+                    enum: ['proceed', 'double_confirm'],
+                    default: 'proceed'
+                },
+                onNoResponse: {
+                    type: String,
+                    enum: ['clarify', 'restart', 'apologize_and_clarify'],
+                    default: 'apologize_and_clarify'
+                },
+                clarifyPhrase: {
+                    type: String,
+                    default: "I apologize for the confusion. Could you tell me more about what you need help with?",
+                    trim: true
+                }
+            },
             // METADATA
             lastUpdated: { type: Date, default: Date.now },
             updatedBy: { type: String, default: null, trim: true }

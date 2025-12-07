@@ -326,6 +326,9 @@ class LLM0ControlsManager {
             <!-- CONFIDENCE THRESHOLDS -->
             ${this.renderConfidencePanel(c.confidenceThresholds)}
 
+            <!-- SMART CONFIRMATION -->
+            ${this.renderSmartConfirmationPanel(c.smartConfirmation || {})}
+
             <!-- ACTIONS -->
             <div class="llm0-actions">
                 <button class="llm0-btn llm0-btn-secondary" onclick="window.llm0ControlsManager.resetToDefaults()">
@@ -707,6 +710,154 @@ class LLM0ControlsManager {
         `;
     }
 
+    renderSmartConfirmationPanel(sc) {
+        // Provide defaults if smartConfirmation doesn't exist yet
+        sc = sc || {
+            enabled: true,
+            confirmTransfers: true,
+            confirmBookings: false,
+            confirmEmergency: true,
+            confirmCancellations: true,
+            confirmBelowConfidence: 0.75,
+            confirmationStyle: 'smart',
+            transferConfirmPhrase: "Before I transfer you, I want to make sure - you'd like to speak with a live agent, correct?",
+            bookingConfirmPhrase: "Just to confirm, you'd like to schedule a service appointment, is that right?",
+            emergencyConfirmPhrase: "This sounds like an emergency. I want to make sure - should I dispatch someone right away?",
+            lowConfidencePhrase: "I want to make sure I understand correctly. You're looking for help with {detected_intent}, is that right?",
+            onNoResponse: 'apologize_and_clarify',
+            clarifyPhrase: "I apologize for the confusion. Could you tell me more about what you need help with?"
+        };
+
+        return `
+            <div class="llm0-panel">
+                <div class="llm0-panel-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+                    <div class="llm0-panel-title">
+                        <span>✅</span> Smart Confirmation
+                    </div>
+                    <div class="llm0-panel-toggle">
+                        <span style="font-size: 12px;">Enabled</span>
+                        <div class="llm0-toggle ${sc.enabled !== false ? 'active' : ''}" data-section="smartConfirmation" data-field="enabled">
+                            <div class="llm0-toggle-knob"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="llm0-panel-body">
+                    <p style="color: #6b7280; margin-bottom: 16px;">
+                        <strong>Prevents embarrassing mistakes.</strong> Confirm critical decisions before acting to avoid wrong transfers, bookings, or dispatches.
+                    </p>
+                    
+                    <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+                        <span style="font-size: 14px;">💡 <strong>Why this matters:</strong> A wrong transfer = lost customer. A wrong emergency dispatch = liability. Confirmation takes 3 seconds but saves hours of problems.</span>
+                    </div>
+
+                    <h4 style="margin: 20px 0 12px; color: #374151; font-size: 14px; font-weight: 600;">🎯 Always Confirm These Actions</h4>
+                    
+                    <div class="llm0-row" style="grid-template-columns: 1fr 1fr;">
+                        <div class="llm0-checkbox-field">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" ${sc.confirmTransfers !== false ? 'checked' : ''} 
+                                       data-section="smartConfirmation" data-field="confirmTransfers">
+                                <span>📞 Transfers</span>
+                            </label>
+                            <div class="llm0-hint">High cost if wrong - always ask</div>
+                        </div>
+                        <div class="llm0-checkbox-field">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" ${sc.confirmEmergency !== false ? 'checked' : ''} 
+                                       data-section="smartConfirmation" data-field="confirmEmergency">
+                                <span>🚨 Emergency Dispatch</span>
+                            </label>
+                            <div class="llm0-hint">Safety critical - always verify</div>
+                        </div>
+                    </div>
+                    
+                    <div class="llm0-row" style="grid-template-columns: 1fr 1fr;">
+                        <div class="llm0-checkbox-field">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" ${sc.confirmBookings ? 'checked' : ''} 
+                                       data-section="smartConfirmation" data-field="confirmBookings">
+                                <span>📅 Bookings</span>
+                            </label>
+                            <div class="llm0-hint">Optional - can clarify during flow</div>
+                        </div>
+                        <div class="llm0-checkbox-field">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" ${sc.confirmCancellations !== false ? 'checked' : ''} 
+                                       data-section="smartConfirmation" data-field="confirmCancellations">
+                                <span>❌ Cancellations</span>
+                            </label>
+                            <div class="llm0-hint">Destructive action - confirm first</div>
+                        </div>
+                    </div>
+
+                    <h4 style="margin: 24px 0 12px; color: #374151; font-size: 14px; font-weight: 600;">📊 Confidence-Based Confirmation</h4>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Confirm when confidence below:</label>
+                        <div class="llm0-slider-container">
+                            <input type="range" class="llm0-slider" value="${(sc.confirmBelowConfidence || 0.75) * 100}" 
+                                   data-section="smartConfirmation" data-field="confirmBelowConfidence" 
+                                   min="50" max="95" id="confirm-conf-slider">
+                            <span id="confirm-conf-value">${((sc.confirmBelowConfidence || 0.75) * 100).toFixed(0)}%</span>
+                        </div>
+                        <div class="llm0-hint">If AI is less confident than this, always ask for confirmation</div>
+                    </div>
+
+                    <div class="llm0-field">
+                        <label class="llm0-label">Confirmation Style</label>
+                        <select class="llm0-input" data-section="smartConfirmation" data-field="confirmationStyle">
+                            <option value="smart" ${sc.confirmationStyle === 'smart' ? 'selected' : ''}>🧠 Smart (based on severity)</option>
+                            <option value="explicit" ${sc.confirmationStyle === 'explicit' ? 'selected' : ''}>✋ Explicit (always ask directly)</option>
+                            <option value="implicit" ${sc.confirmationStyle === 'implicit' ? 'selected' : ''}>💬 Implicit (weave into response)</option>
+                        </select>
+                    </div>
+
+                    <h4 style="margin: 24px 0 12px; color: #374151; font-size: 14px; font-weight: 600;">💬 Confirmation Phrases</h4>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Transfer Confirmation</label>
+                        <input type="text" class="llm0-input" value="${this.escapeHtml(sc.transferConfirmPhrase || '')}" 
+                               data-section="smartConfirmation" data-field="transferConfirmPhrase"
+                               placeholder="Before I transfer you, I want to make sure...">
+                    </div>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Emergency Confirmation</label>
+                        <input type="text" class="llm0-input" value="${this.escapeHtml(sc.emergencyConfirmPhrase || '')}" 
+                               data-section="smartConfirmation" data-field="emergencyConfirmPhrase"
+                               placeholder="This sounds like an emergency. Should I dispatch...">
+                    </div>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Low Confidence Confirmation</label>
+                        <input type="text" class="llm0-input" value="${this.escapeHtml(sc.lowConfidencePhrase || '')}" 
+                               data-section="smartConfirmation" data-field="lowConfidencePhrase"
+                               placeholder="I want to make sure I understand. You're looking for {detected_intent}...">
+                        <div class="llm0-hint">Use {detected_intent} as placeholder for what AI thinks caller wants</div>
+                    </div>
+
+                    <h4 style="margin: 24px 0 12px; color: #374151; font-size: 14px; font-weight: 600;">🔄 When Caller Says "No"</h4>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Recovery Action</label>
+                        <select class="llm0-input" data-section="smartConfirmation" data-field="onNoResponse">
+                            <option value="apologize_and_clarify" ${sc.onNoResponse === 'apologize_and_clarify' ? 'selected' : ''}>😊 Apologize & Ask What They Need</option>
+                            <option value="clarify" ${sc.onNoResponse === 'clarify' ? 'selected' : ''}>🔍 Just Ask for Clarification</option>
+                            <option value="restart" ${sc.onNoResponse === 'restart' ? 'selected' : ''}>🔄 Start Over Fresh</option>
+                        </select>
+                    </div>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Clarification Phrase</label>
+                        <input type="text" class="llm0-input" value="${this.escapeHtml(sc.clarifyPhrase || '')}" 
+                               data-section="smartConfirmation" data-field="clarifyPhrase"
+                               placeholder="I apologize for the confusion. Could you tell me...">
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     // ========================================================================
     // EVENT LISTENERS
     // ========================================================================
@@ -732,7 +883,8 @@ class LLM0ControlsManager {
             { id: 'high-conf-slider', display: 'high-conf-value', suffix: '%' },
             { id: 'med-conf-slider', display: 'med-conf-value', suffix: '%' },
             { id: 'low-conf-slider', display: 'low-conf-value', suffix: '%' },
-            { id: 'fallback-slider', display: 'fallback-value', suffix: '%' }
+            { id: 'fallback-slider', display: 'fallback-value', suffix: '%' },
+            { id: 'confirm-conf-slider', display: 'confirm-conf-value', suffix: '%' }
         ];
 
         sliders.forEach(s => {
