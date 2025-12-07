@@ -742,10 +742,32 @@
             }
         }
 
-        function refreshData() {
+        async function refreshData() {
+            // Show loading state
+            const callList = document.getElementById('callList');
+            const refreshBtn = document.querySelector('.btn-refresh');
+            
+            // Visual feedback
+            refreshBtn.innerHTML = '⏳ Loading...';
+            refreshBtn.disabled = true;
+            callList.innerHTML = `
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Refreshing call recordings...</p>
+                </div>
+            `;
+            
             currentPage = 0;
-            loadStats();
-            loadCalls();
+            
+            try {
+                await Promise.all([loadStats(), loadCalls()]);
+            } catch (error) {
+                console.error('Refresh failed:', error);
+            } finally {
+                // Restore button
+                refreshBtn.innerHTML = '🔄 Refresh';
+                refreshBtn.disabled = false;
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════
