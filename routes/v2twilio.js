@@ -20,6 +20,7 @@ const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTe
 const AdminSettings = require('../models/AdminSettings');
 const HybridScenarioSelector = require('../services/HybridScenarioSelector');
 const IntelligentRouter = require('../services/IntelligentRouter');  // 🧠 3-Tier Self-Improvement System
+const STTHintsBuilder = require('../services/STTHintsBuilder');  // 🎤 STT Hints from vocabulary
 const MatchDiagnostics = require('../services/MatchDiagnostics');
 const AdminNotificationService = require('../services/AdminNotificationService');  // 🚨 Critical error reporting
 // 🚀 V2 SYSTEM: Using V2 AI Agent Runtime instead of legacy agent.js
@@ -2659,6 +2660,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       logger.info('🎯 CHECKPOINT 21: Setting up next speech gathering');
       // Set up next gather - using configurable speech detection settings
       const speechDetection = company.aiAgentSettings?.voiceSettings?.speechDetection || {};
+      
+      // 🎤 Build STT hints from template vocabulary
+      const templateId = company.aiAgentSettings?.templateReferences?.[0]?.templateId;
+      const sttHints = await STTHintsBuilder.buildHints(templateId, company);
+      
       const gather = twiml.gather({
         input: 'speech',
         speechTimeout: (speechDetection.speechTimeout ?? 3).toString(), // Configurable: 1-10 seconds (default: 3s)
@@ -2667,7 +2673,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         timeout: speechDetection.initialTimeout ?? 5,
         enhanced: speechDetection.enhancedRecognition ?? true,
         action: `/api/twilio/v2-agent-respond/${companyID}`,
-        method: 'POST'
+        method: 'POST',
+        hints: sttHints  // 🎤 Template-specific vocabulary for better STT accuracy
       });
       
       gather.say('');

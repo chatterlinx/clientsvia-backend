@@ -20,6 +20,7 @@
 const logger = require('../utils/logger');
 const TriageRouter = require('./TriageRouter');
 const AIBrain3tierllm = require('./AIBrain3tierllm');
+const SmartConfirmationService = require('./SmartConfirmationService');
 
 /**
  * @typedef {Object} TurnResult
@@ -191,6 +192,83 @@ class LLM0TurnHandler {
                 categoryKey: decision.scenarioHints?.categoryKey,
                 transferTarget: null,
                 reason: `Fallback from action: ${decision.action}`
+            };
+        }
+        
+        // ====================================================================
+        // STEP 1.5: SMART CONFIRMATION CHECK (Dec 2025)
+        // ====================================================================
+        // Check if we're waiting for a confirmation response
+        if (callState?.pendingConfirmation && userInput) {
+            const confirmResult = SmartConfirmationService.processConfirmationResponse({
+                userInput,
+                callState,
+                llm0Controls
+            });
+            
+            logger.info('[LLM0 TURN HANDLER] ✅ Processing confirmation response', {
+                companyId,
+                callId,
+                confirmed: confirmResult.confirmed,
+                nextAction: confirmResult.nextAction
+            });
+            
+            if (confirmResult.confirmed) {
+                // User confirmed - proceed with original action
+                const clearedState = SmartConfirmationService.clearPendingState(callState);
+                callState = clearedState;
+                
+                // Restore original decision/route
+                if (callState.originalDecision) {
+                    triageResult.route = this.actionToRoute(callState.originalDecision.action);
+                }
+            } else {
+                // User said NO or was ambiguous
+                return {
+                    text: confirmResult.responseText,
+                    action: 'continue',
+                    shouldTransfer: false,
+                    shouldHangup: false,
+                    callState: SmartConfirmationService.clearPendingState(callState),
+                    debug: {
+                        route: 'CONFIRMATION_DECLINED',
+                        ...confirmResult.debug
+                    }
+                };
+            }
+        }
+        
+        // Check if THIS decision needs confirmation before executing
+        const confirmCheck = SmartConfirmationService.checkIfConfirmationNeeded({
+            action: triageResult.route,
+            confidence: decision.confidence || 0.5,
+            llm0Controls,
+            callState
+        });
+        
+        if (confirmCheck.needsConfirmation) {
+            logger.info('[LLM0 TURN HANDLER] ✅ Confirmation required before action', {
+                companyId,
+                callId,
+                route: triageResult.route,
+                severity: confirmCheck.severity
+            });
+            
+            return {
+                text: confirmCheck.confirmationPhrase,
+                action: 'continue',  // Stay on line, wait for yes/no
+                shouldTransfer: false,
+                shouldHangup: false,
+                callState: SmartConfirmationService.buildPendingState(
+                    callState, 
+                    confirmCheck, 
+                    { action: triageResult.route, confidence: decision.confidence }
+                ),
+                debug: {
+                    route: 'CONFIRMATION_REQUIRED',
+                    pendingAction: confirmCheck.pendingAction,
+                    severity: confirmCheck.severity
+                }
             };
         }
         
