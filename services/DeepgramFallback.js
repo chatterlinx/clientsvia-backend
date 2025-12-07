@@ -32,7 +32,23 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
 
+// Notification service for alerting admins on failures
+let AdminNotificationService;
+try {
+    AdminNotificationService = require('./AdminNotificationService');
+} catch (err) {
+    logger.warn('[DEEPGRAM] AdminNotificationService not available - alerts disabled');
+}
+
 const DG_API_KEY = process.env.DEEPGRAM_API_KEY || '';
+
+// Rate limiting for notifications (prevent spam)
+const notificationRateLimit = {
+    lastErrorNotification: 0,
+    errorCount: 0,
+    ERROR_COOLDOWN_MS: 5 * 60 * 1000,  // 5 minutes between error alerts
+    ERROR_THRESHOLD: 3,                 // Notify after 3 errors in cooldown period
+};
 
 // Deepgram configuration defaults
 const DG_DEFAULTS = {
@@ -110,6 +126,11 @@ async function transcribeWithDeepgram(recordingUrl, options = {}) {
     } catch (err) {
         const duration = Date.now() - startTime;
         logger.error(`[DEEPGRAM] ❌ Transcription failed (${duration}ms):`, err?.response?.data || err.message);
+        
+        // ====================================================================
+        // 🔔 SEND NOTIFICATION ON PERSISTENT FAILURES
+        // ====================================================================
+        await notifyOnError(err, { recordingUrl, duration });
         
         return null;
     }
@@ -215,12 +236,120 @@ function generateVocabularySuggestions(twilioTranscript, deepgramTranscript) {
     return suggestions;
 }
 
+/**
+ * 🔔 NOTIFY ADMINS ON PERSISTENT DEEPGRAM ERRORS
+ * Rate-limited to prevent notification spam
+ * 
+ * @param {Error} err - The error that occurred
+ * @param {object} context - Additional context for the notification
+ */
+async function notifyOnError(err, context = {}) {
+    const now = Date.now();
+    
+    // Check if we're in cooldown period
+    if (now - notificationRateLimit.lastErrorNotification < notificationRateLimit.ERROR_COOLDOWN_MS) {
+        notificationRateLimit.errorCount++;
+        
+        // Only notify if we've hit the threshold
+        if (notificationRateLimit.errorCount < notificationRateLimit.ERROR_THRESHOLD) {
+            logger.debug(`[DEEPGRAM] Error count ${notificationRateLimit.errorCount}/${notificationRateLimit.ERROR_THRESHOLD} - not notifying yet`);
+            return;
+        }
+    } else {
+        // Reset counter outside cooldown
+        notificationRateLimit.errorCount = 1;
+    }
+    
+    // Determine severity based on error type
+    let severity = 'WARNING';
+    let code = 'DEEPGRAM_FALLBACK_ERROR';
+    let message = 'Deepgram STT fallback failed';
+    
+    if (err?.response?.status === 401) {
+        severity = 'CRITICAL';
+        code = 'DEEPGRAM_API_KEY_INVALID';
+        message = '🔑 Deepgram API key is invalid or expired - Hybrid STT disabled!';
+    } else if (err?.response?.status === 402) {
+        severity = 'CRITICAL';
+        code = 'DEEPGRAM_BILLING_ERROR';
+        message = '💳 Deepgram billing issue - Hybrid STT disabled until resolved!';
+    } else if (err?.response?.status === 429) {
+        severity = 'WARNING';
+        code = 'DEEPGRAM_RATE_LIMIT';
+        message = '⚠️ Deepgram rate limit hit - some calls may not get hybrid STT';
+    } else if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
+        severity = 'WARNING';
+        code = 'DEEPGRAM_CONNECTION_ERROR';
+        message = '🌐 Deepgram connection failed - network issue';
+    }
+    
+    // Update rate limit timestamp
+    notificationRateLimit.lastErrorNotification = now;
+    
+    // Send notification if service available
+    if (AdminNotificationService && typeof AdminNotificationService.sendAlert === 'function') {
+        try {
+            await AdminNotificationService.sendAlert({
+                code,
+                severity,
+                companyId: null,  // Platform-wide alert
+                companyName: 'Platform-Wide',
+                message,
+                details: JSON.stringify({
+                    error: err?.message || String(err),
+                    statusCode: err?.response?.status,
+                    errorCount: notificationRateLimit.errorCount,
+                    context,
+                    timestamp: new Date().toISOString(),
+                    recommendation: severity === 'CRITICAL' 
+                        ? 'Check Deepgram dashboard immediately'
+                        : 'Monitor - system will retry on next call'
+                }, null, 2)
+            });
+            
+            logger.info(`[DEEPGRAM] 🔔 Admin notification sent: ${code} (${severity})`);
+            
+            // Reset error count after successful notification
+            notificationRateLimit.errorCount = 0;
+            
+        } catch (notifyErr) {
+            logger.error('[DEEPGRAM] Failed to send admin notification:', notifyErr.message);
+        }
+    }
+}
+
+/**
+ * 🔔 NOTIFY ON HIGH DISCARD RATE (Optional - for monitoring)
+ * Call this when Deepgram also returns low confidence
+ */
+async function notifyOnHighDiscardRate(companyId, discardCount, timeWindow = '1 hour') {
+    if (!AdminNotificationService || discardCount < 5) return;  // Only notify if > 5 discards
+    
+    try {
+        await AdminNotificationService.sendAlert({
+            code: 'DEEPGRAM_HIGH_DISCARD_RATE',
+            severity: 'INFO',
+            companyId,
+            message: `📊 High STT discard rate detected`,
+            details: JSON.stringify({
+                discardCount,
+                timeWindow,
+                suggestion: 'Review Black Box for audio quality issues or STT vocabulary gaps',
+                timestamp: new Date().toISOString()
+            }, null, 2)
+        });
+    } catch (err) {
+        logger.warn('[DEEPGRAM] Failed to send discard rate notification:', err.message);
+    }
+}
+
 module.exports = {
     transcribeWithDeepgram,
     shouldUseDeepgramFallback,
     shouldAcceptDeepgramResult,
     isDeepgramConfigured,
     generateVocabularySuggestions,
+    notifyOnHighDiscardRate,
     DG_DEFAULTS,
 };
 
