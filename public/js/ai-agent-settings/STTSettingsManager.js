@@ -55,16 +55,27 @@ class STTSettingsManager {
     
     async fetchCompanyTemplate() {
         const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-        const response = await fetch(`/api/company/${this.companyId}`, {
+        
+        // Use the same API that AiCore Templates tab uses
+        const response = await fetch(`/api/company/${this.companyId}/configuration/templates`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (response.ok) {
-            const data = await response.json();
-            this.templateId = data.company?.aiAgentSettings?.activeTemplateId || 
-                              data.company?.aiAgentSettings?.selectedGlobalTemplateId ||
-                              data.company?.selectedTemplate?.templateId;
-            console.log('[STT SETTINGS] Template ID from company:', this.templateId);
+            const templates = await response.json();
+            
+            console.log('[STT SETTINGS] Active templates from API:', templates);
+            
+            // Get the first active template (primary)
+            if (templates && templates.length > 0) {
+                this.templateId = templates[0].templateId;
+                this.templateName = templates[0].name;
+                console.log('[STT SETTINGS] Using template:', this.templateName, '(', this.templateId, ')');
+            } else {
+                console.log('[STT SETTINGS] No active templates found for company');
+            }
+        } else {
+            console.error('[STT SETTINGS] Failed to fetch templates:', response.status);
         }
     }
     
