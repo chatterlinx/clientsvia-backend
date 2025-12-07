@@ -348,6 +348,23 @@
             color: var(--text-primary);
         }
 
+        .btn-refresh {
+            background: #334155 !important;
+            color: #f1f5f9 !important;
+            border: 2px solid #64748b !important;
+            font-weight: 600;
+        }
+
+        .btn-refresh:hover {
+            background: #475569 !important;
+            border-color: #94a3b8 !important;
+            transform: scale(1.02);
+        }
+
+        .btn-refresh:active {
+            transform: scale(0.98);
+        }
+
         /* ═══════════════════════════════════════════════════════════════════
            LOADING & EMPTY STATES
            ═══════════════════════════════════════════════════════════════════ */
@@ -489,7 +506,7 @@
             🚨 Only Problematic
         </button>
 
-        <button class="btn btn-secondary" onclick="refreshData()">
+        <button class="btn btn-refresh" onclick="refreshData()">
             🔄 Refresh
         </button>
     </div>
