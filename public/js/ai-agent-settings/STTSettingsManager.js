@@ -114,9 +114,9 @@ class STTSettingsManager {
     
     renderNoTemplate() {
         this.container.innerHTML = `
-            <div style="text-align: center; padding: 60px 20px; color: var(--text-secondary);">
+            <div style="text-align: center; padding: 60px 20px; color: #64748b;">
                 <div style="font-size: 64px; margin-bottom: 20px;">🎤</div>
-                <h2 style="color: var(--text-primary); margin-bottom: 12px;">No Template Selected</h2>
+                <h2 style="color: #1e293b; margin-bottom: 12px;">No Template Selected</h2>
                 <p>STT Settings are configured per template. Please select a Global Template in the AI Brain tab first.</p>
             </div>
         `;
@@ -124,11 +124,11 @@ class STTSettingsManager {
     
     renderError(message) {
         this.container.innerHTML = `
-            <div style="text-align: center; padding: 60px 20px; color: var(--accent-red);">
+            <div style="text-align: center; padding: 60px 20px; color: #ef4444;">
                 <div style="font-size: 64px; margin-bottom: 20px;">⚠️</div>
-                <h2 style="color: var(--text-primary); margin-bottom: 12px;">Error Loading STT Settings</h2>
+                <h2 style="color: #1e293b; margin-bottom: 12px;">Error Loading STT Settings</h2>
                 <p>${message}</p>
-                <button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background: var(--accent-blue); color: white; border: none; border-radius: 8px; cursor: pointer;">
+                <button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer;">
                     Retry
                 </button>
             </div>
@@ -149,7 +149,7 @@ class STTSettingsManager {
                             Enterprise
                         </span>
                     </div>
-                    <p style="color: var(--text-secondary); margin: 0;">
+                    <p style="color: #64748b; margin: 0;">
                         Speech-to-Text correction for <strong>${this.profile.templateName}</strong>
                     </p>
                 </div>
@@ -164,7 +164,7 @@ class STTSettingsManager {
                 </div>
                 
                 <!-- Tab Navigation -->
-                <div style="display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">
+                <div style="display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
                     ${this.renderTab('provider', '⚙️ Provider', this.activeTab === 'provider')}
                     ${this.renderTab('fillers', '🔇 Fillers', this.activeTab === 'fillers')}
                     ${this.renderTab('vocabulary', '🎯 Vocabulary', this.activeTab === 'vocabulary')}
@@ -186,10 +186,10 @@ class STTSettingsManager {
     
     renderStatCard(label, value, icon, color) {
         return `
-            <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; text-align: center;">
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; text-align: center;">
                 <div style="font-size: 24px; margin-bottom: 4px;">${icon}</div>
                 <div style="font-size: 24px; font-weight: bold; color: ${color};">${value}</div>
-                <div style="font-size: 12px; color: var(--text-secondary);">${label}</div>
+                <div style="font-size: 12px; color: #64748b;">${label}</div>
             </div>
         `;
     }
@@ -240,7 +240,7 @@ class STTSettingsManager {
                 <div style="display: grid; gap: 16px;">
                     <div>
                         <label style="display: block; margin-bottom: 4px; font-weight: 500;">STT Provider</label>
-                        <select id="stt-provider-type" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--input-bg);">
+                        <select id="stt-provider-type" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; background: #ffffff;">
                             <option value="twilio" ${provider.type === 'twilio' ? 'selected' : ''}>Twilio (Current)</option>
                             <option value="deepgram" ${provider.type === 'deepgram' ? 'selected' : ''}>Deepgram (Future)</option>
                             <option value="google" ${provider.type === 'google' ? 'selected' : ''}>Google (Future)</option>
@@ -249,7 +249,7 @@ class STTSettingsManager {
                     
                     <div>
                         <label style="display: block; margin-bottom: 4px; font-weight: 500;">Language</label>
-                        <select id="stt-language" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--input-bg);">
+                        <select id="stt-language" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; background: #ffffff;">
                             <option value="en-US" ${provider.language === 'en-US' ? 'selected' : ''}>English (US)</option>
                             <option value="en-GB" ${provider.language === 'en-GB' ? 'selected' : ''}>English (UK)</option>
                             <option value="es-US" ${provider.language === 'es-US' ? 'selected' : ''}>Spanish (US)</option>
@@ -258,14 +258,14 @@ class STTSettingsManager {
                     
                     <div>
                         <label style="display: block; margin-bottom: 4px; font-weight: 500;">Model</label>
-                        <select id="stt-model" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--input-bg);">
+                        <select id="stt-model" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; background: #ffffff;">
                             <option value="phone_call" ${provider.model === 'phone_call' ? 'selected' : ''}>Phone Call (Recommended)</option>
                             <option value="default" ${provider.model === 'default' ? 'selected' : ''}>Default</option>
                             <option value="enhanced" ${provider.model === 'enhanced' ? 'selected' : ''}>Enhanced</option>
                         </select>
                     </div>
                     
-                    <div style="border-top: 1px solid var(--border-color); padding-top: 16px;">
+                    <div style="border-top: 1px solid #e2e8f0; padding-top: 16px;">
                         <h4 style="margin-bottom: 12px;">Feature Toggles</h4>
                         
                         <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; cursor: pointer;">
@@ -291,7 +291,7 @@ class STTSettingsManager {
                     
                     <button onclick="sttManager.saveProviderSettings()" style="
                         padding: 12px 24px;
-                        background: var(--accent-blue);
+                        background: #3b82f6;
                         color: white;
                         border: none;
                         border-radius: 8px;
@@ -314,7 +314,7 @@ class STTSettingsManager {
                     <h3>Filler Words / Noise Removal</h3>
                     <button onclick="sttManager.showAddFillerModal()" style="
                         padding: 8px 16px;
-                        background: var(--accent-green);
+                        background: #10b981;
                         color: white;
                         border: none;
                         border-radius: 8px;
@@ -323,14 +323,14 @@ class STTSettingsManager {
                         + Add Filler
                     </button>
                 </div>
-                <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                <p style="color: #64748b; margin-bottom: 16px;">
                     These words are stripped from transcripts before AI processing.
                 </p>
                 
                 <div style="overflow-x: auto;">
                     <table style="width: 100%; border-collapse: collapse;">
                         <thead>
-                            <tr style="background: var(--card-bg); border-bottom: 1px solid var(--border-color);">
+                            <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                                 <th style="text-align: left; padding: 12px;">Enabled</th>
                                 <th style="text-align: left; padding: 12px;">Phrase</th>
                                 <th style="text-align: left; padding: 12px;">Scope</th>
@@ -340,7 +340,7 @@ class STTSettingsManager {
                         </thead>
                         <tbody>
                             ${fillers.map((f, i) => `
-                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
                                     <td style="padding: 12px;">
                                         <input type="checkbox" ${f.enabled ? 'checked' : ''} onchange="sttManager.toggleFiller('${f.phrase}')">
                                     </td>
@@ -350,9 +350,9 @@ class STTSettingsManager {
                                             ${f.scope}
                                         </span>
                                     </td>
-                                    <td style="padding: 12px; color: var(--text-secondary);">${f.addedBy || 'system'}</td>
+                                    <td style="padding: 12px; color: #64748b;">${f.addedBy || 'system'}</td>
                                     <td style="padding: 12px; text-align: center;">
-                                        <button onclick="sttManager.deleteFiller('${f.phrase}')" style="background: none; border: none; color: var(--accent-red); cursor: pointer;">🗑️</button>
+                                        <button onclick="sttManager.deleteFiller('${f.phrase}')" style="background: none; border: none; color: #ef4444; cursor: pointer;">🗑️</button>
                                     </td>
                                 </tr>
                             `).join('')}
@@ -372,7 +372,7 @@ class STTSettingsManager {
                     <div style="display: flex; gap: 8px;">
                         <button onclick="sttManager.syncVocabulary()" style="
                             padding: 8px 16px;
-                            background: var(--accent-blue);
+                            background: #3b82f6;
                             color: white;
                             border: none;
                             border-radius: 8px;
@@ -382,7 +382,7 @@ class STTSettingsManager {
                         </button>
                         <button onclick="sttManager.showAddKeywordModal()" style="
                             padding: 8px 16px;
-                            background: var(--accent-green);
+                            background: #10b981;
                             color: white;
                             border: none;
                             border-radius: 8px;
@@ -392,14 +392,14 @@ class STTSettingsManager {
                         </button>
                     </div>
                 </div>
-                <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                <p style="color: #64748b; margin-bottom: 16px;">
                     These words are sent as hints to improve STT accuracy.
                 </p>
                 
                 <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
                     <table style="width: 100%; border-collapse: collapse;">
-                        <thead style="position: sticky; top: 0; background: var(--bg-primary);">
-                            <tr style="background: var(--card-bg); border-bottom: 1px solid var(--border-color);">
+                        <thead style="position: sticky; top: 0; background: #ffffff;">
+                            <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                                 <th style="text-align: left; padding: 12px;">Phrase</th>
                                 <th style="text-align: left; padding: 12px;">Type</th>
                                 <th style="text-align: left; padding: 12px;">Source</th>
@@ -409,23 +409,23 @@ class STTSettingsManager {
                         </thead>
                         <tbody>
                             ${keywords.slice(0, 100).map(k => `
-                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
                                     <td style="padding: 12px; font-family: monospace;">${this.escapeHtml(k.phrase)}</td>
                                     <td style="padding: 12px;">
                                         <span style="background: ${this.getTypeColor(k.type)}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">
                                             ${k.type}
                                         </span>
                                     </td>
-                                    <td style="padding: 12px; color: var(--text-secondary); max-width: 200px; overflow: hidden; text-overflow: ellipsis;">${this.escapeHtml(k.source || '-')}</td>
+                                    <td style="padding: 12px; color: #64748b; max-width: 200px; overflow: hidden; text-overflow: ellipsis;">${this.escapeHtml(k.source || '-')}</td>
                                     <td style="padding: 12px; text-align: center;">${k.boostWeight || 5}</td>
                                     <td style="padding: 12px; text-align: center;">
-                                        ${k.type === 'manual' ? `<button onclick="sttManager.deleteKeyword('${k.phrase}')" style="background: none; border: none; color: var(--accent-red); cursor: pointer;">🗑️</button>` : '-'}
+                                        ${k.type === 'manual' ? `<button onclick="sttManager.deleteKeyword('${k.phrase}')" style="background: none; border: none; color: #ef4444; cursor: pointer;">🗑️</button>` : '-'}
                                     </td>
                                 </tr>
                             `).join('')}
                             ${keywords.length > 100 ? `
                                 <tr>
-                                    <td colspan="5" style="padding: 12px; text-align: center; color: var(--text-secondary);">
+                                    <td colspan="5" style="padding: 12px; text-align: center; color: #64748b;">
                                         ... and ${keywords.length - 100} more keywords
                                     </td>
                                 </tr>
@@ -445,7 +445,7 @@ class STTSettingsManager {
                     <h3>Mishear Corrections</h3>
                     <button onclick="sttManager.showAddCorrectionModal()" style="
                         padding: 8px 16px;
-                        background: var(--accent-green);
+                        background: #10b981;
                         color: white;
                         border: none;
                         border-radius: 8px;
@@ -454,14 +454,14 @@ class STTSettingsManager {
                         + Add Correction
                     </button>
                 </div>
-                <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                <p style="color: #64748b; margin-bottom: 16px;">
                     Map commonly misheard words to their correct form.
                 </p>
                 
                 <div style="overflow-x: auto;">
                     <table style="width: 100%; border-collapse: collapse;">
                         <thead>
-                            <tr style="background: var(--card-bg); border-bottom: 1px solid var(--border-color);">
+                            <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                                 <th style="text-align: left; padding: 12px;">Enabled</th>
                                 <th style="text-align: left; padding: 12px;">Heard As</th>
                                 <th style="text-align: left; padding: 12px;">→</th>
@@ -473,25 +473,25 @@ class STTSettingsManager {
                         </thead>
                         <tbody>
                             ${corrections.map(c => `
-                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
                                     <td style="padding: 12px;">
                                         <input type="checkbox" ${c.enabled ? 'checked' : ''}>
                                     </td>
-                                    <td style="padding: 12px; font-family: monospace; color: var(--accent-red);">${this.escapeHtml(c.heard)}</td>
+                                    <td style="padding: 12px; font-family: monospace; color: #ef4444;">${this.escapeHtml(c.heard)}</td>
                                     <td style="padding: 12px;">→</td>
-                                    <td style="padding: 12px; font-family: monospace; color: var(--accent-green);">${this.escapeHtml(c.normalized)}</td>
-                                    <td style="padding: 12px; color: var(--text-secondary);">
+                                    <td style="padding: 12px; font-family: monospace; color: #10b981;">${this.escapeHtml(c.normalized)}</td>
+                                    <td style="padding: 12px; color: #64748b;">
                                         ${c.context?.length ? c.context.join(', ') : 'Any context'}
                                     </td>
                                     <td style="padding: 12px; text-align: center;">${c.occurrences || 0}</td>
                                     <td style="padding: 12px; text-align: center;">
-                                        <button onclick="sttManager.deleteCorrection('${c.heard}')" style="background: none; border: none; color: var(--accent-red); cursor: pointer;">🗑️</button>
+                                        <button onclick="sttManager.deleteCorrection('${c.heard}')" style="background: none; border: none; color: #ef4444; cursor: pointer;">🗑️</button>
                                     </td>
                                 </tr>
                             `).join('')}
                             ${corrections.length === 0 ? `
                                 <tr>
-                                    <td colspan="7" style="padding: 24px; text-align: center; color: var(--text-secondary);">
+                                    <td colspan="7" style="padding: 24px; text-align: center; color: #64748b;">
                                         No corrections yet. Add one or wait for Black Box suggestions.
                                     </td>
                                 </tr>
@@ -511,7 +511,7 @@ class STTSettingsManager {
                     <h3>Impossible Words</h3>
                     <button onclick="sttManager.showAddImpossibleModal()" style="
                         padding: 8px 16px;
-                        background: var(--accent-green);
+                        background: #10b981;
                         color: white;
                         border: none;
                         border-radius: 8px;
@@ -520,14 +520,14 @@ class STTSettingsManager {
                         + Add Impossible Word
                     </button>
                 </div>
-                <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                <p style="color: #64748b; margin-bottom: 16px;">
                     Words that should never appear in this template's context (e.g., "toothache" in HVAC).
                 </p>
                 
                 <div style="overflow-x: auto;">
                     <table style="width: 100%; border-collapse: collapse;">
                         <thead>
-                            <tr style="background: var(--card-bg); border-bottom: 1px solid var(--border-color);">
+                            <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                                 <th style="text-align: left; padding: 12px;">Word</th>
                                 <th style="text-align: left; padding: 12px;">Reason</th>
                                 <th style="text-align: left; padding: 12px;">Suggest Instead</th>
@@ -536,18 +536,18 @@ class STTSettingsManager {
                         </thead>
                         <tbody>
                             ${impossibleWords.map(iw => `
-                                <tr style="border-bottom: 1px solid var(--border-color);">
-                                    <td style="padding: 12px; font-family: monospace; color: var(--accent-red);">${this.escapeHtml(iw.word)}</td>
-                                    <td style="padding: 12px; color: var(--text-secondary);">${this.escapeHtml(iw.reason || '-')}</td>
-                                    <td style="padding: 12px; font-family: monospace; color: var(--accent-green);">${this.escapeHtml(iw.suggestCorrection || '-')}</td>
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
+                                    <td style="padding: 12px; font-family: monospace; color: #ef4444;">${this.escapeHtml(iw.word)}</td>
+                                    <td style="padding: 12px; color: #64748b;">${this.escapeHtml(iw.reason || '-')}</td>
+                                    <td style="padding: 12px; font-family: monospace; color: #10b981;">${this.escapeHtml(iw.suggestCorrection || '-')}</td>
                                     <td style="padding: 12px; text-align: center;">
-                                        <button onclick="sttManager.deleteImpossible('${iw.word}')" style="background: none; border: none; color: var(--accent-red); cursor: pointer;">🗑️</button>
+                                        <button onclick="sttManager.deleteImpossible('${iw.word}')" style="background: none; border: none; color: #ef4444; cursor: pointer;">🗑️</button>
                                     </td>
                                 </tr>
                             `).join('')}
                             ${impossibleWords.length === 0 ? `
                                 <tr>
-                                    <td colspan="4" style="padding: 24px; text-align: center; color: var(--text-secondary);">
+                                    <td colspan="4" style="padding: 24px; text-align: center; color: #64748b;">
                                         No impossible words defined yet.
                                     </td>
                                 </tr>
@@ -564,19 +564,19 @@ class STTSettingsManager {
         return `
             <div>
                 <h3 style="margin-bottom: 8px;">Suggestions from Black Box</h3>
-                <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                <p style="color: #64748b; margin-bottom: 16px;">
                     Patterns detected from real calls. Approve to add to your STT intelligence.
                 </p>
                 
                 ${suggestions.length === 0 ? `
-                    <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                    <div style="text-align: center; padding: 40px; color: #64748b;">
                         <div style="font-size: 48px; margin-bottom: 12px;">✨</div>
                         <p>No pending suggestions. Make some calls to generate learning data!</p>
                     </div>
                 ` : `
                     <div style="display: grid; gap: 12px;">
                         ${suggestions.map((s, i) => `
-                            <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
+                            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px;">
                                 <div style="display: flex; justify-content: space-between; align-items: start;">
                                     <div>
                                         <span style="background: ${this.getSuggestionTypeColor(s.type)}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">
@@ -587,7 +587,7 @@ class STTSettingsManager {
                                     <div style="display: flex; gap: 8px;">
                                         <button onclick="sttManager.approveSuggestion(${i})" style="
                                             padding: 6px 12px;
-                                            background: var(--accent-green);
+                                            background: #10b981;
                                             color: white;
                                             border: none;
                                             border-radius: 6px;
@@ -595,7 +595,7 @@ class STTSettingsManager {
                                         ">✓ Approve</button>
                                         <button onclick="sttManager.ignoreSuggestion(${i})" style="
                                             padding: 6px 12px;
-                                            background: var(--accent-red);
+                                            background: #ef4444;
                                             color: white;
                                             border: none;
                                             border-radius: 6px;
@@ -603,7 +603,7 @@ class STTSettingsManager {
                                         ">✗ Ignore</button>
                                     </div>
                                 </div>
-                                <div style="margin-top: 8px; color: var(--text-secondary); font-size: 13px;">
+                                <div style="margin-top: 8px; color: #64748b; font-size: 13px;">
                                     <span>Seen ${s.count}x</span>
                                     ${s.context ? ` • Context: ${this.escapeHtml(s.context)}` : ''}
                                     ${s.confidenceScore ? ` • Confidence: ${(s.confidenceScore * 100).toFixed(0)}%` : ''}
@@ -620,7 +620,7 @@ class STTSettingsManager {
         return `
             <div style="max-width: 700px;">
                 <h3 style="margin-bottom: 16px;">🧪 Test STT Preprocessing</h3>
-                <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                <p style="color: #64748b; margin-bottom: 16px;">
                     Enter sample text to see how STT preprocessing transforms it.
                 </p>
                 
@@ -630,15 +630,15 @@ class STTSettingsManager {
                         width: 100%;
                         padding: 12px;
                         border-radius: 8px;
-                        border: 1px solid var(--border-color);
-                        background: var(--input-bg);
+                        border: 1px solid #e2e8f0;
+                        background: #ffffff;
                         font-family: monospace;
                     "></textarea>
                 </div>
                 
                 <button onclick="sttManager.runTest()" style="
                     padding: 12px 24px;
-                    background: var(--accent-blue);
+                    background: #3b82f6;
                     color: white;
                     border: none;
                     border-radius: 8px;
@@ -651,11 +651,11 @@ class STTSettingsManager {
                 
                 <div id="stt-test-results" style="display: none;">
                     <div style="margin-bottom: 16px;">
-                        <label style="display: block; margin-bottom: 4px; font-weight: 500; color: var(--accent-green);">Output (cleaned)</label>
+                        <label style="display: block; margin-bottom: 4px; font-weight: 500; color: #10b981;">Output (cleaned)</label>
                         <div id="stt-test-output" style="
                             padding: 12px;
-                            background: var(--card-bg);
-                            border: 1px solid var(--border-color);
+                            background: #f8fafc;
+                            border: 1px solid #e2e8f0;
                             border-radius: 8px;
                             font-family: monospace;
                         "></div>
@@ -663,8 +663,8 @@ class STTSettingsManager {
                     
                     <div id="stt-test-transformations" style="
                         padding: 16px;
-                        background: var(--card-bg);
-                        border: 1px solid var(--border-color);
+                        background: #f8fafc;
+                        border: 1px solid #e2e8f0;
                         border-radius: 8px;
                     "></div>
                 </div>
@@ -934,10 +934,10 @@ class STTSettingsManager {
                     html += `<p>🚫 <strong>Impossible words:</strong> ${transformations.impossibleWordsDetected.map(w => `"${w.word}"`).join(', ')}</p>`;
                 }
                 if (!transformations.fillersRemoved?.length && !transformations.correctionsApplied?.length && !transformations.impossibleWordsDetected?.length) {
-                    html += '<p style="color: var(--text-secondary);">No transformations needed.</p>';
+                    html += '<p style="color: #64748b;">No transformations needed.</p>';
                 }
                 
-                html += `<p style="margin-top: 8px; font-size: 12px; color: var(--text-secondary);">Processing time: ${data.data.metrics.processingTimeMs}ms</p>`;
+                html += `<p style="margin-top: 8px; font-size: 12px; color: #64748b;">Processing time: ${data.data.metrics.processingTimeMs}ms</p>`;
                 
                 document.getElementById('stt-test-transformations').innerHTML = html;
             } else {
@@ -1073,8 +1073,8 @@ class STTSettingsManager {
     showToast(message, type = 'info') {
         const toast = document.createElement('div');
         toast.className = 'toast-notification show';
-        toast.style.background = type === 'success' ? 'var(--accent-green)' : 
-                                 type === 'error' ? 'var(--accent-red)' : 'var(--accent-blue)';
+        toast.style.background = type === 'success' ? '#10b981' : 
+                                 type === 'error' ? '#ef4444' : '#3b82f6';
         toast.textContent = message;
         document.body.appendChild(toast);
         
