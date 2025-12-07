@@ -35,6 +35,14 @@ try {
     logger.warn('[Tier3] DeepgramFallback not available');
 }
 
+// Black Box for logging Deepgram events
+let BlackBoxLogger;
+try {
+    BlackBoxLogger = require('./BlackBoxLogger');
+} catch (err) {
+    logger.warn('[Tier3] BlackBoxLogger not available');
+}
+
 class Tier3LLMFallback {
   constructor() {
     this.config = {
@@ -120,6 +128,24 @@ class Tier3LLMFallback {
           callId
         });
         
+        // Log to Black Box: Tier 3 Deepgram attempt started
+        if (BlackBoxLogger) {
+          try {
+            await BlackBoxLogger.logEvent({
+              callId,
+              companyId,
+              type: 'TIER3_DEEPGRAM_STARTED',
+              data: {
+                twilioConfidence: confidencePercent,
+                twilioTranscript: callerInput?.substring(0, 100) || '',
+                reason: 'STT confidence borderline (40-80%) - checking before expensive LLM call'
+              }
+            });
+          } catch (logErr) {
+            logger.warn('[Tier3] Black Box log failed:', logErr.message);
+          }
+        }
+        
         try {
           const dgResult = await DeepgramFallback.transcribeWithDeepgram(recordingUrl);
           
@@ -132,11 +158,66 @@ class Tier3LLMFallback {
               deepgramConfidence: dgResult.confidencePercent,
               callId
             });
+            
+            // Log to Black Box: Tier 3 Deepgram SUCCESS
+            if (BlackBoxLogger) {
+              try {
+                const vocabSuggestions = DeepgramFallback.generateVocabularySuggestions(callerInput, dgResult.transcript);
+                await BlackBoxLogger.logEvent({
+                  callId,
+                  companyId,
+                  type: 'TIER3_DEEPGRAM_SUCCESS',
+                  data: {
+                    twilioConfidence: confidencePercent,
+                    deepgramConfidence: dgResult.confidencePercent,
+                    twilioTranscript: callerInput?.substring(0, 100) || '',
+                    deepgramTranscript: dgResult.transcript?.substring(0, 100) || '',
+                    durationMs: dgResult.durationMs,
+                    vocabSuggestions,
+                    savings: 'Prevented potential $0.50 LLM waste on bad transcript'
+                  }
+                });
+              } catch (logErr) {
+                logger.warn('[Tier3] Black Box success log failed:', logErr.message);
+              }
+            }
           } else {
             logger.debug(`[Tier3] Deepgram didn't improve transcript - proceeding with original`);
+            
+            // Log to Black Box: Deepgram didn't help
+            if (BlackBoxLogger) {
+              try {
+                await BlackBoxLogger.logEvent({
+                  callId,
+                  companyId,
+                  type: 'TIER3_DEEPGRAM_NO_IMPROVEMENT',
+                  data: {
+                    twilioConfidence: confidencePercent,
+                    deepgramConfidence: dgResult?.confidencePercent || 0,
+                    reason: 'Deepgram confidence also low - proceeding with original transcript'
+                  }
+                });
+              } catch (logErr) {
+                logger.warn('[Tier3] Black Box no-improvement log failed:', logErr.message);
+              }
+            }
           }
         } catch (dgErr) {
           logger.warn(`[Tier3] Deepgram pre-LLM check failed (non-fatal):`, dgErr.message);
+          
+          // Log to Black Box: Deepgram error
+          if (BlackBoxLogger) {
+            try {
+              await BlackBoxLogger.logEvent({
+                callId,
+                companyId,
+                type: 'TIER3_DEEPGRAM_ERROR',
+                data: { error: dgErr.message }
+              });
+            } catch (logErr) {
+              logger.warn('[Tier3] Black Box error log failed:', logErr.message);
+            }
+          }
         }
       }
     }
