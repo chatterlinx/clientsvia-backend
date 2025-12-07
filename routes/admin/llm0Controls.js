@@ -713,5 +713,86 @@ router.get('/defaults', authenticateJWT, (req, res) => {
     });
 });
 
+// ============================================================================
+// DEEPGRAM STATUS CHECK
+// ============================================================================
+// GET /api/admin/llm0-controls/deepgram-status
+// Quick diagnostic to verify Deepgram is configured and working
+// ============================================================================
+router.get('/deepgram-status', authenticateJWT, async (req, res) => {
+    try {
+        const DeepgramFallback = require('../../services/DeepgramFallback');
+        
+        const status = {
+            configured: DeepgramFallback.isDeepgramConfigured(),
+            apiKeyPrefix: process.env.DEEPGRAM_API_KEY 
+                ? process.env.DEEPGRAM_API_KEY.substring(0, 8) + '...' 
+                : null,
+            defaultSettings: {
+                model: DeepgramFallback.DG_DEFAULTS.model,
+                language: DeepgramFallback.DG_DEFAULTS.language
+            }
+        };
+        
+        if (!status.configured) {
+            return res.json({
+                success: true,
+                data: {
+                    ...status,
+                    message: '⚠️ DEEPGRAM_API_KEY not configured in environment',
+                    recommendation: 'Add DEEPGRAM_API_KEY to your Render environment variables'
+                }
+            });
+        }
+        
+        // Optional: Quick API test (only if requested)
+        if (req.query.test === 'true') {
+            const testUrl = 'https://static.deepgram.com/examples/interview_speech-analytics.wav';
+            const startTime = Date.now();
+            
+            try {
+                const result = await DeepgramFallback.transcribeWithDeepgram(testUrl);
+                const duration = Date.now() - startTime;
+                
+                if (result && result.transcript) {
+                    status.testResult = {
+                        success: true,
+                        responseTimeMs: duration,
+                        confidencePercent: result.confidencePercent,
+                        transcriptPreview: result.transcript.substring(0, 100) + '...'
+                    };
+                } else {
+                    status.testResult = {
+                        success: false,
+                        error: 'No transcript returned'
+                    };
+                }
+            } catch (testErr) {
+                status.testResult = {
+                    success: false,
+                    error: testErr.message
+                };
+            }
+        }
+        
+        res.json({
+            success: true,
+            data: {
+                ...status,
+                message: '✅ Deepgram is configured and ready',
+                howToTest: 'Add ?test=true to run a live API test'
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[DEEPGRAM STATUS] Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to check Deepgram status',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;
 
