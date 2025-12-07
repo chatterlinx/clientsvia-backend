@@ -28,6 +28,7 @@ class CheatSheetManager {
     this.isDirty = false;
     this.isReady = false; // NEW: Ready flag to prevent premature actions
     this.currentSubTab = 'triage'; // Default sub-tab
+    this.missionControlViewMode = 'mission-control'; // NEW: Default to Mission Control view (Dec 2025)
     this.rootSelector = options.rootSelector || '#cheatsheet-container';
     this.rootElement = (typeof document !== 'undefined') ? document.querySelector(this.rootSelector) : null;
     
@@ -772,7 +773,79 @@ class CheatSheetManager {
   // ═══════════════════════════════════════════════════════════════════
   
   /**
-   * NEW: Render the Call Flow Engine (Dec 2025)
+   * Switch between Mission Control and Legacy Script views
+   */
+  switchMissionView(mode) {
+    console.log('[CHEAT SHEET] Switching mission view to:', mode);
+    this.missionControlViewMode = mode;
+    this.renderCompanyInstructions();
+  }
+  
+  /**
+   * Render the Mission Control view (Call Flow Engine)
+   */
+  async renderMissionControlView(container) {
+    // Add view switcher at top
+    const switcherHTML = `
+      <div style="margin-bottom: 16px; display: flex; gap: 8px; align-items: center;">
+        <span style="font-size: 13px; color: #6b7280;">View:</span>
+        <button onclick="cheatSheetManager.switchMissionView('mission-control')" 
+                style="padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer;
+                       background: #6366f1; color: white; border: none;">
+          🎯 Mission Control <span style="font-size: 10px; background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; margin-left: 4px;">NEW</span>
+        </button>
+        <button onclick="cheatSheetManager.switchMissionView('legacy-script')" 
+                style="padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer;
+                       background: white; border: 1px solid #d1d5db; color: #374151;">
+          📜 Legacy Script
+        </button>
+      </div>
+    `;
+    
+    // Show loading state
+    container.innerHTML = switcherHTML + `
+      <div style="text-align: center; padding: 40px; color: #6b7280; background: white; border: 1px solid #e5e7eb; border-radius: 12px;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
+        <p>Loading Mission Control...</p>
+      </div>
+    `;
+    
+    // Load the CallFlowEngineManager script if not already loaded
+    if (!window.CallFlowEngineManager) {
+      try {
+        await this.loadScript('/js/ai-agent-settings/CallFlowEngineManager.js');
+        console.log('[CHEAT SHEET] ✅ CallFlowEngineManager script loaded');
+      } catch (err) {
+        console.error('[CHEAT SHEET] ❌ Failed to load CallFlowEngineManager:', err);
+        container.innerHTML = switcherHTML + `
+          <div style="text-align: center; padding: 40px; color: #dc2626; background: white; border: 1px solid #fee2e2; border-radius: 12px;">
+            <p style="font-size: 18px; font-weight: 600;">❌ Failed to load Mission Control</p>
+            <p style="font-size: 12px; color: #6b7280; margin-top: 8px;">${err.message}</p>
+            <button onclick="cheatSheetManager.renderCompanyInstructions()" style="margin-top: 16px; padding: 8px 16px; background: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer;">
+              🔄 Retry
+            </button>
+          </div>
+        `;
+        return;
+      }
+    }
+    
+    // Render the container for CallFlowEngineManager
+    container.innerHTML = switcherHTML + `<div id="callFlowEngineContainer"></div>`;
+    
+    // Initialize and load the manager
+    if (!window.callFlowEngineManager) {
+      window.callFlowEngineManager = new window.CallFlowEngineManager();
+    }
+    
+    // Load data for this company
+    await window.callFlowEngineManager.load(this.companyId);
+    
+    console.log('[CHEAT SHEET] ✅ Mission Control rendered for company:', this.companyId);
+  }
+  
+  /**
+   * LEGACY: Render the Call Flow Engine (Dec 2025)
    * Replaces the old giant frontline script with structured flow routing
    */
   async renderCallFlowEngine() {
@@ -845,19 +918,19 @@ class CheatSheetManager {
   }
   
   renderCompanyInstructions() {
-    // NEW: If Call Flow Engine is enabled, render that instead
-    const callFlowEngine = this.cheatSheet?.callFlowEngine;
-    if (callFlowEngine && (callFlowEngine.enabled || callFlowEngine.missionTriggers)) {
-      this.renderCallFlowEngine();
-      return;
-    }
-    
     const container = document.getElementById('company-instructions-section');
     if (!container) return;
     
-    // LEGACY: Old frontline script UI (for backwards compatibility)
-    // This will be deprecated once all companies migrate to Call Flow Engine
+    // Track view mode (mission-control or legacy-script)
+    const viewMode = this.missionControlViewMode || 'mission-control';
     
+    // If showing Mission Control view, render the new UI
+    if (viewMode === 'mission-control') {
+      this.renderMissionControlView(container);
+      return;
+    }
+    
+    // LEGACY VIEW: Old frontline script UI
     // Extract frontlineIntel text (may be string or {instructions: "text"} object)
     let instructions = '';
     if (typeof this.cheatSheet.frontlineIntel === 'string') {
@@ -872,6 +945,21 @@ class CheatSheetManager {
     const frontlineEnabled = this.isFrontlineIntelEnabled();
     
     container.innerHTML = `
+      <!-- View Mode Switcher -->
+      <div style="margin-bottom: 16px; display: flex; gap: 8px; align-items: center;">
+        <span style="font-size: 13px; color: #6b7280;">View:</span>
+        <button onclick="cheatSheetManager.switchMissionView('mission-control')" 
+                style="padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer;
+                       ${viewMode === 'mission-control' ? 'background: #6366f1; color: white; border: none;' : 'background: white; border: 1px solid #d1d5db; color: #374151;'}">
+          🎯 Mission Control <span style="font-size: 10px; background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; margin-left: 4px;">NEW</span>
+        </button>
+        <button onclick="cheatSheetManager.switchMissionView('legacy-script')" 
+                style="padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer;
+                       ${viewMode === 'legacy-script' ? 'background: #6366f1; color: white; border: none;' : 'background: white; border: 1px solid #d1d5db; color: #374151;'}">
+          📜 Legacy Script
+        </button>
+      </div>
+      
       <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
         
         <!-- Enable Toggle Banner -->
