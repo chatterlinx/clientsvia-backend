@@ -1213,7 +1213,14 @@ const companySchema = new mongoose.Schema({
                 // Log low-confidence events to Black Box for training
                 logToBlackBox: { type: Boolean, default: true },
                 // Skip confirmation if caller repeats clearly (prevents double-confirmation annoyance)
-                skipConfirmationOnClearRepeat: { type: Boolean, default: true }
+                skipConfirmationOnClearRepeat: { type: Boolean, default: true },
+                // DEEPGRAM FALLBACK - Hybrid STT (Premium Feature)
+                // When Twilio confidence is low, try Deepgram instead of asking to repeat
+                useDeepgramFallback: { type: Boolean, default: true },
+                // Threshold to trigger Deepgram (0-100%) - usually same as main threshold
+                deepgramFallbackThreshold: { type: Number, default: 60, min: 30, max: 90 },
+                // Only accept Deepgram result if confidence is above this (0-100%)
+                deepgramAcceptThreshold: { type: Number, default: 80, min: 50, max: 100 }
             },
             // FRUSTRATION DETECTION - Escalate immediately on emotional keywords
             // Prevents loops when caller is clearly frustrated

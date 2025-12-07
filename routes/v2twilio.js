@@ -117,6 +117,26 @@ try {
     LowConfidenceHandler = null;
 }
 
+// ============================================================================
+// 🎯 DEEPGRAM FALLBACK - Hybrid STT for Premium Accuracy
+// ============================================================================
+// When Twilio confidence is low, use Deepgram as a second opinion instead of
+// asking the caller to repeat. Better accuracy, no UX penalty.
+// Global platform API key - per-company toggle in lowConfidenceHandling settings.
+// ============================================================================
+let DeepgramFallback;
+try {
+    DeepgramFallback = require('../services/DeepgramFallback');
+    if (DeepgramFallback.isDeepgramConfigured()) {
+        logger.info('[V2TWILIO] ✅ Deepgram Fallback loaded (API key configured)');
+    } else {
+        logger.warn('[V2TWILIO] ⚠️ Deepgram Fallback loaded but no API key - fallback disabled');
+    }
+} catch (err) {
+    logger.warn('[V2TWILIO] ⚠️ Deepgram Fallback not available', { error: err.message });
+    DeepgramFallback = null;
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // 🔒 HTTPS URL HELPER
 // ════════════════════════════════════════════════════════════════════════════════
@@ -1457,67 +1477,217 @@ router.post('/handle-speech', async (req, res) => {
     
     logger.debug(`[LOW CONFIDENCE CHECK] Speech: "${speechText}" | Confidence: ${confidencePercent.toFixed(1)}% | Threshold: ${effectiveThreshold}% | ${confidencePercent >= effectiveThreshold ? 'PASS ✅' : 'LOW ⚠️'}`);
     
+    // Store original values for comparison
+    let effectiveSpeechText = speechText;
+    let effectiveConfidence = confidencePercent;
+    let usedDeepgram = false;
+    
     if (lcSettings.enabled && confidencePercent < effectiveThreshold) {
-      logger.info(`[LOW CONFIDENCE] ⚠️ STT confidence ${confidencePercent.toFixed(1)}% < ${effectiveThreshold}% threshold - asking caller to repeat`);
+      logger.info(`[LOW CONFIDENCE] ⚠️ STT confidence ${confidencePercent.toFixed(1)}% < ${effectiveThreshold}% threshold`);
       
-      // Track repeat count in Redis
-      const repeats = redisClient ? await redisClient.incr(repeatKey) : 1;
-      if (repeats === 1 && redisClient) {
-        await redisClient.expire(repeatKey, 600);
-      }
-      
-      // 📦 Log to Black Box for vocabulary training
-      if (lcSettings.logToBlackBox && BlackBoxLogger) {
-        try {
-          await BlackBoxLogger.logEvent({
-            callId: callSid,
-            companyId,
-            type: 'LOW_CONFIDENCE_HIT',
-            data: {
-              confidence: confidencePercent,
-              threshold: effectiveThreshold,
-              transcript: speechText?.substring(0, 100) || '',
-              repeatCount: repeats,
-              suggestion: 'STT confidence below threshold - caller asked to repeat. Consider adding this phrase to STT corrections.'
+      // ========================================================================
+      // 🎯 DEEPGRAM FALLBACK - Try Deepgram before asking to repeat
+      // ========================================================================
+      if (lcSettings.useDeepgramFallback && DeepgramFallback && DeepgramFallback.isDeepgramConfigured()) {
+        const dgThreshold = lcSettings.deepgramFallbackThreshold ?? effectiveThreshold;
+        
+        if (confidencePercent < dgThreshold) {
+          logger.info(`[DEEPGRAM] 🎯 Triggering Deepgram fallback (Twilio: ${confidencePercent.toFixed(1)}% < ${dgThreshold}%)`);
+          
+          // Log start of Deepgram attempt
+          if (lcSettings.logToBlackBox && BlackBoxLogger) {
+            try {
+              await BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId,
+                type: 'DEEPGRAM_FALLBACK_STARTED',
+                data: {
+                  twilioConfidence: confidencePercent,
+                  twilioTranscript: speechText?.substring(0, 100) || '',
+                  threshold: dgThreshold
+                }
+              });
+            } catch (logErr) {
+              logger.warn('[DEEPGRAM] Black Box log failed:', logErr.message);
             }
-          });
-        } catch (logErr) {
-          logger.warn('[LOW CONFIDENCE] Black Box log failed (non-fatal):', logErr.message);
+          }
+          
+          try {
+            // Get recording URL from Twilio (if available)
+            const recordingUrl = req.body.RecordingUrl || null;
+            
+            if (recordingUrl) {
+              const dgResult = await DeepgramFallback.transcribeWithDeepgram(recordingUrl);
+              
+              if (dgResult && dgResult.transcript) {
+                const dgAcceptThreshold = lcSettings.deepgramAcceptThreshold ?? 80;
+                
+                if (dgResult.confidencePercent >= dgAcceptThreshold) {
+                  // 🎉 Deepgram gave us a better transcript!
+                  logger.info(`[DEEPGRAM] ✅ SUCCESS! Using Deepgram transcript: "${dgResult.transcript.substring(0, 50)}..." (${dgResult.confidencePercent}%)`);
+                  
+                  effectiveSpeechText = dgResult.transcript;
+                  effectiveConfidence = dgResult.confidencePercent;
+                  usedDeepgram = true;
+                  
+                  // Generate vocabulary suggestions for Black Box
+                  const vocabSuggestions = DeepgramFallback.generateVocabularySuggestions(speechText, dgResult.transcript);
+                  
+                  // Log success with comparison for vocabulary learning
+                  if (lcSettings.logToBlackBox && BlackBoxLogger) {
+                    try {
+                      await BlackBoxLogger.logEvent({
+                        callId: callSid,
+                        companyId,
+                        type: 'DEEPGRAM_FALLBACK_SUCCESS',
+                        data: {
+                          twilioConfidence: confidencePercent,
+                          deepgramConfidence: dgResult.confidencePercent,
+                          twilioTranscript: speechText?.substring(0, 100) || '',
+                          deepgramTranscript: dgResult.transcript?.substring(0, 100) || '',
+                          durationMs: dgResult.durationMs,
+                          vocabSuggestions,
+                          suggestion: 'Deepgram provided better transcript - consider adding corrections to STT Profile'
+                        }
+                      });
+                    } catch (logErr) {
+                      logger.warn('[DEEPGRAM] Success log failed:', logErr.message);
+                    }
+                  }
+                } else {
+                  // Deepgram confidence also low - log but don't use
+                  logger.info(`[DEEPGRAM] ⚠️ Deepgram confidence ${dgResult.confidencePercent}% below accept threshold ${dgAcceptThreshold}%`);
+                  
+                  if (lcSettings.logToBlackBox && BlackBoxLogger) {
+                    try {
+                      await BlackBoxLogger.logEvent({
+                        callId: callSid,
+                        companyId,
+                        type: 'DEEPGRAM_FALLBACK_DISCARDED',
+                        data: {
+                          twilioConfidence: confidencePercent,
+                          deepgramConfidence: dgResult.confidencePercent,
+                          twilioTranscript: speechText?.substring(0, 100) || '',
+                          deepgramTranscript: dgResult.transcript?.substring(0, 100) || '',
+                          acceptThreshold: dgAcceptThreshold,
+                          suggestion: 'Both Twilio and Deepgram low confidence - audio quality issue or unclear speech'
+                        }
+                      });
+                    } catch (logErr) {
+                      logger.warn('[DEEPGRAM] Discarded log failed:', logErr.message);
+                    }
+                  }
+                }
+              } else {
+                logger.warn('[DEEPGRAM] No result returned from Deepgram');
+                
+                if (lcSettings.logToBlackBox && BlackBoxLogger) {
+                  try {
+                    await BlackBoxLogger.logEvent({
+                      callId: callSid,
+                      companyId,
+                      type: 'DEEPGRAM_FALLBACK_NO_RESULT',
+                      data: { twilioConfidence: confidencePercent }
+                    });
+                  } catch (logErr) {
+                    logger.warn('[DEEPGRAM] No result log failed:', logErr.message);
+                  }
+                }
+              }
+            } else {
+              logger.debug('[DEEPGRAM] No recording URL available for fallback');
+            }
+          } catch (dgError) {
+            logger.error('[DEEPGRAM] Fallback error:', dgError.message);
+            
+            if (lcSettings.logToBlackBox && BlackBoxLogger) {
+              try {
+                await BlackBoxLogger.logEvent({
+                  callId: callSid,
+                  companyId,
+                  type: 'DEEPGRAM_FALLBACK_ERROR',
+                  data: { error: dgError.message }
+                });
+              } catch (logErr) {
+                logger.warn('[DEEPGRAM] Error log failed:', logErr.message);
+              }
+            }
+          }
         }
       }
       
-      // Check if max repeats exceeded → escalate to human
-      if (repeats > lcSettings.maxRepeatsBeforeEscalation) {
-        logger.warn(`[LOW CONFIDENCE] 🚨 Max repeats exceeded (${repeats} > ${lcSettings.maxRepeatsBeforeEscalation}) - escalating to human`);
+      // ========================================================================
+      // If Deepgram gave us good confidence, skip the repeat flow!
+      // ========================================================================
+      if (usedDeepgram && effectiveConfidence >= effectiveThreshold) {
+        logger.info(`[LOW CONFIDENCE] ✅ Deepgram saved the day! Using transcript with ${effectiveConfidence}% confidence`);
+        speechText = effectiveSpeechText;
+        // Clear repeat counter since we got a good transcript
+        if (redisClient) await redisClient.del(repeatKey);
+        // Continue to normal flow (fall through to after this block)
+      } else {
+        // Deepgram didn't help or wasn't used - proceed with repeat/escalation flow
+        logger.info(`[LOW CONFIDENCE] ⚠️ Proceeding with repeat flow (confidence: ${effectiveConfidence.toFixed(1)}%)`);
         
-        // Log escalation to Black Box
+        // Track repeat count in Redis
+        const repeats = redisClient ? await redisClient.incr(repeatKey) : 1;
+        if (repeats === 1 && redisClient) {
+          await redisClient.expire(repeatKey, 600);
+        }
+        
+        // 📦 Log to Black Box for vocabulary training
         if (lcSettings.logToBlackBox && BlackBoxLogger) {
           try {
             await BlackBoxLogger.logEvent({
               callId: callSid,
               companyId,
-              type: 'LOW_CONFIDENCE_ESCALATION',
+              type: 'LOW_CONFIDENCE_HIT',
               data: {
+                confidence: effectiveConfidence,
+                threshold: effectiveThreshold,
+                transcript: effectiveSpeechText?.substring(0, 100) || '',
                 repeatCount: repeats,
-                reason: 'Max repeats exceeded due to persistent low STT confidence',
-                suggestion: 'Consider lowering threshold or improving STT vocabulary for this company'
+                deepgramAttempted: lcSettings.useDeepgramFallback && DeepgramFallback?.isDeepgramConfigured(),
+                suggestion: 'STT confidence below threshold - caller asked to repeat. Consider adding this phrase to STT corrections.'
               }
             });
           } catch (logErr) {
-            logger.warn('[LOW CONFIDENCE] Escalation log failed:', logErr.message);
+            logger.warn('[LOW CONFIDENCE] Black Box log failed (non-fatal):', logErr.message);
           }
         }
         
-        const escalateMsg = lcSettings.escalatePhrase;
-        const fallbackText = `<Say>${escapeTwiML(escalateMsg)}</Say>`;
-        twiml.hangup();  // TODO: Replace with transfer to configured number
-        if (redisClient) await redisClient.del(repeatKey);
-        res.type('text/xml');
-        res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
-        return;
-      }
-      
-      // Ask caller to repeat
+        // Check if max repeats exceeded → escalate to human
+        if (repeats > lcSettings.maxRepeatsBeforeEscalation) {
+          logger.warn(`[LOW CONFIDENCE] 🚨 Max repeats exceeded (${repeats} > ${lcSettings.maxRepeatsBeforeEscalation}) - escalating to human`);
+          
+          // Log escalation to Black Box
+          if (lcSettings.logToBlackBox && BlackBoxLogger) {
+            try {
+              await BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId,
+                type: 'LOW_CONFIDENCE_ESCALATION',
+                data: {
+                  repeatCount: repeats,
+                  reason: 'Max repeats exceeded due to persistent low STT confidence',
+                  suggestion: 'Consider lowering threshold or improving STT vocabulary for this company'
+                }
+              });
+            } catch (logErr) {
+              logger.warn('[LOW CONFIDENCE] Escalation log failed:', logErr.message);
+            }
+          }
+          
+          const escalateMsg = lcSettings.escalatePhrase;
+          const fallbackText = `<Say>${escapeTwiML(escalateMsg)}</Say>`;
+          twiml.hangup();  // TODO: Replace with transfer to configured number
+          if (redisClient) await redisClient.del(repeatKey);
+          res.type('text/xml');
+          res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
+          return;
+        }
+        
+        // Ask caller to repeat
       const speechDetection = company.aiAgentSettings?.voiceSettings?.speechDetection || {};
       const gather = twiml.gather({
         input: 'speech',
@@ -1573,6 +1743,7 @@ router.post('/handle-speech', async (req, res) => {
 
       res.type('text/xml');
       return res.send(twiml.toString());
+      }
     }
     
     // Confidence OK - clear repeat counter and proceed

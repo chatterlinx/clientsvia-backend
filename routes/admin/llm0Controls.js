@@ -90,8 +90,13 @@ const DEFAULT_LLM0_CONTROLS = {
         maxRepeatsBeforeEscalation: 2,
         escalatePhrase: "I'm having trouble hearing you clearly. Let me get someone to help you.",
         preserveBookingOnLowConfidence: true,
-        bookingRepeatPhrase: "Sorry, I didn't catch that. Could you repeat that for me?",
-        logToBlackBox: true
+        bookingRepeatPhrase: "Sorry — could you say that again so I can get this right?",
+        logToBlackBox: true,
+        skipConfirmationOnClearRepeat: true,
+        // DEEPGRAM FALLBACK - Premium hybrid STT (ON by default)
+        useDeepgramFallback: true,
+        deepgramFallbackThreshold: 60,
+        deepgramAcceptThreshold: 80
     },
     // FRUSTRATION DETECTION - Escalate immediately on emotional keywords
     frustrationDetection: {

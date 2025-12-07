@@ -857,6 +857,51 @@ class LLM0ControlsManager {
                             ⚡ Skip confirmation if caller repeats clearly (prevents double-confirmation)
                         </label>
                     </div>
+
+                    <div class="llm0-section-divider"></div>
+
+                    <h4 style="margin: 0 0 16px; color: #374151; font-size: 14px; font-weight: 600;">🎯 Deepgram Hybrid STT <span style="background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; padding: 2px 8px; border-radius: 12px; font-size: 10px; margin-left: 8px;">PREMIUM</span></h4>
+
+                    <div style="background: linear-gradient(135deg, #ede9fe 0%, #fce7f3 100%); border: 1px solid #8b5cf6; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                        <p style="margin: 0; color: #5b21b6; font-size: 13px;">
+                            <strong>🚀 Hybrid STT:</strong> When Twilio confidence is low, automatically use Deepgram for a second opinion instead of asking the caller to repeat. Better accuracy, no UX penalty.
+                        </p>
+                    </div>
+
+                    <div class="llm0-checkbox-row">
+                        <input type="checkbox" class="llm0-checkbox" id="lc-deepgram-fallback" ${lc.useDeepgramFallback !== false ? 'checked' : ''}
+                               data-section="lowConfidenceHandling" data-field="useDeepgramFallback">
+                        <label for="lc-deepgram-fallback" style="font-size: 14px; color: #374151; font-weight: 500;">
+                            🎯 Use Deepgram Fallback (recommended for premium accounts)
+                        </label>
+                    </div>
+
+                    <div class="llm0-row" style="margin-top: 12px;">
+                        <div class="llm0-field">
+                            <label class="llm0-label">Trigger Deepgram below:</label>
+                            <div class="llm0-slider-container">
+                                <input type="range" class="llm0-slider" value="${lc.deepgramFallbackThreshold || 60}" 
+                                       data-section="lowConfidenceHandling" data-field="deepgramFallbackThreshold" 
+                                       min="30" max="90" id="dg-fallback-slider">
+                                <span id="dg-fallback-value" style="min-width: 45px; text-align: right;">${lc.deepgramFallbackThreshold || 60}%</span>
+                            </div>
+                        </div>
+                        <div class="llm0-field">
+                            <label class="llm0-label">Accept Deepgram above:</label>
+                            <div class="llm0-slider-container">
+                                <input type="range" class="llm0-slider" value="${lc.deepgramAcceptThreshold || 80}" 
+                                       data-section="lowConfidenceHandling" data-field="deepgramAcceptThreshold" 
+                                       min="50" max="100" id="dg-accept-slider">
+                                <span id="dg-accept-value" style="min-width: 45px; text-align: right;">${lc.deepgramAcceptThreshold || 80}%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="background: #f0fdf4; border: 1px solid #22c55e; border-radius: 8px; padding: 12px; margin-top: 12px;">
+                        <p style="margin: 0; color: #166534; font-size: 12px;">
+                            <strong>💰 Cost:</strong> ~$0.0048/min only when Twilio is uncertain (~10% of calls). All comparisons logged to Black Box for vocabulary learning.
+                        </p>
+                    </div>
                 </div>
             </div>
         `;
@@ -1189,7 +1234,9 @@ class LLM0ControlsManager {
             { id: 'low-conf-slider', display: 'low-conf-value', suffix: '%' },
             { id: 'fallback-slider', display: 'fallback-value', suffix: '%' },
             { id: 'confirm-conf-slider', display: 'confirm-conf-value', suffix: '%' },
-            { id: 'low-conf-threshold-slider', display: 'low-conf-threshold-value', suffix: '%' }
+            { id: 'low-conf-threshold-slider', display: 'low-conf-threshold-value', suffix: '%' },
+            { id: 'dg-fallback-slider', display: 'dg-fallback-value', suffix: '%' },
+            { id: 'dg-accept-slider', display: 'dg-accept-value', suffix: '%' }
         ];
 
         sliders.forEach(s => {
