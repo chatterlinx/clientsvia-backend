@@ -49,6 +49,16 @@ const LLMLearningTask = require('../models/LLMLearningTask');  // 📋 Phase C.0
 const MemoryOptimizationEngine = require('./MemoryOptimizationEngine');  // 🧠 Brain-5: Optimization Engine
 const logger = require('../utils/logger');
 
+// 🎯 Call Flow Engine (Dec 2025) - Universal flow routing
+let FlowEngine, MissionCacheService;
+try {
+    FlowEngine = require('./FlowEngine');
+    MissionCacheService = require('./MissionCacheService');
+} catch (e) {
+    FlowEngine = null;
+    MissionCacheService = null;
+}
+
 // 📦 Black Box Logger for diagnostic events
 let BlackBoxLogger;
 try {
@@ -241,6 +251,86 @@ class IntelligentRouter {
                     logger.debug('[INTELLIGENT ROUTER] STT Preprocessing failed, using raw input', {
                         error: sttError.message
                     });
+                }
+            }
+            
+            // ============================================
+            // 🎯 CALL FLOW ENGINE (Dec 2025)
+            // ============================================
+            // If enabled, determines the PRIMARY FLOW (BOOKING, CANCEL, EMERGENCY, etc.)
+            // This runs BEFORE the tier cascade and can short-circuit for clear intents
+            // The flow decision is passed to subsequent processing for context
+            let flowDecision = null;
+            
+            if (FlowEngine && company?._id) {
+                try {
+                    const callFlowConfig = company?.aiAgentSettings?.callFlowEngine;
+                    
+                    if (callFlowConfig?.enabled) {
+                        const flowStartTime = Date.now();
+                        
+                        flowDecision = await FlowEngine.decideFlow(
+                            processedInput, 
+                            company._id.toString(), 
+                            {
+                                trade: callFlowConfig?.activeTrade || '_default',
+                                synonymMap: callFlowConfig?.synonymMap || {},
+                                customBlockers: callFlowConfig?.customBlockers || {}
+                            }
+                        );
+                        
+                        const flowTime = Date.now() - flowStartTime;
+                        
+                        // Attach to result for diagnostics
+                        result.flowEngine = {
+                            enabled: true,
+                            flow: flowDecision.flow,
+                            confidence: flowDecision.confidence,
+                            matchedTriggers: flowDecision.matchedTriggers,
+                            secondaryIntents: flowDecision.secondaryIntents,
+                            blockedFlows: flowDecision.blockedFlows,
+                            timeMs: flowTime
+                        };
+                        
+                        logger.info('[INTELLIGENT ROUTER] 🎯 Flow Engine decision', {
+                            callId,
+                            flow: flowDecision.flow,
+                            confidence: flowDecision.confidence,
+                            matchedTriggers: flowDecision.matchedTriggers,
+                            timeMs: flowTime
+                        });
+                        
+                        // Log to Black Box
+                        if (BlackBoxLogger && flowDecision.flow !== 'GENERAL_INQUIRY') {
+                            try {
+                                await BlackBoxLogger.logEvent({
+                                    callId,
+                                    companyId: company._id.toString(),
+                                    type: 'FLOW_ENGINE_DECISION',
+                                    data: {
+                                        flow: flowDecision.flow,
+                                        confidence: flowDecision.confidence,
+                                        matchedTriggers: flowDecision.matchedTriggers,
+                                        secondaryIntents: flowDecision.secondaryIntents,
+                                        input: processedInput.substring(0, 100)
+                                    }
+                                });
+                            } catch (logErr) {
+                                logger.debug('[INTELLIGENT ROUTER] Black Box log failed', { error: logErr.message });
+                            }
+                        }
+                        
+                        // Inject flow into context for downstream processing
+                        context.flowDecision = flowDecision;
+                    } else {
+                        result.flowEngine = { enabled: false };
+                    }
+                } catch (flowError) {
+                    logger.warn('[INTELLIGENT ROUTER] Flow Engine failed, continuing without', {
+                        error: flowError.message,
+                        callId
+                    });
+                    result.flowEngine = { enabled: false, error: flowError.message };
                 }
             }
             

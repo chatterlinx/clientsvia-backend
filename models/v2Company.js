@@ -1329,6 +1329,115 @@ const companySchema = new mongoose.Schema({
         },
         
         // -------------------------------------------------------------------
+        // 🎯 CALL FLOW ENGINE - Universal Flow Routing (Dec 2025)
+        // -------------------------------------------------------------------
+        // PURPOSE: Replace giant frontline scripts with code-driven flow decisions
+        // ARCHITECTURE:
+        //   - MissionCacheService: Auto-extracts triggers from triage/scenarios
+        //   - FlowEngine: decideFlow() with priority ladder
+        //   - BookingFlowEngine: State machine for each flow
+        //   - LLM: Only generates words, doesn't make decisions
+        // FLOWS: BOOKING, CANCEL, RESCHEDULE, TRANSFER, MESSAGE, EMERGENCY, GENERAL
+        // -------------------------------------------------------------------
+        callFlowEngine: {
+            // Master toggle
+            enabled: { type: Boolean, default: false }, // Off by default until UI built
+            
+            // ═══════════════════════════════════════════════════════════════
+            // MISSION TRIGGERS - Auto-extracted + Manual Overrides
+            // ═══════════════════════════════════════════════════════════════
+            // Structure: { _default: { booking: {...}, emergency: {...} }, hvac: {...}, plumbing: {...} }
+            missionTriggers: {
+                type: mongoose.Schema.Types.Mixed,
+                default: () => ({
+                    _default: {
+                        booking: { auto: [], manual: [], all: [], sources: {} },
+                        emergency: { auto: [], manual: [], all: [], sources: {} },
+                        cancel: { auto: [], manual: [], all: [], sources: {} },
+                        reschedule: { auto: [], manual: [], all: [], sources: {} },
+                        transfer: { auto: [], manual: [], all: [], sources: {} },
+                        message: { auto: [], manual: [], all: [], sources: {} }
+                    }
+                })
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // BOOKING FIELDS - Configurable data collection
+            // ═══════════════════════════════════════════════════════════════
+            bookingFields: [{
+                key: { type: String, required: true, trim: true },
+                label: { type: String, required: true, trim: true },
+                required: { type: Boolean, default: false },
+                order: { type: Number, default: 0 },
+                prompt: { type: String, trim: true },
+                validation: { type: String, enum: ['none', 'phone', 'email', 'address'], default: 'none' }
+            }],
+            
+            // ═══════════════════════════════════════════════════════════════
+            // STYLE CONFIGURATION - Short, for LLM tone only
+            // ═══════════════════════════════════════════════════════════════
+            style: {
+                preset: {
+                    type: String,
+                    enum: ['friendly', 'professional', 'casual', 'formal'],
+                    default: 'friendly'
+                },
+                // Max ~300 words - enforced in UI
+                customNotes: {
+                    type: String,
+                    maxLength: 2000,
+                    default: '',
+                    trim: true
+                },
+                // Greeting override
+                greeting: { type: String, trim: true, default: '' },
+                // Company name for personalization
+                companyName: { type: String, trim: true, default: '' }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // SYNONYM MAP - For better trigger matching
+            // ═══════════════════════════════════════════════════════════════
+            // Structure: { "reschedule": ["move my appointment", "change the time"], ... }
+            synonymMap: {
+                type: mongoose.Schema.Types.Mixed,
+                default: () => ({})
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // CUSTOM BLOCKERS - Negative triggers per flow
+            // ═══════════════════════════════════════════════════════════════
+            // Structure: { cancel: ["don't cancel", "not cancel"], ... }
+            customBlockers: {
+                type: mongoose.Schema.Types.Mixed,
+                default: () => ({})
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // TRADE CONFIGURATION - For multi-trade companies
+            // ═══════════════════════════════════════════════════════════════
+            trades: [{
+                key: { type: String, required: true, trim: true }, // 'hvac', 'plumbing', etc.
+                label: { type: String, required: true, trim: true },
+                enabled: { type: Boolean, default: true }
+            }],
+            activeTrade: { type: String, default: '_default', trim: true },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // LEGACY SCRIPT (Read-only, deprecated)
+            // ═══════════════════════════════════════════════════════════════
+            legacyFrontlineScript: { type: String, default: '' },
+            legacyScriptActive: { type: Boolean, default: false },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // METADATA
+            // ═══════════════════════════════════════════════════════════════
+            lastCacheRebuild: { type: Date, default: null },
+            lastUpdated: { type: Date, default: Date.now },
+            updatedBy: { type: String, default: null, trim: true }
+        },
+        
+        // -------------------------------------------------------------------
         // CHEAT SHEET META - Version Control Pointers (NEW ARCHITECTURE)
         // -------------------------------------------------------------------
         // LIGHTWEIGHT POINTERS ONLY - actual configs stored in CheatSheetVersion collection
