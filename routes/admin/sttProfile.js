@@ -1,0 +1,691 @@
+/**
+ * STT Profile API Routes
+ * 
+ * CRUD operations for Speech-to-Text profiles
+ * Scoped by templateId - one profile per template
+ * 
+ * @module routes/admin/sttProfile
+ */
+
+const express = require('express');
+const router = express.Router();
+const STTProfile = require('../../models/STTProfile');
+const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+const { authenticateJWT, requireRole } = require('../../middleware/auth');
+const logger = require('../../utils/logger');
+const STTPreprocessor = require('../../services/STTPreprocessor');
+
+// ============================================================================
+// GET PROFILE BY TEMPLATE ID
+// ============================================================================
+
+/**
+ * GET /api/admin/stt-profile/:templateId
+ * Get STT profile for a template (creates default if not exists)
+ */
+router.get('/:templateId', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        
+        let profile = await STTProfile.findOne({ templateId, isActive: true });
+        
+        // Create default profile if none exists
+        if (!profile) {
+            const template = await GlobalInstantResponseTemplate.findById(templateId);
+            if (!template) {
+                return res.status(404).json({ 
+                    success: false, 
+                    error: 'Template not found' 
+                });
+            }
+            
+            profile = await STTProfile.createDefaultForTemplate(template);
+            logger.info('[STT PROFILE API] Created default profile for template', {
+                templateId,
+                templateName: template.name
+            });
+        }
+        
+        res.json({
+            success: true,
+            data: profile
+        });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to get profile', {
+            templateId: req.params.templateId,
+            error: error.message
+        });
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// ============================================================================
+// UPDATE PROVIDER SETTINGS
+// ============================================================================
+
+/**
+ * PATCH /api/admin/stt-profile/:templateId/provider
+ * Update provider configuration
+ */
+router.patch('/:templateId/provider', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        const providerSettings = req.body;
+        
+        const profile = await STTProfile.findOneAndUpdate(
+            { templateId, isActive: true },
+            { 
+                $set: { 
+                    provider: providerSettings,
+                    updatedBy: req.user._id
+                }
+            },
+            { new: true }
+        );
+        
+        if (!profile) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Profile not found' 
+            });
+        }
+        
+        // Clear cache
+        STTPreprocessor.clearCache(templateId);
+        
+        logger.info('[STT PROFILE API] Updated provider settings', {
+            templateId,
+            provider: providerSettings.type
+        });
+        
+        res.json({ success: true, data: profile });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to update provider', {
+            error: error.message
+        });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// FILLER MANAGEMENT
+// ============================================================================
+
+/**
+ * POST /api/admin/stt-profile/:templateId/fillers
+ * Add a new filler word/phrase
+ */
+router.post('/:templateId/fillers', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        const { phrase, scope = 'template' } = req.body;
+        
+        if (!phrase || phrase.trim().length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Phrase is required' 
+            });
+        }
+        
+        const normalizedPhrase = phrase.toLowerCase().trim();
+        
+        const profile = await STTProfile.findOne({ templateId, isActive: true });
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        // Check for duplicate
+        if (profile.fillers.some(f => f.phrase === normalizedPhrase)) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Filler already exists' 
+            });
+        }
+        
+        profile.fillers.push({
+            phrase: normalizedPhrase,
+            scope,
+            enabled: true,
+            addedBy: req.user.email || 'admin'
+        });
+        
+        profile.updatedBy = req.user._id;
+        await profile.save();
+        
+        STTPreprocessor.clearCache(templateId);
+        
+        res.json({ success: true, data: profile });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to add filler', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * DELETE /api/admin/stt-profile/:templateId/fillers/:phrase
+ * Remove a filler
+ */
+router.delete('/:templateId/fillers/:phrase', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId, phrase } = req.params;
+        const normalizedPhrase = decodeURIComponent(phrase).toLowerCase().trim();
+        
+        const profile = await STTProfile.findOneAndUpdate(
+            { templateId, isActive: true },
+            { 
+                $pull: { fillers: { phrase: normalizedPhrase } },
+                $set: { updatedBy: req.user._id }
+            },
+            { new: true }
+        );
+        
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        STTPreprocessor.clearCache(templateId);
+        
+        res.json({ success: true, data: profile });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to remove filler', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * PATCH /api/admin/stt-profile/:templateId/fillers/:phrase/toggle
+ * Toggle filler enabled/disabled
+ */
+router.patch('/:templateId/fillers/:phrase/toggle', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId, phrase } = req.params;
+        const normalizedPhrase = decodeURIComponent(phrase).toLowerCase().trim();
+        
+        const profile = await STTProfile.findOne({ templateId, isActive: true });
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        const filler = profile.fillers.find(f => f.phrase === normalizedPhrase);
+        if (!filler) {
+            return res.status(404).json({ success: false, error: 'Filler not found' });
+        }
+        
+        filler.enabled = !filler.enabled;
+        profile.updatedBy = req.user._id;
+        await profile.save();
+        
+        STTPreprocessor.clearCache(templateId);
+        
+        res.json({ success: true, data: profile });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to toggle filler', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// VOCABULARY MANAGEMENT
+// ============================================================================
+
+/**
+ * POST /api/admin/stt-profile/:templateId/vocabulary
+ * Add a boosted keyword
+ */
+router.post('/:templateId/vocabulary', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        const { phrase, type = 'manual', source = '', boostWeight = 5 } = req.body;
+        
+        if (!phrase || phrase.trim().length === 0) {
+            return res.status(400).json({ success: false, error: 'Phrase is required' });
+        }
+        
+        const profile = await STTProfile.findOne({ templateId, isActive: true });
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        // Check for duplicate
+        const normalized = phrase.toLowerCase().trim();
+        if (profile.vocabulary.boostedKeywords.some(k => k.phrase.toLowerCase() === normalized)) {
+            return res.status(400).json({ success: false, error: 'Keyword already exists' });
+        }
+        
+        profile.vocabulary.boostedKeywords.push({
+            phrase: phrase.trim(),
+            type,
+            source: source || 'Manual addition',
+            boostWeight: Math.min(10, Math.max(1, boostWeight)),
+            enabled: true
+        });
+        
+        profile.updatedBy = req.user._id;
+        await profile.save();
+        
+        STTPreprocessor.clearCache(templateId);
+        
+        res.json({ success: true, data: profile });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to add vocabulary', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * DELETE /api/admin/stt-profile/:templateId/vocabulary/:phrase
+ * Remove a boosted keyword
+ */
+router.delete('/:templateId/vocabulary/:phrase', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId, phrase } = req.params;
+        const normalizedPhrase = decodeURIComponent(phrase).toLowerCase().trim();
+        
+        const profile = await STTProfile.findOne({ templateId, isActive: true });
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        profile.vocabulary.boostedKeywords = profile.vocabulary.boostedKeywords.filter(
+            k => k.phrase.toLowerCase() !== normalizedPhrase
+        );
+        
+        profile.updatedBy = req.user._id;
+        await profile.save();
+        
+        STTPreprocessor.clearCache(templateId);
+        
+        res.json({ success: true, data: profile });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to remove vocabulary', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/admin/stt-profile/:templateId/vocabulary/sync
+ * Re-sync vocabulary from template
+ */
+router.post('/:templateId/vocabulary/sync', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        
+        const template = await GlobalInstantResponseTemplate.findById(templateId);
+        if (!template) {
+            return res.status(404).json({ success: false, error: 'Template not found' });
+        }
+        
+        const profile = await STTProfile.syncFromTemplate(templateId, template);
+        
+        STTPreprocessor.clearCache(templateId);
+        
+        logger.info('[STT PROFILE API] Synced vocabulary from template', {
+            templateId,
+            keywordCount: profile.vocabulary.boostedKeywords.length
+        });
+        
+        res.json({ success: true, data: profile });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to sync vocabulary', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// CORRECTIONS MANAGEMENT
+// ============================================================================
+
+/**
+ * POST /api/admin/stt-profile/:templateId/corrections
+ * Add a mishear correction
+ */
+router.post('/:templateId/corrections', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        const { heard, normalized, context = [], notes = '' } = req.body;
+        
+        if (!heard || !normalized) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Both "heard" and "normalized" are required' 
+            });
+        }
+        
+        const profile = await STTProfile.findOne({ templateId, isActive: true });
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        // Check for duplicate
+        const normalizedHeard = heard.toLowerCase().trim();
+        if (profile.corrections.some(c => c.heard === normalizedHeard)) {
+            return res.status(400).json({ success: false, error: 'Correction already exists for this word' });
+        }
+        
+        profile.corrections.push({
+            heard: normalizedHeard,
+            normalized: normalized.trim(),
+            context: Array.isArray(context) ? context.map(c => c.toLowerCase().trim()) : [],
+            enabled: true,
+            notes
+        });
+        
+        profile.updatedBy = req.user._id;
+        await profile.save();
+        
+        STTPreprocessor.clearCache(templateId);
+        
+        res.json({ success: true, data: profile });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to add correction', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * DELETE /api/admin/stt-profile/:templateId/corrections/:heard
+ * Remove a correction
+ */
+router.delete('/:templateId/corrections/:heard', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId, heard } = req.params;
+        const normalizedHeard = decodeURIComponent(heard).toLowerCase().trim();
+        
+        const profile = await STTProfile.findOneAndUpdate(
+            { templateId, isActive: true },
+            { 
+                $pull: { corrections: { heard: normalizedHeard } },
+                $set: { updatedBy: req.user._id }
+            },
+            { new: true }
+        );
+        
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        STTPreprocessor.clearCache(templateId);
+        
+        res.json({ success: true, data: profile });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to remove correction', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// IMPOSSIBLE WORDS MANAGEMENT
+// ============================================================================
+
+/**
+ * POST /api/admin/stt-profile/:templateId/impossible-words
+ * Add an impossible word
+ */
+router.post('/:templateId/impossible-words', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        const { word, reason = '', suggestCorrection = '' } = req.body;
+        
+        if (!word) {
+            return res.status(400).json({ success: false, error: 'Word is required' });
+        }
+        
+        const profile = await STTProfile.findOne({ templateId, isActive: true });
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        const normalizedWord = word.toLowerCase().trim();
+        if (profile.impossibleWords.some(iw => iw.word === normalizedWord)) {
+            return res.status(400).json({ success: false, error: 'Impossible word already exists' });
+        }
+        
+        profile.impossibleWords.push({
+            word: normalizedWord,
+            reason,
+            suggestCorrection: suggestCorrection.toLowerCase().trim() || null,
+            enabled: true
+        });
+        
+        profile.updatedBy = req.user._id;
+        await profile.save();
+        
+        STTPreprocessor.clearCache(templateId);
+        
+        res.json({ success: true, data: profile });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to add impossible word', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * DELETE /api/admin/stt-profile/:templateId/impossible-words/:word
+ * Remove an impossible word
+ */
+router.delete('/:templateId/impossible-words/:word', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId, word } = req.params;
+        const normalizedWord = decodeURIComponent(word).toLowerCase().trim();
+        
+        const profile = await STTProfile.findOneAndUpdate(
+            { templateId, isActive: true },
+            { 
+                $pull: { impossibleWords: { word: normalizedWord } },
+                $set: { updatedBy: req.user._id }
+            },
+            { new: true }
+        );
+        
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        STTPreprocessor.clearCache(templateId);
+        
+        res.json({ success: true, data: profile });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to remove impossible word', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// SUGGESTIONS MANAGEMENT
+// ============================================================================
+
+/**
+ * GET /api/admin/stt-profile/:templateId/suggestions
+ * Get pending suggestions
+ */
+router.get('/:templateId/suggestions', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        const { status = 'pending' } = req.query;
+        
+        const profile = await STTProfile.findOne({ templateId, isActive: true });
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        const suggestions = profile.suggestions
+            .filter(s => status === 'all' || s.status === status)
+            .sort((a, b) => b.count - a.count);
+        
+        res.json({ success: true, data: suggestions });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to get suggestions', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/admin/stt-profile/:templateId/suggestions/:index/approve
+ * Approve a suggestion
+ */
+router.post('/:templateId/suggestions/:index/approve', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId, index } = req.params;
+        const approvalData = req.body;
+        
+        const profile = await STTProfile.findOne({ templateId, isActive: true });
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        const result = profile.approveSuggestion(parseInt(index), {
+            ...approvalData,
+            approvedBy: req.user.email || 'admin'
+        });
+        
+        if (!result.success) {
+            return res.status(400).json({ success: false, error: result.error });
+        }
+        
+        profile.updatedBy = req.user._id;
+        await profile.save();
+        
+        STTPreprocessor.clearCache(templateId);
+        
+        logger.info('[STT PROFILE API] Approved suggestion', {
+            templateId,
+            type: result.type,
+            addedTo: result.addedTo
+        });
+        
+        res.json({ success: true, data: profile, result });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to approve suggestion', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/admin/stt-profile/:templateId/suggestions/:index/ignore
+ * Ignore a suggestion
+ */
+router.post('/:templateId/suggestions/:index/ignore', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId, index } = req.params;
+        
+        const profile = await STTProfile.findOne({ templateId, isActive: true });
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        const suggestion = profile.suggestions[parseInt(index)];
+        if (!suggestion) {
+            return res.status(404).json({ success: false, error: 'Suggestion not found' });
+        }
+        
+        suggestion.status = 'ignored';
+        suggestion.reviewedBy = req.user.email || 'admin';
+        suggestion.reviewedAt = new Date();
+        
+        await profile.save();
+        
+        res.json({ success: true, data: profile });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to ignore suggestion', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// TEST ENDPOINT
+// ============================================================================
+
+/**
+ * POST /api/admin/stt-profile/:templateId/test
+ * Test STT preprocessing with sample text
+ */
+router.post('/:templateId/test', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        const { text } = req.body;
+        
+        if (!text) {
+            return res.status(400).json({ success: false, error: 'Text is required' });
+        }
+        
+        const result = await STTPreprocessor.process(text, templateId, {});
+        
+        res.json({
+            success: true,
+            data: {
+                input: text,
+                output: result.cleaned,
+                transformations: result.transformations,
+                metrics: result.metrics,
+                suggestions: result.suggestions
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Test failed', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// METRICS ENDPOINT
+// ============================================================================
+
+/**
+ * GET /api/admin/stt-profile/:templateId/metrics
+ * Get profile metrics
+ */
+router.get('/:templateId/metrics', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        
+        const profile = await STTProfile.findOne(
+            { templateId, isActive: true },
+            { metrics: 1, vocabulary: 1, fillers: 1, corrections: 1, suggestions: 1 }
+        );
+        
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        res.json({
+            success: true,
+            data: {
+                metrics: profile.metrics,
+                counts: {
+                    fillers: profile.fillers.length,
+                    enabledFillers: profile.fillers.filter(f => f.enabled).length,
+                    keywords: profile.vocabulary.boostedKeywords.length,
+                    enabledKeywords: profile.vocabulary.boostedKeywords.filter(k => k.enabled).length,
+                    corrections: profile.corrections.length,
+                    enabledCorrections: profile.corrections.filter(c => c.enabled).length,
+                    pendingSuggestions: profile.suggestions.filter(s => s.status === 'pending').length
+                }
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to get metrics', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+module.exports = router;

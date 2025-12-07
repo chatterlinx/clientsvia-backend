@@ -326,6 +326,10 @@
             <i class="fas fa-brain"></i> LLM-0 Controls
             <span style="font-size: 10px; background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; padding: 2px 8px; border-radius: 10px;">Enterprise</span>
           </button>
+          <button class="agent-status-tab" data-agent-tab="stt-settings" onclick="switchAgentStatusTab('stt-settings')" style="padding: 10px 20px; border-radius: 8px; border: 1px solid #475569; background: transparent; color: #94a3b8; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
+            <i class="fas fa-microphone-alt"></i> STT Settings
+            <span style="font-size: 10px; background: linear-gradient(135deg, #10b981, #3b82f6); color: white; padding: 2px 8px; border-radius: 10px;">Enterprise</span>
+          </button>
         </nav>
         
         <!-- Tab Content: Dashboard -->
@@ -346,6 +350,17 @@
               <i class="fas fa-spinner fa-spin" style="font-size: 48px; margin-bottom: 20px; color: #8b5cf6;"></i>
               <p style="font-size: 18px; font-weight: 600;">Loading LLM-0 Controls...</p>
               <p style="font-size: 14px; margin-top: 10px;">Enterprise-grade brain behavior configuration</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Tab Content: STT Settings -->
+        <div id="agent-status-tab-stt-settings" class="agent-status-tab-content" style="display: none;">
+          <div id="stt-settings-container" style="padding: 20px;">
+            <div style="text-align: center; padding: 60px; color: #6b7280;">
+              <i class="fas fa-microphone-alt fa-spin" style="font-size: 48px; margin-bottom: 20px; color: #10b981;"></i>
+              <p style="font-size: 18px; font-weight: 600;">Loading STT Settings...</p>
+              <p style="font-size: 14px; margin-top: 10px;">Speech-to-Text intelligence configuration</p>
             </div>
           </div>
         </div>
@@ -820,6 +835,7 @@
     // AGENT STATUS SUB-TAB SWITCHING (Dashboard / LLM-0 Controls)
     // ═══════════════════════════════════════════════════════════════════════
     let llm0ControlsInitialized = false;
+    let sttSettingsInitialized = false;
     
     async function switchAgentStatusTab(tabName) {
       console.log(`🎯 [CONTROL PLANE] Switching agent status tab to: ${tabName}`);
@@ -846,6 +862,11 @@
       // Initialize LLM-0 Controls on first access
       if (tabName === 'llm0-controls' && !llm0ControlsInitialized && currentCompanyId) {
         await initLLM0Controls();
+      }
+      
+      // Initialize STT Settings on first access
+      if (tabName === 'stt-settings' && !sttSettingsInitialized && currentCompanyId) {
+        await initSTTSettings();
       }
     }
     
@@ -878,6 +899,37 @@
         }
       } catch (error) {
         console.error('❌ [CONTROL PLANE] Error initializing LLM-0 Controls:', error);
+      }
+    }
+    
+    // Initialize STT Settings Manager
+    async function initSTTSettings() {
+      if (!currentCompanyId) return;
+      
+      console.log('🎤 [CONTROL PLANE] Initializing STT Settings for company:', currentCompanyId);
+      
+      try {
+        await loadScript('/js/ai-agent-settings/STTSettingsManager.js');
+        
+        const container = document.getElementById('stt-settings-container');
+        if (container && window.STTSettingsManager) {
+          window.sttManager = new window.STTSettingsManager(container, currentCompanyId);
+          sttSettingsInitialized = true;
+          console.log('✅ [CONTROL PLANE] STT Settings initialized');
+        } else {
+          console.error('❌ [CONTROL PLANE] STTSettingsManager not available');
+          if (container) {
+            container.innerHTML = `
+              <div style="text-align: center; padding: 60px; color: #ef4444;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 16px;"></i>
+                <h3>Failed to Load STT Settings</h3>
+                <p>Please refresh the page or contact support.</p>
+              </div>
+            `;
+          }
+        }
+      } catch (error) {
+        console.error('❌ [CONTROL PLANE] Error initializing STT Settings:', error);
       }
     }
 

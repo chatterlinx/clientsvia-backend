@@ -32,6 +32,7 @@ const EVENT_TYPES = [
   'GREETING_SENT',
   'GATHER_PARTIAL',           // Optional: partial STT results
   'GATHER_FINAL',             // Final STT text from caller
+  'STT_PREPROCESSING',        // 🎤 STT cleaned (fillers stripped, corrections applied)
   'STATE_LOADED',             // 📊 Call state loaded (Redis/Session/Fresh)
   'STATE_SAVED',              // 📊 Call state saved (Redis status)
   'SYNONYM_TRANSLATION',      // 🗣️ Colloquial term translated to technical

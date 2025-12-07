@@ -57,6 +57,14 @@ try {
     BlackBoxLogger = null;
 }
 
+// 🎤 STT Preprocessor - Clean transcripts before AI processing
+let STTPreprocessor;
+try {
+    STTPreprocessor = require('./STTPreprocessor');
+} catch (e) {
+    STTPreprocessor = null;
+}
+
 class IntelligentRouter {
     constructor() {
         this.config = {
@@ -196,11 +204,52 @@ class IntelligentRouter {
         
         try {
             // ============================================
+            // 🎤 STT PREPROCESSING (Dec 2025)
+            // ============================================
+            // Clean transcript: strip fillers, apply corrections, detect impossible words
+            // Uses template-specific STT Profile for industry context
+            let processedInput = callerInput;
+            let sttResult = null;
+            
+            if (STTPreprocessor && template?._id) {
+                try {
+                    sttResult = await STTPreprocessor.process(callerInput, template._id, {
+                        callId,
+                        companyId: company?._id?.toString() || company?.companyId
+                    });
+                    
+                    if (sttResult && sttResult.cleaned !== callerInput) {
+                        processedInput = sttResult.cleaned;
+                        result.sttPreprocessing = {
+                            raw: callerInput,
+                            cleaned: processedInput,
+                            fillersRemoved: sttResult.transformations?.fillersRemoved || [],
+                            correctionsApplied: sttResult.transformations?.correctionsApplied || [],
+                            impossibleWordsDetected: sttResult.transformations?.impossibleWordsDetected || [],
+                            processingTimeMs: sttResult.metrics?.processingTimeMs || 0
+                        };
+                        
+                        logger.info('[INTELLIGENT ROUTER] 🎤 STT Preprocessing applied', {
+                            callId,
+                            rawLength: callerInput.length,
+                            cleanedLength: processedInput.length,
+                            fillersRemoved: sttResult.transformations?.fillersRemoved?.length || 0,
+                            correctionsApplied: sttResult.transformations?.correctionsApplied?.length || 0
+                        });
+                    }
+                } catch (sttError) {
+                    logger.debug('[INTELLIGENT ROUTER] STT Preprocessing failed, using raw input', {
+                        error: sttError.message
+                    });
+                }
+            }
+            
+            // ============================================
             // TIER 1: RULE-BASED (HybridScenarioSelector)
             // ============================================
             // 🔧 PHASE 3 FIX: Pass company for custom fillers
             result.tier1Result = await this.tryTier1({
-                callerInput,
+                callerInput: processedInput,  // Use STT-cleaned input
                 template,
                 threshold: tier1Threshold,
                 context,
@@ -321,7 +370,7 @@ class IntelligentRouter {
                     });
                     
                     // Start warmup in parallel with Tier 2
-                    warmupHandle = await SmartWarmupService.startWarmup(companyId, callerInput, {
+                    warmupHandle = await SmartWarmupService.startWarmup(companyId, processedInput, {
                         systemPrompt: this.buildSystemPrompt(template, company),
                         template,
                         availableScenarios: this.prepareScenarios(template)
@@ -338,7 +387,7 @@ class IntelligentRouter {
             // TIER 2: SEMANTIC (BM25 + Context)
             // ============================================
             result.tier2Result = await this.tryTier2({
-                callerInput,
+                callerInput: processedInput,  // Use STT-cleaned input
                 template,
                 threshold: tier2Threshold,
                 context,
@@ -410,7 +459,7 @@ class IntelligentRouter {
             const availableScenarios = this.prepareScenarios(template);
             
             // Decide if we actually need LLM or if memory/cache can handle it
-            const optimizationDecision = await MemoryOptimizationEngine.shouldUseLLM(callerInput, context);
+            const optimizationDecision = await MemoryOptimizationEngine.shouldUseLLM(processedInput, context);
             
             logger.info('[BRAIN-5] 🔍 LLM Optimization Decision', {
                 routingId,
@@ -546,7 +595,7 @@ class IntelligentRouter {
             // If no warmup or warmup failed, make fresh LLM call
             if (!warmupResult || !warmupResult.success) {
                 result.tier3Result = await Tier3LLMFallback.analyze({
-                    callerInput,
+                    callerInput: processedInput,  // Use STT-cleaned input
                     scenarios: availableScenarios,  // Map to expected param name
                     context: {
                         ...context,
