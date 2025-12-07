@@ -671,6 +671,9 @@
             📋 TODO
             <span class="todo-dot" id="todoDot"></span>
         </button>
+        <button class="tab-btn" data-tab="sttAnalysis" style="color: #10b981;">
+            🎙️ STT Analysis
+        </button>
     </div>
 
     <!-- Tab Content -->
@@ -682,6 +685,7 @@
     <div id="tabTranscript" class="tab-content"></div>
     <div id="tabRaw" class="tab-content"></div>
     <div id="tabTodo" class="tab-content"></div>
+    <div id="tabSttAnalysis" class="tab-content"></div>
 
     <script>
         // ═══════════════════════════════════════════════════════════════════
@@ -764,6 +768,7 @@
             renderTranscript();
             renderRawEvents();
             renderTodo();
+            renderSttAnalysis();
         }
 
         function renderHeader() {
@@ -2036,6 +2041,436 @@
                 ${gaps.map((gap, idx) => renderGapCard(gap, idx)).join('')}
                 ` : ''}
             `;
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // STT ANALYSIS TAB - Deepgram Comparison & Vocabulary Training
+        // ═══════════════════════════════════════════════════════════════════
+        let sttComparisonResult = null;
+        
+        function renderSttAnalysis() {
+            const container = document.getElementById('tabSttAnalysis');
+            
+            // Get Twilio transcripts from this recording
+            const twilioTurns = (recording.transcript?.callerTurns || []).length;
+            const avgConfidence = calculateAverageConfidence();
+            const lowConfTurns = countLowConfidenceTurns();
+            
+            container.innerHTML = `
+                <style>
+                    .stt-card {
+                        background: var(--bg-card);
+                        border: 1px solid var(--border-color);
+                        border-radius: 12px;
+                        padding: 24px;
+                        margin-bottom: 20px;
+                    }
+                    .stt-card h3 {
+                        margin: 0 0 16px 0;
+                        color: var(--text-primary);
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                    }
+                    .stt-stat-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                        gap: 16px;
+                        margin-bottom: 20px;
+                    }
+                    .stt-stat {
+                        background: var(--bg-secondary);
+                        border-radius: 8px;
+                        padding: 16px;
+                        text-align: center;
+                    }
+                    .stt-stat-value {
+                        font-size: 28px;
+                        font-weight: 700;
+                        margin-bottom: 4px;
+                    }
+                    .stt-stat-label {
+                        font-size: 12px;
+                        color: var(--text-secondary);
+                        text-transform: uppercase;
+                    }
+                    .stt-btn {
+                        padding: 12px 24px;
+                        border-radius: 8px;
+                        border: none;
+                        cursor: pointer;
+                        font-weight: 600;
+                        font-size: 14px;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 8px;
+                        transition: all 0.2s;
+                    }
+                    .stt-btn-primary {
+                        background: linear-gradient(135deg, #10b981, #059669);
+                        color: white;
+                    }
+                    .stt-btn-primary:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+                    }
+                    .stt-btn-primary:disabled {
+                        background: #4b5563;
+                        cursor: not-allowed;
+                        transform: none;
+                    }
+                    .stt-comparison-result {
+                        margin-top: 24px;
+                        border-top: 1px solid var(--border-color);
+                        padding-top: 24px;
+                    }
+                    .stt-suggestion {
+                        background: var(--bg-secondary);
+                        border: 1px solid var(--border-color);
+                        border-radius: 8px;
+                        padding: 12px 16px;
+                        margin-bottom: 12px;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                    }
+                    .stt-suggestion-add {
+                        background: #10b981;
+                        color: white;
+                        border: none;
+                        padding: 6px 12px;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-size: 12px;
+                    }
+                    .stt-side-by-side {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 20px;
+                    }
+                    .stt-transcript-box {
+                        background: var(--bg-secondary);
+                        border-radius: 8px;
+                        padding: 16px;
+                        font-family: monospace;
+                        font-size: 13px;
+                        line-height: 1.6;
+                        max-height: 200px;
+                        overflow-y: auto;
+                    }
+                    .stt-transcript-label {
+                        font-weight: 600;
+                        margin-bottom: 8px;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                    }
+                    .stt-verdict {
+                        padding: 16px;
+                        border-radius: 8px;
+                        margin-top: 16px;
+                    }
+                    .stt-verdict.good { background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; }
+                    .stt-verdict.warning { background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; }
+                    .stt-verdict.bad { background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; }
+                </style>
+                
+                <div class="stt-card">
+                    <h3>📊 Current STT Performance (This Call)</h3>
+                    <div class="stt-stat-grid">
+                        <div class="stt-stat">
+                            <div class="stt-stat-value" style="color: #3b82f6;">${twilioTurns}</div>
+                            <div class="stt-stat-label">Caller Turns</div>
+                        </div>
+                        <div class="stt-stat">
+                            <div class="stt-stat-value" style="color: ${avgConfidence >= 80 ? '#10b981' : avgConfidence >= 60 ? '#f59e0b' : '#ef4444'};">${avgConfidence}%</div>
+                            <div class="stt-stat-label">Avg Confidence</div>
+                        </div>
+                        <div class="stt-stat">
+                            <div class="stt-stat-value" style="color: ${lowConfTurns === 0 ? '#10b981' : '#ef4444'};">${lowConfTurns}</div>
+                            <div class="stt-stat-label">Low Confidence Turns</div>
+                        </div>
+                    </div>
+                    
+                    <div style="background: #1e293b; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                        <p style="margin: 0; color: #94a3b8;">
+                            <strong>🧠 What is this?</strong><br>
+                            Compare your current Twilio STT against Deepgram's premium transcription. 
+                            This helps you build your vocabulary to make Twilio as accurate as Deepgram - for FREE!
+                        </p>
+                    </div>
+                    
+                    <button id="sttCompareBtn" class="stt-btn stt-btn-primary" onclick="runSttComparison()">
+                        🎙️ Compare with Deepgram
+                    </button>
+                    <span id="sttCompareStatus" style="margin-left: 16px; color: var(--text-secondary);"></span>
+                </div>
+                
+                <div id="sttComparisonResults"></div>
+            `;
+        }
+        
+        function calculateAverageConfidence() {
+            const turns = recording.transcript?.callerTurns || [];
+            if (turns.length === 0) {
+                // Try events
+                const gatherEvents = (recording.events || []).filter(e => e.type === 'GATHER_FINAL');
+                if (gatherEvents.length === 0) return 0;
+                const sum = gatherEvents.reduce((acc, e) => acc + (e.data?.confidence || 0), 0);
+                return Math.round((sum / gatherEvents.length) * 100);
+            }
+            const sum = turns.reduce((acc, t) => acc + (t.confidence || 0), 0);
+            return Math.round((sum / turns.length) * 100);
+        }
+        
+        function countLowConfidenceTurns() {
+            const turns = recording.transcript?.callerTurns || [];
+            if (turns.length === 0) {
+                const gatherEvents = (recording.events || []).filter(e => e.type === 'GATHER_FINAL');
+                return gatherEvents.filter(e => (e.data?.confidence || 0) < 0.7).length;
+            }
+            return turns.filter(t => (t.confidence || 0) < 0.7).length;
+        }
+        
+        async function runSttComparison() {
+            const btn = document.getElementById('sttCompareBtn');
+            const status = document.getElementById('sttCompareStatus');
+            const resultsDiv = document.getElementById('sttComparisonResults');
+            
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Analyzing...';
+            status.textContent = 'Sending to Deepgram for comparison...';
+            
+            try {
+                const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+                const response = await fetch('/api/admin/stt-profile/compare/' + callId, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({ companyId })
+                });
+                
+                const result = await response.json();
+                sttComparisonResult = result;
+                
+                if (result.success) {
+                    status.textContent = 'Analysis complete!';
+                    renderComparisonResults(result);
+                } else {
+                    status.textContent = 'Error: ' + (result.error || 'Unknown error');
+                    resultsDiv.innerHTML = '<div class="stt-card" style="border-color: #ef4444;"><p style="color: #ef4444;">❌ ' + (result.error || 'Comparison failed') + '</p></div>';
+                }
+            } catch (error) {
+                status.textContent = 'Error: ' + error.message;
+                resultsDiv.innerHTML = '<div class="stt-card" style="border-color: #ef4444;"><p style="color: #ef4444;">❌ ' + error.message + '</p></div>';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '🎙️ Compare with Deepgram';
+            }
+        }
+        
+        function renderComparisonResults(result) {
+            const container = document.getElementById('sttComparisonResults');
+            
+            // Recommendation verdict
+            const rec = result.recommendation || {};
+            const verdictClass = rec.verdict?.includes('SUFFICIENT') || rec.verdict?.includes('COMPARABLE') ? 'good' : 
+                                rec.verdict?.includes('BETTER') ? 'warning' : 'bad';
+            
+            // Vocabulary suggestions
+            const vocab = result.vocabularySuggestions || {};
+            const hasVocabSuggestions = vocab.available && vocab.summary?.totalSuggestions > 0;
+            
+            container.innerHTML = `
+                <div class="stt-card">
+                    <h3>${rec.icon || '📊'} Analysis Result</h3>
+                    
+                    <div class="stt-verdict ${verdictClass}">
+                        <strong style="font-size: 16px;">${rec.message || 'Analysis complete'}</strong>
+                        <p style="margin: 8px 0 0 0; color: var(--text-secondary);">${rec.details || ''}</p>
+                        <p style="margin: 8px 0 0 0; font-style: italic;">${rec.action || ''}</p>
+                    </div>
+                    
+                    ${result.comparison?.available ? `
+                        <div style="margin-top: 24px;">
+                            <h4 style="margin-bottom: 12px;">📊 Comparison Stats</h4>
+                            <div class="stt-stat-grid">
+                                <div class="stt-stat">
+                                    <div class="stt-stat-value" style="color: #3b82f6;">${result.comparison.similarity || 0}%</div>
+                                    <div class="stt-stat-label">Similarity</div>
+                                </div>
+                                <div class="stt-stat">
+                                    <div class="stt-stat-value" style="color: #f59e0b;">${result.comparison.twilioAvgConfidence || 0}%</div>
+                                    <div class="stt-stat-label">Twilio Confidence</div>
+                                </div>
+                                <div class="stt-stat">
+                                    <div class="stt-stat-value" style="color: #10b981;">${result.comparison.deepgramConfidence || 0}%</div>
+                                    <div class="stt-stat-label">Deepgram Confidence</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 24px;">
+                            <h4 style="margin-bottom: 12px;">🔍 Side-by-Side Transcript</h4>
+                            <div class="stt-side-by-side">
+                                <div>
+                                    <div class="stt-transcript-label">
+                                        <span style="color: #f59e0b;">📞 Twilio</span>
+                                        <span style="color: var(--text-secondary); font-weight: normal; font-size: 12px;">(${result.twilio?.totalWords || 0} words)</span>
+                                    </div>
+                                    <div class="stt-transcript-box">${result.comparison.sideBySide?.twilio || 'No transcript'}</div>
+                                </div>
+                                <div>
+                                    <div class="stt-transcript-label">
+                                        <span style="color: #10b981;">🎙️ Deepgram</span>
+                                        <span style="color: var(--text-secondary); font-weight: normal; font-size: 12px;">(${result.deepgram?.wordCount || 0} words)</span>
+                                    </div>
+                                    <div class="stt-transcript-box">${result.comparison.sideBySide?.deepgram || 'No transcript'}</div>
+                                </div>
+                            </div>
+                        </div>
+                    ` : `
+                        <div style="margin-top: 24px; padding: 20px; background: var(--bg-secondary); border-radius: 8px;">
+                            <p style="margin: 0; color: var(--text-secondary);">
+                                ${result.deepgram?.message || 'Deepgram comparison not available. Make sure DEEPGRAM_API_KEY is configured.'}
+                            </p>
+                        </div>
+                    `}
+                </div>
+                
+                ${hasVocabSuggestions ? `
+                    <div class="stt-card">
+                        <h3>🎯 Vocabulary Suggestions</h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                            Add these to your STT Profile to improve future transcriptions - <strong>FREE accuracy boost!</strong>
+                        </p>
+                        
+                        ${vocab.corrections?.length > 0 ? `
+                            <div style="margin-bottom: 24px;">
+                                <h4 style="margin-bottom: 12px; color: #f59e0b;">🔧 Corrections (Mishear Fixes)</h4>
+                                ${vocab.corrections.map(c => `
+                                    <div class="stt-suggestion">
+                                        <div>
+                                            <code style="color: #ef4444;">"${c.heard}"</code> → <code style="color: #10b981;">"${c.shouldBe}"</code>
+                                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${c.reason}</div>
+                                        </div>
+                                        <button class="stt-suggestion-add" onclick="addCorrection('${c.heard}', '${c.shouldBe}')">+ Add</button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                        
+                        ${vocab.keywords?.length > 0 ? `
+                            <div style="margin-bottom: 24px;">
+                                <h4 style="margin-bottom: 12px; color: #3b82f6;">🎯 Keywords (Boost Recognition)</h4>
+                                ${vocab.keywords.map(k => `
+                                    <div class="stt-suggestion">
+                                        <div>
+                                            <code style="color: #3b82f6;">"${k.phrase}"</code>
+                                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${k.reason}</div>
+                                        </div>
+                                        <button class="stt-suggestion-add" onclick="addKeyword('${k.phrase}', ${k.boostWeight || 5})">+ Add</button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                        
+                        ${vocab.fillers?.length > 0 ? `
+                            <div style="margin-bottom: 24px;">
+                                <h4 style="margin-bottom: 12px; color: #8b5cf6;">🔇 Fillers (Strip Noise)</h4>
+                                ${vocab.fillers.map(f => `
+                                    <div class="stt-suggestion">
+                                        <div>
+                                            <code style="color: #8b5cf6;">"${f.phrase}"</code>
+                                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Appeared ${f.occurrences} times</div>
+                                        </div>
+                                        <button class="stt-suggestion-add" onclick="addFiller('${f.phrase}')">+ Add</button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                        
+                        <button class="stt-btn stt-btn-primary" onclick="addAllSuggestions()" style="margin-top: 16px;">
+                            ✨ Add All Suggestions to STT Profile
+                        </button>
+                    </div>
+                ` : ''}
+            `;
+        }
+        
+        async function addCorrection(heard, normalized) {
+            await addToSttProfile('corrections', { heard, normalized, context: [], enabled: true });
+        }
+        
+        async function addKeyword(phrase, boostWeight) {
+            await addToSttProfile('vocabulary', { phrase, type: 'manual', source: 'Deepgram Analysis', boostWeight, enabled: true });
+        }
+        
+        async function addFiller(phrase) {
+            await addToSttProfile('fillers', { phrase, scope: 'template', enabled: true, addedBy: 'deepgram_analysis' });
+        }
+        
+        async function addToSttProfile(type, item) {
+            try {
+                const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+                
+                // Get template ID from recording or company
+                const templateId = recording.metadata?.templateId;
+                if (!templateId) {
+                    showToast('error', 'Template ID not found in recording');
+                    return;
+                }
+                
+                const response = await fetch('/api/admin/stt-profile/' + templateId + '/' + type, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({ item })
+                });
+                
+                if (response.ok) {
+                    showToast('success', 'Added to STT Profile!');
+                } else {
+                    const err = await response.json();
+                    showToast('error', err.error || 'Failed to add');
+                }
+            } catch (error) {
+                showToast('error', error.message);
+            }
+        }
+        
+        async function addAllSuggestions() {
+            if (!sttComparisonResult?.vocabularySuggestions?.copyReady) {
+                showToast('error', 'No suggestions to add');
+                return;
+            }
+            
+            const vocab = sttComparisonResult.vocabularySuggestions;
+            let added = 0;
+            
+            // Add all corrections
+            for (const c of (vocab.copyReady?.corrections || [])) {
+                await addCorrection(c.heard, c.normalized);
+                added++;
+            }
+            
+            // Add all keywords
+            for (const k of (vocab.copyReady?.keywords || [])) {
+                await addKeyword(k.phrase, k.boostWeight);
+                added++;
+            }
+            
+            // Add all fillers
+            for (const f of (vocab.copyReady?.fillers || [])) {
+                await addFiller(f.phrase);
+                added++;
+            }
+            
+            showToast('success', 'Added ' + added + ' items to STT Profile!');
         }
         
         // Detect slang, colloquialisms, and regional dialect terms
