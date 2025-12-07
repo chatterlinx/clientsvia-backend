@@ -82,7 +82,8 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
         res.json({
             success: true,
             data: {
-                enabled: callFlowEngine.enabled || false,
+                // Default to TRUE for production - Mission Control is the primary system
+                enabled: callFlowEngine.enabled !== false, // true unless explicitly set to false
                 missionTriggers: missionTriggers || callFlowEngine.missionTriggers?.[trade] || callFlowEngine.missionTriggers?._default,
                 bookingFields: callFlowEngine.bookingFields?.length > 0 ? callFlowEngine.bookingFields : DEFAULT_BOOKING_FIELDS,
                 style: { ...DEFAULT_STYLE, ...callFlowEngine.style },
