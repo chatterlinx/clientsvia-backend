@@ -177,7 +177,21 @@ class LLM0OrchestratorService {
             const company = await Company.findById(companyId).lean();
             const callFlowConfig = company?.aiAgentSettings?.callFlowEngine;
             
-            if (callFlowConfig?.enabled) {
+            // 🔍 DEBUG: Log whether Flow Engine is enabled
+            logger.info('[LLM-0] 🔍 Flow Engine check:', {
+                callId,
+                companyId,
+                hasCompany: !!company,
+                hasAiAgentSettings: !!company?.aiAgentSettings,
+                hasCallFlowEngine: !!callFlowConfig,
+                enabled: callFlowConfig?.enabled,
+                enabledType: typeof callFlowConfig?.enabled
+            });
+            
+            // Default to true if not explicitly set to false (mission control should be on)
+            const flowEngineEnabled = callFlowConfig?.enabled !== false;
+            
+            if (flowEngineEnabled) {
                 logger.info('[LLM-0] 🎯 Running Flow Engine (Mission Control) before LLM...', {
                     callId,
                     companyId,
