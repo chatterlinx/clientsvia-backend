@@ -1172,6 +1172,47 @@ const companySchema = new mongoose.Schema({
                 lowConfidence: { type: Number, default: 0.45, min: 0.1, max: 0.7 },
                 fallbackToLLM: { type: Number, default: 0.4, min: 0.1, max: 0.6 }
             },
+            // LOW CONFIDENCE HANDLING - STT Quality Guard (Dec 2025)
+            // When STT confidence is low, don't guess - ask caller to repeat
+            // This prevents wrong interpretations, missed bookings, and bad UX
+            lowConfidenceHandling: {
+                enabled: { type: Boolean, default: true },
+                // Threshold (0-100%) - below this, ask to repeat
+                threshold: { type: Number, default: 60, min: 30, max: 90 },
+                // Action when confidence is low
+                action: { 
+                    type: String, 
+                    enum: ['repeat', 'guess_with_context', 'accept'],
+                    default: 'repeat'
+                    // repeat = ask caller to say again (safest)
+                    // guess_with_context = use conversation history to infer (future)
+                    // accept = trust low-confidence transcript anyway (risky)
+                },
+                // Phrase to ask caller to repeat
+                repeatPhrase: {
+                    type: String,
+                    default: "Sorry, there's some background noise — could you say that again?",
+                    trim: true
+                },
+                // Max times to ask for repeat before escalation
+                maxRepeatsBeforeEscalation: { type: Number, default: 2, min: 1, max: 5 },
+                // Phrase when escalating after max repeats
+                escalatePhrase: {
+                    type: String,
+                    default: "I'm having trouble hearing you clearly. Let me get someone to help you.",
+                    trim: true
+                },
+                // Preserve booking mode during low confidence (don't break the flow)
+                preserveBookingOnLowConfidence: { type: Boolean, default: true },
+                // Special phrase for booking flow interruption
+                bookingRepeatPhrase: {
+                    type: String,
+                    default: "Sorry, I didn't catch that. Could you repeat that for me?",
+                    trim: true
+                },
+                // Log low-confidence events to Black Box for training
+                logToBlackBox: { type: Boolean, default: true }
+            },
             // SMART CONFIRMATION - Prevents wrong decisions on critical actions
             smartConfirmation: {
                 enabled: { type: Boolean, default: true },

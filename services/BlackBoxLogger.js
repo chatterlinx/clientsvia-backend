@@ -1001,6 +1001,22 @@ const QuickLog = {
     
   bailoutTriggered: (callId, companyId, turn, type, reason) =>
     logEvent({ callId, companyId, type: 'BAILOUT_TRIGGERED', turn, data: { type, reason } }),
+  
+  // LOW CONFIDENCE HANDLING - STT Quality Guard
+  lowConfidenceHit: (callId, companyId, turn, confidence, transcript, repeatCount) =>
+    logEvent({ callId, companyId, type: 'LOW_CONFIDENCE_HIT', turn, data: { 
+      confidence, 
+      transcript: truncate(transcript, 100), 
+      repeatCount,
+      suggestion: 'STT confidence below threshold - caller asked to repeat'
+    } }),
+  
+  lowConfidenceEscalation: (callId, companyId, turn, repeatCount, reason) =>
+    logEvent({ callId, companyId, type: 'LOW_CONFIDENCE_ESCALATION', turn, data: { 
+      repeatCount, 
+      reason,
+      suggestion: 'Max repeats reached due to persistent low STT confidence - transferring to human'
+    } }),
     
   transferInitiated: (callId, companyId, turn, target, reason) =>
     logEvent({ callId, companyId, type: 'TRANSFER_INITIATED', turn, data: { target, reason } }),

@@ -326,6 +326,9 @@ class LLM0ControlsManager {
             <!-- CONFIDENCE THRESHOLDS -->
             ${this.renderConfidencePanel(c.confidenceThresholds)}
 
+            <!-- LOW CONFIDENCE HANDLING - STT Quality Guard -->
+            ${this.renderLowConfidencePanel(c.lowConfidenceHandling || {})}
+
             <!-- SMART CONFIRMATION -->
             ${this.renderSmartConfirmationPanel(c.smartConfirmation || {})}
 
@@ -710,6 +713,142 @@ class LLM0ControlsManager {
         `;
     }
 
+    renderLowConfidencePanel(lc) {
+        // Provide defaults if lowConfidenceHandling doesn't exist yet
+        lc = lc || {
+            enabled: true,
+            threshold: 60,
+            action: 'repeat',
+            repeatPhrase: "Sorry, there's some background noise — could you say that again?",
+            maxRepeatsBeforeEscalation: 2,
+            escalatePhrase: "I'm having trouble hearing you clearly. Let me get someone to help you.",
+            preserveBookingOnLowConfidence: true,
+            bookingRepeatPhrase: "Sorry, I didn't catch that. Could you repeat that for me?",
+            logToBlackBox: true
+        };
+
+        return `
+            <div class="llm0-panel">
+                <div class="llm0-panel-header" style="background: linear-gradient(135deg, #f97316, #ea580c);">
+                    <div class="llm0-panel-title">
+                        <span>🎯</span> Low Confidence Handling
+                        <span style="background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 12px; font-size: 10px; margin-left: 8px;">STT GUARD</span>
+                    </div>
+                    <div class="llm0-panel-toggle">
+                        <span style="font-size: 12px;">Enabled</span>
+                        <div class="llm0-toggle ${lc.enabled !== false ? 'active' : ''}" data-section="lowConfidenceHandling" data-field="enabled">
+                            <div class="llm0-toggle-knob"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="llm0-panel-body">
+                    <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 1px solid #f59e0b; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 8px; color: #92400e; font-size: 14px;">✅ Recommended Setting</h4>
+                        <p style="margin: 0; color: #78350f; font-size: 13px; line-height: 1.5;">
+                            <strong>Protect your business from misinterpreted calls.</strong> When the AI isn't confident in what the caller said, it politely asks them to repeat instead of guessing.
+                        </p>
+                    </div>
+
+                    <div style="background: #f0fdf4; border: 1px solid #22c55e; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+                        <p style="margin: 0; color: #166534; font-size: 12px;">
+                            <strong>💡 Why this works:</strong> A polite "Could you repeat that?" takes 3 seconds. A wrong interpretation loses customers. This is the same approach used by Google Contact Center AI, Amazon Lex, and enterprise contact centers.
+                        </p>
+                    </div>
+
+                    <h4 style="margin: 0 0 16px; color: #374151; font-size: 14px; font-weight: 600;">📊 Confidence Threshold</h4>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Ask to repeat when STT confidence below:</label>
+                        <div class="llm0-slider-container">
+                            <input type="range" class="llm0-slider" value="${lc.threshold || 60}" 
+                                   data-section="lowConfidenceHandling" data-field="threshold" 
+                                   min="30" max="90" id="low-conf-threshold-slider">
+                            <span id="low-conf-threshold-value" style="min-width: 45px; text-align: right; font-weight: 600; color: #f97316;">${lc.threshold || 60}%</span>
+                        </div>
+                        <div class="llm0-hint">Lower = more aggressive (ask more often). Higher = more lenient (trust more). Recommended: 60%</div>
+                    </div>
+
+                    <div class="llm0-field">
+                        <label class="llm0-label">Action When Confidence is Low</label>
+                        <select class="llm0-select" data-section="lowConfidenceHandling" data-field="action">
+                            <option value="repeat" ${lc.action === 'repeat' ? 'selected' : ''}>🔄 Ask to Repeat (Safest)</option>
+                            <option value="guess_with_context" ${lc.action === 'guess_with_context' ? 'selected' : ''}>🧠 Guess with Context (Future)</option>
+                            <option value="accept" ${lc.action === 'accept' ? 'selected' : ''}>⚠️ Accept Anyway (Risky)</option>
+                        </select>
+                        <div class="llm0-hint">Repeat is recommended - it prevents mistakes without losing callers</div>
+                    </div>
+
+                    <div class="llm0-section-divider"></div>
+
+                    <h4 style="margin: 0 0 16px; color: #374151; font-size: 14px; font-weight: 600;">💬 Repeat Phrases</h4>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Standard Repeat Phrase</label>
+                        <input type="text" class="llm0-input" value="${this.escapeHtml(lc.repeatPhrase || '')}" 
+                               data-section="lowConfidenceHandling" data-field="repeatPhrase"
+                               placeholder="Sorry, there's some background noise — could you say that again?">
+                        <div class="llm0-hint">Natural, polite request - customers accept this</div>
+                    </div>
+
+                    <div class="llm0-field">
+                        <label class="llm0-label">Booking Flow Repeat Phrase</label>
+                        <input type="text" class="llm0-input" value="${this.escapeHtml(lc.bookingRepeatPhrase || '')}" 
+                               data-section="lowConfidenceHandling" data-field="bookingRepeatPhrase"
+                               placeholder="Sorry, I didn't catch that. Could you repeat that for me?">
+                        <div class="llm0-hint">Used when already in booking mode - stays in flow</div>
+                    </div>
+
+                    <div class="llm0-section-divider"></div>
+
+                    <h4 style="margin: 0 0 16px; color: #374151; font-size: 14px; font-weight: 600;">🚨 Escalation After Max Repeats</h4>
+                    
+                    <div class="llm0-row">
+                        <div class="llm0-field">
+                            <label class="llm0-label">Max Repeat Attempts</label>
+                            <input type="number" class="llm0-input llm0-number" value="${lc.maxRepeatsBeforeEscalation || 2}" 
+                                   data-section="lowConfidenceHandling" data-field="maxRepeatsBeforeEscalation" min="1" max="5">
+                            <div class="llm0-hint">After this many repeats, escalate to human</div>
+                        </div>
+                    </div>
+                    
+                    <div class="llm0-field">
+                        <label class="llm0-label">Escalation Phrase</label>
+                        <input type="text" class="llm0-input" value="${this.escapeHtml(lc.escalatePhrase || '')}" 
+                               data-section="lowConfidenceHandling" data-field="escalatePhrase"
+                               placeholder="I'm having trouble hearing you clearly. Let me get someone to help you.">
+                        <div class="llm0-hint">Said before transferring to human agent</div>
+                    </div>
+
+                    <div class="llm0-section-divider"></div>
+
+                    <h4 style="margin: 0 0 16px; color: #374151; font-size: 14px; font-weight: 600;">⚙️ Advanced Options</h4>
+                    
+                    <div class="llm0-checkbox-row">
+                        <input type="checkbox" class="llm0-checkbox" id="lc-preserve-booking" ${lc.preserveBookingOnLowConfidence !== false ? 'checked' : ''}
+                               data-section="lowConfidenceHandling" data-field="preserveBookingOnLowConfidence">
+                        <label for="lc-preserve-booking" style="font-size: 14px; color: #374151;">
+                            📅 Preserve booking mode during low confidence (don't break the flow)
+                        </label>
+                    </div>
+                    
+                    <div class="llm0-checkbox-row">
+                        <input type="checkbox" class="llm0-checkbox" id="lc-log-blackbox" ${lc.logToBlackBox !== false ? 'checked' : ''}
+                               data-section="lowConfidenceHandling" data-field="logToBlackBox">
+                        <label for="lc-log-blackbox" style="font-size: 14px; color: #374151;">
+                            📦 Log to Black Box for vocabulary training
+                        </label>
+                    </div>
+
+                    <div style="background: #eff6ff; border: 1px solid #3b82f6; border-radius: 8px; padding: 12px; margin-top: 16px;">
+                        <p style="margin: 0; color: #1e40af; font-size: 12px;">
+                            <strong>📊 How it works:</strong> When STT gives low confidence → Log the bad transcript to Black Box → Ask caller to repeat → Get better transcript → Proceed with confidence. The logged data helps improve your vocabulary over time.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     renderSmartConfirmationPanel(sc) {
         // Provide defaults if smartConfirmation doesn't exist yet
         sc = sc || {
@@ -884,7 +1023,8 @@ class LLM0ControlsManager {
             { id: 'med-conf-slider', display: 'med-conf-value', suffix: '%' },
             { id: 'low-conf-slider', display: 'low-conf-value', suffix: '%' },
             { id: 'fallback-slider', display: 'fallback-value', suffix: '%' },
-            { id: 'confirm-conf-slider', display: 'confirm-conf-value', suffix: '%' }
+            { id: 'confirm-conf-slider', display: 'confirm-conf-value', suffix: '%' },
+            { id: 'low-conf-threshold-slider', display: 'low-conf-threshold-value', suffix: '%' }
         ];
 
         sliders.forEach(s => {
@@ -982,7 +1122,9 @@ class LLM0ControlsManager {
             spamFilter: {},
             customerPatience: {},
             bailoutRules: {},
-            confidenceThresholds: {}
+            confidenceThresholds: {},
+            lowConfidenceHandling: {},
+            smartConfirmation: {}
         };
 
         // Collect toggle states
@@ -1006,7 +1148,10 @@ class LLM0ControlsManager {
             } else if (input.type === 'number' || input.type === 'range') {
                 value = parseFloat(input.value);
                 // Sliders for percentages need to be divided by 100
-                if (input.type === 'range' && (field.includes('Confidence') || field.includes('Threshold') || field === 'confusionThreshold')) {
+                // EXCEPT lowConfidenceHandling.threshold which is stored as 0-100
+                if (input.type === 'range' && 
+                    (field.includes('Confidence') || field === 'confusionThreshold') && 
+                    !(section === 'lowConfidenceHandling' && field === 'threshold')) {
                     value = value / 100;
                 }
             } else {

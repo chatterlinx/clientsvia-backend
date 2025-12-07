@@ -80,6 +80,34 @@ const DEFAULT_LLM0_CONTROLS = {
         mediumConfidence: 0.65,
         lowConfidence: 0.45,
         fallbackToLLM: 0.4
+    },
+    // LOW CONFIDENCE HANDLING - STT Quality Guard (Dec 2025)
+    lowConfidenceHandling: {
+        enabled: true,
+        threshold: 60,  // 0-100 percent
+        action: 'repeat',
+        repeatPhrase: "Sorry, there's some background noise — could you say that again?",
+        maxRepeatsBeforeEscalation: 2,
+        escalatePhrase: "I'm having trouble hearing you clearly. Let me get someone to help you.",
+        preserveBookingOnLowConfidence: true,
+        bookingRepeatPhrase: "Sorry, I didn't catch that. Could you repeat that for me?",
+        logToBlackBox: true
+    },
+    // SMART CONFIRMATION - Prevent wrong decisions on critical actions
+    smartConfirmation: {
+        enabled: true,
+        confirmTransfers: true,
+        confirmBookings: false,
+        confirmEmergency: true,
+        confirmCancellations: true,
+        confirmBelowConfidence: 0.75,
+        confirmationStyle: 'smart',
+        transferConfirmPhrase: "Before I transfer you, I want to make sure - you'd like to speak with a live agent, correct?",
+        bookingConfirmPhrase: "Just to confirm, you'd like to schedule a service appointment, is that right?",
+        emergencyConfirmPhrase: "This sounds like an emergency. I want to make sure - should I dispatch someone right away?",
+        lowConfidencePhrase: "I want to make sure I understand correctly. You're looking for help with {detected_intent}, is that right?",
+        onNoResponse: 'apologize_and_clarify',
+        clarifyPhrase: "I apologize for the confusion. Could you tell me more about what you need help with?"
     }
 };
 
@@ -128,6 +156,14 @@ router.get('/:companyId', authenticateJWT, requireRole('admin'), async (req, res
             confidenceThresholds: {
                 ...DEFAULT_LLM0_CONTROLS.confidenceThresholds,
                 ...(company.aiAgentSettings?.llm0Controls?.confidenceThresholds || {})
+            },
+            lowConfidenceHandling: {
+                ...DEFAULT_LLM0_CONTROLS.lowConfidenceHandling,
+                ...(company.aiAgentSettings?.llm0Controls?.lowConfidenceHandling || {})
+            },
+            smartConfirmation: {
+                ...DEFAULT_LLM0_CONTROLS.smartConfirmation,
+                ...(company.aiAgentSettings?.llm0Controls?.smartConfirmation || {})
             }
         };
 
@@ -208,6 +244,16 @@ router.put('/:companyId', authenticateJWT, requireRole('admin'), async (req, res
                 ...DEFAULT_LLM0_CONTROLS.confidenceThresholds,
                 ...existingControls.confidenceThresholds,
                 ...(updates.confidenceThresholds || {})
+            },
+            lowConfidenceHandling: {
+                ...DEFAULT_LLM0_CONTROLS.lowConfidenceHandling,
+                ...existingControls.lowConfidenceHandling,
+                ...(updates.lowConfidenceHandling || {})
+            },
+            smartConfirmation: {
+                ...DEFAULT_LLM0_CONTROLS.smartConfirmation,
+                ...existingControls.smartConfirmation,
+                ...(updates.smartConfirmation || {})
             },
             lastUpdated: new Date(),
             updatedBy: req.user?.email || 'admin'
