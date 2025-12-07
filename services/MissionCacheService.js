@@ -151,16 +151,68 @@ function dedupeKeywords(keywords) {
 }
 
 /**
- * Create empty mission structure
+ * Create empty mission structure with UNIVERSAL default triggers
+ * These are intent phrases that work across ALL industries
  */
 function createEmptyMission() {
     return {
-        booking: { auto: [], manual: [], sources: {} },
-        emergency: { auto: [], manual: [], sources: {} },
-        cancel: { auto: [], manual: [], sources: {} },
-        reschedule: { auto: [], manual: [], sources: {} },
-        transfer: { auto: [], manual: [], sources: {} },
-        message: { auto: [], manual: [], sources: {} }
+        booking: { 
+            auto: [
+                // Universal booking intent triggers
+                'schedule', 'appointment', 'book', 'booking', 'schedule a technician',
+                'schedule service', 'make an appointment', 'set up an appointment',
+                'need someone to come out', 'send someone out', 'get someone out here',
+                'schedule a visit', 'book a time', 'when can you come', 'available times',
+                'next available', 'earliest appointment', 'schedule for today', 'schedule for tomorrow'
+            ], 
+            manual: [], 
+            sources: {} 
+        },
+        emergency: { 
+            auto: [
+                // Universal emergency triggers
+                'emergency', 'urgent', 'right now', 'immediately', 'asap',
+                'gas leak', 'flooding', 'no heat', 'no ac', 'no air', 'no power',
+                'water everywhere', 'smell gas', 'sparking', 'smoke', 'fire'
+            ], 
+            manual: [], 
+            sources: {} 
+        },
+        cancel: { 
+            auto: [
+                'cancel', 'cancel my appointment', 'cancel the appointment',
+                'need to cancel', 'want to cancel', 'canceling', 'cancellation'
+            ], 
+            manual: [], 
+            sources: {} 
+        },
+        reschedule: { 
+            auto: [
+                'reschedule', 'move my appointment', 'change my appointment',
+                'different time', 'different day', 'move it to', 'change the time',
+                'push back', 'push it back', 'postpone'
+            ], 
+            manual: [], 
+            sources: {} 
+        },
+        transfer: { 
+            auto: [
+                'speak to someone', 'speak to a person', 'talk to someone',
+                'talk to a human', 'real person', 'live person', 'manager',
+                'supervisor', 'representative', 'agent', 'operator'
+            ], 
+            manual: [], 
+            sources: {} 
+        },
+        message: { 
+            auto: [
+                'leave a message', 'take a message', 'message for',
+                'have someone call me', 'call me back', 'callback',
+                'just wanted to leave', 'let them know'
+            ], 
+            manual: [], 
+            sources: {} 
+        }
     };
 }
 
