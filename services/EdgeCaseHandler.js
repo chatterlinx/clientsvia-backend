@@ -303,6 +303,7 @@ function runEdgeCaseChecks(context) {
  * - Configurable prompts from company settings
  * - Customer patience mode (never auto-hangup)
  * - Callback offer support
+ * - Black Box logging for diagnostics
  */
 function handleSilence(callState) {
   // Initialize counter if not present
@@ -311,6 +312,10 @@ function handleSilence(callState) {
   }
   
   callState.consecutiveSilences++;
+  
+  // Extract IDs for logging
+  const callId = callState?.callId || callState?.CallSid;
+  const companyId = callState?.companyId;
   
   // 🧠 Check for LLM-0 Controls (configurable prompts)
   const llm0Controls = callState?.llm0Controls;
@@ -339,6 +344,29 @@ function handleSilence(callState) {
       action: shouldHangup ? 'hangup' : 'continue'
     });
     
+    // 📦 BLACK BOX: Log silence event for diagnostics
+    if (callId && companyId) {
+      try {
+        const BlackBoxLogger = require('./BlackBoxLogger');
+        BlackBoxLogger.logEvent({
+          callId,
+          companyId,
+          type: 'SILENCE_PROMPT',
+          data: {
+            consecutiveSilences: callState.consecutiveSilences,
+            maxPrompts: silenceSettings.maxPrompts,
+            neverAutoHangup: patienceSettings?.neverAutoHangup || false,
+            offeringCallback: shouldOfferCallback,
+            action: shouldHangup ? 'hangup' : 'continue',
+            prompt: prompt.substring(0, 100),
+            source: 'LLM0_CONTROLS'
+          }
+        });
+      } catch (logErr) {
+        logger.debug('[EDGE CASE] Failed to log silence to Black Box');
+      }
+    }
+    
     return {
       count: callState.consecutiveSilences,
       text: prompt,
@@ -361,6 +389,26 @@ function handleSilence(callState) {
     consecutiveSilences: callState.consecutiveSilences,
     action: response.action
   });
+  
+  // 📦 BLACK BOX: Log silence event (default settings)
+  if (callId && companyId) {
+    try {
+      const BlackBoxLogger = require('./BlackBoxLogger');
+      BlackBoxLogger.logEvent({
+        callId,
+        companyId,
+        type: 'SILENCE_PROMPT',
+        data: {
+          consecutiveSilences: callState.consecutiveSilences,
+          action: response.action,
+          prompt: response.text.substring(0, 100),
+          source: 'DEFAULT'
+        }
+      });
+    } catch (logErr) {
+      logger.debug('[EDGE CASE] Failed to log silence to Black Box');
+    }
+  }
   
   return response;
 }

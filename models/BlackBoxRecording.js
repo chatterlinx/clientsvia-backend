@@ -65,6 +65,10 @@ const EVENT_TYPES = [
   'TTS_GENERATED',            // TTS complete with timing
   'LOOP_DETECTED',            // Loop detector fired
   'BEHAVIOR_EVENT',           // Silence, frustration, escalation
+  'SILENCE_PROMPT',           // 🤫 Silence detected - patience prompt sent
+  'SMART_CONFIRMATION_ASKED', // ✅ Confirmation question asked before action
+  'SMART_CONFIRMATION_RESPONSE', // ✅ Caller response to confirmation (yes/no/ambiguous)
+  'STT_HINTS_LOADED',         // 🎤 STT hints loaded for <Gather>
   'BAILOUT_TRIGGERED',        // Hard or soft bailout
   'TRANSFER_INITIATED',       // Transfer started
   'ERROR_OCCURRED',           // Exception/error

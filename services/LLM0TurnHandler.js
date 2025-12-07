@@ -213,6 +213,27 @@ class LLM0TurnHandler {
                 nextAction: confirmResult.nextAction
             });
             
+            // 📦 BLACK BOX: Log confirmation response
+            try {
+                const BlackBoxLogger = require('./BlackBoxLogger');
+                await BlackBoxLogger.logEvent({
+                    callId,
+                    companyId,
+                    type: 'SMART_CONFIRMATION_RESPONSE',
+                    turn: turnNumber,
+                    data: {
+                        callerInput: userInput.substring(0, 100),
+                        confirmed: confirmResult.confirmed,
+                        pendingAction: callState.pendingAction,
+                        severity: callState.pendingSeverity,
+                        recovery: confirmResult.nextAction,
+                        ...confirmResult.debug
+                    }
+                });
+            } catch (logErr) {
+                logger.debug('[LLM0 TURN HANDLER] Failed to log confirmation response to Black Box');
+            }
+            
             if (confirmResult.confirmed) {
                 // User confirmed - proceed with original action
                 const clearedState = SmartConfirmationService.clearPendingState(callState);
@@ -253,6 +274,27 @@ class LLM0TurnHandler {
                 route: triageResult.route,
                 severity: confirmCheck.severity
             });
+            
+            // 📦 BLACK BOX: Log confirmation question
+            try {
+                const BlackBoxLogger = require('./BlackBoxLogger');
+                await BlackBoxLogger.logEvent({
+                    callId,
+                    companyId,
+                    type: 'SMART_CONFIRMATION_ASKED',
+                    turn: turnNumber,
+                    data: {
+                        pendingAction: confirmCheck.pendingAction,
+                        severity: confirmCheck.severity,
+                        confidence: decision.confidence,
+                        reason: confirmCheck.reason || `${confirmCheck.pendingAction} requires confirmation`,
+                        phrase: confirmCheck.confirmationPhrase.substring(0, 100),
+                        originalRoute: triageResult.route
+                    }
+                });
+            } catch (logErr) {
+                logger.debug('[LLM0 TURN HANDLER] Failed to log confirmation question to Black Box');
+            }
             
             return {
                 text: confirmCheck.confirmationPhrase,

@@ -2665,6 +2665,26 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const templateId = company.aiAgentSettings?.templateReferences?.[0]?.templateId;
       const sttHints = await STTHintsBuilder.buildHints(templateId, company);
       
+      // 📦 BLACK BOX: Log STT hints loaded (first turn only to avoid spam)
+      if (BlackBoxLogger && sttHints && !callState.sttHintsLogged) {
+        try {
+          BlackBoxLogger.logEvent({
+            callId: callState?.CallSid || callState?.callId,
+            companyId: companyID,
+            type: 'STT_HINTS_LOADED',
+            data: {
+              templateId: templateId || 'none',
+              hintsCount: sttHints.split(',').length,
+              hintsPreview: sttHints.substring(0, 200),
+              source: templateId ? 'STT_PROFILE' : 'COMPANY_FALLBACK'
+            }
+          });
+          callState.sttHintsLogged = true;
+        } catch (logErr) {
+          logger.debug('[V2 TWILIO] Failed to log STT hints to Black Box');
+        }
+      }
+      
       const gather = twiml.gather({
         input: 'speech',
         speechTimeout: (speechDetection.speechTimeout ?? 3).toString(), // Configurable: 1-10 seconds (default: 3s)
