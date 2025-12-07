@@ -689,6 +689,90 @@ router.get('/:templateId/metrics', authenticateJWT, requireRole('admin'), async 
 });
 
 // ============================================================================
+// DEEPGRAM COMPARISON (Black Box Analysis)
+// ============================================================================
+
+/**
+ * POST /api/admin/stt-profile/compare/:callId
+ * Compare Twilio vs Deepgram transcription for a Black Box recording
+ * Returns vocabulary suggestions to improve STT accuracy
+ */
+router.post('/compare/:callId', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { callId } = req.params;
+        const { companyId } = req.body;
+        
+        if (!companyId) {
+            return res.status(400).json({ success: false, error: 'companyId required' });
+        }
+        
+        // Lazy load comparison service
+        let STTComparisonService;
+        try {
+            STTComparisonService = require('../../services/stt/STTComparisonService');
+        } catch (e) {
+            return res.status(500).json({ 
+                success: false, 
+                error: 'STT Comparison service not available' 
+            });
+        }
+        
+        const result = await STTComparisonService.compareTranscriptions(callId, companyId);
+        
+        logger.info('[STT PROFILE API] Comparison complete', {
+            callId,
+            companyId,
+            success: result.success,
+            suggestionsCount: result.vocabularySuggestions?.summary?.totalSuggestions || 0
+        });
+        
+        res.json(result);
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Comparison failed', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /api/admin/stt-profile/compare-batch
+ * Batch compare multiple calls
+ */
+router.post('/compare-batch', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { callIds, companyId } = req.body;
+        
+        if (!companyId || !callIds || !Array.isArray(callIds)) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'companyId and callIds array required' 
+            });
+        }
+        
+        // Limit batch size
+        const limitedCallIds = callIds.slice(0, 10);
+        
+        let STTComparisonService;
+        try {
+            STTComparisonService = require('../../services/stt/STTComparisonService');
+        } catch (e) {
+            return res.status(500).json({ 
+                success: false, 
+                error: 'STT Comparison service not available' 
+            });
+        }
+        
+        const result = await STTComparisonService.analyzeMultiple(limitedCallIds, companyId);
+        
+        res.json(result);
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Batch comparison failed', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
 // GET PROVIDER STATUS/OPTIONS
 // ============================================================================
 
