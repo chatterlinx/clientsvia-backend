@@ -236,12 +236,14 @@ class LLM0TurnHandler {
             
             if (confirmResult.confirmed) {
                 // User confirmed - proceed with original action
+                // ⚠️ Extract originalDecision BEFORE clearing state (clearPendingState deletes it!)
+                const originalAction = callState.originalDecision?.action;
                 const clearedState = SmartConfirmationService.clearPendingState(callState);
                 callState = clearedState;
                 
                 // Restore original decision/route
-                if (callState.originalDecision) {
-                    triageResult.route = this.actionToRoute(callState.originalDecision.action);
+                if (originalAction) {
+                    triageResult.route = this.actionToRoute(originalAction);
                 }
             } else {
                 // User said NO or was ambiguous
