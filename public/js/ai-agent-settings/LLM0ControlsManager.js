@@ -329,6 +329,12 @@ class LLM0ControlsManager {
             <!-- LOW CONFIDENCE HANDLING - STT Quality Guard -->
             ${this.renderLowConfidencePanel(c.lowConfidenceHandling || {})}
 
+            <!-- FRUSTRATION DETECTION -->
+            ${this.renderFrustrationPanel(c.frustrationDetection || {})}
+
+            <!-- RESPONSE TIMING -->
+            ${this.renderResponseTimingPanel(c.responseTiming || {})}
+
             <!-- SMART CONFIRMATION -->
             ${this.renderSmartConfirmationPanel(c.smartConfirmation || {})}
 
@@ -844,6 +850,165 @@ class LLM0ControlsManager {
                             <strong>📊 How it works:</strong> When STT gives low confidence → Log the bad transcript to Black Box → Ask caller to repeat → Get better transcript → Proceed with confidence. The logged data helps improve your vocabulary over time.
                         </p>
                     </div>
+                    <div class="llm0-checkbox-row">
+                        <input type="checkbox" class="llm0-checkbox" id="lc-skip-confirm" ${lc.skipConfirmationOnClearRepeat !== false ? 'checked' : ''}
+                               data-section="lowConfidenceHandling" data-field="skipConfirmationOnClearRepeat">
+                        <label for="lc-skip-confirm" style="font-size: 14px; color: #374151;">
+                            ⚡ Skip confirmation if caller repeats clearly (prevents double-confirmation)
+                        </label>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    renderFrustrationPanel(fd) {
+        // Provide defaults if frustrationDetection doesn't exist yet
+        fd = fd || {
+            enabled: true,
+            frustrationKeywords: [
+                "that's not what I said",
+                "you're not listening",
+                "this is ridiculous",
+                "I already told you",
+                "just transfer me",
+                "let me talk to a human",
+                "real person"
+            ],
+            onFrustration: 'apologize_and_escalate',
+            escalationPhrase: "I understand, and I apologize for any confusion. Let me connect you with someone who can help right away.",
+            logToBlackBox: true
+        };
+
+        const keywords = fd.frustrationKeywords || [];
+
+        return `
+            <div class="llm0-panel">
+                <div class="llm0-panel-header" style="background: linear-gradient(135deg, #dc2626, #b91c1c);">
+                    <div class="llm0-panel-title">
+                        <span>😤</span> Frustration Detection
+                        <span style="background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 12px; font-size: 10px; margin-left: 8px;">LOOP BREAKER</span>
+                    </div>
+                    <div class="llm0-panel-toggle">
+                        <span style="font-size: 12px;">Enabled</span>
+                        <div class="llm0-toggle ${fd.enabled !== false ? 'active' : ''}" data-section="frustrationDetection" data-field="enabled">
+                            <div class="llm0-toggle-knob"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="llm0-panel-body">
+                    <div style="background: #fef2f2; border: 1px solid #dc2626; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+                        <p style="margin: 0; color: #991b1b; font-size: 13px;">
+                            <strong>🚨 Prevents frustration loops.</strong> When a caller shows signs of frustration, skip all confirmation logic and immediately escalate to a human. No one likes being asked the same question repeatedly.
+                        </p>
+                    </div>
+
+                    <div class="llm0-field">
+                        <label class="llm0-label">Frustration Keywords (triggers immediate escalation)</label>
+                        <div class="llm0-phrases" id="frustration-keywords">
+                            ${keywords.map(k => `
+                                <div class="llm0-phrase" style="background: #fee2e2; color: #991b1b;">
+                                    ${this.escapeHtml(k)}
+                                    <span class="llm0-phrase-remove" onclick="window.llm0ControlsManager.removeFrustrationKeyword('${this.escapeHtml(k)}')">×</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="llm0-add-phrase">
+                            <input type="text" class="llm0-input" id="new-frustration-keyword" placeholder="Add frustration keyword...">
+                            <button class="llm0-btn llm0-btn-primary" style="padding: 10px 16px; background: #dc2626;" onclick="window.llm0ControlsManager.addFrustrationKeyword()">+ Add</button>
+                        </div>
+                        <div class="llm0-hint">Phrases that indicate caller frustration - triggers immediate escalation</div>
+                    </div>
+
+                    <div class="llm0-section-divider"></div>
+
+                    <div class="llm0-field">
+                        <label class="llm0-label">On Frustration Detected</label>
+                        <select class="llm0-select" data-section="frustrationDetection" data-field="onFrustration">
+                            <option value="apologize_and_escalate" ${fd.onFrustration === 'apologize_and_escalate' ? 'selected' : ''}>😊 Apologize & Escalate (recommended)</option>
+                            <option value="escalate" ${fd.onFrustration === 'escalate' ? 'selected' : ''}>📞 Escalate Immediately</option>
+                            <option value="apologize_and_continue" ${fd.onFrustration === 'apologize_and_continue' ? 'selected' : ''}>🔄 Apologize & Continue (risky)</option>
+                        </select>
+                    </div>
+
+                    <div class="llm0-field">
+                        <label class="llm0-label">Escalation Phrase</label>
+                        <input type="text" class="llm0-input" value="${this.escapeHtml(fd.escalationPhrase || '')}" 
+                               data-section="frustrationDetection" data-field="escalationPhrase"
+                               placeholder="I understand, and I apologize for any confusion...">
+                    </div>
+
+                    <div class="llm0-checkbox-row">
+                        <input type="checkbox" class="llm0-checkbox" id="fd-log-blackbox" ${fd.logToBlackBox !== false ? 'checked' : ''}
+                               data-section="frustrationDetection" data-field="logToBlackBox">
+                        <label for="fd-log-blackbox" style="font-size: 14px; color: #374151;">
+                            📦 Log frustration events to Black Box
+                        </label>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    renderResponseTimingPanel(rt) {
+        // Provide defaults if responseTiming doesn't exist yet
+        rt = rt || {
+            enabled: true,
+            minDelayMs: 80,
+            maxDelayMs: 140,
+            postSpeechDelayMs: 200
+        };
+
+        return `
+            <div class="llm0-panel">
+                <div class="llm0-panel-header" style="background: linear-gradient(135deg, #059669, #047857);">
+                    <div class="llm0-panel-title">
+                        <span>⏱️</span> Response Timing
+                        <span style="background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 12px; font-size: 10px; margin-left: 8px;">NATURAL FEEL</span>
+                    </div>
+                    <div class="llm0-panel-toggle">
+                        <span style="font-size: 12px;">Enabled</span>
+                        <div class="llm0-toggle ${rt.enabled !== false ? 'active' : ''}" data-section="responseTiming" data-field="enabled">
+                            <div class="llm0-toggle-knob"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="llm0-panel-body">
+                    <div style="background: #ecfdf5; border: 1px solid #059669; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+                        <p style="margin: 0; color: #065f46; font-size: 13px;">
+                            <strong>🎯 Creates natural conversation flow.</strong> Adds a small random delay before responding to prevent machine-gun responses that feel robotic. This makes the AI feel like a real receptionist thinking before speaking.
+                        </p>
+                    </div>
+
+                    <h4 style="margin: 0 0 16px; color: #374151; font-size: 14px; font-weight: 600;">⏱️ Response Delay Range</h4>
+
+                    <div class="llm0-row">
+                        <div class="llm0-field">
+                            <label class="llm0-label">Minimum Delay (ms)</label>
+                            <input type="number" class="llm0-input llm0-number" value="${rt.minDelayMs || 80}" 
+                                   data-section="responseTiming" data-field="minDelayMs" min="0" max="500">
+                            <div class="llm0-hint">Shortest possible pause</div>
+                        </div>
+                        <div class="llm0-field">
+                            <label class="llm0-label">Maximum Delay (ms)</label>
+                            <input type="number" class="llm0-input llm0-number" value="${rt.maxDelayMs || 140}" 
+                                   data-section="responseTiming" data-field="maxDelayMs" min="50" max="1000">
+                            <div class="llm0-hint">Longest possible pause</div>
+                        </div>
+                    </div>
+
+                    <div class="llm0-field">
+                        <label class="llm0-label">Post-Speech Delay (ms)</label>
+                        <input type="number" class="llm0-input llm0-number" value="${rt.postSpeechDelayMs || 200}" 
+                               data-section="responseTiming" data-field="postSpeechDelayMs" min="0" max="500">
+                        <div class="llm0-hint">Extra pause after caller finishes speaking - gives them time to add more</div>
+                    </div>
+
+                    <div style="background: #f0fdf4; border: 1px solid #22c55e; border-radius: 8px; padding: 12px; margin-top: 16px;">
+                        <p style="margin: 0; color: #166534; font-size: 12px;">
+                            <strong>💡 Recommended:</strong> 80-140ms delay feels natural without being slow. Humans typically pause 200-400ms before responding. Too fast feels robotic, too slow feels laggy.
+                        </p>
+                    </div>
                 </div>
             </div>
         `;
@@ -862,7 +1027,7 @@ class LLM0ControlsManager {
             transferConfirmPhrase: "Before I transfer you, I want to make sure - you'd like to speak with a live agent, correct?",
             bookingConfirmPhrase: "Just to confirm, you'd like to schedule a service appointment, is that right?",
             emergencyConfirmPhrase: "This sounds like an emergency. I want to make sure - should I dispatch someone right away?",
-            lowConfidencePhrase: "I want to make sure I understand correctly. You're looking for help with {detected_intent}, is that right?",
+            lowConfidencePhrase: "I want to make sure I have this right — you need help with {detected_intent}, correct?",
             onNoResponse: 'apologize_and_clarify',
             clarifyPhrase: "I apologize for the confusion. Could you tell me more about what you need help with?"
         };
@@ -1113,6 +1278,70 @@ class LLM0ControlsManager {
     }
 
     // ========================================================================
+    // FRUSTRATION KEYWORD MANAGEMENT
+    // ========================================================================
+    async addFrustrationKeyword() {
+        const input = document.getElementById('new-frustration-keyword');
+        const keyword = input.value.trim().toLowerCase();
+        
+        if (keyword.length < 3) {
+            this.showToast('error', 'Keyword must be at least 3 characters');
+            return;
+        }
+
+        try {
+            const token = localStorage.getItem('adminToken');
+            const response = await fetch(`/api/admin/llm0-controls/${this.companyId}/frustration-keyword`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ keyword })
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showToast('success', `Added "${keyword}" to frustration keywords`);
+                input.value = '';
+                await this.load();
+            } else {
+                this.showToast('error', result.message || 'Failed to add keyword');
+            }
+        } catch (error) {
+            this.showToast('error', 'Network error: ' + error.message);
+        }
+    }
+
+    async removeFrustrationKeyword(keyword) {
+        if (!confirm(`Remove "${keyword}" from frustration keywords?`)) return;
+
+        try {
+            const token = localStorage.getItem('adminToken');
+            const response = await fetch(`/api/admin/llm0-controls/${this.companyId}/frustration-keyword`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ keyword })
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showToast('success', `Removed "${keyword}"`);
+                await this.load();
+            } else {
+                this.showToast('error', result.message);
+            }
+        } catch (error) {
+            this.showToast('error', 'Network error: ' + error.message);
+        }
+    }
+
+    // ========================================================================
     // SAVE / RESET
     // ========================================================================
     collectFormData() {
@@ -1124,6 +1353,8 @@ class LLM0ControlsManager {
             bailoutRules: {},
             confidenceThresholds: {},
             lowConfidenceHandling: {},
+            frustrationDetection: {},
+            responseTiming: {},
             smartConfirmation: {}
         };
 

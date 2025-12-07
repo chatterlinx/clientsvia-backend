@@ -1207,11 +1207,60 @@ const companySchema = new mongoose.Schema({
                 // Special phrase for booking flow interruption
                 bookingRepeatPhrase: {
                     type: String,
-                    default: "Sorry, I didn't catch that. Could you repeat that for me?",
+                    default: "Sorry — could you say that again so I can get this right?",
                     trim: true
                 },
                 // Log low-confidence events to Black Box for training
+                logToBlackBox: { type: Boolean, default: true },
+                // Skip confirmation if caller repeats clearly (prevents double-confirmation annoyance)
+                skipConfirmationOnClearRepeat: { type: Boolean, default: true }
+            },
+            // FRUSTRATION DETECTION - Escalate immediately on emotional keywords
+            // Prevents loops when caller is clearly frustrated
+            frustrationDetection: {
+                enabled: { type: Boolean, default: true },
+                // Keywords that trigger immediate escalation
+                frustrationKeywords: {
+                    type: [String],
+                    default: [
+                        "that's not what I said",
+                        "you're not listening",
+                        "this is ridiculous",
+                        "I already told you",
+                        "are you even listening",
+                        "I said no",
+                        "stop asking me",
+                        "just transfer me",
+                        "let me talk to a human",
+                        "speak to a person",
+                        "real person",
+                        "actual human"
+                    ]
+                },
+                // Action when frustration detected
+                onFrustration: {
+                    type: String,
+                    enum: ['escalate', 'apologize_and_escalate', 'apologize_and_continue'],
+                    default: 'apologize_and_escalate'
+                },
+                // Phrase before escalating
+                escalationPhrase: {
+                    type: String,
+                    default: "I understand, and I apologize for any confusion. Let me connect you with someone who can help right away.",
+                    trim: true
+                },
+                // Log frustration events to Black Box
                 logToBlackBox: { type: Boolean, default: true }
+            },
+            // RESPONSE TIMING - Natural-feeling delays
+            // Prevents machine-gun responses that feel robotic
+            responseTiming: {
+                enabled: { type: Boolean, default: true },
+                // Random delay range before responding (milliseconds)
+                minDelayMs: { type: Number, default: 80, min: 0, max: 500 },
+                maxDelayMs: { type: Number, default: 140, min: 50, max: 1000 },
+                // Add extra delay after caller finishes speaking
+                postSpeechDelayMs: { type: Number, default: 200, min: 0, max: 500 }
             },
             // SMART CONFIRMATION - Prevents wrong decisions on critical actions
             smartConfirmation: {

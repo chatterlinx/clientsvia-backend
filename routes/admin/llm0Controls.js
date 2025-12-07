@@ -93,6 +93,34 @@ const DEFAULT_LLM0_CONTROLS = {
         bookingRepeatPhrase: "Sorry, I didn't catch that. Could you repeat that for me?",
         logToBlackBox: true
     },
+    // FRUSTRATION DETECTION - Escalate immediately on emotional keywords
+    frustrationDetection: {
+        enabled: true,
+        frustrationKeywords: [
+            "that's not what I said",
+            "you're not listening",
+            "this is ridiculous",
+            "I already told you",
+            "are you even listening",
+            "I said no",
+            "stop asking me",
+            "just transfer me",
+            "let me talk to a human",
+            "speak to a person",
+            "real person",
+            "actual human"
+        ],
+        onFrustration: 'apologize_and_escalate',
+        escalationPhrase: "I understand, and I apologize for any confusion. Let me connect you with someone who can help right away.",
+        logToBlackBox: true
+    },
+    // RESPONSE TIMING - Natural-feeling delays
+    responseTiming: {
+        enabled: true,
+        minDelayMs: 80,
+        maxDelayMs: 140,
+        postSpeechDelayMs: 200
+    },
     // SMART CONFIRMATION - Prevent wrong decisions on critical actions
     smartConfirmation: {
         enabled: true,
@@ -105,7 +133,7 @@ const DEFAULT_LLM0_CONTROLS = {
         transferConfirmPhrase: "Before I transfer you, I want to make sure - you'd like to speak with a live agent, correct?",
         bookingConfirmPhrase: "Just to confirm, you'd like to schedule a service appointment, is that right?",
         emergencyConfirmPhrase: "This sounds like an emergency. I want to make sure - should I dispatch someone right away?",
-        lowConfidencePhrase: "I want to make sure I understand correctly. You're looking for help with {detected_intent}, is that right?",
+        lowConfidencePhrase: "I want to make sure I have this right — you need help with {detected_intent}, correct?",
         onNoResponse: 'apologize_and_clarify',
         clarifyPhrase: "I apologize for the confusion. Could you tell me more about what you need help with?"
     }
@@ -160,6 +188,14 @@ router.get('/:companyId', authenticateJWT, requireRole('admin'), async (req, res
             lowConfidenceHandling: {
                 ...DEFAULT_LLM0_CONTROLS.lowConfidenceHandling,
                 ...(company.aiAgentSettings?.llm0Controls?.lowConfidenceHandling || {})
+            },
+            frustrationDetection: {
+                ...DEFAULT_LLM0_CONTROLS.frustrationDetection,
+                ...(company.aiAgentSettings?.llm0Controls?.frustrationDetection || {})
+            },
+            responseTiming: {
+                ...DEFAULT_LLM0_CONTROLS.responseTiming,
+                ...(company.aiAgentSettings?.llm0Controls?.responseTiming || {})
             },
             smartConfirmation: {
                 ...DEFAULT_LLM0_CONTROLS.smartConfirmation,
@@ -249,6 +285,20 @@ router.put('/:companyId', authenticateJWT, requireRole('admin'), async (req, res
                 ...DEFAULT_LLM0_CONTROLS.lowConfidenceHandling,
                 ...existingControls.lowConfidenceHandling,
                 ...(updates.lowConfidenceHandling || {})
+            },
+            frustrationDetection: {
+                ...DEFAULT_LLM0_CONTROLS.frustrationDetection,
+                ...existingControls.frustrationDetection,
+                ...(updates.frustrationDetection || {}),
+                // Special handling for array field
+                frustrationKeywords: updates.frustrationDetection?.frustrationKeywords || 
+                    existingControls.frustrationDetection?.frustrationKeywords || 
+                    DEFAULT_LLM0_CONTROLS.frustrationDetection.frustrationKeywords
+            },
+            responseTiming: {
+                ...DEFAULT_LLM0_CONTROLS.responseTiming,
+                ...existingControls.responseTiming,
+                ...(updates.responseTiming || {})
             },
             smartConfirmation: {
                 ...DEFAULT_LLM0_CONTROLS.smartConfirmation,
@@ -494,6 +544,155 @@ router.delete('/:companyId/spam-phrase', authenticateJWT, requireRole('admin'), 
         res.status(500).json({
             success: false,
             message: 'Failed to remove spam phrase',
+            error: error.message
+        });
+    }
+});
+
+// ============================================================================
+// ADD FRUSTRATION KEYWORD
+// ============================================================================
+router.post('/:companyId/frustration-keyword', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { keyword } = req.body;
+
+        if (!keyword || keyword.trim().length < 3) {
+            return res.status(400).json({
+                success: false,
+                message: 'Keyword must be at least 3 characters'
+            });
+        }
+
+        logger.info(`😤 [LLM-0 CONTROLS] Adding frustration keyword: "${keyword}" for company: ${companyId}`);
+
+        const company = await v2Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found'
+            });
+        }
+
+        // Initialize if needed
+        if (!company.aiAgentSettings) {
+            company.aiAgentSettings = {};
+        }
+        if (!company.aiAgentSettings.llm0Controls) {
+            company.aiAgentSettings.llm0Controls = { ...DEFAULT_LLM0_CONTROLS };
+        }
+        if (!company.aiAgentSettings.llm0Controls.frustrationDetection) {
+            company.aiAgentSettings.llm0Controls.frustrationDetection = { ...DEFAULT_LLM0_CONTROLS.frustrationDetection };
+        }
+        if (!Array.isArray(company.aiAgentSettings.llm0Controls.frustrationDetection.frustrationKeywords)) {
+            company.aiAgentSettings.llm0Controls.frustrationDetection.frustrationKeywords = [...DEFAULT_LLM0_CONTROLS.frustrationDetection.frustrationKeywords];
+        }
+
+        const normalizedKeyword = keyword.toLowerCase().trim();
+        const existingKeywords = company.aiAgentSettings.llm0Controls.frustrationDetection.frustrationKeywords;
+
+        // Check if already exists
+        if (existingKeywords.includes(normalizedKeyword)) {
+            return res.status(409).json({
+                success: false,
+                message: 'Keyword already exists in frustration detection'
+            });
+        }
+
+        // Add keyword
+        existingKeywords.push(normalizedKeyword);
+        company.aiAgentSettings.llm0Controls.frustrationDetection.frustrationKeywords = existingKeywords;
+        company.aiAgentSettings.llm0Controls.lastUpdated = new Date();
+        company.aiAgentSettings.llm0Controls.updatedBy = req.user?.email || 'admin';
+
+        company.markModified('aiAgentSettings.llm0Controls');
+        await company.save();
+
+        // Clear Redis cache
+        try {
+            await redisClient.del(`company:${companyId}`);
+        } catch (cacheError) {
+            logger.warn(`⚠️ [LLM-0 CONTROLS] Cache clear failed:`, cacheError.message);
+        }
+
+        logger.info(`✅ [LLM-0 CONTROLS] Frustration keyword added: "${normalizedKeyword}"`);
+
+        res.json({
+            success: true,
+            message: `Keyword "${normalizedKeyword}" added to frustration detection`,
+            keywords: existingKeywords
+        });
+
+    } catch (error) {
+        logger.error(`❌ [LLM-0 CONTROLS] Add frustration keyword failed:`, error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to add frustration keyword',
+            error: error.message
+        });
+    }
+});
+
+// ============================================================================
+// REMOVE FRUSTRATION KEYWORD
+// ============================================================================
+router.delete('/:companyId/frustration-keyword', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { keyword } = req.body;
+
+        if (!keyword) {
+            return res.status(400).json({
+                success: false,
+                message: 'Keyword is required'
+            });
+        }
+
+        logger.info(`😤 [LLM-0 CONTROLS] Removing frustration keyword: "${keyword}" for company: ${companyId}`);
+
+        const company = await v2Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found'
+            });
+        }
+
+        const normalizedKeyword = keyword.toLowerCase().trim();
+        const existingKeywords = company.aiAgentSettings?.llm0Controls?.frustrationDetection?.frustrationKeywords || [];
+        
+        const updatedKeywords = existingKeywords.filter(k => k !== normalizedKeyword);
+
+        if (updatedKeywords.length === existingKeywords.length) {
+            return res.status(404).json({
+                success: false,
+                message: 'Keyword not found in frustration detection'
+            });
+        }
+
+        company.aiAgentSettings.llm0Controls.frustrationDetection.frustrationKeywords = updatedKeywords;
+        company.aiAgentSettings.llm0Controls.lastUpdated = new Date();
+        company.markModified('aiAgentSettings.llm0Controls');
+        await company.save();
+
+        // Clear Redis cache
+        try {
+            await redisClient.del(`company:${companyId}`);
+        } catch (cacheError) {
+            logger.warn(`⚠️ [LLM-0 CONTROLS] Cache clear failed:`, cacheError.message);
+        }
+
+        res.json({
+            success: true,
+            message: `Keyword "${normalizedKeyword}" removed from frustration detection`,
+            keywords: updatedKeywords
+        });
+
+    } catch (error) {
+        logger.error(`❌ [LLM-0 CONTROLS] Remove frustration keyword failed:`, error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to remove frustration keyword',
             error: error.message
         });
     }
