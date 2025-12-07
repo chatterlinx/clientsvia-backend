@@ -809,6 +809,23 @@ class LLM0TurnHandler {
                     responseText = "Just so I put you in the right spot, is this more of a repair issue or a routine maintenance visit?";
                     // Stay on same step
                     logger.debug('[LLM0 TURN HANDLER] Service type still unclear, asking again');
+                    
+                    // Log to Black Box for training/review
+                    try {
+                        const BlackBoxLogger = require('./BlackBoxLogger');
+                        await BlackBoxLogger.logEvent({
+                            callId,
+                            companyId,
+                            type: 'SERVICE_TYPE_CLARIFICATION_REPEATED',
+                            data: {
+                                userInput: userInput?.substring(0, 100),
+                                reason: 'still_ambiguous',
+                                note: 'User response did not match any service type keywords'
+                            }
+                        });
+                    } catch (logErr) {
+                        logger.debug('[LLM0 TURN HANDLER] Black Box log failed');
+                    }
                 }
                 break;
             
