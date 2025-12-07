@@ -1341,7 +1341,7 @@ const companySchema = new mongoose.Schema({
         // -------------------------------------------------------------------
         callFlowEngine: {
             // Master toggle
-            enabled: { type: Boolean, default: false }, // Off by default until UI built
+            enabled: { type: Boolean, default: true }, // ON by default - production ready
             
             // ═══════════════════════════════════════════════════════════════
             // MISSION TRIGGERS - Auto-extracted + Manual Overrides
