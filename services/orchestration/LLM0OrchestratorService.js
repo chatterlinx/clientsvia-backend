@@ -158,6 +158,125 @@ class LLM0OrchestratorService {
         const preprocessingMs = Date.now() - preprocessStart;
         
         // ====================================================================
+        // STEP 2.5: 🎯 CALL FLOW ENGINE (Mission Control) - FREE INTENT ROUTING
+        // ====================================================================
+        // The Flow Engine routes clear intents (BOOKING, EMERGENCY, etc.) WITHOUT LLM.
+        // This saves $0.50+ per call when the caller says things like:
+        //   "I need to schedule an appointment" → BOOKING (FREE)
+        //   "This is an emergency!" → EMERGENCY (FREE)
+        // Only falls through to LLM-0 if no clear flow is detected.
+        // ====================================================================
+        
+        let flowEngineDecision = null;
+        try {
+            const FlowEngine = require('../FlowEngine');
+            const { getSharedRedisClient } = require('../redisClientFactory');
+            const Company = require('../../models/v2Company');
+            
+            // Load company config for Flow Engine
+            const company = await Company.findById(companyId).lean();
+            const callFlowConfig = company?.aiAgentSettings?.callFlowEngine;
+            
+            if (callFlowConfig?.enabled) {
+                logger.info('[LLM-0] 🎯 Running Flow Engine (Mission Control) before LLM...', {
+                    callId,
+                    companyId,
+                    cleanedInputPreview: cleanedInput.substring(0, 50)
+                });
+                
+                const flowStart = Date.now();
+                flowEngineDecision = await FlowEngine.decideFlow(
+                    cleanedInput,
+                    companyId,
+                    {
+                        trade: callFlowConfig?.activeTrade || '_default',
+                        synonymMap: callFlowConfig?.synonymMap || {},
+                        customBlockers: callFlowConfig?.customBlockers || {}
+                    }
+                );
+                const flowTimeMs = Date.now() - flowStart;
+                
+                // 📼 BLACK BOX: Log Flow Engine decision
+                try {
+                    const BlackBoxLogger = require('../BlackBoxLogger');
+                    await BlackBoxLogger.logEvent({
+                        callId,
+                        companyId,
+                        type: 'FLOW_ENGINE_DECISION',
+                        data: {
+                            flow: flowEngineDecision.flow,
+                            confidence: flowEngineDecision.confidence,
+                            matchedTriggers: flowEngineDecision.matchedTriggers,
+                            secondaryIntents: flowEngineDecision.secondaryIntents,
+                            blockedFlows: flowEngineDecision.blockedFlows || [],
+                            input: cleanedInput.substring(0, 100),
+                            timeMs: flowTimeMs,
+                            _hint: flowEngineDecision.flow === 'GENERAL_INQUIRY'
+                                ? 'No specific flow detected - continuing to LLM-0'
+                                : `Primary intent: ${flowEngineDecision.flow} - FAST PATH (no LLM needed)`
+                        }
+                    });
+                } catch (logErr) {
+                    logger.debug('[LLM-0] Black Box log failed', { error: logErr.message });
+                }
+                
+                // 🚀 SHORT-CIRCUIT: If clear intent detected, return decision directly (FREE!)
+                if (flowEngineDecision.flow !== 'GENERAL_INQUIRY' && flowEngineDecision.confidence >= 0.7) {
+                    logger.info('[LLM-0] 🎯 FAST PATH: Flow Engine detected clear intent - skipping LLM!', {
+                        callId,
+                        companyId,
+                        flow: flowEngineDecision.flow,
+                        matchedTriggers: flowEngineDecision.matchedTriggers,
+                        timeMs: flowTimeMs,
+                        savings: '$0.50+ saved'
+                    });
+                    
+                    // Map Flow Engine flow to LLM-0 action
+                    const flowToAction = {
+                        'BOOKING': 'BOOK',
+                        'EMERGENCY': 'EMERGENCY_DISPATCH',
+                        'CANCEL': 'CANCEL',
+                        'RESCHEDULE': 'RESCHEDULE',
+                        'TRANSFER': 'TRANSFER_TO_HUMAN',
+                        'MESSAGE': 'TAKE_MESSAGE'
+                    };
+                    
+                    const flowToIntent = {
+                        'BOOKING': 'booking',
+                        'EMERGENCY': 'emergency',
+                        'CANCEL': 'cancel',
+                        'RESCHEDULE': 'reschedule',
+                        'TRANSFER': 'transfer',
+                        'MESSAGE': 'message'
+                    };
+                    
+                    const decision = createEmptyDecision();
+                    decision.action = flowToAction[flowEngineDecision.flow] || 'ASK_FOLLOWUP';
+                    decision.intentTag = flowToIntent[flowEngineDecision.flow] || 'service';
+                    decision.confidence = flowEngineDecision.confidence;
+                    decision.flags.flowEngineMatch = true;
+                    decision.flags.llmSkipped = true;
+                    decision.debug.reasoning = `Flow Engine detected ${flowEngineDecision.flow} (triggers: ${flowEngineDecision.matchedTriggers?.join(', ')})`;
+                    decision.debug.processingTimeMs = Date.now() - startTime;
+                    decision.debug.flowEngineTimeMs = flowTimeMs;
+                    decision.nextPrompt = null; // Let handler generate appropriate response
+                    
+                    return decision;
+                }
+                
+                logger.debug('[LLM-0] Flow Engine: No clear match, continuing to LLM...', {
+                    callId,
+                    flow: flowEngineDecision.flow
+                });
+            }
+        } catch (flowError) {
+            logger.warn('[LLM-0] Flow Engine error (non-fatal, continuing to LLM)', {
+                callId,
+                error: flowError.message
+            });
+        }
+        
+        // ====================================================================
         // STEP 3: EMOTION DETECTION
         // ====================================================================
         let emotion = { primary: 'NEUTRAL', intensity: 0, signals: [] };
