@@ -601,7 +601,12 @@ class IntelligentRouter {
                         ...context,
                         template,
                         companyName: company?.companyName || company?.businessName,
-                        categoryName: template?.name || 'Unknown'
+                        categoryName: template?.name || 'Unknown',
+                        // Deepgram enhancement context - ensure best transcript before LLM
+                        companyId: company?._id?.toString() || null,
+                        callId,
+                        sttConfidence: context.sttConfidence || null,      // 0-100 from Twilio
+                        recordingUrl: context.recordingUrl || null         // For Deepgram re-transcription
                     }
                 });
                 

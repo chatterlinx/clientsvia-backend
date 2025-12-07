@@ -16,11 +16,24 @@
  * COST: ~$0.0005–$0.001 per call (gpt-4o-mini pricing)
  * SPEED: 500–1000ms typical
  * 
+ * DEEPGRAM INTEGRATION (Dec 2025):
+ * Before spending money on LLM, we ensure we have the best possible transcript.
+ * If STT confidence is borderline (60-80%), re-transcribe with Deepgram first.
+ * This dramatically improves LLM accuracy and reduces wasted API calls.
+ * 
  * ============================================================================
  */
 
 const openaiClient = require('../config/openai');
 const logger = require('../utils/logger');
+
+// Deepgram fallback for better transcripts before LLM
+let DeepgramFallback;
+try {
+    DeepgramFallback = require('./DeepgramFallback');
+} catch (err) {
+    logger.warn('[Tier3] DeepgramFallback not available');
+}
 
 class Tier3LLMFallback {
   constructor() {
@@ -56,7 +69,16 @@ class Tier3LLMFallback {
    */
   async analyze({ callerInput, scenarios, context = {} }) {
     const startTime = Date.now();
-    const { companyName, categoryName, channel = 'voice' } = context;
+    const { 
+      companyName, 
+      categoryName, 
+      channel = 'voice',
+      // Deepgram integration context
+      sttConfidence = null,       // 0-100 from Twilio
+      recordingUrl = null,        // For Deepgram re-transcription
+      companyId = null,
+      callId = null
+    } = context;
 
     // GUARD: Empty input
     if (!callerInput || !Array.isArray(scenarios) || scenarios.length === 0) {
@@ -76,9 +98,54 @@ class Tier3LLMFallback {
       };
     }
 
+    // ========================================================================
+    // 🎯 DEEPGRAM PRE-LLM ENHANCEMENT
+    // ========================================================================
+    // If we're at Tier 3 (expensive LLM), ensure we have the best transcript.
+    // If STT confidence is borderline (40-80%), try Deepgram for better accuracy.
+    // This prevents wasting LLM calls on misheard transcripts.
+    // ========================================================================
+    let effectiveCallerInput = callerInput;
+    let usedDeepgram = false;
+    
+    if (DeepgramFallback && DeepgramFallback.isDeepgramConfigured() && recordingUrl) {
+      const confidencePercent = sttConfidence ?? 100; // Default to 100 if not provided
+      
+      // Trigger Deepgram if confidence is in the "uncertain zone" (40-80%)
+      // We don't trigger below 40% (those already went through repeat flow)
+      // We don't trigger above 80% (those are reliable)
+      if (confidencePercent >= 40 && confidencePercent < 80) {
+        logger.info(`[Tier3] 🎯 STT confidence ${confidencePercent}% is borderline - trying Deepgram before LLM`, {
+          originalInput: callerInput.substring(0, 50),
+          callId
+        });
+        
+        try {
+          const dgResult = await DeepgramFallback.transcribeWithDeepgram(recordingUrl);
+          
+          if (dgResult && dgResult.transcript && dgResult.confidencePercent >= 80) {
+            effectiveCallerInput = dgResult.transcript;
+            usedDeepgram = true;
+            
+            logger.info(`[Tier3] ✅ Deepgram improved transcript: "${dgResult.transcript.substring(0, 50)}..." (${dgResult.confidencePercent}%)`, {
+              originalConfidence: confidencePercent,
+              deepgramConfidence: dgResult.confidencePercent,
+              callId
+            });
+          } else {
+            logger.debug(`[Tier3] Deepgram didn't improve transcript - proceeding with original`);
+          }
+        } catch (dgErr) {
+          logger.warn(`[Tier3] Deepgram pre-LLM check failed (non-fatal):`, dgErr.message);
+        }
+      }
+    }
+
     try {
       logger.info('[Tier3] Starting LLM route decision', {
-        callerInputLength: callerInput.length,
+        callerInputLength: effectiveCallerInput.length,
+        originalInputLength: callerInput.length,
+        usedDeepgram,
         scenarioCount: scenarios.length,
         companyName,
         channel,
@@ -122,13 +189,14 @@ NEVER return multiple scenarios.
 NEVER return confidence > 1.0 or < 0.0.`;
 
       // User prompt: caller input + scenario data
+      // Use effectiveCallerInput (may be Deepgram-enhanced)
       const userPrompt = `Company: ${companyName || 'Unknown'}
 Category: ${categoryName || 'Unknown'}
 Channel: ${channel}
 
 CALLER SAID:
 """
-${callerInput}
+${effectiveCallerInput}
 """
 
 AVAILABLE SCENARIOS:
@@ -241,6 +309,7 @@ Choose the best matching scenario ID, or null.`;
         scenarioType: scenario.scenarioType,
         confidence,
         rationale,
+        usedDeepgram,
         responseTime: `${responseTime}ms`,
         cost: `$${cost.toFixed(5)}`,
       });
@@ -258,6 +327,12 @@ Choose the best matching scenario ID, or null.`;
           cost,
           tokens: completion.usage.total_tokens,
         },
+        // Deepgram enhancement info
+        deepgram: usedDeepgram ? {
+          used: true,
+          originalInput: callerInput,
+          enhancedInput: effectiveCallerInput
+        } : { used: false }
       };
     } catch (error) {
       const responseTime = Date.now() - startTime;
