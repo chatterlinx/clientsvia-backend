@@ -300,8 +300,8 @@ class IntelligentRouter {
                             timeMs: flowTime
                         });
                         
-                        // Log to Black Box
-                        if (BlackBoxLogger && flowDecision.flow !== 'GENERAL_INQUIRY') {
+                        // Log to Black Box - ALL decisions for full visibility
+                        if (BlackBoxLogger) {
                             try {
                                 await BlackBoxLogger.logEvent({
                                     callId,
@@ -312,7 +312,12 @@ class IntelligentRouter {
                                         confidence: flowDecision.confidence,
                                         matchedTriggers: flowDecision.matchedTriggers,
                                         secondaryIntents: flowDecision.secondaryIntents,
-                                        input: processedInput.substring(0, 100)
+                                        blockedFlows: flowDecision.blockedFlows || [],
+                                        input: processedInput.substring(0, 100),
+                                        // Add hint for admin review
+                                        _hint: flowDecision.flow === 'GENERAL_INQUIRY' 
+                                            ? 'No specific flow detected - falling through to 3-tier cascade'
+                                            : `Primary intent: ${flowDecision.flow}`
                                     }
                                 });
                             } catch (logErr) {
