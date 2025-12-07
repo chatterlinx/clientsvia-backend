@@ -2483,8 +2483,75 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       const llm0Enabled = adminSettings?.globalProductionIntelligence?.llm0Enabled === true ||
                          company?.agentSettings?.llm0Enabled === true;
       
-      if (llm0Enabled && company) {
+      // 📼 BLACK BOX: Log routing decision (CRITICAL for debugging)
+      if (BlackBoxLogger) {
+        BlackBoxLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'ROUTING_DECISION',
+          turn: turnCount,
+          data: {
+            llm0Enabled,
+            reason: llm0Enabled ? 'LLM-0 active' : 'LLM-0 disabled - using legacy path',
+            adminLlm0: !!adminSettings?.globalProductionIntelligence?.llm0Enabled,
+            companyLlm0: !!company?.agentSettings?.llm0Enabled,
+            bookingModeLocked: !!callState?.bookingModeLocked,
+            bookingState: callState?.bookingState || null,
+            currentBookingStep: callState?.currentBookingStep || null,
+            path: llm0Enabled ? 'LLM0TurnHandler' : 'processUserInput'
+          }
+        }).catch(() => {});
+      }
+      
+      // 🚨 CRITICAL FIX: If booking is locked, we MUST use LLM0TurnHandler regardless of llm0Enabled
+      // The booking slot-fill handler lives in LLM0TurnHandler and will be bypassed if we go to legacy path
+      const forceBookingPath = callState?.bookingModeLocked && callState?.bookingState;
+      
+      if (forceBookingPath && !llm0Enabled) {
+        logger.warn('[V2 TWILIO] 🚨 BOOKING LOCK OVERRIDE - Forcing LLM0TurnHandler path', {
+          companyId: companyID,
+          callSid,
+          bookingState: callState.bookingState,
+          currentStep: callState.currentBookingStep
+        });
+        
+        // 📼 BLACK BOX: Log booking lock override
+        if (BlackBoxLogger) {
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'BOOKING_LOCK_OVERRIDE',
+            turn: turnCount,
+            data: {
+              reason: 'LLM-0 disabled but booking locked - forcing booking handler',
+              bookingState: callState.bookingState,
+              currentBookingStep: callState.currentBookingStep,
+              originalPath: 'processUserInput',
+              forcedPath: 'LLM0TurnHandler.handleBookingSlotFill'
+            }
+          }).catch(() => {});
+        }
+      }
+      
+      if ((llm0Enabled && company) || forceBookingPath) {
         tracer.step('BRAIN1_START', 'LLM-0 Orchestration (Brain-1) analyzing...');
+        
+        // 📼 BLACK BOX: Log booking lock check
+        if (BlackBoxLogger && callState?.bookingModeLocked) {
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'BOOKING_LOCK_CHECK',
+            turn: turnCount,
+            data: {
+              bookingModeLocked: true,
+              bookingState: callState.bookingState,
+              currentBookingStep: callState.currentBookingStep,
+              expectation: 'LLM0TurnHandler will bypass Brain-1 and go straight to slot-fill',
+              userInput: speechResult?.substring(0, 100)
+            }
+          }).catch(() => {});
+        }
         
         // STEP 1: LLM-0 decides what to do
         const llm0Decision = await decideNextStep({
@@ -2509,6 +2576,25 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           userInput: speechResult
         });
         
+        // 📼 BLACK BOX: Log turn completion with booking state
+        if (BlackBoxLogger) {
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'TURN_COMPLETE',
+            turn: turnCount,
+            data: {
+              handler: 'LLM0TurnHandler',
+              action: result.action,
+              responsePreview: (result.text || result.response || '').substring(0, 100),
+              bookingModeLocked: !!result.callState?.bookingModeLocked,
+              bookingState: result.callState?.bookingState || null,
+              currentBookingStep: result.callState?.currentBookingStep || null,
+              bookingCollected: result.callState?.bookingCollected || null
+            }
+          }).catch(() => {});
+        }
+        
         logger.info('[LLM-0] Turn complete', {
           companyId: companyID,
           callSid,
@@ -2520,6 +2606,24 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       } else {
         // Legacy path: Use V2 AI Agent Runtime directly
         tracer.step('BRAIN2_START', 'Using legacy V2 AI Agent Runtime (Brain-2 direct)');
+        
+        // 📼 BLACK BOX: Log legacy path usage (WARNING - booking will be broken!)
+        if (BlackBoxLogger) {
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'LEGACY_PATH_USED',
+            turn: turnCount,
+            data: {
+              reason: 'LLM-0 disabled and no booking lock',
+              warning: 'Booking slot-fill handler is BYPASSED in this path!',
+              bookingModeLocked: !!callState?.bookingModeLocked,
+              bookingState: callState?.bookingState || null,
+              userInput: speechResult?.substring(0, 100)
+            }
+          }).catch(() => {});
+        }
+        
         result = await processUserInput(
           companyID,
           callSid,
