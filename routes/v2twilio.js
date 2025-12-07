@@ -101,6 +101,22 @@ try {
     BlackBoxLogger = null;
 }
 
+// ============================================================================
+// 🎯 LOW CONFIDENCE HANDLER - STT Quality Guard
+// ============================================================================
+// When STT confidence is below threshold, ask caller to repeat instead of guessing.
+// This prevents wrong interpretations, missed bookings, and lost revenue.
+// Settings: company.aiAgentSettings.llm0Controls.lowConfidenceHandling
+// ============================================================================
+let LowConfidenceHandler;
+try {
+    LowConfidenceHandler = require('../services/LowConfidenceHandler');
+    logger.info('[V2TWILIO] ✅ Low Confidence Handler loaded successfully');
+} catch (err) {
+    logger.warn('[V2TWILIO] ⚠️ Low Confidence Handler not available', { error: err.message });
+    LowConfidenceHandler = null;
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // 🔒 HTTPS URL HELPER
 // ════════════════════════════════════════════════════════════════════════════════
@@ -1408,30 +1424,100 @@ router.post('/handle-speech', async (req, res) => {
 
     logger.debug(`[COMPANY CONFIRMED] [OK] Processing speech for: ${company.companyName}`);
 
+    // ========================================================================
+    // 🎯 LOW CONFIDENCE HANDLING - STT Quality Guard (LLM-0 Controls)
+    // ========================================================================
+    // When STT confidence is below threshold, ask caller to repeat.
+    // This prevents wrong interpretations and protects revenue.
+    // Settings: company.aiAgentSettings.llm0Controls.lowConfidenceHandling
+    // ========================================================================
     confidence = parseFloat(req.body.Confidence || '0');
-    threshold = company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.4;
+    const companyId = company._id.toString();
     
-    logger.debug(`[CONFIDENCE CHECK] Speech: "${speechText}" | Confidence: ${confidence} | Threshold: ${threshold} | ${confidence >= threshold ? 'PASS [OK]' : 'FAIL [ERROR]'}`);
+    // Get LLM-0 low confidence settings (fall back to defaults if not configured)
+    const lcSettings = {
+      enabled: true,
+      threshold: 60,  // 0-100%
+      action: 'repeat',
+      repeatPhrase: "Sorry, there's some background noise — could you say that again?",
+      maxRepeatsBeforeEscalation: 2,
+      escalatePhrase: "I'm having trouble hearing you clearly. Let me get someone to help you.",
+      preserveBookingOnLowConfidence: true,
+      bookingRepeatPhrase: "Sorry, I didn't catch that. Could you repeat that for me?",
+      logToBlackBox: true,
+      ...(company.aiAgentSettings?.llm0Controls?.lowConfidenceHandling || {})
+    };
     
-    if (confidence < threshold) {
-      logger.info(`[CONFIDENCE REJECT] Low confidence (${confidence} < ${threshold}) - asking user to repeat`);
+    // Convert 0-1 confidence to 0-100 for comparison
+    const confidencePercent = confidence * 100;
+    
+    // Use legacy threshold if LLM-0 controls not configured (backward compatibility)
+    const legacyThreshold = (company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.4) * 100;
+    const effectiveThreshold = lcSettings.enabled ? lcSettings.threshold : legacyThreshold;
+    
+    logger.debug(`[LOW CONFIDENCE CHECK] Speech: "${speechText}" | Confidence: ${confidencePercent.toFixed(1)}% | Threshold: ${effectiveThreshold}% | ${confidencePercent >= effectiveThreshold ? 'PASS ✅' : 'LOW ⚠️'}`);
+    
+    if (lcSettings.enabled && confidencePercent < effectiveThreshold) {
+      logger.info(`[LOW CONFIDENCE] ⚠️ STT confidence ${confidencePercent.toFixed(1)}% < ${effectiveThreshold}% threshold - asking caller to repeat`);
+      
+      // Track repeat count in Redis
       const repeats = redisClient ? await redisClient.incr(repeatKey) : 1;
       if (repeats === 1 && redisClient) {
         await redisClient.expire(repeatKey, 600);
       }
-      if (repeats > (company.aiSettings?.maxRepeats ?? 3)) {
-        const personality = company.aiSettings?.personality || 'friendly';
-        // V2: Professional max repeats message - configurable per company
-        const msg = company.connectionMessages?.voice?.maxRepeatsMessage ||
-                   "I want to make sure you get the help you need. Please hold while I transfer you to our team.";
-        const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
-        twiml.hangup();
+      
+      // 📦 Log to Black Box for vocabulary training
+      if (lcSettings.logToBlackBox && BlackBoxLogger) {
+        try {
+          await BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId,
+            type: 'LOW_CONFIDENCE_HIT',
+            data: {
+              confidence: confidencePercent,
+              threshold: effectiveThreshold,
+              transcript: speechText?.substring(0, 100) || '',
+              repeatCount: repeats,
+              suggestion: 'STT confidence below threshold - caller asked to repeat. Consider adding this phrase to STT corrections.'
+            }
+          });
+        } catch (logErr) {
+          logger.warn('[LOW CONFIDENCE] Black Box log failed (non-fatal):', logErr.message);
+        }
+      }
+      
+      // Check if max repeats exceeded → escalate to human
+      if (repeats > lcSettings.maxRepeatsBeforeEscalation) {
+        logger.warn(`[LOW CONFIDENCE] 🚨 Max repeats exceeded (${repeats} > ${lcSettings.maxRepeatsBeforeEscalation}) - escalating to human`);
+        
+        // Log escalation to Black Box
+        if (lcSettings.logToBlackBox && BlackBoxLogger) {
+          try {
+            await BlackBoxLogger.logEvent({
+              callId: callSid,
+              companyId,
+              type: 'LOW_CONFIDENCE_ESCALATION',
+              data: {
+                repeatCount: repeats,
+                reason: 'Max repeats exceeded due to persistent low STT confidence',
+                suggestion: 'Consider lowering threshold or improving STT vocabulary for this company'
+              }
+            });
+          } catch (logErr) {
+            logger.warn('[LOW CONFIDENCE] Escalation log failed:', logErr.message);
+          }
+        }
+        
+        const escalateMsg = lcSettings.escalatePhrase;
+        const fallbackText = `<Say>${escapeTwiML(escalateMsg)}</Say>`;
+        twiml.hangup();  // TODO: Replace with transfer to configured number
         if (redisClient) await redisClient.del(repeatKey);
         res.type('text/xml');
         res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
         return;
       }
-      // Use configurable speech detection settings (fallback to defaults if not set)
+      
+      // Ask caller to repeat
       const speechDetection = company.aiAgentSettings?.voiceSettings?.speechDetection || {};
       const gather = twiml.gather({
         input: 'speech',
@@ -1439,27 +1525,25 @@ router.post('/handle-speech', async (req, res) => {
         method: 'POST',
         bargeIn: speechDetection.bargeIn ?? (company.aiSettings?.bargeIn ?? false),
         timeout: speechDetection.initialTimeout ?? 5,
-        speechTimeout: (speechDetection.speechTimeout ?? 3).toString(), // Configurable: 1-10s (default: 3s)
+        speechTimeout: (speechDetection.speechTimeout ?? 3).toString(),
         enhanced: speechDetection.enhancedRecognition ?? true,
         speechModel: speechDetection.speechModel ?? 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
       });
 
-      const personality = company.aiSettings?.personality || 'friendly';
-      
-      // Create a more helpful retry message based on the type of issue
+      // Select appropriate repeat phrase
       let retryMsg;
       if (isLikelyUnclear) {
-        retryMsg = "I didn't quite catch that. Could you please speak a little louder and clearer? What can I help you with today?";
-      } else if (confidence < threshold * 0.6) {
-        retryMsg = "I'm having trouble hearing you clearly. Could you please repeat that for me?";
+        // Speech was garbled - be extra helpful
+        retryMsg = "I didn't quite catch that. Could you please speak a little louder and clearer?";
       } else {
-        // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
-        retryMsg = "I want to make sure I understand what you need help with. Could you tell me a bit more about what's going on?";
+        // Use configured repeat phrase from LLM-0 controls
+        retryMsg = lcSettings.repeatPhrase;
       }
       
-      logger.info(`[RETRY MESSAGE] Using message: "${retryMsg}" for speech: "${speechText}" (confidence: ${confidence})`);
+      logger.info(`[LOW CONFIDENCE] 🔄 Asking to repeat (attempt ${repeats}/${lcSettings.maxRepeatsBeforeEscalation}): "${retryMsg}"`);
       
+      // Use ElevenLabs TTS if configured
       const elevenLabsVoice = company.aiAgentSettings?.voiceSettings?.voiceId;
 
       if (elevenLabsVoice) {
@@ -1474,14 +1558,13 @@ router.post('/handle-speech', async (req, res) => {
             company
           });
           
-          // Store audio in Redis for fast serving
           const audioKey = `audio:retry:${callSid}`;
           if (redisClient) await redisClient.setEx(audioKey, 300, buffer.toString('base64'));
           
           const audioUrl = `https://${req.get('host')}/api/twilio/audio/retry/${callSid}`;
           gather.play(audioUrl);
         } catch (err) {
-          logger.error('ElevenLabs TTS failed, falling back to <Say>:', err);
+          logger.error('[LOW CONFIDENCE] ElevenLabs TTS failed, falling back to <Say>:', err);
           gather.say(escapeTwiML(retryMsg));
         }
       } else {
@@ -1491,7 +1574,10 @@ router.post('/handle-speech', async (req, res) => {
       res.type('text/xml');
       return res.send(twiml.toString());
     }
+    
+    // Confidence OK - clear repeat counter and proceed
     if (redisClient) await redisClient.del(repeatKey);
+    logger.debug(`[LOW CONFIDENCE] ✅ Confidence ${confidencePercent.toFixed(1)}% passed threshold - proceeding with normal flow`);
 
     // Process QA matching using new Company Q&A system
     const companyId = company._id.toString();

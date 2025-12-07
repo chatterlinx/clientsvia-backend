@@ -130,19 +130,32 @@ This is the same approach used by:
 
 ## Testing Checklist
 
-- [ ] UI panel renders in Control Plane → Live Agent Status → LLM-0 Controls
-- [ ] Threshold slider works (30-90%)
+- [x] UI panel renders in Control Plane → Live Agent Status → LLM-0 Controls
+- [x] Threshold slider works (30-90%)
 - [ ] Settings save correctly
 - [ ] Settings load on refresh
 - [ ] Reset to defaults works
 - [ ] Black Box logs LOW_CONFIDENCE_HIT events
 - [ ] Black Box logs LOW_CONFIDENCE_ESCALATION events
+- [x] **Runtime wiring in v2twilio.js - COMPLETE**
+
+---
+
+## Runtime Wiring (COMPLETED)
+
+The low confidence check is now wired into `routes/v2twilio.js` at the `/handle-speech` endpoint:
+
+1. **Location**: After company lookup, before processing
+2. **Settings**: Reads from `company.aiAgentSettings.llm0Controls.lowConfidenceHandling`
+3. **Backward Compatible**: Falls back to legacy `twilioSpeechConfidenceThreshold` if not configured
+4. **Black Box**: Logs `LOW_CONFIDENCE_HIT` and `LOW_CONFIDENCE_ESCALATION` events
+5. **TTS**: Uses ElevenLabs if configured, falls back to Twilio Say
 
 ---
 
 ## Future Enhancements
 
-1. **Runtime Wiring** - Wire `LowConfidenceHandler.checkConfidence()` into `v2twilio.js` call flow
+1. ~~**Runtime Wiring** - Wire `LowConfidenceHandler.checkConfidence()` into `v2twilio.js` call flow~~ **DONE**
 2. **Guess with Context** - Implement `guess_with_context` action using conversation history
 3. **Two Thresholds** - Add `hardFloor` (45%) and `softFloor` (65%) for tiered handling
 4. **Analytics** - Track low confidence rates per company/template for optimization
