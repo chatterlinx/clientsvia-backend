@@ -742,11 +742,44 @@ class LLM0TurnHandler {
     // Simple extraction helpers (no LLM, just patterns)
     static extractName(input) {
         if (!input) return null;
-        const cleaned = input.replace(/^(my name is|i'm|i am|it's|this is|hi i'm|hey i'm)\s*/i, '').trim();
-        const words = cleaned.split(/\s+/).slice(0, 3);
-        if (words.length > 0 && words[0].length > 1) {
-            return words.join(' ');
+        
+        // Normalize input
+        const normalized = input.toLowerCase().trim();
+        
+        // Pattern 1: "my name is X" or "i'm X" anywhere in the string
+        const namePatterns = [
+            /(?:my name is|my name's|i'm|i am|it's|this is|call me|they call me)\s+([a-z]+(?:\s+[a-z]+)?)/i,
+            /(?:sure,?\s*)?(?:my name is|i'm|i am)\s+([a-z]+)/i,
+            /(?:yes,?\s*)?(?:my name is|i'm|i am)\s+([a-z]+)/i,
+            /(?:hi,?\s*)?(?:my name is|i'm|i am)\s+([a-z]+)/i,
+            /(?:hey,?\s*)?(?:my name is|i'm|i am)\s+([a-z]+)/i,
+        ];
+        
+        for (const pattern of namePatterns) {
+            const match = input.match(pattern);
+            if (match && match[1]) {
+                const name = match[1].trim();
+                // Capitalize first letter
+                return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+            }
         }
+        
+        // Pattern 2: If input starts with a clean name (e.g., "Mark", "John Smith")
+        // Only use this if input is SHORT (likely just a name response)
+        if (input.length < 30) {
+            const cleaned = input.replace(/^(sure|yes|hi|hey|okay|ok|um|uh|well|so)[,.\s]*/i, '').trim();
+            // Check if it looks like just a name (1-3 words, no common sentence words)
+            const words = cleaned.split(/\s+/).filter(w => w.length > 1);
+            if (words.length >= 1 && words.length <= 3) {
+                const firstWord = words[0].toLowerCase();
+                // Skip if it's clearly not a name
+                const notNames = ['i', 'my', 'the', 'a', 'an', 'it', 'this', 'that', 'need', 'want', 'can', 'could'];
+                if (!notNames.includes(firstWord)) {
+                    return words.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+                }
+            }
+        }
+        
         return null;
     }
     
