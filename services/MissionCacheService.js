@@ -92,11 +92,18 @@ const FLOW_PRIORITY = [
 ];
 
 // Map triage card actions to flow types
+// CRITICAL: Only map actions that indicate BOOKING INTENT
+// Troubleshooting/service keywords should NOT be booking triggers!
 const ACTION_TO_FLOW_MAP = {
-    // Booking flows
+    // Booking flows - ONLY explicit booking actions
     'BOOK': 'booking',
-    'DIRECT_TO_3TIER': 'booking',
-    'EXPLAIN_AND_PUSH': 'booking',
+    'BOOK_APPOINTMENT': 'booking',
+    'SCHEDULE': 'booking',
+    'SCHEDULE_APPOINTMENT': 'booking',
+    
+    // NOTE: DIRECT_TO_3TIER, EXPLAIN_AND_PUSH are NOT booking!
+    // They route to troubleshooting/triage, not booking flow.
+    // Do NOT include them here - they go to GENERAL_INQUIRY.
     
     // Emergency
     'EMERGENCY_DISPATCH': 'emergency',
@@ -111,7 +118,7 @@ const ACTION_TO_FLOW_MAP = {
     'TAKE_MESSAGE': 'message',
     'MESSAGE_ONLY': 'message',
     
-    // Cancel/Reschedule (may need explicit triage cards)
+    // Cancel/Reschedule
     'CANCEL_APPOINTMENT': 'cancel',
     'CANCEL': 'cancel',
     'RESCHEDULE_APPOINTMENT': 'reschedule',
@@ -245,7 +252,10 @@ class MissionCacheService {
                     else if (nameLower.includes('reschedule')) flowType = 'reschedule';
                     else if (nameLower.includes('transfer')) flowType = 'transfer';
                     else if (nameLower.includes('message')) flowType = 'message';
-                    else flowType = 'booking'; // Default to booking for service scenarios
+                    else if (nameLower.includes('book') || nameLower.includes('schedul') || nameLower.includes('appointment')) flowType = 'booking';
+                    // NOTE: Do NOT default to booking! Service/troubleshooting scenarios 
+                    // should go to GENERAL_INQUIRY (triage), not booking flow.
+                    // flowType remains null → skipped
                 }
                 
                 if (flowType && mission[flowType] && triggers.length > 0) {
