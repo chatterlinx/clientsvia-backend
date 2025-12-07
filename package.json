@@ -33,6 +33,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@deepgram/sdk": "^3.9.0",
     "@elevenlabs/elevenlabs-js": "^2.7.0",
     "@sendgrid/mail": "^8.1.5",
     "@sentry/node": "^9.42.0",

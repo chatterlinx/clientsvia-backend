@@ -688,4 +688,78 @@ router.get('/:templateId/metrics', authenticateJWT, requireRole('admin'), async 
     }
 });
 
+// ============================================================================
+// GET PROVIDER STATUS/OPTIONS
+// ============================================================================
+
+/**
+ * GET /api/admin/stt-profile/providers/status
+ * Get available STT providers and their status
+ */
+router.get('/providers/status', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        // Lazy load to avoid errors if not installed
+        let STTProviderFactory;
+        try {
+            STTProviderFactory = require('../../services/stt/STTProviderFactory');
+        } catch (e) {
+            // Factory not available yet
+            return res.json({
+                success: true,
+                providers: [
+                    {
+                        type: 'twilio',
+                        name: 'Twilio (Current)',
+                        description: 'Built-in STT with Twilio Voice',
+                        cost: 'FREE',
+                        accuracy: '~80%',
+                        available: true,
+                        recommended: false
+                    },
+                    {
+                        type: 'deepgram',
+                        name: 'Deepgram Nova-2',
+                        description: 'Premium accuracy STT',
+                        cost: '$0.0043/min',
+                        accuracy: '~95%',
+                        available: !!process.env.DEEPGRAM_API_KEY,
+                        recommended: true,
+                        setupRequired: !process.env.DEEPGRAM_API_KEY ? 'Add DEEPGRAM_API_KEY to environment' : null
+                    },
+                    {
+                        type: 'google',
+                        name: 'Google Cloud Speech',
+                        description: 'Enterprise-grade (coming soon)',
+                        cost: '$0.006/15sec',
+                        accuracy: '~90%',
+                        available: false,
+                        setupRequired: 'Coming soon'
+                    }
+                ],
+                health: {
+                    twilio: { status: 'healthy', message: 'Built-in' },
+                    deepgram: { 
+                        status: process.env.DEEPGRAM_API_KEY ? 'configured' : 'unconfigured',
+                        message: process.env.DEEPGRAM_API_KEY ? 'API key set' : 'DEEPGRAM_API_KEY not set'
+                    },
+                    google: { status: 'unavailable', message: 'Coming soon' }
+                }
+            });
+        }
+        
+        const providers = STTProviderFactory.getProviderOptions();
+        const health = await STTProviderFactory.healthCheck();
+        
+        res.json({
+            success: true,
+            providers,
+            health
+        });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to get provider status', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;

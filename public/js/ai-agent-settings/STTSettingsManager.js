@@ -241,10 +241,15 @@ class STTSettingsManager {
                     <div>
                         <label style="display: block; margin-bottom: 4px; font-weight: 500;">STT Provider</label>
                         <select id="stt-provider-type" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; background: #ffffff;">
-                            <option value="twilio" ${provider.type === 'twilio' ? 'selected' : ''}>Twilio (Current)</option>
-                            <option value="deepgram" ${provider.type === 'deepgram' ? 'selected' : ''}>Deepgram (Future)</option>
-                            <option value="google" ${provider.type === 'google' ? 'selected' : ''}>Google (Future)</option>
+                            <option value="twilio" ${provider.type === 'twilio' ? 'selected' : ''}>Twilio — FREE (included) • ~80% accuracy</option>
+                            <option value="deepgram" ${provider.type === 'deepgram' ? 'selected' : ''}>Deepgram Nova-2 — $0.004/min • ~95% accuracy ⭐</option>
+                            <option value="google" ${provider.type === 'google' ? 'selected' : ''} disabled>Google Cloud — Coming Soon</option>
                         </select>
+                        <p style="color: #64748b; font-size: 12px; margin-top: 4px;">
+                            ${provider.type === 'deepgram' ? '🟢 Deepgram active - superior accuracy enabled' : 
+                              provider.type === 'twilio' ? '💡 Upgrade to Deepgram for 95% accuracy' : 
+                              '⏳ Google Cloud Speech coming soon'}
+                        </p>
                     </div>
                     
                     <div>
