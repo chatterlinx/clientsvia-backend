@@ -347,6 +347,7 @@ BlackBoxRecordingSchema.index({ callId: 1, companyId: 1 }, { unique: true });
  * Get list of calls with lightweight projection (for list view)
  */
 BlackBoxRecordingSchema.statics.getCallList = async function(companyId, options = {}) {
+  const mongoose = require('mongoose');
   const {
     limit = 20,
     skip = 0,
@@ -357,7 +358,8 @@ BlackBoxRecordingSchema.statics.getCallList = async function(companyId, options 
     onlyProblematic = false
   } = options;
 
-  const query = { companyId };
+  // Convert companyId to ObjectId for proper matching
+  const query = { companyId: new mongoose.Types.ObjectId(companyId) };
 
   // Date range
   if (fromDate || toDate) {
@@ -418,7 +420,11 @@ BlackBoxRecordingSchema.statics.getCallList = async function(companyId, options 
  * Get full call detail
  */
 BlackBoxRecordingSchema.statics.getCallDetail = async function(companyId, callId) {
-  return this.findOne({ companyId, callId }).lean();
+  const mongoose = require('mongoose');
+  return this.findOne({ 
+    companyId: new mongoose.Types.ObjectId(companyId), 
+    callId 
+  }).lean();
 };
 
 // ============================================================================
