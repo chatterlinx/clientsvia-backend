@@ -16,6 +16,14 @@ const TriageCard = require('../models/TriageCard');
 const logger = require('../utils/logger');
 const { createIORedisClient, isRedisConfigured } = require('./redisClientFactory');
 
+// 🎯 Call Flow Engine - Invalidate mission cache when triage cards change
+let MissionCacheService;
+try {
+  MissionCacheService = require('./MissionCacheService');
+} catch (e) {
+  MissionCacheService = null;
+}
+
 // Redis client (lazy initialization via factory)
 let redisClient = null;
 function getRedisClient() {
@@ -506,6 +514,28 @@ class TriageCardService {
         error: error.message 
       });
       // Non-critical, don't throw
+    }
+    
+    // 🎯 Call Flow Engine: Rebuild mission triggers when triage cards change
+    if (MissionCacheService) {
+      try {
+        await MissionCacheService.invalidateCache(companyId);
+        // Rebuild cache in background (non-blocking)
+        setImmediate(async () => {
+          try {
+            await MissionCacheService.rebuildMissionCache(companyId);
+            logger.info('[TRIAGE CARD SERVICE] ✅ Mission cache rebuilt after triage change', { companyId });
+          } catch (rebuildError) {
+            logger.warn('[TRIAGE CARD SERVICE] ⚠️ Mission cache rebuild failed (non-critical)', { 
+              error: rebuildError.message 
+            });
+          }
+        });
+      } catch (missionError) {
+        logger.warn('[TRIAGE CARD SERVICE] ⚠️ Mission cache invalidation failed (non-critical)', { 
+          error: missionError.message 
+        });
+      }
     }
   }
 

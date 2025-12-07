@@ -768,12 +768,95 @@ class CheatSheetManager {
   }
   
   // ═══════════════════════════════════════════════════════════════════
-  // RENDER COMPANY INSTRUCTIONS
+  // RENDER COMPANY INSTRUCTIONS / CALL FLOW ENGINE
   // ═══════════════════════════════════════════════════════════════════
   
-  renderCompanyInstructions() {
+  /**
+   * NEW: Render the Call Flow Engine (Dec 2025)
+   * Replaces the old giant frontline script with structured flow routing
+   */
+  async renderCallFlowEngine() {
     const container = document.getElementById('company-instructions-section');
     if (!container) return;
+    
+    // Check if Call Flow Engine is enabled for this company
+    const callFlowEnabled = this.cheatSheet?.callFlowEngine?.enabled || false;
+    
+    // Show loading state
+    container.innerHTML = `
+      <div style="text-align: center; padding: 40px; color: #6b7280;">
+        <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
+        <p>Loading Call Flow Engine...</p>
+      </div>
+    `;
+    
+    // Load the CallFlowEngineManager script if not already loaded
+    if (!window.CallFlowEngineManager) {
+      try {
+        await this.loadScript('/js/ai-agent-settings/CallFlowEngineManager.js');
+        console.log('[CHEAT SHEET] ✅ CallFlowEngineManager script loaded');
+      } catch (err) {
+        console.error('[CHEAT SHEET] ❌ Failed to load CallFlowEngineManager:', err);
+        container.innerHTML = `
+          <div style="text-align: center; padding: 40px; color: #dc2626;">
+            <p>❌ Failed to load Call Flow Engine</p>
+            <p style="font-size: 12px; color: #6b7280; margin-top: 8px;">${err.message}</p>
+            <button onclick="cheatSheetManager.renderCallFlowEngine()" style="margin-top: 16px; padding: 8px 16px; background: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer;">
+              🔄 Retry
+            </button>
+          </div>
+        `;
+        return;
+      }
+    }
+    
+    // Render the container for CallFlowEngineManager
+    container.innerHTML = `<div id="callFlowEngineContainer"></div>`;
+    
+    // Initialize and load the manager
+    if (!window.callFlowEngineManager) {
+      window.callFlowEngineManager = new window.CallFlowEngineManager();
+    }
+    
+    // Load data for this company
+    await window.callFlowEngineManager.load(this.companyId);
+    
+    console.log('[CHEAT SHEET] ✅ Call Flow Engine rendered for company:', this.companyId);
+  }
+  
+  /**
+   * Helper to dynamically load a script
+   */
+  loadScript(src) {
+    return new Promise((resolve, reject) => {
+      // Check if already loaded
+      const existingScript = document.querySelector(`script[src="${src}"]`);
+      if (existingScript) {
+        resolve();
+        return;
+      }
+      
+      const script = document.createElement('script');
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+      document.head.appendChild(script);
+    });
+  }
+  
+  renderCompanyInstructions() {
+    // NEW: If Call Flow Engine is enabled, render that instead
+    const callFlowEngine = this.cheatSheet?.callFlowEngine;
+    if (callFlowEngine && (callFlowEngine.enabled || callFlowEngine.missionTriggers)) {
+      this.renderCallFlowEngine();
+      return;
+    }
+    
+    const container = document.getElementById('company-instructions-section');
+    if (!container) return;
+    
+    // LEGACY: Old frontline script UI (for backwards compatibility)
+    // This will be deprecated once all companies migrate to Call Flow Engine
     
     // Extract frontlineIntel text (may be string or {instructions: "text"} object)
     let instructions = '';
