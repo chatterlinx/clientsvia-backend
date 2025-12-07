@@ -198,16 +198,19 @@ class STTSettingsManager {
         return `
             <button class="stt-tab ${active ? 'active' : ''}" data-tab="${id}" style="
                 padding: 10px 16px;
-                background: ${active ? 'var(--accent-blue)' : 'transparent'};
-                color: ${active ? 'white' : 'var(--text-secondary)'};
-                border: none;
+                background: ${active ? 'linear-gradient(135deg, #3b82f6, #1d4ed8)' : 'transparent'};
+                color: ${active ? 'white' : '#64748b'};
+                border: ${active ? 'none' : '1px solid #e2e8f0'};
+                border-bottom: ${active ? '2px solid #3b82f6' : '1px solid #e2e8f0'};
                 border-radius: 8px 8px 0 0;
                 cursor: pointer;
                 font-size: 14px;
+                font-weight: ${active ? '600' : '500'};
                 display: flex;
                 align-items: center;
                 gap: 8px;
                 transition: all 0.2s;
+                box-shadow: ${active ? '0 -2px 10px rgba(59, 130, 246, 0.3)' : 'none'};
             ">
                 ${label}
                 ${badge > 0 ? `<span style="background: #ec4899; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px;">${badge}</span>` : ''}
