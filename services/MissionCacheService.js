@@ -163,7 +163,14 @@ function createEmptyMission() {
                 'schedule service', 'make an appointment', 'set up an appointment',
                 'need someone to come out', 'send someone out', 'get someone out here',
                 'schedule a visit', 'book a time', 'when can you come', 'available times',
-                'next available', 'earliest appointment', 'schedule for today', 'schedule for tomorrow'
+                'next available', 'earliest appointment', 'schedule for today', 'schedule for tomorrow',
+                // Service/repair triggers (HVAC, Plumbing, etc.)
+                'service', 'repair', 'fix', 'need service', 'need repair', 'need a repair',
+                'need help with', 'looking for service', 'looking to get', 'need a technician',
+                'technician', 'come out', 'send a tech', 'get a tech', 'need someone',
+                // AC/HVAC specific (very common)
+                'ac service', 'ac repair', 'a c service', 'a c repair', 'air conditioning',
+                'heating', 'hvac', 'furnace', 'air conditioner'
             ], 
             manual: [], 
             sources: {} 
