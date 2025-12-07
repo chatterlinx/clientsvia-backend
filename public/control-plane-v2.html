@@ -318,15 +318,15 @@
       <!-- AICORE: LIVE AGENT STATUS -->
       <div class="panel" data-aicore-panel="agent-status">
         <!-- Sub-Navigation for Agent Status -->
-        <nav class="agent-status-subnav" style="display: flex; gap: 8px; padding: 16px 20px; border-bottom: 1px solid #334155; background: rgba(15, 23, 42, 0.5);">
-          <button class="agent-status-tab active" data-agent-tab="dashboard" onclick="switchAgentStatusTab('dashboard')" style="padding: 10px 20px; border-radius: 8px; border: 1px solid transparent; background: linear-gradient(135deg, #667eea, #764ba2); color: white; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
+        <nav class="agent-status-subnav" style="display: flex; gap: 12px; padding: 16px 20px; border-bottom: 1px solid #475569; background: #1e293b;">
+          <button class="agent-status-tab active" data-agent-tab="dashboard" onclick="switchAgentStatusTab('dashboard')" style="padding: 12px 24px; border-radius: 10px; border: 2px solid transparent; background: linear-gradient(135deg, #667eea, #764ba2); color: white; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
             <i class="fas fa-tachometer-alt"></i> Dashboard
           </button>
-          <button class="agent-status-tab" data-agent-tab="llm0-controls" onclick="switchAgentStatusTab('llm0-controls')" style="padding: 10px 20px; border-radius: 8px; border: 1px solid #475569; background: transparent; color: #94a3b8; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
+          <button class="agent-status-tab" data-agent-tab="llm0-controls" onclick="switchAgentStatusTab('llm0-controls')" style="padding: 12px 24px; border-radius: 10px; border: 2px solid #64748b; background: #334155; color: #f1f5f9; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
             <i class="fas fa-brain"></i> LLM-0 Controls
             <span style="font-size: 10px; background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; padding: 2px 8px; border-radius: 10px;">Enterprise</span>
           </button>
-          <button class="agent-status-tab" data-agent-tab="stt-settings" onclick="switchAgentStatusTab('stt-settings')" style="padding: 10px 20px; border-radius: 8px; border: 1px solid #475569; background: transparent; color: #94a3b8; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
+          <button class="agent-status-tab" data-agent-tab="stt-settings" onclick="switchAgentStatusTab('stt-settings')" style="padding: 12px 24px; border-radius: 10px; border: 2px solid #64748b; background: #334155; color: #f1f5f9; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
             <i class="fas fa-microphone-alt"></i> STT Settings
             <span style="font-size: 10px; background: linear-gradient(135deg, #10b981, #3b82f6); color: white; padding: 2px 8px; border-radius: 10px;">Enterprise</span>
           </button>
@@ -840,12 +840,13 @@
     async function switchAgentStatusTab(tabName) {
       console.log(`🎯 [CONTROL PLANE] Switching agent status tab to: ${tabName}`);
       
-      // Update tab button styles
+      // Update tab button styles with better contrast
       document.querySelectorAll('.agent-status-tab').forEach(btn => {
         const isActive = btn.getAttribute('data-agent-tab') === tabName;
-        btn.style.background = isActive ? 'linear-gradient(135deg, #667eea, #764ba2)' : 'transparent';
-        btn.style.color = isActive ? 'white' : '#94a3b8';
-        btn.style.border = isActive ? '1px solid transparent' : '1px solid #475569';
+        btn.style.background = isActive ? 'linear-gradient(135deg, #667eea, #764ba2)' : '#334155';
+        btn.style.color = isActive ? 'white' : '#f1f5f9';
+        btn.style.border = isActive ? '2px solid transparent' : '2px solid #64748b';
+        btn.style.boxShadow = isActive ? '0 4px 12px rgba(102, 126, 234, 0.4)' : 'none';
         btn.classList.toggle('active', isActive);
       });
       
