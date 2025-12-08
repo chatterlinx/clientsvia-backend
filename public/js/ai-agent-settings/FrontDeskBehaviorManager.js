@@ -23,11 +23,29 @@ class FrontDeskBehaviorManager {
             console.log('[FRONT DESK BEHAVIOR] Loading config for:', this.companyId);
             const token = localStorage.getItem('token');
             
+            if (!token) {
+                console.warn('[FRONT DESK BEHAVIOR] No auth token found - using defaults');
+                this.config = this.getDefaultConfig();
+                return this.config;
+            }
+            
             const response = await fetch(`/api/admin/front-desk-behavior/${this.companyId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
             });
             
-            if (!response.ok) throw new Error('Failed to load Front Desk Behavior');
+            if (response.status === 401) {
+                console.warn('[FRONT DESK BEHAVIOR] Auth failed (401) - check token or deploy status. Using defaults.');
+                this.config = this.getDefaultConfig();
+                return this.config;
+            }
+            
+            if (!response.ok) {
+                console.error('[FRONT DESK BEHAVIOR] API error:', response.status, response.statusText);
+                throw new Error(`Failed to load Front Desk Behavior (${response.status})`);
+            }
             
             const result = await response.json();
             this.config = result.data;
@@ -36,8 +54,53 @@ class FrontDeskBehaviorManager {
             return this.config;
         } catch (error) {
             console.error('[FRONT DESK BEHAVIOR] Load error:', error);
-            throw error;
+            // Fallback to defaults so UI still renders
+            this.config = this.getDefaultConfig();
+            console.log('[FRONT DESK BEHAVIOR] Using default config as fallback');
+            return this.config;
         }
+    }
+
+    // Default config for when API is unavailable
+    getDefaultConfig() {
+        return {
+            enabled: true,
+            personality: {
+                tone: 'warm',
+                verbosity: 'concise',
+                maxResponseWords: 30,
+                useCallerName: true
+            },
+            bookingPrompts: {
+                askName: "May I have your name?",
+                askPhone: "What's the best phone number to reach you?",
+                askAddress: "What's the service address?",
+                askTime: "When works best for you - morning or afternoon?",
+                confirmTemplate: "So I have {name} at {address}, {time}. Does that sound right?",
+                completeTemplate: "You're all set, {name}! A technician will be out {time}. You'll receive a confirmation text shortly."
+            },
+            emotionResponses: {
+                stressed: { enabled: true, acknowledgments: ["I understand, that sounds stressful."], followUp: "Let me help you get this taken care of." },
+                frustrated: { enabled: true, acknowledgments: ["I completely understand."], followUp: "I'll get someone scheduled right away.", reduceFriction: true },
+                angry: { enabled: true, acknowledgments: ["I'm really sorry you're dealing with this."], followUp: "Let me make this right.", offerEscalation: true },
+                friendly: { enabled: true, allowSmallTalk: true }
+            },
+            frustrationTriggers: ["i don't care", "just send someone", "this is ridiculous", "you're not listening", "i already told you"],
+            escalation: {
+                enabled: true,
+                maxLoopsBeforeOffer: 3,
+                triggerPhrases: ["manager", "supervisor", "real person", "human"],
+                offerMessage: "I can connect you to someone directly or take a message for a manager. Which would you prefer?",
+                transferMessage: "Let me connect you to our team now."
+            },
+            loopPrevention: {
+                enabled: true,
+                maxSameQuestion: 2,
+                onLoop: 'rephrase',
+                rephraseIntro: "Let me try this differently - "
+            },
+            forbiddenPhrases: ["tell me more about what you need", "what specific issues are you experiencing"]
+        };
     }
 
     // Save config to API
