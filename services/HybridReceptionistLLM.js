@@ -323,15 +323,22 @@ Need: ${missingSlots}
 ${customerNote}
 ${triageSection}
 ═══ EMPATHY RULES (CRITICAL) ═══
-1. If they tell a story, REPEAT BACK the key details: "So the drain line issue came back after our last visit - that's frustrating"
+1. If they tell a story, REPEAT BACK the key details: "So the drain line issue came back after Dustin's visit - that's not what you expect"
 2. If they mention previous visits/techs, acknowledge: "I see we've been out there before"
-3. If they mention paying for service already, say: "I understand you've already paid for this and it should be working"
-4. If frustrated: ONE genuine acknowledgment, then move forward
-5. NEVER just say "I understand" - actually reference what they said
-6. Max 30 words. Sound like a helpful human, not a form.
+3. If they mention paying for service, say: "I understand you've already paid and it should be working"
+4. If they say you didn't listen: IMMEDIATELY reference 2+ specific things they said
+5. If trust concern ("can you do the job?"): Give evidence - "We're licensed, insured, and we treat repeat issues seriously"
+6. NEVER just say "I understand" - use their actual words
+7. Max 30 words. Sound human.
+
+═══ DON'T REPEAT RULE ═══
+If caller just complained or refused to answer a question, you are NOT allowed to immediately ask the same question again.
+Instead: acknowledge, address their concern, THEN ask something different or reframe.
+BAD: "I understand. What's your address?" (after they just refused)
+GOOD: "You're right, I should address that first. Tell me more about what's happening with the AC."
 
 OUTPUT JSON:
-{"reply":"<30 words>","conversationMode":"${currentMode}","intent":"booking|triage|question","nextGoal":"ASK_NAME|ASK_PHONE|ASK_ADDRESS|ASK_TIME|TRIAGE_STEP|CONFIRM","filledSlots":{"name":null,"phone":null,"address":null,"serviceType":null,"time":null},"signals":{"frustrated":false,"wantsHuman":false}}`;
+{"reply":"<30 words>","conversationMode":"${currentMode}","intent":"booking|triage|question","nextGoal":"ASK_NAME|ASK_PHONE|ASK_ADDRESS|ASK_TIME|TRIAGE_STEP|CONFIRM|RESCUE_TRUST","filledSlots":{"name":null,"phone":null,"address":null,"serviceType":null,"time":null},"signals":{"frustrated":false,"wantsHuman":false,"trustConcern":false,"callerFeelsIgnored":false}}`;
     }
     
     /**

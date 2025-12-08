@@ -2483,15 +2483,24 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // ═══════════════════════════════════════════════════════════════════════════
       // 🧠 LLM-0 ENABLEMENT LOGIC (Dec 2025 Update)
       // ═══════════════════════════════════════════════════════════════════════════
-      // FORCE ENABLE: If booking is in progress, ALWAYS use LLM-0 path
-      // This prevents the legacy path from breaking booking slot-fill
+      // LLM-0 ROUTING DECISION - ALWAYS USE LLM-0 FOR VOICE CALLS
       // ═══════════════════════════════════════════════════════════════════════════
-      const bookingInProgress = !!(callState?.bookingModeLocked && callState?.bookingState); // FIX: Convert to boolean!
-      const adminDisabled = adminSettings?.globalProductionIntelligence?.llm0Enabled === false;
-      const companyDisabled = company?.agentSettings?.llm0Enabled === false;
+      // The legacy path creates "split-brain" behavior where first turn is robotic
+      // and subsequent turns are conversational. This confuses callers.
+      // FIX: LLM-0 is now DEFAULT ON for all voice calls.
+      // Only explicitly disabled for specific use cases (after-hours, DTMF menus)
+      // ═══════════════════════════════════════════════════════════════════════════
+      const bookingInProgress = !!(callState?.bookingModeLocked && callState?.bookingState);
       
-      // FORCE ENABLE when booking is active, otherwise respect settings
-      const llm0Enabled = bookingInProgress ? true : (!adminDisabled && !companyDisabled);
+      // LLM-0 is DEFAULT ON - only disabled if BOTH admin AND company explicitly disable
+      // OR if after-hours mode is active (voicemail/simple message)
+      const afterHoursMode = company?.agentSettings?.afterHoursMode === true;
+      const forceDisabledByAdmin = adminSettings?.globalProductionIntelligence?.llm0Enabled === false 
+                                   && company?.agentSettings?.llm0Enabled === false;
+      
+      // LLM-0 ON by default. Force ON if booking in progress.
+      // Only disabled for: after-hours OR explicit double-disable
+      const llm0Enabled = afterHoursMode ? false : (bookingInProgress || !forceDisabledByAdmin);
       
       if (bookingInProgress && (adminDisabled || companyDisabled)) {
         logger.warn('[V2 TWILIO] 🔓 FORCE ENABLING LLM-0 for booking in progress', {

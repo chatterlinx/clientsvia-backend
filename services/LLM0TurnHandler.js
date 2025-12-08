@@ -894,17 +894,89 @@ class LLM0TurnHandler {
         await ConversationStateManager.addTurn(callId, 'caller', userInput);
         
         // ════════════════════════════════════════════════════════════════════════════
-        // 😤 FRUSTRATION DETECTION - Switch to rescue mode if needed
+        // 😤 FRUSTRATION, TRUST CONCERN & "FEELS IGNORED" DETECTION
+        // ════════════════════════════════════════════════════════════════════════════
+        // These signals change behavior dramatically:
+        // - FRUSTRATED: Generic complaint, move to rescue mode
+        // - TRUST_CONCERN: "can you even do the job?" - needs reassurance
+        // - FEELS_IGNORED: "you didn't listen" - must reference their specific words
         // ════════════════════════════════════════════════════════════════════════════
         let currentMode = callState.conversationMode || 'booking';
+        const lowerInput = userInput.toLowerCase();
+        
         const isFrustrated = HybridReceptionistLLM.detectFrustration(userInput);
         
-        if (isFrustrated) {
+        // TRUST CONCERN: Caller questions our competence
+        const trustConcern = /can you (do|handle|fix)|are you able|know what you'?re doing|qualified|sure you can|is this going to work|you guys any good/i.test(userInput);
+        
+        // FEELS IGNORED: Caller explicitly says we're not listening
+        const callerFeelsIgnored = /you'?re not listen|didn'?t listen|you didn'?t (hear|understand|acknowledge|sympathize)|you'?re ignoring|you don'?t get it|that'?s not what i (said|meant)|you missed|you'?re not getting/i.test(userInput);
+        
+        // REFUSED SLOT: Caller is refusing to give info we asked for
+        const refusedSlot = /i don'?t (want to|wanna)|not going to (give|tell)|don'?t want to share|not comfortable|rather not/i.test(userInput);
+        
+        // DESCRIBING PROBLEM: Caller is giving issue details (not answering booking question)
+        const describingProblem = /water (leak|dripping)|thermostat|not cool|no cool|won'?t (turn|start)|making (noise|sound)|smell|broken|not working|problem is|issue is|been here before|came out|was here|technician.*before/i.test(userInput);
+        
+        // Track last question we asked for don't-repeat rule
+        const lastAskField = callState.lastAskField || null;
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🔓 AUTO-UNLOCK BOOKING: When caller clearly switches to triage
+        // ════════════════════════════════════════════════════════════════════════════
+        let shouldUnlockBooking = false;
+        let unlockReason = null;
+        
+        if (callState.bookingModeLocked) {
+            // Unlock conditions
+            if ((isFrustrated || callerFeelsIgnored) && describingProblem) {
+                shouldUnlockBooking = true;
+                unlockReason = 'FRUSTRATED_WITH_PROBLEM_DESCRIPTION';
+            } else if (refusedSlot && describingProblem) {
+                shouldUnlockBooking = true;
+                unlockReason = 'REFUSED_SLOT_THEN_DESCRIBED_PROBLEM';
+            } else if (callerFeelsIgnored) {
+                shouldUnlockBooking = true;
+                unlockReason = 'CALLER_FEELS_IGNORED';
+            } else if (trustConcern) {
+                shouldUnlockBooking = true;
+                unlockReason = 'TRUST_CONCERN_DETECTED';
+            }
+            
+            if (shouldUnlockBooking) {
+                logger.info('[LLM0 TURN HANDLER] 🔓 AUTO-UNLOCK: Switching from booking to triage/rescue', {
+                    companyId, callId, reason: unlockReason
+                });
+                
+                currentMode = callerFeelsIgnored || isFrustrated ? 'rescue' : 'triage';
+                
+                // Log to Black Box
+                try {
+                    const BlackBoxLogger = require('./BlackBoxLogger');
+                    await BlackBoxLogger.logEvent({
+                        callId, companyId,
+                        type: 'BOOKING_AUTO_UNLOCK',
+                        turn: turnNumber,
+                        data: {
+                            reason: unlockReason,
+                            previousStep: currentStep,
+                            newMode: currentMode,
+                            isFrustrated,
+                            trustConcern,
+                            callerFeelsIgnored,
+                            describingProblem
+                        }
+                    });
+                } catch (logErr) {}
+            }
+        }
+        
+        if (isFrustrated || callerFeelsIgnored) {
             currentMode = 'rescue';
             const frustrationCount = await ConversationStateManager.markFrustrated(callId);
             
-            logger.info('[LLM0 TURN HANDLER] 😤 FRUSTRATION DETECTED - Switching to rescue mode', {
-                companyId, callId, frustrationCount
+            logger.info('[LLM0 TURN HANDLER] 😤 FRUSTRATION/IGNORED DETECTED - Switching to rescue mode', {
+                companyId, callId, frustrationCount, callerFeelsIgnored
             });
             
             // Log to Black Box
@@ -912,12 +984,15 @@ class LLM0TurnHandler {
                 const BlackBoxLogger = require('./BlackBoxLogger');
                 await BlackBoxLogger.logEvent({
                     callId, companyId,
-                    type: 'FRUSTRATION_DETECTED',
+                    type: callerFeelsIgnored ? 'CALLER_FEELS_IGNORED' : 'FRUSTRATION_DETECTED',
                     turn: turnNumber,
                     data: {
                         userInput: userInput?.substring(0, 100),
                         frustrationCount,
-                        switchedToRescue: true
+                        callerFeelsIgnored,
+                        trustConcern,
+                        switchedToRescue: true,
+                        lastAskField
                     }
                 });
             } catch (logErr) {}
@@ -933,7 +1008,8 @@ class LLM0TurnHandler {
                         ...callState,
                         turnCount: turnNumber,
                         offerHumanTransfer: true,
-                        conversationMode: 'rescue'
+                        conversationMode: 'rescue',
+                        bookingModeLocked: shouldUnlockBooking ? false : callState.bookingModeLocked
                     },
                     debug: { route: 'FRUSTRATION_ESCALATION', frustrationCount }
                 };
