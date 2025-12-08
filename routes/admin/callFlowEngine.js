@@ -255,7 +255,7 @@ router.post('/:companyId/rebuild', authenticateJWT, async (req, res) => {
 });
 
 // ============================================================================
-// TEST SENTENCE (Debugger)
+// TEST SENTENCE (Simple - Flow Engine only)
 // ============================================================================
 router.post('/:companyId/test', authenticateJWT, async (req, res) => {
     try {
@@ -309,6 +309,414 @@ router.post('/:companyId/test', authenticateJWT, async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 });
+
+// ============================================================================
+// TEST SENTENCE - FULL DIAGNOSTIC (Traces through ALL layers)
+// ============================================================================
+// This endpoint simulates a COMPLETE call routing to show admins exactly
+// what would happen: Flow Engine → Triage → 3-Tier → Response
+// ============================================================================
+router.post('/:companyId/test-full', authenticateJWT, async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { sentence, trade = '_default' } = req.body;
+        
+        if (!sentence || typeof sentence !== 'string') {
+            return res.status(400).json({ success: false, message: 'Sentence is required' });
+        }
+        
+        logger.info('[CALL FLOW ENGINE] FULL DIAGNOSTIC TEST:', sentence.substring(0, 80));
+        
+        // Load company and template
+        const company = await v2Company.findById(companyId).lean();
+        if (!company) {
+            return res.status(404).json({ success: false, message: 'Company not found' });
+        }
+        
+        const callFlowEngine = company?.aiAgentSettings?.callFlowEngine || {};
+        
+        // Initialize diagnostic trace
+        const trace = {
+            input: sentence,
+            timestamp: new Date().toISOString(),
+            steps: [],
+            issues: [],
+            suggestions: []
+        };
+        
+        // ════════════════════════════════════════════════════════════════════════
+        // STEP 1: FLOW ENGINE
+        // ════════════════════════════════════════════════════════════════════════
+        let flowResult = null;
+        try {
+            flowResult = await FlowEngine.testSentence(sentence, companyId, {
+                trade,
+                synonymMap: callFlowEngine.synonymMap || {},
+                customBlockers: callFlowEngine.customBlockers || {}
+            });
+            
+            trace.steps.push({
+                step: 1,
+                name: 'Flow Engine',
+                status: 'OK',
+                result: {
+                    flow: flowResult.decision?.flow || 'GENERAL_INQUIRY',
+                    confidence: flowResult.decision?.confidence || 0,
+                    matchedTrigger: flowResult.decision?.matchedTrigger || null,
+                    blockerHit: flowResult.decision?.blockerHit || false
+                }
+            });
+            
+            // Check for issues
+            if (!flowResult.decision?.matchedTrigger && flowResult.decision?.flow !== 'GENERAL_INQUIRY') {
+                trace.issues.push({
+                    step: 1,
+                    severity: 'warning',
+                    message: `Flow "${flowResult.decision?.flow}" detected but no explicit trigger matched`
+                });
+            }
+        } catch (flowError) {
+            trace.steps.push({
+                step: 1,
+                name: 'Flow Engine',
+                status: 'ERROR',
+                error: flowError.message
+            });
+            trace.issues.push({
+                step: 1,
+                severity: 'error',
+                message: `Flow Engine failed: ${flowError.message}`
+            });
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════
+        // STEP 2: TRIAGE CARD MATCHING
+        // ════════════════════════════════════════════════════════════════════════
+        let triageResult = null;
+        try {
+            const TriageCard = require('../../models/TriageCard');
+            
+            // Load active triage cards
+            const cards = await TriageCard.find({
+                companyId,
+                active: true
+            }).sort({ priority: -1 }).lean();
+            
+            // Try to find a matching card
+            const lowerInput = sentence.toLowerCase();
+            let matchedCard = null;
+            let matchedKeyword = null;
+            
+            for (const card of cards) {
+                const mustHave = card.quickRuleConfig?.keywordsMustHave || [];
+                const exclude = card.quickRuleConfig?.keywordsExclude || [];
+                
+                // Check exclusions first
+                const excluded = exclude.some(kw => lowerInput.includes(kw.toLowerCase()));
+                if (excluded) continue;
+                
+                // Check must-have keywords
+                for (const kw of mustHave) {
+                    if (lowerInput.includes(kw.toLowerCase())) {
+                        matchedCard = card;
+                        matchedKeyword = kw;
+                        break;
+                    }
+                }
+                if (matchedCard) break;
+            }
+            
+            if (matchedCard) {
+                triageResult = {
+                    matched: true,
+                    cardId: matchedCard._id.toString(),
+                    cardName: matchedCard.displayName || matchedCard.triageLabel,
+                    action: matchedCard.quickRuleConfig?.action || 'DIRECT_TO_3TIER',
+                    matchedKeyword,
+                    priority: matchedCard.priority,
+                    threeTierLink: matchedCard.threeTierLink || null
+                };
+                
+                trace.steps.push({
+                    step: 2,
+                    name: 'Triage Match',
+                    status: 'MATCHED',
+                    result: triageResult
+                });
+            } else {
+                trace.steps.push({
+                    step: 2,
+                    name: 'Triage Match',
+                    status: 'NO_MATCH',
+                    result: {
+                        matched: false,
+                        cardsChecked: cards.length,
+                        note: 'No triage card keywords matched this input'
+                    }
+                });
+                
+                trace.issues.push({
+                    step: 2,
+                    severity: 'warning',
+                    message: 'No triage card matched - will use 3-tier fallback'
+                });
+                
+                trace.suggestions.push({
+                    type: 'CREATE_TRIAGE_CARD',
+                    message: `Consider creating a triage card for: "${sentence.substring(0, 50)}"`,
+                    suggestedKeywords: extractKeywords(sentence)
+                });
+            }
+        } catch (triageError) {
+            trace.steps.push({
+                step: 2,
+                name: 'Triage Match',
+                status: 'ERROR',
+                error: triageError.message
+            });
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════
+        // STEP 3: 3-TIER INTELLIGENCE
+        // ════════════════════════════════════════════════════════════════════════
+        let tier3Result = null;
+        try {
+            // Load template for the company
+            const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+            const template = await GlobalInstantResponseTemplate.findById(company.globalTemplateId).lean();
+            
+            if (!template) {
+                trace.steps.push({
+                    step: 3,
+                    name: '3-Tier Intelligence',
+                    status: 'SKIPPED',
+                    result: {
+                        reason: 'No template found for company'
+                    }
+                });
+                trace.issues.push({
+                    step: 3,
+                    severity: 'error',
+                    message: 'No template assigned to company - 3-tier cannot run'
+                });
+            } else {
+                const IntelligentRouter = require('../../services/IntelligentRouter');
+                const router = new IntelligentRouter();
+                
+                // Run through 3-tier (this is the REAL test)
+                const routeResult = await router.route({
+                    callerInput: sentence,
+                    template,
+                    company,
+                    callId: `test-${Date.now()}`,
+                    context: {
+                        isTest: true,
+                        flowDecision: flowResult?.decision?.flow
+                    }
+                });
+                
+                tier3Result = {
+                    tierUsed: routeResult.tierUsed,
+                    matched: routeResult.matched,
+                    confidence: routeResult.confidence,
+                    scenario: routeResult.scenario ? {
+                        key: routeResult.scenario.key || routeResult.scenario.scenarioKey,
+                        name: routeResult.scenario.name || routeResult.scenario.scenarioLabel,
+                        category: routeResult.scenario.category || routeResult.scenario.categoryKey
+                    } : null,
+                    responsePreview: routeResult.response?.substring(0, 200),
+                    cost: routeResult.cost,
+                    performance: routeResult.performance
+                };
+                
+                trace.steps.push({
+                    step: 3,
+                    name: '3-Tier Intelligence',
+                    status: routeResult.matched ? 'MATCHED' : 'FALLBACK',
+                    result: tier3Result
+                });
+                
+                // Check for issues
+                if (routeResult.tierUsed === 3) {
+                    trace.issues.push({
+                        step: 3,
+                        severity: 'info',
+                        message: 'Used Tier 3 (LLM) - costs money! Consider adding scenario coverage.'
+                    });
+                    
+                    if (routeResult.patternsLearned?.length > 0) {
+                        trace.suggestions.push({
+                            type: 'PATTERNS_LEARNED',
+                            message: 'LLM learned new patterns that will improve Tier 1',
+                            patterns: routeResult.patternsLearned
+                        });
+                    }
+                }
+                
+                if (!routeResult.matched) {
+                    trace.issues.push({
+                        step: 3,
+                        severity: 'warning',
+                        message: 'No scenario matched - generic response used'
+                    });
+                    
+                    trace.suggestions.push({
+                        type: 'CREATE_SCENARIO',
+                        message: `Consider creating a scenario for this type of request`,
+                        suggestedCategory: guessCategory(sentence),
+                        suggestedTriggers: extractKeywords(sentence)
+                    });
+                }
+            }
+        } catch (tier3Error) {
+            trace.steps.push({
+                step: 3,
+                name: '3-Tier Intelligence',
+                status: 'ERROR',
+                error: tier3Error.message
+            });
+            trace.issues.push({
+                step: 3,
+                severity: 'error',
+                message: `3-Tier failed: ${tier3Error.message}`
+            });
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════
+        // STEP 4: FINAL ACTION SUMMARY
+        // ════════════════════════════════════════════════════════════════════════
+        const finalAction = determineFinalAction(flowResult, triageResult, tier3Result);
+        
+        trace.steps.push({
+            step: 4,
+            name: 'Final Action',
+            status: 'COMPLETE',
+            result: finalAction
+        });
+        
+        // ════════════════════════════════════════════════════════════════════════
+        // GENERATE DIAGNOSTIC SUMMARY
+        // ════════════════════════════════════════════════════════════════════════
+        const summary = {
+            verdict: trace.issues.filter(i => i.severity === 'error').length > 0 ? 'ISSUES_FOUND' :
+                     trace.issues.filter(i => i.severity === 'warning').length > 0 ? 'WARNINGS' : 'OK',
+            issueCount: trace.issues.length,
+            suggestionCount: trace.suggestions.length,
+            estimatedCost: tier3Result?.cost?.total || 0,
+            estimatedLatency: tier3Result?.performance?.totalTime || 0,
+            wouldUseLLM: tier3Result?.tierUsed === 3
+        };
+        
+        res.json({
+            success: true,
+            data: {
+                trace,
+                summary
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[CALL FLOW ENGINE] Full diagnostic test error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Helper: Extract keywords from a sentence
+function extractKeywords(sentence) {
+    const stopWords = ['i', 'me', 'my', 'the', 'a', 'an', 'is', 'are', 'was', 'be', 'to', 'of', 'and', 'in', 'it', 'for', 'on', 'with', 'as', 'at', 'by', 'this', 'that', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'can', 'could', 'should', 'need', 'want', 'please', 'hi', 'hello', 'hey'];
+    
+    return sentence.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .split(/\s+/)
+        .filter(w => w.length > 2 && !stopWords.includes(w))
+        .slice(0, 5);
+}
+
+// Helper: Guess category from sentence
+function guessCategory(sentence) {
+    const lower = sentence.toLowerCase();
+    
+    if (/thermostat|temperature|degrees|heat|cold/.test(lower)) return 'Thermostat Issues';
+    if (/ac|air condition|cooling|not cool|warm air/.test(lower)) return 'AC Issues';
+    if (/furnace|heater|heating|no heat/.test(lower)) return 'Heating Issues';
+    if (/leak|water|drip|flooding/.test(lower)) return 'Water/Leak Issues';
+    if (/noise|sound|loud|buzzing|clicking/.test(lower)) return 'Noise Issues';
+    if (/smell|odor|gas|burning/.test(lower)) return 'Safety/Odor Issues';
+    if (/maintenance|tune.?up|annual|service/.test(lower)) return 'Maintenance';
+    if (/install|new|replace/.test(lower)) return 'Installation';
+    
+    return 'General';
+}
+
+// Helper: Determine final action from all results
+function determineFinalAction(flowResult, triageResult, tier3Result) {
+    const flow = flowResult?.decision?.flow || 'GENERAL_INQUIRY';
+    
+    // Direct booking flow
+    if (flow === 'BOOKING' || flow === 'booking') {
+        return {
+            action: 'BOOKING_FLOW',
+            nextStep: 'ASK_NAME',
+            prompt: 'What is your name?',
+            source: 'FLOW_ENGINE'
+        };
+    }
+    
+    // Emergency
+    if (flow === 'EMERGENCY' || flow === 'emergency') {
+        return {
+            action: 'EMERGENCY_TRANSFER',
+            nextStep: 'TRANSFER',
+            prompt: 'Transferring to emergency line...',
+            source: 'FLOW_ENGINE'
+        };
+    }
+    
+    // Cancel/Reschedule
+    if (flow === 'CANCEL' || flow === 'cancel') {
+        return {
+            action: 'CANCEL_FLOW',
+            nextStep: 'VERIFY_APPOINTMENT',
+            source: 'FLOW_ENGINE'
+        };
+    }
+    
+    // Triage matched - use its action
+    if (triageResult?.matched) {
+        const actionMap = {
+            'BOOK_APPOINTMENT': { action: 'BOOKING_FLOW', nextStep: 'ASK_NAME' },
+            'DIRECT_TO_3TIER': { action: 'SCENARIO_RESPONSE', nextStep: 'RESPOND' },
+            'EXPLAIN_AND_PUSH': { action: 'EXPLAIN_THEN_BOOK', nextStep: 'RESPOND_THEN_ASK_NAME' },
+            'TRANSFER': { action: 'TRANSFER', nextStep: 'TRANSFER' }
+        };
+        
+        return {
+            ...(actionMap[triageResult.action] || { action: 'SCENARIO_RESPONSE', nextStep: 'RESPOND' }),
+            triageCard: triageResult.cardName,
+            source: 'TRIAGE_CARD'
+        };
+    }
+    
+    // 3-tier matched
+    if (tier3Result?.matched) {
+        return {
+            action: 'SCENARIO_RESPONSE',
+            nextStep: 'RESPOND',
+            scenario: tier3Result.scenario?.name,
+            responsePreview: tier3Result.responsePreview,
+            source: `TIER_${tier3Result.tierUsed}`
+        };
+    }
+    
+    // Fallback
+    return {
+        action: 'LLM_FALLBACK',
+        nextStep: 'RESPOND',
+        responsePreview: tier3Result?.responsePreview || 'How can I help you?',
+        source: 'TIER_3_LLM',
+        warning: 'No fast-match coverage - using expensive LLM'
+    };
+}
 
 // ============================================================================
 // GET TRIGGER STATS

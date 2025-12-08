@@ -559,9 +559,22 @@ class CallFlowEngineManager {
             return;
         }
         
+        // Show loading state
+        const resultContainer = document.getElementById('cfe-test-result');
+        if (resultContainer) {
+            resultContainer.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #6b7280;">
+                    <div style="font-size: 24px; margin-bottom: 8px;">🔄</div>
+                    <div>Testing through all layers...</div>
+                </div>
+            `;
+        }
+        
         try {
             const token = localStorage.getItem('adminToken');
-            const response = await fetch(`/api/admin/call-flow-engine/${this.companyId}/test`, {
+            
+            // Use the FULL diagnostic endpoint
+            const response = await fetch(`/api/admin/call-flow-engine/${this.companyId}/test-full`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -578,13 +591,240 @@ class CallFlowEngineManager {
             
             this.testResult = result.data;
             
-            const resultContainer = document.getElementById('cfe-test-result');
             if (resultContainer) {
-                resultContainer.innerHTML = this.renderTestResult();
+                resultContainer.innerHTML = this.renderFullTestResult();
             }
             
         } catch (error) {
-            this.showNotification('Test failed: ' + error.message, 'error');
+            console.error('[CFE] Test error:', error);
+            if (resultContainer) {
+                resultContainer.innerHTML = `
+                    <div style="background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 16px; color: #991b1b;">
+                        <strong>❌ Test Failed</strong>
+                        <p style="margin: 8px 0 0; font-size: 13px;">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+    }
+    
+    // ========================================================================
+    // RENDER FULL DIAGNOSTIC TEST RESULT
+    // ========================================================================
+    renderFullTestResult() {
+        const { trace, summary } = this.testResult || {};
+        
+        if (!trace) {
+            return '<div style="padding: 20px; text-align: center; color: #6b7280;">No results</div>';
+        }
+        
+        // Status badge colors
+        const statusColors = {
+            'OK': { bg: '#dcfce7', border: '#86efac', text: '#166534' },
+            'MATCHED': { bg: '#dcfce7', border: '#86efac', text: '#166534' },
+            'NO_MATCH': { bg: '#fef3c7', border: '#fcd34d', text: '#92400e' },
+            'FALLBACK': { bg: '#fef3c7', border: '#fcd34d', text: '#92400e' },
+            'ERROR': { bg: '#fef2f2', border: '#fca5a5', text: '#991b1b' },
+            'SKIPPED': { bg: '#f3f4f6', border: '#d1d5db', text: '#6b7280' },
+            'COMPLETE': { bg: '#dbeafe', border: '#93c5fd', text: '#1e40af' }
+        };
+        
+        // Verdict badge
+        const verdictColors = {
+            'OK': { bg: '#dcfce7', text: '#166534', icon: '✅' },
+            'WARNINGS': { bg: '#fef3c7', text: '#92400e', icon: '⚠️' },
+            'ISSUES_FOUND': { bg: '#fef2f2', text: '#991b1b', icon: '❌' }
+        };
+        
+        const verdict = verdictColors[summary?.verdict] || verdictColors['OK'];
+        
+        return `
+            <!-- Summary Banner -->
+            <div style="background: ${verdict.bg}; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 20px;">${verdict.icon}</span>
+                    <span style="font-weight: 600; color: ${verdict.text};">${summary?.verdict?.replace('_', ' ') || 'OK'}</span>
+                </div>
+                <div style="display: flex; gap: 16px; font-size: 12px; color: #6b7280;">
+                    ${summary?.wouldUseLLM ? '<span style="color: #dc2626;">💰 Uses LLM</span>' : '<span style="color: #16a34a;">💚 Free Tier</span>'}
+                    <span>⏱️ ~${summary?.estimatedLatency || 0}ms</span>
+                    <span>💵 $${(summary?.estimatedCost || 0).toFixed(4)}</span>
+                </div>
+            </div>
+            
+            <!-- Steps Timeline -->
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                ${trace.steps.map(step => {
+                    const colors = statusColors[step.status] || statusColors['OK'];
+                    return `
+                        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f9fafb; border-bottom: 1px solid #e5e7eb;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="background: #6366f1; color: white; font-weight: 600; font-size: 11px; padding: 2px 8px; border-radius: 10px;">STEP ${step.step}</span>
+                                    <span style="font-weight: 500;">${step.name}</span>
+                                </div>
+                                <span style="background: ${colors.bg}; color: ${colors.text}; border: 1px solid ${colors.border}; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;">
+                                    ${step.status}
+                                </span>
+                            </div>
+                            <div style="padding: 12px 14px; font-size: 13px;">
+                                ${this.renderStepResult(step)}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+            
+            <!-- Issues & Suggestions -->
+            ${trace.issues?.length > 0 ? `
+                <div style="margin-top: 16px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px 16px;">
+                    <div style="font-weight: 600; color: #92400e; margin-bottom: 8px;">⚠️ Issues Found (${trace.issues.length})</div>
+                    <ul style="margin: 0; padding-left: 20px; color: #78350f; font-size: 13px;">
+                        ${trace.issues.map(i => `<li style="margin: 4px 0;">[Step ${i.step}] ${i.message}</li>`).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+            
+            ${trace.suggestions?.length > 0 ? `
+                <div style="margin-top: 12px; background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 12px 16px;">
+                    <div style="font-weight: 600; color: #1e40af; margin-bottom: 8px;">💡 Suggestions (${trace.suggestions.length})</div>
+                    <ul style="margin: 0; padding-left: 20px; color: #1e3a8a; font-size: 13px;">
+                        ${trace.suggestions.map(s => `
+                            <li style="margin: 6px 0;">
+                                <strong>${s.type.replace(/_/g, ' ')}:</strong> ${s.message}
+                                ${s.suggestedKeywords ? `<br><code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px; font-size: 11px;">Keywords: ${s.suggestedKeywords.join(', ')}</code>` : ''}
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+        `;
+    }
+    
+    // ========================================================================
+    // RENDER INDIVIDUAL STEP RESULT
+    // ========================================================================
+    renderStepResult(step) {
+        const result = step.result;
+        
+        if (step.error) {
+            return `<div style="color: #dc2626;">❌ Error: ${step.error}</div>`;
+        }
+        
+        switch (step.name) {
+            case 'Flow Engine':
+                return `
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                        <div>
+                            <div style="color: #6b7280; font-size: 11px; text-transform: uppercase;">Flow</div>
+                            <div style="font-weight: 600; color: ${result.flow === 'BOOKING' ? '#16a34a' : result.flow === 'EMERGENCY' ? '#dc2626' : '#374151'};">
+                                ${result.flow || 'GENERAL_INQUIRY'}
+                            </div>
+                        </div>
+                        <div>
+                            <div style="color: #6b7280; font-size: 11px; text-transform: uppercase;">Confidence</div>
+                            <div style="font-weight: 600;">${Math.round((result.confidence || 0) * 100)}%</div>
+                        </div>
+                        <div>
+                            <div style="color: #6b7280; font-size: 11px; text-transform: uppercase;">Matched Trigger</div>
+                            <div style="font-weight: 500;">${result.matchedTrigger || '—'}</div>
+                        </div>
+                    </div>
+                `;
+                
+            case 'Triage Match':
+                if (result.matched) {
+                    return `
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                            <div>
+                                <div style="color: #6b7280; font-size: 11px; text-transform: uppercase;">Card</div>
+                                <div style="font-weight: 600; color: #16a34a;">✅ ${result.cardName}</div>
+                            </div>
+                            <div>
+                                <div style="color: #6b7280; font-size: 11px; text-transform: uppercase;">Action</div>
+                                <div style="font-weight: 500;">${result.action}</div>
+                            </div>
+                            <div>
+                                <div style="color: #6b7280; font-size: 11px; text-transform: uppercase;">Matched Keyword</div>
+                                <div><code style="background: #dcfce7; padding: 2px 6px; border-radius: 4px;">${result.matchedKeyword}</code></div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div style="color: #78350f;">
+                            <span style="font-weight: 500;">No triage card matched</span>
+                            <span style="color: #92400e; font-size: 12px;"> — Checked ${result.cardsChecked || 0} cards</span>
+                        </div>
+                    `;
+                }
+                
+            case '3-Tier Intelligence':
+                if (!result) return '<div style="color: #6b7280;">No result</div>';
+                return `
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <div style="color: #6b7280; font-size: 11px; text-transform: uppercase;">Tier Used</div>
+                            <div style="font-weight: 600;">
+                                ${result.tierUsed === 1 ? '🟢 Tier 1 (Free)' : 
+                                  result.tierUsed === 2 ? '🟡 Tier 2 (Free)' : 
+                                  '🔴 Tier 3 (LLM $)'}
+                            </div>
+                        </div>
+                        <div>
+                            <div style="color: #6b7280; font-size: 11px; text-transform: uppercase;">Confidence</div>
+                            <div style="font-weight: 600;">${Math.round((result.confidence || 0) * 100)}%</div>
+                        </div>
+                        ${result.scenario ? `
+                            <div style="grid-column: span 2;">
+                                <div style="color: #6b7280; font-size: 11px; text-transform: uppercase;">Scenario</div>
+                                <div style="font-weight: 500;">${result.scenario.name || result.scenario.key} <span style="color: #6b7280; font-size: 12px;">(${result.scenario.category || 'General'})</span></div>
+                            </div>
+                        ` : ''}
+                        ${result.responsePreview ? `
+                            <div style="grid-column: span 2; margin-top: 8px;">
+                                <div style="color: #6b7280; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Response Preview</div>
+                                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px; font-size: 12px; color: #374151; font-style: italic;">
+                                    "${result.responsePreview}..."
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+                
+            case 'Final Action':
+                return `
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                        <div>
+                            <div style="color: #6b7280; font-size: 11px; text-transform: uppercase;">Action</div>
+                            <div style="font-weight: 600; color: ${result.action === 'BOOKING_FLOW' ? '#16a34a' : '#374151'};">${result.action}</div>
+                        </div>
+                        <div>
+                            <div style="color: #6b7280; font-size: 11px; text-transform: uppercase;">Next Step</div>
+                            <div style="font-weight: 500;">${result.nextStep}</div>
+                        </div>
+                        <div>
+                            <div style="color: #6b7280; font-size: 11px; text-transform: uppercase;">Source</div>
+                            <div style="font-weight: 500;">${result.source}</div>
+                        </div>
+                        ${result.warning ? `
+                            <div style="grid-column: span 3; background: #fef3c7; padding: 8px; border-radius: 6px; color: #92400e; font-size: 12px;">
+                                ⚠️ ${result.warning}
+                            </div>
+                        ` : ''}
+                        ${result.responsePreview && !result.warning ? `
+                            <div style="grid-column: span 3;">
+                                <div style="color: #6b7280; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Agent Would Say</div>
+                                <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 10px; font-size: 12px; color: #166534;">
+                                    "${result.responsePreview}"
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+                
+            default:
+                return `<pre style="font-size: 11px; overflow: auto;">${JSON.stringify(result, null, 2)}</pre>`;
         }
     }
     
