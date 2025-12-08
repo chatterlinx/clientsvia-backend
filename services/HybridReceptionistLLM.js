@@ -24,6 +24,7 @@
 
 const logger = require('../utils/logger');
 const openaiClient = require('../config/openai');
+const TriageContextProvider = require('./TriageContextProvider');
 
 // ════════════════════════════════════════════════════════════════════════════
 // BEHAVIOR RULES - Baked into every prompt
@@ -142,6 +143,7 @@ class HybridReceptionistLLM {
     }) {
         const startTime = Date.now();
         const callId = callContext.callId || 'unknown';
+        const companyId = company.id || company._id || callContext.companyId;
         
         if (!openaiClient) {
             logger.error('[HYBRID LLM] OpenAI not configured!');
@@ -150,13 +152,45 @@ class HybridReceptionistLLM {
         
         try {
             // ════════════════════════════════════════════════════════════════
-            // BUILD THE SYSTEM PROMPT
+            // 🔍 GET TRIAGE CONTEXT - This is what makes us SMART
+            // ════════════════════════════════════════════════════════════════
+            // Look up matching triage cards so we know:
+            // - What diagnostic questions to ask
+            // - What explanations to give
+            // - Urgency level
+            // - Whether this is repair vs maintenance
+            let triageContext = null;
+            
+            // Only get triage context if caller is describing an issue
+            const isDescribingIssue = /problem|issue|broken|not working|leak|noise|smell|blank|won't|doesn't|can't|stopped/i.test(userInput);
+            
+            if (isDescribingIssue && companyId) {
+                triageContext = await TriageContextProvider.getTriageContext(companyId, userInput);
+                
+                if (triageContext?.matched) {
+                    logger.info('[HYBRID LLM] 🎯 Triage context found', {
+                        callId,
+                        cardName: triageContext.cardName,
+                        urgency: triageContext.urgency,
+                        hasQuestions: triageContext.diagnosticQuestions?.length > 0
+                    });
+                    
+                    // Switch to triage mode if we matched a card
+                    if (currentMode === 'booking' || currentMode === 'free') {
+                        currentMode = 'triage';
+                    }
+                }
+            }
+            
+            // ════════════════════════════════════════════════════════════════
+            // BUILD THE SYSTEM PROMPT (now with triage context)
             // ════════════════════════════════════════════════════════════════
             const systemPrompt = this.buildSystemPrompt({
                 company,
                 currentMode,
                 knownSlots,
-                behaviorConfig
+                behaviorConfig,
+                triageContext  // Pass triage context for smarter responses
             });
             
             // ════════════════════════════════════════════════════════════════
@@ -169,13 +203,17 @@ class HybridReceptionistLLM {
             ];
             
             // ════════════════════════════════════════════════════════════════
-            // CALL THE LLM
+            // CALL THE LLM - OPTIMIZED FOR SPEED
             // ════════════════════════════════════════════════════════════════
+            // Target: <1.5s response time
+            // - Reduced max_tokens (we only need ~100 for a short reply)
+            // - Lower temperature for more predictable (faster) responses
+            // - Compact prompt to reduce input tokens
             const response = await openaiClient.chat.completions.create({
-                model: 'gpt-4o-mini', // Fast, cheap, good enough for conversation
+                model: 'gpt-4o-mini', // Fast and cheap
                 messages,
-                temperature: 0.8, // More personality
-                max_tokens: 300,
+                temperature: 0.6, // Lower = faster, more focused
+                max_tokens: 150, // We only need ~100 for reply + slots
                 response_format: { type: 'json_object' }
             });
             
@@ -233,86 +271,73 @@ class HybridReceptionistLLM {
     
     /**
      * Build the system prompt with all context
+     * OPTIMIZED: Reduced token count for faster responses
      */
-    static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig }) {
+    static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext }) {
         const companyName = company.name || 'our company';
         const trade = company.trade || 'HVAC';
-        const serviceAreas = company.serviceAreas?.join(', ') || 'your area';
         
-        const personality = behaviorConfig.personality || {};
-        const tone = personality.tone || 'warm and professional';
+        // Compact slot display
+        const hasSlots = Object.entries(knownSlots).filter(([k, v]) => v);
+        const slotsList = hasSlots.length > 0 
+            ? hasSlots.map(([k, v]) => `${k}:${v}`).join(', ')
+            : 'none';
         
-        // Format known slots for display
-        const slotsList = Object.entries(knownSlots)
-            .filter(([k, v]) => v)
-            .map(([k, v]) => `  ${k}: ${v}`)
-            .join('\n') || '  (nothing collected yet)';
+        const missingSlots = ['name', 'phone', 'address', 'time']
+            .filter(s => !knownSlots[s]).join(',') || 'none';
         
-        // Format missing slots
-        const requiredSlots = ['name', 'phone', 'address', 'serviceType', 'time'];
-        const missingSlots = requiredSlots.filter(s => !knownSlots[s]).join(', ') || 'none';
-        
-        return `You are the receptionist for ${companyName}, a ${trade} company serving ${serviceAreas}.
-
-═══ YOUR PERSONALITY ═══
-Tone: ${tone}
-Style: Conversational, helpful, efficient. You sound like a real person, not a robot.
-You're the kind of receptionist people actually LIKE talking to.
-
-═══ CURRENT STATE ═══
-Mode: ${currentMode}
-${MODE_INSTRUCTIONS[currentMode] || MODE_INSTRUCTIONS.free}
-
-═══ WHAT YOU ALREADY KNOW ═══
-${slotsList}
-
-═══ STILL NEED (for booking) ═══
-${missingSlots}
-
-${BEHAVIOR_RULES}
-
-═══ YOUR OUTPUT (JSON) ═══
-Return ONLY valid JSON with this structure:
-{
-  "reply": "What you say to the caller (max 40 words, 2-3 sentences)",
-  "conversationMode": "free|booking|triage|rescue",
-  "intent": "booking|triage|question|smalltalk|cancel|escalate",
-  "nextGoal": "ASK_NAME|ASK_PHONE|ASK_ADDRESS|ASK_SERVICE_TYPE|ASK_TIME|CONFIRM|TRIAGE_STEP|ANSWER_QUESTION|null",
-  "filledSlots": {
-    "name": "extracted name or null",
-    "phone": "extracted phone or null",
-    "address": "extracted address or null",
-    "serviceType": "repair|maintenance|null",
-    "time": "extracted time preference or null"
-  },
-  "signals": {
-    "frustrated": false,
-    "wantsHuman": false,
-    "isQuestion": false,
-    "bookingComplete": false
-  },
-  "reasoning": "Brief explanation of your decision"
-}
-
-REMEMBER: 
-- Your reply goes DIRECTLY to the caller. Make it sound human.
-- Answer what they said FIRST, then move the conversation forward.
-- If you already have their phone, DON'T ask for it again.
+        // Build triage context section if available
+        let triageSection = '';
+        if (triageContext?.matched) {
+            const questions = triageContext.diagnosticQuestions?.slice(0, 2).join('\n  - ') || '';
+            triageSection = `
+═══ ISSUE DIAGNOSIS ═══
+Matched: ${triageContext.cardName || 'AC Issue'}
+Urgency: ${triageContext.urgency?.toUpperCase() || 'NORMAL'}
+${triageContext.explanation ? `Explain: ${triageContext.explanation}` : ''}
+${questions ? `Ask one of:\n  - ${questions}` : ''}
+Suggested: ${triageContext.suggestedServiceType || 'repair'}
 `;
+        }
+        
+        // Compact mode instructions
+        const modeInstructions = {
+            'free': 'Figure out what they want. Answer questions naturally.',
+            'booking': `Get: ${missingSlots}. Don't re-ask filled slots.`,
+            'triage': 'Ask diagnostic questions from ISSUE DIAGNOSIS. Then recommend repair/maintenance and book.',
+            'rescue': 'Apologize once. Confirm what you have. Move forward.'
+        };
+        
+        return `You: receptionist at ${companyName} (${trade}).
+Mode: ${currentMode}. ${modeInstructions[currentMode] || ''}
+Have: ${slotsList}
+Need: ${missingSlots}
+${triageSection}
+RULES:
+1. Answer their question/comment first, then ask next thing.
+2. Never re-ask filled slots.
+3. Max 30 words. Sound human.
+4. If describing issue, ask diagnostic question then transition to booking.
+
+OUTPUT JSON:
+{"reply":"<30 words>","conversationMode":"${currentMode}","intent":"booking|triage|question","nextGoal":"ASK_NAME|ASK_PHONE|ASK_ADDRESS|ASK_TIME|TRIAGE_STEP|CONFIRM","filledSlots":{"name":null,"phone":null,"address":null,"serviceType":null,"time":null},"signals":{"frustrated":false,"wantsHuman":false}}`;
     }
     
     /**
      * Format conversation history for the messages array
+     * OPTIMIZED: Keep minimal history for speed
      */
     static formatConversationHistory(history) {
         if (!history || !Array.isArray(history)) return [];
         
-        // Keep last 10 turns max (context window efficiency)
-        const recent = history.slice(-10);
+        // Keep only last 4 turns (2 exchanges) for speed
+        // This is enough for context while reducing token count
+        const recent = history.slice(-4);
         
         return recent.map(turn => ({
             role: turn.role === 'caller' ? 'user' : 'assistant',
-            content: turn.content || turn.text
+            // Truncate long messages to save tokens
+            content: (turn.content || turn.text || '').substring(0, 200)
         }));
     }
     
