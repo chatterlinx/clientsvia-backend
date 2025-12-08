@@ -947,6 +947,14 @@ class LLM0TurnHandler {
                 
             case 'ASK_PHONE':
             case 'collecting_phone':
+                logger.info('[LLM0 TURN HANDLER] 📞 ASK_PHONE case matched', {
+                    companyId,
+                    callId,
+                    isFrustrated,
+                    wantsBooking,
+                    collectedName: collected?.name
+                });
+                
                 const extractedPhone = this.extractPhone(userInput);
                 if (extractedPhone) {
                     newCollected.phone = extractedPhone;
@@ -957,6 +965,14 @@ class LLM0TurnHandler {
                 } else {
                     // No phone extracted - if frustrated & wants booking, be empathetic
                     if (isFrustrated && wantsBooking) {
+                        responseText = getEmpathicAsk('phone', collected?.name);
+                        logger.info('[LLM0 TURN HANDLER] 😤 Using empathetic response for frustrated customer', {
+                            companyId,
+                            callId,
+                            responsePreview: responseText.substring(0, 80)
+                        });
+                    } else if (isFrustrated) {
+                        // Frustrated but no clear booking intent - still be empathetic
                         responseText = getEmpathicAsk('phone', collected?.name);
                     } else {
                         responseText = "I need your phone number so we can reach you. What's the best number?";

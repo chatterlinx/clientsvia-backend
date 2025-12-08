@@ -2483,12 +2483,25 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // ═══════════════════════════════════════════════════════════════════════════
       // 🧠 LLM-0 ENABLEMENT LOGIC (Dec 2025 Update)
       // ═══════════════════════════════════════════════════════════════════════════
-      // DEFAULT: LLM-0 is ENABLED unless explicitly disabled
-      // This ensures the intelligent system is used, not the legacy dumb path
+      // FORCE ENABLE: If booking is in progress, ALWAYS use LLM-0 path
+      // This prevents the legacy path from breaking booking slot-fill
       // ═══════════════════════════════════════════════════════════════════════════
+      const bookingInProgress = callState?.bookingModeLocked && callState?.bookingState;
       const adminDisabled = adminSettings?.globalProductionIntelligence?.llm0Enabled === false;
       const companyDisabled = company?.agentSettings?.llm0Enabled === false;
-      const llm0Enabled = !adminDisabled && !companyDisabled; // DEFAULT ON
+      
+      // FORCE ENABLE when booking is active, otherwise respect settings
+      const llm0Enabled = bookingInProgress || (!adminDisabled && !companyDisabled);
+      
+      if (bookingInProgress && (adminDisabled || companyDisabled)) {
+        logger.warn('[V2 TWILIO] 🔓 FORCE ENABLING LLM-0 for booking in progress', {
+          companyId: companyID,
+          callSid,
+          bookingState: callState.bookingState,
+          adminDisabled,
+          companyDisabled
+        });
+      }
       
       // 📼 BLACK BOX: Log routing decision (CRITICAL for debugging)
       if (BlackBoxLogger) {
