@@ -2553,27 +2553,17 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // ═══════════════════════════════════════════════════════════════════════════
       const bookingInProgress = !!(callState?.bookingModeLocked && callState?.bookingState);
       
-      // LLM-0 is DEFAULT ON - only disabled if BOTH admin AND company explicitly disable
-      // OR if after-hours mode is active (voicemail/simple message)
+      // ═══════════════════════════════════════════════════════════════════════════
+      // 🚀 LLM-0 IS NOW ALWAYS ON - Dec 2025 SIMPLIFICATION
+      // ═══════════════════════════════════════════════════════════════════════════
+      // The legacy path is DEAD. Every call uses HybridReceptionistLLM.
+      // This gives: fast responses (<1.5s), smart conversation, name capture.
+      // Only exception: after-hours voicemail mode.
+      // ═══════════════════════════════════════════════════════════════════════════
       const afterHoursMode = company?.agentSettings?.afterHoursMode === true;
-      const forceDisabledByAdmin = adminSettings?.globalProductionIntelligence?.llm0Enabled === false 
-                                   && company?.agentSettings?.llm0Enabled === false;
+      const llm0Enabled = !afterHoursMode; // ON unless after-hours
       
-      // LLM-0 ON by default. Force ON if booking in progress.
-      // Only disabled for: after-hours OR explicit double-disable
-      const llm0Enabled = afterHoursMode ? false : (bookingInProgress || !forceDisabledByAdmin);
-      
-      if (bookingInProgress && (adminDisabled || companyDisabled)) {
-        logger.warn('[V2 TWILIO] 🔓 FORCE ENABLING LLM-0 for booking in progress', {
-          companyId: companyID,
-          callSid,
-          bookingState: callState.bookingState,
-          adminDisabled,
-          companyDisabled
-        });
-      }
-      
-      // 📼 BLACK BOX: Log routing decision (CRITICAL for debugging)
+      // 📼 BLACK BOX: Log routing decision
       if (BlackBoxLogger) {
         BlackBoxLogger.logEvent({
           callId: callSid,
@@ -2582,48 +2572,19 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           turn: turnCount,
           data: {
             llm0Enabled,
-            reason: llm0Enabled ? 'LLM-0 active (default ON)' : 'LLM-0 explicitly disabled',
-            adminLlm0: !adminDisabled,
-            companyLlm0: !companyDisabled,
+            reason: afterHoursMode ? 'After-hours mode active' : 'LLM-0 ALWAYS ON (Dec 2025)',
             bookingModeLocked: !!callState?.bookingModeLocked,
             bookingState: callState?.bookingState || null,
             currentBookingStep: callState?.currentBookingStep || null,
-            path: llm0Enabled ? 'LLM0TurnHandler' : 'processUserInput'
+            path: 'HybridReceptionistLLM'
           }
         }).catch(() => {});
       }
       
-      // 🚨 CRITICAL FIX: If booking is locked, we MUST use LLM0TurnHandler regardless of llm0Enabled
-      // The booking slot-fill handler lives in LLM0TurnHandler and will be bypassed if we go to legacy path
-      const forceBookingPath = callState?.bookingModeLocked && callState?.bookingState;
+      // LLM-0 is ALWAYS ON now (simplified Dec 2025)
+      // No more forceBookingPath logic needed - hybrid handles everything
       
-      if (forceBookingPath && !llm0Enabled) {
-        logger.warn('[V2 TWILIO] 🚨 BOOKING LOCK OVERRIDE - Forcing LLM0TurnHandler path', {
-          companyId: companyID,
-          callSid,
-          bookingState: callState.bookingState,
-          currentStep: callState.currentBookingStep
-        });
-        
-        // 📼 BLACK BOX: Log booking lock override
-        if (BlackBoxLogger) {
-          BlackBoxLogger.logEvent({
-            callId: callSid,
-            companyId: companyID,
-            type: 'BOOKING_LOCK_OVERRIDE',
-            turn: turnCount,
-            data: {
-              reason: 'LLM-0 disabled but booking locked - forcing booking handler',
-              bookingState: callState.bookingState,
-              currentBookingStep: callState.currentBookingStep,
-              originalPath: 'processUserInput',
-              forcedPath: 'LLM0TurnHandler.handleBookingSlotFill'
-            }
-          }).catch(() => {});
-        }
-      }
-      
-      if ((llm0Enabled && company) || forceBookingPath) {
+      if (llm0Enabled && company) {
         
         // ════════════════════════════════════════════════════════════════════════════════════
         // 🚀 HYBRID FAST PATH - BYPASS SLOW decideNextStep (Dec 2025)
