@@ -47,17 +47,23 @@ function normalizeToSignature(response) {
     if (!response) return 'EMPTY';
     
     return response
-        .toLowerCase()
-        // Remove specific names (2+ capital letters followed by lowercase)
+        // Remove specific names BEFORE lowercasing (2+ capital letters followed by lowercase)
         .replace(/\b[A-Z][a-z]+\b/g, 'NAME')
+        // Now lowercase
+        .toLowerCase()
         // Remove phone numbers
         .replace(/\+?\d{10,}/g, 'PHONE')
+        .replace(/\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/g, 'PHONE')
         // Remove times
         .replace(/\d{1,2}:\d{2}(?:\s*(?:am|pm))?/gi, 'TIME')
         // Remove dates
         .replace(/\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?/g, 'DATE')
         // Remove standalone numbers
         .replace(/\b\d+\b/g, 'NUM')
+        // Normalize "ask for X" patterns to distinguish different slot requests
+        .replace(/\b(phone|number|call)\b/g, 'SLOT_PHONE')
+        .replace(/\b(address|location|where)\b/g, 'SLOT_ADDRESS')
+        .replace(/\b(time|when|schedule)\b/g, 'SLOT_TIME')
         // Normalize whitespace
         .replace(/\s+/g, ' ')
         .trim()
@@ -138,13 +144,23 @@ function checkForLoop(callId, pendingResponse = null) {
         }
     }
     
-    const isLooping = loopCount >= 2;
+    // FIXED: Require 3+ consecutive matches, not 2
+    // 2 is too aggressive and causes false positives on legitimate booking flows
+    // where responses like "I understand..." appear more than once
+    const isLooping = loopCount >= 3;
     
     if (isLooping) {
         logger.warn('[LOOP DETECTOR] 🔄 LOOP DETECTED!', {
             callId: callId.substring(0, 12),
             loopCount,
             signature: signatureToCheck.substring(0, 50)
+        });
+    } else if (loopCount >= 2) {
+        // Log warning but don't trigger loop yet
+        logger.info('[LOOP DETECTOR] ⚠️ Potential loop forming (count=2, threshold=3)', {
+            callId: callId.substring(0, 12),
+            loopCount,
+            signature: signatureToCheck.substring(0, 30)
         });
     }
     

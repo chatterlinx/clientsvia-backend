@@ -23,8 +23,8 @@ class FrontDeskBehaviorManager {
             console.log('[FRONT DESK BEHAVIOR] Loading config for:', this.companyId);
             const token = localStorage.getItem('token');
             
-            const response = await fetch(\`/api/admin/front-desk-behavior/\${this.companyId}\`, {
-                headers: { 'Authorization': \`Bearer \${token}\` }
+            const response = await fetch(`/api/admin/front-desk-behavior/${this.companyId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             
             if (!response.ok) throw new Error('Failed to load Front Desk Behavior');
@@ -46,10 +46,10 @@ class FrontDeskBehaviorManager {
             console.log('[FRONT DESK BEHAVIOR] Saving config...');
             const token = localStorage.getItem('token');
             
-            const response = await fetch(\`/api/admin/front-desk-behavior/\${this.companyId}\`, {
+            const response = await fetch(`/api/admin/front-desk-behavior/${this.companyId}`, {
                 method: 'PATCH',
                 headers: {
-                    'Authorization': \`Bearer \${token}\`,
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(this.config)
@@ -74,7 +74,7 @@ class FrontDeskBehaviorManager {
             return;
         }
 
-        container.innerHTML = \`
+        container.innerHTML = `
             <div class="front-desk-behavior-panel" style="padding: 20px; background: #0d1117; color: #e6edf3;">
                 
                 <!-- Header -->
@@ -82,8 +82,8 @@ class FrontDeskBehaviorManager {
                     <div>
                         <h2 style="margin: 0; font-size: 1.5rem; color: #58a6ff; display: flex; align-items: center; gap: 10px;">
                             💬 Front Desk Behavior
-                            <span style="font-size: 0.75rem; padding: 3px 8px; background: \${this.config.enabled ? '#238636' : '#6e7681'}; border-radius: 12px; color: white;">
-                                \${this.config.enabled ? 'ACTIVE' : 'DISABLED'}
+                            <span style="font-size: 0.75rem; padding: 3px 8px; background: ${this.config.enabled ? '#238636' : '#6e7681'}; border-radius: 12px; color: white;">
+                                ${this.config.enabled ? 'ACTIVE' : 'DISABLED'}
                             </span>
                         </h2>
                         <p style="margin: 8px 0 0 0; color: #8b949e; font-size: 0.875rem;">
@@ -102,43 +102,43 @@ class FrontDeskBehaviorManager {
 
                 <!-- Tab Navigation -->
                 <div id="fdb-tabs" style="display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap;">
-                    \${this.renderTab('personality', '🎭 Personality', true)}
-                    \${this.renderTab('booking', '📅 Booking Prompts')}
-                    \${this.renderTab('emotions', '💭 Emotions')}
-                    \${this.renderTab('frustration', '😤 Frustration')}
-                    \${this.renderTab('escalation', '🆘 Escalation')}
-                    \${this.renderTab('loops', '🔄 Loops')}
-                    \${this.renderTab('forbidden', '🚫 Forbidden')}
-                    \${this.renderTab('test', '🧪 Test')}
+                    ${this.renderTab('personality', '🎭 Personality', true)}
+                    ${this.renderTab('booking', '📅 Booking Prompts')}
+                    ${this.renderTab('emotions', '💭 Emotions')}
+                    ${this.renderTab('frustration', '😤 Frustration')}
+                    ${this.renderTab('escalation', '🆘 Escalation')}
+                    ${this.renderTab('loops', '🔄 Loops')}
+                    ${this.renderTab('forbidden', '🚫 Forbidden')}
+                    ${this.renderTab('test', '🧪 Test')}
                 </div>
 
                 <!-- Tab Content -->
                 <div id="fdb-tab-content" style="min-height: 400px;">
-                    \${this.renderPersonalityTab()}
+                    ${this.renderPersonalityTab()}
                 </div>
             </div>
-        \`;
+        `;
 
         this.attachEventListeners(container);
     }
 
     renderTab(id, label, active = false) {
-        return \`
-            <button class="fdb-tab" data-tab="\${id}" style="
+        return `
+            <button class="fdb-tab" data-tab="${id}" style="
                 padding: 10px 16px;
-                background: \${active ? '#21262d' : 'transparent'};
-                color: \${active ? '#58a6ff' : '#8b949e'};
-                border: \${active ? '1px solid #30363d' : '1px solid transparent'};
+                background: ${active ? '#21262d' : 'transparent'};
+                color: ${active ? '#58a6ff' : '#8b949e'};
+                border: ${active ? '1px solid #30363d' : '1px solid transparent'};
                 border-radius: 6px;
                 cursor: pointer;
                 font-size: 0.875rem;
-            ">\${label}</button>
-        \`;
+            ">${label}</button>
+        `;
     }
 
     renderPersonalityTab() {
         const p = this.config.personality || {};
-        return \`
+        return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
                 <h3 style="margin: 0 0 16px 0; color: #58a6ff;">🎭 Personality Settings</h3>
                 <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">Control the overall tone and style of your AI receptionist.</p>
@@ -147,44 +147,44 @@ class FrontDeskBehaviorManager {
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Tone</label>
                         <select id="fdb-tone" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                            <option value="warm" \${p.tone === 'warm' ? 'selected' : ''}>🌟 Warm - Friendly and caring</option>
-                            <option value="professional" \${p.tone === 'professional' ? 'selected' : ''}>💼 Professional - Business-like</option>
-                            <option value="casual" \${p.tone === 'casual' ? 'selected' : ''}>😊 Casual - Laid-back</option>
-                            <option value="formal" \${p.tone === 'formal' ? 'selected' : ''}>🎩 Formal - Very proper</option>
+                            <option value="warm" ${p.tone === 'warm' ? 'selected' : ''}>🌟 Warm - Friendly and caring</option>
+                            <option value="professional" ${p.tone === 'professional' ? 'selected' : ''}>💼 Professional - Business-like</option>
+                            <option value="casual" ${p.tone === 'casual' ? 'selected' : ''}>😊 Casual - Laid-back</option>
+                            <option value="formal" ${p.tone === 'formal' ? 'selected' : ''}>🎩 Formal - Very proper</option>
                         </select>
                     </div>
                     
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Response Length</label>
                         <select id="fdb-verbosity" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                            <option value="concise" \${p.verbosity === 'concise' ? 'selected' : ''}>📝 Concise - Short and direct</option>
-                            <option value="balanced" \${p.verbosity === 'balanced' ? 'selected' : ''}>⚖️ Balanced - Medium length</option>
-                            <option value="detailed" \${p.verbosity === 'detailed' ? 'selected' : ''}>📖 Detailed - More explanation</option>
+                            <option value="concise" ${p.verbosity === 'concise' ? 'selected' : ''}>📝 Concise - Short and direct</option>
+                            <option value="balanced" ${p.verbosity === 'balanced' ? 'selected' : ''}>⚖️ Balanced - Medium length</option>
+                            <option value="detailed" ${p.verbosity === 'detailed' ? 'selected' : ''}>📖 Detailed - More explanation</option>
                         </select>
                     </div>
                     
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                            Max Response Words: <span id="fdb-max-words-val" style="color: #58a6ff;">\${p.maxResponseWords || 30}</span>
+                            Max Response Words: <span id="fdb-max-words-val" style="color: #58a6ff;">${p.maxResponseWords || 30}</span>
                         </label>
-                        <input type="range" id="fdb-max-words" min="10" max="100" value="\${p.maxResponseWords || 30}" style="width: 100%; accent-color: #58a6ff;">
+                        <input type="range" id="fdb-max-words" min="10" max="100" value="${p.maxResponseWords || 30}" style="width: 100%; accent-color: #58a6ff;">
                     </div>
                     
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Use Caller's Name</label>
                         <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
-                            <input type="checkbox" id="fdb-use-name" \${p.useCallerName !== false ? 'checked' : ''} style="accent-color: #58a6ff; width: 18px; height: 18px;">
+                            <input type="checkbox" id="fdb-use-name" ${p.useCallerName !== false ? 'checked' : ''} style="accent-color: #58a6ff; width: 18px; height: 18px;">
                             <span style="color: #c9d1d9;">Address caller by name once known</span>
                         </label>
                     </div>
                 </div>
             </div>
-        \`;
+        `;
     }
 
     renderBookingPromptsTab() {
         const bp = this.config.bookingPrompts || {};
-        return \`
+        return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
                 <h3 style="margin: 0 0 16px 0; color: #58a6ff;">📅 Booking Prompts</h3>
                 <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">What the AI says when collecting booking information. Use {name}, {address}, {time} as placeholders.</p>
@@ -192,58 +192,58 @@ class FrontDeskBehaviorManager {
                 <div style="display: flex; flex-direction: column; gap: 16px;">
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Ask for Name</label>
-                        <input type="text" id="fdb-askName" value="\${bp.askName || "May I have your name?"}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        <input type="text" id="fdb-askName" value="${bp.askName || "May I have your name?"}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Ask for Phone</label>
-                        <input type="text" id="fdb-askPhone" value="\${bp.askPhone || "What's the best phone number to reach you?"}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        <input type="text" id="fdb-askPhone" value="${bp.askPhone || "What's the best phone number to reach you?"}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Ask for Address</label>
-                        <input type="text" id="fdb-askAddress" value="\${bp.askAddress || "What's the service address?"}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        <input type="text" id="fdb-askAddress" value="${bp.askAddress || "What's the service address?"}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Ask for Time</label>
-                        <input type="text" id="fdb-askTime" value="\${bp.askTime || "When works best for you - morning or afternoon?"}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        <input type="text" id="fdb-askTime" value="${bp.askTime || "When works best for you - morning or afternoon?"}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Confirmation Template</label>
-                        <textarea id="fdb-confirmTemplate" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">\${bp.confirmTemplate || "So I have {name} at {address}, {time}. Does that sound right?"}</textarea>
+                        <textarea id="fdb-confirmTemplate" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${bp.confirmTemplate || "So I have {name} at {address}, {time}. Does that sound right?"}</textarea>
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Completion Message</label>
-                        <textarea id="fdb-completeTemplate" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">\${bp.completeTemplate || "You're all set, {name}! A technician will be out {time}. You'll receive a confirmation text shortly."}</textarea>
+                        <textarea id="fdb-completeTemplate" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${bp.completeTemplate || "You're all set, {name}! A technician will be out {time}. You'll receive a confirmation text shortly."}</textarea>
                     </div>
                 </div>
             </div>
-        \`;
+        `;
     }
 
     renderEmotionsTab() {
         const er = this.config.emotionResponses || {};
-        return \`
+        return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
                 <h3 style="margin: 0 0 16px 0; color: #58a6ff;">💭 Emotion Responses</h3>
                 <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">How the AI responds when it detects different emotions from the caller.</p>
                 
                 <div style="display: flex; flex-direction: column; gap: 16px;">
-                    \${this.renderEmotionSection('stressed', '😟 Stressed', er.stressed)}
-                    \${this.renderEmotionSection('frustrated', '😤 Frustrated', er.frustrated)}
-                    \${this.renderEmotionSection('angry', '😠 Angry', er.angry)}
-                    \${this.renderEmotionSection('friendly', '😊 Friendly', er.friendly)}
+                    ${this.renderEmotionSection('stressed', '😟 Stressed', er.stressed)}
+                    ${this.renderEmotionSection('frustrated', '😤 Frustrated', er.frustrated)}
+                    ${this.renderEmotionSection('angry', '😠 Angry', er.angry)}
+                    ${this.renderEmotionSection('friendly', '😊 Friendly', er.friendly)}
                 </div>
             </div>
-        \`;
+        `;
     }
 
     renderEmotionSection(emotion, label, config = {}) {
         const acks = (config.acknowledgments || []).join('\\n');
-        return \`
+        return `
             <div style="border: 1px solid #30363d; border-radius: 8px; padding: 16px; background: #0d1117;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <span style="color: #c9d1d9; font-weight: 600;">\${label}</span>
+                    <span style="color: #c9d1d9; font-weight: 600;">${label}</span>
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                        <input type="checkbox" id="fdb-emotion-\${emotion}-enabled" \${config.enabled !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
+                        <input type="checkbox" id="fdb-emotion-${emotion}-enabled" ${config.enabled !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
                         <span style="color: #8b949e; font-size: 0.875rem;">Enabled</span>
                     </label>
                 </div>
@@ -251,47 +251,47 @@ class FrontDeskBehaviorManager {
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #8b949e; font-size: 0.875rem;">Acknowledgment Phrases (one per line)</label>
-                        <textarea id="fdb-emotion-\${emotion}-acks" rows="3" style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.875rem; resize: vertical;">\${acks}</textarea>
+                        <textarea id="fdb-emotion-${emotion}-acks" rows="3" style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.875rem; resize: vertical;">${acks}</textarea>
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #8b949e; font-size: 0.875rem;">Follow-up Phrase</label>
-                        <input type="text" id="fdb-emotion-\${emotion}-followup" value="\${config.followUp || ''}" style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        <input type="text" id="fdb-emotion-${emotion}-followup" value="${config.followUp || ''}" style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                         
-                        \${emotion === 'frustrated' ? \`
+                        ${emotion === 'frustrated' ? `
                             <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer;">
-                                <input type="checkbox" id="fdb-emotion-frustrated-reduce" \${config.reduceFriction ? 'checked' : ''} style="accent-color: #f0883e;">
+                                <input type="checkbox" id="fdb-emotion-frustrated-reduce" ${config.reduceFriction ? 'checked' : ''} style="accent-color: #f0883e;">
                                 <span style="color: #f0883e; font-size: 0.875rem;">Skip optional questions</span>
                             </label>
-                        \` : ''}
+                        ` : ''}
                         
-                        \${emotion === 'angry' ? \`
+                        ${emotion === 'angry' ? `
                             <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer;">
-                                <input type="checkbox" id="fdb-emotion-angry-escalate" \${config.offerEscalation ? 'checked' : ''} style="accent-color: #f85149;">
+                                <input type="checkbox" id="fdb-emotion-angry-escalate" ${config.offerEscalation ? 'checked' : ''} style="accent-color: #f85149;">
                                 <span style="color: #f85149; font-size: 0.875rem;">Offer escalation to human</span>
                             </label>
-                        \` : ''}
+                        ` : ''}
                         
-                        \${emotion === 'friendly' ? \`
+                        ${emotion === 'friendly' ? `
                             <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer;">
-                                <input type="checkbox" id="fdb-emotion-friendly-smalltalk" \${config.allowSmallTalk ? 'checked' : ''} style="accent-color: #3fb950;">
+                                <input type="checkbox" id="fdb-emotion-friendly-smalltalk" ${config.allowSmallTalk ? 'checked' : ''} style="accent-color: #3fb950;">
                                 <span style="color: #3fb950; font-size: 0.875rem;">Allow small talk</span>
                             </label>
-                        \` : ''}
+                        ` : ''}
                     </div>
                 </div>
             </div>
-        \`;
+        `;
     }
 
     renderFrustrationTab() {
         const triggers = this.config.frustrationTriggers || [];
-        return \`
+        return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
                 <h3 style="margin: 0 0 16px 0; color: #f0883e;">😤 Frustration Triggers</h3>
                 <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">Phrases that indicate the caller is losing patience. When detected, the AI will reduce friction.</p>
                 
                 <div id="fdb-frustration-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
-                    \${triggers.map((t, i) => this.renderTriggerChip(t, i, 'frustration')).join('')}
+                    ${triggers.map((t, i) => this.renderTriggerChip(t, i, 'frustration')).join('')}
                 </div>
                 
                 <div style="display: flex; gap: 10px;">
@@ -302,44 +302,44 @@ class FrontDeskBehaviorManager {
                     </button>
                 </div>
             </div>
-        \`;
+        `;
     }
 
     renderTriggerChip(text, index, type) {
-        return \`
+        return `
             <span style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #21262d; border: 1px solid #30363d; border-radius: 20px; color: #c9d1d9; font-size: 0.875rem;">
-                "\${text}"
-                <button onclick="window.frontDeskBehaviorManager.removeTrigger('\${type}', \${index})" 
+                "${text}"
+                <button onclick="window.frontDeskBehaviorManager.removeTrigger('${type}', ${index})" 
                     style="background: none; border: none; color: #f85149; cursor: pointer; font-size: 1rem; padding: 0; line-height: 1;">×</button>
             </span>
-        \`;
+        `;
     }
 
     renderEscalationTab() {
         const e = this.config.escalation || {};
         const triggers = e.triggerPhrases || [];
-        return \`
+        return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
                 <h3 style="margin: 0 0 16px 0; color: #f85149;">🆘 Escalation Settings</h3>
                 <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">When to offer connecting the caller to a human.</p>
                 
                 <div style="margin-bottom: 20px;">
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                        <input type="checkbox" id="fdb-escalation-enabled" \${e.enabled !== false ? 'checked' : ''} style="accent-color: #58a6ff; width: 18px; height: 18px;">
+                        <input type="checkbox" id="fdb-escalation-enabled" ${e.enabled !== false ? 'checked' : ''} style="accent-color: #58a6ff; width: 18px; height: 18px;">
                         <span style="color: #c9d1d9; font-weight: 500;">Enable escalation system</span>
                     </label>
                 </div>
                 
                 <div style="margin-bottom: 20px;">
                     <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                        Max loops before offering escalation: <span style="color: #58a6ff;">\${e.maxLoopsBeforeOffer || 3}</span>
+                        Max loops before offering escalation: <span style="color: #58a6ff;">${e.maxLoopsBeforeOffer || 3}</span>
                     </label>
-                    <input type="range" id="fdb-max-loops" min="1" max="5" value="\${e.maxLoopsBeforeOffer || 3}" style="width: 50%; accent-color: #58a6ff;">
+                    <input type="range" id="fdb-max-loops" min="1" max="5" value="${e.maxLoopsBeforeOffer || 3}" style="width: 50%; accent-color: #58a6ff;">
                 </div>
                 
                 <h4 style="color: #c9d1d9; margin: 20px 0 12px 0;">Escalation Trigger Phrases</h4>
                 <div id="fdb-escalation-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
-                    \${triggers.map((t, i) => this.renderTriggerChip(t, i, 'escalation')).join('')}
+                    ${triggers.map((t, i) => this.renderTriggerChip(t, i, 'escalation')).join('')}
                 </div>
                 
                 <div style="display: flex; gap: 10px; margin-bottom: 20px;">
@@ -352,27 +352,27 @@ class FrontDeskBehaviorManager {
                 
                 <div style="margin-top: 20px;">
                     <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Offer Message</label>
-                    <textarea id="fdb-escalation-offer" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">\${e.offerMessage || ''}</textarea>
+                    <textarea id="fdb-escalation-offer" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${e.offerMessage || ''}</textarea>
                 </div>
                 
                 <div style="margin-top: 12px;">
                     <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Transfer Message</label>
-                    <input type="text" id="fdb-escalation-transfer" value="\${e.transferMessage || ''}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                    <input type="text" id="fdb-escalation-transfer" value="${e.transferMessage || ''}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                 </div>
             </div>
-        \`;
+        `;
     }
 
     renderLoopsTab() {
         const lp = this.config.loopPrevention || {};
-        return \`
+        return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
                 <h3 style="margin: 0 0 16px 0; color: #58a6ff;">🔄 Loop Prevention</h3>
                 <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">Prevent the AI from asking the same question repeatedly.</p>
                 
                 <div style="margin-bottom: 20px;">
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                        <input type="checkbox" id="fdb-loop-enabled" \${lp.enabled !== false ? 'checked' : ''} style="accent-color: #58a6ff; width: 18px; height: 18px;">
+                        <input type="checkbox" id="fdb-loop-enabled" ${lp.enabled !== false ? 'checked' : ''} style="accent-color: #58a6ff; width: 18px; height: 18px;">
                         <span style="color: #c9d1d9; font-weight: 500;">Enable loop prevention</span>
                     </label>
                 </div>
@@ -380,46 +380,46 @@ class FrontDeskBehaviorManager {
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                            Max times to ask same question: <span style="color: #58a6ff;">\${lp.maxSameQuestion || 2}</span>
+                            Max times to ask same question: <span style="color: #58a6ff;">${lp.maxSameQuestion || 2}</span>
                         </label>
-                        <input type="range" id="fdb-max-same-q" min="1" max="5" value="\${lp.maxSameQuestion || 2}" style="width: 100%; accent-color: #58a6ff;">
+                        <input type="range" id="fdb-max-same-q" min="1" max="5" value="${lp.maxSameQuestion || 2}" style="width: 100%; accent-color: #58a6ff;">
                     </div>
                     
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">When loop detected</label>
                         <select id="fdb-on-loop" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                            <option value="rephrase" \${lp.onLoop === 'rephrase' ? 'selected' : ''}>🔄 Rephrase the question</option>
-                            <option value="skip" \${lp.onLoop === 'skip' ? 'selected' : ''}>⏭️ Skip and move on</option>
-                            <option value="escalate" \${lp.onLoop === 'escalate' ? 'selected' : ''}>🆘 Offer escalation</option>
+                            <option value="rephrase" ${lp.onLoop === 'rephrase' ? 'selected' : ''}>🔄 Rephrase the question</option>
+                            <option value="skip" ${lp.onLoop === 'skip' ? 'selected' : ''}>⏭️ Skip and move on</option>
+                            <option value="escalate" ${lp.onLoop === 'escalate' ? 'selected' : ''}>🆘 Offer escalation</option>
                         </select>
                     </div>
                 </div>
                 
                 <div style="margin-top: 20px;">
                     <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Rephrase Introduction</label>
-                    <input type="text" id="fdb-rephrase-intro" value="\${lp.rephraseIntro || 'Let me try this differently - '}" 
+                    <input type="text" id="fdb-rephrase-intro" value="${lp.rephraseIntro || 'Let me try this differently - '}" 
                         style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                 </div>
             </div>
-        \`;
+        `;
     }
 
     renderForbiddenTab() {
         const phrases = this.config.forbiddenPhrases || [];
-        return \`
+        return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
                 <h3 style="margin: 0 0 16px 0; color: #f85149;">🚫 Forbidden Phrases</h3>
                 <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">The AI will never say these phrases. Add anything that sounds robotic or annoying.</p>
                 
                 <div id="fdb-forbidden-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
-                    \${phrases.map((p, i) => \`
+                    ${phrases.map((p, i) => `
                         <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
                             <span style="color: #f85149; font-size: 1.2rem;">🚫</span>
-                            <span style="flex: 1; color: #c9d1d9;">"\${p}"</span>
-                            <button onclick="window.frontDeskBehaviorManager.removeTrigger('forbidden', \${i})" 
+                            <span style="flex: 1; color: #c9d1d9;">"${p}"</span>
+                            <button onclick="window.frontDeskBehaviorManager.removeTrigger('forbidden', ${i})" 
                                 style="background: none; border: none; color: #f85149; cursor: pointer; font-size: 1.2rem;">×</button>
                         </div>
-                    \`).join('')}
+                    `).join('')}
                 </div>
                 
                 <div style="display: flex; gap: 10px;">
@@ -430,11 +430,11 @@ class FrontDeskBehaviorManager {
                     </button>
                 </div>
             </div>
-        \`;
+        `;
     }
 
     renderTestTab() {
-        return \`
+        return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
                 <h3 style="margin: 0 0 16px 0; color: #58a6ff;">🧪 Test Phrase</h3>
                 <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">Test how the AI would respond to different caller emotions.</p>
@@ -449,7 +449,7 @@ class FrontDeskBehaviorManager {
                 
                 <div id="fdb-test-result" style="display: none; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;"></div>
             </div>
-        \`;
+        `;
     }
 
     attachEventListeners(container) {
@@ -475,8 +475,8 @@ class FrontDeskBehaviorManager {
 
         // Add trigger buttons
         ['frustration', 'escalation', 'forbidden'].forEach(type => {
-            const addBtn = container.querySelector(\`#fdb-add-\${type}\`);
-            const input = container.querySelector(\`#fdb-new-\${type}\`);
+            const addBtn = container.querySelector(`#fdb-add-${type}`);
+            const input = container.querySelector(`#fdb-new-${type}`);
             if (addBtn && input) {
                 addBtn.addEventListener('click', () => this.addTrigger(type, input.value, container));
                 input.addEventListener('keypress', (e) => {
@@ -533,7 +533,7 @@ class FrontDeskBehaviorManager {
         this.isDirty = true;
         this.switchTab(type === 'escalation' ? 'escalation' : type, container);
         
-        const input = container.querySelector(\`#fdb-new-\${type}\`);
+        const input = container.querySelector(`#fdb-new-${type}`);
         if (input) input.value = '';
     }
 
@@ -577,13 +577,13 @@ class FrontDeskBehaviorManager {
         }
 
         ['stressed', 'frustrated', 'angry', 'friendly'].forEach(emotion => {
-            const acksEl = document.getElementById(\`fdb-emotion-\${emotion}-acks\`);
+            const acksEl = document.getElementById(`fdb-emotion-${emotion}-acks`);
             if (acksEl) {
                 if (!this.config.emotionResponses) this.config.emotionResponses = {};
                 this.config.emotionResponses[emotion] = {
-                    enabled: getChecked(\`fdb-emotion-\${emotion}-enabled\`),
+                    enabled: getChecked(`fdb-emotion-${emotion}-enabled`),
                     acknowledgments: acksEl.value.split('\\n').filter(a => a.trim()),
-                    followUp: get(\`fdb-emotion-\${emotion}-followup\`)
+                    followUp: get(`fdb-emotion-${emotion}-followup`)
                 };
                 
                 if (emotion === 'frustrated') {
@@ -628,9 +628,9 @@ class FrontDeskBehaviorManager {
         
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(\`/api/admin/front-desk-behavior/\${this.companyId}/reset\`, {
+            const response = await fetch(`/api/admin/front-desk-behavior/${this.companyId}/reset`, {
                 method: 'POST',
-                headers: { 'Authorization': \`Bearer \${token}\` }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             
             if (!response.ok) throw new Error('Reset failed');
@@ -660,10 +660,10 @@ class FrontDeskBehaviorManager {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(\`/api/admin/front-desk-behavior/\${this.companyId}/test-emotion\`, {
+            const response = await fetch(`/api/admin/front-desk-behavior/${this.companyId}/test-emotion`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': \`Bearer \${token}\`,
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ phrase })
@@ -675,45 +675,45 @@ class FrontDeskBehaviorManager {
                 const d = result.data;
                 const emojis = { neutral: '😐', friendly: '😊', joking: '😄', stressed: '😟', frustrated: '😤', angry: '😠' };
                 
-                resultDiv.innerHTML = \`
+                resultDiv.innerHTML = `
                     <h4 style="margin: 0 0 16px 0; color: #58a6ff;">Test Results</h4>
                     
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                         <div style="padding: 12px; background: #161b22; border-radius: 6px;">
                             <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 4px;">DETECTED EMOTION</div>
                             <div style="color: #c9d1d9; font-size: 1.2rem; font-weight: 600;">
-                                \${emojis[d.detectedEmotion] || '😐'} \${d.detectedEmotion.toUpperCase()}
+                                ${emojis[d.detectedEmotion] || '😐'} ${d.detectedEmotion.toUpperCase()}
                             </div>
                         </div>
                         
                         <div style="padding: 12px; background: #161b22; border-radius: 6px;">
                             <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 4px;">MATCHED TRIGGERS</div>
-                            <div style="color: \${d.matchedFrustration.length > 0 ? '#f0883e' : '#3fb950'};">
-                                \${d.matchedFrustration.length > 0 
-                                    ? d.matchedFrustration.map(t => \`"\${t}"\`).join(', ') 
+                            <div style="color: ${d.matchedFrustration.length > 0 ? '#f0883e' : '#3fb950'};">
+                                ${d.matchedFrustration.length > 0 
+                                    ? d.matchedFrustration.map(t => `"${t}"`).join(', ') 
                                     : 'None matched'}
                             </div>
                         </div>
                     </div>
                     
-                    \${d.sampleAcknowledgment ? \`
+                    ${d.sampleAcknowledgment ? `
                         <div style="margin-top: 16px; padding: 12px; background: #161b22; border-radius: 6px; border-left: 3px solid #58a6ff;">
                             <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 4px;">AI WOULD SAY</div>
-                            <div style="color: #c9d1d9;">"\${d.sampleAcknowledgment}"</div>
-                            <div style="color: #58a6ff; margin-top: 6px;">\${d.followUp}</div>
+                            <div style="color: #c9d1d9;">"${d.sampleAcknowledgment}"</div>
+                            <div style="color: #58a6ff; margin-top: 6px;">${d.followUp}</div>
                         </div>
-                    \` : ''}
+                    ` : ''}
                     
                     <div style="margin-top: 16px; display: flex; gap: 12px;">
-                        \${d.reduceFriction ? '<span style="padding: 4px 10px; background: #f0883e20; color: #f0883e; border-radius: 4px; font-size: 0.875rem;">⚡ Would reduce friction</span>' : ''}
-                        \${d.offerEscalation ? '<span style="padding: 4px 10px; background: #f8514920; color: #f85149; border-radius: 4px; font-size: 0.875rem;">🆘 Would offer escalation</span>' : ''}
+                        ${d.reduceFriction ? '<span style="padding: 4px 10px; background: #f0883e20; color: #f0883e; border-radius: 4px; font-size: 0.875rem;">⚡ Would reduce friction</span>' : ''}
+                        ${d.offerEscalation ? '<span style="padding: 4px 10px; background: #f8514920; color: #f85149; border-radius: 4px; font-size: 0.875rem;">🆘 Would offer escalation</span>' : ''}
                     </div>
-                \`;
+                `;
             } else {
-                resultDiv.innerHTML = \`<div style="color: #f85149;">Error: \${result.message}</div>\`;
+                resultDiv.innerHTML = `<div style="color: #f85149;">Error: ${result.message}</div>`;
             }
         } catch (error) {
-            resultDiv.innerHTML = \`<div style="color: #f85149;">Error: \${error.message}</div>\`;
+            resultDiv.innerHTML = `<div style="color: #f85149;">Error: ${error.message}</div>`;
         }
     }
 
@@ -721,11 +721,11 @@ class FrontDeskBehaviorManager {
         const colors = { success: '#238636', error: '#f85149', warning: '#f0883e', info: '#58a6ff' };
         
         const notification = document.createElement('div');
-        notification.style.cssText = \`
+        notification.style.cssText = `
             position: fixed; top: 20px; right: 20px; padding: 12px 20px;
-            background: \${colors[type]}; color: white; border-radius: 8px;
+            background: ${colors[type]}; color: white; border-radius: 8px;
             font-weight: 500; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        \`;
+        `;
         notification.textContent = message;
         document.body.appendChild(notification);
         
