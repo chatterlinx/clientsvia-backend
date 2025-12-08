@@ -145,19 +145,61 @@ class LLM0TurnHandler {
                 turn: turnNumber,
                 bookingState: callState.bookingState,
                 currentStep: callState.currentBookingStep,
-                ignoredDecision: decision.action
+                ignoredDecision: decision.action,
+                userInputPreview: userInput?.substring(0, 50)
             });
             
-            // Go straight to slot-filling - no triage, no Brain-2
-            const bookingResult = await this.handleBookingSlotFill({
-                companyId,
-                callId,
-                userInput,
-                callState,
-                turnNumber
-            });
-            
-            return bookingResult;
+            try {
+                // Go straight to slot-filling - no triage, no Brain-2
+                const bookingResult = await this.handleBookingSlotFill({
+                    companyId,
+                    callId,
+                    userInput,
+                    callState,
+                    turnNumber
+                });
+                
+                logger.info('[LLM0 TURN HANDLER] ✅ SLOT-FILL COMPLETED', {
+                    companyId,
+                    callId,
+                    responsePreview: bookingResult.text?.substring(0, 80),
+                    nextStep: bookingResult.callState?.currentBookingStep,
+                    extractedName: bookingResult.callState?.bookingCollected?.name
+                });
+                
+                return bookingResult;
+            } catch (slotFillError) {
+                // 🚨 CRITICAL: Log the exact error so we can fix it!
+                logger.error('[LLM0 TURN HANDLER] 🔴 SLOT-FILL ERROR - This is causing generic fallback!', {
+                    companyId,
+                    callId,
+                    errorMessage: slotFillError.message,
+                    errorStack: slotFillError.stack?.substring(0, 500),
+                    userInput: userInput?.substring(0, 100),
+                    bookingState: callState.bookingState,
+                    currentStep: callState.currentBookingStep
+                });
+                
+                // Log to Black Box for visibility
+                try {
+                    const BlackBoxLogger = require('./BlackBoxLogger');
+                    await BlackBoxLogger.logEvent({
+                        callId,
+                        companyId,
+                        type: 'SLOT_FILL_ERROR',
+                        data: {
+                            error: slotFillError.message,
+                            stack: slotFillError.stack?.substring(0, 300),
+                            userInput: userInput?.substring(0, 100),
+                            bookingState: callState.bookingState,
+                            currentStep: callState.currentBookingStep
+                        }
+                    });
+                } catch (logErr) {}
+                
+                // Re-throw to let the outer handler deal with it
+                throw slotFillError;
+            }
         }
         
         // ====================================================================
@@ -927,7 +969,22 @@ class LLM0TurnHandler {
             
             case 'ASK_NAME':
             case 'collecting_name':
+                logger.info('[LLM0 TURN HANDLER] 📝 ASK_NAME case matched', {
+                    companyId,
+                    callId,
+                    userInput: userInput?.substring(0, 60),
+                    isFrustrated
+                });
+                
                 const extractedName = this.extractName(userInput);
+                
+                logger.info('[LLM0 TURN HANDLER] 📝 Name extraction result', {
+                    companyId,
+                    callId,
+                    extractedName: extractedName || 'null',
+                    inputLength: userInput?.length
+                });
+                
                 if (extractedName) {
                     newCollected.name = extractedName;
                     nextStep = 'ASK_PHONE';
@@ -937,11 +994,24 @@ class LLM0TurnHandler {
                     } else {
                         responseText = `Thanks, ${extractedName}. And what's the best phone number to reach you?`;
                     }
+                    logger.info('[LLM0 TURN HANDLER] ✅ Name captured successfully', {
+                        companyId,
+                        callId,
+                        name: extractedName,
+                        nextStep: 'ASK_PHONE',
+                        responsePreview: responseText.substring(0, 60)
+                    });
                 } else {
                     // No name extracted - use empathetic ask if frustrated
                     responseText = isFrustrated 
                         ? getEmpathicAsk('name')
                         : "I didn't quite catch that. Could you please tell me your name?";
+                    logger.info('[LLM0 TURN HANDLER] ⚠️ Name NOT extracted, asking again', {
+                        companyId,
+                        callId,
+                        isFrustrated,
+                        responsePreview: responseText.substring(0, 60)
+                    });
                 }
                 break;
                 

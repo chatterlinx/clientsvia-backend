@@ -2486,12 +2486,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // FORCE ENABLE: If booking is in progress, ALWAYS use LLM-0 path
       // This prevents the legacy path from breaking booking slot-fill
       // ═══════════════════════════════════════════════════════════════════════════
-      const bookingInProgress = callState?.bookingModeLocked && callState?.bookingState;
+      const bookingInProgress = !!(callState?.bookingModeLocked && callState?.bookingState); // FIX: Convert to boolean!
       const adminDisabled = adminSettings?.globalProductionIntelligence?.llm0Enabled === false;
       const companyDisabled = company?.agentSettings?.llm0Enabled === false;
       
       // FORCE ENABLE when booking is active, otherwise respect settings
-      const llm0Enabled = bookingInProgress || (!adminDisabled && !companyDisabled);
+      const llm0Enabled = bookingInProgress ? true : (!adminDisabled && !companyDisabled);
       
       if (bookingInProgress && (adminDisabled || companyDisabled)) {
         logger.warn('[V2 TWILIO] 🔓 FORCE ENABLING LLM-0 for booking in progress', {
