@@ -83,6 +83,33 @@ class LLM0TurnHandler {
     static async handle({ decision, company, callState, userInput }) {
         const startTime = Date.now();
         const companyId = company._id?.toString() || company.companyId;
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🚀 HYBRID FAST PATH - Use smart LLM for ALL turns (Dec 2025)
+        // ════════════════════════════════════════════════════════════════════════════
+        // Instead of slow legacy routing, use HybridReceptionistLLM for everything.
+        // This gives us: fast responses, name capture, smart conversation, empathy.
+        // The LLM handles free talk, booking, triage - all modes.
+        // ════════════════════════════════════════════════════════════════════════════
+        const useHybridForAll = company?.aiAgentSettings?.callFlowEngine?.enabled !== false;
+        
+        if (useHybridForAll) {
+            try {
+                return await this.handleWithHybridLLM({
+                    company,
+                    callState,
+                    userInput,
+                    decision,
+                    startTime
+                });
+            } catch (hybridError) {
+                logger.error('[LLM0 TURN HANDLER] Hybrid path failed, falling back to legacy', {
+                    error: hybridError.message,
+                    stack: hybridError.stack?.substring(0, 500)
+                });
+                // Fall through to legacy path
+            }
+        }
         const callId = callState?.callId || callState?.CallSid;
         const turnNumber = (callState?.turnCount || 0) + 1;
         
@@ -1875,6 +1902,192 @@ class LLM0TurnHandler {
                 route: 'END_CALL',
                 isSpam,
                 isWrongNumber
+            }
+        };
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // 🚀 HYBRID FAST PATH - Smart LLM for ALL turns
+    // ════════════════════════════════════════════════════════════════════════════
+    
+    /**
+     * Handle ALL turns with HybridReceptionistLLM - smarter, faster, more human
+     * 
+     * @param {Object} params
+     * @returns {Promise<TurnResult>}
+     */
+    static async handleWithHybridLLM({ company, callState, userInput, decision, startTime }) {
+        const companyId = company._id?.toString() || company.companyId;
+        const callId = callState?.callId || callState?.CallSid;
+        const turnNumber = (callState?.turnCount || 0) + 1;
+        
+        // Load or create conversation state
+        let convState = await ConversationStateManager.load(callId) || {
+            conversationHistory: [],
+            collectedSlots: {},
+            currentMode: 'free',
+            signals: {}
+        };
+        
+        // Add caller input to history
+        if (userInput) {
+            convState.conversationHistory.push({
+                role: 'user',
+                content: userInput,
+                timestamp: Date.now()
+            });
+        }
+        
+        // Get front desk config for personality
+        const frontDeskConfig = getFrontDeskConfig(company);
+        
+        // Get customer context from callState
+        const customerContext = {
+            isReturning: callState?.isReturning || false,
+            totalCalls: callState?.totalCalls || 0,
+            customerName: callState?.customerName || convState.collectedSlots?.name,
+            lastVisit: callState?.lastVisit
+        };
+        
+        logger.info('[LLM0 TURN HANDLER] 🚀 HYBRID PATH - Processing with smart LLM', {
+            companyId,
+            callId,
+            turn: turnNumber,
+            mode: convState.currentMode,
+            knownSlots: Object.keys(convState.collectedSlots).filter(k => convState.collectedSlots[k]),
+            userInput: userInput?.substring(0, 80)
+        });
+        
+        // 📼 BLACK BOX: Log hybrid turn start
+        try {
+            const BlackBoxLogger = require('./BlackBoxLogger');
+            await BlackBoxLogger.logEvent({
+                callId,
+                companyId,
+                type: 'HYBRID_LLM_TURN_START',
+                turn: turnNumber,
+                data: {
+                    mode: convState.currentMode,
+                    knownSlots: convState.collectedSlots,
+                    historyLength: convState.conversationHistory.length,
+                    userInput: userInput?.substring(0, 100)
+                }
+            });
+        } catch (e) {}
+        
+        // Call HybridReceptionistLLM
+        const llmResult = await HybridReceptionistLLM.processConversation({
+            company: {
+                name: company?.name || 'our company',
+                trade: company?.trade || 'HVAC',
+                serviceAreas: company?.serviceAreas || [],
+                id: companyId
+            },
+            callContext: { callId, turnCount: turnNumber },
+            currentMode: convState.currentMode,
+            knownSlots: convState.collectedSlots,
+            conversationHistory: convState.conversationHistory.slice(-4), // Last 4 turns for speed
+            userInput,
+            behaviorConfig: frontDeskConfig,
+            customerContext
+        });
+        
+        const latencyMs = Date.now() - startTime;
+        
+        logger.info('[LLM0 TURN HANDLER] 🚀 HYBRID RESULT', {
+            companyId,
+            callId,
+            latencyMs,
+            reply: llmResult.reply?.substring(0, 80),
+            mode: llmResult.conversationMode,
+            nextGoal: llmResult.nextGoal,
+            filledSlots: llmResult.filledSlots,
+            signals: llmResult.signals
+        });
+        
+        // Update conversation state with LLM results
+        convState.currentMode = llmResult.conversationMode || convState.currentMode;
+        
+        // Merge any extracted slots
+        if (llmResult.filledSlots) {
+            for (const [key, value] of Object.entries(llmResult.filledSlots)) {
+                if (value) {
+                    convState.collectedSlots[key] = value;
+                }
+            }
+        }
+        
+        // Add agent response to history
+        if (llmResult.reply) {
+            convState.conversationHistory.push({
+                role: 'assistant',
+                content: llmResult.reply,
+                timestamp: Date.now()
+            });
+        }
+        
+        // Save conversation state
+        await ConversationStateManager.save(callId, convState);
+        
+        // 📼 BLACK BOX: Log hybrid turn complete
+        try {
+            const BlackBoxLogger = require('./BlackBoxLogger');
+            await BlackBoxLogger.logEvent({
+                callId,
+                companyId,
+                type: 'HYBRID_LLM_TURN_COMPLETE',
+                turn: turnNumber,
+                data: {
+                    latencyMs,
+                    mode: convState.currentMode,
+                    reply: llmResult.reply?.substring(0, 150),
+                    filledSlots: llmResult.filledSlots,
+                    signals: llmResult.signals,
+                    nextGoal: llmResult.nextGoal,
+                    fromQuickAnswers: llmResult.fromQuickAnswers || false
+                }
+            });
+        } catch (e) {}
+        
+        // Determine if booking is now active
+        const isBookingMode = convState.currentMode === 'booking' || convState.currentMode === 'guided';
+        const hasEnoughSlots = Object.values(convState.collectedSlots).filter(v => v).length >= 2;
+        const shouldLockBooking = isBookingMode && hasEnoughSlots;
+        
+        // Build updated call state
+        const updatedCallState = {
+            ...callState,
+            turnCount: turnNumber,
+            bookingModeLocked: shouldLockBooking,
+            bookingState: shouldLockBooking ? 'ACTIVE' : callState?.bookingState,
+            currentBookingStep: llmResult.nextGoal || callState?.currentBookingStep,
+            bookingCollected: {
+                name: convState.collectedSlots.name || callState?.bookingCollected?.name,
+                phone: convState.collectedSlots.phone || callState?.bookingCollected?.phone,
+                address: convState.collectedSlots.address || callState?.bookingCollected?.address,
+                time: convState.collectedSlots.time || callState?.bookingCollected?.time,
+                serviceType: convState.collectedSlots.serviceType || callState?.bookingCollected?.serviceType
+            },
+            conversationMode: convState.currentMode,
+            lastSignals: llmResult.signals
+        };
+        
+        // Check for escalation signals
+        const shouldTransfer = llmResult.signals?.wantsHuman || llmResult.signals?.escalate;
+        
+        return {
+            text: llmResult.reply || "I'm here to help. How can I assist you?",
+            response: llmResult.reply, // Alias for some handlers
+            action: shouldTransfer ? 'transfer' : 'continue',
+            shouldTransfer,
+            shouldHangup: false,
+            callState: updatedCallState,
+            debug: {
+                route: 'HYBRID_LLM',
+                latencyMs,
+                mode: convState.currentMode,
+                filledSlots: llmResult.filledSlots,
+                fromQuickAnswers: llmResult.fromQuickAnswers || false
             }
         };
     }
