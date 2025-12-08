@@ -21,6 +21,39 @@ const logger = require('../utils/logger');
 const TriageRouter = require('./TriageRouter');
 const AIBrain3tierllm = require('./AIBrain3tierllm');
 const SmartConfirmationService = require('./SmartConfirmationService');
+const { DEFAULT_FRONT_DESK_CONFIG } = require('../config/frontDeskPrompt');
+
+// ════════════════════════════════════════════════════════════════════════════
+// FRONT DESK BEHAVIOR - UI-Controlled Response Text
+// ════════════════════════════════════════════════════════════════════════════
+// All responses come from company config, not hardcoded text
+// Admin can edit every phrase in Control Plane → Live Agent Status → Front Desk
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Load and merge Front Desk Behavior config with defaults
+ * @param {Object} company - Company document
+ * @returns {Object} Merged config
+ */
+function getFrontDeskConfig(company) {
+    const saved = company?.aiAgentSettings?.frontDeskBehavior || {};
+    return deepMerge(DEFAULT_FRONT_DESK_CONFIG, saved);
+}
+
+/**
+ * Deep merge helper
+ */
+function deepMerge(target, source) {
+    const result = { ...target };
+    for (const key of Object.keys(source || {})) {
+        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+            result[key] = deepMerge(result[key] || {}, source[key]);
+        } else if (source[key] !== undefined) {
+            result[key] = source[key];
+        }
+    }
+    return result;
+}
 
 /**
  * @typedef {Object} TurnResult
@@ -821,29 +854,41 @@ class LLM0TurnHandler {
         });
         
         // ════════════════════════════════════════════════════════════════════════════
-        // 😤 FRUSTRATION DETECTION - Handle difficult/frustrated customers empathetically
+        // 📋 LOAD FRONT DESK BEHAVIOR CONFIG (UI-Controlled)
         // ════════════════════════════════════════════════════════════════════════════
-        const frustrationIndicators = [
-            "i don't care", "don't care", "doesn't matter", "doesnt matter",
-            "whatever", "just send someone", "just send", "just fix", "just come",
-            "i said", "i told you", "i already", "already told", "we went through",
-            "this is ridiculous", "ridiculous", "frustrated", "frustrating",
-            "waste of time", "forget it", "just need", "i want someone",
-            "send a tech", "send technician", "get someone", "somebody here",
-            "stop asking", "enough questions", "too many questions"
-        ];
+        let frontDeskConfig = DEFAULT_FRONT_DESK_CONFIG;
+        try {
+            const v2Company = require('../models/v2Company');
+            const company = await v2Company.findById(companyId).lean();
+            frontDeskConfig = getFrontDeskConfig(company);
+        } catch (e) {
+            logger.warn('[LLM0 TURN HANDLER] Could not load Front Desk config, using defaults');
+        }
         
+        // Get UI-configured values
+        const bookingPrompts = frontDeskConfig.bookingPrompts || {};
+        const emotionResponses = frontDeskConfig.emotionResponses || {};
+        const frustrationTriggers = frontDeskConfig.frustrationTriggers || [];
+        const loopPrevention = frontDeskConfig.loopPrevention || {};
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 😤 FRUSTRATION DETECTION - Using UI-configured triggers
+        // ════════════════════════════════════════════════════════════════════════════
         const lowerInput = userInput?.toLowerCase() || '';
-        const isFrustrated = frustrationIndicators.some(phrase => lowerInput.includes(phrase));
+        const matchedFrustration = frustrationTriggers.filter(phrase => 
+            phrase && lowerInput.includes(phrase.toLowerCase())
+        );
+        const isFrustrated = matchedFrustration.length > 0;
         const wantsBooking = /fix|repair|service|appointment|schedule|technician|someone|come out|send/i.test(lowerInput);
         
         if (isFrustrated) {
-            logger.info('[LLM0 TURN HANDLER] 😤 FRUSTRATION DETECTED', {
+            logger.info('[LLM0 TURN HANDLER] 😤 FRUSTRATION DETECTED (UI Config)', {
                 companyId,
                 callId,
                 userInput: userInput?.substring(0, 100),
                 currentStep,
-                wantsBooking
+                wantsBooking,
+                matchedTriggers: matchedFrustration
             });
             
             // Log to Black Box
@@ -857,7 +902,8 @@ class LLM0TurnHandler {
                         userInput: userInput?.substring(0, 100),
                         currentStep,
                         wantsBooking,
-                        matchedPhrases: frustrationIndicators.filter(p => lowerInput.includes(p))
+                        matchedPhrases: matchedFrustration,
+                        configSource: 'frontDeskBehavior.frustrationTriggers'
                     }
                 });
             } catch (logErr) {}
@@ -868,20 +914,34 @@ class LLM0TurnHandler {
         let nextStep = currentStep;
         let responseText = '';
         
-        // Helper for empathetic slot requests when frustrated
+        // ════════════════════════════════════════════════════════════════════════════
+        // 💬 UI-CONTROLLED BOOKING PROMPTS & EMPATHETIC RESPONSES
+        // ════════════════════════════════════════════════════════════════════════════
+        const frustratedConfig = emotionResponses.frustrated || {};
+        const frustratedFollowUp = frustratedConfig.followUp || "I'll get someone scheduled right away.";
+        const frustratedAcks = frustratedConfig.acknowledgments || ["I completely understand."];
+        const randomAck = frustratedAcks[Math.floor(Math.random() * frustratedAcks.length)] || "I understand.";
+        
+        // Helper for empathetic slot requests when frustrated (using UI config)
         const getEmpathicAsk = (field, customerName) => {
             const name = customerName || collected?.name || '';
             const namePrefix = name ? `${name}, ` : '';
             
+            // Use random acknowledgment from UI config + follow-up + the booking prompt
+            const ack = isFrustrated ? `${randomAck} ${frustratedFollowUp} ` : '';
+            
             switch (field) {
                 case 'phone':
-                    return `${namePrefix}I understand, it's frustrating when the AC isn't working. I'll get someone scheduled right away. What's the best phone number for the technician to reach you?`;
+                    return `${namePrefix}${ack}${bookingPrompts.askPhone || "What's the best phone number to reach you?"}`;
                 case 'address':
-                    return `Got it, we'll get this taken care of. What's the service address?`;
+                    return `${ack}${bookingPrompts.askAddress || "What's the service address?"}`;
                 case 'time':
-                    return `I hear you - let's get this scheduled. When works best for the technician to come out? Or should I send someone as soon as possible?`;
+                    const asapOffer = bookingPrompts.offerAsap !== false 
+                        ? ` ${bookingPrompts.asapPhrase || "Or I can send someone as soon as possible."}` 
+                        : '';
+                    return `${ack}${bookingPrompts.askTime || "When works best for you?"}${asapOffer}`;
                 case 'name':
-                    return `I completely understand. Let me get you on the schedule right away. May I just get your name?`;
+                    return `${ack}${bookingPrompts.askName || "May I have your name?"}`;
                 default:
                     return null;
             }
@@ -1080,15 +1140,23 @@ class LLM0TurnHandler {
                     newCollected.time = extractedTime;
                     nextStep = 'POST_BOOKING'; // Go to POST_BOOKING to handle follow-ups
                     
-                    // Build a natural confirmation - don't repeat raw input verbatim
+                    // Build confirmation using UI-configured template
                     const customerName = newCollected.name || 'you';
                     const isAsap = /asap|as soon as|urgent|today|immediately|right away|fix it|send someone|possible/i.test(extractedTime);
                     
-                    if (isAsap || isFrustrated) {
-                        responseText = `Perfect, ${customerName}! I've got you on the schedule. We'll send someone out as soon as possible. You'll receive a confirmation shortly. Is there anything else I can help with?`;
-                    } else {
-                        responseText = `Perfect, ${customerName}! I have you scheduled for ${extractedTime}. You'll receive a confirmation shortly. Is there anything else I can help you with?`;
-                    }
+                    // Use completeTemplate from UI config
+                    let completionTemplate = bookingPrompts.completeTemplate || 
+                        "You're all set, {name}! A technician will be out {time}. You'll receive a confirmation text shortly.";
+                    
+                    // Replace placeholders
+                    responseText = completionTemplate
+                        .replace('{name}', customerName)
+                        .replace('{address}', newCollected.address || '')
+                        .replace('{time}', isAsap || isFrustrated ? 'as soon as possible' : extractedTime)
+                        .replace('{phone}', newCollected.phone || '');
+                    
+                    // Add follow-up question
+                    responseText += ' Is there anything else I can help with?';
                     
                     // Log booking completion to Black Box
                     try {
