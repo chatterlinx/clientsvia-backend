@@ -179,6 +179,41 @@ class CallFlowEngineManager {
                     
                 </div>
                 
+                <!-- Booking Fields Configuration Panel (Full Width) -->
+                <div class="cfe-panel cfe-booking-fields-panel" style="margin-top: 20px;">
+                    <div class="cfe-panel-header">
+                        <h3>📋 Booking Fields</h3>
+                        <button class="cfe-btn cfe-btn-secondary cfe-btn-sm" onclick="callFlowEngineManager.toggleBookingFieldsConfig()">
+                            ⚙️ Configure
+                        </button>
+                    </div>
+                    <p class="cfe-hint">
+                        What information the AI collects from callers when booking. Drag to reorder. Toggle required fields.
+                    </p>
+                    
+                    <div id="booking-fields-list" style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px;">
+                        ${this.renderBookingFieldCards(cfg.bookingFields)}
+                    </div>
+                    
+                    <!-- Expanded Config (hidden by default) -->
+                    <div id="booking-fields-config" style="display: none; margin-top: 16px; border-top: 1px solid #e2e8f0; padding-top: 16px;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                            <thead>
+                                <tr style="background: #f8fafc;">
+                                    <th style="padding: 8px; text-align: left;">Order</th>
+                                    <th style="padding: 8px; text-align: left;">Field</th>
+                                    <th style="padding: 8px; text-align: left;">Prompt</th>
+                                    <th style="padding: 8px; text-align: center;">Required</th>
+                                    <th style="padding: 8px; text-align: center;">Enabled</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${this.renderBookingFieldRows(cfg.bookingFields)}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
                 <!-- Service Type Clarification Panel (Full Width) -->
                 <div class="cfe-panel cfe-service-type-panel" style="margin-top: 20px;">
                     <div class="cfe-panel-header">
@@ -826,6 +861,146 @@ class CallFlowEngineManager {
             script.onerror = reject;
             document.head.appendChild(script);
         });
+    }
+    
+    // ========================================================================
+    // BOOKING FIELDS MANAGEMENT
+    // ========================================================================
+    
+    /**
+     * Render booking field cards (compact view)
+     */
+    renderBookingFieldCards(fields) {
+        if (!fields || !Array.isArray(fields) || fields.length === 0) {
+            // Use defaults
+            fields = [
+                { key: 'name', label: 'Name', required: true, order: 1 },
+                { key: 'phone', label: 'Phone', required: true, order: 2 },
+                { key: 'address', label: 'Address', required: true, order: 3 },
+                { key: 'serviceType', label: 'Service Type', required: false, order: 4 },
+                { key: 'preferredTime', label: 'Preferred Time', required: false, order: 5 }
+            ];
+        }
+        
+        return fields
+            .sort((a, b) => (a.order || 0) - (b.order || 0))
+            .map(f => {
+                const required = f.required !== false;
+                const emoji = this.getFieldEmoji(f.key);
+                const bgColor = required ? '#f0fdf4' : '#f8fafc';
+                const borderColor = required ? '#86efac' : '#e2e8f0';
+                const textColor = required ? '#166534' : '#64748b';
+                
+                return `
+                    <div style="
+                        background: ${bgColor}; 
+                        border: 1px solid ${borderColor}; 
+                        border-radius: 8px; 
+                        padding: 10px 14px;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        min-width: 120px;
+                    ">
+                        <span style="font-size: 16px;">${emoji}</span>
+                        <div>
+                            <strong style="color: #1f2937; font-size: 13px;">${f.label || f.key}</strong>
+                            ${required ? '<span style="color: #dc2626; font-size: 11px; display: block;">Required</span>' : '<span style="color: #9ca3af; font-size: 11px; display: block;">Optional</span>'}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+    }
+    
+    /**
+     * Render booking field rows (expanded config view)
+     */
+    renderBookingFieldRows(fields) {
+        if (!fields || !Array.isArray(fields) || fields.length === 0) {
+            fields = [
+                { key: 'name', label: 'Name', required: true, order: 1, prompt: 'May I have your name please?' },
+                { key: 'phone', label: 'Phone', required: true, order: 2, prompt: "What's the best phone number to reach you?" },
+                { key: 'address', label: 'Address', required: true, order: 3, prompt: "What's the service address?" },
+                { key: 'serviceType', label: 'Service Type', required: false, order: 4, prompt: 'Is this for repair or maintenance?' },
+                { key: 'preferredTime', label: 'Preferred Time', required: false, order: 5, prompt: 'When would you like us to come out?' }
+            ];
+        }
+        
+        return fields
+            .sort((a, b) => (a.order || 0) - (b.order || 0))
+            .map(f => `
+                <tr style="border-bottom: 1px solid #e2e8f0;">
+                    <td style="padding: 8px;">
+                        <input type="number" value="${f.order || 1}" min="1" max="10" 
+                            style="width: 50px; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px;"
+                            onchange="callFlowEngineManager.updateBookingField('${f.key}', 'order', this.value)">
+                    </td>
+                    <td style="padding: 8px; font-weight: 600;">${this.getFieldEmoji(f.key)} ${f.label || f.key}</td>
+                    <td style="padding: 8px;">
+                        <input type="text" value="${f.prompt || ''}" 
+                            style="width: 100%; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;"
+                            placeholder="Enter prompt..."
+                            onchange="callFlowEngineManager.updateBookingField('${f.key}', 'prompt', this.value)">
+                    </td>
+                    <td style="padding: 8px; text-align: center;">
+                        <input type="checkbox" ${f.required !== false ? 'checked' : ''}
+                            onchange="callFlowEngineManager.updateBookingField('${f.key}', 'required', this.checked)">
+                    </td>
+                    <td style="padding: 8px; text-align: center;">
+                        <input type="checkbox" ${f.enabled !== false ? 'checked' : ''}
+                            onchange="callFlowEngineManager.updateBookingField('${f.key}', 'enabled', this.checked)">
+                    </td>
+                </tr>
+            `).join('');
+    }
+    
+    /**
+     * Get emoji for booking field
+     */
+    getFieldEmoji(key) {
+        const emojis = {
+            name: '👤',
+            phone: '📞',
+            address: '📍',
+            serviceType: '🔧',
+            preferredTime: '📅',
+            email: '📧',
+            notes: '📝'
+        };
+        return emojis[key] || '📋';
+    }
+    
+    /**
+     * Toggle booking fields config panel
+     */
+    toggleBookingFieldsConfig() {
+        const panel = document.getElementById('booking-fields-config');
+        if (panel) {
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+    }
+    
+    /**
+     * Update a booking field property
+     */
+    updateBookingField(fieldKey, property, value) {
+        if (!this.config.bookingFields) {
+            this.config.bookingFields = [];
+        }
+        
+        const field = this.config.bookingFields.find(f => f.key === fieldKey);
+        if (field) {
+            if (property === 'order') {
+                field[property] = parseInt(value, 10);
+            } else if (property === 'required' || property === 'enabled') {
+                field[property] = !!value;
+            } else {
+                field[property] = value;
+            }
+            this.markDirty();
+        }
+        
+        console.log('[CALL FLOW ENGINE] Updated booking field:', { fieldKey, property, value });
     }
     
     // ========================================================================

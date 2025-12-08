@@ -557,6 +557,40 @@ class LLM0TurnHandler {
         if (!callState?.serviceTypeDetected) {
             const clarifyResult = ServiceTypeClarifier.shouldClarify(userInput, stConfig);
             
+            // 🔍 LOG ALL SERVICE TYPE DECISIONS for debugging
+            logger.info('[LLM0 TURN HANDLER] 🔧 SERVICE TYPE CHECK', {
+                companyId,
+                callId,
+                userInput: userInput?.substring(0, 100),
+                needsClarification: clarifyResult.needsClarification,
+                reason: clarifyResult.reason,
+                matchedPhrase: clarifyResult.matchedPhrase,
+                detectedType: clarifyResult.detectedType?.key,
+                configEnabled: stConfig?.enabled !== false,
+                hasAmbiguousPhrases: stConfig?.ambiguousPhrases?.length || 'using defaults'
+            });
+            
+            // Log to Black Box for ALL decisions (not just when clarification needed)
+            try {
+                const BlackBoxLogger = require('./BlackBoxLogger');
+                await BlackBoxLogger.logEvent({
+                    callId,
+                    companyId,
+                    type: 'SERVICE_TYPE_CHECK',
+                    data: {
+                        userInput: userInput?.substring(0, 100),
+                        needsClarification: clarifyResult.needsClarification,
+                        reason: clarifyResult.reason,
+                        matchedPhrase: clarifyResult.matchedPhrase,
+                        detectedType: clarifyResult.detectedType?.key || null,
+                        configPresent: !!stConfig,
+                        configEnabled: stConfig?.enabled !== false
+                    }
+                });
+            } catch (logErr) {
+                logger.debug('[LLM0 TURN HANDLER] Black Box log failed');
+            }
+            
             if (clarifyResult.needsClarification) {
                 // Service type is ambiguous - ask for clarification
                 const question = ServiceTypeClarifier.getClarificationQuestion(stConfig);
