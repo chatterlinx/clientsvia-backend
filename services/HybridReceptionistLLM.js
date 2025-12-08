@@ -327,12 +327,33 @@ class HybridReceptionistLLM {
                 return this.emergencyFallback(currentMode, knownSlots);
             }
             
-            // Normalize the response
+            // ════════════════════════════════════════════════════════════════
+            // NORMALIZE RESPONSE (3-Phase System)
+            // ════════════════════════════════════════════════════════════════
+            const phase = (parsed.phase || 'DISCOVERY').toUpperCase();
+            const problemSummary = parsed.problemSummary || parsed.summary || null;
+            const wantsBooking = parsed.wantsBooking === true;
+            const confidence = parsed.confidence || 0.5;
+            
+            // Determine conversation mode from phase
+            let conversationMode = 'free';
+            if (phase === 'BOOKING' && wantsBooking && problemSummary) {
+                conversationMode = 'booking';
+            } else if (phase === 'DECISION') {
+                conversationMode = 'decision';
+            } else {
+                conversationMode = 'discovery';
+            }
+            
             const result = {
-                reply: parsed.reply || parsed.response || "I'm here to help. What can I do for you?",
-                conversationMode: this.normalizeMode(parsed.conversationMode || parsed.mode || currentMode),
+                reply: parsed.reply || parsed.response || "What's going on with the AC?",
+                phase,
+                conversationMode,
+                problemSummary,
+                wantsBooking,
+                confidence,
                 intent: parsed.intent || 'unknown',
-                nextGoal: parsed.nextGoal || null,
+                nextGoal: parsed.nextGoal || this.phaseToNextGoal(phase, parsed.filledSlots),
                 filledSlots: this.mergeSlots(knownSlots, parsed.filledSlots || parsed.extracted || {}),
                 signals: {
                     frustrated: parsed.signals?.frustrated || parsed.frustrated || false,
@@ -442,64 +463,88 @@ RESPOND: "I believe we service ${serviceAreaInfo.detected.city}, let me get your
             }
         }
         
-        // Detected services
-        let servicesSection = '';
-        if (detectedServices && detectedServices.length > 0) {
-            const serviceList = detectedServices.map(s => s.display).join(' and ');
-            servicesSection = `
-═══ CALLER NEEDS ═══
-Mentioned: ${serviceList}
-ACKNOWLEDGE THIS: "Great, we can help with ${serviceList}!"
-THEN: Start booking (get name, phone, address, time)`;
-        }
-        
         // Build triage context section if available
         let triageSection = '';
         if (triageContext?.matched) {
             const questions = triageContext.diagnosticQuestions?.slice(0, 2).join('\n  - ') || '';
             triageSection = `
-═══ ISSUE DIAGNOSIS ═══
-Matched: ${triageContext.cardName || 'AC Issue'}
+═══ ISSUE MATCHED ═══
+Issue: ${triageContext.cardName || 'AC Issue'}
 Urgency: ${triageContext.urgency?.toUpperCase() || 'NORMAL'}
 ${triageContext.explanation ? `Explain: ${triageContext.explanation}` : ''}
-${questions ? `Ask one of:\n  - ${questions}` : ''}
-Suggested: ${triageContext.suggestedServiceType || 'repair'}
+${questions ? `Possible questions:\n  - ${questions}` : ''}
+Type: ${triageContext.suggestedServiceType || 'repair'}
 `;
         }
         
-        // Compact mode instructions
-        const modeInstructions = {
-            'free': 'Figure out what they want. Answer questions naturally.',
-            'booking': `Get: ${missingSlots}. Don't re-ask filled slots.`,
-            'triage': 'Ask diagnostic questions from ISSUE DIAGNOSIS. Then recommend repair/maintenance and book.',
-            'rescue': 'Apologize once. Confirm what you have. Move forward.'
-        };
-        
-        return `You: receptionist at ${companyName} (${trade}).
-Mode: ${currentMode}. ${modeInstructions[currentMode] || ''}
-Have: ${slotsList}
-Need: ${missingSlots}
+        // ════════════════════════════════════════════════════════════════════
+        // 3-PHASE SYSTEM PROMPT (DISCOVERY → DECISION → BOOKING)
+        // ════════════════════════════════════════════════════════════════════
+        return `You are a receptionist at ${companyName} (${trade}).
+
+═══ YOUR JOB: HAVE A HUMAN CONVERSATION ═══
+You are LLM-0, the brain. You control the conversation flow.
+You decide which PHASE we're in based on what you learn.
+
+═══ THE 3 PHASES ═══
+
+PHASE 1: DISCOVERY (default for first turns)
+- Goal: Understand what's happening
+- Ask ONE clarifying question about their situation
+- "What's going on with the AC?" / "Is it not cooling, making noise, or something else?"
+- DO NOT ask for name/phone/address yet
+- DO NOT mention booking yet
+
+PHASE 2: DECISION (after you understand the problem)
+- Goal: Confirm what they want
+- Summarize their issue back to them
+- Ask if they want a technician: "Would you like me to schedule someone to check that out?"
+- If they say "yes" → move to BOOKING
+- If they just have a question → answer it, stay in DECISION
+
+PHASE 3: BOOKING (only after they agree to schedule)
+- Goal: Collect details
+- Announce transition: "Let's get you on the schedule. First, what's your name?"
+- Ask ONE thing at a time
+- Keep referencing their issue so it feels human
+
+═══ HARD RULES ═══
+1. "I need AC service" → STAY IN DISCOVERY. Ask what's wrong. NOT booking.
+2. "I need service" is AMBIGUOUS. Could be repair OR maintenance. Clarify first.
+3. You CANNOT enter BOOKING phase unless:
+   - You know the problem (problemSummary is set)
+   - Caller has agreed to schedule (wantsBooking = true)
+4. If they describe a problem, REFLECT IT BACK before asking another question
+5. Max 35 words per reply. Sound human, not robotic.
+
+═══ CURRENT STATE ═══
+Collected: ${slotsList}
 ${customerNote}
 ${serviceAreaSection}
-${servicesSection}
 ${triageSection}
-═══ EMPATHY RULES (CRITICAL) ═══
-1. If they tell a story, REPEAT BACK the key details: "So the drain line issue came back after Dustin's visit - that's not what you expect"
-2. If they mention previous visits/techs, acknowledge: "I see we've been out there before"
-3. If they mention paying for service, say: "I understand you've already paid and it should be working"
-4. If they say you didn't listen: IMMEDIATELY reference 2+ specific things they said
-5. If trust concern ("can you do the job?"): Give evidence - "We're licensed, insured, and we treat repeat issues seriously"
-6. NEVER just say "I understand" - use their actual words
-7. Max 30 words. Sound human.
 
-═══ DON'T REPEAT RULE ═══
-If caller just complained or refused to answer a question, you are NOT allowed to immediately ask the same question again.
-Instead: acknowledge, address their concern, THEN ask something different or reframe.
-BAD: "I understand. What's your address?" (after they just refused)
-GOOD: "You're right, I should address that first. Tell me more about what's happening with the AC."
+═══ EMPATHY RULES ═══
+1. Use their words: "So the water in the garage after Dustin's visit..."
+2. Acknowledge feelings: "That's frustrating after paying for service"
+3. If they say you didn't listen: reference 2+ things they said
+4. NEVER just say "I understand" - prove you understood
+
+═══ NEVER DO ═══
+- Jump to "May I have your name?" on the first turn
+- Ask for address before knowing what's wrong
+- Repeat the same question after they complained
+- Ignore what they just said
 
 OUTPUT JSON:
-{"reply":"<30 words>","conversationMode":"${currentMode}","intent":"booking|triage|question","nextGoal":"ASK_NAME|ASK_PHONE|ASK_ADDRESS|ASK_TIME|TRIAGE_STEP|CONFIRM|RESCUE_TRUST","filledSlots":{"name":null,"phone":null,"address":null,"serviceType":null,"time":null},"signals":{"frustrated":false,"wantsHuman":false,"trustConcern":false,"callerFeelsIgnored":false}}`;
+{
+  "reply": "<your response, max 35 words>",
+  "phase": "DISCOVERY|DECISION|BOOKING",
+  "problemSummary": "<what's wrong, or null if unknown>",
+  "wantsBooking": false,
+  "confidence": 0.5,
+  "filledSlots": {"name":null,"phone":null,"address":null,"serviceType":null,"time":null},
+  "signals": {"frustrated":false,"wantsHuman":false,"isQuestion":false}
+}`;
     }
     
     /**
@@ -523,6 +568,27 @@ OUTPUT JSON:
     /**
      * Merge new slots with existing, preferring new non-null values
      */
+    /**
+     * Determine next goal based on phase (3-Phase System)
+     */
+    static phaseToNextGoal(phase, filledSlots = {}) {
+        if (phase === 'DISCOVERY') {
+            return 'UNDERSTAND_PROBLEM';
+        }
+        if (phase === 'DECISION') {
+            return 'CONFIRM_WANTS_BOOKING';
+        }
+        if (phase === 'BOOKING') {
+            // In booking phase, determine which slot to ask for next
+            if (!filledSlots.name) return 'ASK_NAME';
+            if (!filledSlots.phone) return 'ASK_PHONE';
+            if (!filledSlots.address) return 'ASK_ADDRESS';
+            if (!filledSlots.time) return 'ASK_TIME';
+            return 'CONFIRM_BOOKING';
+        }
+        return 'UNDERSTAND_PROBLEM';
+    }
+    
     static mergeSlots(existing, extracted) {
         const merged = { ...existing };
         

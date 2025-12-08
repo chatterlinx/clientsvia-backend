@@ -2049,18 +2049,63 @@ class LLM0TurnHandler {
             });
         } catch (e) {}
         
-        // Determine if booking is now active
-        const isBookingMode = convState.currentMode === 'booking' || convState.currentMode === 'guided';
-        const hasEnoughSlots = Object.values(convState.collectedSlots).filter(v => v).length >= 2;
-        const shouldLockBooking = isBookingMode && hasEnoughSlots;
+        // ════════════════════════════════════════════════════════════════════════════
+        // 3-PHASE BOOKING GATE (Dec 2025)
+        // ════════════════════════════════════════════════════════════════════════════
+        // Only lock booking when ALL conditions are met:
+        // 1. Phase is BOOKING (not DISCOVERY or DECISION)
+        // 2. wantsBooking is true (caller agreed to schedule)
+        // 3. problemSummary exists (we know what's wrong)
+        // 4. At least 2 turns have happened (we've had a real conversation)
+        // 5. Confidence is high enough (0.75+)
+        // ════════════════════════════════════════════════════════════════════════════
+        const phase = llmResult.phase || 'DISCOVERY';
+        const wantsBooking = llmResult.wantsBooking === true;
+        const hasProblemSummary = !!llmResult.problemSummary;
+        const hasEnoughTurns = turnNumber >= 2;
+        const highConfidence = (llmResult.confidence || 0) >= 0.75;
+        
+        // Hard gate: ALL conditions must be true to enter booking
+        const canEnterBooking = 
+            phase === 'BOOKING' &&
+            wantsBooking &&
+            hasProblemSummary &&
+            hasEnoughTurns &&
+            highConfidence;
+        
+        const shouldLockBooking = canEnterBooking && Object.values(convState.collectedSlots).filter(v => v).length >= 1;
+        
+        // 📼 BLACK BOX: Log phase transition
+        try {
+            const BlackBoxLogger = require('./BlackBoxLogger');
+            if (BlackBoxLogger) {
+                await BlackBoxLogger.logEvent({
+                    callId,
+                    companyId,
+                    type: 'PHASE_CHECK',
+                    turn: turnNumber,
+                    data: {
+                        phase,
+                        wantsBooking,
+                        problemSummary: llmResult.problemSummary?.substring(0, 50),
+                        hasEnoughTurns,
+                        confidence: llmResult.confidence,
+                        canEnterBooking,
+                        shouldLockBooking
+                    }
+                });
+            } catch (e) {}
+        }
         
         // Build updated call state
         const updatedCallState = {
             ...callState,
             turnCount: turnNumber,
+            phase, // NEW: Track current phase
+            problemSummary: llmResult.problemSummary || callState?.problemSummary,
             bookingModeLocked: shouldLockBooking,
-            bookingState: shouldLockBooking ? 'ACTIVE' : callState?.bookingState,
-            currentBookingStep: llmResult.nextGoal || callState?.currentBookingStep,
+            bookingState: shouldLockBooking ? 'ACTIVE' : (callState?.bookingState || null),
+            currentBookingStep: canEnterBooking ? llmResult.nextGoal : null,
             bookingCollected: {
                 name: convState.collectedSlots.name || callState?.bookingCollected?.name,
                 phone: convState.collectedSlots.phone || callState?.bookingCollected?.phone,
