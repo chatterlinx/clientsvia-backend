@@ -916,6 +916,8 @@ class CallFlowEngineManager {
                     greeting: document.getElementById('cfe-style-greeting')?.value || '',
                     customNotes: document.getElementById('cfe-style-notes')?.value || ''
                 },
+                // Include booking fields if modified
+                bookingFields: this.config.bookingFields || [],
                 rebuildCache: false
             };
             
@@ -1366,23 +1368,34 @@ class CallFlowEngineManager {
                 const emoji = this.getFieldEmoji(f.key);
                 const bgColor = required ? '#f0fdf4' : '#f8fafc';
                 const borderColor = required ? '#86efac' : '#e2e8f0';
-                const textColor = required ? '#166534' : '#64748b';
+                const hoverBorder = required ? '#22c55e' : '#94a3b8';
                 
                 return `
-                    <div style="
-                        background: ${bgColor}; 
-                        border: 1px solid ${borderColor}; 
-                        border-radius: 8px; 
-                        padding: 10px 14px;
-                        display: flex;
-                        align-items: center;
-                        gap: 8px;
-                        min-width: 120px;
-                    ">
+                    <div class="booking-field-card" 
+                        data-key="${f.key}"
+                        onclick="callFlowEngineManager.toggleBookingFieldRequired('${f.key}')"
+                        title="Click to toggle Required/Optional"
+                        style="
+                            background: ${bgColor}; 
+                            border: 2px solid ${borderColor}; 
+                            border-radius: 8px; 
+                            padding: 10px 14px;
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            min-width: 120px;
+                            cursor: pointer;
+                            transition: all 0.15s ease;
+                        "
+                        onmouseover="this.style.borderColor='${hoverBorder}'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 6px rgba(0,0,0,0.1)'"
+                        onmouseout="this.style.borderColor='${borderColor}'; this.style.transform='translateY(0)'; this.style.boxShadow='none'"
+                    >
                         <span style="font-size: 16px;">${emoji}</span>
                         <div>
                             <strong style="color: #1f2937; font-size: 13px;">${f.label || f.key}</strong>
-                            ${required ? '<span style="color: #dc2626; font-size: 11px; display: block;">Required</span>' : '<span style="color: #9ca3af; font-size: 11px; display: block;">Optional</span>'}
+                            ${required 
+                                ? '<span style="color: #dc2626; font-size: 11px; display: block;">Required ✓</span>' 
+                                : '<span style="color: #9ca3af; font-size: 11px; display: block;">Optional</span>'}
                         </div>
                     </div>
                 `;
@@ -1460,10 +1473,46 @@ class CallFlowEngineManager {
     /**
      * Update a booking field property
      */
-    updateBookingField(fieldKey, property, value) {
-        if (!this.config.bookingFields) {
-            this.config.bookingFields = [];
+    /**
+     * Toggle booking field required status (called when clicking cards)
+     */
+    toggleBookingFieldRequired(fieldKey) {
+        this.ensureBookingFieldsExist();
+        
+        const field = this.config.bookingFields.find(f => f.key === fieldKey);
+        if (field) {
+            field.required = !field.required;
+            this.markDirty();
+            
+            // Show visual feedback
+            const status = field.required ? 'Required ✓' : 'Optional';
+            this.showNotification(`${field.label || fieldKey}: ${status}`, 'info');
+            
+            // Re-render cards with animation
+            const cardList = document.getElementById('booking-fields-list');
+            if (cardList) {
+                cardList.innerHTML = this.renderBookingFieldCards(this.config.bookingFields);
+            }
         }
+    }
+    
+    /**
+     * Ensure bookingFields array exists with defaults
+     */
+    ensureBookingFieldsExist() {
+        if (!this.config.bookingFields || !Array.isArray(this.config.bookingFields) || this.config.bookingFields.length === 0) {
+            this.config.bookingFields = [
+                { key: 'name', label: 'Name', required: true, order: 1, prompt: 'May I have your name please?' },
+                { key: 'phone', label: 'Phone', required: true, order: 2, prompt: "What's the best phone number to reach you?" },
+                { key: 'address', label: 'Address', required: true, order: 3, prompt: "What's the service address?" },
+                { key: 'serviceType', label: 'Service Type', required: false, order: 4, prompt: 'Is this for repair or maintenance?' },
+                { key: 'preferredTime', label: 'Preferred Time', required: false, order: 5, prompt: 'When would you like us to come out?' }
+            ];
+        }
+    }
+    
+    updateBookingField(fieldKey, property, value) {
+        this.ensureBookingFieldsExist();
         
         const field = this.config.bookingFields.find(f => f.key === fieldKey);
         if (field) {

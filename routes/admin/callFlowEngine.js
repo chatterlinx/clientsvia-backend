@@ -197,6 +197,17 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
         
         await v2Company.updateOne({ _id: companyId }, { $set: updateObj });
         
+        // Clear company cache so changes take effect immediately
+        try {
+            const redis = require('../../config/redis');
+            if (redis?.client) {
+                await redis.client.del(`company:${companyId}`);
+                logger.info('[CALL FLOW ENGINE] Cleared company cache');
+            }
+        } catch (cacheErr) {
+            logger.warn('[CALL FLOW ENGINE] Cache clear failed (non-critical):', cacheErr.message);
+        }
+        
         // Rebuild mission cache if needed
         if (updates.rebuildCache) {
             await MissionCacheService.rebuildMissionCache(companyId, updates.activeTrade || '_default');
