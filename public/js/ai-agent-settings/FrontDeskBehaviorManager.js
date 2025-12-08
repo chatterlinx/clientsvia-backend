@@ -21,7 +21,10 @@ class FrontDeskBehaviorManager {
     async load() {
         try {
             console.log('[FRONT DESK BEHAVIOR] Loading config for:', this.companyId);
-            const token = localStorage.getItem('token');
+            // Check all possible token locations (matches other managers)
+            const token = localStorage.getItem('adminToken') || 
+                          localStorage.getItem('token') || 
+                          sessionStorage.getItem('token');
             
             if (!token) {
                 console.warn('[FRONT DESK BEHAVIOR] No auth token found - using defaults');
@@ -107,7 +110,7 @@ class FrontDeskBehaviorManager {
     async save() {
         try {
             console.log('[FRONT DESK BEHAVIOR] Saving config...');
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
             
             const response = await fetch(`/api/admin/front-desk-behavior/${this.companyId}`, {
                 method: 'PATCH',
@@ -690,7 +693,7 @@ class FrontDeskBehaviorManager {
         if (!confirm('Reset all Front Desk Behavior settings to defaults?')) return;
         
         try {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
             const response = await fetch(`/api/admin/front-desk-behavior/${this.companyId}/reset`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -722,7 +725,13 @@ class FrontDeskBehaviorManager {
         resultDiv.innerHTML = '<div style="color: #8b949e;">Testing...</div>';
 
         try {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+            
+            if (!token) {
+                resultDiv.innerHTML = `<div style="color: #f85149;">Error: Not logged in. Please refresh and login again.</div>`;
+                return;
+            }
+            
             const response = await fetch(`/api/admin/front-desk-behavior/${this.companyId}/test-emotion`, {
                 method: 'POST',
                 headers: {
