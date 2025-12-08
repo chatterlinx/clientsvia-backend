@@ -903,11 +903,14 @@ class LLM0TurnHandler {
                 if (llmResult.extracted.phone) newCollected.phone = llmResult.extracted.phone;
                 if (llmResult.extracted.address) newCollected.address = llmResult.extracted.address;
                 if (llmResult.extracted.time) newCollected.time = llmResult.extracted.time;
+                if (llmResult.extracted.serviceType) newCollected.serviceType = llmResult.extracted.serviceType;
                 
-                // Determine next step
+                // Determine next step based on LLM or logic
                 let nextStep = currentStep;
-                if (llmResult.nextStep) {
+                if (llmResult.nextStep && llmResult.nextStep !== 'null') {
                     nextStep = llmResult.nextStep;
+                } else if (llmResult.extracted.serviceType && currentStep === 'ASK_SERVICE_TYPE') {
+                    nextStep = 'ASK_NAME';
                 } else if (llmResult.extracted.name && currentStep === 'ASK_NAME') {
                     nextStep = 'ASK_PHONE';
                 } else if (llmResult.extracted.phone && currentStep === 'ASK_PHONE') {
@@ -915,10 +918,13 @@ class LLM0TurnHandler {
                 } else if (llmResult.extracted.address && currentStep === 'ASK_ADDRESS') {
                     nextStep = 'ASK_TIME';
                 } else if (llmResult.extracted.time && currentStep === 'ASK_TIME') {
+                    // After time collected, check if we need confirmation
+                    nextStep = 'CONFIRM';
+                } else if (currentStep === 'CONFIRM') {
                     nextStep = 'POST_BOOKING';
                 }
                 
-                const isComplete = nextStep === 'POST_BOOKING' && 
+                const isComplete = (nextStep === 'POST_BOOKING' || nextStep === 'CONFIRM') && 
                     newCollected.name && newCollected.phone && newCollected.address && newCollected.time;
                 
                 // Log to Black Box

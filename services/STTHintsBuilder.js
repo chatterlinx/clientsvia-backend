@@ -80,14 +80,25 @@ class STTHintsBuilder {
             const addressHints = [
                 // Street types
                 'street', 'avenue', 'road', 'lane', 'drive', 'court', 'circle',
-                'boulevard', 'parkway', 'way', 'place', 'terrace',
+                'boulevard', 'parkway', 'way', 'place', 'terrace', 'highway',
                 // Common address words
                 'north', 'south', 'east', 'west', 'suite', 'unit', 'apartment',
                 'building', 'floor', 'number',
+                // Numbers (critical for addresses and phone numbers)
+                'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'zero',
+                'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen',
+                'twenty', 'thirty', 'forty', 'fifty', 'hundred', 'thousand',
+                // Number patterns
+                'one two', 'one five', 'two three', 'five five',
                 // Phone patterns
                 'area code', 'phone number', 'cell', 'mobile',
+                '239', '305', '786', '954', '561', '407', '813', '727', // FL area codes
+                // Time hints
+                'morning', 'afternoon', 'tomorrow', 'today', 'asap', 'as soon as possible',
                 // Names (common)
-                'my name is', 'this is', 'speaking'
+                'my name is', 'this is', 'speaking',
+                // Service types (for clarification)
+                'repair', 'maintenance', 'tune up', 'fix', 'broken', 'not working'
             ];
             
             // Merge and deduplicate (include address hints for booking flow)

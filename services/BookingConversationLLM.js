@@ -56,7 +56,7 @@ class BookingConversationLLM {
             const systemPrompt = this.buildSystemPrompt(config, companyName, serviceType, currentStep, collected);
             
             const response = await openaiClient.chat.completions.create({
-                model: 'gpt-4o-mini', // Fast and cheap
+                model: 'gpt-4o-mini', // Fast and cheap - typically 500-1500ms
                 messages: [
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: userInput }
@@ -84,10 +84,12 @@ class BookingConversationLLM {
                     name: parsed.extractedName || parsed.name || null,
                     phone: parsed.extractedPhone || parsed.phone || null,
                     address: parsed.extractedAddress || parsed.address || null,
-                    time: parsed.extractedTime || parsed.time || null
+                    time: parsed.extractedTime || parsed.time || null,
+                    serviceType: parsed.extractedServiceType || parsed.serviceType || null
                 },
                 emotion: parsed.emotion || parsed.emotionGuess || 'neutral',
                 isQuestion: parsed.isQuestion || false,
+                needsConfirmation: parsed.needsConfirmation || false,
                 nextStep: parsed.nextStep || null,
                 llmUsed: true,
                 latencyMs: ms
@@ -108,49 +110,58 @@ class BookingConversationLLM {
         const emotionResponses = config.emotionResponses || {};
         
         const collectedSummary = [];
+        if (collected.serviceType) collectedSummary.push(`Service Type: ${collected.serviceType}`);
         if (collected.name) collectedSummary.push(`Name: ${collected.name}`);
         if (collected.phone) collectedSummary.push(`Phone: ${collected.phone}`);
         if (collected.address) collectedSummary.push(`Address: ${collected.address}`);
         if (collected.time) collectedSummary.push(`Time: ${collected.time}`);
         
         const stepInstructions = {
-            'ASK_NAME': `You need to get their name. Prompt: "${bookingPrompts.askName || 'May I have your name?'}"`,
-            'ASK_PHONE': `You need their phone number. Prompt: "${bookingPrompts.askPhone || "What's the best phone number?"}"`,
-            'ASK_ADDRESS': `You need the service address. Prompt: "${bookingPrompts.askAddress || "What's the service address?"}"`,
-            'ASK_TIME': `You need a time for the appointment. Prompt: "${bookingPrompts.askTime || "When works best?"}"`,
-            'POST_BOOKING': 'Booking is complete. Answer any follow-up questions.'
+            'ASK_SERVICE_TYPE': `IMPORTANT: Ask if this is for REPAIR (something broken) or MAINTENANCE (tune-up/cleaning). Say: "Is this for a repair issue, or routine maintenance?"`,
+            'ASK_NAME': `Get their name. Say: "${bookingPrompts.askName || 'May I have your name?'}"`,
+            'ASK_PHONE': `Get phone number. Say: "${bookingPrompts.askPhone || "What's the best phone number?"}"`,
+            'ASK_ADDRESS': `Get service address. Say: "${bookingPrompts.askAddress || "What's the service address?"}"`,
+            'ASK_TIME': `Get appointment time. Say: "${bookingPrompts.askTime || "When works best?"}"`,
+            'CONFIRM': `Read back ALL details: "So I have [name] at [address], [phone], for [service type] [time]. Does that sound right?"`,
+            'POST_BOOKING': 'Booking confirmed. Answer follow-up questions. If they say thanks/goodbye, say: "You\'re all set! A technician will call before arriving. Have a great day!"'
         };
         
+        // Determine if we need service type clarification
+        const needsServiceType = !collected.serviceType && 
+            (serviceType === 'AC service' || serviceType === 'service' || !serviceType || serviceType === 'unknown');
+        
         return `You are the front desk receptionist for ${companyName}.
-Your personality is ${personality.tone || 'warm'} and ${personality.verbosity || 'concise'}.
-Keep responses under ${personality.maxResponseWords || 30} words.
-${personality.useCallerName !== false ? 'Use the caller\'s name once you know it.' : ''}
+Personality: ${personality.tone || 'warm'}, ${personality.verbosity || 'concise'}.
+Max ${personality.maxResponseWords || 25} words per response.
+${personality.useCallerName !== false ? 'Use caller\'s name when you know it.' : ''}
 
-SERVICE: ${serviceType}
+═══ BOOKING DATA ═══
+${collectedSummary.length > 0 ? collectedSummary.join('\n') : 'Nothing collected yet'}
 
-ALREADY COLLECTED:
-${collectedSummary.length > 0 ? collectedSummary.join('\n') : 'Nothing yet'}
-
-CURRENT STEP: ${currentStep}
+═══ CURRENT STEP: ${currentStep} ═══
 ${stepInstructions[currentStep] || 'Help the caller.'}
 
-RULES:
-1. If caller asks a QUESTION, answer it briefly, then return to booking.
-2. If caller sounds frustrated, acknowledge briefly: "${emotionResponses.frustrated?.followUp || "I understand, let me help."}"
-3. Extract any booking info (name, phone, address, time) from their response.
-4. NEVER say robotic phrases like "tell me more about what you need".
-5. Be conversational, not a form-filling robot.
+═══ CRITICAL RULES ═══
+1. ${needsServiceType && currentStep === 'ASK_NAME' ? 'FIRST ask if this is repair or maintenance BEFORE asking for name!' : ''}
+2. If caller asks a question, answer it briefly, then continue booking.
+3. When frustrated: "${emotionResponses.frustrated?.followUp || "I understand, let me help."}"
+4. Before completing booking, ALWAYS confirm: name, phone, address, service type, time.
+5. Extract: name from "my name is X", phone from digits, address from street names, time from morning/afternoon/tomorrow/asap.
+6. If they say "repair/fix/broken" → serviceType = "repair"
+7. If they say "maintenance/tune-up/cleaning/check" → serviceType = "maintenance"
 
-RESPOND IN JSON:
+═══ OUTPUT JSON ═══
 {
-  "reply": "your natural response",
-  "extractedName": "name if found or null",
-  "extractedPhone": "phone if found or null", 
-  "extractedAddress": "address if found or null",
-  "extractedTime": "time/date if found or null",
+  "reply": "your response (max 25 words)",
+  "extractedName": "name or null",
+  "extractedPhone": "phone or null",
+  "extractedAddress": "address or null",
+  "extractedTime": "time or null",
+  "extractedServiceType": "repair|maintenance|null",
   "emotion": "neutral|friendly|stressed|frustrated|angry",
   "isQuestion": true/false,
-  "nextStep": "ASK_NAME|ASK_PHONE|ASK_ADDRESS|ASK_TIME|POST_BOOKING|null"
+  "needsConfirmation": true/false,
+  "nextStep": "ASK_SERVICE_TYPE|ASK_NAME|ASK_PHONE|ASK_ADDRESS|ASK_TIME|CONFIRM|POST_BOOKING|null"
 }`;
     }
     
