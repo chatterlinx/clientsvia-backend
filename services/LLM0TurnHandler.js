@@ -1229,7 +1229,7 @@ class LLM0TurnHandler {
             },
             debug: {
                 route: 'BOOKING_SLOT_FILL',
-                hardLocked: !isComplete,
+                hardLocked: !isBookingComplete,  // FIX: was !isComplete (undefined variable!)
                 currentStep: nextStep,
                 extracted: Object.keys(newCollected).filter(k => newCollected[k] && !collected[k])
             }
