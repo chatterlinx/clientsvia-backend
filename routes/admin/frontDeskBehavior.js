@@ -318,7 +318,7 @@ router.post('/:companyId/reset', authenticateJWT, async (req, res) => {
 });
 
 // ============================================================================
-// POST - Test a phrase with current emotion detection
+// POST - Test a phrase with FULL analysis and suggested response
 // ============================================================================
 router.post('/:companyId/test-emotion', authenticateJWT, async (req, res) => {
     try {
@@ -334,38 +334,131 @@ router.post('/:companyId/test-emotion', authenticateJWT, async (req, res) => {
         
         const lowerPhrase = phrase.toLowerCase();
         
-        // Check frustration triggers
+        // ════════════════════════════════════════════════════════════════════
+        // 1. EMOTION DETECTION
+        // ════════════════════════════════════════════════════════════════════
         const frustrationTriggers = config.frustrationTriggers || UI_DEFAULTS.frustrationTriggers;
         const matchedFrustration = frustrationTriggers.filter(t => lowerPhrase.includes(t.toLowerCase()));
         
-        // Check escalation triggers
         const escalationTriggers = config.escalation?.triggerPhrases || UI_DEFAULTS.escalation.triggerPhrases;
         const matchedEscalation = escalationTriggers.filter(t => lowerPhrase.includes(t.toLowerCase()));
         
-        // Determine emotion
         let detectedEmotion = 'neutral';
-        if (matchedFrustration.length > 0) {
-            detectedEmotion = 'frustrated';
+        if (matchedFrustration.length > 0) detectedEmotion = 'frustrated';
+        if (matchedEscalation.length > 0) detectedEmotion = 'angry';
+        
+        // ════════════════════════════════════════════════════════════════════
+        // 2. INTENT DETECTION - What does the caller want?
+        // ════════════════════════════════════════════════════════════════════
+        let detectedIntent = 'unknown';
+        let intentKeywords = [];
+        
+        // Hours/Schedule questions
+        if (/hours|open|close|available|when.*open|schedule/i.test(lowerPhrase)) {
+            detectedIntent = 'hours_inquiry';
+            intentKeywords = lowerPhrase.match(/hours|open|close|available|schedule/gi) || [];
         }
-        if (matchedEscalation.length > 0) {
-            detectedEmotion = 'angry';
+        // Pricing questions
+        else if (/price|cost|how much|charge|fee|rate|estimate|quote/i.test(lowerPhrase)) {
+            detectedIntent = 'pricing_inquiry';
+            intentKeywords = lowerPhrase.match(/price|cost|how much|charge|fee|rate|estimate|quote/gi) || [];
+        }
+        // Service area questions
+        else if (/service.*area|do you (service|cover|come to)|in my area|fort myers|naples|cape coral/i.test(lowerPhrase)) {
+            detectedIntent = 'service_area';
+            intentKeywords = lowerPhrase.match(/service|area|fort myers|naples|cape coral/gi) || [];
+        }
+        // Booking intent
+        else if (/schedule|appointment|book|come out|send someone|technician|need service/i.test(lowerPhrase)) {
+            detectedIntent = 'booking';
+            intentKeywords = lowerPhrase.match(/schedule|appointment|book|come out|technician/gi) || [];
+        }
+        // Emergency
+        else if (/emergency|urgent|right now|immediately|asap|leak|flood|no (heat|ac|air)/i.test(lowerPhrase)) {
+            detectedIntent = 'emergency';
+            intentKeywords = lowerPhrase.match(/emergency|urgent|leak|flood|no heat|no ac/gi) || [];
+        }
+        // General question
+        else if (/\?$|what|how|why|can you|do you/i.test(lowerPhrase)) {
+            detectedIntent = 'general_question';
         }
         
-        // Get appropriate response
+        // ════════════════════════════════════════════════════════════════════
+        // 3. SUGGESTED RESPONSE - What should the AI say?
+        // ════════════════════════════════════════════════════════════════════
+        let suggestedResponse = '';
+        let suggestion = '';
+        let needsConfiguration = false;
+        
+        const inquiryResponses = config.inquiryResponses || UI_DEFAULTS.inquiryResponses || {};
+        
+        switch (detectedIntent) {
+            case 'hours_inquiry':
+                if (company?.businessHours) {
+                    suggestedResponse = `Our office is open ${company.businessHours}. How can I help you today?`;
+                } else {
+                    suggestedResponse = "We're available Monday through Friday. Would you like to schedule a service?";
+                    suggestion = "💡 Add business hours to Company Settings for automatic response";
+                    needsConfiguration = true;
+                }
+                break;
+                
+            case 'pricing_inquiry':
+                suggestedResponse = inquiryResponses.pricingInfo || 
+                    "Pricing depends on the specific work needed. I'd be happy to get you a quote - may I have your name?";
+                break;
+                
+            case 'service_area':
+                const serviceAreaResponses = config.serviceAreaResponses || UI_DEFAULTS.serviceAreaResponses || {};
+                suggestedResponse = serviceAreaResponses.confirm?.replace('{city}', 'your area') || 
+                    "Yes, we service most of Southwest Florida! May I have your address to confirm?";
+                break;
+                
+            case 'booking':
+                const bookingPrompts = config.bookingPrompts || UI_DEFAULTS.bookingPrompts || {};
+                suggestedResponse = `I can definitely help with that! ${bookingPrompts.askName || "May I have your name?"}`;
+                break;
+                
+            case 'emergency':
+                suggestedResponse = "I understand this is urgent. Let me get your information so we can send someone right away. What's your name and address?";
+                break;
+                
+            case 'general_question':
+                suggestedResponse = "I'd be happy to help! Let me get your information first - what's your name?";
+                suggestion = "💡 Consider adding a specific response for this type of question in the Forbidden tab or creating a Triage Card";
+                needsConfiguration = true;
+                break;
+                
+            default:
+                suggestedResponse = "I can help you with that! May I have your name to get started?";
+                suggestion = "💡 This phrase didn't match any known patterns. Consider adding it to a Scenario or Triage Card.";
+                needsConfiguration = true;
+        }
+        
+        // ════════════════════════════════════════════════════════════════════
+        // 4. RESPONSE
+        // ════════════════════════════════════════════════════════════════════
         const emotionConfig = config.emotionResponses?.[detectedEmotion] || {};
-        const acknowledgments = emotionConfig.acknowledgments || [];
-        const followUp = emotionConfig.followUp || '';
         
         res.json({
             success: true,
             data: {
                 phrase,
+                // Emotion analysis
                 detectedEmotion,
                 matchedFrustration,
                 matchedEscalation,
-                wouldAcknowledge: acknowledgments.length > 0,
-                sampleAcknowledgment: acknowledgments[0] || null,
-                followUp,
+                // Intent analysis
+                detectedIntent,
+                intentKeywords,
+                // What AI would say
+                suggestedResponse,
+                suggestion,
+                needsConfiguration,
+                // Emotion-specific behavior
+                wouldAcknowledge: (emotionConfig.acknowledgments || []).length > 0,
+                sampleAcknowledgment: (emotionConfig.acknowledgments || [])[0] || null,
+                followUp: emotionConfig.followUp || '',
                 reduceFriction: emotionConfig.reduceFriction || false,
                 offerEscalation: emotionConfig.offerEscalation || false
             }

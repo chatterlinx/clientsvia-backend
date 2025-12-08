@@ -159,6 +159,64 @@ class HybridReceptionistLLM {
         
         try {
             // ════════════════════════════════════════════════════════════════
+            // ❓ QUICK ANSWERS - Check for instant responses FIRST
+            // ════════════════════════════════════════════════════════════════
+            // If the caller is asking a common question (hours, pricing, etc.)
+            // we can give an instant answer without needing the full LLM
+            const QuickAnswersMatcher = require('./QuickAnswersMatcher');
+            
+            if (QuickAnswersMatcher.looksLikeQuestion(userInput)) {
+                const quickMatch = await QuickAnswersMatcher.findBestMatch(companyId, userInput);
+                
+                if (quickMatch) {
+                    logger.info('[HYBRID LLM] ❓ Quick Answer matched!', {
+                        callId,
+                        category: quickMatch.category,
+                        question: quickMatch.question,
+                        triggers: quickMatch.matchedTriggers
+                    });
+                    
+                    // Build a response that answers the question AND continues the flow
+                    // If we're in booking mode, bridge back to booking after answering
+                    let reply = quickMatch.answer;
+                    
+                    // Smart bridging based on current mode
+                    if (currentMode === 'booking') {
+                        const nextSlot = this.getNextMissingSlot(knownSlots);
+                        if (nextSlot) {
+                            reply += ` Now, to help you further, ${this.getSlotPrompt(nextSlot, behaviorConfig)}`;
+                        }
+                    } else if (currentMode === 'free') {
+                        // Nudge toward booking after answering
+                        reply += ` Is there anything else I can help you with, or would you like to schedule service?`;
+                    }
+                    
+                    BlackBoxLogger.logEvent({
+                        type: 'QUICK_ANSWER_USED',
+                        callId,
+                        data: {
+                            question: quickMatch.question,
+                            category: quickMatch.category,
+                            matchedTriggers: quickMatch.matchedTriggers,
+                            score: quickMatch.score,
+                            mode: currentMode,
+                            latencyMs: Date.now() - startTime
+                        }
+                    });
+                    
+                    return {
+                        reply,
+                        conversationMode: currentMode,
+                        intent: 'answering_question',
+                        nextGoal: currentMode === 'booking' ? this.getNextMissingSlot(knownSlots) : 'discover_intent',
+                        filledSlots: {},
+                        signals: { answeredQuestion: true, quickAnswerUsed: true },
+                        fromQuickAnswers: true
+                    };
+                }
+            }
+            
+            // ════════════════════════════════════════════════════════════════
             // 🗺️ SERVICE AREA CHECK - Answer area questions FIRST
             // ════════════════════════════════════════════════════════════════
             let serviceAreaInfo = null;
@@ -304,6 +362,39 @@ class HybridReceptionistLLM {
         } catch (error) {
             logger.error('[HYBRID LLM] Error:', error.message);
             return this.emergencyFallback(currentMode, knownSlots);
+        }
+    }
+    
+    /**
+     * Get the next missing slot that needs to be collected
+     */
+    static getNextMissingSlot(knownSlots) {
+        const slotOrder = ['name', 'phone', 'address', 'time'];
+        for (const slot of slotOrder) {
+            if (!knownSlots[slot]) {
+                return slot;
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Get a prompt for a specific slot (for bridging from Quick Answers)
+     */
+    static getSlotPrompt(slotName, behaviorConfig = {}) {
+        const prompts = behaviorConfig.bookingPrompts || {};
+        
+        switch (slotName) {
+            case 'name':
+                return prompts.name || 'may I have your name?';
+            case 'phone':
+                return prompts.phone || 'what is the best phone number to reach you?';
+            case 'address':
+                return prompts.address || 'what is the address where service is needed?';
+            case 'time':
+                return prompts.time || 'what day and time works best for you?';
+            default:
+                return 'how can I help you?';
         }
     }
     

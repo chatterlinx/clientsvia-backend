@@ -1396,6 +1396,31 @@ const companySchema = new mongoose.Schema({
             },
             
             // ═══════════════════════════════════════════════════════════════
+            // QUICK ANSWERS - Common questions with instant responses
+            // ═══════════════════════════════════════════════════════════════
+            // NO LEGACY CONNECTION - Fresh implementation 2025-12
+            // Structure: Array of { question, answer, triggers[], category }
+            quickAnswers: [{
+                id: { type: String, required: true },
+                // The question this answers
+                question: { type: String, required: true, trim: true },
+                // The answer to give
+                answer: { type: String, required: true, trim: true },
+                // Trigger phrases that match this Q&A
+                triggers: [{ type: String, trim: true }],
+                // Category for organization
+                category: { 
+                    type: String, 
+                    enum: ['hours', 'pricing', 'service_area', 'services', 'policies', 'general'],
+                    default: 'general'
+                },
+                // Is this active?
+                enabled: { type: Boolean, default: true },
+                // Priority for matching (higher = checked first)
+                priority: { type: Number, default: 0 }
+            }],
+            
+            // ═══════════════════════════════════════════════════════════════
             // SYNONYM MAP - For better trigger matching
             // ═══════════════════════════════════════════════════════════════
             // Structure: { "reschedule": ["move my appointment", "change the time"], ... }

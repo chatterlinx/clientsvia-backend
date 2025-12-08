@@ -213,6 +213,7 @@ async function loadAllRoutes() {
         routes.callFlowEngineRoutes = await loadRouteWithTimeout('./routes/admin/callFlowEngine', 'callFlowEngineRoutes'); // 🎯 Call Flow Engine (Universal flow routing)
         routes.serviceTypeClarificationRoutes = await loadRouteWithTimeout('./routes/admin/serviceTypeClarification', 'serviceTypeClarificationRoutes'); // 🔧 Service Type Clarification (repair vs maintenance)
         routes.frontDeskBehaviorRoutes = await loadRouteWithTimeout('./routes/admin/frontDeskBehavior', 'frontDeskBehaviorRoutes'); // 💬 Front Desk Behavior (LLM-0 conversation style)
+        routes.quickAnswersRoutes = await loadRouteWithTimeout('./routes/admin/quickAnswers', 'quickAnswersRoutes'); // ❓ Quick Answers (common questions - NO LEGACY)
         routes.sttProfileRoutes = await loadRouteWithTimeout('./routes/admin/sttProfile', 'sttProfileRoutes'); // 🎤 STT Profile (Speech-to-Text intelligence per template)
         routes.adminNotificationsRoutes = await loadRouteWithTimeout('./routes/admin/adminNotifications', 'adminNotificationsRoutes');
         routes.setupNotificationCenterRoutes = await loadRouteWithTimeout('./routes/admin/setup-notification-center', 'setupNotificationCenterRoutes');
@@ -450,6 +451,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/call-flow-engine', routes.callFlowEngineRoutes); // 🎯 Call Flow Engine (Universal flow routing)
     app.use('/api/admin/service-type-clarification', routes.serviceTypeClarificationRoutes); // 🔧 Service Type Clarification (repair vs maintenance)
     app.use('/api/admin/front-desk-behavior', routes.frontDeskBehaviorRoutes); // 💬 Front Desk Behavior (LLM-0 conversation style - ALL UI controlled)
+    app.use('/api/admin/quick-answers', routes.quickAnswersRoutes); // ❓ Quick Answers (common questions - NO LEGACY connection)
     app.use('/api/admin/stt-profile', routes.sttProfileRoutes); // 🎤 STT Profile (Speech-to-Text intelligence per template)
     app.use('/api/admin/notifications', routes.adminNotificationsRoutes); // ADMIN: Notification Center (platform alerts, SMS delivery, health checks)
     app.use('/api', routes.setupNotificationCenterRoutes); // ADMIN: One-time setup endpoint for Notification Center company

@@ -244,6 +244,25 @@ class CallFlowEngineManager {
                 
                 <!-- Service Type Clarification Modal Container -->
                 <div id="serviceTypeClarificationContainer"></div>
+                
+                <!-- Quick Answers Panel (Full Width) -->
+                <div class="cfe-panel cfe-quick-answers-panel" style="margin-top: 20px;">
+                    <div class="cfe-panel-header">
+                        <h3>❓ Quick Answers</h3>
+                        <button class="cfe-btn cfe-btn-secondary cfe-btn-sm" onclick="callFlowEngineManager.openQuickAnswers()">
+                            ⚙️ Manage Answers
+                        </button>
+                    </div>
+                    <p class="cfe-hint">
+                        Instant responses to common caller questions — hours, pricing, service areas, policies, etc.
+                    </p>
+                    <div id="quickAnswersSummary" style="margin-top: 12px;">
+                        ${this.renderQuickAnswersSummary()}
+                    </div>
+                </div>
+                
+                <!-- Quick Answers Modal Container -->
+                <div id="quickAnswersModalContainer"></div>
                     
                 </div>
                 
@@ -278,6 +297,9 @@ class CallFlowEngineManager {
                 if (e.key === 'Enter') this.testSentence();
             });
         }
+        
+        // Load Quick Answers summary asynchronously
+        this.loadQuickAnswersSummary();
     }
     
     // ========================================================================
@@ -1101,6 +1123,221 @@ class CallFlowEngineManager {
             script.onerror = reject;
             document.head.appendChild(script);
         });
+    }
+    
+    // ========================================================================
+    // QUICK ANSWERS MANAGEMENT
+    // ========================================================================
+    
+    /**
+     * Render a summary of Quick Answers for the main panel
+     */
+    renderQuickAnswersSummary() {
+        // This will be populated async after load
+        return `
+            <div id="qa-summary-content" style="display: flex; flex-wrap: wrap; gap: 10px; min-height: 40px;">
+                <div style="color: #6b7280; font-size: 13px;">Loading quick answers...</div>
+            </div>
+        `;
+    }
+    
+    /**
+     * Load and display Quick Answers summary
+     */
+    async loadQuickAnswersSummary() {
+        const summaryEl = document.getElementById('qa-summary-content');
+        if (!summaryEl) return;
+        
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+            const response = await fetch(`/api/admin/quick-answers/${this.companyId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!response.ok) throw new Error('Failed to load');
+            
+            const result = await response.json();
+            const answers = result.data || [];
+            
+            if (answers.length === 0) {
+                summaryEl.innerHTML = `
+                    <div style="color: #f59e0b; font-size: 13px;">
+                        ⚠️ No quick answers configured — 
+                        <a href="#" onclick="callFlowEngineManager.openQuickAnswers(); return false;" style="color: #3b82f6;">add some</a>
+                        to help handle common questions.
+                    </div>
+                `;
+                return;
+            }
+            
+            // Show category counts
+            const categories = {};
+            answers.forEach(qa => {
+                const cat = qa.category || 'general';
+                categories[cat] = (categories[cat] || 0) + 1;
+            });
+            
+            const categoryIcons = {
+                hours: '🕐',
+                pricing: '💰',
+                service_area: '📍',
+                services: '🔧',
+                policies: '📋',
+                general: '💬'
+            };
+            
+            summaryEl.innerHTML = Object.entries(categories).map(([cat, count]) => `
+                <div style="background: #f3f4f6; border-radius: 6px; padding: 6px 12px; font-size: 13px;">
+                    ${categoryIcons[cat] || '💬'} ${cat.replace('_', ' ')}: <strong>${count}</strong>
+                </div>
+            `).join('') + `
+                <div style="margin-left: auto; color: #22c55e; font-size: 13px; font-weight: 500;">
+                    ✅ ${answers.length} answers ready
+                </div>
+            `;
+            
+        } catch (error) {
+            console.error('[CALL FLOW ENGINE] Failed to load quick answers summary:', error);
+            summaryEl.innerHTML = `<div style="color: #ef4444; font-size: 13px;">Failed to load quick answers</div>`;
+        }
+    }
+    
+    /**
+     * Open Quick Answers management modal
+     */
+    async openQuickAnswers() {
+        console.log('[CALL FLOW ENGINE] Opening Quick Answers');
+        
+        // Load the QuickAnswersManager script if not already loaded
+        if (!window.QuickAnswersManager) {
+            try {
+                await this.loadScript('/js/ai-agent-settings/QuickAnswersManager.js');
+                console.log('[CALL FLOW ENGINE] ✅ QuickAnswersManager script loaded');
+            } catch (err) {
+                console.error('[CALL FLOW ENGINE] ❌ Failed to load QuickAnswersManager:', err);
+                alert('Failed to load Quick Answers. Please refresh and try again.');
+                return;
+            }
+        }
+        
+        // Create modal backdrop
+        const existingModal = document.getElementById('qa-modal-backdrop');
+        if (existingModal) existingModal.remove();
+        
+        const modal = document.createElement('div');
+        modal.id = 'qa-modal-backdrop';
+        modal.innerHTML = `
+            <style>
+                #qa-modal-backdrop {
+                    position: fixed;
+                    inset: 0;
+                    background: rgba(0,0,0,0.7);
+                    z-index: 9998;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                
+                .qa-modal {
+                    background: #0d1117;
+                    border-radius: 16px;
+                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+                    max-height: 90vh;
+                    width: 700px;
+                    max-width: 95%;
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
+                    animation: slideUp 0.2s ease-out;
+                    border: 1px solid #30363d;
+                }
+                
+                @keyframes slideUp {
+                    from { transform: translateY(40px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
+                
+                .qa-modal-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 16px 20px;
+                    border-bottom: 1px solid #30363d;
+                    background: #161b22;
+                }
+                
+                .qa-modal-header h2 {
+                    margin: 0;
+                    font-size: 1.1rem;
+                    font-weight: 600;
+                    color: #c9d1d9;
+                }
+                
+                .qa-modal-close {
+                    background: none;
+                    border: none;
+                    font-size: 20px;
+                    cursor: pointer;
+                    color: #8b949e;
+                    padding: 4px 8px;
+                    border-radius: 6px;
+                }
+                
+                .qa-modal-close:hover {
+                    background: #21262d;
+                    color: #c9d1d9;
+                }
+                
+                .qa-modal-body {
+                    overflow-y: auto;
+                    flex: 1;
+                }
+            </style>
+            
+            <div class="qa-modal">
+                <div class="qa-modal-header">
+                    <h2>❓ Quick Answers Manager</h2>
+                    <button class="qa-modal-close" onclick="document.getElementById('qa-modal-backdrop').remove()">×</button>
+                </div>
+                <div class="qa-modal-body">
+                    <div id="quickAnswersContainer" style="min-height: 300px;">
+                        <div style="text-align: center; padding: 60px; color: #8b949e;">
+                            <div style="font-size: 2rem; margin-bottom: 12px;">⏳</div>
+                            <p>Loading quick answers...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Close on backdrop click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+                this.loadQuickAnswersSummary(); // Refresh summary on close
+            }
+        });
+        
+        // Close on Escape key
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                modal.remove();
+                this.loadQuickAnswersSummary();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+        
+        // Initialize and render the manager
+        const manager = new window.QuickAnswersManager(this.companyId);
+        await manager.load();
+        
+        const container = document.getElementById('quickAnswersContainer');
+        if (container) {
+            manager.render(container);
+        }
     }
     
     // ========================================================================
