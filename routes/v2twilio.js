@@ -2480,8 +2480,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         neverAutoHangup: llm0Controls.customerPatience.neverAutoHangup
       });
       
-      const llm0Enabled = adminSettings?.globalProductionIntelligence?.llm0Enabled === true ||
-                         company?.agentSettings?.llm0Enabled === true;
+      // ═══════════════════════════════════════════════════════════════════════════
+      // 🧠 LLM-0 ENABLEMENT LOGIC (Dec 2025 Update)
+      // ═══════════════════════════════════════════════════════════════════════════
+      // DEFAULT: LLM-0 is ENABLED unless explicitly disabled
+      // This ensures the intelligent system is used, not the legacy dumb path
+      // ═══════════════════════════════════════════════════════════════════════════
+      const adminDisabled = adminSettings?.globalProductionIntelligence?.llm0Enabled === false;
+      const companyDisabled = company?.agentSettings?.llm0Enabled === false;
+      const llm0Enabled = !adminDisabled && !companyDisabled; // DEFAULT ON
       
       // 📼 BLACK BOX: Log routing decision (CRITICAL for debugging)
       if (BlackBoxLogger) {
@@ -2492,9 +2499,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           turn: turnCount,
           data: {
             llm0Enabled,
-            reason: llm0Enabled ? 'LLM-0 active' : 'LLM-0 disabled - using legacy path',
-            adminLlm0: !!adminSettings?.globalProductionIntelligence?.llm0Enabled,
-            companyLlm0: !!company?.agentSettings?.llm0Enabled,
+            reason: llm0Enabled ? 'LLM-0 active (default ON)' : 'LLM-0 explicitly disabled',
+            adminLlm0: !adminDisabled,
+            companyLlm0: !companyDisabled,
             bookingModeLocked: !!callState?.bookingModeLocked,
             bookingState: callState?.bookingState || null,
             currentBookingStep: callState?.currentBookingStep || null,
