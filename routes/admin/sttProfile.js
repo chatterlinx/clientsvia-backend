@@ -708,6 +708,8 @@ router.post('/:templateId/seed-address-corrections', authenticateJWT, requireRol
             { heard: "one two one five five", normalized: "12155", context: ["address"], notes: "Spelled out numbers" },
             { heard: "three one two", normalized: "312", context: ["address", "suite"], notes: "Suite/unit number" },
             { heard: "don't be", normalized: "", context: [], notes: "STT noise - delete this" },
+            { heard: "twelve dash", normalized: "12-", context: ["address"], notes: "Hyphenated number start" },
+            { heard: "dash one five five", normalized: "-155", context: ["address"], notes: "Hyphenated number end" },
             
             // Common phone number mishears
             { heard: "to three nine", normalized: "239", context: ["phone", "area code"], notes: "Area code mishear" },
@@ -715,21 +717,52 @@ router.post('/:templateId/seed-address-corrections', authenticateJWT, requireRol
             { heard: "five six five", normalized: "565", context: ["phone"], notes: "Phone segment" },
             { heard: "to to o to", normalized: "2202", context: ["phone"], notes: "Phone number ending" },
             
-            // Common address words
+            // Suite/Apartment with letters
             { heard: "sweet", normalized: "suite", context: ["address"], notes: "Suite mishear" },
             { heard: "sweets", normalized: "suites", context: ["address"], notes: "Suites mishear" },
             { heard: "apt", normalized: "apartment", context: ["address"], notes: "Abbreviation" },
             { heard: "unit number", normalized: "unit", context: ["address"], notes: "Redundant" },
+            { heard: "for b", normalized: "4B", context: ["suite", "unit"], notes: "Unit 4B" },
+            { heard: "for bee", normalized: "4B", context: ["suite", "unit"], notes: "Unit 4B" },
+            { heard: "four b", normalized: "4B", context: ["suite", "unit"], notes: "Unit 4B" },
+            { heard: "four bee", normalized: "4B", context: ["suite", "unit"], notes: "Unit 4B" },
+            { heard: "for slash b", normalized: "4/B", context: ["suite"], notes: "Unit 4/B" },
+            { heard: "four slash b", normalized: "4/B", context: ["suite"], notes: "Unit 4/B" },
+            { heard: "for dash b", normalized: "4-B", context: ["suite"], notes: "Unit 4-B" },
+            { heard: "four dash b", normalized: "4-B", context: ["suite"], notes: "Unit 4-B" },
+            { heard: "a as in apple", normalized: "A", context: ["suite", "unit"], notes: "Letter A" },
+            { heard: "b as in boy", normalized: "B", context: ["suite", "unit"], notes: "Letter B" },
+            { heard: "c as in charlie", normalized: "C", context: ["suite", "unit"], notes: "Letter C" },
+            { heard: "d as in david", normalized: "D", context: ["suite", "unit"], notes: "Letter D" },
             
             // Street types
             { heard: "parkway", normalized: "Parkway", context: ["street"], notes: "Street type" },
             { heard: "metro", normalized: "Metro", context: ["street", "address"], notes: "Street name" },
             { heard: "boulevard", normalized: "Boulevard", context: ["street"], notes: "Street type" },
             { heard: "avenue", normalized: "Avenue", context: ["street"], notes: "Street type" },
+            { heard: "st", normalized: "Street", context: ["address"], notes: "Street abbreviation" },
+            { heard: "ave", normalized: "Avenue", context: ["address"], notes: "Avenue abbreviation" },
+            { heard: "blvd", normalized: "Boulevard", context: ["address"], notes: "Boulevard abbreviation" },
+            { heard: "dr", normalized: "Drive", context: ["address"], notes: "Drive abbreviation" },
+            { heard: "ln", normalized: "Lane", context: ["address"], notes: "Lane abbreviation" },
+            { heard: "ct", normalized: "Court", context: ["address"], notes: "Court abbreviation" },
+            { heard: "cir", normalized: "Circle", context: ["address"], notes: "Circle abbreviation" },
+            { heard: "pl", normalized: "Place", context: ["address"], notes: "Place abbreviation" },
+            
+            // Directions
+            { heard: "n", normalized: "North", context: ["address", "direction"], notes: "North abbreviation" },
+            { heard: "s", normalized: "South", context: ["address", "direction"], notes: "South abbreviation" },
+            { heard: "e", normalized: "East", context: ["address", "direction"], notes: "East abbreviation" },
+            { heard: "w", normalized: "West", context: ["address", "direction"], notes: "West abbreviation" },
+            { heard: "ne", normalized: "Northeast", context: ["address"], notes: "Direction" },
+            { heard: "nw", normalized: "Northwest", context: ["address"], notes: "Direction" },
+            { heard: "se", normalized: "Southeast", context: ["address"], notes: "Direction" },
+            { heard: "sw", normalized: "Southwest", context: ["address"], notes: "Direction" },
             
             // ASAP/Urgency
             { heard: "a sap", normalized: "ASAP", context: ["time", "schedule"], notes: "ASAP mishear" },
-            { heard: "as soon", normalized: "ASAP", context: ["time"], notes: "Urgency" }
+            { heard: "as soon", normalized: "ASAP", context: ["time"], notes: "Urgency" },
+            { heard: "asap", normalized: "ASAP", context: ["time"], notes: "ASAP" }
         ];
         
         let profile = await STTProfile.findOne({ templateId, isActive: true });
