@@ -2563,47 +2563,170 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }
       
       if ((llm0Enabled && company) || forceBookingPath) {
-        tracer.step('BRAIN1_START', 'LLM-0 Orchestration (Brain-1) analyzing...');
         
-        // 📼 BLACK BOX: Log booking lock check
-        if (BlackBoxLogger && callState?.bookingModeLocked) {
+        // ════════════════════════════════════════════════════════════════════════════════════
+        // 🚀 HYBRID FAST PATH - BYPASS SLOW decideNextStep (Dec 2025)
+        // ════════════════════════════════════════════════════════════════════════════════════
+        // The old path: decideNextStep (7+ seconds) → LLM0TurnHandler
+        // The new path: LLM0TurnHandler directly (uses HybridReceptionistLLM internally)
+        // 
+        // This is THE FIX for the "dumb robot" problem.
+        // HybridReceptionistLLM handles: intent detection, slot extraction, empathy - all in <1.5s
+        // ════════════════════════════════════════════════════════════════════════════════════
+        
+        const useHybridPath = company?.aiAgentSettings?.callFlowEngine?.enabled !== false; // Default ON
+        const hybridStartTime = Date.now();
+        let usedPath = 'legacy';
+        
+        if (useHybridPath) {
+          try {
+            usedPath = 'hybrid';
+            tracer.step('HYBRID_PATH_START', '🚀 Fast hybrid path - bypassing slow decideNextStep');
+            
+            // 📼 BLACK BOX: Log hybrid path start
+            if (BlackBoxLogger) {
+              BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'HYBRID_PATH_START',
+                turn: turnCount,
+                data: {
+                  reason: 'useHybridPath enabled (default ON)',
+                  bookingModeLocked: !!callState?.bookingModeLocked,
+                  userInput: speechResult?.substring(0, 100)
+                }
+              }).catch(() => {});
+            }
+            
+            // Call LLM0TurnHandler directly - it has hybrid logic inside
+            // Add timeout protection (4 seconds max)
+            result = await Promise.race([
+              LLM0TurnHandler.handle({
+                decision: { action: 'AUTO', intentTag: null, confidence: 0 }, // Minimal decision - LLM figures it out
+                company,
+                callState,
+                userInput: speechResult
+              }),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Hybrid path timeout (4s)')), 4000)
+              )
+            ]);
+            
+            const hybridLatencyMs = Date.now() - hybridStartTime;
+            
+            tracer.step('HYBRID_PATH_SUCCESS', `🚀 Hybrid completed in ${hybridLatencyMs}ms`);
+            
+            // 📼 BLACK BOX: Log hybrid success
+            if (BlackBoxLogger) {
+              BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'HYBRID_PATH_SUCCESS',
+                turn: turnCount,
+                data: {
+                  latencyMs: hybridLatencyMs,
+                  responsePreview: (result?.text || result?.response || '').substring(0, 100),
+                  mode: result?.debug?.mode,
+                  filledSlots: result?.debug?.filledSlots
+                }
+              }).catch(() => {});
+            }
+            
+          } catch (hybridError) {
+            // ════════════════════════════════════════════════════════════════════════════
+            // GRACEFUL FALLBACK TO LEGACY PATH
+            // ════════════════════════════════════════════════════════════════════════════
+            usedPath = 'legacy_fallback';
+            const hybridLatencyMs = Date.now() - hybridStartTime;
+            
+            logger.warn('[V2 TWILIO] 🔄 Hybrid path failed, falling back to legacy', {
+              error: hybridError.message,
+              latencyMs: hybridLatencyMs,
+              callSid
+            });
+            
+            // 📼 BLACK BOX: Log hybrid failure
+            if (BlackBoxLogger) {
+              BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'HYBRID_PATH_FAILED',
+                turn: turnCount,
+                data: {
+                  error: hybridError.message?.substring(0, 200),
+                  stack: hybridError.stack?.substring(0, 300),
+                  latencyMs: hybridLatencyMs
+                }
+              }).catch(() => {});
+            }
+            
+            // Fall through to legacy path below
+            result = null;
+          }
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // LEGACY PATH - Only used when: hybrid disabled OR hybrid failed
+        // ════════════════════════════════════════════════════════════════════════════
+        if (!result) {
+          usedPath = useHybridPath ? 'legacy_fallback' : 'legacy_disabled';
+          tracer.step('BRAIN1_START', 'LLM-0 Orchestration (Brain-1) analyzing...');
+          
+          // 📼 BLACK BOX: Log booking lock check
+          if (BlackBoxLogger && callState?.bookingModeLocked) {
+            BlackBoxLogger.logEvent({
+              callId: callSid,
+              companyId: companyID,
+              type: 'BOOKING_LOCK_CHECK',
+              turn: turnCount,
+              data: {
+                bookingModeLocked: true,
+                bookingState: callState.bookingState,
+                currentBookingStep: callState.currentBookingStep,
+                expectation: 'LLM0TurnHandler will bypass Brain-1 and go straight to slot-fill',
+                userInput: speechResult?.substring(0, 100)
+              }
+            }).catch(() => {});
+          }
+          
+          // STEP 1: LLM-0 decides what to do (THIS IS THE SLOW PART - 7+ seconds)
+          const llm0Decision = await decideNextStep({
+            companyId: companyID,
+            callId: callSid,
+            userInput: speechResult,
+            callState,
+            turnHistory: callState.turnHistory || []
+          });
+          
+          tracer.decision(llm0Decision?.action || 'UNKNOWN', {
+            intent: llm0Decision?.intentTag,
+            confidence: llm0Decision?.confidence,
+            flags: llm0Decision?.flags
+          });
+          
+          // STEP 2: Route through Triage and execute
+          result = await LLM0TurnHandler.handle({
+            decision: llm0Decision,
+            company,
+            callState,
+            userInput: speechResult
+          });
+        }
+        
+        // 📼 BLACK BOX: Log which path was used
+        if (BlackBoxLogger) {
           BlackBoxLogger.logEvent({
             callId: callSid,
             companyId: companyID,
-            type: 'BOOKING_LOCK_CHECK',
+            type: 'PATH_RESOLVED',
             turn: turnCount,
             data: {
-              bookingModeLocked: true,
-              bookingState: callState.bookingState,
-              currentBookingStep: callState.currentBookingStep,
-              expectation: 'LLM0TurnHandler will bypass Brain-1 and go straight to slot-fill',
-              userInput: speechResult?.substring(0, 100)
+              usedPath,
+              latencyMs: Date.now() - hybridStartTime,
+              responseLength: (result?.text || result?.response || '').length
             }
           }).catch(() => {});
         }
-        
-        // STEP 1: LLM-0 decides what to do
-        const llm0Decision = await decideNextStep({
-          companyId: companyID,
-          callId: callSid,
-          userInput: speechResult,
-          callState,
-          turnHistory: callState.turnHistory || []
-        });
-        
-        tracer.decision(llm0Decision?.action || 'UNKNOWN', {
-          intent: llm0Decision?.intentTag,
-          confidence: llm0Decision?.confidence,
-          flags: llm0Decision?.flags
-        });
-        
-        // STEP 2: Route through Triage and execute
-        result = await LLM0TurnHandler.handle({
-          decision: llm0Decision,
-          company,
-          callState,
-          userInput: speechResult
-        });
         
         // 📼 BLACK BOX: Log turn completion with booking state
         if (BlackBoxLogger) {
