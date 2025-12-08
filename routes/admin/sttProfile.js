@@ -700,69 +700,178 @@ router.post('/:templateId/seed-address-corrections', authenticateJWT, requireRol
     try {
         const { templateId } = req.params;
         
-        // Common number mishearings (spoken → digits)
+        // ============================================================================
+        // COMPREHENSIVE ADDRESS CORRECTIONS (~100+ rules)
+        // ============================================================================
         const commonCorrections = [
-            // Number sequences often mishear
-            { heard: "twelve one five five", normalized: "12155", context: ["address", "street"], notes: "Common address number" },
-            { heard: "to one five five", normalized: "2155", context: ["address"], notes: "STT often hears 'to' as number" },
-            { heard: "one two one five five", normalized: "12155", context: ["address"], notes: "Spelled out numbers" },
-            { heard: "three one two", normalized: "312", context: ["address", "suite"], notes: "Suite/unit number" },
-            { heard: "don't be", normalized: "", context: [], notes: "STT noise - delete this" },
-            { heard: "twelve dash", normalized: "12-", context: ["address"], notes: "Hyphenated number start" },
-            { heard: "dash one five five", normalized: "-155", context: ["address"], notes: "Hyphenated number end" },
             
-            // Common phone number mishears
-            { heard: "to three nine", normalized: "239", context: ["phone", "area code"], notes: "Area code mishear" },
-            { heard: "two three nine", normalized: "239", context: ["phone"], notes: "Area code" },
-            { heard: "five six five", normalized: "565", context: ["phone"], notes: "Phone segment" },
-            { heard: "to to o to", normalized: "2202", context: ["phone"], notes: "Phone number ending" },
+            // ════════════════════════════════════════════════════════════════════════
+            // 1️⃣ APARTMENT / UNIT / SUITE NORMALIZATION
+            // ════════════════════════════════════════════════════════════════════════
+            // Normalize all variants to clean format: Apt 4B, Ste 200, Unit 3A
+            { heard: "apartment", normalized: "Apt", context: ["address"], notes: "Apartment → Apt" },
+            { heard: "apt", normalized: "Apt", context: ["address"], notes: "Already abbreviated" },
+            { heard: "app", normalized: "Apt", context: ["address"], notes: "Partial abbreviation" },
+            { heard: "a p t", normalized: "Apt", context: ["address"], notes: "Spelled out" },
+            { heard: "suite", normalized: "Ste", context: ["address"], notes: "Suite → Ste" },
+            { heard: "sweet", normalized: "Ste", context: ["address"], notes: "Suite mishear" },
+            { heard: "suit", normalized: "Ste", context: ["address"], notes: "Suite mishear" },
+            { heard: "unit", normalized: "Unit", context: ["address"], notes: "Unit stays as Unit" },
+            { heard: "you knit", normalized: "Unit", context: ["address"], notes: "Unit mishear" },
+            { heard: "you net", normalized: "Unit", context: ["address"], notes: "Unit mishear" },
+            { heard: "number", normalized: "#", context: ["address"], notes: "Number → #" },
+            { heard: "pound", normalized: "#", context: ["address"], notes: "Pound sign" },
+            { heard: "hashtag", normalized: "#", context: ["address"], notes: "Modern slang" },
             
-            // Suite/Apartment with letters
-            { heard: "sweet", normalized: "suite", context: ["address"], notes: "Suite mishear" },
-            { heard: "sweets", normalized: "suites", context: ["address"], notes: "Suites mishear" },
-            { heard: "apt", normalized: "apartment", context: ["address"], notes: "Abbreviation" },
-            { heard: "unit number", normalized: "unit", context: ["address"], notes: "Redundant" },
+            // Unit with letters
+            { heard: "apartment 4 b", normalized: "Apt 4B", context: ["address"], notes: "Full unit" },
+            { heard: "apartment four bee", normalized: "Apt 4B", context: ["address"], notes: "Spelled out" },
+            { heard: "unit 3", normalized: "Unit 3", context: ["address"], notes: "Simple unit" },
+            { heard: "unit three a", normalized: "Unit 3A", context: ["address"], notes: "Unit with letter" },
+            { heard: "suite 200", normalized: "Ste 200", context: ["address"], notes: "Suite number" },
+            { heard: "sweet 200", normalized: "Ste 200", context: ["address"], notes: "Suite mishear" },
             { heard: "for b", normalized: "4B", context: ["suite", "unit"], notes: "Unit 4B" },
             { heard: "for bee", normalized: "4B", context: ["suite", "unit"], notes: "Unit 4B" },
             { heard: "four b", normalized: "4B", context: ["suite", "unit"], notes: "Unit 4B" },
             { heard: "four bee", normalized: "4B", context: ["suite", "unit"], notes: "Unit 4B" },
-            { heard: "for slash b", normalized: "4/B", context: ["suite"], notes: "Unit 4/B" },
-            { heard: "four slash b", normalized: "4/B", context: ["suite"], notes: "Unit 4/B" },
-            { heard: "for dash b", normalized: "4-B", context: ["suite"], notes: "Unit 4-B" },
-            { heard: "four dash b", normalized: "4-B", context: ["suite"], notes: "Unit 4-B" },
+            { heard: "three a", normalized: "3A", context: ["suite", "unit"], notes: "Unit 3A" },
+            { heard: "three ay", normalized: "3A", context: ["suite", "unit"], notes: "Unit 3A" },
+            { heard: "number 15", normalized: "#15", context: ["address"], notes: "Number format" },
+            
+            // NATO alphabet for unit letters
             { heard: "a as in apple", normalized: "A", context: ["suite", "unit"], notes: "Letter A" },
             { heard: "b as in boy", normalized: "B", context: ["suite", "unit"], notes: "Letter B" },
             { heard: "c as in charlie", normalized: "C", context: ["suite", "unit"], notes: "Letter C" },
             { heard: "d as in david", normalized: "D", context: ["suite", "unit"], notes: "Letter D" },
+            { heard: "e as in echo", normalized: "E", context: ["suite", "unit"], notes: "Letter E" },
+            { heard: "f as in frank", normalized: "F", context: ["suite", "unit"], notes: "Letter F" },
             
-            // Street types
-            { heard: "parkway", normalized: "Parkway", context: ["street"], notes: "Street type" },
-            { heard: "metro", normalized: "Metro", context: ["street", "address"], notes: "Street name" },
-            { heard: "boulevard", normalized: "Boulevard", context: ["street"], notes: "Street type" },
-            { heard: "avenue", normalized: "Avenue", context: ["street"], notes: "Street type" },
-            { heard: "st", normalized: "Street", context: ["address"], notes: "Street abbreviation" },
-            { heard: "ave", normalized: "Avenue", context: ["address"], notes: "Avenue abbreviation" },
-            { heard: "blvd", normalized: "Boulevard", context: ["address"], notes: "Boulevard abbreviation" },
-            { heard: "dr", normalized: "Drive", context: ["address"], notes: "Drive abbreviation" },
-            { heard: "ln", normalized: "Lane", context: ["address"], notes: "Lane abbreviation" },
-            { heard: "ct", normalized: "Court", context: ["address"], notes: "Court abbreviation" },
-            { heard: "cir", normalized: "Circle", context: ["address"], notes: "Circle abbreviation" },
-            { heard: "pl", normalized: "Place", context: ["address"], notes: "Place abbreviation" },
+            // ════════════════════════════════════════════════════════════════════════
+            // 2️⃣ ORDINALS (1st, 2nd, 3rd, 21st, etc.)
+            // ════════════════════════════════════════════════════════════════════════
+            { heard: "first", normalized: "1st", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "second", normalized: "2nd", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "third", normalized: "3rd", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "fourth", normalized: "4th", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "fifth", normalized: "5th", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "sixth", normalized: "6th", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "seventh", normalized: "7th", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "eighth", normalized: "8th", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "ninth", normalized: "9th", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "tenth", normalized: "10th", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "eleventh", normalized: "11th", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "twelfth", normalized: "12th", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "thirteenth", normalized: "13th", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "twentieth", normalized: "20th", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "twenty first", normalized: "21st", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "twenty second", normalized: "22nd", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "twenty third", normalized: "23rd", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "twenty fourth", normalized: "24th", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "twenty fifth", normalized: "25th", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "thirtieth", normalized: "30th", context: ["address", "street"], notes: "Ordinal" },
+            { heard: "thirty first", normalized: "31st", context: ["address", "street"], notes: "Ordinal" },
             
-            // Directions
-            { heard: "n", normalized: "North", context: ["address", "direction"], notes: "North abbreviation" },
-            { heard: "s", normalized: "South", context: ["address", "direction"], notes: "South abbreviation" },
-            { heard: "e", normalized: "East", context: ["address", "direction"], notes: "East abbreviation" },
-            { heard: "w", normalized: "West", context: ["address", "direction"], notes: "West abbreviation" },
-            { heard: "ne", normalized: "Northeast", context: ["address"], notes: "Direction" },
-            { heard: "nw", normalized: "Northwest", context: ["address"], notes: "Direction" },
-            { heard: "se", normalized: "Southeast", context: ["address"], notes: "Direction" },
-            { heard: "sw", normalized: "Southwest", context: ["address"], notes: "Direction" },
+            // ════════════════════════════════════════════════════════════════════════
+            // 3️⃣ ZERO, DOUBLE, TRIPLE (Phone & Address Numbers)
+            // ════════════════════════════════════════════════════════════════════════
+            { heard: "oh", normalized: "0", context: ["phone", "address", "number"], notes: "Oh → 0" },
+            { heard: "zero", normalized: "0", context: ["phone", "address"], notes: "Zero" },
+            { heard: "double zero", normalized: "00", context: ["phone", "address"], notes: "Double zero" },
+            { heard: "double one", normalized: "11", context: ["phone", "address"], notes: "Double one" },
+            { heard: "double two", normalized: "22", context: ["phone", "address"], notes: "Double two" },
+            { heard: "double three", normalized: "33", context: ["phone", "address"], notes: "Double three" },
+            { heard: "double four", normalized: "44", context: ["phone", "address"], notes: "Double four" },
+            { heard: "double five", normalized: "55", context: ["phone", "address"], notes: "Double five" },
+            { heard: "double six", normalized: "66", context: ["phone", "address"], notes: "Double six" },
+            { heard: "double seven", normalized: "77", context: ["phone", "address"], notes: "Double seven" },
+            { heard: "double eight", normalized: "88", context: ["phone", "address"], notes: "Double eight" },
+            { heard: "double nine", normalized: "99", context: ["phone", "address"], notes: "Double nine" },
+            { heard: "triple zero", normalized: "000", context: ["phone", "address"], notes: "Triple zero" },
+            { heard: "triple five", normalized: "555", context: ["phone"], notes: "Triple five" },
             
-            // ASAP/Urgency
-            { heard: "a sap", normalized: "ASAP", context: ["time", "schedule"], notes: "ASAP mishear" },
+            // Common number mishearings
+            { heard: "twelve one five five", normalized: "12155", context: ["address"], notes: "Address number" },
+            { heard: "to one five five", normalized: "2155", context: ["address"], notes: "STT mishear" },
+            { heard: "one two one five five", normalized: "12155", context: ["address"], notes: "Spelled out" },
+            { heard: "three one two", normalized: "312", context: ["address", "suite"], notes: "Suite number" },
+            { heard: "don't be", normalized: "", context: [], notes: "STT noise - delete" },
+            { heard: "twelve dash", normalized: "12-", context: ["address"], notes: "Hyphenated" },
+            
+            // Phone numbers
+            { heard: "to three nine", normalized: "239", context: ["phone"], notes: "Area code" },
+            { heard: "two three nine", normalized: "239", context: ["phone"], notes: "Area code" },
+            { heard: "five six five", normalized: "565", context: ["phone"], notes: "Phone segment" },
+            { heard: "to to o to", normalized: "2202", context: ["phone"], notes: "Phone ending" },
+            
+            // ════════════════════════════════════════════════════════════════════════
+            // 4️⃣ STREET TYPES (All Common Variants)
+            // ════════════════════════════════════════════════════════════════════════
+            { heard: "street", normalized: "Street", context: ["address"], notes: "Street" },
+            { heard: "st", normalized: "Street", context: ["address", "end"], notes: "St → Street (at end)" },
+            { heard: "avenue", normalized: "Avenue", context: ["address"], notes: "Avenue" },
+            { heard: "ave", normalized: "Avenue", context: ["address"], notes: "Ave → Avenue" },
+            { heard: "boulevard", normalized: "Boulevard", context: ["address"], notes: "Boulevard" },
+            { heard: "blvd", normalized: "Boulevard", context: ["address"], notes: "Blvd → Boulevard" },
+            { heard: "drive", normalized: "Drive", context: ["address"], notes: "Drive" },
+            { heard: "dr", normalized: "Drive", context: ["address"], notes: "Dr → Drive" },
+            { heard: "road", normalized: "Road", context: ["address"], notes: "Road" },
+            { heard: "rd", normalized: "Road", context: ["address"], notes: "Rd → Road" },
+            { heard: "lane", normalized: "Lane", context: ["address"], notes: "Lane" },
+            { heard: "ln", normalized: "Lane", context: ["address"], notes: "Ln → Lane" },
+            { heard: "court", normalized: "Court", context: ["address"], notes: "Court" },
+            { heard: "ct", normalized: "Court", context: ["address"], notes: "Ct → Court" },
+            { heard: "circle", normalized: "Circle", context: ["address"], notes: "Circle" },
+            { heard: "cir", normalized: "Circle", context: ["address"], notes: "Cir → Circle" },
+            { heard: "place", normalized: "Place", context: ["address"], notes: "Place" },
+            { heard: "pl", normalized: "Place", context: ["address"], notes: "Pl → Place" },
+            { heard: "way", normalized: "Way", context: ["address"], notes: "Way" },
+            { heard: "parkway", normalized: "Parkway", context: ["address"], notes: "Parkway" },
+            { heard: "pkwy", normalized: "Parkway", context: ["address"], notes: "Pkwy → Parkway" },
+            { heard: "highway", normalized: "Highway", context: ["address"], notes: "Highway" },
+            { heard: "hwy", normalized: "Highway", context: ["address"], notes: "Hwy → Highway" },
+            { heard: "trail", normalized: "Trail", context: ["address"], notes: "Trail" },
+            { heard: "trl", normalized: "Trail", context: ["address"], notes: "Trl → Trail" },
+            { heard: "terrace", normalized: "Terrace", context: ["address"], notes: "Terrace" },
+            { heard: "ter", normalized: "Terrace", context: ["address"], notes: "Ter → Terrace" },
+            { heard: "expressway", normalized: "Expressway", context: ["address"], notes: "Expressway" },
+            { heard: "expwy", normalized: "Expressway", context: ["address"], notes: "Expwy → Expressway" },
+            { heard: "metro", normalized: "Metro", context: ["address"], notes: "Metro (common name)" },
+            
+            // ════════════════════════════════════════════════════════════════════════
+            // 5️⃣ DIRECTIONS (Full and Abbreviated)
+            // ════════════════════════════════════════════════════════════════════════
+            { heard: "north", normalized: "N", context: ["address", "direction"], notes: "North → N" },
+            { heard: "south", normalized: "S", context: ["address", "direction"], notes: "South → S" },
+            { heard: "east", normalized: "E", context: ["address", "direction"], notes: "East → E" },
+            { heard: "west", normalized: "W", context: ["address", "direction"], notes: "West → W" },
+            { heard: "northeast", normalized: "NE", context: ["address"], notes: "Northeast → NE" },
+            { heard: "northwest", normalized: "NW", context: ["address"], notes: "Northwest → NW" },
+            { heard: "southeast", normalized: "SE", context: ["address"], notes: "Southeast → SE" },
+            { heard: "southwest", normalized: "SW", context: ["address"], notes: "Southwest → SW" },
+            
+            // ════════════════════════════════════════════════════════════════════════
+            // 6️⃣ SPANISH / LATINO PATTERNS (Florida Market)
+            // ════════════════════════════════════════════════════════════════════════
+            { heard: "calle", normalized: "Calle", context: ["address"], notes: "Spanish: Street" },
+            { heard: "avenida", normalized: "Avenida", context: ["address"], notes: "Spanish: Avenue" },
+            { heard: "norte", normalized: "N", context: ["address", "direction"], notes: "Spanish: North" },
+            { heard: "sur", normalized: "S", context: ["address", "direction"], notes: "Spanish: South" },
+            { heard: "este", normalized: "E", context: ["address", "direction"], notes: "Spanish: East" },
+            { heard: "oeste", normalized: "W", context: ["address", "direction"], notes: "Spanish: West" },
+            { heard: "apartamento", normalized: "Apt", context: ["address"], notes: "Spanish: Apartment" },
+            { heard: "numero", normalized: "#", context: ["address"], notes: "Spanish: Number" },
+            { heard: "piso", normalized: "Floor", context: ["address"], notes: "Spanish: Floor" },
+            { heard: "edificio", normalized: "Building", context: ["address"], notes: "Spanish: Building" },
+            
+            // ════════════════════════════════════════════════════════════════════════
+            // 7️⃣ TIME / URGENCY
+            // ════════════════════════════════════════════════════════════════════════
+            { heard: "a sap", normalized: "ASAP", context: ["time"], notes: "ASAP mishear" },
             { heard: "as soon", normalized: "ASAP", context: ["time"], notes: "Urgency" },
-            { heard: "asap", normalized: "ASAP", context: ["time"], notes: "ASAP" }
+            { heard: "asap", normalized: "ASAP", context: ["time"], notes: "ASAP" },
+            { heard: "today", normalized: "today", context: ["time"], notes: "Same day" },
+            { heard: "tomorrow", normalized: "tomorrow", context: ["time"], notes: "Next day" },
+            { heard: "this week", normalized: "this week", context: ["time"], notes: "This week" }
         ];
         
         let profile = await STTProfile.findOne({ templateId, isActive: true });

@@ -448,17 +448,39 @@ class STTSettingsManager {
             <div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h3>Mishear Corrections</h3>
-                    <button onclick="sttManager.showAddCorrectionModal()" style="
-                        padding: 8px 16px;
-                        background: #10b981;
-                        color: white;
-                        border: none;
-                        border-radius: 8px;
-                        cursor: pointer;
-                    ">
-                        + Add Correction
-                    </button>
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="sttManager.seedAddressCorrections()" style="
+                            padding: 8px 16px;
+                            background: #6366f1;
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            cursor: pointer;
+                            font-size: 13px;
+                        " title="Add ~100 common address/phone corrections">
+                            🏠 Seed Address Defaults
+                        </button>
+                        <button onclick="sttManager.showAddCorrectionModal()" style="
+                            padding: 8px 16px;
+                            background: #10b981;
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            cursor: pointer;
+                        ">
+                            + Add Correction
+                        </button>
+                    </div>
                 </div>
+                
+                <!-- Info box -->
+                <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                    <p style="color: #0369a1; margin: 0; font-size: 13px;">
+                        <strong>💡 Pro Tip:</strong> Click "Seed Address Defaults" to add 100+ corrections for addresses, phone numbers, 
+                        ordinals (1st, 2nd), unit numbers (Apt 4B), and Spanish address terms. Duplicates are automatically skipped.
+                    </p>
+                </div>
+                
                 <p style="color: #64748b; margin-bottom: 16px;">
                     Map commonly misheard words to their correct form.
                 </p>
@@ -805,6 +827,43 @@ class STTSettingsManager {
             this.showToast('Keyword deleted', 'success');
         } catch (error) {
             this.showToast('Error deleting keyword', 'error');
+        }
+    }
+    
+    /**
+     * Seed default address corrections (~100 rules)
+     * Includes: unit/suite, ordinals, phone patterns, street types, Spanish terms
+     */
+    async seedAddressCorrections() {
+        if (!confirm('Add ~100 default address corrections?\n\nThis includes:\n• Apartment/Suite/Unit (Apt 4B, Ste 200)\n• Ordinals (1st, 2nd, 21st)\n• Numbers (double five → 55)\n• Street types (Ave, Blvd, Pkwy)\n• Directions (N, S, E, W)\n• Spanish terms (calle, avenida)\n\nDuplicates will be skipped.')) {
+            return;
+        }
+        
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+        
+        try {
+            this.showToast('⏳ Seeding corrections...', 'info');
+            
+            const response = await fetch(`/api/admin/stt-profile/${this.templateId}/seed-address-corrections`, {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                await this.loadProfile();
+                this.render();
+                this.showToast(`✅ ${result.message}`, 'success');
+            } else {
+                this.showToast(`❌ ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('[STT] Seed error:', error);
+            this.showToast('Error seeding corrections', 'error');
         }
     }
     
