@@ -23,6 +23,8 @@ const AIBrain3tierllm = require('./AIBrain3tierllm');
 const SmartConfirmationService = require('./SmartConfirmationService');
 const { DEFAULT_FRONT_DESK_CONFIG } = require('../config/frontDeskPrompt');
 const BookingConversationLLM = require('./BookingConversationLLM');
+const HybridReceptionistLLM = require('./HybridReceptionistLLM');
+const ConversationStateManager = require('./ConversationStateManager');
 
 // ════════════════════════════════════════════════════════════════════════════
 // FRONT DESK BEHAVIOR - UI-Controlled Response Text
@@ -833,30 +835,249 @@ class LLM0TurnHandler {
     
     /**
      * ════════════════════════════════════════════════════════════════════════════
-     * 🔒 HARD LOCK SLOT-FILL (Bypasses EVERYTHING)
+     * 🧠 HYBRID RECEPTIONIST - The REAL AI Brain
      * ════════════════════════════════════════════════════════════════════════════
      * 
-     * This is called when bookingModeLocked = true.
-     * NO Brain-1, NO triage, NO troubleshooting.
-     * Just simple extraction and slot progression.
+     * This is what makes the AI "worth paying for."
+     * 
+     * The LLM gets:
+     *   - Full conversation history
+     *   - All known slots
+     *   - Current mode (free/booking/rescue)
+     *   - Behavior rules
+     * 
+     * The LLM returns:
+     *   - Natural conversational reply
+     *   - Updated slots
+     *   - Next goal
+     *   - Signals (frustrated, wants human, etc.)
+     * 
+     * We TRUST the LLM's reply and send it to TTS.
+     * No more overriding with templates.
      * 
      * @private
      */
     static async handleBookingSlotFill({ companyId, callId, userInput, callState, turnNumber }) {
-        const currentStep = callState.currentBookingStep || callState.bookingState;
-        const collected = { ...callState.bookingCollected } || {};
+        const currentStep = callState.currentBookingStep || callState.bookingState || 'free';
+        const existingSlots = { ...callState.bookingCollected } || {};
         
-        logger.info('[LLM0 TURN HANDLER] 🔒 SLOT-FILL (Hard Lock Active)', {
+        logger.info('[LLM0 TURN HANDLER] 🧠 HYBRID RECEPTIONIST ENGAGED', {
             companyId,
             callId,
             turn: turnNumber,
             currentStep,
-            userInput: userInput?.substring(0, 50)
+            existingSlots: Object.keys(existingSlots).filter(k => existingSlots[k]),
+            userInput: userInput?.substring(0, 60)
         });
         
         // ════════════════════════════════════════════════════════════════════════════
-        // 📋 LOAD FRONT DESK BEHAVIOR CONFIG (UI-Controlled)
+        // 📋 LOAD COMPANY AND BEHAVIOR CONFIG
         // ════════════════════════════════════════════════════════════════════════════
+        let frontDeskConfig = DEFAULT_FRONT_DESK_CONFIG;
+        let company = null;
+        
+        try {
+            const v2Company = require('../models/v2Company');
+            company = await v2Company.findById(companyId).lean();
+            frontDeskConfig = getFrontDeskConfig(company);
+        } catch (e) {
+            logger.warn('[LLM0 TURN HANDLER] Could not load company config, using defaults');
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 💬 GET CONVERSATION HISTORY
+        // ════════════════════════════════════════════════════════════════════════════
+        const conversationState = await ConversationStateManager.getState(callId);
+        const conversationHistory = conversationState.history || [];
+        
+        // Add caller's current input to history
+        await ConversationStateManager.addTurn(callId, 'caller', userInput);
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 😤 FRUSTRATION DETECTION - Switch to rescue mode if needed
+        // ════════════════════════════════════════════════════════════════════════════
+        let currentMode = callState.conversationMode || 'booking';
+        const isFrustrated = HybridReceptionistLLM.detectFrustration(userInput);
+        
+        if (isFrustrated) {
+            currentMode = 'rescue';
+            const frustrationCount = await ConversationStateManager.markFrustrated(callId);
+            
+            logger.info('[LLM0 TURN HANDLER] 😤 FRUSTRATION DETECTED - Switching to rescue mode', {
+                companyId, callId, frustrationCount
+            });
+            
+            // Log to Black Box
+            try {
+                const BlackBoxLogger = require('./BlackBoxLogger');
+                await BlackBoxLogger.logEvent({
+                    callId, companyId,
+                    type: 'FRUSTRATION_DETECTED',
+                    turn: turnNumber,
+                    data: {
+                        userInput: userInput?.substring(0, 100),
+                        frustrationCount,
+                        switchedToRescue: true
+                    }
+                });
+            } catch (logErr) {}
+            
+            // If frustrated too many times, offer human
+            if (frustrationCount >= 3) {
+                return {
+                    text: "I can tell this has been frustrating. Would you like me to connect you with someone who can help directly?",
+                    action: 'continue',
+                    shouldTransfer: false,
+                    shouldHangup: false,
+                    callState: {
+                        ...callState,
+                        turnCount: turnNumber,
+                        offerHumanTransfer: true,
+                        conversationMode: 'rescue'
+                    },
+                    debug: { route: 'FRUSTRATION_ESCALATION', frustrationCount }
+                };
+            }
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🤖 CALL THE HYBRID LLM - Full context, natural conversation
+        // ════════════════════════════════════════════════════════════════════════════
+        const llmResult = await HybridReceptionistLLM.processConversation({
+            company: {
+                name: company?.name || 'our company',
+                trade: company?.trade || 'HVAC',
+                serviceAreas: company?.serviceAreas || []
+            },
+            callContext: {
+                callId,
+                turnCount: turnNumber,
+                isReturning: callState.customerContext?.isReturning || false
+            },
+            currentMode,
+            knownSlots: existingSlots,
+            conversationHistory,
+            userInput,
+            behaviorConfig: frontDeskConfig
+        });
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 📊 LOG EVERYTHING FOR DEBUGGING
+        // ════════════════════════════════════════════════════════════════════════════
+        logger.info('[LLM0 TURN HANDLER] 🧠 HYBRID LLM RESULT', {
+            companyId, callId,
+            mode: llmResult.conversationMode,
+            intent: llmResult.intent,
+            nextGoal: llmResult.nextGoal,
+            latencyMs: llmResult.latencyMs,
+            slotsNow: Object.keys(llmResult.filledSlots).filter(k => llmResult.filledSlots[k]),
+            signals: llmResult.signals,
+            responsePreview: llmResult.reply?.substring(0, 60)
+        });
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 💾 UPDATE CONVERSATION STATE
+        // ════════════════════════════════════════════════════════════════════════════
+        await ConversationStateManager.addTurn(callId, 'agent', llmResult.reply, {
+            mode: llmResult.conversationMode,
+            slotsExtracted: Object.keys(llmResult.filledSlots).filter(
+                k => llmResult.filledSlots[k] && !existingSlots[k]
+            )
+        });
+        await ConversationStateManager.updateSlots(callId, llmResult.filledSlots);
+        await ConversationStateManager.updateMode(callId, llmResult.conversationMode);
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 📝 BLACK BOX LOGGING
+        // ════════════════════════════════════════════════════════════════════════════
+        try {
+            const BlackBoxLogger = require('./BlackBoxLogger');
+            await BlackBoxLogger.logEvent({
+                callId, companyId,
+                type: 'HYBRID_LLM_TURN',
+                turn: turnNumber,
+                data: {
+                    mode: llmResult.conversationMode,
+                    intent: llmResult.intent,
+                    nextGoal: llmResult.nextGoal,
+                    latencyMs: llmResult.latencyMs,
+                    tokensUsed: llmResult.tokensUsed,
+                    slots: {
+                        name: llmResult.filledSlots.name || null,
+                        phone: llmResult.filledSlots.phone ? 'captured' : null,
+                        address: llmResult.filledSlots.address ? 'captured' : null,
+                        time: llmResult.filledSlots.time || null,
+                        serviceType: llmResult.filledSlots.serviceType || null
+                    },
+                    signals: llmResult.signals,
+                    responsePreview: llmResult.reply?.substring(0, 100),
+                    reasoning: llmResult.reasoning
+                }
+            });
+        } catch (logErr) {
+            logger.debug('[LLM0 TURN HANDLER] Black Box log failed');
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🎯 DETERMINE NEXT STATE
+        // ════════════════════════════════════════════════════════════════════════════
+        const isComplete = HybridReceptionistLLM.isBookingComplete(llmResult.filledSlots);
+        const nextStep = isComplete ? 'POST_BOOKING' : (llmResult.nextGoal || currentStep);
+        
+        // Handle human transfer request
+        if (llmResult.signals.wantsHuman) {
+            return {
+                text: "Absolutely, let me connect you with someone. Please hold.",
+                action: 'transfer',
+                shouldTransfer: true,
+                shouldHangup: false,
+                callState: {
+                    ...callState,
+                    turnCount: turnNumber,
+                    transferRequested: true
+                },
+                debug: { route: 'HUMAN_TRANSFER_REQUESTED' }
+            };
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // ✅ RETURN THE LLM's NATURAL RESPONSE
+        // ════════════════════════════════════════════════════════════════════════════
+        return {
+            text: llmResult.reply,  // <-- THIS IS THE REAL AI TALKING
+            action: 'continue',
+            shouldTransfer: false,
+            shouldHangup: false,
+            callState: {
+                ...callState,
+                turnCount: turnNumber,
+                bookingModeLocked: true,
+                bookingState: nextStep,
+                currentBookingStep: nextStep,
+                bookingCollected: llmResult.filledSlots,
+                bookingReady: isComplete,
+                conversationMode: llmResult.conversationMode
+            },
+            debug: {
+                route: 'HYBRID_RECEPTIONIST',
+                mode: llmResult.conversationMode,
+                intent: llmResult.intent,
+                nextGoal: llmResult.nextGoal,
+                latencyMs: llmResult.latencyMs,
+                isComplete
+            }
+        };
+    }
+    
+    /**
+     * Legacy slot-fill for fallback (if hybrid fails)
+     * @private
+     * @deprecated Use handleBookingSlotFill with HybridReceptionistLLM
+     */
+    static async handleBookingSlotFillLegacy({ companyId, callId, userInput, callState, turnNumber }) {
+        const currentStep = callState.currentBookingStep || callState.bookingState;
+        const collected = { ...callState.bookingCollected } || {};
+        
         let frontDeskConfig = DEFAULT_FRONT_DESK_CONFIG;
         let company = null;
         let useLLMForConversation = false;
@@ -867,26 +1088,9 @@ class LLM0TurnHandler {
             frontDeskConfig = getFrontDeskConfig(company);
             useLLMForConversation = frontDeskConfig.enabled !== false;
         } catch (e) {
-            logger.warn('[LLM0 TURN HANDLER] Could not load Front Desk config, using defaults');
+            logger.warn('[LLM0 TURN HANDLER] Could not load Front Desk config');
         }
         
-        // Get UI-configured values
-        const bookingPrompts = frontDeskConfig.bookingPrompts || {};
-        const emotionResponses = frontDeskConfig.emotionResponses || {};
-        const frustrationTriggers = frontDeskConfig.frustrationTriggers || [];
-        const loopPrevention = frontDeskConfig.loopPrevention || {};
-        
-        // ════════════════════════════════════════════════════════════════════════════
-        // 🤖 USE REAL LLM FOR CONVERSATIONAL RESPONSES (FIXED Dec 8, 2025)
-        // ════════════════════════════════════════════════════════════════════════════
-        // CRITICAL: The LLM now handles EVERYTHING:
-        //   1. Extraction (name, phone, address, time, serviceType)
-        //   2. Step determination (what to ask next)
-        //   3. Response generation (validated to match the step!)
-        //   4. Question answering (answers questions then continues)
-        // 
-        // We TRUST the LLM's response - it has been validated to match the step.
-        // ════════════════════════════════════════════════════════════════════════════
         if (useLLMForConversation) {
             try {
                 const llmResult = await BookingConversationLLM.generateResponse({
@@ -898,30 +1102,6 @@ class LLM0TurnHandler {
                     serviceType: collected.serviceType || 'AC service'
                 });
                 
-                // ════════════════════════════════════════════════════════════════════
-                // 🔍 COMPREHENSIVE LOGGING - See exactly what LLM decided
-                // ════════════════════════════════════════════════════════════════════
-                logger.info('[LLM0 TURN HANDLER] 🤖 LLM BOOKING RESULT', {
-                    companyId, callId, 
-                    currentStep,
-                    llmNextStep: llmResult.nextStep,
-                    llmUsed: llmResult.llmUsed,
-                    latencyMs: llmResult.latencyMs,
-                    emotion: llmResult.emotion,
-                    isQuestion: llmResult.isQuestion,
-                    responsePreview: llmResult.response?.substring(0, 60),
-                    extracted: {
-                        name: llmResult.extracted?.name || null,
-                        phone: llmResult.extracted?.phone ? 'YES' : null,
-                        address: llmResult.extracted?.address ? 'YES' : null,
-                        time: llmResult.extracted?.time || null,
-                        serviceType: llmResult.extracted?.serviceType || null
-                    }
-                });
-                
-                // ════════════════════════════════════════════════════════════════════
-                // 📦 UPDATE COLLECTED DATA - Merge LLM extractions with existing
-                // ════════════════════════════════════════════════════════════════════
                 const newCollected = { ...collected };
                 if (llmResult.extracted?.name) newCollected.name = llmResult.extracted.name;
                 if (llmResult.extracted?.phone) newCollected.phone = llmResult.extracted.phone;
@@ -929,45 +1109,9 @@ class LLM0TurnHandler {
                 if (llmResult.extracted?.time) newCollected.time = llmResult.extracted.time;
                 if (llmResult.extracted?.serviceType) newCollected.serviceType = llmResult.extracted.serviceType;
                 
-                // ════════════════════════════════════════════════════════════════════
-                // 🎯 USE LLM's NEXT STEP - It has already validated the response!
-                // ════════════════════════════════════════════════════════════════════
                 const nextStep = llmResult.nextStep || currentStep;
-                
-                // Check if booking is complete
                 const isComplete = (nextStep === 'POST_BOOKING' || nextStep === 'CONFIRM') && 
                     newCollected.name && newCollected.phone && newCollected.address && newCollected.time;
-                
-                // ════════════════════════════════════════════════════════════════════
-                // 📝 BLACK BOX LOGGING - Full diagnostic trail
-                // ════════════════════════════════════════════════════════════════════
-                try {
-                    const BlackBoxLogger = require('./BlackBoxLogger');
-                    await BlackBoxLogger.logEvent({
-                        callId, companyId,
-                        type: 'LLM_BOOKING_CONVERSATION',
-                        turn: turnNumber,
-                        data: {
-                            llmUsed: llmResult.llmUsed,
-                            latencyMs: llmResult.latencyMs,
-                            currentStep,
-                            nextStep,
-                            emotion: llmResult.emotion,
-                            isQuestion: llmResult.isQuestion,
-                            responsePreview: llmResult.response?.substring(0, 80),
-                            extracted: {
-                                name: newCollected.name,
-                                phone: newCollected.phone ? 'captured' : null,
-                                address: newCollected.address ? 'captured' : null,
-                                time: newCollected.time,
-                                serviceType: newCollected.serviceType
-                            },
-                            isComplete
-                        }
-                    });
-                } catch (logErr) {
-                    logger.debug('[LLM0 TURN HANDLER] Black Box log failed');
-                }
                 
                 return {
                     text: llmResult.response,
@@ -983,23 +1127,11 @@ class LLM0TurnHandler {
                         bookingCollected: newCollected,
                         bookingReady: isComplete
                     },
-                    debug: {
-                        route: 'BOOKING_LLM_CONVERSATION',
-                        llmUsed: llmResult.llmUsed,
-                        latencyMs: llmResult.latencyMs,
-                        emotion: llmResult.emotion,
-                        currentStep,
-                        nextStep,
-                        isQuestion: llmResult.isQuestion
-                    }
+                    debug: { route: 'BOOKING_LLM_CONVERSATION_LEGACY' }
                 };
                 
             } catch (llmError) {
-                logger.error('[LLM0 TURN HANDLER] ⚠️ LLM failed, falling back to templates', { 
-                    error: llmError.message,
-                    stack: llmError.stack?.substring(0, 200)
-                });
-                // Fall through to template-based handling
+                logger.error('[LLM0 TURN HANDLER] Legacy LLM failed', { error: llmError.message });
             }
         }
         
