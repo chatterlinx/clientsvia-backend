@@ -330,6 +330,10 @@
             <i class="fas fa-microphone-alt"></i> STT Settings
             <span style="font-size: 10px; background: linear-gradient(135deg, #10b981, #3b82f6); color: white; padding: 2px 8px; border-radius: 10px;">Enterprise</span>
           </button>
+          <button class="agent-status-tab" data-agent-tab="front-desk" onclick="switchAgentStatusTab('front-desk')" style="padding: 12px 24px; border-radius: 10px; border: 2px solid #64748b; background: #334155; color: #f1f5f9; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
+            <i class="fas fa-comments"></i> Front Desk
+            <span style="font-size: 10px; background: linear-gradient(135deg, #f59e0b, #ef4444); color: white; padding: 2px 8px; border-radius: 10px;">NEW</span>
+          </button>
         </nav>
         
         <!-- Tab Content: Dashboard -->
@@ -361,6 +365,17 @@
               <i class="fas fa-microphone-alt fa-spin" style="font-size: 48px; margin-bottom: 20px; color: #10b981;"></i>
               <p style="font-size: 18px; font-weight: 600;">Loading STT Settings...</p>
               <p style="font-size: 14px; margin-top: 10px;">Speech-to-Text intelligence configuration</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Tab Content: Front Desk Behavior -->
+        <div id="agent-status-tab-front-desk" class="agent-status-tab-content" style="display: none;">
+          <div id="front-desk-container" style="padding: 20px;">
+            <div style="text-align: center; padding: 60px; color: #6b7280;">
+              <i class="fas fa-comments fa-spin" style="font-size: 48px; margin-bottom: 20px; color: #f59e0b;"></i>
+              <p style="font-size: 18px; font-weight: 600;">Loading Front Desk Behavior...</p>
+              <p style="font-size: 14px; margin-top: 10px;">Control exactly how your AI talks to callers</p>
             </div>
           </div>
         </div>
@@ -836,6 +851,7 @@
     // ═══════════════════════════════════════════════════════════════════════
     let llm0ControlsInitialized = false;
     let sttSettingsInitialized = false;
+    let frontDeskInitialized = false;
     
     async function switchAgentStatusTab(tabName) {
       console.log(`🎯 [CONTROL PLANE] Switching agent status tab to: ${tabName}`);
@@ -868,6 +884,11 @@
       // Initialize STT Settings on first access
       if (tabName === 'stt-settings' && !sttSettingsInitialized && currentCompanyId) {
         await initSTTSettings();
+      }
+      
+      // Initialize Front Desk Behavior on first access
+      if (tabName === 'front-desk' && !frontDeskInitialized && currentCompanyId) {
+        await initFrontDesk();
       }
     }
     
@@ -931,6 +952,39 @@
         }
       } catch (error) {
         console.error('❌ [CONTROL PLANE] Error initializing STT Settings:', error);
+      }
+    }
+    
+    // Initialize Front Desk Behavior Manager
+    async function initFrontDesk() {
+      if (!currentCompanyId) return;
+      
+      console.log('💬 [CONTROL PLANE] Initializing Front Desk Behavior for company:', currentCompanyId);
+      
+      try {
+        await loadScript('/js/ai-agent-settings/FrontDeskBehaviorManager.js');
+        
+        const container = document.getElementById('front-desk-container');
+        if (container && window.FrontDeskBehaviorManager) {
+          window.frontDeskManager = new window.FrontDeskBehaviorManager(currentCompanyId);
+          await window.frontDeskManager.load();
+          window.frontDeskManager.render(container);
+          frontDeskInitialized = true;
+          console.log('✅ [CONTROL PLANE] Front Desk Behavior initialized');
+        } else {
+          console.error('❌ [CONTROL PLANE] FrontDeskBehaviorManager not available');
+          if (container) {
+            container.innerHTML = `
+              <div style="text-align: center; padding: 60px; color: #ef4444;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 16px;"></i>
+                <h3>Failed to Load Front Desk Behavior</h3>
+                <p>Please refresh the page or contact support.</p>
+              </div>
+            `;
+          }
+        }
+      } catch (error) {
+        console.error('❌ [CONTROL PLANE] Error initializing Front Desk Behavior:', error);
       }
     }
 
