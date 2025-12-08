@@ -21,8 +21,8 @@ class AgentStatusManager {
     this.companyId = companyId;
     this.refreshInterval = null;
     this.backgroundInterval = null; // NEW: Always-on background health check
-    this.autoRefreshSeconds = 30;
-    this.backgroundRefreshSeconds = 60; // Check health every 60s even when tab is closed
+    this.autoRefreshSeconds = 60; // Reduced from 30 to prevent server overload
+    this.backgroundRefreshSeconds = 120; // Reduced from 60 to prevent resource exhaustion
     
     console.log('[AGENT STATUS] Manager initialized', { companyId });
     
@@ -881,16 +881,39 @@ class AgentStatusManager {
 
   /**
    * Start auto-refresh interval
+   * FIXED: Call refresh() not init() to prevent interval stacking
    */
   startAutoRefresh() {
+    // Guard: Don't create multiple intervals
     if (this.refreshInterval) {
-      clearInterval(this.refreshInterval);
+      return; // Already running
     }
 
     this.refreshInterval = setInterval(async () => {
       console.log('[AGENT STATUS] Auto-refreshing...');
-      await this.init();
+      await this.refresh(); // Use refresh(), NOT init() - prevents interval stacking
     }, this.autoRefreshSeconds * 1000);
+  }
+  
+  /**
+   * Refresh data without reinitializing
+   */
+  async refresh() {
+    try {
+      const [status, metrics, health] = await Promise.all([
+        this.fetchStatus(),
+        this.fetchMetrics(),
+        this.fetchHealth()
+      ]);
+      
+      this.status = status;
+      this.metrics = metrics;
+      this.health = health;
+      
+      this.render();
+    } catch (error) {
+      console.error('[AGENT STATUS] Refresh failed:', error.message);
+    }
   }
 
   /**
