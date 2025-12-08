@@ -689,6 +689,98 @@ router.get('/:templateId/metrics', authenticateJWT, requireRole('admin'), async 
 });
 
 // ============================================================================
+// SEED COMMON CORRECTIONS (Address/Number Recognition)
+// ============================================================================
+
+/**
+ * POST /api/admin/stt-profile/:templateId/seed-address-corrections
+ * Seed common address and number corrections for better STT accuracy
+ */
+router.post('/:templateId/seed-address-corrections', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        
+        // Common number mishearings (spoken → digits)
+        const commonCorrections = [
+            // Number sequences often mishear
+            { heard: "twelve one five five", normalized: "12155", context: ["address", "street"], notes: "Common address number" },
+            { heard: "to one five five", normalized: "2155", context: ["address"], notes: "STT often hears 'to' as number" },
+            { heard: "one two one five five", normalized: "12155", context: ["address"], notes: "Spelled out numbers" },
+            { heard: "three one two", normalized: "312", context: ["address", "suite"], notes: "Suite/unit number" },
+            { heard: "don't be", normalized: "", context: [], notes: "STT noise - delete this" },
+            
+            // Common phone number mishears
+            { heard: "to three nine", normalized: "239", context: ["phone", "area code"], notes: "Area code mishear" },
+            { heard: "two three nine", normalized: "239", context: ["phone"], notes: "Area code" },
+            { heard: "five six five", normalized: "565", context: ["phone"], notes: "Phone segment" },
+            { heard: "to to o to", normalized: "2202", context: ["phone"], notes: "Phone number ending" },
+            
+            // Common address words
+            { heard: "sweet", normalized: "suite", context: ["address"], notes: "Suite mishear" },
+            { heard: "sweets", normalized: "suites", context: ["address"], notes: "Suites mishear" },
+            { heard: "apt", normalized: "apartment", context: ["address"], notes: "Abbreviation" },
+            { heard: "unit number", normalized: "unit", context: ["address"], notes: "Redundant" },
+            
+            // Street types
+            { heard: "parkway", normalized: "Parkway", context: ["street"], notes: "Street type" },
+            { heard: "metro", normalized: "Metro", context: ["street", "address"], notes: "Street name" },
+            { heard: "boulevard", normalized: "Boulevard", context: ["street"], notes: "Street type" },
+            { heard: "avenue", normalized: "Avenue", context: ["street"], notes: "Street type" },
+            
+            // ASAP/Urgency
+            { heard: "a sap", normalized: "ASAP", context: ["time", "schedule"], notes: "ASAP mishear" },
+            { heard: "as soon", normalized: "ASAP", context: ["time"], notes: "Urgency" }
+        ];
+        
+        let profile = await STTProfile.findOne({ templateId, isActive: true });
+        
+        if (!profile) {
+            profile = await STTProfile.createForTemplate(templateId);
+        }
+        
+        // Add corrections that don't already exist
+        let added = 0;
+        let skipped = 0;
+        
+        for (const correction of commonCorrections) {
+            const normalizedHeard = correction.heard.toLowerCase().trim();
+            const exists = profile.corrections.some(c => c.heard === normalizedHeard);
+            
+            if (!exists) {
+                profile.corrections.push({
+                    heard: normalizedHeard,
+                    normalized: correction.normalized,
+                    context: correction.context,
+                    enabled: true,
+                    notes: correction.notes
+                });
+                added++;
+            } else {
+                skipped++;
+            }
+        }
+        
+        if (added > 0) {
+            profile.updatedBy = req.user._id;
+            await profile.save();
+            STTPreprocessor.clearCache(templateId);
+        }
+        
+        logger.info('[STT PROFILE API] Seeded address corrections', { templateId, added, skipped });
+        
+        res.json({
+            success: true,
+            message: `Added ${added} corrections, skipped ${skipped} duplicates`,
+            totalCorrections: profile.corrections.length
+        });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to seed corrections', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
 // DEEPGRAM COMPARISON (Black Box Analysis)
 // ============================================================================
 
