@@ -778,10 +778,72 @@ class LLM0TurnHandler {
             userInput: userInput?.substring(0, 50)
         });
         
+        // ════════════════════════════════════════════════════════════════════════════
+        // 😤 FRUSTRATION DETECTION - Handle difficult/frustrated customers empathetically
+        // ════════════════════════════════════════════════════════════════════════════
+        const frustrationIndicators = [
+            "i don't care", "don't care", "doesn't matter", "doesnt matter",
+            "whatever", "just send someone", "just send", "just fix", "just come",
+            "i said", "i told you", "i already", "already told", "we went through",
+            "this is ridiculous", "ridiculous", "frustrated", "frustrating",
+            "waste of time", "forget it", "just need", "i want someone",
+            "send a tech", "send technician", "get someone", "somebody here",
+            "stop asking", "enough questions", "too many questions"
+        ];
+        
+        const lowerInput = userInput?.toLowerCase() || '';
+        const isFrustrated = frustrationIndicators.some(phrase => lowerInput.includes(phrase));
+        const wantsBooking = /fix|repair|service|appointment|schedule|technician|someone|come out|send/i.test(lowerInput);
+        
+        if (isFrustrated) {
+            logger.info('[LLM0 TURN HANDLER] 😤 FRUSTRATION DETECTED', {
+                companyId,
+                callId,
+                userInput: userInput?.substring(0, 100),
+                currentStep,
+                wantsBooking
+            });
+            
+            // Log to Black Box
+            try {
+                const BlackBoxLogger = require('./BlackBoxLogger');
+                await BlackBoxLogger.logEvent({
+                    callId,
+                    companyId,
+                    type: 'CUSTOMER_FRUSTRATED',
+                    data: {
+                        userInput: userInput?.substring(0, 100),
+                        currentStep,
+                        wantsBooking,
+                        matchedPhrases: frustrationIndicators.filter(p => lowerInput.includes(p))
+                    }
+                });
+            } catch (logErr) {}
+        }
+        
         // Simple extraction based on current step - NO LLM, NO INTENT
         let newCollected = { ...collected };
         let nextStep = currentStep;
         let responseText = '';
+        
+        // Helper for empathetic slot requests when frustrated
+        const getEmpathicAsk = (field, customerName) => {
+            const name = customerName || collected?.name || '';
+            const namePrefix = name ? `${name}, ` : '';
+            
+            switch (field) {
+                case 'phone':
+                    return `${namePrefix}I understand, it's frustrating when the AC isn't working. I'll get someone scheduled right away. What's the best phone number for the technician to reach you?`;
+                case 'address':
+                    return `Got it, we'll get this taken care of. What's the service address?`;
+                case 'time':
+                    return `I hear you - let's get this scheduled. When works best for the technician to come out? Or should I send someone as soon as possible?`;
+                case 'name':
+                    return `I completely understand. Let me get you on the schedule right away. May I just get your name?`;
+                default:
+                    return null;
+            }
+        };
         
         switch (currentStep) {
             // ════════════════════════════════════════════════════════════════════════════
@@ -869,9 +931,17 @@ class LLM0TurnHandler {
                 if (extractedName) {
                     newCollected.name = extractedName;
                     nextStep = 'ASK_PHONE';
-                    responseText = `Thanks, ${extractedName}. And what's the best phone number to reach you?`;
+                    // If frustrated, acknowledge and move faster
+                    if (isFrustrated) {
+                        responseText = `Got it ${extractedName}, I'll get someone scheduled for you right away. What's the best phone number to reach you?`;
+                    } else {
+                        responseText = `Thanks, ${extractedName}. And what's the best phone number to reach you?`;
+                    }
                 } else {
-                    responseText = "I didn't quite catch that. Could you please tell me your name?";
+                    // No name extracted - use empathetic ask if frustrated
+                    responseText = isFrustrated 
+                        ? getEmpathicAsk('name')
+                        : "I didn't quite catch that. Could you please tell me your name?";
                 }
                 break;
                 
@@ -881,9 +951,16 @@ class LLM0TurnHandler {
                 if (extractedPhone) {
                     newCollected.phone = extractedPhone;
                     nextStep = 'ASK_ADDRESS';
-                    responseText = "Great. What's the service address?";
+                    responseText = isFrustrated 
+                        ? "Got it. What's the service address?"
+                        : "Great. What's the service address?";
                 } else {
-                    responseText = "I need your phone number so we can reach you. What's the best number?";
+                    // No phone extracted - if frustrated & wants booking, be empathetic
+                    if (isFrustrated && wantsBooking) {
+                        responseText = getEmpathicAsk('phone', collected?.name);
+                    } else {
+                        responseText = "I need your phone number so we can reach you. What's the best number?";
+                    }
                 }
                 break;
                 
@@ -893,25 +970,36 @@ class LLM0TurnHandler {
                 if (extractedAddress) {
                     newCollected.address = extractedAddress;
                     nextStep = 'ASK_TIME';
-                    responseText = "When would be a good time for us to come out?";
+                    responseText = isFrustrated 
+                        ? "Got it. When do you need someone there? Or should I send them as soon as possible?"
+                        : "When would be a good time for us to come out?";
                 } else {
-                    responseText = "Could you please repeat the service address?";
+                    responseText = isFrustrated && wantsBooking
+                        ? getEmpathicAsk('address')
+                        : "Could you please repeat the service address?";
                 }
                 break;
                 
             case 'ASK_TIME':
             case 'collecting_time':
-                const extractedTime = this.extractTime(userInput);
+                let extractedTime = this.extractTime(userInput);
+                
+                // If frustrated and wants booking but no time extracted, default to ASAP
+                if (!extractedTime && isFrustrated && wantsBooking) {
+                    extractedTime = 'as soon as possible';
+                    logger.info('[LLM0 TURN HANDLER] 😤 Frustrated customer - defaulting to ASAP', { companyId, callId });
+                }
+                
                 if (extractedTime) {
                     newCollected.time = extractedTime;
                     nextStep = 'POST_BOOKING'; // Go to POST_BOOKING to handle follow-ups
                     
                     // Build a natural confirmation - don't repeat raw input verbatim
                     const customerName = newCollected.name || 'you';
-                    const isAsap = /asap|as soon as|urgent|today|immediately|right away/i.test(extractedTime);
+                    const isAsap = /asap|as soon as|urgent|today|immediately|right away|fix it|send someone|possible/i.test(extractedTime);
                     
-                    if (isAsap) {
-                        responseText = `Perfect, ${customerName}! I have all your information. We'll send someone out as soon as possible. You'll receive a confirmation shortly with the exact time. Is there anything else I can help you with?`;
+                    if (isAsap || isFrustrated) {
+                        responseText = `Perfect, ${customerName}! I've got you on the schedule. We'll send someone out as soon as possible. You'll receive a confirmation shortly. Is there anything else I can help with?`;
                     } else {
                         responseText = `Perfect, ${customerName}! I have you scheduled for ${extractedTime}. You'll receive a confirmation shortly. Is there anything else I can help you with?`;
                     }
