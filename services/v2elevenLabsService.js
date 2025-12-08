@@ -193,6 +193,10 @@ async function getAvailableModels({ apiKey, company } = {}) {
 
 /**
  * Enhanced text-to-speech synthesis with latest features
+ * 
+ * INCLUDES: Phone number and address formatting for natural pronunciation
+ * - "239-565-2202" → "2 3 9, 5 6 5, 2 2 zero 2"
+ * - "12155 Metro Parkway" → "1 2 1 5 5 Metro Parkway"
  */
 async function synthesizeSpeech({ 
   text, 
@@ -211,11 +215,19 @@ async function synthesizeSpeech({
     throw new Error('text and voiceId are required');
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // FORMAT TEXT FOR NATURAL PRONUNCIATION
+  // ════════════════════════════════════════════════════════════════════════════
+  // Apply phone/address formatting so TTS says "zero" instead of "oh"
+  // and spells out numbers naturally
+  const { formatForTTS } = require('../utils/textUtils');
+  const formattedText = formatForTTS(text);
+
   try {
     const client = createClient({ apiKey, company });
     
     const audioStream = await client.textToSpeech.convert(voiceId, {
-      text,
+      text: formattedText,
       model_id,
       output_format,
       optimize_streaming_latency,
