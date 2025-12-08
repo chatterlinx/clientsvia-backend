@@ -871,7 +871,33 @@ router.post('/:templateId/seed-address-corrections', authenticateJWT, requireRol
             { heard: "asap", normalized: "ASAP", context: ["time"], notes: "ASAP" },
             { heard: "today", normalized: "today", context: ["time"], notes: "Same day" },
             { heard: "tomorrow", normalized: "tomorrow", context: ["time"], notes: "Next day" },
-            { heard: "this week", normalized: "this week", context: ["time"], notes: "This week" }
+            { heard: "this week", normalized: "this week", context: ["time"], notes: "This week" },
+            
+            // ════════════════════════════════════════════════════════════════════════
+            // 8️⃣ HVAC / AC / AIR CONDITIONING (Critical for service intent)
+            // ════════════════════════════════════════════════════════════════════════
+            // STT often transcribes "AC" as "a c" or "a.c." or "A.C."
+            { heard: "a c", normalized: "AC", context: ["service", "hvac"], notes: "AC mishear" },
+            { heard: "a c service", normalized: "AC service", context: ["service"], notes: "AC service request" },
+            { heard: "a c repair", normalized: "AC repair", context: ["service"], notes: "AC repair request" },
+            { heard: "a c maintenance", normalized: "AC maintenance", context: ["service"], notes: "AC maintenance" },
+            { heard: "a c unit", normalized: "AC unit", context: ["service"], notes: "AC unit" },
+            { heard: "a c system", normalized: "AC system", context: ["service"], notes: "AC system" },
+            { heard: "a.c.", normalized: "AC", context: ["service"], notes: "AC with periods" },
+            { heard: "a. c.", normalized: "AC", context: ["service"], notes: "AC with spaces and periods" },
+            { heard: "air con", normalized: "air conditioning", context: ["service"], notes: "Abbreviation" },
+            { heard: "air cond", normalized: "air conditioning", context: ["service"], notes: "Abbreviation" },
+            { heard: "h vac", normalized: "HVAC", context: ["service"], notes: "HVAC mishear" },
+            { heard: "h v a c", normalized: "HVAC", context: ["service"], notes: "HVAC spelled out" },
+            { heard: "h.v.a.c.", normalized: "HVAC", context: ["service"], notes: "HVAC with periods" },
+            { heard: "heating and cooling", normalized: "HVAC", context: ["service"], notes: "HVAC description" },
+            { heard: "heat and air", normalized: "HVAC", context: ["service"], notes: "HVAC informal" },
+            { heard: "furnace", normalized: "furnace", context: ["service", "hvac"], notes: "Heating system" },
+            { heard: "heater", normalized: "heater", context: ["service", "hvac"], notes: "Heating system" },
+            { heard: "condenser", normalized: "condenser", context: ["service", "hvac"], notes: "AC component" },
+            { heard: "compressor", normalized: "compressor", context: ["service", "hvac"], notes: "AC component" },
+            { heard: "thermostat", normalized: "thermostat", context: ["service", "hvac"], notes: "Temperature control" },
+            { heard: "thermal stat", normalized: "thermostat", context: ["service"], notes: "Thermostat mishear" }
         ];
         
         let profile = await STTProfile.findOne({ templateId, isActive: true });

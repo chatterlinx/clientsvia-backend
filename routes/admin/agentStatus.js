@@ -378,6 +378,74 @@ router.get('/:companyId/health', async (req, res) => {
 // GET /api/admin/agent-status/:companyId/llm-config - Get LLM Configuration
 // ============================================================================
 
+// ============================================================================
+// GET/PUT LLM-0 ENABLED STATUS
+// ============================================================================
+// This controls whether the intelligent LLM-0 brain is active
+// When disabled, the agent uses the legacy (slow, dumb) path
+// ============================================================================
+
+router.get('/:companyId/llm0-enabled', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const company = await V2Company.findById(companyId, 'agentSettings.llm0Enabled companyName').lean();
+    
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+    
+    res.json({
+      success: true,
+      companyId,
+      companyName: company.companyName,
+      llm0Enabled: company.agentSettings?.llm0Enabled === true
+    });
+  } catch (error) {
+    logger.error('[AGENT STATUS] Error fetching LLM-0 status', { error: error.message });
+    res.status(500).json({ success: false, error: 'Failed to fetch LLM-0 status' });
+  }
+});
+
+router.put('/:companyId/llm0-enabled', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { enabled } = req.body;
+    
+    logger.info('[AGENT STATUS] 🧠 Updating LLM-0 enabled status', { companyId, enabled });
+    
+    const company = await V2Company.findByIdAndUpdate(
+      companyId,
+      { $set: { 'agentSettings.llm0Enabled': enabled === true } },
+      { new: true }
+    );
+    
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+    
+    // Clear Redis cache to ensure new settings take effect immediately
+    const { redisClient } = require('../../clients');
+    if (redisClient) {
+      await redisClient.del(`company:${companyId}`);
+      await redisClient.del(`company:${companyId}:agentSettings`);
+    }
+    
+    logger.info('[AGENT STATUS] ✅ LLM-0 status updated', { 
+      companyId, 
+      llm0Enabled: enabled === true
+    });
+    
+    res.json({
+      success: true,
+      message: enabled ? '🧠 LLM-0 Brain ENABLED - Intelligent responses active' : '⚠️ LLM-0 Brain DISABLED - Using legacy path',
+      llm0Enabled: enabled === true
+    });
+  } catch (error) {
+    logger.error('[AGENT STATUS] Error updating LLM-0 status', { error: error.message });
+    res.status(500).json({ success: false, error: 'Failed to update LLM-0 status' });
+  }
+});
+
 router.get('/:companyId/llm-config', async (req, res) => {
   try {
     const { companyId } = req.params;
