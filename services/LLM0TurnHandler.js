@@ -877,7 +877,15 @@ class LLM0TurnHandler {
         const loopPrevention = frontDeskConfig.loopPrevention || {};
         
         // ════════════════════════════════════════════════════════════════════════════
-        // 🤖 USE REAL LLM FOR CONVERSATIONAL RESPONSES
+        // 🤖 USE REAL LLM FOR CONVERSATIONAL RESPONSES (FIXED Dec 8, 2025)
+        // ════════════════════════════════════════════════════════════════════════════
+        // CRITICAL: The LLM now handles EVERYTHING:
+        //   1. Extraction (name, phone, address, time, serviceType)
+        //   2. Step determination (what to ask next)
+        //   3. Response generation (validated to match the step!)
+        //   4. Question answering (answers questions then continues)
+        // 
+        // We TRUST the LLM's response - it has been validated to match the step.
         // ════════════════════════════════════════════════════════════════════════════
         if (useLLMForConversation) {
             try {
@@ -890,58 +898,76 @@ class LLM0TurnHandler {
                     serviceType: collected.serviceType || 'AC service'
                 });
                 
-                logger.info('[LLM0 TURN HANDLER] 🤖 LLM CONVERSATION', {
-                    companyId, callId, currentStep,
+                // ════════════════════════════════════════════════════════════════════
+                // 🔍 COMPREHENSIVE LOGGING - See exactly what LLM decided
+                // ════════════════════════════════════════════════════════════════════
+                logger.info('[LLM0 TURN HANDLER] 🤖 LLM BOOKING RESULT', {
+                    companyId, callId, 
+                    currentStep,
+                    llmNextStep: llmResult.nextStep,
                     llmUsed: llmResult.llmUsed,
                     latencyMs: llmResult.latencyMs,
-                    emotion: llmResult.emotion
+                    emotion: llmResult.emotion,
+                    isQuestion: llmResult.isQuestion,
+                    responsePreview: llmResult.response?.substring(0, 60),
+                    extracted: {
+                        name: llmResult.extracted?.name || null,
+                        phone: llmResult.extracted?.phone ? 'YES' : null,
+                        address: llmResult.extracted?.address ? 'YES' : null,
+                        time: llmResult.extracted?.time || null,
+                        serviceType: llmResult.extracted?.serviceType || null
+                    }
                 });
                 
-                // Update collected data
-                let newCollected = { ...collected };
-                if (llmResult.extracted.name) newCollected.name = llmResult.extracted.name;
-                if (llmResult.extracted.phone) newCollected.phone = llmResult.extracted.phone;
-                if (llmResult.extracted.address) newCollected.address = llmResult.extracted.address;
-                if (llmResult.extracted.time) newCollected.time = llmResult.extracted.time;
-                if (llmResult.extracted.serviceType) newCollected.serviceType = llmResult.extracted.serviceType;
+                // ════════════════════════════════════════════════════════════════════
+                // 📦 UPDATE COLLECTED DATA - Merge LLM extractions with existing
+                // ════════════════════════════════════════════════════════════════════
+                const newCollected = { ...collected };
+                if (llmResult.extracted?.name) newCollected.name = llmResult.extracted.name;
+                if (llmResult.extracted?.phone) newCollected.phone = llmResult.extracted.phone;
+                if (llmResult.extracted?.address) newCollected.address = llmResult.extracted.address;
+                if (llmResult.extracted?.time) newCollected.time = llmResult.extracted.time;
+                if (llmResult.extracted?.serviceType) newCollected.serviceType = llmResult.extracted.serviceType;
                 
-                // Determine next step based on LLM or logic
-                let nextStep = currentStep;
-                if (llmResult.nextStep && llmResult.nextStep !== 'null') {
-                    nextStep = llmResult.nextStep;
-                } else if (llmResult.extracted.serviceType && currentStep === 'ASK_SERVICE_TYPE') {
-                    nextStep = 'ASK_NAME';
-                } else if (llmResult.extracted.name && currentStep === 'ASK_NAME') {
-                    nextStep = 'ASK_PHONE';
-                } else if (llmResult.extracted.phone && currentStep === 'ASK_PHONE') {
-                    nextStep = 'ASK_ADDRESS';
-                } else if (llmResult.extracted.address && currentStep === 'ASK_ADDRESS') {
-                    nextStep = 'ASK_TIME';
-                } else if (llmResult.extracted.time && currentStep === 'ASK_TIME') {
-                    // After time collected, check if we need confirmation
-                    nextStep = 'CONFIRM';
-                } else if (currentStep === 'CONFIRM') {
-                    nextStep = 'POST_BOOKING';
-                }
+                // ════════════════════════════════════════════════════════════════════
+                // 🎯 USE LLM's NEXT STEP - It has already validated the response!
+                // ════════════════════════════════════════════════════════════════════
+                const nextStep = llmResult.nextStep || currentStep;
                 
+                // Check if booking is complete
                 const isComplete = (nextStep === 'POST_BOOKING' || nextStep === 'CONFIRM') && 
                     newCollected.name && newCollected.phone && newCollected.address && newCollected.time;
                 
-                // Log to Black Box
+                // ════════════════════════════════════════════════════════════════════
+                // 📝 BLACK BOX LOGGING - Full diagnostic trail
+                // ════════════════════════════════════════════════════════════════════
                 try {
                     const BlackBoxLogger = require('./BlackBoxLogger');
                     await BlackBoxLogger.logEvent({
                         callId, companyId,
                         type: 'LLM_BOOKING_CONVERSATION',
+                        turn: turnNumber,
                         data: {
                             llmUsed: llmResult.llmUsed,
                             latencyMs: llmResult.latencyMs,
-                            currentStep, nextStep,
+                            currentStep,
+                            nextStep,
                             emotion: llmResult.emotion,
-                            isQuestion: llmResult.isQuestion
+                            isQuestion: llmResult.isQuestion,
+                            responsePreview: llmResult.response?.substring(0, 80),
+                            extracted: {
+                                name: newCollected.name,
+                                phone: newCollected.phone ? 'captured' : null,
+                                address: newCollected.address ? 'captured' : null,
+                                time: newCollected.time,
+                                serviceType: newCollected.serviceType
+                            },
+                            isComplete
                         }
                     });
-                } catch (logErr) {}
+                } catch (logErr) {
+                    logger.debug('[LLM0 TURN HANDLER] Black Box log failed');
+                }
                 
                 return {
                     text: llmResult.response,
@@ -960,12 +986,19 @@ class LLM0TurnHandler {
                     debug: {
                         route: 'BOOKING_LLM_CONVERSATION',
                         llmUsed: llmResult.llmUsed,
-                        emotion: llmResult.emotion
+                        latencyMs: llmResult.latencyMs,
+                        emotion: llmResult.emotion,
+                        currentStep,
+                        nextStep,
+                        isQuestion: llmResult.isQuestion
                     }
                 };
                 
             } catch (llmError) {
-                logger.error('[LLM0 TURN HANDLER] LLM failed, using templates', { error: llmError.message });
+                logger.error('[LLM0 TURN HANDLER] ⚠️ LLM failed, falling back to templates', { 
+                    error: llmError.message,
+                    stack: llmError.stack?.substring(0, 200)
+                });
                 // Fall through to template-based handling
             }
         }
