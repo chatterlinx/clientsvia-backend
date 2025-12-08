@@ -947,12 +947,21 @@ class LLM0TurnHandler {
             company: {
                 name: company?.name || 'our company',
                 trade: company?.trade || 'HVAC',
-                serviceAreas: company?.serviceAreas || []
+                serviceAreas: company?.serviceAreas || [],
+                id: company?._id || company?.id
             },
             callContext: {
                 callId,
+                companyId: company?._id || company?.id,
                 turnCount: turnNumber,
-                isReturning: callState.customerContext?.isReturning || false
+                // Pass full customer context for empathy
+                customerContext: {
+                    isReturning: callState.customerContext?.isReturning || false,
+                    totalCalls: callState.customerContext?.totalCalls || 0,
+                    customerName: callState.customerContext?.customerName || null,
+                    lastVisit: callState.customerContext?.lastVisit || null,
+                    previousTechs: callState.customerContext?.previousTechs || []
+                }
             },
             currentMode,
             knownSlots: existingSlots,

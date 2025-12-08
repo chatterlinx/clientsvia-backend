@@ -183,14 +183,15 @@ class HybridReceptionistLLM {
             }
             
             // ════════════════════════════════════════════════════════════════
-            // BUILD THE SYSTEM PROMPT (now with triage context)
+            // BUILD THE SYSTEM PROMPT (now with triage + customer context)
             // ════════════════════════════════════════════════════════════════
             const systemPrompt = this.buildSystemPrompt({
                 company,
                 currentMode,
                 knownSlots,
                 behaviorConfig,
-                triageContext  // Pass triage context for smarter responses
+                triageContext,  // Pass triage context for smarter responses
+                customerContext: callContext.customerContext || { isReturning: false, totalCalls: 0 }
             });
             
             // ════════════════════════════════════════════════════════════════
@@ -272,8 +273,9 @@ class HybridReceptionistLLM {
     /**
      * Build the system prompt with all context
      * OPTIMIZED: Reduced token count for faster responses
+     * ENHANCED: Better empathy and customer recognition
      */
-    static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext }) {
+    static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext, customerContext }) {
         const companyName = company.name || 'our company';
         const trade = company.trade || 'HVAC';
         
@@ -285,6 +287,12 @@ class HybridReceptionistLLM {
         
         const missingSlots = ['name', 'phone', 'address', 'time']
             .filter(s => !knownSlots[s]).join(',') || 'none';
+        
+        // Customer context
+        const isReturning = customerContext?.isReturning || customerContext?.totalCalls > 1;
+        const customerNote = isReturning 
+            ? `RETURNING CUSTOMER (${customerContext?.totalCalls || 'multiple'} previous calls). Acknowledge this!` 
+            : '';
         
         // Build triage context section if available
         let triageSection = '';
@@ -312,12 +320,15 @@ Suggested: ${triageContext.suggestedServiceType || 'repair'}
 Mode: ${currentMode}. ${modeInstructions[currentMode] || ''}
 Have: ${slotsList}
 Need: ${missingSlots}
+${customerNote}
 ${triageSection}
-RULES:
-1. Answer their question/comment first, then ask next thing.
-2. Never re-ask filled slots.
-3. Max 30 words. Sound human.
-4. If describing issue, ask diagnostic question then transition to booking.
+═══ EMPATHY RULES (CRITICAL) ═══
+1. If they tell a story, REPEAT BACK the key details: "So the drain line issue came back after our last visit - that's frustrating"
+2. If they mention previous visits/techs, acknowledge: "I see we've been out there before"
+3. If they mention paying for service already, say: "I understand you've already paid for this and it should be working"
+4. If frustrated: ONE genuine acknowledgment, then move forward
+5. NEVER just say "I understand" - actually reference what they said
+6. Max 30 words. Sound like a helpful human, not a form.
 
 OUTPUT JSON:
 {"reply":"<30 words>","conversationMode":"${currentMode}","intent":"booking|triage|question","nextGoal":"ASK_NAME|ASK_PHONE|ASK_ADDRESS|ASK_TIME|TRIAGE_STEP|CONFIRM","filledSlots":{"name":null,"phone":null,"address":null,"serviceType":null,"time":null},"signals":{"frustrated":false,"wantsHuman":false}}`;
