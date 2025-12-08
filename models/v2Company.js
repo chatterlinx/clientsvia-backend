@@ -1495,6 +1495,117 @@ const companySchema = new mongoose.Schema({
         },
         
         // -------------------------------------------------------------------
+        // FRONT DESK BEHAVIOR - LLM-0 Conversation Style (UI-CONTROLLED)
+        // -------------------------------------------------------------------
+        // ALL settings are visible and editable in the Control Plane.
+        // No hidden magic - admins see exactly why the agent behaves this way.
+        // 
+        // PHILOSOPHY:
+        // - Make caller feel HEARD
+        // - Make company feel COMPETENT & CARING  
+        // - Get the BOOKING with minimum friction
+        // - Never sound robotic or like a form
+        // -------------------------------------------------------------------
+        frontDeskBehavior: {
+            // Master toggle
+            enabled: { type: Boolean, default: true },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // PERSONALITY SETTINGS
+            // ═══════════════════════════════════════════════════════════════
+            personality: {
+                tone: { type: String, enum: ['warm', 'professional', 'casual', 'formal'], default: 'warm' },
+                verbosity: { type: String, enum: ['concise', 'balanced', 'detailed'], default: 'concise' },
+                maxResponseWords: { type: Number, default: 30, min: 10, max: 100 },
+                useCallerName: { type: Boolean, default: true }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // BOOKING PROMPTS - What to say when collecting info
+            // ═══════════════════════════════════════════════════════════════
+            bookingPrompts: {
+                askName: { type: String, default: "May I have your name?", trim: true },
+                askPhone: { type: String, default: "What's the best phone number to reach you?", trim: true },
+                askAddress: { type: String, default: "What's the service address?", trim: true },
+                askTime: { type: String, default: "When works best for you - morning or afternoon?", trim: true },
+                confirmTemplate: { type: String, default: "So I have {name} at {address}, {time}. Does that sound right?", trim: true },
+                completeTemplate: { type: String, default: "You're all set, {name}! A technician will be out {time}. You'll receive a confirmation text shortly.", trim: true },
+                offerAsap: { type: Boolean, default: true },
+                asapPhrase: { type: String, default: "Or I can send someone as soon as possible.", trim: true }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // EMOTION RESPONSES - What to say when caller is emotional
+            // ═══════════════════════════════════════════════════════════════
+            emotionResponses: {
+                stressed: {
+                    enabled: { type: Boolean, default: true },
+                    acknowledgments: [{ type: String, trim: true }],
+                    followUp: { type: String, default: "Let me help you get this taken care of.", trim: true }
+                },
+                frustrated: {
+                    enabled: { type: Boolean, default: true },
+                    acknowledgments: [{ type: String, trim: true }],
+                    followUp: { type: String, default: "I'll get someone scheduled right away.", trim: true },
+                    reduceFriction: { type: Boolean, default: true }
+                },
+                angry: {
+                    enabled: { type: Boolean, default: true },
+                    acknowledgments: [{ type: String, trim: true }],
+                    followUp: { type: String, default: "Let me make this right.", trim: true },
+                    offerEscalation: { type: Boolean, default: true },
+                    maxTriesBeforeEscalate: { type: Number, default: 2 }
+                },
+                friendly: {
+                    enabled: { type: Boolean, default: true },
+                    allowSmallTalk: { type: Boolean, default: true },
+                    smallTalkLimit: { type: Number, default: 1 }
+                }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // FRUSTRATION TRIGGERS - Phrases that indicate losing patience
+            // ═══════════════════════════════════════════════════════════════
+            frustrationTriggers: [{
+                type: String,
+                trim: true,
+                lowercase: true
+            }],
+            
+            // ═══════════════════════════════════════════════════════════════
+            // ESCALATION SETTINGS
+            // ═══════════════════════════════════════════════════════════════
+            escalation: {
+                enabled: { type: Boolean, default: true },
+                maxLoopsBeforeOffer: { type: Number, default: 3 },
+                triggerPhrases: [{ type: String, trim: true }],
+                offerMessage: { type: String, default: "I can connect you to someone directly or take a message for a manager. Which would you prefer?", trim: true },
+                transferMessage: { type: String, default: "Let me connect you to our team now.", trim: true }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // LOOP PREVENTION
+            // ═══════════════════════════════════════════════════════════════
+            loopPrevention: {
+                enabled: { type: Boolean, default: true },
+                maxSameQuestion: { type: Number, default: 2 },
+                onLoop: { type: String, enum: ['rephrase', 'skip', 'escalate'], default: 'rephrase' },
+                rephraseIntro: { type: String, default: "Let me try this differently - ", trim: true }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // FORBIDDEN PHRASES - Never say these
+            // ═══════════════════════════════════════════════════════════════
+            forbiddenPhrases: [{ type: String, trim: true }],
+            
+            // ═══════════════════════════════════════════════════════════════
+            // METADATA
+            // ═══════════════════════════════════════════════════════════════
+            lastUpdated: { type: Date, default: Date.now },
+            updatedBy: { type: String, default: null, trim: true }
+        },
+        
+        // -------------------------------------------------------------------
         // CHEAT SHEET META - Version Control Pointers (NEW ARCHITECTURE)
         // -------------------------------------------------------------------
         // LIGHTWEIGHT POINTERS ONLY - actual configs stored in CheatSheetVersion collection
