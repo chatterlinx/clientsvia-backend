@@ -22,6 +22,7 @@ const TriageRouter = require('./TriageRouter');
 const AIBrain3tierllm = require('./AIBrain3tierllm');
 const SmartConfirmationService = require('./SmartConfirmationService');
 const { DEFAULT_FRONT_DESK_CONFIG } = require('../config/frontDeskPrompt');
+const BookingConversationLLM = require('./BookingConversationLLM');
 
 // ════════════════════════════════════════════════════════════════════════════
 // FRONT DESK BEHAVIOR - UI-Controlled Response Text
@@ -857,10 +858,14 @@ class LLM0TurnHandler {
         // 📋 LOAD FRONT DESK BEHAVIOR CONFIG (UI-Controlled)
         // ════════════════════════════════════════════════════════════════════════════
         let frontDeskConfig = DEFAULT_FRONT_DESK_CONFIG;
+        let company = null;
+        let useLLMForConversation = false;
+        
         try {
             const v2Company = require('../models/v2Company');
-            const company = await v2Company.findById(companyId).lean();
+            company = await v2Company.findById(companyId).lean();
             frontDeskConfig = getFrontDeskConfig(company);
+            useLLMForConversation = frontDeskConfig.enabled !== false;
         } catch (e) {
             logger.warn('[LLM0 TURN HANDLER] Could not load Front Desk config, using defaults');
         }
@@ -870,6 +875,94 @@ class LLM0TurnHandler {
         const emotionResponses = frontDeskConfig.emotionResponses || {};
         const frustrationTriggers = frontDeskConfig.frustrationTriggers || [];
         const loopPrevention = frontDeskConfig.loopPrevention || {};
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🤖 USE REAL LLM FOR CONVERSATIONAL RESPONSES
+        // ════════════════════════════════════════════════════════════════════════════
+        if (useLLMForConversation) {
+            try {
+                const llmResult = await BookingConversationLLM.generateResponse({
+                    userInput,
+                    currentStep,
+                    collected,
+                    frontDeskConfig,
+                    companyName: company?.name || 'our company',
+                    serviceType: collected.serviceType || 'AC service'
+                });
+                
+                logger.info('[LLM0 TURN HANDLER] 🤖 LLM CONVERSATION', {
+                    companyId, callId, currentStep,
+                    llmUsed: llmResult.llmUsed,
+                    latencyMs: llmResult.latencyMs,
+                    emotion: llmResult.emotion
+                });
+                
+                // Update collected data
+                let newCollected = { ...collected };
+                if (llmResult.extracted.name) newCollected.name = llmResult.extracted.name;
+                if (llmResult.extracted.phone) newCollected.phone = llmResult.extracted.phone;
+                if (llmResult.extracted.address) newCollected.address = llmResult.extracted.address;
+                if (llmResult.extracted.time) newCollected.time = llmResult.extracted.time;
+                
+                // Determine next step
+                let nextStep = currentStep;
+                if (llmResult.nextStep) {
+                    nextStep = llmResult.nextStep;
+                } else if (llmResult.extracted.name && currentStep === 'ASK_NAME') {
+                    nextStep = 'ASK_PHONE';
+                } else if (llmResult.extracted.phone && currentStep === 'ASK_PHONE') {
+                    nextStep = 'ASK_ADDRESS';
+                } else if (llmResult.extracted.address && currentStep === 'ASK_ADDRESS') {
+                    nextStep = 'ASK_TIME';
+                } else if (llmResult.extracted.time && currentStep === 'ASK_TIME') {
+                    nextStep = 'POST_BOOKING';
+                }
+                
+                const isComplete = nextStep === 'POST_BOOKING' && 
+                    newCollected.name && newCollected.phone && newCollected.address && newCollected.time;
+                
+                // Log to Black Box
+                try {
+                    const BlackBoxLogger = require('./BlackBoxLogger');
+                    await BlackBoxLogger.logEvent({
+                        callId, companyId,
+                        type: 'LLM_BOOKING_CONVERSATION',
+                        data: {
+                            llmUsed: llmResult.llmUsed,
+                            latencyMs: llmResult.latencyMs,
+                            currentStep, nextStep,
+                            emotion: llmResult.emotion,
+                            isQuestion: llmResult.isQuestion
+                        }
+                    });
+                } catch (logErr) {}
+                
+                return {
+                    text: llmResult.response,
+                    action: 'continue',
+                    shouldTransfer: false,
+                    shouldHangup: false,
+                    callState: {
+                        ...callState,
+                        turnCount: turnNumber,
+                        bookingModeLocked: true,
+                        bookingState: nextStep,
+                        currentBookingStep: nextStep,
+                        bookingCollected: newCollected,
+                        bookingReady: isComplete
+                    },
+                    debug: {
+                        route: 'BOOKING_LLM_CONVERSATION',
+                        llmUsed: llmResult.llmUsed,
+                        emotion: llmResult.emotion
+                    }
+                };
+                
+            } catch (llmError) {
+                logger.error('[LLM0 TURN HANDLER] LLM failed, using templates', { error: llmError.message });
+                // Fall through to template-based handling
+            }
+        }
         
         // ════════════════════════════════════════════════════════════════════════════
         // 😤 FRUSTRATION DETECTION - Using UI-configured triggers
@@ -1128,6 +1221,41 @@ class LLM0TurnHandler {
                 
             case 'ASK_TIME':
             case 'collecting_time':
+                // ════════════════════════════════════════════════════════════════════════════
+                // 💬 HANDLE QUESTIONS DURING BOOKING (Front Desk Behavior)
+                // ════════════════════════════════════════════════════════════════════════════
+                // If caller asks a question instead of giving a time, ANSWER IT first
+                // then ask for the time again. This is conversational, not robotic.
+                const isQuestion = /\?|do you know|why are you|what is|who is|how much|how long|when will|will you|can you/i.test(userInput);
+                
+                if (isQuestion) {
+                    const lowerQ = userInput.toLowerCase();
+                    const serviceType = newCollected.serviceType || 'AC service';
+                    const customerName = newCollected.name || '';
+                    
+                    // Answer common mid-booking questions
+                    if (/why|what.*for|reason|coming out/i.test(lowerQ)) {
+                        responseText = `Yes${customerName ? `, ${customerName}` : ''}, for your ${serviceType} request. When would be a good time for the technician to come out?`;
+                    } else if (/how much|cost|price|charge/i.test(lowerQ)) {
+                        responseText = `The technician will provide you with an estimate on-site before doing any work. When would be a good time for them to come out?`;
+                    } else if (/how long|take|duration/i.test(lowerQ)) {
+                        responseText = `It typically depends on the issue, but the technician will give you a timeframe when they arrive. When works best for you?`;
+                    } else if (/who|which tech|same person/i.test(lowerQ)) {
+                        responseText = `A qualified technician will be assigned based on availability. When would you like them to come out?`;
+                    } else {
+                        // Generic question handling
+                        responseText = `Good question! The technician will be able to help with all the details when they arrive. Now, when would be a good time for us to come out?`;
+                    }
+                    
+                    // Stay on ASK_TIME - we haven't collected the time yet
+                    nextStep = 'ASK_TIME';
+                    
+                    logger.info('[LLM0 TURN HANDLER] 💬 Answered question during ASK_TIME, staying on step', {
+                        companyId, callId, question: userInput?.substring(0, 50)
+                    });
+                    break;
+                }
+                
                 let extractedTime = this.extractTime(userInput);
                 
                 // If frustrated and wants booking but no time extracted, default to ASAP
@@ -1141,7 +1269,7 @@ class LLM0TurnHandler {
                     nextStep = 'POST_BOOKING'; // Go to POST_BOOKING to handle follow-ups
                     
                     // Build confirmation using UI-configured template
-                    const customerName = newCollected.name || 'you';
+                    const confirmName = newCollected.name || 'you';
                     const isAsap = /asap|as soon as|urgent|today|immediately|right away|fix it|send someone|possible/i.test(extractedTime);
                     
                     // Use completeTemplate from UI config
@@ -1150,7 +1278,7 @@ class LLM0TurnHandler {
                     
                     // Replace placeholders
                     responseText = completionTemplate
-                        .replace('{name}', customerName)
+                        .replace('{name}', confirmName)
                         .replace('{address}', newCollected.address || '')
                         .replace('{time}', isAsap || isFrustrated ? 'as soon as possible' : extractedTime)
                         .replace('{phone}', newCollected.phone || '');
@@ -1369,16 +1497,32 @@ class LLM0TurnHandler {
     
     static extractTime(input) {
         if (!input) return null;
+        
+        const lowerInput = input.toLowerCase();
+        
+        // Check if this is a QUESTION (not a time)
+        if (/\?|do you|why|what|when will|how long|who is/i.test(input)) {
+            return null; // This is a question, not a time
+        }
+        
+        // Time patterns
         const patterns = [
             /\b(morning|afternoon|evening|tonight|tomorrow|today|asap|as soon as possible)\b/i,
             /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
-            /\d{1,2}(:\d{2})?\s*(am|pm)?/i,
-            /\b(next week|this week|anytime)\b/i
+            /\d{1,2}(:\d{2})?\s*(am|pm)/i,  // Must have am/pm if using numbers
+            /\b(next week|this week|anytime|whenever|earliest|soonest)\b/i,
+            /\b(as soon as|right away|immediately|urgent|now)\b/i
         ];
+        
         for (const pattern of patterns) {
-            if (pattern.test(input)) return input.trim();
+            const match = input.match(pattern);
+            if (match) {
+                // Return the matched time expression, not the full input
+                return match[0].trim();
+            }
         }
-        if (input.length > 3) return input.trim();
+        
+        // DON'T default to accepting any input - only accept actual times
         return null;
     }
     
