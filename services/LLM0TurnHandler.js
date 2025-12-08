@@ -904,7 +904,7 @@ class LLM0TurnHandler {
                 const extractedTime = this.extractTime(userInput);
                 if (extractedTime) {
                     newCollected.time = extractedTime;
-                    nextStep = 'CONFIRM';
+                    nextStep = 'POST_BOOKING'; // Go to POST_BOOKING to handle follow-ups
                     
                     // Build a natural confirmation - don't repeat raw input verbatim
                     const customerName = newCollected.name || 'you';
@@ -915,6 +915,28 @@ class LLM0TurnHandler {
                     } else {
                         responseText = `Perfect, ${customerName}! I have you scheduled for ${extractedTime}. You'll receive a confirmation shortly. Is there anything else I can help you with?`;
                     }
+                    
+                    // Log booking completion to Black Box
+                    try {
+                        const BlackBoxLogger = require('./BlackBoxLogger');
+                        await BlackBoxLogger.logEvent({
+                            callId,
+                            companyId,
+                            type: 'BOOKING_COMPLETED',
+                            data: {
+                                collected: {
+                                    name: newCollected.name,
+                                    phone: newCollected.phone ? 'captured' : null,
+                                    address: newCollected.address ? 'captured' : null,
+                                    time: newCollected.time
+                                },
+                                allSlotsCollected: true,
+                                transitionTo: 'POST_BOOKING'
+                            }
+                        });
+                    } catch (logErr) {
+                        logger.debug('[LLM0 TURN HANDLER] Black Box log failed');
+                    }
                 } else {
                     responseText = "What day and time works best for you?";
                 }
@@ -922,8 +944,85 @@ class LLM0TurnHandler {
                 
             case 'CONFIRM':
             case 'confirmed':
-                responseText = "Is there anything else I can help you with today?";
-                nextStep = 'COMPLETE';
+            case 'COMPLETE':
+            case 'POST_BOOKING':
+                // ════════════════════════════════════════════════════════════════
+                // 🔒 POST-BOOKING HANDLER - Booking is DONE, handle follow-ups
+                // ════════════════════════════════════════════════════════════════
+                // The caller is asking follow-up questions AFTER booking completed.
+                // We should answer their question, NOT restart the booking flow.
+                // ════════════════════════════════════════════════════════════════
+                
+                logger.info('[LLM0 TURN HANDLER] 📋 POST-BOOKING FOLLOW-UP', {
+                    companyId,
+                    callId,
+                    userInput: userInput?.substring(0, 100),
+                    previousStep: currentStep,
+                    bookingCollected: collected
+                });
+                
+                // Check what the caller is asking about
+                const lowerInput = userInput?.toLowerCase() || '';
+                
+                // Time-related follow-up
+                if (/time|when|what time|arrive|coming|be there|get here|show up|schedule|timing/i.test(lowerInput)) {
+                    responseText = "Our dispatch team will call you shortly to confirm the exact arrival time. " +
+                        "Typically we provide a 2-hour window based on technician availability. " +
+                        "Is there anything else I can help you with?";
+                }
+                // Confirmation/verification
+                else if (/confirm|sure|right|correct|got it|verify|booked|appointment/i.test(lowerInput)) {
+                    const confirmName = collected?.name || 'you';
+                    const confirmAddress = collected?.address ? ` at ${collected.address.substring(0, 50)}` : '';
+                    responseText = `Yes ${confirmName}, your service appointment is confirmed${confirmAddress}. ` +
+                        "You'll receive a confirmation text shortly. Anything else I can help with?";
+                }
+                // Technician questions
+                else if (/technician|person|who|someone|send|coming out/i.test(lowerInput)) {
+                    responseText = "A qualified technician will be dispatched to you. " +
+                        "They'll call before arriving. Is there anything else I can help with?";
+                }
+                // Price/cost questions
+                else if (/cost|price|charge|pay|how much|fee/i.test(lowerInput)) {
+                    responseText = "The technician will assess the situation on-site and provide you with pricing " +
+                        "before doing any work. Is there anything else I can help with?";
+                }
+                // Generic follow-up (including the "that's all" responses)
+                else if (/no|nope|that's all|that is all|nothing|all set|goodbye|bye|thank/i.test(lowerInput)) {
+                    responseText = "You're all set! Thank you for calling. Have a great day!";
+                    nextStep = 'COMPLETE';
+                    break;
+                }
+                // Any other follow-up
+                else {
+                    responseText = "Your appointment is all set! Our team will reach out shortly. " +
+                        "Is there anything else I can help you with today?";
+                }
+                
+                nextStep = 'POST_BOOKING';
+                
+                // Log to Black Box
+                try {
+                    const BlackBoxLogger = require('./BlackBoxLogger');
+                    await BlackBoxLogger.logEvent({
+                        callId,
+                        companyId,
+                        type: 'POST_BOOKING_FOLLOWUP',
+                        data: {
+                            userInput: userInput?.substring(0, 100),
+                            responseType: 'follow_up_handled',
+                            bookingDataPreserved: true,
+                            collected: {
+                                name: collected?.name,
+                                phone: collected?.phone ? 'captured' : null,
+                                address: collected?.address ? 'captured' : null,
+                                time: collected?.time
+                            }
+                        }
+                    });
+                } catch (logErr) {
+                    logger.debug('[LLM0 TURN HANDLER] Black Box log failed');
+                }
                 break;
                 
             default:
@@ -931,7 +1030,12 @@ class LLM0TurnHandler {
                 nextStep = 'ASK_NAME';
         }
         
-        const isComplete = nextStep === 'CONFIRM' || nextStep === 'COMPLETE';
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🔒 LOCK MANAGEMENT - Keep locked even after completion to prevent restart
+        // ════════════════════════════════════════════════════════════════════════════
+        const isBookingComplete = nextStep === 'CONFIRM' || nextStep === 'COMPLETE' || nextStep === 'POST_BOOKING';
+        // Only fully unlock when caller says goodbye (nextStep === 'COMPLETE')
+        const shouldKeepLocked = nextStep !== 'COMPLETE';
         
         return {
             text: responseText,
@@ -941,12 +1045,13 @@ class LLM0TurnHandler {
             callState: {
                 ...callState,
                 turnCount: turnNumber,
-                // 🔒 Keep lock active until complete
-                bookingModeLocked: !isComplete,
+                // 🔒 Keep lock active to prevent booking restart!
+                bookingModeLocked: shouldKeepLocked,
+                bookingComplete: isBookingComplete, // Track completion state
                 bookingState: nextStep,
                 currentBookingStep: nextStep,
                 bookingCollected: newCollected,
-                bookingReady: isComplete
+                bookingReady: isBookingComplete
             },
             debug: {
                 route: 'BOOKING_SLOT_FILL',
