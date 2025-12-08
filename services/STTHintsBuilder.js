@@ -75,8 +75,23 @@ class STTHintsBuilder {
                 'service', 'repair', 'maintenance', 'problem', 'issue'
             ];
             
-            // Merge and deduplicate
-            const allHints = [...new Set([...hints, ...defaultHints])];
+            // 🏠 Add address-related hints for booking flow
+            // These help STT recognize street addresses, numbers, and common words
+            const addressHints = [
+                // Street types
+                'street', 'avenue', 'road', 'lane', 'drive', 'court', 'circle',
+                'boulevard', 'parkway', 'way', 'place', 'terrace',
+                // Common address words
+                'north', 'south', 'east', 'west', 'suite', 'unit', 'apartment',
+                'building', 'floor', 'number',
+                // Phone patterns
+                'area code', 'phone number', 'cell', 'mobile',
+                // Names (common)
+                'my name is', 'this is', 'speaking'
+            ];
+            
+            // Merge and deduplicate (include address hints for booking flow)
+            const allHints = [...new Set([...hints, ...defaultHints, ...addressHints])];
             
             // Build string with Twilio limit (1000 chars)
             let hintsString = '';

@@ -871,7 +871,16 @@ class LLM0TurnHandler {
                 if (extractedTime) {
                     newCollected.time = extractedTime;
                     nextStep = 'CONFIRM';
-                    responseText = `Perfect! I have ${newCollected.name || 'you'} at ${newCollected.address || 'your location'} for ${extractedTime}. I'll get that scheduled and someone will confirm with you shortly. Is there anything else I can help you with?`;
+                    
+                    // Build a natural confirmation - don't repeat raw input verbatim
+                    const customerName = newCollected.name || 'you';
+                    const isAsap = /asap|as soon as|urgent|today|immediately|right away/i.test(extractedTime);
+                    
+                    if (isAsap) {
+                        responseText = `Perfect, ${customerName}! I have all your information. We'll send someone out as soon as possible. You'll receive a confirmation shortly with the exact time. Is there anything else I can help you with?`;
+                    } else {
+                        responseText = `Perfect, ${customerName}! I have you scheduled for ${extractedTime}. You'll receive a confirmation shortly. Is there anything else I can help you with?`;
+                    }
                 } else {
                     responseText = "What day and time works best for you?";
                 }
