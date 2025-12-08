@@ -25,6 +25,7 @@
 const logger = require('../utils/logger');
 const openaiClient = require('../config/openai');
 const TriageContextProvider = require('./TriageContextProvider');
+const ServiceAreaHandler = require('./ServiceAreaHandler');
 
 // ════════════════════════════════════════════════════════════════════════════
 // BEHAVIOR RULES - Baked into every prompt
@@ -38,6 +39,12 @@ RULE 1: ANSWER THEN BRIDGE
 - First sentence: Answer/acknowledge what they said.
 - Second sentence: Bridge to your next goal.
 - Example: "Yes, we service Fort Myers! Let me grab your phone number in case we get disconnected."
+
+RULE 1B: SERVICE AREA QUESTIONS
+- If they ask "Do you service [area]?" - ANSWER IMMEDIATELY
+- If the area is in our service territory: "Yes, we absolutely service {city}!"
+- Then acknowledge their needs and start booking
+- Example: "Yes, we service Fort Myers! Duct cleaning and thermostat work — we can help with both. What's your name?"
 
 RULE 2: NEVER ASK FOR WHAT YOU ALREADY HAVE
 - If a field is filled in knownSlots, do NOT ask for it again.
@@ -152,6 +159,34 @@ class HybridReceptionistLLM {
         
         try {
             // ════════════════════════════════════════════════════════════════
+            // 🗺️ SERVICE AREA CHECK - Answer area questions FIRST
+            // ════════════════════════════════════════════════════════════════
+            let serviceAreaInfo = null;
+            if (ServiceAreaHandler.isServiceAreaQuestion(userInput)) {
+                serviceAreaInfo = ServiceAreaHandler.buildComprehensiveResponse(
+                    userInput,
+                    company.serviceAreas,
+                    behaviorConfig.serviceAreaResponses
+                );
+                
+                logger.info('[HYBRID LLM] 🗺️ Service area question detected', {
+                    callId,
+                    detectedCity: serviceAreaInfo.detected?.city,
+                    services: serviceAreaInfo.services?.map(s => s.display),
+                    action: serviceAreaInfo.action
+                });
+            }
+            
+            // Also detect service needs even if not an area question
+            const detectedServices = ServiceAreaHandler.detectServiceNeeds(userInput);
+            if (detectedServices.length > 0) {
+                logger.info('[HYBRID LLM] 🔧 Services detected', {
+                    callId,
+                    services: detectedServices.map(s => s.display)
+                });
+            }
+            
+            // ════════════════════════════════════════════════════════════════
             // 🔍 GET TRIAGE CONTEXT - This is what makes us SMART
             // ════════════════════════════════════════════════════════════════
             // Look up matching triage cards so we know:
@@ -191,6 +226,8 @@ class HybridReceptionistLLM {
                 knownSlots,
                 behaviorConfig,
                 triageContext,  // Pass triage context for smarter responses
+                serviceAreaInfo,  // Include service area detection
+                detectedServices,  // Include detected service needs
                 customerContext: callContext.customerContext || { isReturning: false, totalCalls: 0 }
             });
             
@@ -275,7 +312,7 @@ class HybridReceptionistLLM {
      * OPTIMIZED: Reduced token count for faster responses
      * ENHANCED: Better empathy and customer recognition
      */
-    static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext, customerContext }) {
+    static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext, customerContext, serviceAreaInfo, detectedServices }) {
         const companyName = company.name || 'our company';
         const trade = company.trade || 'HVAC';
         
@@ -293,6 +330,37 @@ class HybridReceptionistLLM {
         const customerNote = isReturning 
             ? `RETURNING CUSTOMER (${customerContext?.totalCalls || 'multiple'} previous calls). Acknowledge this!` 
             : '';
+        
+        // ════════════════════════════════════════════════════════════════════
+        // SERVICE AREA & NEEDS SECTION
+        // ════════════════════════════════════════════════════════════════════
+        let serviceAreaSection = '';
+        if (serviceAreaInfo) {
+            if (serviceAreaInfo.detected?.isKnownArea) {
+                serviceAreaSection = `
+═══ SERVICE AREA QUESTION ═══
+CALLER ASKED ABOUT: ${serviceAreaInfo.detected.city}
+WE SERVICE THIS AREA: YES!
+RESPOND: "Yes, we absolutely service ${serviceAreaInfo.detected.city}!"`;
+            } else if (serviceAreaInfo.detected) {
+                serviceAreaSection = `
+═══ SERVICE AREA QUESTION ═══
+CALLER ASKED ABOUT: ${serviceAreaInfo.detected.city}
+WE SERVICE THIS AREA: Likely yes (Southwest Florida)
+RESPOND: "I believe we service ${serviceAreaInfo.detected.city}, let me get your info..."`;
+            }
+        }
+        
+        // Detected services
+        let servicesSection = '';
+        if (detectedServices && detectedServices.length > 0) {
+            const serviceList = detectedServices.map(s => s.display).join(' and ');
+            servicesSection = `
+═══ CALLER NEEDS ═══
+Mentioned: ${serviceList}
+ACKNOWLEDGE THIS: "Great, we can help with ${serviceList}!"
+THEN: Start booking (get name, phone, address, time)`;
+        }
         
         // Build triage context section if available
         let triageSection = '';
@@ -321,6 +389,8 @@ Mode: ${currentMode}. ${modeInstructions[currentMode] || ''}
 Have: ${slotsList}
 Need: ${missingSlots}
 ${customerNote}
+${serviceAreaSection}
+${servicesSection}
 ${triageSection}
 ═══ EMPATHY RULES (CRITICAL) ═══
 1. If they tell a story, REPEAT BACK the key details: "So the drain line issue came back after Dustin's visit - that's not what you expect"

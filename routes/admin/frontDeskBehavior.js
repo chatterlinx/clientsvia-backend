@@ -104,10 +104,41 @@ const UI_DEFAULTS = {
         rephraseIntro: "Let me try this differently - "
     },
     forbiddenPhrases: [
+        // Generic robot phrases that kill trust
         "tell me more about what you need",
         "what specific issues are you experiencing",
-        "I'm sorry, I didn't understand"
-    ]
+        "I'm sorry, I didn't understand",
+        "let me clarify",
+        "I'm here to help. Can you please tell me",
+        "I understand. I can help you with that",
+        "let me get some details",
+        "can you please provide more information",
+        "I need more information",
+        "what exactly do you need",
+        "could you be more specific",
+        // Avoid these hedging phrases
+        "I think",
+        "I'm not sure but",
+        "probably",
+        "maybe I can",
+        // These sound robotic
+        "processing your request",
+        "one moment please",
+        "please hold while I"
+    ],
+    // Service area responses (admin-editable)
+    serviceAreaResponses: {
+        confirm: "Yes, we absolutely service {city} and all of Southwest Florida! We've been taking care of customers there for years.",
+        ask: "We service most of Southwest Florida. What city or area are you located in?",
+        decline: "I'm sorry, we don't currently service that area."
+    },
+    // Inquiry responses for common questions
+    inquiryResponses: {
+        ductCleaning: "Absolutely! Duct cleaning is one of our specialties. It helps improve air quality and system efficiency.",
+        thermostatUpgrade: "Great choice! A new thermostat can save you money and make your home more comfortable. We install all major brands.",
+        generalService: "We'd be happy to help! Let me get you scheduled with one of our technicians.",
+        pricingInfo: "I'd be happy to get you a quote. Our pricing depends on the specific work needed - let me get your information and have someone reach out with details."
+    }
 };
 
 // ============================================================================

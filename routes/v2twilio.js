@@ -2962,7 +2962,46 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }
       
       // 🎯 PHASE A – STEP 3B: Build response text with follow-up question (if ASK_FOLLOWUP_QUESTION or ASK_IF_BOOK)
-      let responseText = result.response || result.text || "I'm connecting you to our team.";
+      let responseText = result.response || result.text || "";
+      
+      // ════════════════════════════════════════════════════════════════════════
+      // 🛡️ SAFETY NET: Prevent empty/generic responses that cause Twilio fallback
+      // ════════════════════════════════════════════════════════════════════════
+      if (!responseText || responseText.trim().length < 10) {
+        logger.warn('[TWILIO] ⚠️ Empty or too-short response detected - using safety fallback');
+        responseText = "I'm here — go ahead, I'm listening. How can I help you today?";
+        
+        if (BlackBoxLogger) {
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'SAFETY_FALLBACK_TRIGGERED',
+            data: { 
+              reason: 'Empty or too-short response',
+              originalResponse: result.response || result.text || null,
+              turnCount 
+            }
+          }).catch(() => {});
+        }
+      }
+      
+      // 🛡️ Filter out forbidden/robotic phrases
+      const forbiddenPhrases = [
+        "let me clarify",
+        "I'm here to help. Can you please tell me",
+        "tell me more about what you need",
+        "what specific issues are you experiencing"
+      ];
+      
+      const lowerResponse = responseText.toLowerCase();
+      for (const phrase of forbiddenPhrases) {
+        if (lowerResponse.includes(phrase.toLowerCase())) {
+          logger.warn(`[TWILIO] ⚠️ Forbidden phrase detected: "${phrase}" - replacing response`);
+          responseText = "I can definitely help with that! May I have your name so I can get you scheduled?";
+          break;
+        }
+      }
+      
       responseText = buildFollowUpAwareText(responseText, followUp);
       
       if (followUpMode === 'ASK_FOLLOWUP_QUESTION' || followUpMode === 'ASK_IF_BOOK') {

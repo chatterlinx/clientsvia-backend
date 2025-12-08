@@ -170,7 +170,18 @@ function createEmptyMission() {
                 'technician', 'come out', 'send a tech', 'get a tech', 'need someone',
                 // AC/HVAC specific (very common)
                 'ac service', 'ac repair', 'a c service', 'a c repair', 'air conditioning',
-                'heating', 'hvac', 'furnace', 'air conditioner'
+                'heating', 'hvac', 'furnace', 'air conditioner',
+                // Specific service types that indicate booking intent
+                'duct cleaning', 'duct work', 'clean my ducts', 'clean the ducts',
+                'thermostat', 'thermostat replacement', 'new thermostat', 'change thermostat',
+                'tune up', 'tune-up', 'maintenance', 'annual maintenance', 'preventive maintenance',
+                'inspection', 'ac inspection', 'system check', 'check my system',
+                'install', 'installation', 'new unit', 'replace my', 'replacement',
+                'not working', 'stopped working', 'broke', 'broken', 'not cooling', 'not heating',
+                // Caller showing intent phrases
+                'i need', 'i want', 'i would like', 'looking for', 'interested in',
+                'can you help with', 'do you do', 'do you offer', 'do you service',
+                'somebody recommended', 'was referred', 'friend told me'
             ], 
             manual: [], 
             sources: {} 
