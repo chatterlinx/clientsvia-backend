@@ -375,6 +375,17 @@ class STTSettingsManager {
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h3>Boosted Vocabulary / Keywords</h3>
                     <div style="display: flex; gap: 8px;">
+                        <button onclick="sttManager.seedHvacKeywords()" style="
+                            padding: 8px 16px;
+                            background: #6366f1;
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            cursor: pointer;
+                            font-size: 13px;
+                        " title="Add 50+ HVAC industry terms">
+                            ❄️ Seed HVAC Keywords
+                        </button>
                         <button onclick="sttManager.syncVocabulary()" style="
                             padding: 8px 16px;
                             background: #3b82f6;
@@ -397,8 +408,17 @@ class STTSettingsManager {
                         </button>
                     </div>
                 </div>
+                
+                <!-- Info box -->
+                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                    <p style="color: #166534; margin: 0; font-size: 13px;">
+                        <strong>💡 How it works:</strong> Keywords are sent to Twilio's <code>&lt;Gather&gt;</code> as hints, 
+                        helping STT recognize industry-specific terms. Higher weight = stronger hint.
+                    </p>
+                </div>
+                
                 <p style="color: #64748b; margin-bottom: 16px;">
-                    These words are sent as hints to improve STT accuracy.
+                    These words are sent as hints to improve STT accuracy. Current: <strong>${keywords.length}</strong> keywords
                 </p>
                 
                 <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
@@ -864,6 +884,42 @@ class STTSettingsManager {
         } catch (error) {
             console.error('[STT] Seed error:', error);
             this.showToast('Error seeding corrections', 'error');
+        }
+    }
+    
+    /**
+     * Seed default HVAC vocabulary keywords for better recognition
+     */
+    async seedHvacKeywords() {
+        if (!confirm('Add 50+ HVAC industry keywords?\n\nThis includes:\n• Equipment (AC, HVAC, furnace, thermostat)\n• Components (compressor, condenser, evaporator)\n• Services (maintenance, repair, tune-up)\n• Problems (no heat, no AC, leaking, frozen)\n• Booking terms (appointment, schedule, ASAP)\n\nDuplicates will be skipped.')) {
+            return;
+        }
+        
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+        
+        try {
+            this.showToast('⏳ Seeding HVAC keywords...', 'info');
+            
+            const response = await fetch(`/api/admin/stt-profile/${this.templateId}/seed-hvac-keywords`, {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                await this.loadProfile();
+                this.render();
+                this.showToast(`✅ ${result.message}`, 'success');
+            } else {
+                this.showToast(`❌ ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('[STT] Seed keywords error:', error);
+            this.showToast('Error seeding keywords', 'error');
         }
     }
     

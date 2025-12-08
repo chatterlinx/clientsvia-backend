@@ -1106,4 +1106,126 @@ router.get('/providers/status', authenticateJWT, requireRole('admin'), async (re
     }
 });
 
+// ============================================================================
+// SEED HVAC VOCABULARY KEYWORDS
+// ============================================================================
+
+/**
+ * POST /api/admin/stt-profile/:templateId/seed-hvac-keywords
+ * Seed common HVAC vocabulary for better STT recognition
+ */
+router.post('/:templateId/seed-hvac-keywords', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        
+        // HVAC-specific keywords for boosting
+        const hvacKeywords = [
+            // Equipment
+            { phrase: 'air conditioner', boostWeight: 8, notes: 'Core term' },
+            { phrase: 'AC', boostWeight: 10, notes: 'Abbreviation - most common' },
+            { phrase: 'HVAC', boostWeight: 10, notes: 'Industry term' },
+            { phrase: 'furnace', boostWeight: 8, notes: 'Heating' },
+            { phrase: 'heat pump', boostWeight: 8, notes: 'Heating/cooling' },
+            { phrase: 'thermostat', boostWeight: 9, notes: 'Control device' },
+            { phrase: 'ductwork', boostWeight: 7, notes: 'Air distribution' },
+            { phrase: 'compressor', boostWeight: 7, notes: 'Component' },
+            { phrase: 'condenser', boostWeight: 7, notes: 'Outdoor unit' },
+            { phrase: 'evaporator', boostWeight: 7, notes: 'Indoor coil' },
+            { phrase: 'air handler', boostWeight: 7, notes: 'Indoor unit' },
+            { phrase: 'blower', boostWeight: 7, notes: 'Fan component' },
+            { phrase: 'refrigerant', boostWeight: 8, notes: 'Coolant' },
+            { phrase: 'freon', boostWeight: 8, notes: 'Common name' },
+            { phrase: 'R410A', boostWeight: 7, notes: 'Refrigerant type' },
+            { phrase: 'capacitor', boostWeight: 7, notes: 'Component' },
+            { phrase: 'contactor', boostWeight: 7, notes: 'Component' },
+            
+            // Services
+            { phrase: 'maintenance', boostWeight: 9, notes: 'Service type' },
+            { phrase: 'tune up', boostWeight: 9, notes: 'Service' },
+            { phrase: 'tune-up', boostWeight: 9, notes: 'Service hyphenated' },
+            { phrase: 'repair', boostWeight: 9, notes: 'Service type' },
+            { phrase: 'installation', boostWeight: 8, notes: 'Service type' },
+            { phrase: 'replacement', boostWeight: 8, notes: 'Service type' },
+            { phrase: 'duct cleaning', boostWeight: 8, notes: 'Service' },
+            { phrase: 'filter change', boostWeight: 7, notes: 'Service' },
+            { phrase: 'emergency', boostWeight: 10, notes: 'Urgency' },
+            { phrase: 'no heat', boostWeight: 9, notes: 'Problem' },
+            { phrase: 'no AC', boostWeight: 9, notes: 'Problem' },
+            { phrase: 'no cooling', boostWeight: 9, notes: 'Problem' },
+            { phrase: 'not working', boostWeight: 8, notes: 'Problem' },
+            { phrase: 'broken', boostWeight: 8, notes: 'Problem' },
+            { phrase: 'leaking', boostWeight: 8, notes: 'Problem' },
+            { phrase: 'frozen', boostWeight: 8, notes: 'Problem' },
+            { phrase: 'ice on', boostWeight: 7, notes: 'Problem indicator' },
+            { phrase: 'strange noise', boostWeight: 7, notes: 'Problem' },
+            { phrase: 'making noise', boostWeight: 7, notes: 'Problem' },
+            { phrase: 'bad smell', boostWeight: 7, notes: 'Problem' },
+            { phrase: 'blowing warm air', boostWeight: 8, notes: 'Problem' },
+            { phrase: 'not blowing cold', boostWeight: 8, notes: 'Problem' },
+            
+            // Booking
+            { phrase: 'appointment', boostWeight: 9, notes: 'Booking' },
+            { phrase: 'schedule', boostWeight: 9, notes: 'Booking' },
+            { phrase: 'book', boostWeight: 8, notes: 'Booking' },
+            { phrase: 'technician', boostWeight: 8, notes: 'Person' },
+            { phrase: 'tech', boostWeight: 8, notes: 'Abbreviation' },
+            { phrase: 'today', boostWeight: 8, notes: 'Time' },
+            { phrase: 'tomorrow', boostWeight: 8, notes: 'Time' },
+            { phrase: 'as soon as possible', boostWeight: 8, notes: 'Urgency' },
+            { phrase: 'ASAP', boostWeight: 8, notes: 'Urgency abbrev' },
+            { phrase: 'morning', boostWeight: 7, notes: 'Time' },
+            { phrase: 'afternoon', boostWeight: 7, notes: 'Time' },
+            { phrase: 'evening', boostWeight: 7, notes: 'Time' },
+        ];
+        
+        const profile = await STTProfile.findOne({ templateId, isActive: true });
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        // Add keywords that don't exist yet
+        let added = 0;
+        let skipped = 0;
+        const existing = profile.vocabulary?.boostedKeywords || [];
+        const existingPhrases = new Set(existing.map(k => k.phrase.toLowerCase()));
+        
+        for (const kw of hvacKeywords) {
+            if (!existingPhrases.has(kw.phrase.toLowerCase())) {
+                existing.push({
+                    phrase: kw.phrase,
+                    boostWeight: kw.boostWeight,
+                    enabled: true,
+                    addedBy: req.user.email || 'admin',
+                    notes: kw.notes
+                });
+                added++;
+            } else {
+                skipped++;
+            }
+        }
+        
+        profile.vocabulary = profile.vocabulary || {};
+        profile.vocabulary.boostedKeywords = existing;
+        profile.updatedBy = req.user._id;
+        await profile.save();
+        
+        // Clear cache
+        STTPreprocessor.clearCache(templateId);
+        
+        logger.info('[STT PROFILE API] Seeded HVAC keywords', { templateId, added, skipped });
+        
+        res.json({ 
+            success: true, 
+            message: `Added ${added} keywords, skipped ${skipped} duplicates`,
+            added,
+            skipped,
+            totalKeywords: existing.length
+        });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to seed keywords', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;

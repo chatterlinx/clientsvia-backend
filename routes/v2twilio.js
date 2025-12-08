@@ -21,6 +21,7 @@ const AdminSettings = require('../models/AdminSettings');
 const HybridScenarioSelector = require('../services/HybridScenarioSelector');
 const IntelligentRouter = require('../services/IntelligentRouter');  // 🧠 3-Tier Self-Improvement System
 const STTHintsBuilder = require('../services/STTHintsBuilder');  // 🎤 STT Hints from vocabulary
+const STTPreprocessor = require('../services/STTPreprocessor');  // 🎤 STT Intelligence - filler removal, corrections
 const MatchDiagnostics = require('../services/MatchDiagnostics');
 const AdminNotificationService = require('../services/AdminNotificationService');  // 🚨 Critical error reporting
 // 🚀 V2 SYSTEM: Using V2 AI Agent Runtime instead of legacy agent.js
@@ -2276,8 +2277,68 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
   
   const callSid = req.body.CallSid || 'UNKNOWN';
   const fromNumber = req.body.From || 'UNKNOWN';
-  const speechResult = req.body.SpeechResult || '';
+  let speechResult = req.body.SpeechResult || '';
+  const rawSpeechResult = speechResult; // Keep original for logging
   const { companyID } = req.params;
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🎤 STT INTELLIGENCE - Apply preprocessing (fillers, corrections, impossible)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // This is where the STT Intelligence UI settings actually get applied!
+  // - Strips filler words: "um", "uh", "like"
+  // - Applies corrections: "a c" -> "AC", "thermal stat" -> "thermostat"
+  // - Detects impossible words (suggests additions to STT profile)
+  // ═══════════════════════════════════════════════════════════════════════════
+  let sttProcessResult = null;
+  try {
+    // Get template ID for this company
+    const company = await Company.findById(companyID).select('aiAgentSettings.templateReferences').lean();
+    const templateId = company?.aiAgentSettings?.templateReferences?.[0]?.templateId;
+    
+    if (templateId && speechResult) {
+      sttProcessResult = await STTPreprocessor.process(speechResult, templateId, {
+        callId: callSid,
+        companyId: companyID
+      });
+      
+      // Use cleaned speech for all subsequent processing
+      if (sttProcessResult.cleaned && sttProcessResult.cleaned !== speechResult) {
+        speechResult = sttProcessResult.cleaned;
+        
+        logger.info('[STT INTELLIGENCE] 🎤 Preprocessing applied', {
+          callSid,
+          companyId: companyID,
+          raw: rawSpeechResult.substring(0, 100),
+          cleaned: speechResult.substring(0, 100),
+          fillersRemoved: sttProcessResult.metrics.fillerCount,
+          correctionsApplied: sttProcessResult.metrics.correctionCount,
+          processingTimeMs: sttProcessResult.metrics.processingTimeMs
+        });
+      }
+      
+      // 📼 BLACK BOX: Log STT preprocessing results
+      if (BlackBoxLogger && (sttProcessResult.metrics.fillerCount > 0 || sttProcessResult.metrics.correctionCount > 0)) {
+        BlackBoxLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'STT_PREPROCESSING',
+          data: {
+            raw: rawSpeechResult.substring(0, 200),
+            cleaned: speechResult.substring(0, 200),
+            fillersRemoved: sttProcessResult.transformations.fillersRemoved,
+            correctionsApplied: sttProcessResult.transformations.correctionsApplied,
+            impossibleDetected: sttProcessResult.transformations.impossibleWordsDetected,
+            processingTimeMs: sttProcessResult.metrics.processingTimeMs
+          }
+        }).catch(() => {});
+      }
+    }
+  } catch (sttErr) {
+    logger.warn('[STT INTELLIGENCE] Preprocessing failed - using raw speech', {
+      callSid,
+      error: sttErr.message
+    });
+  }
   
   // ═══════════════════════════════════════════════════════════════════════════
   // 📊 CALL FLOW TRACER - Track this turn
