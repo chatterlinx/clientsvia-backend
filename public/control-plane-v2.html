@@ -106,7 +106,7 @@
     <button class="js-aicore-tab" data-aicore-target="templates">AiCore Templates</button>
     <button class="js-aicore-tab" data-aicore-target="live-scenarios">AiCore Live Scenarios</button>
     <button class="js-aicore-tab" data-aicore-target="cheat-sheet">Cheat Sheet</button>
-    <button class="js-aicore-tab" data-aicore-target="call-flow">Call Flow</button>
+    <!-- Call Flow REMOVED Dec 2025 - replaced by Mission Control in Cheat Sheet -->
     <!-- AiCore Knowledgebase REMOVED Dec 2025 - always showed zeros, Black Box is better -->
     <!-- Observability (AI Metrics) REMOVED Dec 2025 - broken, Black Box is better -->
     <button class="js-aicore-tab" data-aicore-target="black-box" style="color: #f97316;">📼 Black Box</button>
@@ -213,22 +213,7 @@
       </div>
       <!-- END CHEAT SHEET -->
 
-      <!-- AICORE: CALL FLOW -->
-      <div class="panel" data-aicore-panel="call-flow">
-        <div class="card">
-          <h2>Call Flow Designer</h2>
-          <p class="muted">Visual overview of Twilio → Frontline-Intel → LLM-0 → 3-Tier → Booking pipeline.</p>
-          
-          <!-- Call Flow Manager Container (ID must match CallFlowManager.js) -->
-          <div id="callflow-container" style="margin-top: 20px;">
-            <div style="text-align: center; padding: 40px; color: #6b7280;">
-              <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
-              <p>Loading call flow...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
+      <!-- Call Flow REMOVED Dec 2025 - replaced by Mission Control in Cheat Sheet -->
       <!-- AiCore Knowledgebase REMOVED Dec 2025 - always showed zeros -->
       <!-- Observability REMOVED Dec 2025 - broken, use Black Box instead -->
 
@@ -650,8 +635,7 @@
     window.aiCoreTemplatesManager = null;  // Uses window.aiCoreTemplatesManager in onclick
     window.aiCoreLiveScenariosManager = null;  // Uses aiCoreLiveScenariosManager in onclick
     window.cheatSheetManager = null;  // Uses cheatSheetManager in onclick
-    window.callFlowManager = null;  // Uses callFlowManager in onclick
-    // REMOVED Dec 2025: aiCoreKnowledgebaseManager, analyticsManager, llmCortexIntelInitialized
+    // REMOVED Dec 2025: callFlowManager (replaced by Mission Control), aiCoreKnowledgebaseManager, analyticsManager, llmCortexIntelInitialized
 
     // Mock parent object for all managers (matches company-profile.html interface)
     const mockParent = {
@@ -753,17 +737,7 @@
       }
     }
 
-    // Initialize CallFlowManager (no constructor params, load() takes companyId)
-    async function initCallFlowManager() {
-      if (!currentCompanyId) return;
-      if (!window.callFlowManager || window.callFlowManager.companyId !== currentCompanyId) {
-        console.log('🎯 [CONTROL PLANE] Initializing CallFlowManager');
-        await loadScript('/js/ai-agent-settings/CallFlowManager.js');
-        window.callFlowManager = new window.CallFlowManager();
-        window.callFlowManager.load(currentCompanyId);
-      }
-    }
-
+    // CallFlowManager REMOVED Dec 2025 - replaced by Mission Control
     // AiCoreKnowledgebaseManager REMOVED Dec 2025 - always showed zeros
     // AnalyticsManager REMOVED Dec 2025 - broken, Black Box is better
     // LLM Cortex Intel REMOVED Dec 2025 - obsolete, Black Box does everything better
@@ -1015,10 +989,7 @@
         } else if (target === 'cheat-sheet' && !window.cheatSheetManagerLoaded) {
           initCheatSheetManager();
           window.cheatSheetManagerLoaded = true;
-        } else if (target === 'call-flow' && !window.callFlowManagerLoaded) {
-          initCallFlowManager();
-          window.callFlowManagerLoaded = true;
-        // NUKED Dec 2025: knowledgebase, observability, llm-cortex-intel
+        // NUKED Dec 2025: call-flow (replaced by Mission Control), knowledgebase, observability, llm-cortex-intel
         } else if (target === 'agent-status') {
           initAgentStatus(); // Always refresh on tab click
         }

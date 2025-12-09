@@ -195,15 +195,7 @@ class AIAgentSettingsManager {
                 case 'aicore-cheat-sheet':
                     await this.loadAiCoreCheatSheet();
                     break;
-                case 'aicore-call-flow':
-                    await this.loadAiCoreCallFlow();
-                    break;
-                case 'aicore-knowledgebase':
-                    await this.loadAiCoreKnowledgebase();
-                    break;
-                case 'analytics':
-                    await this.loadAnalytics();
-                    break;
+                // REMOVED Dec 2025: aicore-call-flow (Mission Control), aicore-knowledgebase, analytics
                 default:
                     console.warn(`Unknown sub-tab: ${subTabName}`);
             }
@@ -336,53 +328,9 @@ class AIAgentSettingsManager {
         console.log('✅ [AI AGENT SETTINGS] Cheat Sheet loaded successfully');
     }
     
-    /**
-     * Load AiCore Call Flow sub-tab
-     */
-    async loadAiCoreCallFlow() {
-        console.log('🎯 [AI AGENT SETTINGS] Loading AiCore Call Flow...');
-        
-        // CallFlowManager is loaded globally from CallFlowManager.js
-        if (typeof callFlowManager === 'undefined') {
-            console.error('❌ [AI AGENT SETTINGS] CallFlowManager not found!');
-            this.showError('Call Flow manager failed to load');
-            return;
-        }
-        
-        // Load call flow data for this company
-        await callFlowManager.load(this.companyId);
-        
-        console.log('✅ [AI AGENT SETTINGS] Call Flow loaded successfully');
-    }
-    
-    /**
-     * Load AiCore Knowledgebase sub-tab (NEW)
-     */
-    async loadAiCoreKnowledgebase() {
-        console.log('🧠 [AI AGENT SETTINGS] Loading AiCore Knowledgebase...');
-        
-        if (!this.aiCoreKnowledgebaseManager) {
-            this.aiCoreKnowledgebaseManager = new AiCoreKnowledgebaseManager(this);
-            window.aiCoreKnowledgebaseManager = this.aiCoreKnowledgebaseManager;
-        }
-        
-        await this.aiCoreKnowledgebaseManager.load();
-    }
-    
-    /**
-     * Load Analytics sub-tab
-     */
-    async loadAnalytics() {
-        console.log('📊 [AI AGENT SETTINGS] Loading analytics...');
-        
-        if (!this.analyticsManager) {
-            this.analyticsManager = new AnalyticsManager(this.companyId);
-            // Expose globally for onclick handlers
-            window.analyticsManager = this.analyticsManager;
-        }
-        
-        await this.analyticsManager.load();
-    }
+    // REMOVED Dec 2025: loadAiCoreCallFlow (replaced by Mission Control)
+    // REMOVED Dec 2025: loadAiCoreKnowledgebase (always showed zeros)
+    // REMOVED Dec 2025: loadAnalytics (broken, use Black Box)
     
     /**
      * Update status banner with readiness score
