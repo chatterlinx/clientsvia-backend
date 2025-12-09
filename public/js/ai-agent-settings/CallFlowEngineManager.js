@@ -1127,7 +1127,7 @@ class CallFlowEngineManager {
             <div class="qa-modal">
                 <div class="qa-modal-header">
                     <h2>❓ Quick Answers Manager</h2>
-                    <button class="qa-modal-close" onclick="document.getElementById('qa-modal-backdrop').remove()">×</button>
+                    <button class="qa-modal-close" onclick="document.getElementById('qa-modal-backdrop').remove(); callFlowEngineManager.loadQuickAnswersSummary();">×</button>
                 </div>
                 <div class="qa-modal-body">
                     <div id="quickAnswersContainer" style="min-height: 300px;">
