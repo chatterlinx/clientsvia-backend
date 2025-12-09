@@ -112,11 +112,22 @@ const authorizeCompanyAccess = async (req, res, next) => {
     // ─────────────────────────────────────────────────────────────────────────
     
     // Get user's allowed companies (handle different formats)
-    const userCompanyIds = user.companyIds || user.companies || [];
+    // Check companyIds (array), companies (array), or companyId (single - most common)
+    let userCompanyIds = user.companyIds || user.companies || [];
+    
+    // Also check singular companyId (this is how our auth system works)
+    if (user.companyId) {
+      const singleCompanyId = typeof user.companyId === 'object' 
+        ? (user.companyId._id?.toString() || user.companyId.toString())
+        : user.companyId;
+      if (!userCompanyIds.includes(singleCompanyId)) {
+        userCompanyIds = [...userCompanyIds, singleCompanyId];
+      }
+    }
     
     // Convert to strings for comparison
     const allowedCompanies = userCompanyIds.map(id => 
-      typeof id === 'object' ? id.toString() : id
+      typeof id === 'object' ? (id._id?.toString() || id.toString()) : id
     );
     
     // Super admin check (has access to all companies)
