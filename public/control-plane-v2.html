@@ -145,7 +145,6 @@
     <div class="tab-group" data-group="admin" style="display: inline-flex; align-items: center; gap: 0; position: relative;">
       <span class="tab-group-indicator" style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #10b981; border-radius: 2px;" title="⚙️ Admin Tools - Version management"></span>
       <button class="js-cheat-tab cheatsheet-subtab-btn tab-admin" data-cheat-target="version-history" style="border-left: 3px solid #10b981;">📚 Version History</button>
-      <button class="js-cheat-tab cheatsheet-subtab-btn tab-admin" data-cheat-target="cheat-active-instructions" style="border-left: 3px solid #10b981;">Active Instructions Preview</button>
     </div>
   </nav>
 
@@ -999,7 +998,7 @@
     // CHEAT SHEET SUB-TABS (CONTROL PLANE NAV → CheatSheetManager)
     const cheatTabButtons = document.querySelectorAll('.js-cheat-tab');
     // All tabs now handled by CheatSheetManager - working tabs render normally, Coming Soon tabs show placeholder
-    const cheatTabsHandledByManager = new Set(['triage','frontline-intel','transfer-calls','edge-cases','behavior','guardrails','booking','company-contacts','links','calculator','version-history','cheat-active-instructions']);
+    const cheatTabsHandledByManager = new Set(['triage','frontline-intel','transfer-calls','edge-cases','behavior','guardrails','booking','company-contacts','links','calculator','version-history']);
     const cheatTabLabels = {
       'triage': 'Triage',
       'frontline-intel': 'Mission Control',
@@ -1011,8 +1010,7 @@
       'company-contacts': 'Company Contacts',
       'links': 'Links',
       'calculator': 'Calculator',
-      'version-history': 'Version History',
-      'cheat-active-instructions': 'Active Instructions Preview'
+      'version-history': 'Version History'
     };
 
     let activeCheatTab = 'triage';

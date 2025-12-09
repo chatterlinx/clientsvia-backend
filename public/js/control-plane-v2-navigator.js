@@ -88,7 +88,6 @@ class ControlPlaneV2Navigator {
       'versioning': { main: 'aicore', sub: 'versioning' },
       'observability': { main: 'aicore', sub: 'observability' },
       'llm-cortex-intel': { main: 'aicore', sub: 'llm-cortex-intel' },
-      'active-instructions': { main: 'aicore', sub: 'active-instructions' },
       
       // ============================================
       // COMPANYOPS TABS
