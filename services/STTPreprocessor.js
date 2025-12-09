@@ -178,9 +178,14 @@ class STTPreprocessor {
         const removed = [];
         let cleaned = transcript;
         
+        // CRITICAL: Never strip single-letter words that are essential parts of speech
+        // These should NEVER be fillers - they destroy sentence meaning
+        const PROTECTED_WORDS = new Set(['i', 'a', 'u', 'r', 'n', 'o', 'y']);
+        
         // Sort fillers by length (longest first) to handle multi-word fillers
         const sortedFillers = fillers
             .filter(f => f.enabled)
+            .filter(f => !PROTECTED_WORDS.has(f.phrase.toLowerCase())) // SKIP protected words
             .sort((a, b) => b.phrase.length - a.phrase.length);
         
         for (const filler of sortedFillers) {

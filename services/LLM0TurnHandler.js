@@ -2094,8 +2094,8 @@ class LLM0TurnHandler {
                         shouldLockBooking
                     }
                 });
-            } catch (e) {}
-        }
+            }
+        } catch (e) {}
         
         // Build updated call state
         const updatedCallState = {

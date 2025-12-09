@@ -2622,6 +2622,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             
             // Call LLM0TurnHandler directly - it has hybrid logic inside
             // Add timeout protection (4 seconds max)
+            
+            // SAFETY: Check LLM0TurnHandler exists (might be null if load failed)
+            if (!LLM0TurnHandler) {
+              throw new Error('LLM0TurnHandler not loaded - check startup logs');
+            }
+            
             result = await Promise.race([
               LLM0TurnHandler.handle({
                 decision: { action: 'AUTO', intentTag: null, confidence: 0 }, // Minimal decision - LLM figures it out
