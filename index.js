@@ -201,7 +201,7 @@ async function loadAllRoutes() {
         routes.v2ConnectionMessagesRoutes = await loadRouteWithTimeout('./routes/company/v2connectionMessages', 'v2ConnectionMessagesRoutes');
         routes.v2TTSRoutes = await loadRouteWithTimeout('./routes/company/v2tts', 'v2TTSRoutes');
         routes.v2AIAgentDiagnosticsRoutes = await loadRouteWithTimeout('./routes/company/v2aiAgentDiagnostics', 'v2AIAgentDiagnosticsRoutes');
-        routes.v2AIKnowledgebaseRoutes = await loadRouteWithTimeout('./routes/company/v2aiKnowledgebase', 'v2AIKnowledgebaseRoutes');
+        // v2AIKnowledgebaseRoutes REMOVED Dec 2025 - always showed zeros, Black Box is better
         routes.v2AILiveScenariosRoutes = await loadRouteWithTimeout('./routes/company/v2aiLiveScenarios', 'v2AILiveScenariosRoutes');
         routes.v2AICoreScenarios = await loadRouteWithTimeout('./routes/company/v2aiCoreScenarios', 'v2AICoreScenarios');
         // v2AIAnalyticsRoutes REMOVED Dec 2025 - broken observability, Black Box is better
@@ -224,7 +224,7 @@ async function loadAllRoutes() {
         routes.globalIntelligenceRoutes = await loadRouteWithTimeout('./routes/admin/globalIntelligence', 'globalIntelligenceRoutes'); // ADMIN: Global Production Intelligence (platform-wide 3-tier defaults, inheritance system)
         routes.enterpriseSuggestionsRoutes = await loadRouteWithTimeout('./routes/admin/enterpriseSuggestions', 'enterpriseSuggestionsRoutes'); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost)
         routes.healthRoutes = await loadRouteWithTimeout('./routes/health', 'healthRoutes');
-        routes.llm0TraceRoutes = await loadRouteWithTimeout('./routes/llm0-trace', 'llm0TraceRoutes'); // LLM-0 Cortex-Intel: Brain-1 trace API
+        // llm0TraceRoutes REMOVED Dec 2025 - LLM-0 Cortex-Intel nuked, Black Box is better
         routes.frontlineScriptBuilderRoutes = await loadRouteWithTimeout('./routes/admin/frontlineScriptBuilder', 'frontlineScriptBuilderRoutes'); // Frontline Script Builder: LLM-powered script generation
         
         // REMOVED: Legacy V2 AI Intelligence routes - archived to prevent external LLM dependencies
@@ -439,7 +439,7 @@ function registerRoutes(routes) {
     app.use('/api/company', routes.v2ConnectionMessagesRoutes); // V2: Connection Messages (AI Agent Settings - Messages & Greetings tab)
     app.use('/api/company', routes.v2TTSRoutes); // V2: Text-to-Speech for voice testing and preview (AI Voice Settings tab)
     app.use('/api/company', routes.v2AIAgentDiagnosticsRoutes); // V2: System Diagnostics (AI Agent Settings - copy/paste for debugging)
-    app.use('/api', routes.v2AIKnowledgebaseRoutes); // V2: AiCore Knowledgebase (AI performance monitoring & action items)
+    // v2AIKnowledgebaseRoutes REMOVED Dec 2025 - nuked
     app.use('/api', routes.v2AILiveScenariosRoutes); // V2: AiCore Live Scenarios (real-time scenario browser from all templates)
     app.use('/api', routes.v2AICoreScenarios); // V2: AiCore Scenario Controls (per-company enable/disable toggles)
     // v2AIAnalyticsRoutes REMOVED Dec 2025 - broken, Black Box is better
@@ -462,7 +462,7 @@ function registerRoutes(routes) {
     app.use('/api/admin', routes.globalIntelligenceRoutes); // ADMIN: Global Production Intelligence API (platform-wide 3-tier defaults, inheritance system)
     app.use('/api/admin/suggestions', routes.enterpriseSuggestionsRoutes); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost projections)
     app.use('/api', routes.healthRoutes); // SYSTEM: Health check endpoint for systems (Call Archives, Spam Filter)
-    app.use('/api/llm0', routes.llm0TraceRoutes); // LLM-0 Cortex-Intel: Brain-1 trace API for debugging
+    // llm0TraceRoutes REMOVED Dec 2025 - nuked
     app.use('/api/admin/frontline-script', routes.frontlineScriptBuilderRoutes); // Frontline Script Builder: LLM-powered script generation
     // app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system

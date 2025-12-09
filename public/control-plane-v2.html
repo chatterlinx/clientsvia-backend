@@ -107,7 +107,7 @@
     <button class="js-aicore-tab" data-aicore-target="live-scenarios">AiCore Live Scenarios</button>
     <button class="js-aicore-tab" data-aicore-target="cheat-sheet">Cheat Sheet</button>
     <button class="js-aicore-tab" data-aicore-target="call-flow">Call Flow</button>
-    <button class="js-aicore-tab" data-aicore-target="knowledgebase">AiCore Knowledgebase</button>
+    <!-- AiCore Knowledgebase REMOVED Dec 2025 - always showed zeros, Black Box is better -->
     <!-- Observability (AI Metrics) REMOVED Dec 2025 - broken, Black Box is better -->
     <button class="js-aicore-tab" data-aicore-target="black-box" style="color: #f97316;">📼 Black Box</button>
     <!-- LLM-0 Cortex-Intel REMOVED Dec 2025 - obsolete, Black Box does everything better -->
@@ -229,22 +229,7 @@
         </div>
       </div>
 
-      <!-- AICORE: KNOWLEDGEBASE -->
-      <div class="panel" data-aicore-panel="knowledgebase">
-        <div class="card">
-          <h2>AiCore Knowledgebase</h2>
-          <p class="muted">Company Q&A, Trade Q&A, scenario content backing Tier-1/Tier-2 answers.</p>
-          
-          <!-- Knowledgebase Manager Container -->
-          <div id="aicore-knowledgebase-container" style="margin-top: 20px;">
-            <div style="text-align: center; padding: 40px; color: #6b7280;">
-              <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
-              <p>Loading knowledgebase...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
+      <!-- AiCore Knowledgebase REMOVED Dec 2025 - always showed zeros -->
       <!-- Observability REMOVED Dec 2025 - broken, use Black Box instead -->
 
       <!-- AICORE: BLACK BOX RECORDER -->
@@ -666,9 +651,7 @@
     window.aiCoreLiveScenariosManager = null;  // Uses aiCoreLiveScenariosManager in onclick
     window.cheatSheetManager = null;  // Uses cheatSheetManager in onclick
     window.callFlowManager = null;  // Uses callFlowManager in onclick
-    window.aiCoreKnowledgebaseManager = null;  // Uses aiCoreKnowledgebaseManager in onclick
-    window.analyticsManager = null;  // Uses window.analyticsManager in onclick
-    window.llmCortexIntelInitialized = false;  // Track if LLM Cortex Intel panel has been initialized
+    // REMOVED Dec 2025: aiCoreKnowledgebaseManager, analyticsManager, llmCortexIntelInitialized
 
     // Mock parent object for all managers (matches company-profile.html interface)
     const mockParent = {
@@ -781,17 +764,7 @@
       }
     }
 
-    // Initialize AiCoreKnowledgebaseManager
-    async function initKnowledgebaseManager() {
-      if (!currentCompanyId) return;
-      if (!window.aiCoreKnowledgebaseManager) {
-        console.log('🎯 [CONTROL PLANE] Initializing AiCoreKnowledgebaseManager');
-        await loadScript('/js/ai-agent-settings/AiCoreKnowledgebaseManager.js');
-        window.aiCoreKnowledgebaseManager = new window.AiCoreKnowledgebaseManager(mockParent);
-        window.aiCoreKnowledgebaseManager.load();
-      }
-    }
-
+    // AiCoreKnowledgebaseManager REMOVED Dec 2025 - always showed zeros
     // AnalyticsManager REMOVED Dec 2025 - broken, Black Box is better
     // LLM Cortex Intel REMOVED Dec 2025 - obsolete, Black Box does everything better
 
@@ -1045,11 +1018,7 @@
         } else if (target === 'call-flow' && !window.callFlowManagerLoaded) {
           initCallFlowManager();
           window.callFlowManagerLoaded = true;
-        } else if (target === 'knowledgebase' && !window.knowledgebaseManagerLoaded) {
-          initKnowledgebaseManager();
-          window.knowledgebaseManagerLoaded = true;
-        // Observability REMOVED Dec 2025 - broken, Black Box is better
-        // LLM Cortex Intel REMOVED Dec 2025 - obsolete
+        // NUKED Dec 2025: knowledgebase, observability, llm-cortex-intel
         } else if (target === 'agent-status') {
           initAgentStatus(); // Always refresh on tab click
         }
