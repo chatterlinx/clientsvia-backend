@@ -722,6 +722,33 @@ class CallFlowEngineManager {
                         </div>
                     </div>
                 `;
+            
+            case 'Quick Answers':
+                if (result.matched) {
+                    return `
+                        <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 12px;">
+                            <div style="font-weight: 600; color: #166534; margin-bottom: 8px;">✅ Would use Quick Answer!</div>
+                            <div style="margin-bottom: 6px;">
+                                <span style="color: #6b7280; font-size: 11px;">QUESTION:</span>
+                                <span style="font-weight: 500;"> ${result.question}</span>
+                            </div>
+                            <div style="margin-bottom: 6px;">
+                                <span style="color: #6b7280; font-size: 11px;">ANSWER:</span>
+                                <span style="font-style: italic;"> "${result.answer}"</span>
+                            </div>
+                            <div style="font-size: 11px; color: #6b7280;">
+                                Matched trigger: <code style="background: #dcfce7; padding: 2px 6px; border-radius: 4px;">${result.matchedTrigger}</code>
+                                • Category: ${result.category || 'general'}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div style="color: #92400e;">
+                            No quick answer matched — Checked ${result.answersChecked || 0} answers
+                        </div>
+                    `;
+                }
                 
             case 'Triage Match':
                 if (result.matched) {

@@ -401,6 +401,67 @@ router.post('/:companyId/test-full', authenticateJWT, async (req, res) => {
         }
         
         // ════════════════════════════════════════════════════════════════════════
+        // STEP 1.5: QUICK ANSWERS CHECK
+        // ════════════════════════════════════════════════════════════════════════
+        let quickAnswerResult = null;
+        try {
+            const quickAnswers = callFlowEngine.quickAnswers || [];
+            const lowerInput = sentence.toLowerCase();
+            
+            // Find matching quick answer by triggers
+            let matchedQA = null;
+            let matchedTrigger = null;
+            
+            for (const qa of quickAnswers) {
+                if (!qa.enabled) continue;
+                
+                for (const trigger of (qa.triggers || [])) {
+                    if (lowerInput.includes(trigger.toLowerCase())) {
+                        matchedQA = qa;
+                        matchedTrigger = trigger;
+                        break;
+                    }
+                }
+                if (matchedQA) break;
+            }
+            
+            if (matchedQA) {
+                quickAnswerResult = {
+                    matched: true,
+                    question: matchedQA.question,
+                    answer: matchedQA.answer?.substring(0, 150) + (matchedQA.answer?.length > 150 ? '...' : ''),
+                    category: matchedQA.category,
+                    matchedTrigger
+                };
+                
+                trace.steps.push({
+                    step: 1.5,
+                    name: 'Quick Answers',
+                    status: 'MATCHED',
+                    result: quickAnswerResult
+                });
+            } else {
+                trace.steps.push({
+                    step: 1.5,
+                    name: 'Quick Answers',
+                    status: 'NO_MATCH',
+                    result: {
+                        matched: false,
+                        answersChecked: quickAnswers.filter(qa => qa.enabled).length,
+                        note: 'No quick answer triggers matched'
+                    }
+                });
+            }
+        } catch (qaError) {
+            trace.steps.push({
+                step: 1.5,
+                name: 'Quick Answers',
+                status: 'ERROR',
+                error: qaError.message
+            });
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════
         // STEP 2: TRIAGE CARD MATCHING
         // ════════════════════════════════════════════════════════════════════════
         let triageResult = null;
