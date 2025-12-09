@@ -1042,6 +1042,15 @@ class CallFlowEngineManager {
         if (!window.QuickAnswersManager) {
             try {
                 await this.loadScript('/js/ai-agent-settings/QuickAnswersManager.js');
+                // Wait for class to be available (race condition fix)
+                let retries = 0;
+                while (!window.QuickAnswersManager && retries < 10) {
+                    await new Promise(r => setTimeout(r, 50));
+                    retries++;
+                }
+                if (!window.QuickAnswersManager) {
+                    throw new Error('QuickAnswersManager not available after loading');
+                }
                 console.log('[CALL FLOW ENGINE] ✅ QuickAnswersManager script loaded');
             } catch (err) {
                 console.error('[CALL FLOW ENGINE] ❌ Failed to load QuickAnswersManager:', err);
