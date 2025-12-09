@@ -931,7 +931,7 @@ class AgentStatusManager {
    * This keeps the tab indicator always up-to-date
    */
   startBackgroundMonitoring() {
-    console.log('[AGENT STATUS] Starting background health monitoring (every 60s)');
+    // Silent start - no console spam
     
     // Initial check
     this.updateTabHealth();
@@ -955,11 +955,12 @@ class AgentStatusManager {
       
       // Update tab indicator with current health status
       this.updateTabIndicator(health.status);
-      
-      console.log('[AGENT STATUS] Background health check:', health.status);
+      // Silent success - no console spam
     } catch (error) {
-      console.error('[AGENT STATUS] Background health check failed:', error);
-      // On error, mark as down
+      // Only log real errors, not network blips
+      if (error.message && !error.message.includes('fetch')) {
+        console.warn('[AGENT STATUS] Health check error:', error.message);
+      }
       this.updateTabIndicator('down');
     }
   }

@@ -1602,18 +1602,21 @@
           };
           
           indicator.textContent = statusEmoji[status] || '⚪';
-          console.log('[BACKGROUND HEALTH] Status:', status);
+          // Silent success - only log errors
         } else {
           indicator.textContent = '🟡'; // API error = degraded
         }
       } catch (error) {
-        console.error('[BACKGROUND HEALTH] Check failed:', error.message);
+        // Only log real errors, not network blips
+        if (!error.message.includes('Failed to fetch')) {
+          console.warn('[HEALTH] Check failed:', error.message);
+        }
         indicator.textContent = '🔴'; // Network error = down
       }
     }
     
     function startBackgroundHealthMonitor() {
-      console.log('[BACKGROUND HEALTH] Starting monitor (checks every 60s)');
+      // Silent start - no console spam
       
       // Initial check immediately
       checkAgentHealth();
