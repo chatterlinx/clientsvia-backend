@@ -203,6 +203,19 @@ class STTPreprocessor {
             // NEGATION - Critical for understanding refusals
             'not', 'dont', "don't", 'never', 'none', 'nothing',
             
+            // ESSENTIAL VERBS - Removing these destroys grammar
+            'do', 'does', 'did', 'done',
+            'is', 'are', 'was', 'were', 'be', 'been', 'being',
+            'have', 'has', 'had',
+            'can', 'could', 'will', 'would', 'should', 'may', 'might', 'must',
+            'need', 'want', 'get', 'got',
+            
+            // CONJUNCTIONS - Critical for compound sentences
+            'and', 'or', 'but', 'if', 'then', 'so', 'because',
+            
+            // ARTICLES - Essential grammar
+            'the', 'an',
+            
             // NUMBERS - Often part of addresses/phone numbers
             'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'zero'
         ]);

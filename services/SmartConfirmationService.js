@@ -97,20 +97,21 @@ class SmartConfirmationService {
             };
         }
         
-        // Confidence-based confirmation
-        const confThreshold = settings.confirmBelowConfidence || 0.75;
-        if (confidence < confThreshold && actionLower !== 'continue') {
-            const phrase = (settings.lowConfidencePhrase || defaultSettings.lowConfidencePhrase)
-                .replace('{detected_intent}', callState?.detectedIntent || 'this');
-            
-            return {
-                needsConfirmation: true,
-                confirmationPhrase: phrase,
-                pendingAction: action,
-                severity: 'low',
-                reason: 'low_confidence'
-            };
-        }
+        // ════════════════════════════════════════════════════════════════════════
+        // LOW CONFIDENCE CONFIRMATION - DISABLED (Dec 2025)
+        // ════════════════════════════════════════════════════════════════════════
+        // Problem: This was causing infinite loops because:
+        //   1. No triggers matched → confidence = 0
+        //   2. Confirmation asked → User says "yes"
+        //   3. Next turn → Still no triggers → confidence = 0 → Loop!
+        //
+        // Solution: Let the LLM ask NATURAL clarifying questions instead
+        // of robotic "was that a yes or no?" confirmations.
+        //
+        // Keep confirmations ONLY for high-risk: transfer, emergency, cancel
+        // ════════════════════════════════════════════════════════════════════════
+        // const confThreshold = settings.confirmBelowConfidence || 0.75;
+        // if (confidence < confThreshold && actionLower !== 'continue') { ... }
         
         return { needsConfirmation: false };
     }
