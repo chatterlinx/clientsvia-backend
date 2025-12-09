@@ -154,6 +154,40 @@ class STTSettingsManager {
                     </p>
                 </div>
                 
+                <!-- Quick Actions Bar -->
+                <div style="display: flex; gap: 12px; margin-bottom: 16px; padding: 12px; background: linear-gradient(135deg, #1e293b, #334155); border-radius: 12px;">
+                    <button onclick="sttManager.seedAll()" style="
+                        padding: 10px 20px;
+                        background: linear-gradient(135deg, #10b981, #059669);
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-weight: 600;
+                        font-size: 14px;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                    " title="One-click: Add keywords, corrections, and remove bad fillers">
+                        🚀 Seed All Defaults
+                    </button>
+                    <button onclick="sttManager.cleanBadFillers()" style="
+                        padding: 10px 20px;
+                        background: linear-gradient(135deg, #f59e0b, #d97706);
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-weight: 600;
+                        font-size: 14px;
+                    " title="Remove yes/no/do/and/etc. that break conversations">
+                        🧹 Clean Bad Fillers
+                    </button>
+                    <div style="flex: 1; display: flex; align-items: center; justify-content: flex-end; color: #94a3b8; font-size: 13px;">
+                        💡 Click "Seed All Defaults" to populate with industry-standard settings
+                    </div>
+                </div>
+                
                 <!-- Stats Row -->
                 <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px;">
                     ${this.renderStatCard('Fillers', this.profile.fillers?.length || 0, '🔇', '#6366f1')}
@@ -920,6 +954,81 @@ class STTSettingsManager {
         } catch (error) {
             console.error('[STT] Seed keywords error:', error);
             this.showToast('Error seeding keywords', 'error');
+        }
+    }
+    
+    /**
+     * 🚀 SEED ALL DEFAULTS - One-click comprehensive setup
+     */
+    async seedAll() {
+        if (!confirm('🚀 SEED ALL DEFAULTS\n\nThis will:\n✅ Add 30+ HVAC keywords\n✅ Add common mishear corrections\n✅ Remove bad fillers (yes, no, do, and, etc.)\n\nThis is the recommended starting configuration.\nDuplicates will be skipped.\n\nProceed?')) {
+            return;
+        }
+        
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+        
+        try {
+            this.showToast('🚀 Seeding all defaults...', 'info');
+            
+            const response = await fetch(`/api/admin/stt-profile/${this.templateId}/seed-all`, {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                await this.loadProfile();
+                this.render();
+                this.showToast(`✅ ${result.message}`, 'success');
+            } else {
+                this.showToast(`❌ ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('[STT] Seed all error:', error);
+            this.showToast('Error seeding defaults', 'error');
+        }
+    }
+    
+    /**
+     * 🧹 CLEAN BAD FILLERS - Remove words that break conversations
+     */
+    async cleanBadFillers() {
+        if (!confirm('🧹 CLEAN BAD FILLERS\n\nThis will remove words that should NEVER be stripped:\n• Confirmations: yes, no, yeah, okay\n• Pronouns: you, we, they, it\n• Grammar: do, does, is, are, and, or\n• Questions: what, when, where, how\n\nThese cause infinite loops when stripped!\n\nProceed?')) {
+            return;
+        }
+        
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+        
+        try {
+            this.showToast('🧹 Cleaning bad fillers...', 'info');
+            
+            const response = await fetch(`/api/admin/stt-profile/${this.templateId}/clean-bad-fillers`, {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                await this.loadProfile();
+                this.render();
+                this.showToast(`✅ ${result.message}`, 'success');
+                if (result.removedWords?.length > 0) {
+                    console.log('[STT] Removed bad fillers:', result.removedWords);
+                }
+            } else {
+                this.showToast(`❌ ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('[STT] Clean fillers error:', error);
+            this.showToast('Error cleaning fillers', 'error');
         }
     }
     

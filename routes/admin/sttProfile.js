@@ -1228,4 +1228,195 @@ router.post('/:templateId/seed-hvac-keywords', authenticateJWT, requireRole('adm
     }
 });
 
+// ============================================================================
+// CLEAN BAD FILLERS - Remove words that should NEVER be stripped
+// ============================================================================
+
+/**
+ * POST /api/admin/stt-profile/:templateId/clean-bad-fillers
+ * Remove confirmation words, pronouns, grammar words that cause loops
+ */
+router.post('/:templateId/clean-bad-fillers', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        
+        // Words that should NEVER be fillers (from STTPreprocessor.js)
+        const PROTECTED_WORDS = new Set([
+            // Confirmations
+            'yes', 'no', 'yeah', 'yep', 'nope', 'yup', 'nah',
+            'okay', 'ok', 'alright', 'sure', 'correct', 'right',
+            'absolutely', 'definitely', 'certainly', 'exactly',
+            
+            // Pronouns
+            'you', 'we', 'they', 'he', 'she', 'it', 'me', 'us', 'them',
+            'your', 'my', 'our', 'their', 'his', 'her', 'its', 'i',
+            
+            // Question words
+            'what', 'when', 'where', 'who', 'how', 'why', 'which',
+            
+            // Negation
+            'not', 'dont', "don't", 'never', 'none', 'nothing',
+            
+            // Essential verbs
+            'do', 'does', 'did', 'done',
+            'is', 'are', 'was', 'were', 'be', 'been', 'being',
+            'have', 'has', 'had',
+            'can', 'could', 'will', 'would', 'should', 'may', 'might', 'must',
+            'need', 'want', 'get', 'got',
+            
+            // Conjunctions & articles
+            'and', 'or', 'but', 'if', 'then', 'so', 'because',
+            'the', 'a', 'an',
+            
+            // Numbers
+            'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'zero'
+        ]);
+        
+        const profile = await STTProfile.findOne({ templateId, isActive: true });
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        const originalFillers = profile.fillerWords || [];
+        const cleanedFillers = originalFillers.filter(f => {
+            const phrase = (f.phrase || '').toLowerCase().trim();
+            return !PROTECTED_WORDS.has(phrase);
+        });
+        
+        const removed = originalFillers.length - cleanedFillers.length;
+        const removedWords = originalFillers
+            .filter(f => PROTECTED_WORDS.has((f.phrase || '').toLowerCase().trim()))
+            .map(f => f.phrase);
+        
+        profile.fillerWords = cleanedFillers;
+        profile.updatedBy = req.user._id;
+        await profile.save();
+        
+        // Clear cache
+        STTPreprocessor.clearCache(templateId);
+        
+        logger.info('[STT PROFILE API] Cleaned bad fillers', { 
+            templateId, 
+            removed, 
+            remaining: cleanedFillers.length,
+            removedWords 
+        });
+        
+        res.json({ 
+            success: true, 
+            message: `Removed ${removed} bad fillers, ${cleanedFillers.length} remaining`,
+            removed,
+            remaining: cleanedFillers.length,
+            removedWords
+        });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to clean fillers', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// SEED ALL DEFAULTS - Comprehensive one-click setup
+// ============================================================================
+
+/**
+ * POST /api/admin/stt-profile/:templateId/seed-all
+ * One-click seed: keywords + corrections + clean bad fillers
+ */
+router.post('/:templateId/seed-all', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        const results = { keywords: 0, corrections: 0, fillersRemoved: 0 };
+        
+        const profile = await STTProfile.findOne({ templateId, isActive: true });
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        // 1. CLEAN BAD FILLERS
+        const PROTECTED_WORDS = new Set([
+            'yes', 'no', 'yeah', 'yep', 'nope', 'yup', 'nah', 'okay', 'ok', 'alright', 'sure', 'correct', 'right',
+            'you', 'we', 'they', 'he', 'she', 'it', 'me', 'us', 'them', 'your', 'my', 'our', 'their', 'i',
+            'what', 'when', 'where', 'who', 'how', 'why', 'which',
+            'not', 'dont', "don't", 'never', 'none', 'nothing',
+            'do', 'does', 'did', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had',
+            'can', 'could', 'will', 'would', 'should', 'may', 'might', 'must', 'need', 'want', 'get', 'got',
+            'and', 'or', 'but', 'if', 'then', 'so', 'because', 'the', 'a', 'an',
+            'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'zero'
+        ]);
+        
+        const originalFillers = profile.fillerWords || [];
+        profile.fillerWords = originalFillers.filter(f => !PROTECTED_WORDS.has((f.phrase || '').toLowerCase().trim()));
+        results.fillersRemoved = originalFillers.length - profile.fillerWords.length;
+        
+        // 2. SEED KEYWORDS (HVAC for now - template-specific in future)
+        const hvacKeywords = [
+            { phrase: 'air conditioner', boostWeight: 8 }, { phrase: 'AC', boostWeight: 10 },
+            { phrase: 'HVAC', boostWeight: 10 }, { phrase: 'furnace', boostWeight: 8 },
+            { phrase: 'heat pump', boostWeight: 8 }, { phrase: 'thermostat', boostWeight: 9 },
+            { phrase: 'compressor', boostWeight: 7 }, { phrase: 'condenser', boostWeight: 7 },
+            { phrase: 'refrigerant', boostWeight: 8 }, { phrase: 'freon', boostWeight: 8 },
+            { phrase: 'maintenance', boostWeight: 9 }, { phrase: 'tune up', boostWeight: 9 },
+            { phrase: 'repair', boostWeight: 9 }, { phrase: 'installation', boostWeight: 8 },
+            { phrase: 'emergency', boostWeight: 10 }, { phrase: 'no heat', boostWeight: 9 },
+            { phrase: 'no AC', boostWeight: 9 }, { phrase: 'no cooling', boostWeight: 9 },
+            { phrase: 'not working', boostWeight: 8 }, { phrase: 'broken', boostWeight: 8 },
+            { phrase: 'leaking', boostWeight: 8 }, { phrase: 'frozen', boostWeight: 8 },
+            { phrase: 'appointment', boostWeight: 9 }, { phrase: 'schedule', boostWeight: 9 },
+            { phrase: 'technician', boostWeight: 8 }, { phrase: 'today', boostWeight: 8 },
+            { phrase: 'tomorrow', boostWeight: 8 }, { phrase: 'ASAP', boostWeight: 8 },
+            { phrase: 'service', boostWeight: 9 }, { phrase: 'air conditioning', boostWeight: 9 }
+        ];
+        
+        profile.vocabulary = profile.vocabulary || {};
+        profile.vocabulary.boostedKeywords = profile.vocabulary.boostedKeywords || [];
+        const existingPhrases = new Set(profile.vocabulary.boostedKeywords.map(k => k.phrase.toLowerCase()));
+        
+        for (const kw of hvacKeywords) {
+            if (!existingPhrases.has(kw.phrase.toLowerCase())) {
+                profile.vocabulary.boostedKeywords.push({ ...kw, enabled: true, addedBy: 'seed' });
+                results.keywords++;
+            }
+        }
+        
+        // 3. SEED COMMON CORRECTIONS
+        const commonCorrections = [
+            { mishearing: 'condition in', correction: 'conditioning', context: 'air' },
+            { mishearing: 'AC unit', correction: 'AC unit', context: '' },
+            { mishearing: 'thermal stat', correction: 'thermostat', context: '' },
+            { mishearing: 'air condition', correction: 'air conditioning', context: '' },
+            { mishearing: 'fridge rant', correction: 'refrigerant', context: '' }
+        ];
+        
+        profile.corrections = profile.corrections || [];
+        const existingCorrections = new Set(profile.corrections.map(c => c.mishearing?.toLowerCase()));
+        
+        for (const corr of commonCorrections) {
+            if (!existingCorrections.has(corr.mishearing.toLowerCase())) {
+                profile.corrections.push({ ...corr, enabled: true, addedBy: 'seed' });
+                results.corrections++;
+            }
+        }
+        
+        profile.updatedBy = req.user._id;
+        await profile.save();
+        
+        // Clear cache
+        STTPreprocessor.clearCache(templateId);
+        
+        logger.info('[STT PROFILE API] Seeded all defaults', { templateId, results });
+        
+        res.json({ 
+            success: true, 
+            message: `Seeded: ${results.keywords} keywords, ${results.corrections} corrections, removed ${results.fillersRemoved} bad fillers`,
+            results
+        });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to seed all', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;
