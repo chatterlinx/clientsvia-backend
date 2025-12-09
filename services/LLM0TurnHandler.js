@@ -649,14 +649,12 @@ class LLM0TurnHandler {
         });
         
         // ════════════════════════════════════════════════════════════════════════════
-        // 🔧 SERVICE TYPE CLARIFICATION - "Is this repair or maintenance?"
-        // ════════════════════════════════════════════════════════════════════════════
-        // CRITICAL: Companies may have DIFFERENT CALENDARS for repair vs maintenance
-        // We MUST know which type BEFORE we can properly book the appointment!
+        // 🔧 SERVICE TYPE CLARIFICATION - REMOVED Dec 2025
+        // This was redundant with Triage. Triage handles intent clarification.
         // ════════════════════════════════════════════════════════════════════════════
         
-        const ServiceTypeClarifier = require('./ServiceTypeClarifier');
-        const stConfig = company?.aiAgentSettings?.serviceTypeClarification;
+        // ServiceTypeClarifier REMOVED - Triage handles this now
+        const stConfig = null; // Disabled
         
         // Check if service type already determined (from previous turn or clear keywords)
         if (!callState?.serviceTypeDetected) {
@@ -1325,11 +1323,19 @@ class LLM0TurnHandler {
         
         switch (currentStep) {
             // ════════════════════════════════════════════════════════════════════════════
-            // 🔧 SERVICE TYPE CLARIFICATION RESPONSE
+            // 🔧 SERVICE TYPE CLARIFICATION - REMOVED Dec 2025
+            // Triage handles intent clarification now. This case should never be reached.
             // ════════════════════════════════════════════════════════════════════════════
             case 'ASK_SERVICE_TYPE':
             case 'service_type_clarification':
-                const ServiceTypeClarifier = require('./ServiceTypeClarifier');
+                // ServiceTypeClarifier REMOVED - fall through to ask name
+                nextStep = 'ASK_NAME';
+                responseText = "May I have your name please?";
+                break;
+                
+            // LEGACY CODE BELOW - kept for reference but unreachable
+            case '_LEGACY_SERVICE_TYPE_DISABLED':
+                const ServiceTypeClarifier = { detectServiceType: () => null }; // stub
                 // Get company config - need to load it fresh here
                 let stConfig = null;
                 try {

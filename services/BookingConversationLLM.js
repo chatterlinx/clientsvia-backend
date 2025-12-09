@@ -419,10 +419,8 @@ OUTPUT JSON:
      * Determine the next booking step based on what we have
      */
     static determineNextStep(currentStep, collected, config) {
-        // Do we need service type clarification?
-        const needsServiceType = config?.serviceTypeClarification?.enabled !== false && 
-            !collected.serviceType && 
-            currentStep !== 'ASK_SERVICE_TYPE';
+        // Service type clarification REMOVED Dec 2025 - Triage handles this
+        const needsServiceType = false; // Disabled
         
         // Priority order of slots
         if (needsServiceType && currentStep === 'ASK_NAME') {
