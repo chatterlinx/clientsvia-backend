@@ -254,6 +254,10 @@ router.post('/:templateId/vocabulary', authenticateJWT, requireRole('admin'), as
             return res.status(404).json({ success: false, error: 'Profile not found' });
         }
         
+        // Ensure vocabulary structure exists
+        profile.vocabulary = profile.vocabulary || {};
+        profile.vocabulary.boostedKeywords = profile.vocabulary.boostedKeywords || [];
+        
         // Check for duplicate
         const normalized = phrase.toLowerCase().trim();
         if (profile.vocabulary.boostedKeywords.some(k => k.phrase.toLowerCase() === normalized)) {
@@ -366,6 +370,9 @@ router.post('/:templateId/corrections', authenticateJWT, requireRole('admin'), a
         if (!profile) {
             return res.status(404).json({ success: false, error: 'Profile not found' });
         }
+        
+        // Ensure corrections array exists
+        profile.corrections = profile.corrections || [];
         
         // Check for duplicate
         const normalizedHeard = heard.toLowerCase().trim();
@@ -903,8 +910,11 @@ router.post('/:templateId/seed-address-corrections', authenticateJWT, requireRol
         let profile = await STTProfile.findOne({ templateId, isActive: true });
         
         if (!profile) {
-            profile = await STTProfile.createForTemplate(templateId);
+            return res.status(404).json({ success: false, error: 'STT Profile not found. Please create one first.' });
         }
+        
+        // Ensure corrections array exists
+        profile.corrections = profile.corrections || [];
         
         // Add corrections that don't already exist
         let added = 0;
