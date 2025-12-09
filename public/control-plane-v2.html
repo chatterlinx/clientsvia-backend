@@ -110,7 +110,7 @@
     <button class="js-aicore-tab" data-aicore-target="knowledgebase">AiCore Knowledgebase</button>
     <button class="js-aicore-tab" data-aicore-target="observability">Observability (AI Metrics)</button>
     <button class="js-aicore-tab" data-aicore-target="black-box" style="color: #f97316;">📼 Black Box</button>
-    <button class="js-aicore-tab" data-aicore-target="llm-cortex-intel">LLM-0 Cortex-Intel</button>
+    <!-- LLM-0 Cortex-Intel REMOVED Dec 2025 - obsolete, Black Box does everything better -->
     <button class="js-aicore-tab" id="agent-status-tab" data-aicore-target="agent-status">
       <span id="agent-status-indicator">⚪</span> Live Agent Status
     </button>
@@ -310,10 +310,7 @@
         </div>
       </div>
 
-      <!-- AICORE: LLM-0 CORTEX-INTEL -->
-      <div class="panel" data-aicore-panel="llm-cortex-intel">
-        <div id="llm-cortex-intel-panel"></div>
-      </div>
+      <!-- LLM-0 Cortex-Intel REMOVED Dec 2025 - obsolete -->
 
       <!-- AICORE: LIVE AGENT STATUS -->
       <div class="panel" data-aicore-panel="agent-status">
@@ -820,17 +817,7 @@
       }
     }
 
-    // Initialize LLM Cortex Intel panel
-    async function initLlmCortexIntel() {
-      if (!currentCompanyId) return;
-      await loadScript('/js/ai-agent-settings/LlmCortexIntelManager.js');
-      if (typeof window.initLlmCortexIntelPanel === 'function') {
-        console.log('🎯 [CONTROL PLANE] Initializing LLM Cortex Intel panel');
-        window.initLlmCortexIntelPanel(currentCompanyId);
-      } else {
-        console.error('🎯 [CONTROL PLANE] LlmCortexIntelManager not loaded!');
-      }
-    }
+    // LLM Cortex Intel REMOVED Dec 2025 - obsolete, Black Box does everything better
 
     // Initialize Agent Status Manager
     async function initAgentStatus() {
@@ -1088,9 +1075,7 @@
         } else if (target === 'observability' && !window.analyticsManagerLoaded) {
           initAnalyticsManager();
           window.analyticsManagerLoaded = true;
-        } else if (target === 'llm-cortex-intel' && !window.llmCortexIntelInitialized) {
-          initLlmCortexIntel();
-          window.llmCortexIntelInitialized = true;
+        // LLM Cortex Intel REMOVED Dec 2025
         } else if (target === 'agent-status') {
           initAgentStatus(); // Always refresh on tab click
         }
