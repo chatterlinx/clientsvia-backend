@@ -93,17 +93,27 @@ class HybridScenarioSelector {
         // ============================================
         // 🔇 FILLER WORDS (DATABASE-DRIVEN)
         // ============================================
-        // CRITICAL: Filler words are now TEMPLATE-SPECIFIC and editable in UI
-        // If provided (from template), use those; otherwise use fallback defaults
+        // CRITICAL: These are TRUE fillers that add no meaning.
+        // DO NOT add confirmation words, pronouns, or question words here!
+        // Those are protected in STTPreprocessor.js
         const defaultFillerWords = [
-            'um', 'uh', 'like', 'you', 'know', 'i', 'mean', 'basically',
-            'actually', 'so', 'well', 'okay', 'alright', 'right', 'the',
-            'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were',
-            'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does',
-            'did', 'will', 'would', 'should', 'could', 'can', 'may',
-            'might', 'must', 'what', 'when', 'where', 'who', 'how', 'why',
-            'please', 'thanks', 'thank', 'yes', 'no', 'yeah', 'yep', 'nope',
-            'hi', 'hey', 'hello', 'you guys', 'today', 'there'
+            // TRUE fillers - sounds that add no meaning
+            'um', 'uh', 'er', 'ah', 'hmm',
+            
+            // Discourse markers (can be stripped safely)
+            'like', 'basically', 'actually', 'literally',
+            'i mean', 'you know', 'sort of', 'kind of',
+            
+            // Greetings (context: caller already greeted by agent)
+            'hi', 'hey', 'hello', 'howdy',
+            
+            // Politeness (captured but not needed for intent)
+            'please', 'thanks', 'thank you'
+            
+            // NOTE: Removed dangerous words that were causing infinite loops:
+            // - yes, no, yeah, yep, nope, okay, alright (confirmations!)
+            // - you, what, when, where, who, how, why (essential meaning!)
+            // - the, a, an, is, are, was, were (grammar!)
         ];
         
         // Use provided filler words from template, or fall back to defaults

@@ -178,9 +178,34 @@ class STTPreprocessor {
         const removed = [];
         let cleaned = transcript;
         
-        // CRITICAL: Never strip single-letter words that are essential parts of speech
-        // These should NEVER be fillers - they destroy sentence meaning
-        const PROTECTED_WORDS = new Set(['i', 'a', 'u', 'r', 'n', 'o', 'y']);
+        // ════════════════════════════════════════════════════════════════════════
+        // PROTECTED WORDS - NEVER STRIP THESE REGARDLESS OF TEMPLATE SETTINGS
+        // ════════════════════════════════════════════════════════════════════════
+        // These words are ESSENTIAL for understanding caller intent.
+        // Stripping them causes loops, confusion, and broken conversations.
+        const PROTECTED_WORDS = new Set([
+            // Single letters (essential parts of speech)
+            'i', 'a', 'u', 'r', 'n', 'o', 'y',
+            
+            // CONFIRMATION WORDS - Critical for yes/no questions!
+            'yes', 'no', 'yeah', 'yep', 'nope', 'yup', 'nah',
+            'okay', 'ok', 'alright', 'sure', 'correct', 'right',
+            'absolutely', 'definitely', 'certainly', 'exactly',
+            'affirmative', 'negative', 'confirmed', 'denied',
+            
+            // ESSENTIAL PRONOUNS - Removing these destroys sentences
+            'you', 'we', 'they', 'he', 'she', 'it', 'me', 'us', 'them',
+            'your', 'my', 'our', 'their', 'his', 'her', 'its',
+            
+            // QUESTION WORDS - Critical for understanding intent
+            'what', 'when', 'where', 'who', 'how', 'why', 'which',
+            
+            // NEGATION - Critical for understanding refusals
+            'not', 'dont', "don't", 'never', 'none', 'nothing',
+            
+            // NUMBERS - Often part of addresses/phone numbers
+            'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'zero'
+        ]);
         
         // Sort fillers by length (longest first) to handle multi-word fillers
         const sortedFillers = fillers
