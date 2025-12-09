@@ -131,7 +131,8 @@ const authorizeCompanyAccess = async (req, res, next) => {
     );
     
     // Super admin check (has access to all companies)
-    const isSuperAdmin = user.role === 'super_admin' || user.isSuperAdmin === true;
+    // Note: Our auth uses 'admin' role for platform admins (not 'super_admin')
+    const isSuperAdmin = user.role === 'admin' || user.role === 'super_admin' || user.isSuperAdmin === true;
     
     // Check access
     const hasAccess = isSuperAdmin || allowedCompanies.includes(companyId);
