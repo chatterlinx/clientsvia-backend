@@ -204,7 +204,7 @@ async function loadAllRoutes() {
         routes.v2AIKnowledgebaseRoutes = await loadRouteWithTimeout('./routes/company/v2aiKnowledgebase', 'v2AIKnowledgebaseRoutes');
         routes.v2AILiveScenariosRoutes = await loadRouteWithTimeout('./routes/company/v2aiLiveScenarios', 'v2AILiveScenariosRoutes');
         routes.v2AICoreScenarios = await loadRouteWithTimeout('./routes/company/v2aiCoreScenarios', 'v2AICoreScenarios');
-        routes.v2AIAnalyticsRoutes = await loadRouteWithTimeout('./routes/company/v2aiAnalytics', 'v2AIAnalyticsRoutes');
+        // v2AIAnalyticsRoutes REMOVED Dec 2025 - broken observability, Black Box is better
         routes.v2FillerFilterRoutes = await loadRouteWithTimeout('./routes/company/v2FillerFilter', 'v2FillerFilterRoutes');
         routes.callArchivesRoutes = await loadRouteWithTimeout('./routes/admin/callArchives', 'callArchivesRoutes');
         routes.callFilteringRoutes = await loadRouteWithTimeout('./routes/admin/callFiltering', 'callFilteringRoutes');
@@ -442,7 +442,7 @@ function registerRoutes(routes) {
     app.use('/api', routes.v2AIKnowledgebaseRoutes); // V2: AiCore Knowledgebase (AI performance monitoring & action items)
     app.use('/api', routes.v2AILiveScenariosRoutes); // V2: AiCore Live Scenarios (real-time scenario browser from all templates)
     app.use('/api', routes.v2AICoreScenarios); // V2: AiCore Scenario Controls (per-company enable/disable toggles)
-    app.use('/api', routes.v2AIAnalyticsRoutes); // V2: AI Analytics (real-time performance dashboard)
+    // v2AIAnalyticsRoutes REMOVED Dec 2025 - broken, Black Box is better
     app.use('/api', routes.v2FillerFilterRoutes); // V2: AiCore Filler Filter (inherited + custom filler words management)
     app.use('/api', routes.callArchivesRoutes); // ADMIN: Call Archives (search transcripts, export call history)
     app.use('/api', routes.callFilteringRoutes); // ADMIN: Call Filtering (spam detection, blacklist/whitelist management)

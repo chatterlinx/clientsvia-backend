@@ -108,7 +108,7 @@
     <button class="js-aicore-tab" data-aicore-target="cheat-sheet">Cheat Sheet</button>
     <button class="js-aicore-tab" data-aicore-target="call-flow">Call Flow</button>
     <button class="js-aicore-tab" data-aicore-target="knowledgebase">AiCore Knowledgebase</button>
-    <button class="js-aicore-tab" data-aicore-target="observability">Observability (AI Metrics)</button>
+    <!-- Observability (AI Metrics) REMOVED Dec 2025 - broken, Black Box is better -->
     <button class="js-aicore-tab" data-aicore-target="black-box" style="color: #f97316;">📼 Black Box</button>
     <!-- LLM-0 Cortex-Intel REMOVED Dec 2025 - obsolete, Black Box does everything better -->
     <button class="js-aicore-tab" id="agent-status-tab" data-aicore-target="agent-status">
@@ -245,21 +245,7 @@
         </div>
       </div>
 
-      <!-- AICORE: OBSERVABILITY -->
-      <div class="panel" data-aicore-panel="observability">
-        <div class="card">
-          <h2>Observability (AI Metrics)</h2>
-          <p class="muted">Latency, tier usage %, failure rates, and alert thresholds for the AI brain.</p>
-          
-          <!-- Analytics Manager Container (handles observability metrics) -->
-          <div id="analytics-container" style="margin-top: 20px;">
-            <div style="text-align: center; padding: 40px; color: #6b7280;">
-              <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
-              <p>Loading metrics...</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- Observability REMOVED Dec 2025 - broken, use Black Box instead -->
 
       <!-- AICORE: BLACK BOX RECORDER -->
       <div class="panel" data-aicore-panel="black-box">
@@ -806,17 +792,7 @@
       }
     }
 
-    // Initialize AnalyticsManager (for Observability tab)
-    async function initAnalyticsManager() {
-      if (!currentCompanyId) return;
-      if (!window.analyticsManager) {
-        console.log('🎯 [CONTROL PLANE] Initializing AnalyticsManager');
-        await loadScript('/js/ai-agent-settings/AnalyticsManager.js');
-        window.analyticsManager = new window.AnalyticsManager(mockParent);
-        window.analyticsManager.load();
-      }
-    }
-
+    // AnalyticsManager REMOVED Dec 2025 - broken, Black Box is better
     // LLM Cortex Intel REMOVED Dec 2025 - obsolete, Black Box does everything better
 
     // Initialize Agent Status Manager
@@ -1072,10 +1048,8 @@
         } else if (target === 'knowledgebase' && !window.knowledgebaseManagerLoaded) {
           initKnowledgebaseManager();
           window.knowledgebaseManagerLoaded = true;
-        } else if (target === 'observability' && !window.analyticsManagerLoaded) {
-          initAnalyticsManager();
-          window.analyticsManagerLoaded = true;
-        // LLM Cortex Intel REMOVED Dec 2025
+        // Observability REMOVED Dec 2025 - broken, Black Box is better
+        // LLM Cortex Intel REMOVED Dec 2025 - obsolete
         } else if (target === 'agent-status') {
           initAgentStatus(); // Always refresh on tab click
         }
