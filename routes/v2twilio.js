@@ -24,8 +24,9 @@ const STTHintsBuilder = require('../services/STTHintsBuilder');  // 🎤 STT Hin
 const STTPreprocessor = require('../services/STTPreprocessor');  // 🎤 STT Intelligence - filler removal, corrections
 const MatchDiagnostics = require('../services/MatchDiagnostics');
 const AdminNotificationService = require('../services/AdminNotificationService');  // 🚨 Critical error reporting
-// 🚀 V2 SYSTEM: Using V2 AI Agent Runtime instead of legacy agent.js
-const { initializeCall, processUserInput } = require('../services/v2AIAgentRuntime');
+// 🚀 V2 SYSTEM: Using V2 AI Agent Runtime for call initialization
+const { initializeCall } = require('../services/v2AIAgentRuntime');
+// NOTE: processUserInput REMOVED - HybridReceptionistLLM is the only brain now
 // V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime
 // const aiAgentRuntime = require('../services/aiAgentRuntime');
 // V2: AI responses come from AIBrain3tierllm (3-Tier Intelligence System)
@@ -39,18 +40,15 @@ const { initializeCall, processUserInput } = require('../services/v2AIAgentRunti
 // Feature flag: AdminSettings.globalProductionIntelligence.llm0Enabled
 // ============================================================================
 // SAFE IMPORT: Wrap in try/catch to prevent startup crash if dependencies fail
-let decideNextStep, LLM0TurnHandler;
+let LLM0TurnHandler;
 try {
-    const LLM0Service = require('../services/orchestration/LLM0OrchestratorService');
-    decideNextStep = LLM0Service.decideNextStep;
     LLM0TurnHandler = require('../services/LLM0TurnHandler');
-    logger.info('[V2TWILIO] ✅ LLM-0 Orchestration loaded successfully');
+    logger.info('[V2TWILIO] ✅ LLM0TurnHandler (HybridReceptionistLLM) loaded successfully');
 } catch (err) {
-    logger.warn('[V2TWILIO] ⚠️ LLM-0 Orchestration failed to load - using fallback', { error: err.message });
-    // Provide fallback that skips LLM-0
-    decideNextStep = async () => null;
+    logger.error('[V2TWILIO] ❌ CRITICAL: LLM0TurnHandler failed to load!', { error: err.message, stack: err.stack });
     LLM0TurnHandler = null;
 }
+// NOTE: decideNextStep/LLM0OrchestratorService REMOVED - HybridReceptionistLLM is the only brain
 // V2 DELETED: CompanyKnowledgeQnA model removed (AI Brain only)
 
 // ============================================================================
@@ -2662,13 +2660,17 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             
           } catch (hybridError) {
             // ════════════════════════════════════════════════════════════════════════════
-            // GRACEFUL FALLBACK TO LEGACY PATH
+            // HYBRID FAILED - Return simple helpful response (NO LEGACY FALLBACK)
             // ════════════════════════════════════════════════════════════════════════════
-            usedPath = 'legacy_fallback';
+            // We don't fall back to the slow legacy path anymore.
+            // Just return a helpful response and log the error for debugging.
+            // ════════════════════════════════════════════════════════════════════════════
+            usedPath = 'hybrid_error_recovery';
             const hybridLatencyMs = Date.now() - hybridStartTime;
             
-            logger.warn('[V2 TWILIO] 🔄 Hybrid path failed, falling back to legacy', {
+            logger.error('[V2 TWILIO] ❌ Hybrid path failed - using simple recovery', {
               error: hybridError.message,
+              stack: hybridError.stack?.substring(0, 500),
               latencyMs: hybridLatencyMs,
               callSid
             });
@@ -2682,63 +2684,20 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 turn: turnCount,
                 data: {
                   error: hybridError.message?.substring(0, 200),
-                  stack: hybridError.stack?.substring(0, 300),
-                  latencyMs: hybridLatencyMs
+                  stack: hybridError.stack?.substring(0, 500),
+                  latencyMs: hybridLatencyMs,
+                  recovery: 'simple_response'
                 }
               }).catch(() => {});
             }
             
-            // Fall through to legacy path below
-            result = null;
+            // Simple recovery response - don't spin up slow legacy LLM
+            result = {
+              text: "I'm here to help! What's going on with your AC today?",
+              action: 'DISCOVERY',
+              callState: callState
+            };
           }
-        }
-        
-        // ════════════════════════════════════════════════════════════════════════════
-        // LEGACY PATH - Only used when: hybrid disabled OR hybrid failed
-        // ════════════════════════════════════════════════════════════════════════════
-        if (!result) {
-          usedPath = useHybridPath ? 'legacy_fallback' : 'legacy_disabled';
-          tracer.step('BRAIN1_START', 'LLM-0 Orchestration (Brain-1) analyzing...');
-          
-          // 📼 BLACK BOX: Log booking lock check
-          if (BlackBoxLogger && callState?.bookingModeLocked) {
-            BlackBoxLogger.logEvent({
-              callId: callSid,
-              companyId: companyID,
-              type: 'BOOKING_LOCK_CHECK',
-              turn: turnCount,
-              data: {
-                bookingModeLocked: true,
-                bookingState: callState.bookingState,
-                currentBookingStep: callState.currentBookingStep,
-                expectation: 'LLM0TurnHandler will bypass Brain-1 and go straight to slot-fill',
-                userInput: speechResult?.substring(0, 100)
-              }
-            }).catch(() => {});
-          }
-          
-          // STEP 1: LLM-0 decides what to do (THIS IS THE SLOW PART - 7+ seconds)
-          const llm0Decision = await decideNextStep({
-            companyId: companyID,
-            callId: callSid,
-            userInput: speechResult,
-            callState,
-            turnHistory: callState.turnHistory || []
-          });
-          
-          tracer.decision(llm0Decision?.action || 'UNKNOWN', {
-            intent: llm0Decision?.intentTag,
-            confidence: llm0Decision?.confidence,
-            flags: llm0Decision?.flags
-          });
-          
-          // STEP 2: Route through Triage and execute
-          result = await LLM0TurnHandler.handle({
-            decision: llm0Decision,
-            company,
-            callState,
-            userInput: speechResult
-          });
         }
         
         // 📼 BLACK BOX: Log which path was used
@@ -2775,7 +2734,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           }).catch(() => {});
         }
         
-        logger.info('[LLM-0] Turn complete', {
+        logger.info('[HYBRID] Turn complete', {
           companyId: companyID,
           callSid,
           finalAction: result.action,
@@ -2783,47 +2742,27 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           shouldHangup: result.shouldHangup
         });
         
-      } else {
-        // Legacy path: Use V2 AI Agent Runtime directly
-        tracer.step('BRAIN2_START', 'Using legacy V2 AI Agent Runtime (Brain-2 direct)');
-        
-        // 📼 BLACK BOX: Log legacy path usage (WARNING - booking will be broken!)
-        if (BlackBoxLogger) {
-          BlackBoxLogger.logEvent({
-            callId: callSid,
-            companyId: companyID,
-            type: 'LEGACY_PATH_USED',
-            turn: turnCount,
-            data: {
-              reason: 'LLM-0 disabled and no booking lock',
-              warning: 'Booking slot-fill handler is BYPASSED in this path!',
-              bookingModeLocked: !!callState?.bookingModeLocked,
-              bookingState: callState?.bookingState || null,
-              userInput: speechResult?.substring(0, 100)
-            }
-          }).catch(() => {});
-        }
-        
-        result = await processUserInput(
-          companyID,
-          callSid,
-          speechResult,
-          callState
-        );
-        tracer.step('BRAIN2_RESULT', `Got response: "${result?.text?.substring(0, 40) || result?.response?.substring(0, 40)}..."`);
       }
+      // LEGACY PATHS REMOVED - Dec 2025
+      // HybridReceptionistLLM is the ONLY brain now.
+      // If it fails, we return a simple recovery response (already handled above).
+      // No more slow legacy LLM fallbacks.
       
     } catch (llm0Error) {
-      // If LLM-0 fails, fall back to legacy system
-      tracer.error('LLM-0 failed, using legacy fallback', llm0Error);
+      // Simple error recovery - no legacy fallback
+      logger.error('[HYBRID] Critical error - using simple recovery', {
+        error: llm0Error.message,
+        stack: llm0Error.stack?.substring(0, 500),
+        callSid
+      });
       
-      result = await processUserInput(
-        companyID,
-        callSid,
-        speechResult,
-        callState
-      );
-      tracer.step('BRAIN2_RESULT', 'Fallback response ready');
+      result = {
+        text: "I'm here to help with your AC. What's going on?",
+        action: 'DISCOVERY',
+        callState: callState
+      };
+      
+      tracer.error('Hybrid failed, using simple recovery', llm0Error);
     }
     
     perfCheckpoints.aiProcessing = Date.now() - aiProcessStart;
