@@ -20,7 +20,16 @@ const BehaviorEngine = require('./BehaviorEngine');
 const EdgeCaseHandler = require('./EdgeCaseHandler');
 // Use centralized Redis factory - NO db.redisClient
 const { getSharedRedisClient, isRedisConfigured } = require('./redisClientFactory');
-const defaultCallFlowConfig = require('../config/defaultCallFlowConfig');
+
+// Inline default (legacy - this executor is deprecated)
+const defaultCallFlowConfig = [
+  { id: 'spam-filter', name: 'Spam Filter', enabled: true, locked: true },
+  { id: 'frontline-intel', name: 'Frontline Intel', enabled: true, locked: false },
+  { id: 'edge-cases', name: 'Edge Cases', enabled: true, locked: false },
+  { id: 'cheat-sheet', name: 'Cheat Sheet', enabled: true, locked: false },
+  { id: 'behavior', name: 'Behavior Engine', enabled: true, locked: false },
+  { id: 'llm-response', name: 'LLM Response', enabled: true, locked: true }
+];
 
 class CallFlowExecutor {
     
