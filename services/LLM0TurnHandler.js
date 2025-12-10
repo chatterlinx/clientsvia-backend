@@ -2378,7 +2378,7 @@ class LLM0TurnHandler {
         const turnNumber = (callState?.turnCount || 0) + 1;
         
         // Load or create conversation state
-        let convState = await ConversationStateManager.load(callId) || {
+        let convState = await ConversationStateManager.getState(callId) || {
             conversationHistory: [],
             collectedSlots: {},
             currentMode: 'free',
@@ -2581,7 +2581,7 @@ class LLM0TurnHandler {
         }
         
         // Save conversation state
-        await ConversationStateManager.save(callId, convState);
+        await ConversationStateManager.saveState(callId, convState);
         
         // 📼 BLACK BOX: Log hybrid turn complete
         try {
