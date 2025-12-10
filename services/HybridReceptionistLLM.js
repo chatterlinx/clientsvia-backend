@@ -23,7 +23,10 @@
  */
 
 const logger = require('../utils/logger');
-const openaiClient = require('../config/openai');
+// ════════════════════════════════════════════════════════════════════════════
+// ⚠️ IMPORTANT: All LLM calls go through llmRegistry - NOT direct OpenAI
+// ════════════════════════════════════════════════════════════════════════════
+const { callLLM0 } = require('./llmRegistry');
 const TriageContextProvider = require('./TriageContextProvider');
 const ServiceAreaHandler = require('./ServiceAreaHandler');
 
@@ -299,18 +302,26 @@ class HybridReceptionistLLM {
             ];
             
             // ════════════════════════════════════════════════════════════════
-            // CALL THE LLM - OPTIMIZED FOR SPEED
+            // CALL LLM-0 via REGISTRY (THE ONLY ALLOWED PATH)
             // ════════════════════════════════════════════════════════════════
             // Target: <1.5s response time
+            // - All LLM calls go through llmRegistry.callLLM0()
+            // - This ensures proper logging with brain identifier
             // - Reduced max_tokens (we only need ~100 for a short reply)
-            // - Lower temperature for more predictable (faster) responses
-            // - Compact prompt to reduce input tokens
-            const response = await openaiClient.chat.completions.create({
-                model: 'gpt-4o-mini', // Fast and cheap
+            // ════════════════════════════════════════════════════════════════
+            const response = await callLLM0({
+                callId,
+                companyId,
                 messages,
                 temperature: 0.6, // Lower = faster, more focused
                 max_tokens: 150, // We only need ~100 for reply + slots
-                response_format: { type: 'json_object' }
+                response_format: { type: 'json_object' },
+                metadata: {
+                    mode: currentMode,
+                    turn: callContext.turnCount || 0,
+                    hasTriageContext: !!triageContext,
+                    hasServiceAreaInfo: !!serviceAreaInfo
+                }
             });
             
             const latencyMs = Date.now() - startTime;

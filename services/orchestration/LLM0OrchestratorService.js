@@ -1,24 +1,25 @@
 /**
  * ============================================================================
- * LLM-0 ORCHESTRATOR SERVICE
+ * ❌ DEPRECATED - LLM-0 ORCHESTRATOR SERVICE
  * ============================================================================
  * 
- * BRAIN 1: FRONTLINE-INTEL / LLM-0
+ * ⚠️⚠️⚠️ WARNING: THIS SERVICE IS DEPRECATED AND BYPASSED ⚠️⚠️⚠️
  * 
- * This is the SINGLE entry point for all LLM-0 decisions.
- * Every caller turn flows through here FIRST before hitting Triage or 3-Tier.
+ * As of December 2025, this service is NO LONGER USED for live calls.
+ * All live call processing now goes through:
  * 
- * ARCHITECTURE:
- *   Caller → LLM0OrchestratorService.decideNextStep() 
- *          → TriageRouter 
- *          → Brain 2 (3-Tier) OR Booking OR Transfer
+ *   v2twilio.js → LLM0TurnHandler.handle() → llmRegistry.callLLM0()
  * 
- * RESPONSIBILITIES:
- * 1. Preprocess input (FillerStripper, TranscriptNormalizer)
- * 2. Detect emotion (EmotionDetector)
- * 3. Call LLM to decide action
- * 4. Extract intent, entities, flags
- * 5. Return normalized LLM0Decision conforming to contract
+ * This file is kept for reference only. The decideNextStep() method will
+ * throw an error if called to catch any accidental usage.
+ * 
+ * THE NEW ARCHITECTURE:
+ * - LLM-0 (Frontline Brain): LLM0TurnHandler + HybridReceptionistLLM
+ * - Tier-3 (Fallback Brain): Tier3LLMFallback
+ * - All calls go through: services/llmRegistry.js
+ * 
+ * If you're seeing this error, check your call stack and ensure you're
+ * using LLM0TurnHandler.handle() instead of this deprecated service.
  * 
  * ============================================================================
  */
@@ -46,16 +47,51 @@ class LLM0OrchestratorService {
     
     /**
      * ========================================================================
-     * MAIN ENTRY POINT: Decide what to do with this caller turn
+     * ❌ DEPRECATED - DO NOT USE
      * ========================================================================
      * 
-     * This is Brain 1. The receptionist brain.
-     * Every turn flows through here before anything else.
+     * This method is DEPRECATED as of December 2025.
+     * All live calls must use LLM0TurnHandler.handle() instead.
      * 
-     * @param {import('./LLM0Contracts').LLM0Input} input
-     * @returns {Promise<import('./LLM0Contracts').LLM0Decision>}
+     * @deprecated Use LLM0TurnHandler.handle() instead
+     * @throws {Error} Always throws to catch accidental usage
      */
     async decideNextStep(input) {
+        // ════════════════════════════════════════════════════════════════════════════
+        // ❌ DEPRECATED - THROW ERROR TO CATCH ACCIDENTAL USAGE
+        // ════════════════════════════════════════════════════════════════════════════
+        const errorMessage = `
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  ❌ DEPRECATED: LLM0OrchestratorService.decideNextStep() was called!         ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  This method is NO LONGER USED as of December 2025.                         ║
+║                                                                              ║
+║  All live calls must go through:                                            ║
+║    → LLM0TurnHandler.handle()                                               ║
+║    → which uses llmRegistry.callLLM0()                                      ║
+║                                                                              ║
+║  If you're seeing this error, check your call stack and fix the routing.   ║
+║                                                                              ║
+║  CallId: ${input?.callId || 'unknown'}
+║  CompanyId: ${input?.companyId || 'unknown'}
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+`;
+        
+        const logger = require('../../utils/logger');
+        logger.error('[LLM-0 ORCHESTRATOR] ❌ DEPRECATED METHOD CALLED', {
+            callId: input?.callId,
+            companyId: input?.companyId,
+            stack: new Error().stack
+        });
+        
+        throw new Error(errorMessage);
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // ORIGINAL CODE BELOW (kept for reference, never runs)
+        // ════════════════════════════════════════════════════════════════════════════
+        
         const startTime = Date.now();
         const { companyId, callId, userInput, callState, turnHistory } = input;
         

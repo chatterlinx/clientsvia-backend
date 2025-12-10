@@ -24,7 +24,10 @@
  * ============================================================================
  */
 
-const openaiClient = require('../config/openai');
+// ════════════════════════════════════════════════════════════════════════════
+// ⚠️ IMPORTANT: All LLM calls go through llmRegistry - NOT direct OpenAI
+// ════════════════════════════════════════════════════════════════════════════
+const { callTier3Fallback } = require('./llmRegistry');
 const logger = require('../utils/logger');
 
 // Deepgram fallback for better transcripts before LLM
@@ -285,21 +288,32 @@ ${JSON.stringify(scenarioSummaries, null, 2)}
 
 Choose the best matching scenario ID, or null.`;
 
-      // Call OpenAI with JSON mode
+      // ════════════════════════════════════════════════════════════════
+      // CALL TIER-3 via REGISTRY (THE ONLY ALLOWED PATH)
+      // ════════════════════════════════════════════════════════════════
+      // All LLM calls go through llmRegistry.callTier3Fallback()
+      // This ensures proper logging with brain identifier
+      // ════════════════════════════════════════════════════════════════
       let completion;
       try {
-        completion = await openaiClient.chat.completions.create({
-          model: this.config.model,
-          response_format: { type: 'json_object' },
-          temperature: this.config.temperature,
-          max_tokens: this.config.maxTokens,
+        completion = await callTier3Fallback({
+          callId,
+          companyId,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
           ],
+          temperature: this.config.temperature,
+          max_tokens: this.config.maxTokens,
+          response_format: { type: 'json_object' },
+          metadata: {
+            scenarioCount: scenarios.length,
+            usedDeepgram,
+            sttConfidence: sttConfidence
+          }
         });
       } catch (openaiErr) {
-        logger.error('[Tier3] OpenAI API error', {
+        logger.error('[Tier3] LLM API error', {
           error: openaiErr.message,
           code: openaiErr.code,
         });

@@ -103,6 +103,27 @@ async function initCall({ callId, companyId, from, to, customerId, customerConte
 async function logEvent({ callId, companyId, type, turn, data = {} }) {
   const now = new Date();
   
+  // ════════════════════════════════════════════════════════════════════════════
+  // 🧠 BRAIN VALIDATION: Ensure LLM_RESPONSE events identify which brain spoke
+  // ════════════════════════════════════════════════════════════════════════════
+  // This is CRITICAL for debugging. Every LLM response must say which brain:
+  // - brain: 'LLM0' = Frontline brain
+  // - brain: 'TIER3' = Fallback brain
+  // If missing, it's a rogue LLM call that needs to be hunted down.
+  // ════════════════════════════════════════════════════════════════════════════
+  if (type === 'LLM_RESPONSE' && !data?.brain) {
+    logger.error('[BLACK BOX] ⚠️ CRITICAL: LLM_RESPONSE missing brain identifier!', {
+      callId,
+      companyId,
+      type,
+      data,
+      stack: new Error().stack?.substring(0, 1000)
+    });
+    // Add a flag so we can find these in the data
+    data.brain = 'UNKNOWN_ROGUE';
+    data._missingBrainWarning = true;
+  }
+  
   try {
     // Get startedAt for calculating offset
     const rec = await BlackBoxRecording.findOne(

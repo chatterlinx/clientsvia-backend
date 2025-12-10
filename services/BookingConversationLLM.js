@@ -24,7 +24,10 @@
  */
 
 const logger = require('../utils/logger');
-const openaiClient = require('../config/openai');
+// ════════════════════════════════════════════════════════════════════════════
+// ⚠️ IMPORTANT: All LLM calls go through llmRegistry - NOT direct OpenAI
+// ════════════════════════════════════════════════════════════════════════════
+const { callLLM0 } = require('./llmRegistry');
 const { DEFAULT_FRONT_DESK_CONFIG } = require('../config/frontDeskPrompt');
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -306,9 +309,12 @@ class BookingConversationLLM {
     }
     
     /**
-     * Call OpenAI for response generation
+     * Call LLM-0 via registry for response generation
+     * @param {Object} params
+     * @param {string} params.callId - Twilio Call SID (for logging)
+     * @param {string} params.companyId - Company ID (for logging)
      */
-    static async callLLM({ userInput, currentStep, nextStep, collected, config, companyName, serviceType, isQuestion }) {
+    static async callLLM({ callId, companyId, userInput, currentStep, nextStep, collected, config, companyName, serviceType, isQuestion }) {
         const personality = config.personality || {};
         const bookingPrompts = config.bookingPrompts || {};
         
@@ -355,15 +361,24 @@ OUTPUT JSON:
   "emotion": "neutral|friendly|frustrated|angry"
 }`;
 
-        const response = await openaiClient.chat.completions.create({
-            model: 'gpt-4o-mini',
+        // ════════════════════════════════════════════════════════════════
+        // CALL LLM-0 via REGISTRY (THE ONLY ALLOWED PATH)
+        // ════════════════════════════════════════════════════════════════
+        const response = await callLLM0({
+            callId: callId || 'booking-unknown',
+            companyId: companyId || 'booking-unknown',
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userInput }
             ],
             temperature: 0.7,
             max_tokens: 150,
-            response_format: { type: 'json_object' }
+            response_format: { type: 'json_object' },
+            metadata: {
+                source: 'BookingConversationLLM',
+                step: currentStep,
+                nextStep
+            }
         });
         
         const content = response.choices[0]?.message?.content;
