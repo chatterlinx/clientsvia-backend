@@ -482,6 +482,14 @@ class LLM0TurnHandler {
         
         if (useHybridForAll) {
             try {
+                // 🔥 CRITICAL DEBUG LOG - If you see this in Render logs, the code IS deployed
+                logger.info('[LLM0 TURN HANDLER] 🔥🔥🔥 ENTERING handleWithHybridLLM (Dec 10 version)', {
+                    companyId,
+                    callId: callState?.callId || callState?.CallSid,
+                    userInput: userInput?.substring(0, 50),
+                    timestamp: new Date().toISOString()
+                });
+                
                 return await this.handleWithHybridLLM({
                     company,
                     callState,
@@ -2310,6 +2318,11 @@ class LLM0TurnHandler {
      * @returns {Promise<TurnResult>}
      */
     static async handleWithHybridLLM({ company, callState, userInput, decision, startTime }) {
+        // 🔥🔥🔥 ULTRA-VISIBLE DEBUG - This MUST appear in Render logs if new code is deployed
+        console.log('='.repeat(80));
+        console.log('🔥 handleWithHybridLLM ENTERED - Dec 10 2025 VERSION');
+        console.log('='.repeat(80));
+        
         const companyId = company._id?.toString() || company.companyId;
         const callId = callState?.callId || callState?.CallSid;
         const turnNumber = (callState?.turnCount || 0) + 1;
@@ -2370,6 +2383,11 @@ class LLM0TurnHandler {
         
         // Call HybridReceptionistLLM
         const trade = company?.trade || 'HVAC';
+        
+        // 🔥 DEBUG: Log before calling LLM
+        console.log('🔥 CALLING HybridReceptionistLLM.processConversation...');
+        console.log('🔥 userInput:', userInput?.substring(0, 100));
+        
         const rawLlmResult = await HybridReceptionistLLM.processConversation({
             company: {
                 name: company?.name || 'our company',
@@ -2385,6 +2403,12 @@ class LLM0TurnHandler {
             behaviorConfig: frontDeskConfig,
             customerContext
         });
+        
+        // 🔥 DEBUG: Log after LLM returns
+        console.log('🔥 HybridReceptionistLLM RETURNED:');
+        console.log('🔥 reply:', rawLlmResult?.reply?.substring(0, 100));
+        console.log('🔥 phase:', rawLlmResult?.phase);
+        console.log('🔥 isEmergencyFallback:', rawLlmResult?.isEmergencyFallback);
         
         const latencyMs = Date.now() - startTime;
         
