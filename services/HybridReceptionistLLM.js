@@ -155,8 +155,9 @@ class HybridReceptionistLLM {
         const callId = callContext.callId || 'unknown';
         const companyId = company.id || company._id || callContext.companyId;
         
-        if (!openaiClient) {
-            logger.error('[HYBRID LLM] OpenAI not configured!');
+        // Note: callLLM0 is imported from llmRegistry - it handles OpenAI config internally
+        if (!callLLM0) {
+            logger.error('[HYBRID LLM] llmRegistry.callLLM0 not available!');
             return this.emergencyFallback(currentMode, knownSlots);
         }
         
