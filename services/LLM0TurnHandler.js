@@ -498,11 +498,61 @@ class LLM0TurnHandler {
                     startTime
                 });
             } catch (hybridError) {
-                logger.error('[LLM0 TURN HANDLER] Hybrid path failed, falling back to legacy', {
+                // 🔥 NO MORE LEGACY FALLTHROUGH - Return smart response immediately
+                logger.error('[LLM0 TURN HANDLER] ❌ Hybrid path failed - returning smart fallback (NO LEGACY)', {
                     error: hybridError.message,
-                    stack: hybridError.stack?.substring(0, 500)
+                    stack: hybridError.stack?.substring(0, 500),
+                    userInput: userInput?.substring(0, 100)
                 });
-                // Fall through to legacy path
+                
+                // Log to Black Box so we can debug
+                try {
+                    const BlackBoxLogger = require('./BlackBoxLogger');
+                    await BlackBoxLogger.logEvent({
+                        callId: callState?.callId || callState?.CallSid,
+                        companyId,
+                        type: 'HYBRID_PATH_ERROR',
+                        data: {
+                            error: hybridError.message,
+                            stack: hybridError.stack?.substring(0, 300),
+                            userInput: userInput?.substring(0, 100),
+                            action: 'SMART_FALLBACK_RETURNED'
+                        }
+                    });
+                } catch (e) {}
+                
+                // 🧠 SMART FALLBACK - Actually understands context
+                const trade = company?.trade || 'HVAC';
+                let smartResponse = `Got it, I can help with your ${trade.toLowerCase()} needs. `;
+                
+                // Detect what they likely want
+                const input = (userInput || '').toLowerCase();
+                if (input.includes('service') || input.includes('repair') || input.includes('fix')) {
+                    smartResponse += "What's going on — not cooling, not heating, making noise, or something else?";
+                } else if (input.includes('maintenance') || input.includes('tune')) {
+                    smartResponse += "Is this for a tune-up or maintenance check?";
+                } else if (input.includes('install') || input.includes('new')) {
+                    smartResponse += "Are you looking at a new installation or replacement?";
+                } else {
+                    smartResponse += "Can you tell me a bit more about what's happening so I can get you the right help?";
+                }
+                
+                return {
+                    text: smartResponse,
+                    action: 'continue',
+                    shouldTransfer: false,
+                    shouldHangup: false,
+                    callState: {
+                        ...callState,
+                        hybridPathFailed: true,
+                        turnCount: (callState?.turnCount || 0) + 1
+                    },
+                    debug: {
+                        route: 'HYBRID_SMART_FALLBACK',
+                        error: hybridError.message,
+                        noLegacy: true
+                    }
+                };
             }
         }
         const callId = callState?.callId || callState?.CallSid;
@@ -986,9 +1036,9 @@ class LLM0TurnHandler {
                 hasResponse: !!brainResult.response
             });
             
-            // Use 3-Tier response if available, otherwise use LLM-0's response
+            // Use 3-Tier response if available, otherwise use smart fallback
             const responseText = brainResult.response || decision.nextPrompt || 
-                "I can help you with that. Could you tell me more?";
+                "Got it, what's going on — is it not cooling, not heating, making noise, or something else?";
             
             return {
                 text: responseText,
@@ -1011,9 +1061,9 @@ class LLM0TurnHandler {
                 error: error.message
             });
             
-            // Fallback to LLM-0's response
+            // 🧠 Smart fallback - NOT generic garbage
             return {
-                text: decision.nextPrompt || "I can help you with that. What would you like to know?",
+                text: decision.nextPrompt || "Got it, what's going on with your system — not cooling, not heating, making a noise, or something else?",
                 action: 'continue',
                 shouldTransfer: false,
                 shouldHangup: false,

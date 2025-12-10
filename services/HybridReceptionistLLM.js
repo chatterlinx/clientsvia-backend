@@ -696,22 +696,28 @@ Return ONLY valid JSON:
     }
     
     /**
-     * Emergency fallback when LLM fails
+     * Emergency fallback when LLM fails - MUST be smart, NOT generic
      */
     static emergencyFallback(mode, knownSlots) {
-        let reply = "I'm here to help. What can I do for you?";
+        // 🧠 SMART FALLBACK - Even in emergency, sound like a receptionist not a chatbot
+        let reply = "Got it, what's going on — is it not cooling, not heating, making noise, or something else?";
         
         if (mode === 'booking') {
             if (!knownSlots.name) {
-                reply = "Let me get some details. What's your name?";
+                reply = "Perfect, let me get you on the schedule. What's your name?";
             } else if (!knownSlots.phone) {
-                reply = `Thanks ${knownSlots.name}. What's the best phone number?`;
+                reply = `Great ${knownSlots.name}, and what's the best number to reach you?`;
             } else if (!knownSlots.address) {
-                reply = "What's the service address?";
+                reply = "What's the address where service is needed?";
             } else if (!knownSlots.time) {
-                reply = "When would be a good time?";
+                reply = "When works best for you — morning or afternoon?";
             }
         }
+        
+        logger.warn('[HYBRID LLM] 🚨 Emergency fallback used - LLM was not called', {
+            mode,
+            hasSlots: Object.keys(knownSlots || {}).filter(k => knownSlots[k]).length
+        });
         
         return {
             reply,
