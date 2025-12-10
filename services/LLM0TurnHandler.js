@@ -68,6 +68,199 @@ function deepMerge(target, source) {
  * @property {Object} debug - Debug information
  */
 
+// ════════════════════════════════════════════════════════════════════════════
+// LLM-0 PHASE SAFETY HELPERS (Dec 2025)
+// ════════════════════════════════════════════════════════════════════════════
+// These helpers enforce the 3-phase system at RUNTIME.
+// Even if the LLM tries to jump to booking, we catch and correct it.
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Detect if the LLM is trying to collect booking slots instead of talking like a human first.
+ * @param {string} reply - LLM's response text
+ * @returns {boolean} True if reply is asking for slots
+ */
+function replyIsAskingForSlots(reply) {
+    if (!reply || typeof reply !== 'string') return false;
+
+    const patterns = [
+        // Name patterns
+        /\bwhat(?:'s| is)\s+your\s+name\b/i,
+        /\bmay I have your name\b/i,
+        /\bcan I get your name\b/i,
+        /\byour full name\b/i,
+        /\bfirst,?\s+(?:can I get|what's|what is)\s+your name\b/i,
+        /\bwho am I speaking with\b/i,
+
+        // Phone patterns
+        /\bphone\s*number\b/i,
+        /\bbest number\b/i,
+        /\bnumber I can reach you\b/i,
+        /\bcallback number\b/i,
+        /\bcontact number\b/i,
+        /\bgood number\b/i,
+
+        // Address patterns
+        /\b(?:what(?:'s| is)|can I get)\s+(?:your|the)\s+address\b/i,
+        /\bhome address\b/i,
+        /\bstreet address\b/i,
+        /\bservice address\b/i,
+        /\bwhere are you located\b/i,
+        /\bwhat city\b/i,
+
+        // Email patterns
+        /\bemail\s*address\b/i,
+        /\bwhat(?:'s| is) your email\b/i,
+
+        // Time/scheduling patterns (only if asking to book)
+        /\bbest time\b/i,
+        /\bwhat day works\b/i,
+        /\bthis afternoon or tomorrow\b/i,
+        /\bdo you prefer morning\b/i,
+        /\bwhat time works\b/i,
+        /\bschedule\s+(?:you|that|an appointment)\b/i
+    ];
+
+    return patterns.some((re) => re.test(reply));
+}
+
+/**
+ * Build a safe DISCOVERY follow-up when the LLM jumps to slots too early.
+ * @param {string} userText - What the caller said
+ * @param {string} problemSummary - Current problem summary if any
+ * @param {string} trade - Company trade (HVAC, PLUMBING, etc.)
+ * @returns {string} Safe discovery question
+ */
+function buildDiscoveryFollowup(userText, problemSummary, trade = 'HVAC') {
+    const userLower = (userText || '').toLowerCase();
+    
+    // If we already have a problem summary, build on it
+    if (problemSummary && typeof problemSummary === 'string' && problemSummary.length > 10) {
+        return `Got it about ${problemSummary}. Can you tell me a bit more about what's happening so we get the right tech out and fix it properly the first time?`;
+    }
+
+    // HVAC-specific patterns
+    if (trade === 'HVAC' || /ac\b|a\.c\.|air conditioning|aircon|cooling|hvac/i.test(userLower)) {
+        if (/not cooling|no cool|won't cool|doesn't cool/i.test(userLower)) {
+            return `I understand your AC isn't cooling. Is it blowing warm air, or not coming on at all?`;
+        }
+        if (/noise|loud|sound|making a sound/i.test(userLower)) {
+            return `I can help with that noise. Can you describe it — is it like a humming, grinding, rattling, or something else?`;
+        }
+        if (/leak|water|dripping/i.test(userLower)) {
+            return `Water from the AC unit? Is it leaking inside the house or outside near the unit?`;
+        }
+        if (/not working|broken|won't turn on|stopped/i.test(userLower)) {
+            return `Let's figure out what's going on. When you try to turn it on, does anything happen at all — any sounds, lights, or fan movement?`;
+        }
+        if (/service|maintenance|tune-up|check/i.test(userLower)) {
+            return `Sure, I can help with that. Are you looking for routine maintenance, or is there something specific going on with the system?`;
+        }
+        // Generic AC fallback
+        return `Sure, I can help with your air conditioning. What's going on with it — not cooling, making noise, leaking water, or something else?`;
+    }
+
+    // Plumbing patterns
+    if (trade === 'PLUMBING' || /plumb|drain|water|pipe|leak|faucet|toilet/i.test(userLower)) {
+        return `I can help with that. Can you tell me what's going on — is it a leak, a clog, or something else?`;
+    }
+
+    // Electrical patterns
+    if (trade === 'ELECTRICAL' || /electric|outlet|circuit|breaker|power/i.test(userLower)) {
+        return `I can help with that. What's happening — is something not working, or is there a safety concern?`;
+    }
+
+    // Generic service request
+    if (/service|appointment|schedule|book|someone out|tech/i.test(userLower)) {
+        return `I can definitely help with that. Before I get you on the schedule, can you tell me what's going on so we send the right person?`;
+    }
+
+    // Ultimate fallback
+    return `I can help with that. Can you tell me a bit more about what's going on so I understand the situation?`;
+}
+
+/**
+ * Enforce: DISCOVERY phase cannot ask for name/phone/address/time.
+ * If the LLM reply violates this, we override it with a DISCOVERY-style question.
+ * 
+ * @param {Object} params
+ * @param {string} params.phase - Current phase (DISCOVERY/DECISION/BOOKING)
+ * @param {string} params.reply - LLM's response
+ * @param {string} params.userText - What the caller said
+ * @param {string} params.problemSummary - Current problem summary
+ * @param {boolean} params.wantsBooking - Whether caller wants booking
+ * @param {string} params.callId - Call ID for logging
+ * @param {string} params.companyId - Company ID
+ * @param {string} params.trade - Company trade
+ * @param {number} params.turnNumber - Current turn number
+ * @returns {Object} Sanitized { reply, phase, wantsBooking, wasViolation }
+ */
+function sanitizeLLM0ReplyForPhase({
+    phase,
+    reply,
+    userText,
+    problemSummary,
+    wantsBooking,
+    callId,
+    companyId,
+    trade = 'HVAC',
+    turnNumber = 1
+}) {
+    let sanitizedReply = reply;
+    let sanitizedPhase = phase || 'DISCOVERY';
+    let sanitizedWantsBooking = !!wantsBooking;
+    let wasViolation = false;
+
+    // Only police slot-asking when NOT in BOOKING phase
+    if (sanitizedPhase !== 'BOOKING' && replyIsAskingForSlots(reply)) {
+        wasViolation = true;
+        
+        logger.warn('[PHASE SANITIZER] 🚫 VIOLATION: LLM tried to ask for slots in DISCOVERY/DECISION', {
+            callId,
+            companyId,
+            phase: sanitizedPhase,
+            turnNumber,
+            originalReply: reply?.substring(0, 100)
+        });
+
+        // Override with a proper discovery question
+        sanitizedReply = buildDiscoveryFollowup(userText, problemSummary, trade);
+
+        // Force the model to stay in DISCOVERY logically
+        sanitizedPhase = 'DISCOVERY';
+        sanitizedWantsBooking = false;
+    }
+
+    // Extra safety: Turn 1 should ALWAYS be discovery-style
+    if (turnNumber <= 1 && sanitizedPhase === 'BOOKING') {
+        wasViolation = true;
+        logger.warn('[PHASE SANITIZER] 🚫 VIOLATION: LLM tried to go to BOOKING on turn 1', {
+            callId,
+            companyId,
+            originalPhase: sanitizedPhase
+        });
+        
+        sanitizedPhase = 'DISCOVERY';
+        sanitizedWantsBooking = false;
+        
+        // If the reply looks slot-grabby, override it
+        if (replyIsAskingForSlots(reply)) {
+            sanitizedReply = buildDiscoveryFollowup(userText, problemSummary, trade);
+        }
+    }
+
+    return {
+        reply: sanitizedReply,
+        phase: sanitizedPhase,
+        wantsBooking: sanitizedWantsBooking,
+        wasViolation
+    };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// END LLM-0 PHASE SAFETY HELPERS
+// ════════════════════════════════════════════════════════════════════════════
+
 class LLM0TurnHandler {
     
     /**
@@ -1982,10 +2175,11 @@ class LLM0TurnHandler {
         } catch (e) {}
         
         // Call HybridReceptionistLLM
-        const llmResult = await HybridReceptionistLLM.processConversation({
+        const trade = company?.trade || 'HVAC';
+        const rawLlmResult = await HybridReceptionistLLM.processConversation({
             company: {
                 name: company?.name || 'our company',
-                trade: company?.trade || 'HVAC',
+                trade,
                 serviceAreas: company?.serviceAreas || [],
                 id: companyId
             },
@@ -2000,11 +2194,59 @@ class LLM0TurnHandler {
         
         const latencyMs = Date.now() - startTime;
         
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🚧 PHASE SANITIZER: Catch and correct LLM misbehavior
+        // ════════════════════════════════════════════════════════════════════════════
+        // If LLM tries to ask for name/phone/address during DISCOVERY, override it.
+        // This is the HARD GUARD that ensures "listen first, book second" behavior.
+        // ════════════════════════════════════════════════════════════════════════════
+        const phaseSafety = sanitizeLLM0ReplyForPhase({
+            phase: rawLlmResult.phase,
+            reply: rawLlmResult.reply,
+            userText: userInput,
+            problemSummary: rawLlmResult.problemSummary,
+            wantsBooking: rawLlmResult.wantsBooking,
+            callId,
+            companyId,
+            trade,
+            turnNumber
+        });
+        
+        // Build sanitized llmResult - keep original fields, override sanitized ones
+        const llmResult = {
+            ...rawLlmResult,
+            reply: phaseSafety.reply,
+            phase: phaseSafety.phase,
+            wantsBooking: phaseSafety.wantsBooking
+        };
+        
+        // Log if there was a violation
+        if (phaseSafety.wasViolation) {
+            try {
+                const BlackBoxLogger = require('./BlackBoxLogger');
+                await BlackBoxLogger.logEvent({
+                    callId,
+                    companyId,
+                    type: 'PHASE_VIOLATION',
+                    turn: turnNumber,
+                    data: {
+                        originalPhase: rawLlmResult.phase,
+                        originalReply: rawLlmResult.reply?.substring(0, 100),
+                        sanitizedPhase: phaseSafety.phase,
+                        sanitizedReply: phaseSafety.reply?.substring(0, 100),
+                        reason: 'LLM tried to ask for slots in non-BOOKING phase'
+                    }
+                });
+            } catch (e) {}
+        }
+        
         logger.info('[LLM0 TURN HANDLER] 🚀 HYBRID RESULT', {
             companyId,
             callId,
             latencyMs,
             reply: llmResult.reply?.substring(0, 80),
+            phase: llmResult.phase,
+            wasViolation: phaseSafety.wasViolation,
             mode: llmResult.conversationMode,
             nextGoal: llmResult.nextGoal,
             filledSlots: llmResult.filledSlots,
@@ -2045,8 +2287,12 @@ class LLM0TurnHandler {
                 turn: turnNumber,
                 data: {
                     latencyMs,
+                    phase: llmResult.phase,
+                    wasPhaseViolation: phaseSafety.wasViolation,
                     mode: convState.currentMode,
                     reply: llmResult.reply?.substring(0, 150),
+                    problemSummary: llmResult.problemSummary?.substring(0, 100),
+                    wantsBooking: llmResult.wantsBooking,
                     filledSlots: llmResult.filledSlots,
                     signals: llmResult.signals,
                     nextGoal: llmResult.nextGoal,
