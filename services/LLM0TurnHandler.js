@@ -2378,12 +2378,13 @@ class LLM0TurnHandler {
         const turnNumber = (callState?.turnCount || 0) + 1;
         
         // Load or create conversation state
-        let convState = await ConversationStateManager.getState(callId) || {
-            conversationHistory: [],
-            collectedSlots: {},
-            currentMode: 'free',
-            signals: {}
-        };
+        let convState = await ConversationStateManager.getState(callId) || {};
+        
+        // Ensure all required fields exist (getState might return partial object)
+        convState.conversationHistory = convState.conversationHistory || [];
+        convState.collectedSlots = convState.collectedSlots || {};
+        convState.currentMode = convState.currentMode || 'free';
+        convState.signals = convState.signals || {};
         
         // Add caller input to history
         if (userInput) {
