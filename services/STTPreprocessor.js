@@ -210,6 +210,32 @@ class STTPreprocessor {
             'can', 'could', 'will', 'would', 'should', 'may', 'might', 'must',
             'need', 'want', 'get', 'got',
             
+            // COGNITIVE/COMMUNICATION VERBS - Critical for understanding caller
+            'know', 'knew', 'known',     // "I want to know" is NOT a filler!
+            'mean', 'meant',             // "What do you mean?" is NOT a filler!
+            'think', 'thought',          // "I think the AC is broken"
+            'say', 'said', 'saying',     // "What did you say?"
+            'tell', 'told', 'telling',   // "Can you tell me..."
+            'ask', 'asked', 'asking',    // "I'm asking you..."
+            'call', 'called', 'calling', // "I'm calling about..."
+            'help', 'helped', 'helping', // "Can you help me?"
+            'hear', 'heard',             // "Did you hear that?"
+            'see', 'saw', 'seen',        // "I see water leaking"
+            'feel', 'felt',              // "It feels hot"
+            'look', 'looked', 'looking', // "It looks broken"
+            'try', 'tried', 'trying',    // "I tried restarting it"
+            'work', 'worked', 'working', // "It's not working"
+            'fix', 'fixed', 'fixing',    // "Can you fix it?"
+            'come', 'came', 'coming',    // "Can someone come out?"
+            'go', 'went', 'going', 'gone', // "It's going to break"
+            'make', 'made', 'making',    // "It's making a noise"
+            'take', 'took', 'taking',    // "How long does it take?"
+            'give', 'gave', 'giving',    // "Can you give me a quote?"
+            'send', 'sent', 'sending',   // "Can you send someone?"
+            'start', 'started',          // "It started making noise"
+            'stop', 'stopped',           // "It stopped working"
+            'turn', 'turned',            // "I turned it on"
+            
             // CONJUNCTIONS - Critical for compound sentences
             'and', 'or', 'but', 'if', 'then', 'so', 'because',
             

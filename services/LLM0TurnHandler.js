@@ -258,6 +258,186 @@ function sanitizeLLM0ReplyForPhase({
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// GENERIC REPLY SANITIZER - Catch useless chatbot responses
+// ════════════════════════════════════════════════════════════════════════════
+// These are the hallmarks of a dumb chatbot, NOT a real receptionist.
+// If LLM says these, we OVERRIDE with a proper response.
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Detect if the LLM reply is generic useless chatbot speak
+ * @param {string} reply - LLM's response text
+ * @returns {boolean} True if reply is generic/useless
+ */
+function replyIsGenericAndUseless(reply) {
+    if (!reply || typeof reply !== 'string') return false;
+    const r = reply.toLowerCase();
+
+    // These are the EXACT phrases that make callers think "this is a dumb bot"
+    const genericPatterns = [
+        'how can i help you',
+        'how may i help you',
+        'how can i assist you',
+        'how may i assist you',
+        'what would you like to know',
+        'what can i do for you',
+        'what can i help you with',
+        'how can i assist you today',
+        'what do you need help with',
+        'is there anything i can help you with',
+        'i can help you with that',  // When not followed by specifics
+        'i\'d be happy to help',
+        'i\'m here to help',
+        'thank you for calling',      // When used as the whole response
+        'thanks for calling'
+    ];
+
+    // Check if reply contains any of these generic patterns
+    const isGeneric = genericPatterns.some(p => r.includes(p));
+    
+    // Additional check: reply is too short and doesn't mention their issue
+    const isTooVague = r.length < 60 && !r.includes('air') && !r.includes('cool') && 
+                       !r.includes('heat') && !r.includes('noise') && !r.includes('leak') &&
+                       !r.includes('service') && !r.includes('repair') && !r.includes('maintenance');
+    
+    return isGeneric || (isTooVague && r.includes('help'));
+}
+
+/**
+ * Extract what the caller mentioned to build a targeted response
+ * @param {string} userText - What the caller said
+ * @returns {Object} Detected hints about their need
+ */
+function extractCallerContext(userText) {
+    if (!userText) return { topic: null, symptom: null };
+    const t = userText.toLowerCase();
+    
+    let topic = null;
+    let symptom = null;
+    
+    // Detect topic
+    if (/air conditioning|a\.?c\.?\b|cooling|cool|air/i.test(t)) {
+        topic = 'ac';
+    } else if (/heat|heater|furnace|warm/i.test(t)) {
+        topic = 'heat';
+    } else if (/plumb|drain|water|pipe|leak|faucet|toilet/i.test(t)) {
+        topic = 'plumbing';
+    } else if (/electric|outlet|circuit|breaker|power/i.test(t)) {
+        topic = 'electrical';
+    }
+    
+    // Detect symptom
+    if (/not cooling|no cool|won't cool|doesn't cool|blowing hot|blowing warm/i.test(t)) {
+        symptom = 'not_cooling';
+    } else if (/noise|loud|sound|making a sound|banging|rattling|humming/i.test(t)) {
+        symptom = 'noise';
+    } else if (/leak|water|dripping|wet/i.test(t)) {
+        symptom = 'leak';
+    } else if (/not working|broken|won't turn on|stopped|dead/i.test(t)) {
+        symptom = 'not_working';
+    } else if (/service|maintenance|tune-up|check/i.test(t)) {
+        symptom = 'service_request';
+    }
+    
+    return { topic, symptom };
+}
+
+/**
+ * Build a SMART response that reflects what the caller actually said
+ * @param {string} userText - What the caller said
+ * @param {string} problemSummary - Current problem summary
+ * @param {string} trade - Company trade
+ * @returns {string} Proper discovery response
+ */
+function buildSmartDiscoveryResponse(userText, problemSummary, trade = 'HVAC') {
+    const context = extractCallerContext(userText);
+    
+    // If we have a problem summary, build on it
+    if (problemSummary && typeof problemSummary === 'string' && problemSummary.length > 10) {
+        return `Got it, ${problemSummary}. Can you tell me a bit more about what's happening so I can get the right person out there?`;
+    }
+    
+    // Build response based on what they mentioned
+    if (context.topic === 'ac') {
+        if (context.symptom === 'not_cooling') {
+            return `I understand, your AC isn't cooling properly. Is it blowing warm air, or not coming on at all?`;
+        }
+        if (context.symptom === 'noise') {
+            return `Got it, your AC is making a noise. Can you describe it — is it more like a rattling, humming, or grinding sound?`;
+        }
+        if (context.symptom === 'leak') {
+            return `I see, you've got water from the AC. Is it leaking inside the house or outside near the unit?`;
+        }
+        if (context.symptom === 'service_request') {
+            return `Sure, I can help with AC service. Are you looking for routine maintenance, or is there something specific going on with the system?`;
+        }
+        // Generic AC
+        return `Got it, you need air conditioning service. What's going on with it — is it not cooling, making noise, leaking, or something else?`;
+    }
+    
+    if (context.topic === 'heat') {
+        return `Got it, you're having an issue with the heat. Is it not turning on, not getting warm enough, or shutting off unexpectedly?`;
+    }
+    
+    if (context.topic === 'plumbing') {
+        return `Got it, sounds like a plumbing issue. What's happening — is it a leak, a clog, low water pressure, or something else?`;
+    }
+    
+    if (context.topic === 'electrical') {
+        return `Got it, you need electrical help. What's going on — is something not working, flickering, or is there a safety concern?`;
+    }
+    
+    // Service request without specific topic
+    if (context.symptom === 'service_request') {
+        return `Sure, I can help with service. What's going on — is something not working right, or are you looking for routine maintenance?`;
+    }
+    
+    // Ultimate fallback - still better than "how can I help you"
+    return `Got it, I can help with that. Tell me what's going on so I understand the situation and can get the right help for you.`;
+}
+
+/**
+ * Sanitize generic/useless replies with smart, contextual responses
+ * @param {Object} params
+ * @returns {Object} { reply, wasGenericViolation }
+ */
+function sanitizeGenericReply({
+    phase,
+    reply,
+    userText,
+    problemSummary,
+    trade = 'HVAC',
+    callId,
+    companyId,
+    turnNumber
+}) {
+    let sanitizedReply = reply;
+    let wasGenericViolation = false;
+
+    // Only check in DISCOVERY phase - in BOOKING, generic responses are less harmful
+    if (phase === 'DISCOVERY' && replyIsGenericAndUseless(reply)) {
+        wasGenericViolation = true;
+        
+        logger.warn('[GENERIC SANITIZER] 🚫 VIOLATION: LLM gave useless generic response', {
+            callId,
+            companyId,
+            phase,
+            turnNumber,
+            originalReply: reply?.substring(0, 100),
+            userText: userText?.substring(0, 50)
+        });
+
+        // Build a smart response that reflects what the caller said
+        sanitizedReply = buildSmartDiscoveryResponse(userText, problemSummary, trade);
+    }
+
+    return {
+        reply: sanitizedReply,
+        wasGenericViolation
+    };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // END LLM-0 PHASE SAFETY HELPERS
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -2212,15 +2392,33 @@ class LLM0TurnHandler {
             turnNumber
         });
         
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🚧 GENERIC REPLY SANITIZER: Catch useless chatbot responses
+        // ════════════════════════════════════════════════════════════════════════════
+        // Even if the reply doesn't ask for slots, it might be garbage like
+        // "I can help you with that. What would you like to know?"
+        // We catch and override these with smart, contextual responses.
+        // ════════════════════════════════════════════════════════════════════════════
+        const genericSafety = sanitizeGenericReply({
+            phase: phaseSafety.phase,
+            reply: phaseSafety.reply,
+            userText: userInput,
+            problemSummary: rawLlmResult.problemSummary,
+            trade,
+            callId,
+            companyId,
+            turnNumber
+        });
+        
         // Build sanitized llmResult - keep original fields, override sanitized ones
         const llmResult = {
             ...rawLlmResult,
-            reply: phaseSafety.reply,
+            reply: genericSafety.reply, // Use reply after BOTH sanitizers
             phase: phaseSafety.phase,
             wantsBooking: phaseSafety.wantsBooking
         };
         
-        // Log if there was a violation
+        // Log if there was a phase violation
         if (phaseSafety.wasViolation) {
             try {
                 const BlackBoxLogger = require('./BlackBoxLogger');
@@ -2240,13 +2438,33 @@ class LLM0TurnHandler {
             } catch (e) {}
         }
         
+        // Log if there was a generic reply violation
+        if (genericSafety.wasGenericViolation) {
+            try {
+                const BlackBoxLogger = require('./BlackBoxLogger');
+                await BlackBoxLogger.logEvent({
+                    callId,
+                    companyId,
+                    type: 'GENERIC_VIOLATION',
+                    turn: turnNumber,
+                    data: {
+                        originalReply: phaseSafety.reply?.substring(0, 100),
+                        sanitizedReply: genericSafety.reply?.substring(0, 100),
+                        userText: userInput?.substring(0, 100),
+                        reason: 'LLM gave useless generic chatbot response'
+                    }
+                });
+            } catch (e) {}
+        }
+        
         logger.info('[LLM0 TURN HANDLER] 🚀 HYBRID RESULT', {
             companyId,
             callId,
             latencyMs,
             reply: llmResult.reply?.substring(0, 80),
             phase: llmResult.phase,
-            wasViolation: phaseSafety.wasViolation,
+            wasPhaseViolation: phaseSafety.wasViolation,
+            wasGenericViolation: genericSafety.wasGenericViolation,
             mode: llmResult.conversationMode,
             nextGoal: llmResult.nextGoal,
             filledSlots: llmResult.filledSlots,
@@ -2289,6 +2507,7 @@ class LLM0TurnHandler {
                     latencyMs,
                     phase: llmResult.phase,
                     wasPhaseViolation: phaseSafety.wasViolation,
+                    wasGenericViolation: genericSafety.wasGenericViolation,
                     mode: convState.currentMode,
                     reply: llmResult.reply?.substring(0, 150),
                     problemSummary: llmResult.problemSummary?.substring(0, 100),
