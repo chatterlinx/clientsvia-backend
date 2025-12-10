@@ -1046,6 +1046,42 @@ const companySchema = new mongoose.Schema({
                     default: 'phone_call'
                 }
             },
+            // -------------------------------------------------------------------
+            // CALL EXPERIENCE SETTINGS - Response Timing & Voice (Dec 2025)
+            // -------------------------------------------------------------------
+            // These settings control how the AI listens, responds, and speaks
+            // "Ashley Mode" is a preset that optimizes for natural conversation flow
+            callExperience: {
+                // === Response Timing ===
+                speechTimeout: { type: Number, default: 3, min: 1, max: 5 },       // Wait after caller stops
+                endSilenceTimeout: { type: Number, default: 2.0, min: 0.5, max: 3 }, // Extra silence detection
+                initialTimeout: { type: Number, default: 5, min: 3, max: 15 },     // Wait for caller to start
+                
+                // === Interruption Behavior ===
+                allowInterruption: { type: Boolean, default: false },              // Barge-in enabled
+                interruptSensitivity: { 
+                    type: String, 
+                    enum: ['low', 'medium', 'high'], 
+                    default: 'medium' 
+                },
+                
+                // === Voice & Speed ===
+                speakingSpeed: { type: Number, default: 1.0, min: 0.8, max: 1.5 }, // TTS speed multiplier
+                pauseBetweenSentences: { type: Number, default: 0.3, min: 0, max: 0.5 }, // Micro-pause
+                
+                // === AI Behavior ===
+                llmTimeout: { type: Number, default: 6, min: 2, max: 10 },         // Max LLM wait
+                maxSilenceBeforePrompt: { type: Number, default: 8, min: 3, max: 15 }, // "Still there?" trigger
+                responseLength: { 
+                    type: String, 
+                    enum: ['short', 'medium', 'long'], 
+                    default: 'medium' 
+                },
+                
+                // === Preset Flag ===
+                ashleyMode: { type: Boolean, default: false },                     // Is Ashley Mode active?
+                updatedAt: { type: Date, default: Date.now }
+            },
             enabled: { 
                 type: Boolean, 
                 default: true 

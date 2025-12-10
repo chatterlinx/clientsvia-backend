@@ -2635,5 +2635,137 @@ router.get('/:companyId/warmup-analytics', async (req, res) => {
     }
 });
 
+/**
+ * ============================================================================
+ * GET /api/company/:companyId/call-experience
+ * ============================================================================
+ * PURPOSE: Get call experience settings (timing, interruption, voice speed)
+ * ============================================================================
+ */
+router.get('/:companyId/call-experience', async (req, res) => {
+    const { companyId } = req.params;
+    
+    logger.info(`[CALL EXPERIENCE] GET request for company: ${companyId}`);
+    
+    try {
+        const company = await Company.findById(companyId).lean();
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Call experience settings can come from multiple places
+        const settings = company.aiAgentSettings?.callExperience || {};
+        const speechDetection = company.aiAgentSettings?.speechDetection || {};
+        
+        // Merge legacy speechDetection with new callExperience
+        const merged = {
+            // Timing (from speechDetection if not in callExperience)
+            speechTimeout: settings.speechTimeout ?? speechDetection.speechTimeout ?? 3,
+            initialTimeout: settings.initialTimeout ?? speechDetection.initialTimeout ?? 5,
+            endSilenceTimeout: settings.endSilenceTimeout ?? 2.0,
+            // Interruption
+            allowInterruption: settings.allowInterruption ?? speechDetection.bargeIn ?? false,
+            interruptSensitivity: settings.interruptSensitivity ?? 'medium',
+            // Voice & Speed
+            speakingSpeed: settings.speakingSpeed ?? 1.0,
+            pauseBetweenSentences: settings.pauseBetweenSentences ?? 0.3,
+            // AI Behavior
+            llmTimeout: settings.llmTimeout ?? 6,
+            maxSilenceBeforePrompt: settings.maxSilenceBeforePrompt ?? 8,
+            responseLength: settings.responseLength ?? 'medium',
+            // Ashley Mode flag
+            ashleyMode: settings.ashleyMode ?? false
+        };
+        
+        res.json({ success: true, data: merged });
+        
+    } catch (error) {
+        logger.error('[CALL EXPERIENCE] GET Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * ============================================================================
+ * PUT /api/company/:companyId/call-experience
+ * ============================================================================
+ * PURPOSE: Save call experience settings
+ * CRITICAL: These settings affect live call behavior - cached must be cleared
+ * ============================================================================
+ */
+router.put('/:companyId/call-experience', async (req, res) => {
+    const { companyId } = req.params;
+    const settings = req.body;
+    
+    logger.info(`[CALL EXPERIENCE] PUT request for company: ${companyId}`, {
+        ashleyMode: settings.ashleyMode,
+        speechTimeout: settings.speechTimeout,
+        endSilenceTimeout: settings.endSilenceTimeout
+    });
+    
+    try {
+        // Validate companyId
+        if (!mongoose.Types.ObjectId.isValid(companyId)) {
+            return res.status(400).json({ error: 'Invalid company ID' });
+        }
+        
+        // Update the call experience settings
+        const updatePath = 'aiAgentSettings.callExperience';
+        const update = {
+            $set: {
+                [updatePath]: {
+                    // Timing
+                    speechTimeout: settings.speechTimeout ?? 3,
+                    initialTimeout: settings.initialTimeout ?? 5,
+                    endSilenceTimeout: settings.endSilenceTimeout ?? 2.0,
+                    // Interruption
+                    allowInterruption: settings.allowInterruption ?? false,
+                    interruptSensitivity: settings.interruptSensitivity ?? 'medium',
+                    // Voice & Speed
+                    speakingSpeed: settings.speakingSpeed ?? 1.0,
+                    pauseBetweenSentences: settings.pauseBetweenSentences ?? 0.3,
+                    // AI Behavior
+                    llmTimeout: settings.llmTimeout ?? 6,
+                    maxSilenceBeforePrompt: settings.maxSilenceBeforePrompt ?? 8,
+                    responseLength: settings.responseLength ?? 'medium',
+                    // Ashley Mode flag
+                    ashleyMode: settings.ashleyMode ?? false,
+                    // Meta
+                    updatedAt: new Date()
+                },
+                // Also sync to speechDetection for backwards compatibility
+                'aiAgentSettings.speechDetection.speechTimeout': settings.speechTimeout ?? 3,
+                'aiAgentSettings.speechDetection.initialTimeout': settings.initialTimeout ?? 5,
+                'aiAgentSettings.speechDetection.bargeIn': settings.allowInterruption ?? false
+            }
+        };
+        
+        const result = await Company.findByIdAndUpdate(
+            companyId,
+            update,
+            { new: true }
+        );
+        
+        if (!result) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // CRITICAL: Clear Redis cache so live calls use new settings
+        await clearCompanyCache(companyId, 'CALL_EXPERIENCE_UPDATE');
+        
+        logger.info(`[CALL EXPERIENCE] ✅ Settings saved for ${companyId}`, {
+            ashleyMode: settings.ashleyMode,
+            speechTimeout: settings.speechTimeout,
+            endSilenceTimeout: settings.endSilenceTimeout
+        });
+        
+        res.json({ success: true, message: 'Call experience settings saved' });
+        
+    } catch (error) {
+        logger.error('[CALL EXPERIENCE] PUT Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;
 

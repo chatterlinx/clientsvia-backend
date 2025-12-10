@@ -82,11 +82,14 @@ class STTSettingsManager {
     async loadProfile() {
         const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
         
-        const [profileRes, metricsRes] = await Promise.all([
+        const [profileRes, metricsRes, callExpRes] = await Promise.all([
             fetch(`/api/admin/stt-profile/${this.templateId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }),
             fetch(`/api/admin/stt-profile/${this.templateId}/metrics`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }),
+            fetch(`/api/company/${this.companyId}/call-experience`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
         ]);
@@ -101,6 +104,13 @@ class STTSettingsManager {
         if (metricsRes.ok) {
             const metricsData = await metricsRes.json();
             this.metrics = metricsData.data;
+        }
+        
+        // Load call experience settings
+        if (callExpRes.ok) {
+            const callExpData = await callExpRes.json();
+            this.profile.callExperience = callExpData.data;
+            console.log('[STT SETTINGS] Call experience loaded:', this.profile.callExperience);
         }
         
         console.log('[STT SETTINGS] Profile loaded:', {
@@ -153,6 +163,11 @@ class STTSettingsManager {
                         Speech-to-Text correction for <strong>${this.profile.templateName}</strong>
                     </p>
                 </div>
+                
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <!-- 📞 CALL EXPERIENCE SETTINGS - TOP OF PAGE -->
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                ${this.renderCallExperienceSettingsTop()}
                 
                 <!-- Quick Actions Bar -->
                 <div style="display: flex; gap: 12px; margin-bottom: 16px; padding: 12px; background: linear-gradient(135deg, #1e293b, #334155); border-radius: 12px;">
@@ -343,6 +358,358 @@ class STTSettingsManager {
                 </div>
             </div>
         `;
+    }
+    
+    renderCallExperienceSettingsTop() {
+        // Get current settings from profile or defaults
+        const callExp = this.profile.callExperience || {};
+        const speechTimeout = callExp.speechTimeout ?? 3;
+        const initialTimeout = callExp.initialTimeout ?? 5;
+        const endSilenceTimeout = callExp.endSilenceTimeout ?? 2.0;
+        const allowInterruption = callExp.allowInterruption !== false;
+        const interruptSensitivity = callExp.interruptSensitivity || 'medium';
+        const speakingSpeed = callExp.speakingSpeed ?? 1.0;
+        const pauseBetweenSentences = callExp.pauseBetweenSentences ?? 0.3;
+        const llmTimeout = callExp.llmTimeout ?? 6;
+        const maxSilenceBeforePrompt = callExp.maxSilenceBeforePrompt ?? 8;
+        const responseLength = callExp.responseLength || 'medium';
+        const ashleyModeActive = callExp.ashleyMode === true;
+        
+        return `
+            <div style="max-width: 700px; margin-top: 32px; border-top: 2px solid #e2e8f0; padding-top: 24px;">
+                <!-- ASHLEY MODE PRESET -->
+                <div style="
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    border-radius: 12px;
+                    padding: 20px;
+                    margin-bottom: 24px;
+                    color: white;
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h3 style="margin: 0 0 8px 0; display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 24px;">✨</span>
+                                Ashley Mode — Natural Flow
+                            </h3>
+                            <p style="margin: 0; opacity: 0.9; font-size: 14px;">
+                                One-click preset for human-like conversation timing. Reduces dead air, enables interruption, speeds up response.
+                            </p>
+                        </div>
+                        <button onclick="sttManager.applyAshleyMode()" style="
+                            padding: 12px 24px;
+                            background: ${ashleyModeActive ? '#10b981' : 'rgba(255,255,255,0.2)'};
+                            color: white;
+                            border: 2px solid white;
+                            border-radius: 8px;
+                            cursor: pointer;
+                            font-weight: 600;
+                            font-size: 14px;
+                            transition: all 0.2s;
+                        " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='${ashleyModeActive ? '#10b981' : 'rgba(255,255,255,0.2)'}'"
+                        >
+                            ${ashleyModeActive ? '✓ Active' : 'Enable Ashley Mode'}
+                        </button>
+                    </div>
+                </div>
+                
+                <h3 style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                    <span>📞</span> Call Experience Settings
+                </h3>
+                <p style="color: #64748b; margin-bottom: 20px; font-size: 14px;">
+                    Fine-tune how the AI listens, speaks, and responds. These settings eliminate dead air and make conversations feel natural.
+                </p>
+                
+                <div style="display: grid; gap: 24px;">
+                    <!-- RESPONSE TIMING SECTION -->
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 20px;">
+                        <h4 style="margin: 0 0 16px 0; display: flex; align-items: center; gap: 8px;">
+                            <span>🎯</span> Response Timing
+                        </h4>
+                        
+                        <div style="display: grid; gap: 16px;">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <label style="font-weight: 500;">Speech Timeout</label>
+                                    <span id="speech-timeout-value" style="color: #3b82f6; font-weight: 600;">${speechTimeout}s</span>
+                                </div>
+                                <input type="range" id="call-exp-speech-timeout" min="1" max="5" step="0.5" value="${speechTimeout}" 
+                                    style="width: 100%; cursor: pointer;"
+                                    oninput="document.getElementById('speech-timeout-value').textContent = this.value + 's'">
+                                <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
+                                    How long to wait after caller stops talking. Lower = faster response. (Rec: 1.5-2s)
+                                </p>
+                            </div>
+                            
+                            <div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <label style="font-weight: 500;">End Silence Timeout</label>
+                                    <span id="end-silence-value" style="color: #3b82f6; font-weight: 600;">${endSilenceTimeout}s</span>
+                                </div>
+                                <input type="range" id="call-exp-end-silence" min="0.5" max="3" step="0.1" value="${endSilenceTimeout}" 
+                                    style="width: 100%; cursor: pointer;"
+                                    oninput="document.getElementById('end-silence-value').textContent = this.value + 's'">
+                                <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
+                                    Extra silence detection. This is the #1 cause of dead air. (Rec: 0.7-0.9s)
+                                </p>
+                            </div>
+                            
+                            <div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <label style="font-weight: 500;">Initial Timeout</label>
+                                    <span id="initial-timeout-value" style="color: #3b82f6; font-weight: 600;">${initialTimeout}s</span>
+                                </div>
+                                <input type="range" id="call-exp-initial-timeout" min="3" max="15" step="1" value="${initialTimeout}" 
+                                    style="width: 100%; cursor: pointer;"
+                                    oninput="document.getElementById('initial-timeout-value').textContent = this.value + 's'">
+                                <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
+                                    Max wait for caller to start talking after greeting. (Rec: 5s)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- INTERRUPTION SECTION -->
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 20px;">
+                        <h4 style="margin: 0 0 16px 0; display: flex; align-items: center; gap: 8px;">
+                            <span>🗣️</span> Interruption Behavior
+                        </h4>
+                        
+                        <div style="display: grid; gap: 16px;">
+                            <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                <input type="checkbox" id="call-exp-allow-interrupt" ${allowInterruption ? 'checked' : ''} 
+                                    style="width: 20px; height: 20px; cursor: pointer;">
+                                <div>
+                                    <span style="font-weight: 500;">Allow Caller to Interrupt (Barge-in)</span>
+                                    <p style="color: #64748b; font-size: 12px; margin: 2px 0 0 0;">
+                                        Caller can cut off AI mid-sentence. Makes it feel alive. (Rec: ON)
+                                    </p>
+                                </div>
+                            </label>
+                            
+                            <div>
+                                <label style="font-weight: 500; display: block; margin-bottom: 8px;">Interrupt Sensitivity</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <button onclick="sttManager.setInterruptSensitivity('low')" 
+                                        style="flex: 1; padding: 10px; border: 2px solid ${interruptSensitivity === 'low' ? '#3b82f6' : '#e2e8f0'}; 
+                                        background: ${interruptSensitivity === 'low' ? '#eff6ff' : 'white'}; border-radius: 8px; cursor: pointer;">
+                                        Low
+                                    </button>
+                                    <button onclick="sttManager.setInterruptSensitivity('medium')" 
+                                        style="flex: 1; padding: 10px; border: 2px solid ${interruptSensitivity === 'medium' ? '#3b82f6' : '#e2e8f0'}; 
+                                        background: ${interruptSensitivity === 'medium' ? '#eff6ff' : 'white'}; border-radius: 8px; cursor: pointer;">
+                                        Medium
+                                    </button>
+                                    <button onclick="sttManager.setInterruptSensitivity('high')" 
+                                        style="flex: 1; padding: 10px; border: 2px solid ${interruptSensitivity === 'high' ? '#3b82f6' : '#e2e8f0'}; 
+                                        background: ${interruptSensitivity === 'high' ? '#eff6ff' : 'white'}; border-radius: 8px; cursor: pointer;">
+                                        High ⭐
+                                    </button>
+                                </div>
+                                <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
+                                    How easily caller voice triggers interrupt. (Rec: High)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- VOICE & SPEED SECTION -->
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 20px;">
+                        <h4 style="margin: 0 0 16px 0; display: flex; align-items: center; gap: 8px;">
+                            <span>🔊</span> Voice & Speed
+                        </h4>
+                        
+                        <div style="display: grid; gap: 16px;">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <label style="font-weight: 500;">Speaking Speed</label>
+                                    <span id="speaking-speed-value" style="color: #3b82f6; font-weight: 600;">${speakingSpeed}x</span>
+                                </div>
+                                <input type="range" id="call-exp-speaking-speed" min="0.8" max="1.5" step="0.05" value="${speakingSpeed}" 
+                                    style="width: 100%; cursor: pointer;"
+                                    oninput="document.getElementById('speaking-speed-value').textContent = this.value + 'x'">
+                                <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
+                                    1.0x = normal. 1.2x = confident receptionist. (Rec: 1.15-1.25x)
+                                </p>
+                            </div>
+                            
+                            <div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <label style="font-weight: 500;">Pause Between Sentences</label>
+                                    <span id="pause-value" style="color: #3b82f6; font-weight: 600;">${pauseBetweenSentences}s</span>
+                                </div>
+                                <input type="range" id="call-exp-pause" min="0" max="0.5" step="0.05" value="${pauseBetweenSentences}" 
+                                    style="width: 100%; cursor: pointer;"
+                                    oninput="document.getElementById('pause-value').textContent = this.value + 's'">
+                                <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
+                                    Micro-pause for natural breathing. 0s = run-on robot. (Rec: 0.15-0.25s)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- AI BEHAVIOR SECTION -->
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 20px;">
+                        <h4 style="margin: 0 0 16px 0; display: flex; align-items: center; gap: 8px;">
+                            <span>🤖</span> AI Response Behavior
+                        </h4>
+                        
+                        <div style="display: grid; gap: 16px;">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <label style="font-weight: 500;">LLM Timeout</label>
+                                    <span id="llm-timeout-value" style="color: #3b82f6; font-weight: 600;">${llmTimeout}s</span>
+                                </div>
+                                <input type="range" id="call-exp-llm-timeout" min="2" max="10" step="0.5" value="${llmTimeout}" 
+                                    style="width: 100%; cursor: pointer;"
+                                    oninput="document.getElementById('llm-timeout-value').textContent = this.value + 's'">
+                                <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
+                                    Max wait for AI response. Uses smart fallback if exceeded. (Rec: 4s)
+                                </p>
+                            </div>
+                            
+                            <div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <label style="font-weight: 500;">Max Silence Before Prompt</label>
+                                    <span id="max-silence-value" style="color: #3b82f6; font-weight: 600;">${maxSilenceBeforePrompt}s</span>
+                                </div>
+                                <input type="range" id="call-exp-max-silence" min="3" max="15" step="1" value="${maxSilenceBeforePrompt}" 
+                                    style="width: 100%; cursor: pointer;"
+                                    oninput="document.getElementById('max-silence-value').textContent = this.value + 's'">
+                                <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
+                                    If caller goes quiet, AI says "Still there?" (Rec: 5s)
+                                </p>
+                            </div>
+                            
+                            <div>
+                                <label style="font-weight: 500; display: block; margin-bottom: 8px;">Response Length</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <button onclick="sttManager.setResponseLength('short')" 
+                                        style="flex: 1; padding: 10px; border: 2px solid ${responseLength === 'short' ? '#3b82f6' : '#e2e8f0'}; 
+                                        background: ${responseLength === 'short' ? '#eff6ff' : 'white'}; border-radius: 8px; cursor: pointer;">
+                                        Short<br><span style="font-size: 11px; color: #64748b;">~12 words</span>
+                                    </button>
+                                    <button onclick="sttManager.setResponseLength('medium')" 
+                                        style="flex: 1; padding: 10px; border: 2px solid ${responseLength === 'medium' ? '#3b82f6' : '#e2e8f0'}; 
+                                        background: ${responseLength === 'medium' ? '#eff6ff' : 'white'}; border-radius: 8px; cursor: pointer;">
+                                        Medium ⭐<br><span style="font-size: 11px; color: #64748b;">~20 words</span>
+                                    </button>
+                                    <button onclick="sttManager.setResponseLength('long')" 
+                                        style="flex: 1; padding: 10px; border: 2px solid ${responseLength === 'long' ? '#3b82f6' : '#e2e8f0'}; 
+                                        background: ${responseLength === 'long' ? '#eff6ff' : 'white'}; border-radius: 8px; cursor: pointer;">
+                                        Long<br><span style="font-size: 11px; color: #64748b;">~35 words</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button onclick="sttManager.saveCallExperienceSettings()" style="
+                        padding: 14px 28px;
+                        background: #10b981;
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-weight: 600;
+                        font-size: 15px;
+                        width: 100%;
+                    ">
+                        💾 Save Call Experience Settings
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Call Experience Methods
+    async applyAshleyMode() {
+        // Ashley Mode optimal settings
+        const ashleySettings = {
+            ashleyMode: true,
+            speechTimeout: 1.5,
+            endSilenceTimeout: 0.8,
+            initialTimeout: 5,
+            allowInterruption: true,
+            interruptSensitivity: 'high',
+            speakingSpeed: 1.2,
+            pauseBetweenSentences: 0.2,
+            llmTimeout: 4,
+            maxSilenceBeforePrompt: 5,
+            responseLength: 'medium'
+        };
+        
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const response = await fetch(`/api/company/${this.companyId}/call-experience`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(ashleySettings)
+            });
+            
+            if (response.ok) {
+                this.profile.callExperience = ashleySettings;
+                this.render();
+                alert('✨ Ashley Mode activated! Natural conversation flow enabled.');
+            } else {
+                throw new Error('Failed to apply Ashley Mode');
+            }
+        } catch (error) {
+            console.error('[STT SETTINGS] Ashley Mode failed:', error);
+            alert('Failed to apply Ashley Mode: ' + error.message);
+        }
+    }
+    
+    setInterruptSensitivity(level) {
+        this.profile.callExperience = this.profile.callExperience || {};
+        this.profile.callExperience.interruptSensitivity = level;
+        this.render();
+    }
+    
+    setResponseLength(length) {
+        this.profile.callExperience = this.profile.callExperience || {};
+        this.profile.callExperience.responseLength = length;
+        this.render();
+    }
+    
+    async saveCallExperienceSettings() {
+        const settings = {
+            ashleyMode: false, // Manual settings = not Ashley Mode
+            speechTimeout: parseFloat(document.getElementById('call-exp-speech-timeout').value),
+            endSilenceTimeout: parseFloat(document.getElementById('call-exp-end-silence').value),
+            initialTimeout: parseInt(document.getElementById('call-exp-initial-timeout').value),
+            allowInterruption: document.getElementById('call-exp-allow-interrupt').checked,
+            interruptSensitivity: this.profile.callExperience?.interruptSensitivity || 'medium',
+            speakingSpeed: parseFloat(document.getElementById('call-exp-speaking-speed').value),
+            pauseBetweenSentences: parseFloat(document.getElementById('call-exp-pause').value),
+            llmTimeout: parseFloat(document.getElementById('call-exp-llm-timeout').value),
+            maxSilenceBeforePrompt: parseInt(document.getElementById('call-exp-max-silence').value),
+            responseLength: this.profile.callExperience?.responseLength || 'medium'
+        };
+        
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const response = await fetch(`/api/company/${this.companyId}/call-experience`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(settings)
+            });
+            
+            if (response.ok) {
+                this.profile.callExperience = settings;
+                alert('✅ Call Experience settings saved!');
+            } else {
+                throw new Error('Failed to save settings');
+            }
+        } catch (error) {
+            console.error('[STT SETTINGS] Save failed:', error);
+            alert('Failed to save: ' + error.message);
+        }
     }
     
     renderFillersTab() {
