@@ -184,6 +184,37 @@ const canEnterBooking =
     highConfidence (>= 0.75);
 ```
 
+### Phase Sanitizer (NEW - Dec 2025)
+
+Even if the LLM tries to ask for slots in DISCOVERY, the **phase sanitizer** catches and corrects it:
+
+```
+LLM0TurnHandler.handleWithHybridLLM()
+    │
+    ▼
+HybridReceptionistLLM.processConversation() → rawLlmResult
+    │
+    ▼
+sanitizeLLM0ReplyForPhase({phase, reply, userText, ...})
+    │
+    ├── If phase !== 'BOOKING' AND reply asks for name/phone/address:
+    │       → Log PHASE_VIOLATION to Black Box
+    │       → Override reply with buildDiscoveryFollowup()
+    │       → Force phase = 'DISCOVERY', wantsBooking = false
+    │
+    ▼
+llmResult (sanitized) → sent to caller
+```
+
+**Key Functions:**
+- `replyIsAskingForSlots(reply)` - Detects slot-grabbing patterns
+- `buildDiscoveryFollowup(userText, problemSummary, trade)` - Generates proper discovery questions
+- `sanitizeLLM0ReplyForPhase({...})` - The main enforcer
+
+**Black Box Events:**
+- `PHASE_VIOLATION` - Logged when sanitizer catches misbehavior
+- `HYBRID_LLM_TURN_COMPLETE.wasPhaseViolation` - Boolean flag on every turn
+
 ---
 
 ## 7. Known Issues / Tech Debt
