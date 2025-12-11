@@ -729,20 +729,28 @@ class STTSettingsManager {
             
             console.log('[STT SETTINGS] 🔵 Response status:', response.status);
             const responseData = await response.json();
-            console.log('[STT SETTINGS] 🔵 Response body:', responseData);
-            console.log('[STT SETTINGS] 🔵 Saved data:', responseData.saved);
-            console.log('[STT SETTINGS] 🔵 Verified data:', responseData.verified);
+            console.log('[STT SETTINGS] 🔵 Response body:', JSON.stringify(responseData, null, 2));
+            console.log('[STT SETTINGS] 🔵 Saved (top-level):', responseData.savedTopLevel);
+            console.log('[STT SETTINGS] 🔵 Saved (nested):', responseData.savedNested);
+            console.log('[STT SETTINGS] 🔵 Verified (top-level):', responseData.verifiedTopLevel);
+            console.log('[STT SETTINGS] 🔵 Verified (nested):', responseData.verifiedNested);
             
             if (response.ok) {
                 this.profile.callExperience = settings;
                 
                 // Check if data actually persisted
-                if (responseData.verified) {
+                const savedOk = responseData.savedTopLevel || responseData.savedNested;
+                const verifiedOk = responseData.verifiedTopLevel || responseData.verifiedNested;
+                
+                if (verifiedOk) {
                     console.log('[STT SETTINGS] ✅ Data verified in MongoDB!');
                     alert('✅ Call Experience settings saved and verified!');
-                } else {
-                    console.warn('[STT SETTINGS] ⚠️ Data saved but verification returned undefined');
+                } else if (savedOk) {
+                    console.warn('[STT SETTINGS] ⚠️ Data saved but fresh verification failed');
                     alert('⚠️ Settings saved but verification failed - check Render logs');
+                } else {
+                    console.error('[STT SETTINGS] ❌ MongoDB save failed completely');
+                    alert('❌ Save returned success but no data persisted - check Render logs for CHECKPOINT errors');
                 }
             } else {
                 throw new Error(responseData.error || 'Failed to save settings');

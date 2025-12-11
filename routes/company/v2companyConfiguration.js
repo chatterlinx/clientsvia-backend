@@ -2661,13 +2661,16 @@ router.get('/:companyId/call-experience', async (req, res) => {
         
         // CHECKPOINT 3: Check what's in the database
         logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 3: Company found: ${company.companyName}`);
-        logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 4: Raw aiAgentSettings exists: ${!!company.aiAgentSettings}`);
-        logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 5: Raw callExperience exists: ${!!company.aiAgentSettings?.callExperience}`);
-        logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 6: Raw callExperience data:`, JSON.stringify(company.aiAgentSettings?.callExperience || 'UNDEFINED', null, 2));
+        logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 4: Top-level callExperienceSettings exists: ${!!company.callExperienceSettings}`);
+        logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 4b: Top-level callExperienceSettings:`, JSON.stringify(company.callExperienceSettings || 'UNDEFINED', null, 2));
+        logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 5: Nested aiAgentSettings.callExperience exists: ${!!company.aiAgentSettings?.callExperience}`);
+        logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 6: Nested callExperience data:`, JSON.stringify(company.aiAgentSettings?.callExperience || 'UNDEFINED', null, 2));
         
-        // Call experience settings can come from multiple places
-        const settings = company.aiAgentSettings?.callExperience || {};
+        // Call experience settings - CHECK TOP-LEVEL FIRST, then nested
+        const settings = company.callExperienceSettings || company.aiAgentSettings?.callExperience || {};
         const speechDetection = company.aiAgentSettings?.speechDetection || {};
+        
+        logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 6b: Using settings from: ${company.callExperienceSettings ? 'TOP-LEVEL' : (company.aiAgentSettings?.callExperience ? 'NESTED' : 'DEFAULTS')}`);
         
         logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 7: Settings object:`, JSON.stringify(settings, null, 2));
         logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 8: speechDetection object:`, JSON.stringify(speechDetection, null, 2));
@@ -2765,12 +2768,17 @@ router.put('/:companyId/call-experience', async (req, res) => {
         logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 6: callExperienceData to save:`, JSON.stringify(callExperienceData, null, 2));
         
         // CHECKPOINT 7: Execute MongoDB update
+        // WORKAROUND: Save to TOP-LEVEL field to bypass nested schema issues
         logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 7: Executing MongoDB findByIdAndUpdate...`);
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 7b: Using DIRECT $set to top-level callExperienceSettings`);
         
         const result = await Company.findByIdAndUpdate(
             companyId,
             {
                 $set: {
+                    // TOP-LEVEL field - bypass nested aiAgentSettings schema
+                    'callExperienceSettings': callExperienceData,
+                    // Also try the nested path
                     'aiAgentSettings.callExperience': callExperienceData,
                     // Also sync to speechDetection for backwards compatibility
                     'aiAgentSettings.speechDetection.speechTimeout': callExperienceData.speechTimeout,
@@ -2778,7 +2786,7 @@ router.put('/:companyId/call-experience', async (req, res) => {
                     'aiAgentSettings.speechDetection.bargeIn': callExperienceData.allowInterruption
                 }
             },
-            { new: true, runValidators: false }  // runValidators: false to bypass schema validation issues
+            { new: true, runValidators: false, strict: false }  // strict: false allows saving to undefined schema paths
         );
         
         // CHECKPOINT 8: Check result
@@ -2791,12 +2799,14 @@ router.put('/:companyId/call-experience', async (req, res) => {
         }
         
         // CHECKPOINT 9: Verify what was saved
-        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 9: AFTER UPDATE - aiAgentSettings.callExperience:`, JSON.stringify(result.aiAgentSettings?.callExperience || 'UNDEFINED', null, 2));
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 9: AFTER UPDATE - result.callExperienceSettings:`, JSON.stringify(result.callExperienceSettings || 'UNDEFINED', null, 2));
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 9b: AFTER UPDATE - result.aiAgentSettings?.callExperience:`, JSON.stringify(result.aiAgentSettings?.callExperience || 'UNDEFINED', null, 2));
         
         // CHECKPOINT 10: Verify with a fresh query
         logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 10: Verifying with fresh query...`);
         const verification = await Company.findById(companyId).lean();
-        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 11: Fresh query callExperience:`, JSON.stringify(verification?.aiAgentSettings?.callExperience || 'UNDEFINED', null, 2));
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 11: Fresh query callExperienceSettings (TOP-LEVEL):`, JSON.stringify(verification?.callExperienceSettings || 'UNDEFINED', null, 2));
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 11b: Fresh query aiAgentSettings.callExperience (NESTED):`, JSON.stringify(verification?.aiAgentSettings?.callExperience || 'UNDEFINED', null, 2));
         
         // CHECKPOINT 12: Clear Redis cache
         logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 12: Clearing Redis cache...`);
@@ -2809,8 +2819,10 @@ router.put('/:companyId/call-experience', async (req, res) => {
         res.json({ 
             success: true, 
             message: 'Call experience settings saved', 
-            saved: result.aiAgentSettings?.callExperience,
-            verified: verification?.aiAgentSettings?.callExperience
+            savedTopLevel: result.callExperienceSettings || null,
+            savedNested: result.aiAgentSettings?.callExperience || null,
+            verifiedTopLevel: verification?.callExperienceSettings || null,
+            verifiedNested: verification?.aiAgentSettings?.callExperience || null
         });
         
     } catch (error) {
