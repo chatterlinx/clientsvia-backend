@@ -1401,7 +1401,8 @@ class LLM0TurnHandler {
         let currentMode = callState.conversationMode || 'booking';
         const lowerInput = userInput.toLowerCase();
         
-        const isFrustrated = HybridReceptionistLLM.detectFrustration(userInput);
+        // 🚨 UI-CONTROLLED: Frustration detection uses triggers from frontDeskBehavior.frustrationTriggers
+        const isFrustrated = HybridReceptionistLLM.detectFrustration(userInput, company);
         
         // TRUST CONCERN: Caller questions our competence
         const trustConcern = /can you (do|handle|fix)|are you able|know what you'?re doing|qualified|sure you can|is this going to work|you guys any good/i.test(userInput);

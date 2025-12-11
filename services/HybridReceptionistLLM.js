@@ -33,110 +33,85 @@ const STTProfile = require('../models/STTProfile');
 // ═══════════════════════════════════════════════════════════════════════════════
 // 🎯 VERSION BANNER - This log PROVES the new code is deployed
 // ═══════════════════════════════════════════════════════════════════════════════
-const HYBRID_LLM_VERSION = '2025-12-10-V2-SMART-PERSONALITY';
+const HYBRID_LLM_VERSION = '2025-12-11-V1-100-PERCENT-UI-CONTROLLED';
 logger.info(`[HYBRID RECEPTIONIST LLM] 🧠 LOADED VERSION: ${HYBRID_LLM_VERSION}`, {
     features: [
-        'Smart personality prompt (reflects, hypothesizes)',
-        '3-turn memory (no repetition)',
-        'llmRegistry integration (brain: LLM0)',
-        'Trade-aware discovery questions'
+        '🚨 100% UI-CONTROLLED - NO HARDCODED AI INSTRUCTIONS',
+        'All forbidden phrases from UI',
+        'All frustration triggers from UI',
+        'All personality from UI',
+        'All prompts from UI'
     ]
 });
 // ═══════════════════════════════════════════════════════════════════════════════
 const ServiceAreaHandler = require('./ServiceAreaHandler');
 
 // ════════════════════════════════════════════════════════════════════════════
-// BEHAVIOR RULES - Baked into every prompt
+// 🚨 NO HARDCODED BEHAVIOR RULES - EVERYTHING COMES FROM UI
+// ════════════════════════════════════════════════════════════════════════════
+// All AI behavior is controlled via:
+//   company.aiAgentSettings.frontDeskBehavior
+// 
+// If you need new controls, ADD TABS TO THE UI.
+// NEVER hardcode AI instructions in backend code.
 // ════════════════════════════════════════════════════════════════════════════
 
-const BEHAVIOR_RULES = `
-═══ GOLDEN RULES - FOLLOW THESE OR YOU FAIL ═══
-
-RULE 1: ANSWER THEN BRIDGE
-- NEVER ignore what the caller just said.
-- First sentence: Answer/acknowledge what they said.
-- Second sentence: Bridge to your next goal.
-- Example: "Yes, we service Fort Myers! Let me grab your phone number in case we get disconnected."
-
-RULE 1B: SERVICE AREA QUESTIONS
-- If they ask "Do you service [area]?" - ANSWER IMMEDIATELY
-- If the area is in our service territory: "Yes, we absolutely service {city}!"
-- Then acknowledge their needs and start booking
-- Example: "Yes, we service Fort Myers! Duct cleaning and thermostat work — we can help with both. What's your name?"
-
-RULE 2: NEVER ASK FOR WHAT YOU ALREADY HAVE
-- If a field is filled in knownSlots, do NOT ask for it again.
-- If caller repeats something you have: confirm and move on.
-- Example: "Yes, I have 239-565-2202. What's the service address?"
-
-RULE 3: COMPRESS WHEN THEY GIVE A LOT
-- If caller gives multiple pieces of info, USE ALL OF THEM.
-- Don't ask for things they just told you.
-- Skip ahead in the flow.
-
-RULE 4: HANDLE SIDE COMMENTS AND QUESTIONS
-- If they ask something off-topic, answer briefly, then pivot back.
-- "Man this heat is killing me" → "Yeah, it's brutal. Let's get you cooled down. What's your address?"
-- "How much is this gonna cost?" → "The tech will give you an estimate on-site. What time works for you?"
-
-RULE 5: FRUSTRATION = IMMEDIATE REPAIR
-- If they say "I just told you", "Are you listening?", "What?" etc:
-  1. Apologize ONCE, briefly
-  2. Confirm what you have
-  3. Move to the next thing you need
-- Example: "You're right, I have your number as 239-565-2202. Let me just get the address."
-
-RULE 6: KEEP IT SHORT
-- Max 2-3 sentences per response.
-- Max 40 words unless explaining something complex.
-- Sound conversational, not scripted.
-
-RULE 7: NEVER SAY THESE
-- "I apologize for any inconvenience"
-- "Thank you for your patience"  
-- "I understand your frustration" (too canned)
-- "How may I assist you today" (robotic)
-- Don't start every sentence with "Great!" or "Got it!"
-`;
-
-// ════════════════════════════════════════════════════════════════════════════
-// MODE DEFINITIONS
-// ════════════════════════════════════════════════════════════════════════════
-
-const MODE_INSTRUCTIONS = {
-    free: `
-MODE: FREE/DISCOVERY
-You're in open conversation mode. Figure out what they want.
-- Answer their questions naturally
-- Pick up any info they volunteer (name, phone, location, issue)
-- When you understand their intent, transition to the right mode
-- Don't jump straight to "What's your name?" - have a conversation first
-`,
-    booking: `
-MODE: GUIDED BOOKING
-Goal: Get them scheduled with minimum friction.
-Required slots: name, phone, address, serviceType, time
-- Only ask for slots you DON'T have yet
-- If they give multiple pieces of info, use all of them
-- Be conversational, not robotic
-- When all slots are filled, confirm everything once and wrap up
-`,
-    triage: `
-MODE: TRIAGE/DIAGNOSIS
-Goal: Understand their issue to route correctly.
-- Ask diagnostic questions naturally
-- If they volunteer booking info, capture it
-- If they clearly want to book, transition to booking mode
-`,
-    rescue: `
-MODE: RESCUE (FRUSTRATION DETECTED)
-The caller is frustrated. Handle with care:
-1. Acknowledge briefly (don't over-apologize)
-2. Confirm what you already know
-3. Move forward with ONE clear next question
-4. If they stay frustrated, offer human transfer
-`
-};
+/**
+ * Load Front Desk Behavior config from company
+ * This is the SINGLE SOURCE OF TRUTH for AI behavior
+ */
+function loadFrontDeskConfig(company) {
+    const config = company?.aiAgentSettings?.frontDeskBehavior || {};
+    
+    return {
+        // Personality
+        personality: {
+            tone: config.personality?.tone || 'warm',
+            verbosity: config.personality?.verbosity || 'concise',
+            maxResponseWords: config.personality?.maxResponseWords || 30,
+            useCallerName: config.personality?.useCallerName !== false,
+            agentName: config.personality?.agentName || 'Ashley'
+        },
+        
+        // Booking prompts
+        bookingPrompts: {
+            askName: config.bookingPrompts?.askName || "May I have your name?",
+            askPhone: config.bookingPrompts?.askPhone || "What's the best phone number to reach you?",
+            askAddress: config.bookingPrompts?.askAddress || "What's the service address?",
+            askTime: config.bookingPrompts?.askTime || "When works best for you - morning or afternoon?",
+            confirmTemplate: config.bookingPrompts?.confirmTemplate || "So I have {name} at {address}, {time}. Does that sound right?",
+            completeTemplate: config.bookingPrompts?.completeTemplate || "You're all set, {name}! A technician will be out {time}. You'll receive a confirmation text shortly."
+        },
+        
+        // Emotion responses (from UI)
+        emotionResponses: config.emotionResponses || {},
+        
+        // Frustration triggers (from UI) - THESE CONTROL DETECTION
+        frustrationTriggers: config.frustrationTriggers || [],
+        
+        // Escalation settings (from UI)
+        escalation: {
+            enabled: config.escalation?.enabled !== false,
+            maxLoopsBeforeOffer: config.escalation?.maxLoopsBeforeOffer || 3,
+            triggerPhrases: config.escalation?.triggerPhrases || [],
+            offerMessage: config.escalation?.offerMessage || "I can connect you to someone directly. Would you like that?",
+            transferMessage: config.escalation?.transferMessage || "Let me connect you to our team now."
+        },
+        
+        // Loop prevention (from UI)
+        loopPrevention: {
+            enabled: config.loopPrevention?.enabled !== false,
+            maxSameQuestion: config.loopPrevention?.maxSameQuestion || 2,
+            onLoop: config.loopPrevention?.onLoop || 'rephrase'
+        },
+        
+        // Forbidden phrases (from UI) - THESE ARE CHECKED AGAINST LLM OUTPUT
+        forbiddenPhrases: config.forbiddenPhrases || [],
+        
+        // Raw config for anything else
+        raw: config
+    };
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // THE MAIN CLASS
@@ -477,12 +452,23 @@ class HybridReceptionistLLM {
     
     /**
      * Build the system prompt with all context
-     * OPTIMIZED: Reduced token count for faster responses
-     * ENHANCED: Better empathy and customer recognition
+     * 🚨 100% UI-CONTROLLED - All instructions come from frontDeskBehavior config
      */
     static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext, customerContext, serviceAreaInfo, detectedServices, lastAgentResponse, turnCount, speakingCorrections }) {
         const companyName = company.name || 'our company';
         const trade = company.trade || 'HVAC';
+        
+        // ════════════════════════════════════════════════════════════════════
+        // 🚨 LOAD ALL CONFIG FROM UI - NO HARDCODED DEFAULTS
+        // ════════════════════════════════════════════════════════════════════
+        const uiConfig = loadFrontDeskConfig(company);
+        
+        logger.debug('[HYBRID LLM] Building prompt from UI config', {
+            personality: uiConfig.personality,
+            forbiddenCount: uiConfig.forbiddenPhrases.length,
+            frustrationTriggersCount: uiConfig.frustrationTriggers.length,
+            bookingPromptsConfigured: Object.keys(uiConfig.bookingPrompts).length
+        });
         
         // Build speaking style rules from corrections
         let speakingStyleSection = '';
@@ -496,6 +482,52 @@ ${rules}
 Never use the words on the left - always use the replacement on the right.
 `;
         }
+        
+        // ════════════════════════════════════════════════════════════════════
+        // FORBIDDEN PHRASES FROM UI (not hardcoded!)
+        // ════════════════════════════════════════════════════════════════════
+        let forbiddenSection = '';
+        if (uiConfig.forbiddenPhrases.length > 0) {
+            forbiddenSection = `
+═══ FORBIDDEN PHRASES (from UI settings) ═══
+${uiConfig.forbiddenPhrases.map(p => `- "${p}"`).join('\n')}
+NEVER say any of these phrases. They make you sound robotic.
+`;
+        }
+        
+        // ════════════════════════════════════════════════════════════════════
+        // EMOTION RESPONSES FROM UI
+        // ════════════════════════════════════════════════════════════════════
+        let emotionSection = '';
+        const emotions = uiConfig.emotionResponses;
+        if (emotions && Object.keys(emotions).length > 0) {
+            const emotionRules = Object.entries(emotions)
+                .filter(([_, v]) => v.enabled !== false)
+                .map(([emotion, config]) => {
+                    const acks = config.acknowledgments?.join(' OR ') || 'Acknowledge briefly';
+                    return `- ${emotion.toUpperCase()}: ${acks}${config.followUp ? ` → "${config.followUp}"` : ''}`;
+                })
+                .join('\n');
+            if (emotionRules) {
+                emotionSection = `
+═══ EMOTION RESPONSES (from UI settings) ═══
+${emotionRules}
+`;
+            }
+        }
+        
+        // ════════════════════════════════════════════════════════════════════
+        // BOOKING PROMPTS FROM UI
+        // ════════════════════════════════════════════════════════════════════
+        const bookingPromptsSection = `
+═══ BOOKING PROMPTS (from UI settings) ═══
+- For name: "${uiConfig.bookingPrompts.askName}"
+- For phone: "${uiConfig.bookingPrompts.askPhone}"
+- For address: "${uiConfig.bookingPrompts.askAddress}"
+- For time: "${uiConfig.bookingPrompts.askTime}"
+- To confirm: "${uiConfig.bookingPrompts.confirmTemplate}"
+- After booking: "${uiConfig.bookingPrompts.completeTemplate}"
+`;
         
         // Compact slot display
         const hasSlots = Object.entries(knownSlots).filter(([k, v]) => v);
@@ -544,124 +576,67 @@ ${triageContext.explanation ? `Explain: ${triageContext.explanation}` : ''}
 ${questions ? `Possible questions:\n  - ${questions}` : ''}
 Type: ${triageContext.suggestedServiceType || 'repair'}
 `;
-        }
         
         // ════════════════════════════════════════════════════════════════════
-        // 3-PHASE SYSTEM PROMPT (DISCOVERY → DECISION → BOOKING)
+        // 🚨 100% UI-CONTROLLED SYSTEM PROMPT
+        // All behavior comes from frontDeskBehavior config
         // ════════════════════════════════════════════════════════════════════
+        
+        // Map personality tone to description
+        const toneDescriptions = {
+            warm: 'warm, friendly, and approachable',
+            professional: 'professional, polished, and efficient',
+            casual: 'casual, relaxed, and conversational',
+            formal: 'formal, respectful, and businesslike'
+        };
+        const toneDesc = toneDescriptions[uiConfig.personality.tone] || toneDescriptions.warm;
+        
+        // Map verbosity to word limit
+        const verbosityLimits = {
+            concise: 30,
+            balanced: 50,
+            detailed: 75
+        };
+        const maxWords = uiConfig.personality.maxResponseWords || verbosityLimits[uiConfig.personality.verbosity] || 30;
+        
         return `You are the lead receptionist at ${companyName}, a ${trade} company. You are on a LIVE phone call RIGHT NOW.
 
-═══ WHO YOU ARE ═══
-You've taken 10,000+ calls. You're confident, warm, and efficient.
-You sound like a real person — not a chatbot, not an IVR, not a script.
-You LEAD the conversation. You don't wait for the caller to drive it.
-
-═══ YOUR PERSONALITY ═══
-You're Ashley - confident, direct, and genuinely helpful.
-You've been doing this for years and know ${trade} inside-out.
-You sound like you're leaning forward, engaged, interested in solving their problem.
-Never robotic. Never boring. Never generic.
+═══ YOUR PERSONALITY (from UI settings) ═══
+Name: ${uiConfig.personality.agentName}
+Tone: ${toneDesc}
+Max response length: ${maxWords} words
+${uiConfig.personality.useCallerName ? 'Use caller\'s name once you know it.' : 'Don\'t use caller\'s name.'}
 ${speakingStyleSection}
 
-═══ YOUR 3 CORE BEHAVIORS ═══
+═══ CORE BEHAVIORS ═══
+1. REFLECT - Show you HEARD them (vary your openings)
+2. HYPOTHESIZE - Show you know ${trade} (make educated guesses)
+3. LEAD - Drive to the next logical step
 
-1. REFLECT - Show you HEARD them (vary your openings!)
-   ✓ "Oh yeah, AC not cooling — that's no fun."
-   ✓ "Air conditioning service, absolutely."
-   ✓ "Alright, so your unit's making noise."
-   ✓ "AC repair, got it."
-   ✗ DON'T start every response with "Got it" or "Okay" — vary it!
-
-2. HYPOTHESIZE - Show you KNOW your stuff
-   ✓ "That sounds like it could be low refrigerant or a compressor issue."
-   ✓ "Nine times out of ten, when it's blowing warm, it's the capacitor or a leak."
-   ✓ "If it stopped suddenly, we should definitely get someone out there."
-   ✗ Don't just say "sounds like a repair" — show expertise!
-
-3. LEAD - Drive to the NEXT logical step
-   ✓ "Quick question — is it blowing warm air or just not turning on at all?"
-   ✓ "We can usually get someone out same-day. Want me to check availability?"
-   ✓ "Is this an emergency or can it wait a day or two?"
-   ✗ Don't ask vague questions — be specific!
-
-═══ THE 3 PHASES ═══
-
-PHASE 1: DISCOVERY (turns 1-2)
-Goal: Understand the problem so well you could explain it to a technician.
-- SHOW EXPERTISE: Make an educated guess about what might be wrong
-- ASK THE RIGHT QUESTION: Based on what they said, ask the ONE question that matters
-  Examples by symptom:
-  - "not cooling" → "Is it blowing warm air or not coming on at all?"
-  - "making noise" → "What kind of noise — buzzing, grinding, or clicking?"
-  - "AC service" → "Is something wrong with it, or just time for a tune-up?"
-  - "leak" → "Is it water or refrigerant? Inside or outside the house?"
-- FORBIDDEN: name, phone, address, scheduling (save for BOOKING phase)
-
-PHASE 2: DECISION (after you understand)
-Goal: Confirm what they need.
-- SUMMARIZE: "So your AC stopped cooling yesterday and it's making a grinding noise."
-- OFFER: "That definitely needs a tech. Want me to get someone out there?"
-- If yes → BOOKING. If no → answer their question.
-
-PHASE 3: BOOKING (after they agree)
-Goal: Collect details efficiently.
-- TRANSITION: "Perfect, let me get you scheduled. What's your name?"
-- Ask ONE thing at a time: name → phone → address → time
-- Keep referencing their issue: "Great, so for the AC repair at 123 Main..."
-
-═══ FORBIDDEN PHRASES (Instant fail if you say these) ═══
-- "How can I help you?" / "How may I assist you?"
-- "What would you like to know?"
-- "I can help you with that." (alone, without specifics)
-- "What can I do for you today?"
-- "Is there anything else I can help with?"
-- "May I have your name and what you need help with?"
-
-═══ SMART ASSUMPTIONS ═══
-- "AC service" or "air conditioning" → probably REPAIR unless they say maintenance/tune-up
-- "Not cooling" / "blowing warm" → definitely REPAIR
-- "Tune-up" / "maintenance" / "check" → MAINTENANCE
-- "Something's wrong" → REPAIR, ask what symptoms
-- If unsure → ask ONE clarifying question, don't interrogate
-
-═══ YOUR ${trade.toUpperCase()} EXPERTISE ═══
-Use this knowledge to sound like you know what you're talking about:
-
-COMMON AC PROBLEMS (ask smart follow-ups):
-- "Not cooling" → Could be low refrigerant, dirty filters, frozen coils, or compressor issue
-  Ask: "Is it blowing air but just not cold, or not running at all?"
-- "Making noise" → Depends on the sound type
-  Ask: "Is it more of a buzzing, grinding, or clicking sound?"
-- "Unit won't turn on" → Could be electrical, thermostat, or capacitor
-  Ask: "Have you checked if the thermostat is set to cool and below room temp?"
-- "Ice on the unit" → Usually restricted airflow or low refrigerant
-  Ask: "When did you last change the filter?"
-- "Water leaking" → Usually a clogged drain line or frozen coils
-  Ask: "Is the water inside the house or around the outdoor unit?"
-
-URGENCY DETECTION:
-- 🔴 EMERGENCY: "No AC in Florida summer", elderly/babies at home, medical conditions
-- 🟡 SOON: Unit making bad noises, water leaking, not working right
-- 🟢 ROUTINE: Tune-up, maintenance, check-up, seasonal service
+═══ CONVERSATION PHASES ═══
+PHASE 1: DISCOVERY - Understand what they need
+PHASE 2: DECISION - Confirm and offer to help
+PHASE 3: BOOKING - Collect details efficiently
+${bookingPromptsSection}
+${forbiddenSection}
+${emotionSection}
 
 ═══ CURRENT CALL STATE ═══
 Turn: ${turnCount || 1}
 Collected: ${slotsList}
+Missing: ${missingSlots}
 ${customerNote}
 ${serviceAreaSection}
 ${triageSection}
 ${lastAgentResponse ? `
 ═══ YOUR LAST RESPONSE (DO NOT REPEAT) ═══
 "${lastAgentResponse}"
-You MUST say something DIFFERENT. Progress the conversation forward.
-If you already asked a question, don't ask it again — either:
-- Answer based on what they said, OR
-- Ask a DIFFERENT follow-up question
+Say something DIFFERENT. Progress the conversation forward.
 ` : ''}
 ═══ OUTPUT FORMAT ═══
 Return ONLY valid JSON:
 {
-  "reply": "<your spoken response, max 40 words, sounds human>",
+  "reply": "<your spoken response, max ${maxWords} words, sounds human>",
   "phase": "DISCOVERY|DECISION|BOOKING",
   "problemSummary": "<one sentence summary of their issue, or null>",
   "likelyNeed": "repair|maintenance|question|unknown",
@@ -810,21 +785,63 @@ Return ONLY valid JSON:
     
     /**
      * Detect if caller is frustrated from their input
+     * 🚨 100% UI-CONTROLLED - Uses triggers from frontDeskBehavior.frustrationTriggers
+     * 
+     * @param {string} input - Caller's input
+     * @param {Object} company - Company object with aiAgentSettings.frontDeskBehavior
+     * @returns {boolean} True if frustrated
      */
-    static detectFrustration(input) {
-        const frustrationPatterns = [
-            /i just told you/i,
-            /i already said/i,
-            /are you (even )?listening/i,
-            /what\?/i,
-            /this is ridiculous/i,
-            /forget it/i,
-            /can i talk to a (real )?human/i,
-            /this is frustrating/i,
-            /you('re| are) not helping/i
-        ];
+    static detectFrustration(input, company = null) {
+        if (!input) return false;
         
-        return frustrationPatterns.some(p => p.test(input));
+        const lowerInput = input.toLowerCase();
+        
+        // Load frustration triggers from UI config
+        const uiConfig = loadFrontDeskConfig(company);
+        const uiTriggers = uiConfig.frustrationTriggers || [];
+        
+        // If no UI triggers configured, return false (no detection)
+        // This is intentional - if admin doesn't configure triggers, no detection happens
+        if (uiTriggers.length === 0) {
+            logger.debug('[HYBRID LLM] No frustration triggers configured in UI - skipping detection');
+            return false;
+        }
+        
+        // Check UI-configured triggers
+        const matched = uiTriggers.find(trigger => 
+            trigger && lowerInput.includes(trigger.toLowerCase())
+        );
+        
+        if (matched) {
+            logger.info('[HYBRID LLM] 😤 Frustration detected via UI trigger', {
+                input: input.substring(0, 50),
+                matchedTrigger: matched,
+                source: 'UI_CONFIGURED'
+            });
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Detect if caller wants to speak to a human
+     * 🚨 100% UI-CONTROLLED - Uses triggers from frontDeskBehavior.escalation.triggerPhrases
+     */
+    static detectEscalationRequest(input, company = null) {
+        if (!input) return false;
+        
+        const lowerInput = input.toLowerCase();
+        const uiConfig = loadFrontDeskConfig(company);
+        const triggerPhrases = uiConfig.escalation.triggerPhrases || [];
+        
+        if (triggerPhrases.length === 0) {
+            return false;
+        }
+        
+        return triggerPhrases.some(trigger => 
+            trigger && lowerInput.includes(trigger.toLowerCase())
+        );
     }
     
     /**
