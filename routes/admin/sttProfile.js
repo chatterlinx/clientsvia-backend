@@ -1299,11 +1299,17 @@ router.post('/:templateId/clean-bad-fillers', authenticateJWT, requireRole('admi
             .map(f => f.phrase);
         
         profile.fillerWords = cleanedFillers;
-        profile.updatedBy = req.user._id;
+        if (req.user && req.user._id) {
+            profile.updatedBy = req.user._id;
+        }
         await profile.save();
         
         // Clear cache
-        STTPreprocessor.clearCache(templateId);
+        try {
+            STTPreprocessor.clearCache(templateId);
+        } catch (cacheErr) {
+            logger.warn('[STT PROFILE API] Cache clear failed (non-fatal)', { error: cacheErr.message });
+        }
         
         logger.info('[STT PROFILE API] Cleaned bad fillers', { 
             templateId, 
@@ -1420,9 +1426,15 @@ router.post('/:templateId/seed-all', authenticateJWT, requireRole('admin'), asyn
         
         logger.info('[STT PROFILE API] Seed-all CHECKPOINT 5: Corrections seeded', { correctionsAdded: results.corrections });
         
-        profile.updatedBy = req.user._id;
+        // Safely set updatedBy
+        if (req.user && req.user._id) {
+            profile.updatedBy = req.user._id;
+        }
         
-        logger.info('[STT PROFILE API] Seed-all CHECKPOINT 6: Saving profile...');
+        logger.info('[STT PROFILE API] Seed-all CHECKPOINT 6: Saving profile...', { 
+            hasUser: !!req.user,
+            userId: req.user?._id 
+        });
         await profile.save();
         logger.info('[STT PROFILE API] Seed-all CHECKPOINT 7: Profile saved successfully');
         

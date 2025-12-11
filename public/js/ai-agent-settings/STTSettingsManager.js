@@ -1489,6 +1489,8 @@ class STTSettingsManager {
         try {
             this.showToast('🚀 Seeding all defaults...', 'info');
             
+            console.log('[STT SETTINGS] 🚀 Calling seed-all for template:', this.templateId);
+            
             const response = await fetch(`/api/admin/stt-profile/${this.templateId}/seed-all`, {
                 method: 'POST',
                 headers: { 
@@ -1497,18 +1499,24 @@ class STTSettingsManager {
                 }
             });
             
+            console.log('[STT SETTINGS] 🚀 Seed-all response status:', response.status);
+            
             const result = await response.json();
+            console.log('[STT SETTINGS] 🚀 Seed-all result:', result);
             
             if (result.success) {
                 await this.loadProfile();
                 this.render();
                 this.showToast(`✅ ${result.message}`, 'success');
             } else {
-                this.showToast(`❌ ${result.error}`, 'error');
+                console.error('[STT SETTINGS] ❌ Seed-all failed:', result.error);
+                this.showToast(`❌ ${result.error || 'Unknown error'}`, 'error');
+                alert(`Seed failed: ${result.error || 'Check Render logs for CHECKPOINT details'}`);
             }
         } catch (error) {
             console.error('[STT] Seed all error:', error);
             this.showToast('Error seeding defaults', 'error');
+            alert(`Seed error: ${error.message}`);
         }
     }
     
