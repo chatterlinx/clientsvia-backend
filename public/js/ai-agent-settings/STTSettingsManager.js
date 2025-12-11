@@ -171,7 +171,7 @@ class STTSettingsManager {
                 
                 <!-- Quick Actions Bar -->
                 <div style="display: flex; gap: 12px; margin-bottom: 16px; padding: 12px; background: linear-gradient(135deg, #1e293b, #334155); border-radius: 12px;">
-                    <button onclick="sttManager.seedAll()" style="
+                    <button onclick="window.sttManager.seedAll()" style="
                         padding: 10px 20px;
                         background: linear-gradient(135deg, #10b981, #059669);
                         color: white;
@@ -186,7 +186,7 @@ class STTSettingsManager {
                     " title="One-click: Add keywords, corrections, and remove bad fillers">
                         🚀 Seed All Defaults
                     </button>
-                    <button onclick="sttManager.cleanBadFillers()" style="
+                    <button onclick="window.sttManager.cleanBadFillers()" style="
                         padding: 10px 20px;
                         background: linear-gradient(135deg, #f59e0b, #d97706);
                         color: white;
@@ -343,7 +343,7 @@ class STTSettingsManager {
                         </label>
                     </div>
                     
-                    <button onclick="sttManager.saveProviderSettings()" style="
+                    <button onclick="window.sttManager.saveProviderSettings()" style="
                         padding: 12px 24px;
                         background: #3b82f6;
                         color: white;
@@ -395,7 +395,7 @@ class STTSettingsManager {
                                 One-click preset for human-like conversation timing. Reduces dead air, enables interruption, speeds up response.
                             </p>
                         </div>
-                        <button onclick="sttManager.applyAshleyMode()" style="
+                        <button onclick="window.sttManager.applyAshleyMode()" style="
                             padding: 12px 24px;
                             background: ${ashleyModeActive ? '#10b981' : 'rgba(255,255,255,0.2)'};
                             color: white;
@@ -489,17 +489,17 @@ class STTSettingsManager {
                             <div>
                                 <label style="font-weight: 500; display: block; margin-bottom: 8px;">Interrupt Sensitivity</label>
                                 <div style="display: flex; gap: 8px;">
-                                    <button onclick="sttManager.setInterruptSensitivity('low')" 
+                                    <button onclick="window.sttManager.setInterruptSensitivity('low')" 
                                         style="flex: 1; padding: 10px; border: 2px solid ${interruptSensitivity === 'low' ? '#3b82f6' : '#e2e8f0'}; 
                                         background: ${interruptSensitivity === 'low' ? '#eff6ff' : 'white'}; border-radius: 8px; cursor: pointer;">
                                         Low
                                     </button>
-                                    <button onclick="sttManager.setInterruptSensitivity('medium')" 
+                                    <button onclick="window.sttManager.setInterruptSensitivity('medium')" 
                                         style="flex: 1; padding: 10px; border: 2px solid ${interruptSensitivity === 'medium' ? '#3b82f6' : '#e2e8f0'}; 
                                         background: ${interruptSensitivity === 'medium' ? '#eff6ff' : 'white'}; border-radius: 8px; cursor: pointer;">
                                         Medium
                                     </button>
-                                    <button onclick="sttManager.setInterruptSensitivity('high')" 
+                                    <button onclick="window.sttManager.setInterruptSensitivity('high')" 
                                         style="flex: 1; padding: 10px; border: 2px solid ${interruptSensitivity === 'high' ? '#3b82f6' : '#e2e8f0'}; 
                                         background: ${interruptSensitivity === 'high' ? '#eff6ff' : 'white'}; border-radius: 8px; cursor: pointer;">
                                         High ⭐
@@ -583,17 +583,17 @@ class STTSettingsManager {
                             <div>
                                 <label style="font-weight: 500; display: block; margin-bottom: 8px;">Response Length</label>
                                 <div style="display: flex; gap: 8px;">
-                                    <button onclick="sttManager.setResponseLength('short')" 
+                                    <button onclick="window.sttManager.setResponseLength('short')" 
                                         style="flex: 1; padding: 10px; border: 2px solid ${responseLength === 'short' ? '#3b82f6' : '#e2e8f0'}; 
                                         background: ${responseLength === 'short' ? '#eff6ff' : 'white'}; border-radius: 8px; cursor: pointer;">
                                         Short<br><span style="font-size: 11px; color: #64748b;">~12 words</span>
                                     </button>
-                                    <button onclick="sttManager.setResponseLength('medium')" 
+                                    <button onclick="window.sttManager.setResponseLength('medium')" 
                                         style="flex: 1; padding: 10px; border: 2px solid ${responseLength === 'medium' ? '#3b82f6' : '#e2e8f0'}; 
                                         background: ${responseLength === 'medium' ? '#eff6ff' : 'white'}; border-radius: 8px; cursor: pointer;">
                                         Medium ⭐<br><span style="font-size: 11px; color: #64748b;">~20 words</span>
                                     </button>
-                                    <button onclick="sttManager.setResponseLength('long')" 
+                                    <button onclick="window.sttManager.setResponseLength('long')" 
                                         style="flex: 1; padding: 10px; border: 2px solid ${responseLength === 'long' ? '#3b82f6' : '#e2e8f0'}; 
                                         background: ${responseLength === 'long' ? '#eff6ff' : 'white'}; border-radius: 8px; cursor: pointer;">
                                         Long<br><span style="font-size: 11px; color: #64748b;">~35 words</span>
@@ -603,7 +603,7 @@ class STTSettingsManager {
                         </div>
                     </div>
                     
-                    <button onclick="sttManager.saveCallExperienceSettings()" style="
+                    <button onclick="window.sttManager.saveCallExperienceSettings()" style="
                         padding: 14px 28px;
                         background: #10b981;
                         color: white;
@@ -728,7 +728,7 @@ class STTSettingsManager {
             <div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h3>Filler Words / Noise Removal</h3>
-                    <button onclick="sttManager.showAddFillerModal()" style="
+                    <button onclick="window.sttManager.showAddFillerModal()" style="
                         padding: 8px 16px;
                         background: #10b981;
                         color: white;
@@ -768,7 +768,7 @@ class STTSettingsManager {
                                     </td>
                                     <td style="padding: 12px; color: #64748b;">${f.addedBy || 'system'}</td>
                                     <td style="padding: 12px; text-align: center;">
-                                        <button onclick="sttManager.deleteFiller('${f.phrase}')" style="background: none; border: none; color: #ef4444; cursor: pointer;">🗑️</button>
+                                        <button onclick="window.sttManager.deleteFiller('${f.phrase}')" style="background: none; border: none; color: #ef4444; cursor: pointer;">🗑️</button>
                                     </td>
                                 </tr>
                             `).join('')}
@@ -786,7 +786,7 @@ class STTSettingsManager {
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h3>Boosted Vocabulary / Keywords</h3>
                     <div style="display: flex; gap: 8px;">
-                        <button onclick="sttManager.seedHvacKeywords()" style="
+                        <button onclick="window.sttManager.seedHvacKeywords()" style="
                             padding: 8px 16px;
                             background: #6366f1;
                             color: white;
@@ -797,7 +797,7 @@ class STTSettingsManager {
                         " title="Add 50+ HVAC industry terms">
                             ❄️ Seed HVAC Keywords
                         </button>
-                        <button onclick="sttManager.syncVocabulary()" style="
+                        <button onclick="window.sttManager.syncVocabulary()" style="
                             padding: 8px 16px;
                             background: #3b82f6;
                             color: white;
@@ -807,7 +807,7 @@ class STTSettingsManager {
                         ">
                             🔄 Sync from Template
                         </button>
-                        <button onclick="sttManager.showAddKeywordModal()" style="
+                        <button onclick="window.sttManager.showAddKeywordModal()" style="
                             padding: 8px 16px;
                             background: #10b981;
                             color: white;
@@ -855,7 +855,7 @@ class STTSettingsManager {
                                     <td style="padding: 12px; color: #64748b; max-width: 200px; overflow: hidden; text-overflow: ellipsis;">${this.escapeHtml(k.source || '-')}</td>
                                     <td style="padding: 12px; text-align: center;">${k.boostWeight || 5}</td>
                                     <td style="padding: 12px; text-align: center;">
-                                        ${k.type === 'manual' ? `<button onclick="sttManager.deleteKeyword('${k.phrase}')" style="background: none; border: none; color: #ef4444; cursor: pointer;">🗑️</button>` : '-'}
+                                        ${k.type === 'manual' ? `<button onclick="window.sttManager.deleteKeyword('${k.phrase}')" style="background: none; border: none; color: #ef4444; cursor: pointer;">🗑️</button>` : '-'}
                                     </td>
                                 </tr>
                             `).join('')}
@@ -880,7 +880,7 @@ class STTSettingsManager {
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h3>Mishear Corrections</h3>
                     <div style="display: flex; gap: 8px;">
-                        <button onclick="sttManager.seedAddressCorrections()" style="
+                        <button onclick="window.sttManager.seedAddressCorrections()" style="
                             padding: 8px 16px;
                             background: #6366f1;
                             color: white;
@@ -891,7 +891,7 @@ class STTSettingsManager {
                         " title="Add ~100 common address/phone corrections">
                             🏠 Seed Address Defaults
                         </button>
-                        <button onclick="sttManager.showAddCorrectionModal()" style="
+                        <button onclick="window.sttManager.showAddCorrectionModal()" style="
                             padding: 8px 16px;
                             background: #10b981;
                             color: white;
@@ -943,7 +943,7 @@ class STTSettingsManager {
                                     </td>
                                     <td style="padding: 12px; text-align: center;">${c.occurrences || 0}</td>
                                     <td style="padding: 12px; text-align: center;">
-                                        <button onclick="sttManager.deleteCorrection('${c.heard}')" style="background: none; border: none; color: #ef4444; cursor: pointer;">🗑️</button>
+                                        <button onclick="window.sttManager.deleteCorrection('${c.heard}')" style="background: none; border: none; color: #ef4444; cursor: pointer;">🗑️</button>
                                     </td>
                                 </tr>
                             `).join('')}
@@ -967,7 +967,7 @@ class STTSettingsManager {
             <div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h3>Impossible Words</h3>
-                    <button onclick="sttManager.showAddImpossibleModal()" style="
+                    <button onclick="window.sttManager.showAddImpossibleModal()" style="
                         padding: 8px 16px;
                         background: #10b981;
                         color: white;
@@ -999,7 +999,7 @@ class STTSettingsManager {
                                     <td style="padding: 12px; color: #64748b;">${this.escapeHtml(iw.reason || '-')}</td>
                                     <td style="padding: 12px; font-family: monospace; color: #10b981;">${this.escapeHtml(iw.suggestCorrection || '-')}</td>
                                     <td style="padding: 12px; text-align: center;">
-                                        <button onclick="sttManager.deleteImpossible('${iw.word}')" style="background: none; border: none; color: #ef4444; cursor: pointer;">🗑️</button>
+                                        <button onclick="window.sttManager.deleteImpossible('${iw.word}')" style="background: none; border: none; color: #ef4444; cursor: pointer;">🗑️</button>
                                     </td>
                                 </tr>
                             `).join('')}
@@ -1043,7 +1043,7 @@ class STTSettingsManager {
                                         <span style="font-family: monospace; font-size: 18px; margin-left: 12px;">"${this.escapeHtml(s.phrase)}"</span>
                                     </div>
                                     <div style="display: flex; gap: 8px;">
-                                        <button onclick="sttManager.approveSuggestion(${i})" style="
+                                        <button onclick="window.sttManager.approveSuggestion(${i})" style="
                                             padding: 6px 12px;
                                             background: #10b981;
                                             color: white;
@@ -1051,7 +1051,7 @@ class STTSettingsManager {
                                             border-radius: 6px;
                                             cursor: pointer;
                                         ">✓ Approve</button>
-                                        <button onclick="sttManager.ignoreSuggestion(${i})" style="
+                                        <button onclick="window.sttManager.ignoreSuggestion(${i})" style="
                                             padding: 6px 12px;
                                             background: #ef4444;
                                             color: white;
@@ -1094,7 +1094,7 @@ class STTSettingsManager {
                     "></textarea>
                 </div>
                 
-                <button onclick="sttManager.runTest()" style="
+                <button onclick="window.sttManager.runTest()" style="
                     padding: 12px 24px;
                     background: #3b82f6;
                     color: white;
