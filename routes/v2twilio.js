@@ -1306,10 +1306,11 @@ router.post('/voice', async (req, res) => {
         gather.say(escapeTwiML(fallbackGreeting));
       }
       
-      // ✅ FIX: Add fallback if no speech detected (gather timeout)
-      logger.debug(`[GATHER FALLBACK] Setting up timeout fallback...`);
-      twiml.say("I didn't hear anything. Please try calling back later.");
-      twiml.hangup();
+      // 🚫 NEVER HANG UP - Blame connection, not caller
+      logger.debug(`[GATHER FALLBACK] No speech detected - prompting again`);
+      twiml.say("I'm sorry, I think our connection isn't great. I didn't catch that. Could you please repeat?");
+      // Redirect back to continue listening
+      twiml.redirect(`https://${req.get('host')}/api/twilio/${companyID}/voice`);
       
     } catch (v2Error) {
       logger.error(`[V2 AGENT ERROR] Failed to initialize V2 Agent: ${v2Error.message}`);
@@ -1329,9 +1330,9 @@ router.post('/voice', async (req, res) => {
       });
       gather.say(escapeTwiML(fallbackGreeting));
       
-      // ✅ FIX: Add fallback if no speech detected (gather timeout)
-      twiml.say("I didn't hear anything. Please try calling back later.");
-      twiml.hangup();
+      // 🚫 NEVER HANG UP - Blame connection, not caller
+      twiml.say("I'm sorry, the connection seems a bit choppy. Could you repeat that?");
+      twiml.redirect(`https://${req.get('host')}/api/twilio/${companyID}/voice`);
     }
 
     res.type('text/xml');
@@ -2691,10 +2692,35 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               }).catch(() => {});
             }
             
-            // Simple recovery response - don't spin up slow legacy LLM
+            // Simple recovery response - CONTEXT-AWARE, blame connection not caller
+            let recoveryText = "I'm sorry, the connection cut out for a second. What can I help you with?";
+            let recoveryAction = 'DISCOVERY';
+            
+            // Check if we're in booking mode - don't reset!
+            if (callState?.bookingModeLocked || callState?.bookingState === 'ACTIVE') {
+              const currentStep = callState?.currentBookingStep;
+              if (currentStep === 'ASK_NAME' || currentStep === 'name') {
+                recoveryText = "I'm sorry, I think the connection dropped. Could you tell me your name again?";
+                recoveryAction = 'BOOKING';
+              } else if (currentStep === 'ASK_ADDRESS' || currentStep === 'address') {
+                recoveryText = "Sorry, I didn't catch that. What's your address?";
+                recoveryAction = 'BOOKING';
+              } else if (currentStep === 'ASK_PHONE' || currentStep === 'phone') {
+                recoveryText = "The connection cut out. What's a good phone number for you?";
+                recoveryAction = 'BOOKING';
+              } else if (currentStep === 'ASK_TIME' || currentStep === 'time') {
+                recoveryText = "Sorry about that, the line was choppy. When works best for you?";
+                recoveryAction = 'BOOKING';
+              } else {
+                recoveryText = "I'm sorry, I missed that. Could you say that again?";
+                recoveryAction = 'BOOKING';
+              }
+              logger.info('[HYBRID] Booking-aware fallback used', { currentStep, recoveryText });
+            }
+            
             result = {
-              text: "I'm here to help! What's going on with your AC today?",
-              action: 'DISCOVERY',
+              text: recoveryText,
+              action: recoveryAction,
               callState: callState
             };
           }
@@ -2756,13 +2782,34 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         callSid
       });
       
+      // CONTEXT-AWARE recovery - blame connection, respect booking state!
+      let errorRecoveryText = "I'm sorry, the connection isn't great. What can I help you with?";
+      let errorRecoveryAction = 'DISCOVERY';
+      
+      if (callState?.bookingModeLocked || callState?.bookingState === 'ACTIVE') {
+        const currentStep = callState?.currentBookingStep;
+        if (currentStep === 'ASK_NAME' || currentStep === 'name') {
+          errorRecoveryText = "Sorry, I think the connection dropped. What's your name?";
+          errorRecoveryAction = 'BOOKING';
+        } else if (currentStep === 'ASK_ADDRESS' || currentStep === 'address') {
+          errorRecoveryText = "The line was a bit choppy. What's your address?";
+          errorRecoveryAction = 'BOOKING';
+        } else if (currentStep === 'ASK_PHONE' || currentStep === 'phone') {
+          errorRecoveryText = "I missed that. What's a good phone number for you?";
+          errorRecoveryAction = 'BOOKING';
+        } else {
+          errorRecoveryText = "Sorry, the connection cut out. Could you repeat that?";
+          errorRecoveryAction = 'BOOKING';
+        }
+      }
+      
       result = {
-        text: "I'm here to help with your AC. What's going on?",
-        action: 'DISCOVERY',
+        text: errorRecoveryText,
+        action: errorRecoveryAction,
         callState: callState
       };
       
-      tracer.error('Hybrid failed, using simple recovery', llm0Error);
+      tracer.error('Hybrid failed, using context-aware recovery', llm0Error);
     }
     
     perfCheckpoints.aiProcessing = Date.now() - aiProcessStart;
@@ -2841,8 +2888,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       result.shouldTransfer = true;
       result.text = result.response || "I'm connecting you to our team.";
     } else if (result.action === 'hangup') {
-      result.shouldHangup = true;
-      result.text = result.response || "Thank you for calling.";
+      // 🚫 NEVER HANG UP ON CALLER - Always transfer to human instead!
+      // Business rule: We never abandon callers. Always connect them to someone.
+      logger.warn('[HANGUP PREVENTED] AI tried to hangup - converting to transfer', {
+        originalAction: 'hangup',
+        convertedTo: 'transfer'
+      });
+      result.shouldTransfer = true;  // Transfer instead of hangup!
+      result.shouldHangup = false;
+      result.text = result.response || "Let me connect you to our team.";
     }
     
     // 📊 STRUCTURED LOG 5: Agent Output (before TwiML generation)
