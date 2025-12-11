@@ -875,6 +875,12 @@ class LLM0ControlsManager {
 
                     <h4 style="margin: 24px 0 12px; color: #374151; font-size: 14px; font-weight: 600;">📊 Confidence-Based Confirmation</h4>
                     
+                    <div style="background: #ecfdf5; border: 1px solid #10b981; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                        <span style="font-size: 13px; color: #065f46;">
+                            <strong>✅ ACTIVE:</strong> When AI detects a real intent (service, repair, booking, etc.) but confidence is below the threshold, it will ask: "I want to make sure I understand correctly..."
+                        </span>
+                    </div>
+                    
                     <div class="llm0-field">
                         <label class="llm0-label">Confirm when confidence below:</label>
                         <div class="llm0-slider-container">
@@ -883,7 +889,7 @@ class LLM0ControlsManager {
                                    min="50" max="95" id="confirm-conf-slider">
                             <span id="confirm-conf-value">${((sc.confirmBelowConfidence || 0.75) * 100).toFixed(0)}%</span>
                         </div>
-                        <div class="llm0-hint">If AI is less confident than this, always ask for confirmation</div>
+                        <div class="llm0-hint">If AI is less confident than this AND detects a real intent, ask for confirmation. Won't trigger on generic responses.</div>
                     </div>
 
                     <div class="llm0-field">

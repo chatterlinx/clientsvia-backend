@@ -98,20 +98,45 @@ class SmartConfirmationService {
         }
         
         // ════════════════════════════════════════════════════════════════════════
-        // LOW CONFIDENCE CONFIRMATION - DISABLED (Dec 2025)
+        // LOW CONFIDENCE CONFIRMATION - RE-ENABLED WITH SAFEGUARDS (Dec 2025)
         // ════════════════════════════════════════════════════════════════════════
-        // Problem: This was causing infinite loops because:
-        //   1. No triggers matched → confidence = 0
-        //   2. Confirmation asked → User says "yes"
-        //   3. Next turn → Still no triggers → confidence = 0 → Loop!
+        // Previous bug: Infinite loops when no match → confidence = 0 → ask → loop
+        // 
+        // FIX: Only trigger for REAL detected actions, NOT for:
+        //   - 'continue' (generic fallback)
+        //   - 'unknown' (no intent detected)
+        //   - 'clarify' (already asking for clarification)
+        //   - '' or null (no action)
         //
-        // Solution: Let the LLM ask NATURAL clarifying questions instead
-        // of robotic "was that a yes or no?" confirmations.
-        //
-        // Keep confirmations ONLY for high-risk: transfer, emergency, cancel
+        // This ensures the slider in UI actually does something!
         // ════════════════════════════════════════════════════════════════════════
-        // const confThreshold = settings.confirmBelowConfidence || 0.75;
-        // if (confidence < confThreshold && actionLower !== 'continue') { ... }
+        
+        const confThreshold = settings.confirmBelowConfidence || 0.75;
+        const skipActions = ['continue', 'unknown', 'clarify', '', null, undefined];
+        
+        // Only trigger for real detected intents with low confidence
+        if (confidence < confThreshold && 
+            !skipActions.includes(actionLower) && 
+            actionLower && 
+            callState?.detectedIntent) {
+            
+            // Don't ask confirmation if we already asked within last 2 turns
+            const turnsSinceLastConfirmation = callState?.turnsSinceConfirmation || 999;
+            if (turnsSinceLastConfirmation < 2) {
+                return { needsConfirmation: false };
+            }
+            
+            const phrase = (settings.lowConfidencePhrase || defaultSettings.lowConfidencePhrase)
+                .replace('{detected_intent}', callState?.detectedIntent || 'that service');
+            
+            return {
+                needsConfirmation: true,
+                confirmationPhrase: phrase,
+                pendingAction: actionLower,
+                severity: 'low',
+                reason: `Low confidence (${(confidence * 100).toFixed(0)}% < ${(confThreshold * 100).toFixed(0)}% threshold)`
+            };
+        }
         
         return { needsConfirmation: false };
     }
