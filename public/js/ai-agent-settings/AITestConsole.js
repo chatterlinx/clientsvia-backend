@@ -585,6 +585,7 @@ class AITestConsole {
     resetConversation() {
         this.conversationHistory = [];
         this.knownSlots = {};
+        this.lastDebug = null;
         this.testSessionId = `test-${Date.now()}`;
         
         const container = document.getElementById('test-chat-messages');
@@ -595,6 +596,42 @@ class AITestConsole {
                 <p style="font-size: 12px;">Start a new test</p>
             </div>
         `;
+        
+        this.updateAnalysis();
+    }
+    
+    /**
+     * Copy debug info to clipboard for sharing
+     */
+    copyDebug() {
+        const debug = this.lastDebug;
+        const history = this.conversationHistory;
+        
+        const text = `
+=== AI TEST CONSOLE DEBUG ===
+Session: ${this.testSessionId}
+Total Turns: ${history.length / 2}
+
+--- Last Turn Debug ---
+Turn #: ${debug?.turnCount || 'N/A'}
+History Sent: ${debug?.historyReceived || 0} messages
+Quick Answer: ${debug?.wasQuickAnswer ? 'Yes' : 'No'}
+Triage Match: ${debug?.triageMatched ? 'Yes' : 'No'}
+
+--- Conversation History ---
+${history.map((h, i) => `${i+1}. [${h.role}]: ${h.content}`).join('\n')}
+
+--- Slots Collected ---
+${Object.entries(this.knownSlots).filter(([k,v]) => v).map(([k,v]) => `${k}: ${v}`).join('\n') || 'None'}
+`.trim();
+        
+        navigator.clipboard.writeText(text).then(() => {
+            alert('✅ Debug info copied to clipboard!');
+        }).catch(err => {
+            console.error('Failed to copy:', err);
+            // Fallback: show in prompt
+            prompt('Copy this debug info:', text);
+        });
     }
 
     /**
@@ -676,7 +713,10 @@ class AITestConsole {
                 
                 <!-- Debug Panel - Shows what LLM received -->
                 <div style="background: #1a1d23; border: 1px solid #f0883e; border-radius: 8px; padding: 12px;">
-                    <h4 style="margin: 0 0 8px 0; color: #f0883e; font-size: 12px;">🔧 DEBUG (What LLM Received)</h4>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <h4 style="margin: 0; color: #f0883e; font-size: 12px;">🔧 DEBUG (What LLM Received)</h4>
+                        <button onclick="window.aiTestConsole.copyDebug()" style="background: #30363d; border: none; color: #8b949e; padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer;">📋 Copy</button>
+                    </div>
                     ${this.lastDebug ? `
                     <div style="font-size: 11px; color: #8b949e; display: grid; gap: 6px;">
                         <div><strong style="color: #c9d1d9;">Turn #:</strong> ${this.lastDebug.turnCount || 1}</div>
