@@ -675,12 +675,33 @@ class STTSettingsManager {
     }
     
     async saveCallExperienceSettings() {
+        console.log('[STT SETTINGS] 🟢 saveCallExperienceSettings() CALLED!');
+        
+        // Debug: Check if elements exist
+        const speechTimeoutEl = document.getElementById('call-exp-speech-timeout');
+        const endSilenceEl = document.getElementById('call-exp-end-silence');
+        const initialTimeoutEl = document.getElementById('call-exp-initial-timeout');
+        const allowInterruptEl = document.getElementById('call-exp-allow-interrupt');
+        
+        console.log('[STT SETTINGS] 🔵 Element check:', {
+            speechTimeout: !!speechTimeoutEl,
+            endSilence: !!endSilenceEl,
+            initialTimeout: !!initialTimeoutEl,
+            allowInterrupt: !!allowInterruptEl
+        });
+        
+        if (!speechTimeoutEl || !endSilenceEl) {
+            console.error('[STT SETTINGS] ❌ Form elements not found!');
+            alert('Error: Form elements not found. Please refresh the page.');
+            return;
+        }
+        
         const settings = {
             ashleyMode: false, // Manual settings = not Ashley Mode
-            speechTimeout: parseFloat(document.getElementById('call-exp-speech-timeout').value),
-            endSilenceTimeout: parseFloat(document.getElementById('call-exp-end-silence').value),
-            initialTimeout: parseInt(document.getElementById('call-exp-initial-timeout').value),
-            allowInterruption: document.getElementById('call-exp-allow-interrupt').checked,
+            speechTimeout: parseFloat(speechTimeoutEl.value),
+            endSilenceTimeout: parseFloat(endSilenceEl.value),
+            initialTimeout: parseInt(initialTimeoutEl.value),
+            allowInterruption: allowInterruptEl?.checked ?? false,
             interruptSensitivity: this.profile.callExperience?.interruptSensitivity || 'medium',
             speakingSpeed: parseFloat(document.getElementById('call-exp-speaking-speed').value),
             pauseBetweenSentences: parseFloat(document.getElementById('call-exp-pause').value),
@@ -1693,4 +1714,4 @@ class STTSettingsManager {
 
 // Export for Control Plane lazy loading
 window.STTSettingsManager = STTSettingsManager;
-console.log('✅ [STT SETTINGS MANAGER] Loaded and available globally');
+console.log('✅ [STT SETTINGS MANAGER] Loaded and available globally - VERSION 2025-12-11-V1');
