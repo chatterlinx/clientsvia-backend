@@ -513,6 +513,90 @@ router.delete('/:templateId/impossible-words/:word', authenticateJWT, requireRol
 });
 
 // ============================================================================
+// SPEAKING CORRECTIONS (what AI says, not what it hears)
+// ============================================================================
+
+/**
+ * POST /api/admin/stt-profile/:templateId/speaking-corrections
+ * Add a speaking correction rule
+ */
+router.post('/:templateId/speaking-corrections', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        const { dontSay, sayInstead, reason = '' } = req.body;
+        
+        if (!dontSay || !sayInstead) {
+            return res.status(400).json({ success: false, error: 'Both dontSay and sayInstead are required' });
+        }
+        
+        const profile = await STTProfile.findOne({ templateId, isActive: true });
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        // Initialize array if needed
+        profile.speakingCorrections = profile.speakingCorrections || [];
+        
+        const normalizedDontSay = dontSay.toLowerCase().trim();
+        if (profile.speakingCorrections.some(sc => sc.dontSay.toLowerCase() === normalizedDontSay)) {
+            return res.status(400).json({ success: false, error: 'Speaking rule already exists for this word' });
+        }
+        
+        profile.speakingCorrections.push({
+            dontSay: dontSay.trim(),
+            sayInstead: sayInstead.trim(),
+            reason,
+            enabled: true
+        });
+        
+        if (req.user && req.user._id) {
+            profile.updatedBy = req.user._id;
+        }
+        await profile.save();
+        
+        logger.info('[STT PROFILE API] Added speaking correction', { templateId, dontSay, sayInstead });
+        
+        res.json({ success: true, data: profile });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to add speaking correction', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * DELETE /api/admin/stt-profile/:templateId/speaking-corrections/:dontSay
+ * Remove a speaking correction
+ */
+router.delete('/:templateId/speaking-corrections/:dontSay', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { templateId, dontSay } = req.params;
+        const normalizedDontSay = decodeURIComponent(dontSay).toLowerCase().trim();
+        
+        const profile = await STTProfile.findOneAndUpdate(
+            { templateId, isActive: true },
+            { 
+                $pull: { speakingCorrections: { dontSay: { $regex: new RegExp(`^${normalizedDontSay}$`, 'i') } } },
+                $set: { updatedBy: req.user?._id }
+            },
+            { new: true }
+        );
+        
+        if (!profile) {
+            return res.status(404).json({ success: false, error: 'Profile not found' });
+        }
+        
+        logger.info('[STT PROFILE API] Removed speaking correction', { templateId, dontSay });
+        
+        res.json({ success: true, data: profile });
+        
+    } catch (error) {
+        logger.error('[STT PROFILE API] Failed to remove speaking correction', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
 // SUGGESTIONS MANAGEMENT
 // ============================================================================
 

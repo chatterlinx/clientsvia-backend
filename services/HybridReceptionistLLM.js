@@ -28,6 +28,7 @@ const logger = require('../utils/logger');
 // ════════════════════════════════════════════════════════════════════════════
 const { callLLM0 } = require('./llmRegistry');
 const TriageContextProvider = require('./TriageContextProvider');
+const STTProfile = require('../models/STTProfile');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 🎯 VERSION BANNER - This log PROVES the new code is deployed
@@ -298,6 +299,22 @@ class HybridReceptionistLLM {
             }
             
             // ════════════════════════════════════════════════════════════════
+            // LOAD SPEAKING CORRECTIONS (what AI should NOT say)
+            // ════════════════════════════════════════════════════════════════
+            let speakingCorrections = [];
+            try {
+                const templateId = company.aiAgentSettings?.templateReferences?.[0]?.templateId;
+                if (templateId) {
+                    const sttProfile = await STTProfile.findOne({ templateId, isActive: true }).lean();
+                    if (sttProfile?.speakingCorrections?.length > 0) {
+                        speakingCorrections = sttProfile.speakingCorrections.filter(sc => sc.enabled !== false);
+                    }
+                }
+            } catch (err) {
+                logger.debug('[HYBRID LLM] Failed to load speaking corrections (non-fatal)', { error: err.message });
+            }
+            
+            // ════════════════════════════════════════════════════════════════
             // BUILD THE SYSTEM PROMPT (now with triage + customer context)
             // ════════════════════════════════════════════════════════════════
             // Get last agent response to prevent repetition
@@ -316,7 +333,8 @@ class HybridReceptionistLLM {
                 detectedServices,  // Include detected service needs
                 customerContext: callContext.customerContext || { isReturning: false, totalCalls: 0 },
                 lastAgentResponse,  // Prevent repetition
-                turnCount: callContext.turnCount || 1
+                turnCount: callContext.turnCount || 1,
+                speakingCorrections  // What words NOT to use
             });
             
             // ════════════════════════════════════════════════════════════════
@@ -462,9 +480,22 @@ class HybridReceptionistLLM {
      * OPTIMIZED: Reduced token count for faster responses
      * ENHANCED: Better empathy and customer recognition
      */
-    static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext, customerContext, serviceAreaInfo, detectedServices, lastAgentResponse, turnCount }) {
+    static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext, customerContext, serviceAreaInfo, detectedServices, lastAgentResponse, turnCount, speakingCorrections }) {
         const companyName = company.name || 'our company';
         const trade = company.trade || 'HVAC';
+        
+        // Build speaking style rules from corrections
+        let speakingStyleSection = '';
+        if (speakingCorrections && speakingCorrections.length > 0) {
+            const rules = speakingCorrections
+                .map(sc => `- Say "${sc.sayInstead}" NOT "${sc.dontSay}"`)
+                .join('\n');
+            speakingStyleSection = `
+═══ SPEAKING STYLE (CRITICAL) ═══
+${rules}
+Never use the words on the left - always use the replacement on the right.
+`;
+        }
         
         // Compact slot display
         const hasSlots = Object.entries(knownSlots).filter(([k, v]) => v);
@@ -530,6 +561,7 @@ You're Ashley - confident, direct, and genuinely helpful.
 You've been doing this for years and know ${trade} inside-out.
 You sound like you're leaning forward, engaged, interested in solving their problem.
 Never robotic. Never boring. Never generic.
+${speakingStyleSection}
 
 ═══ YOUR 3 CORE BEHAVIORS ═══
 

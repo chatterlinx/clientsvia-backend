@@ -95,6 +95,24 @@ const ImpossibleWordSchema = new Schema({
     enabled: { type: Boolean, default: true }
 }, { _id: false });
 
+// Speaking corrections - what AI should say instead
+const SpeakingCorrectionSchema = new Schema({
+    dontSay: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 50
+    },
+    saySteadInstead: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 100
+    },
+    reason: { type: String, trim: true, maxlength: 200 },
+    enabled: { type: Boolean, default: true }
+}, { _id: false });
+
 const SuggestionSchema = new Schema({
     type: {
         type: String,
@@ -185,6 +203,13 @@ const STTProfileSchema = new Schema({
         type: [ImpossibleWordSchema],
         default: [],
         validate: { validator: v => v.length <= 200, message: 'Impossible words limit: 200' }
+    },
+    
+    // SPEAKING CORRECTIONS (what AI says, not what it hears)
+    speakingCorrections: {
+        type: [SpeakingCorrectionSchema],
+        default: [],
+        validate: { validator: v => v.length <= 100, message: 'Speaking corrections limit: 100' }
     },
     
     // SUGGESTIONS

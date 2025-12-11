@@ -213,11 +213,12 @@ class STTSettingsManager {
                 </div>
                 
                 <!-- Tab Navigation -->
-                <div style="display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+                <div style="display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; flex-wrap: wrap;">
                     ${this.renderTab('provider', '⚙️ Provider', this.activeTab === 'provider')}
                     ${this.renderTab('fillers', '🔇 Fillers', this.activeTab === 'fillers')}
                     ${this.renderTab('vocabulary', '🎯 Vocabulary', this.activeTab === 'vocabulary')}
                     ${this.renderTab('corrections', '🔄 Corrections', this.activeTab === 'corrections')}
+                    ${this.renderTab('speaking', '🗣️ Speaking', this.activeTab === 'speaking')}
                     ${this.renderTab('impossible', '🚫 Impossible', this.activeTab === 'impossible')}
                     ${this.renderTab('suggestions', '💡 Suggestions', this.activeTab === 'suggestions', pendingSuggestions)}
                     ${this.renderTab('test', '🧪 Test', this.activeTab === 'test')}
@@ -273,6 +274,7 @@ class STTSettingsManager {
             case 'fillers': return this.renderFillersTab();
             case 'vocabulary': return this.renderVocabularyTab();
             case 'corrections': return this.renderCorrectionsTab();
+            case 'speaking': return this.renderSpeakingTab();
             case 'impossible': return this.renderImpossibleTab();
             case 'suggestions': return this.renderSuggestionsTab();
             case 'test': return this.renderTestTab();
@@ -1222,6 +1224,76 @@ class STTSettingsManager {
         `;
     }
     
+    renderSpeakingTab() {
+        const speakingCorrections = this.profile.speakingCorrections || [];
+        return `
+            <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3>Speaking Style</h3>
+                    <button onclick="window.sttManager.showAddSpeakingModal()" style="
+                        padding: 8px 16px;
+                        background: #8b5cf6;
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                    ">
+                        + Add Speaking Rule
+                    </button>
+                </div>
+                <p style="color: #64748b; margin-bottom: 16px;">
+                    Words the AI should <b>NOT say</b> to customers. These get replaced in the AI's responses.
+                </p>
+                
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                                <th style="text-align: left; padding: 12px;">Don't Say</th>
+                                <th style="text-align: center; padding: 12px;">→</th>
+                                <th style="text-align: left; padding: 12px;">Say Instead</th>
+                                <th style="text-align: left; padding: 12px;">Reason</th>
+                                <th style="text-align: center; padding: 12px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${speakingCorrections.map(sc => `
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
+                                    <td style="padding: 12px; font-family: monospace; color: #ef4444; text-decoration: line-through;">${this.escapeHtml(sc.dontSay)}</td>
+                                    <td style="padding: 12px; text-align: center;">→</td>
+                                    <td style="padding: 12px; font-family: monospace; color: #10b981;">${this.escapeHtml(sc.sayInstead)}</td>
+                                    <td style="padding: 12px; color: #64748b;">${this.escapeHtml(sc.reason || '-')}</td>
+                                    <td style="padding: 12px; text-align: center;">
+                                        <button onclick="window.sttManager.showEditSpeakingModal('${this.escapeHtml(sc.dontSay)}', '${this.escapeHtml(sc.sayInstead)}', '${this.escapeHtml(sc.reason || '')}')" 
+                                            style="background: none; border: none; color: #3b82f6; cursor: pointer; margin-right: 8px;" title="Edit">✏️</button>
+                                        <button onclick="window.sttManager.deleteSpeaking('${this.escapeHtml(sc.dontSay)}')" 
+                                            style="background: none; border: none; color: #ef4444; cursor: pointer;" title="Delete">🗑️</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                            ${speakingCorrections.length === 0 ? `
+                                <tr>
+                                    <td colspan="5" style="padding: 24px; text-align: center; color: #64748b;">
+                                        No speaking rules yet. Add rules to control what the AI says to customers.
+                                    </td>
+                                </tr>
+                            ` : ''}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div style="margin-top: 24px; padding: 16px; background: #f0fdf4; border-radius: 12px; border: 1px solid #bbf7d0;">
+                    <h4 style="margin: 0 0 8px 0; color: #166534;">💡 Example Rules</h4>
+                    <ul style="margin: 0; padding-left: 20px; color: #166534; font-size: 14px;">
+                        <li><b>HVAC</b> → <b>air conditioning</b> (customers don't say HVAC)</li>
+                        <li><b>unit</b> → <b>system</b> (sounds more professional)</li>
+                        <li><b>gonna</b> → <b>going to</b> (more professional)</li>
+                    </ul>
+                </div>
+            </div>
+        `;
+    }
+    
     renderImpossibleTab() {
         const impossibleWords = this.profile.impossibleWords || [];
         return `
@@ -2117,6 +2189,232 @@ class STTSettingsManager {
             this.showToast('Impossible word added!', 'success');
         } catch (error) {
             this.showToast('Error adding impossible word', 'error');
+        }
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // SPEAKING CORRECTIONS (what AI says)
+    // ════════════════════════════════════════════════════════════════════════════
+    
+    showAddSpeakingModal() {
+        this.showSpeakingModal({ dontSay: '', sayInstead: '', reason: '' }, false);
+    }
+    
+    showEditSpeakingModal(dontSay, sayInstead, reason) {
+        this.showSpeakingModal({ dontSay, sayInstead, reason }, true);
+    }
+    
+    showSpeakingModal(data, isEdit) {
+        const existingModal = document.getElementById('speaking-modal');
+        if (existingModal) existingModal.remove();
+        
+        const modal = document.createElement('div');
+        modal.id = 'speaking-modal';
+        modal.innerHTML = `
+            <div style="
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+            " onclick="if(event.target === this) this.parentElement.remove()">
+                <div style="
+                    background: white;
+                    border-radius: 16px;
+                    padding: 24px;
+                    width: 90%;
+                    max-width: 480px;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                " onclick="event.stopPropagation()">
+                    <h3 style="margin: 0 0 20px 0; display: flex; align-items: center; gap: 8px;">
+                        🗣️ ${isEdit ? 'Edit' : 'Add'} Speaking Rule
+                    </h3>
+                    
+                    <div style="display: grid; gap: 16px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151;">
+                                Don't Say <span style="color: #ef4444;">*</span>
+                            </label>
+                            <input type="text" id="speaking-dontsay-input" value="${this.escapeHtml(data.dontSay)}" 
+                                placeholder="e.g., HVAC, gonna, unit"
+                                ${isEdit ? 'disabled' : ''}
+                                style="
+                                    width: 100%;
+                                    padding: 12px;
+                                    border: 2px solid #e2e8f0;
+                                    border-radius: 8px;
+                                    font-size: 15px;
+                                    box-sizing: border-box;
+                                    ${isEdit ? 'background: #f1f5f9; color: #64748b;' : ''}
+                                ">
+                            <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
+                                Word the AI should NOT say to customers
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151;">
+                                Say Instead <span style="color: #ef4444;">*</span>
+                            </label>
+                            <input type="text" id="speaking-sayinstead-input" value="${this.escapeHtml(data.sayInstead)}" 
+                                placeholder="e.g., air conditioning, going to, system"
+                                style="
+                                    width: 100%;
+                                    padding: 12px;
+                                    border: 2px solid #e2e8f0;
+                                    border-radius: 8px;
+                                    font-size: 15px;
+                                    box-sizing: border-box;
+                                ">
+                            <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
+                                What the AI should say instead
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151;">
+                                Reason <span style="color: #94a3b8; font-weight: normal;">(optional)</span>
+                            </label>
+                            <input type="text" id="speaking-reason-input" value="${this.escapeHtml(data.reason)}" 
+                                placeholder="e.g., Customers don't use this term"
+                                style="
+                                    width: 100%;
+                                    padding: 12px;
+                                    border: 2px solid #e2e8f0;
+                                    border-radius: 8px;
+                                    font-size: 15px;
+                                    box-sizing: border-box;
+                                ">
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; margin-top: 24px;">
+                        <button onclick="document.getElementById('speaking-modal').remove()" style="
+                            flex: 1;
+                            padding: 12px;
+                            background: #f1f5f9;
+                            color: #64748b;
+                            border: none;
+                            border-radius: 8px;
+                            cursor: pointer;
+                            font-size: 15px;
+                            font-weight: 500;
+                        ">Cancel</button>
+                        <button onclick="window.sttManager.saveSpeakingFromModal(${isEdit})" style="
+                            flex: 1;
+                            padding: 12px;
+                            background: #8b5cf6;
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            cursor: pointer;
+                            font-size: 15px;
+                            font-weight: 600;
+                        ">${isEdit ? 'Save Changes' : 'Add Rule'}</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        if (!isEdit) {
+            document.getElementById('speaking-dontsay-input').focus();
+        } else {
+            document.getElementById('speaking-sayinstead-input').focus();
+        }
+    }
+    
+    async saveSpeakingFromModal(isEdit) {
+        const dontSay = document.getElementById('speaking-dontsay-input').value.trim();
+        const sayInstead = document.getElementById('speaking-sayinstead-input').value.trim();
+        const reason = document.getElementById('speaking-reason-input').value.trim();
+        
+        if (!dontSay || !sayInstead) {
+            alert('Please fill in both "Don\'t Say" and "Say Instead" fields');
+            return;
+        }
+        
+        document.getElementById('speaking-modal').remove();
+        
+        if (isEdit) {
+            await this.updateSpeaking(dontSay, sayInstead, reason);
+        } else {
+            await this.addSpeaking(dontSay, sayInstead, reason);
+        }
+    }
+    
+    async addSpeaking(dontSay, sayInstead, reason) {
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+        
+        try {
+            const response = await fetch(`/api/admin/stt-profile/${this.templateId}/speaking-corrections`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ dontSay, sayInstead, reason })
+            });
+            
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to add');
+            }
+            
+            await this.loadProfile();
+            this.render();
+            this.showToast('Speaking rule added!', 'success');
+        } catch (error) {
+            this.showToast('Error: ' + error.message, 'error');
+        }
+    }
+    
+    async updateSpeaking(dontSay, sayInstead, reason) {
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+        
+        try {
+            // Delete and re-add
+            await fetch(`/api/admin/stt-profile/${this.templateId}/speaking-corrections/${encodeURIComponent(dontSay)}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            await fetch(`/api/admin/stt-profile/${this.templateId}/speaking-corrections`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ dontSay, sayInstead, reason })
+            });
+            
+            await this.loadProfile();
+            this.render();
+            this.showToast('Speaking rule updated!', 'success');
+        } catch (error) {
+            this.showToast('Error updating speaking rule', 'error');
+        }
+    }
+    
+    async deleteSpeaking(dontSay) {
+        if (!confirm(`Remove speaking rule for "${dontSay}"?`)) return;
+        
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+        
+        try {
+            await fetch(`/api/admin/stt-profile/${this.templateId}/speaking-corrections/${encodeURIComponent(dontSay)}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            await this.loadProfile();
+            this.render();
+            this.showToast('Speaking rule removed!', 'success');
+        } catch (error) {
+            this.showToast('Error removing speaking rule', 'error');
         }
     }
     
