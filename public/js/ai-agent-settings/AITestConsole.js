@@ -681,6 +681,60 @@ class AITestConsole {
     }
     
     /**
+     * Rate a response as good or bad (feedback for learning)
+     */
+    async rateFeedback(feedbackId, rating, responseText, source) {
+        const container = document.getElementById(feedbackId);
+        if (!container) return;
+        
+        // Get the last user message that prompted this response
+        const lastUserMessage = this.conversationHistory
+            .filter(h => h.role === 'user')
+            .slice(-1)[0]?.content || 'Unknown';
+        
+        // Visual feedback immediately
+        if (rating === 'good') {
+            container.innerHTML = `<span style="color: #3fb950; font-size: 11px;">✅ Saved as good example</span>`;
+        } else {
+            // For bad ratings, ask what was wrong
+            const reason = prompt('What was wrong with this response?\n\nOptions:\n- Too generic\n- Wrong tone\n- Asked wrong question\n- Should have moved to booking\n- Other');
+            
+            if (!reason) {
+                container.innerHTML = `<span style="color: #8b949e; font-size: 11px;">Cancelled</span>`;
+                return;
+            }
+            
+            container.innerHTML = `<span style="color: #f0883e; font-size: 11px;">📝 Feedback saved</span>`;
+        }
+        
+        // Save to backend
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            await fetch(`/api/admin/ai-test/${this.companyId}/feedback`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    sessionId: this.testSessionId,
+                    userMessage: lastUserMessage,
+                    aiResponse: responseText.substring(0, 500),
+                    rating,
+                    reason: rating === 'bad' ? (typeof reason !== 'undefined' ? reason : null) : null,
+                    source,
+                    timestamp: new Date().toISOString(),
+                    conversationContext: this.conversationHistory.slice(-4)
+                })
+            });
+            
+            console.log('[AI Test] Feedback saved:', { rating, source });
+        } catch (error) {
+            console.error('[AI Test] Failed to save feedback:', error);
+        }
+    }
+    
+    /**
      * Copy debug info to clipboard for sharing
      */
     copyDebug() {
