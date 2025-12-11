@@ -674,10 +674,10 @@ class AITestConsole {
                 </div>
                 ` : ''}
                 
-                ${this.lastDebug ? `
                 <!-- Debug Panel - Shows what LLM received -->
                 <div style="background: #1a1d23; border: 1px solid #f0883e; border-radius: 8px; padding: 12px;">
                     <h4 style="margin: 0 0 8px 0; color: #f0883e; font-size: 12px;">🔧 DEBUG (What LLM Received)</h4>
+                    ${this.lastDebug ? `
                     <div style="font-size: 11px; color: #8b949e; display: grid; gap: 6px;">
                         <div><strong style="color: #c9d1d9;">Turn #:</strong> ${this.lastDebug.turnCount || 1}</div>
                         <div><strong style="color: #c9d1d9;">History sent:</strong> ${this.lastDebug.historyReceived || 0} messages</div>
@@ -694,8 +694,12 @@ class AITestConsole {
                         <div><strong style="color: #c9d1d9;">Quick Answer:</strong> ${this.lastDebug.wasQuickAnswer ? '✅ Yes' : '❌ No'}</div>
                         <div><strong style="color: #c9d1d9;">Triage Match:</strong> ${this.lastDebug.triageMatched ? '✅ Yes' : '❌ No'}</div>
                     </div>
+                    ` : `
+                    <div style="font-size: 11px; color: #6e7681; text-align: center; padding: 8px;">
+                        Send a message to see debug info
+                    </div>
+                    `}
                 </div>
-                ` : ''}
                 
                 <!-- Tips -->
                 <div style="background: #1c2128; border: 1px solid #30363d; border-radius: 8px; padding: 12px;">
