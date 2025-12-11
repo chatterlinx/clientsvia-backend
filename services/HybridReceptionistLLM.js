@@ -397,63 +397,42 @@ class HybridReceptionistLLM {
             // ════════════════════════════════════════════════════════════════
             // PARSE AND VALIDATE RESPONSE
             // ════════════════════════════════════════════════════════════════
+            // ════════════════════════════════════════════════════════════════
+            // SIMPLE RESPONSE PARSING
+            // AI returns: {"reply":"...", "needsInfo":"name|phone|address|time|none"}
+            // ════════════════════════════════════════════════════════════════
             let parsed;
             try {
                 parsed = JSON.parse(content);
             } catch (parseErr) {
-                logger.error('[HYBRID LLM] JSON parse failed', { content });
-                return this.emergencyFallback(currentMode, knownSlots);
+                // If JSON parse fails, maybe AI just returned plain text (which is fine!)
+                logger.warn('[HYBRID LLM] JSON parse failed, using raw content as reply');
+                parsed = { reply: content.replace(/[{}"\n]/g, '').trim() };
             }
             
-            // ════════════════════════════════════════════════════════════════
-            // NORMALIZE RESPONSE (3-Phase System)
-            // ════════════════════════════════════════════════════════════════
-            const phase = (parsed.phase || 'DISCOVERY').toUpperCase();
-            const problemSummary = parsed.problemSummary || parsed.summary || null;
-            const wantsBooking = parsed.wantsBooking === true;
-            const confidence = parsed.confidence || 0.5;
+            const reply = parsed.reply || parsed.response || content;
+            const needsInfo = parsed.needsInfo || 'none';
             
-            // Determine conversation mode from phase
-            let conversationMode = 'free';
-            if (phase === 'BOOKING' && wantsBooking && problemSummary) {
-                conversationMode = 'booking';
-            } else if (phase === 'DECISION') {
-                conversationMode = 'decision';
-            } else {
-                conversationMode = 'discovery';
-            }
+            // Determine mode from what we still need
+            const hasAllSlots = knownSlots.name && knownSlots.phone && knownSlots.address && knownSlots.time;
+            const conversationMode = hasAllSlots ? 'confirmation' : 
+                                     needsInfo !== 'none' ? 'booking' : 'discovery';
             
             const result = {
-                reply: parsed.reply || parsed.response || "What's going on with the AC?",
-                phase,
+                reply,
                 conversationMode,
-                problemSummary,
-                wantsBooking,
-                confidence,
-                intent: parsed.intent || 'unknown',
-                nextGoal: parsed.nextGoal || this.phaseToNextGoal(phase, parsed.filledSlots),
-                filledSlots: this.mergeSlots(knownSlots, parsed.filledSlots || parsed.extracted || {}),
-                signals: {
-                    frustrated: parsed.signals?.frustrated || parsed.frustrated || false,
-                    wantsHuman: parsed.signals?.wantsHuman || parsed.wantsHuman || false,
-                    wantsEstimate: parsed.signals?.wantsEstimate || false,
-                    offTopic: parsed.signals?.offTopic || false,
-                    isQuestion: parsed.signals?.isQuestion || parsed.isQuestion || false,
-                    bookingComplete: parsed.signals?.bookingComplete || false
-                },
-                reasoning: parsed.reasoningTrace || parsed.reasoning || null,
+                needsInfo,
+                nextGoal: needsInfo !== 'none' ? `ASK_${needsInfo.toUpperCase()}` : 'CONTINUE',
+                filledSlots: knownSlots,
                 latencyMs,
                 tokensUsed: response.usage?.total_tokens || 0
             };
             
-            logger.info('[HYBRID LLM] Turn processed', {
+            logger.info('[HYBRID LLM] ✅ Response', {
                 callId,
-                mode: result.conversationMode,
-                intent: result.intent,
-                nextGoal: result.nextGoal,
-                latencyMs,
-                slots: Object.keys(result.filledSlots).filter(k => result.filledSlots[k]),
-                signals: result.signals
+                reply: reply.substring(0, 60) + '...',
+                needsInfo,
+                latencyMs
             });
             
             return result;
@@ -542,63 +521,9 @@ NEVER say any of these phrases. They make you sound robotic.
 `;
         }
         
-        // ════════════════════════════════════════════════════════════════════
-        // EMOTION HANDLING (behavior rules, not scripts)
-        // AI generates its own natural responses - we just tell it what to DO
-        // ════════════════════════════════════════════════════════════════════
-        let emotionSection = '';
-        const emotions = uiConfig.emotionResponses;
-        if (emotions && Object.keys(emotions).length > 0) {
-            const emotionRules = [];
-            
-            if (emotions.stressed?.enabled !== false) {
-                emotionRules.push('- If stressed/worried → Be reassuring and helpful');
-            }
-            if (emotions.frustrated?.enabled !== false) {
-                const extra = emotions.frustrated?.reduceFriction ? ' (skip optional questions)' : '';
-                emotionRules.push(`- If frustrated → Empathize and move faster${extra}`);
-            }
-            if (emotions.angry?.enabled !== false) {
-                const extra = emotions.angry?.offerEscalation ? ' (offer human if needed)' : '';
-                emotionRules.push(`- If angry → Apologize and de-escalate${extra}`);
-            }
-            if (emotions.friendly?.enabled !== false) {
-                const extra = emotions.friendly?.allowSmallTalk ? ' (brief pleasantries OK)' : '';
-                emotionRules.push(`- If friendly/chatty → Be warm${extra}`);
-            }
-            if (emotions.joking?.enabled !== false) {
-                emotionRules.push('- If joking/hyperbole ("I\'m dying!") → Match playful energy, NOT an emergency');
-            }
-            if (emotions.panicked?.enabled !== false) {
-                const action = emotions.panicked?.bypassAllQuestions 
-                    ? 'DISPATCH IMMEDIATELY' 
-                    : 'Prioritize urgency';
-                const confirm = emotions.panicked?.confirmFirst 
-                    ? ' (ask "Are you in immediate danger?" first)' 
-                    : '';
-                emotionRules.push(`- If REAL emergency (gas, fire, flooding) → ${action}${confirm}`);
-            }
-            
-            if (emotionRules.length > 0) {
-                emotionSection = `
-═══ EMOTION HANDLING ═══
-${emotionRules.join('\n')}
-`;
-            }
-        }
-        
-        // ════════════════════════════════════════════════════════════════════
-        // BOOKING PROMPTS FROM UI
-        // ════════════════════════════════════════════════════════════════════
-        const bookingPromptsSection = `
-═══ BOOKING PROMPTS (from UI settings) ═══
-- For name: "${uiConfig.bookingPrompts.askName}"
-- For phone: "${uiConfig.bookingPrompts.askPhone}"
-- For address: "${uiConfig.bookingPrompts.askAddress}"
-- For time: "${uiConfig.bookingPrompts.askTime}"
-- To confirm: "${uiConfig.bookingPrompts.confirmTemplate}"
-- After booking: "${uiConfig.bookingPrompts.completeTemplate}"
-`;
+        // NOTE: Emotion handling and booking prompts removed - AI handles naturally
+        // GPT-4o-mini knows how to be empathetic, ask for info, etc.
+        // We trust the AI to be a good receptionist.
         
         // Compact slot display
         const hasSlots = Object.entries(knownSlots).filter(([k, v]) => v);
@@ -670,52 +595,43 @@ Type: ${triageContext.suggestedServiceType || 'repair'}
         };
         const maxWords = uiConfig.personality.maxResponseWords || verbosityLimits[uiConfig.personality.verbosity] || 30;
         
-        return `You are the lead receptionist at ${companyName}, a ${trade} company. You are on a LIVE phone call RIGHT NOW.
+        // ════════════════════════════════════════════════════════════════════
+        // STREAMLINED PROMPT - Let AI be an AI, not a form-filler
+        // ════════════════════════════════════════════════════════════════════
+        
+        // Build a MINIMAL, FOCUSED prompt
+        let prompt = `You are ${uiConfig.personality.agentName || 'the receptionist'} at ${companyName} (${trade}). LIVE PHONE CALL.
 
-═══ YOUR PERSONALITY (from UI settings) ═══
-Name: ${uiConfig.personality.agentName}
-Tone: ${toneDesc}
-Max response length: ${maxWords} words
-${uiConfig.personality.useCallerName ? 'Use caller\'s name once you know it.' : 'Don\'t use caller\'s name.'}
+STYLE: ${toneDesc}, max ${maxWords} words per response.
 ${speakingStyleSection}
+GOAL: Help caller, schedule service if needed.
+COLLECT (when booking): name, phone, address, preferred time.
 
-═══ CORE BEHAVIORS ═══
-1. REFLECT - Show you HEARD them (vary your openings)
-2. HYPOTHESIZE - Show you know ${trade} (make educated guesses)
-3. LEAD - Drive to the next logical step
+KNOWN SO FAR: ${slotsList}
+${missingSlots !== 'none' ? `STILL NEED: ${missingSlots}` : 'ALL INFO COLLECTED - confirm and complete.'}`;
 
-═══ CONVERSATION PHASES ═══
-PHASE 1: DISCOVERY - Understand what they need
-PHASE 2: DECISION - Confirm and offer to help
-PHASE 3: BOOKING - Collect details efficiently
-${bookingPromptsSection}
-${forbiddenSection}
-${emotionSection}
+        // Add only what's RELEVANT to this specific turn
+        if (customerNote) prompt += `\n${customerNote}`;
+        if (serviceAreaSection) prompt += `\n${serviceAreaSection}`;
+        if (triageSection) prompt += `\n${triageSection}`;
+        
+        // Forbidden phrases (keep minimal)
+        if (uiConfig.forbiddenPhrases.length > 0 && uiConfig.forbiddenPhrases.length <= 5) {
+            prompt += `\nDON'T SAY: ${uiConfig.forbiddenPhrases.slice(0, 5).join(', ')}`;
+        }
+        
+        // Last response anti-repeat
+        if (lastAgentResponse) {
+            prompt += `\n\nYOU JUST SAID: "${lastAgentResponse.substring(0, 50)}..." - say something DIFFERENT.`;
+        }
+        
+        // SIMPLE output format - just reply + one useful field
+        prompt += `
 
-═══ CURRENT CALL STATE ═══
-Turn: ${turnCount || 1}
-Collected: ${slotsList}
-Missing: ${missingSlots}
-${customerNote}
-${serviceAreaSection}
-${triageSection}
-${lastAgentResponse ? `
-═══ YOUR LAST RESPONSE (DO NOT REPEAT) ═══
-"${lastAgentResponse}"
-Say something DIFFERENT. Progress the conversation forward.
-` : ''}
-═══ OUTPUT FORMAT ═══
-Return ONLY valid JSON:
-{
-  "reply": "<your spoken response, max ${maxWords} words, sounds human>",
-  "phase": "DISCOVERY|DECISION|BOOKING",
-  "problemSummary": "<one sentence summary of their issue, or null>",
-  "likelyNeed": "repair|maintenance|question|unknown",
-  "wantsBooking": false,
-  "confidence": 0.5,
-  "filledSlots": {"name":null,"phone":null,"address":null,"serviceType":null,"time":null},
-  "signals": {"frustrated":false,"wantsHuman":false,"isQuestion":false}
-}`;
+RESPOND with JSON:
+{"reply":"<what you say>","needsInfo":"name|phone|address|time|none"}`;
+        
+        return prompt;
     }
     
     /**
