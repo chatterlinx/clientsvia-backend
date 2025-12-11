@@ -108,6 +108,35 @@ function loadFrontDeskConfig(company) {
         // Forbidden phrases (from UI) - THESE ARE CHECKED AGAINST LLM OUTPUT
         forbiddenPhrases: config.forbiddenPhrases || [],
         
+        // Detection triggers (from UI) - THESE CONTROL WHAT AI DETECTS
+        detectionTriggers: {
+            trustConcern: config.detectionTriggers?.trustConcern || [],
+            callerFeelsIgnored: config.detectionTriggers?.callerFeelsIgnored || [],
+            refusedSlot: config.detectionTriggers?.refusedSlot || [],
+            describingProblem: config.detectionTriggers?.describingProblem || [],
+            wantsBooking: config.detectionTriggers?.wantsBooking || []
+        },
+        
+        // Fallback responses (from UI) - WHAT AI SAYS WHEN LLM FAILS
+        fallbackResponses: {
+            discovery: config.fallbackResponses?.discovery || "Got it, what's going on — is it not cooling, not heating, making noise, or something else?",
+            askName: config.fallbackResponses?.askName || "May I have your name please?",
+            askPhone: config.fallbackResponses?.askPhone || "What's the best phone number to reach you?",
+            askAddress: config.fallbackResponses?.askAddress || "What's the service address?",
+            askTime: config.fallbackResponses?.askTime || "When works best for you — morning or afternoon?",
+            didNotHear: config.fallbackResponses?.didNotHear || "I'm sorry, I didn't quite catch that. Could you please repeat?",
+            connectionIssue: config.fallbackResponses?.connectionIssue || "I'm sorry, I think our connection isn't great. Could you please repeat?",
+            transfering: config.fallbackResponses?.transfering || "Let me connect you with someone who can help you right away."
+        },
+        
+        // Mode switching (from UI) - WHEN TO SWITCH MODES
+        modeSwitching: {
+            minTurnsBeforeBooking: config.modeSwitching?.minTurnsBeforeBooking ?? 2,
+            bookingConfidenceThreshold: config.modeSwitching?.bookingConfidenceThreshold ?? 0.75,
+            autoRescueOnFrustration: config.modeSwitching?.autoRescueOnFrustration !== false,
+            autoTriageOnProblem: config.modeSwitching?.autoTriageOnProblem !== false
+        },
+        
         // Raw config for anything else
         raw: config
     };
@@ -249,10 +278,17 @@ class HybridReceptionistLLM {
             let triageContext = null;
             
             // ════════════════════════════════════════════════════════════════════
-            // EXPANDED: Load triage context for ANY service-related input
-            // The previous regex was too narrow - "not cooling" and "need service" didn't match!
+            // 🚨 UI-CONTROLLED: Problem detection triggers
+            // Uses: company.aiAgentSettings.frontDeskBehavior.detectionTriggers.describingProblem
             // ════════════════════════════════════════════════════════════════════
-            const isDescribingIssue = /problem|issue|broken|not working|not cooling|not heating|blowing|warm air|cold air|won't turn|leak|noise|smell|blank|won't|doesn't|can't|stopped|service|repair|maintenance|tune.?up|check|schedule|appointment|technician|help|emergency|urgent|asap|ac |a\.c\.|air condition|hvac|heat|furnace|unit|system/i.test(userInput);
+            const uiConfig = loadFrontDeskConfig(company);
+            const problemTriggers = uiConfig.detectionTriggers?.describingProblem || [];
+            const lowerUserInput = userInput.toLowerCase();
+            
+            // Use UI triggers if configured, otherwise always true to load triage context
+            const isDescribingIssue = problemTriggers.length > 0
+                ? problemTriggers.some(t => t && lowerUserInput.includes(t.toLowerCase()))
+                : true; // If no triggers configured, always try to load triage context
             
             // ALWAYS try to load triage context for service calls
             if (companyId && (isDescribingIssue || trade === 'HVAC')) {

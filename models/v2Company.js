@@ -1660,6 +1660,46 @@ const companySchema = new mongoose.Schema({
             forbiddenPhrases: [{ type: String, trim: true }],
             
             // ═══════════════════════════════════════════════════════════════
+            // DETECTION TRIGGERS - What AI detects in caller speech
+            // ═══════════════════════════════════════════════════════════════
+            detectionTriggers: {
+                // Trust Concern: Caller questions AI competence
+                trustConcern: [{ type: String, trim: true, lowercase: true }],
+                // Caller feels ignored
+                callerFeelsIgnored: [{ type: String, trim: true, lowercase: true }],
+                // Caller refuses to give info
+                refusedSlot: [{ type: String, trim: true, lowercase: true }],
+                // Caller describing problem (not answering booking question)
+                describingProblem: [{ type: String, trim: true, lowercase: true }],
+                // Booking intent detection
+                wantsBooking: [{ type: String, trim: true, lowercase: true }]
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // FALLBACK RESPONSES - What AI says when LLM fails
+            // ═══════════════════════════════════════════════════════════════
+            fallbackResponses: {
+                discovery: { type: String, default: "Got it, what's going on — is it not cooling, not heating, making noise, or something else?", trim: true },
+                askName: { type: String, default: "May I have your name please?", trim: true },
+                askPhone: { type: String, default: "What's the best phone number to reach you?", trim: true },
+                askAddress: { type: String, default: "What's the service address?", trim: true },
+                askTime: { type: String, default: "When works best for you — morning or afternoon?", trim: true },
+                didNotHear: { type: String, default: "I'm sorry, I didn't quite catch that. Could you please repeat?", trim: true },
+                connectionIssue: { type: String, default: "I'm sorry, I think our connection isn't great. Could you please repeat?", trim: true },
+                transfering: { type: String, default: "Let me connect you with someone who can help you right away.", trim: true }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // MODE SWITCHING - When to switch between modes
+            // ═══════════════════════════════════════════════════════════════
+            modeSwitching: {
+                minTurnsBeforeBooking: { type: Number, default: 2, min: 0, max: 5 },
+                bookingConfidenceThreshold: { type: Number, default: 0.75, min: 0.5, max: 1.0 },
+                autoRescueOnFrustration: { type: Boolean, default: true },
+                autoTriageOnProblem: { type: Boolean, default: true }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
             // METADATA
             // ═══════════════════════════════════════════════════════════════
             lastUpdated: { type: Date, default: Date.now },

@@ -199,11 +199,46 @@ const DEFAULT_FRONT_DESK_CONFIG = {
     // FORBIDDEN PHRASES (Never say these)
     // ════════════════════════════════════════════════════════════════════════
     forbiddenPhrases: [
-        'tell me more about what you need',  // Annoying after they already said
-        'what specific issues',  // Too clinical
-        'can you please',  // Sounds like begging
-        'I\'m sorry, I didn\'t understand'  // Admission of failure
+        'tell me more about what you need',
+        'what specific issues',
+        'can you please',
+        'I\'m sorry, I didn\'t understand'
     ],
+
+    // ════════════════════════════════════════════════════════════════════════
+    // DETECTION TRIGGERS - What AI detects in caller speech
+    // ════════════════════════════════════════════════════════════════════════
+    detectionTriggers: {
+        trustConcern: ['can you do', 'can you handle', 'can you fix', 'are you able', 'know what you\'re doing', 'qualified', 'sure you can', 'is this going to work', 'you guys any good'],
+        callerFeelsIgnored: ['you\'re not listening', 'didn\'t listen', 'you didn\'t hear', 'you\'re ignoring', 'you don\'t get it', 'that\'s not what I said', 'you missed'],
+        refusedSlot: ['i don\'t want to', 'not going to give', 'don\'t want to share', 'not comfortable', 'rather not'],
+        describingProblem: ['water leak', 'thermostat', 'not cooling', 'not cool', 'won\'t turn', 'won\'t start', 'making noise', 'making sound', 'smell', 'broken', 'not working', 'problem is', 'issue is'],
+        wantsBooking: ['fix', 'repair', 'service', 'appointment', 'schedule', 'technician', 'someone', 'come out', 'send']
+    },
+
+    // ════════════════════════════════════════════════════════════════════════
+    // FALLBACK RESPONSES - What AI says when LLM fails
+    // ════════════════════════════════════════════════════════════════════════
+    fallbackResponses: {
+        discovery: 'Got it, what\'s going on — is it not cooling, not heating, making noise, or something else?',
+        askName: 'May I have your name please?',
+        askPhone: 'What\'s the best phone number to reach you?',
+        askAddress: 'What\'s the service address?',
+        askTime: 'When works best for you — morning or afternoon?',
+        didNotHear: 'I\'m sorry, I didn\'t quite catch that. Could you please repeat?',
+        connectionIssue: 'I\'m sorry, I think our connection isn\'t great. Could you please repeat?',
+        transfering: 'Let me connect you with someone who can help you right away.'
+    },
+
+    // ════════════════════════════════════════════════════════════════════════
+    // MODE SWITCHING - When to switch between modes
+    // ════════════════════════════════════════════════════════════════════════
+    modeSwitching: {
+        minTurnsBeforeBooking: 2,
+        bookingConfidenceThreshold: 0.75,
+        autoRescueOnFrustration: true,
+        autoTriageOnProblem: true
+    },
 
     // ════════════════════════════════════════════════════════════════════════
     // REQUIRED PHRASES (Always include when appropriate)

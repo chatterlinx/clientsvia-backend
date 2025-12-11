@@ -72,7 +72,8 @@ class FrontDeskBehaviorManager {
                 tone: 'warm',
                 verbosity: 'concise',
                 maxResponseWords: 30,
-                useCallerName: true
+                useCallerName: true,
+                agentName: 'Ashley'
             },
             bookingPrompts: {
                 askName: "May I have your name?",
@@ -88,11 +89,11 @@ class FrontDeskBehaviorManager {
                 angry: { enabled: true, acknowledgments: ["I'm really sorry you're dealing with this."], followUp: "Let me make this right.", offerEscalation: true },
                 friendly: { enabled: true, allowSmallTalk: true }
             },
-            frustrationTriggers: ["i don't care", "just send someone", "this is ridiculous", "you're not listening", "i already told you"],
+            frustrationTriggers: ["i don't care", "just send someone", "this is ridiculous", "you're not listening", "i already told you", "stop asking", "forget it", "whatever"],
             escalation: {
                 enabled: true,
                 maxLoopsBeforeOffer: 3,
-                triggerPhrases: ["manager", "supervisor", "real person", "human"],
+                triggerPhrases: ["manager", "supervisor", "real person", "human", "someone else"],
                 offerMessage: "I can connect you to someone directly or take a message for a manager. Which would you prefer?",
                 transferMessage: "Let me connect you to our team now."
             },
@@ -102,7 +103,51 @@ class FrontDeskBehaviorManager {
                 onLoop: 'rephrase',
                 rephraseIntro: "Let me try this differently - "
             },
-            forbiddenPhrases: ["tell me more about what you need", "what specific issues are you experiencing"]
+            forbiddenPhrases: ["tell me more about what you need", "what specific issues are you experiencing", "how can I help you", "what can I do for you today"],
+            
+            // ════════════════════════════════════════════════════════════════════
+            // NEW: Detection Triggers - Control what AI detects
+            // ════════════════════════════════════════════════════════════════════
+            detectionTriggers: {
+                // Trust Concern: Caller questions AI competence
+                trustConcern: ["can you do", "can you handle", "can you fix", "are you able", "know what you're doing", "qualified", "sure you can", "is this going to work", "you guys any good"],
+                // Caller feels ignored
+                callerFeelsIgnored: ["you're not listening", "didn't listen", "you didn't hear", "you're ignoring", "you don't get it", "that's not what I said", "you missed"],
+                // Caller refuses to give info
+                refusedSlot: ["i don't want to", "not going to give", "don't want to share", "not comfortable", "rather not"],
+                // Caller describing problem (not answering booking question)
+                describingProblem: ["water leak", "thermostat", "not cooling", "not cool", "won't turn", "won't start", "making noise", "making sound", "smell", "broken", "not working", "problem is", "issue is"],
+                // Booking intent detection
+                wantsBooking: ["fix", "repair", "service", "appointment", "schedule", "technician", "someone", "come out", "send"]
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
+            // NEW: Fallback Responses - What AI says when LLM fails
+            // ════════════════════════════════════════════════════════════════════
+            fallbackResponses: {
+                discovery: "Got it, what's going on — is it not cooling, not heating, making noise, or something else?",
+                askName: "May I have your name please?",
+                askPhone: "What's the best phone number to reach you?",
+                askAddress: "What's the service address?",
+                askTime: "When works best for you — morning or afternoon?",
+                didNotHear: "I'm sorry, I didn't quite catch that. Could you please repeat?",
+                connectionIssue: "I'm sorry, I think our connection isn't great. Could you please repeat?",
+                transfering: "Let me connect you with someone who can help you right away."
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
+            // NEW: Mode Switching - When to switch between modes
+            // ════════════════════════════════════════════════════════════════════
+            modeSwitching: {
+                // Turns before allowing booking mode
+                minTurnsBeforeBooking: 2,
+                // Confidence threshold to lock booking
+                bookingConfidenceThreshold: 0.75,
+                // Auto-switch to rescue mode on frustration
+                autoRescueOnFrustration: true,
+                // Auto-switch to triage when describing problem
+                autoTriageOnProblem: true
+            }
         };
     }
 
@@ -175,6 +220,9 @@ class FrontDeskBehaviorManager {
                     ${this.renderTab('escalation', '🆘 Escalation')}
                     ${this.renderTab('loops', '🔄 Loops')}
                     ${this.renderTab('forbidden', '🚫 Forbidden')}
+                    ${this.renderTab('detection', '🔍 Detection')}
+                    ${this.renderTab('fallbacks', '🆘 Fallbacks')}
+                    ${this.renderTab('modes', '🔀 Modes')}
                     ${this.renderTab('test', '🧪 Test')}
                 </div>
 
@@ -499,6 +547,282 @@ class FrontDeskBehaviorManager {
         `;
     }
 
+    // ════════════════════════════════════════════════════════════════════
+    // NEW TAB: Detection Triggers
+    // ════════════════════════════════════════════════════════════════════
+    renderDetectionTab() {
+        const dt = this.config.detectionTriggers || {};
+        return `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
+                <h3 style="margin: 0 0 16px 0; color: #a371f7;">🔍 Detection Triggers</h3>
+                <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">
+                    These patterns control WHAT the AI detects in caller speech. Add phrases that trigger each behavior.
+                </p>
+                
+                <!-- Trust Concern -->
+                <div style="margin-bottom: 24px; border: 1px solid #30363d; border-radius: 8px; padding: 16px; background: #0d1117;">
+                    <h4 style="margin: 0 0 8px 0; color: #f0883e;">🤔 Trust Concern Detection</h4>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 12px;">When caller questions if AI can actually help them</p>
+                    <div id="fdb-trust-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+                        ${(dt.trustConcern || []).map((t, i) => this.renderDetectionChip(t, i, 'trustConcern')).join('')}
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="fdb-new-trustConcern" placeholder="e.g., 'are you sure you can help'" 
+                            style="flex: 1; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        <button onclick="window.frontDeskBehaviorManager.addDetection('trustConcern')" 
+                            style="padding: 8px 16px; background: #f0883e; color: #0d1117; border: none; border-radius: 6px; cursor: pointer;">+ Add</button>
+                    </div>
+                </div>
+                
+                <!-- Caller Feels Ignored -->
+                <div style="margin-bottom: 24px; border: 1px solid #30363d; border-radius: 8px; padding: 16px; background: #0d1117;">
+                    <h4 style="margin: 0 0 8px 0; color: #f85149;">😤 Caller Feels Ignored Detection</h4>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 12px;">When caller explicitly says AI isn't listening</p>
+                    <div id="fdb-ignored-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+                        ${(dt.callerFeelsIgnored || []).map((t, i) => this.renderDetectionChip(t, i, 'callerFeelsIgnored')).join('')}
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="fdb-new-callerFeelsIgnored" placeholder="e.g., 'you're not listening to me'" 
+                            style="flex: 1; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        <button onclick="window.frontDeskBehaviorManager.addDetection('callerFeelsIgnored')" 
+                            style="padding: 8px 16px; background: #f85149; color: white; border: none; border-radius: 6px; cursor: pointer;">+ Add</button>
+                    </div>
+                </div>
+                
+                <!-- Refused Slot -->
+                <div style="margin-bottom: 24px; border: 1px solid #30363d; border-radius: 8px; padding: 16px; background: #0d1117;">
+                    <h4 style="margin: 0 0 8px 0; color: #8b949e;">🙅 Refused Slot Detection</h4>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 12px;">When caller refuses to give info (name, phone, etc.)</p>
+                    <div id="fdb-refused-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+                        ${(dt.refusedSlot || []).map((t, i) => this.renderDetectionChip(t, i, 'refusedSlot')).join('')}
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="fdb-new-refusedSlot" placeholder="e.g., 'I don't want to give that'" 
+                            style="flex: 1; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        <button onclick="window.frontDeskBehaviorManager.addDetection('refusedSlot')" 
+                            style="padding: 8px 16px; background: #6e7681; color: white; border: none; border-radius: 6px; cursor: pointer;">+ Add</button>
+                    </div>
+                </div>
+                
+                <!-- Describing Problem -->
+                <div style="margin-bottom: 24px; border: 1px solid #30363d; border-radius: 8px; padding: 16px; background: #0d1117;">
+                    <h4 style="margin: 0 0 8px 0; color: #58a6ff;">🔧 Problem Description Detection</h4>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 12px;">When caller describes their issue (triggers triage mode)</p>
+                    <div id="fdb-problem-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+                        ${(dt.describingProblem || []).map((t, i) => this.renderDetectionChip(t, i, 'describingProblem')).join('')}
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="fdb-new-describingProblem" placeholder="e.g., 'water leaking'" 
+                            style="flex: 1; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        <button onclick="window.frontDeskBehaviorManager.addDetection('describingProblem')" 
+                            style="padding: 8px 16px; background: #58a6ff; color: white; border: none; border-radius: 6px; cursor: pointer;">+ Add</button>
+                    </div>
+                </div>
+                
+                <!-- Wants Booking -->
+                <div style="border: 1px solid #30363d; border-radius: 8px; padding: 16px; background: #0d1117;">
+                    <h4 style="margin: 0 0 8px 0; color: #3fb950;">📅 Booking Intent Detection</h4>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 12px;">When caller wants to schedule an appointment</p>
+                    <div id="fdb-booking-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+                        ${(dt.wantsBooking || []).map((t, i) => this.renderDetectionChip(t, i, 'wantsBooking')).join('')}
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="fdb-new-wantsBooking" placeholder="e.g., 'schedule a visit'" 
+                            style="flex: 1; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        <button onclick="window.frontDeskBehaviorManager.addDetection('wantsBooking')" 
+                            style="padding: 8px 16px; background: #3fb950; color: white; border: none; border-radius: 6px; cursor: pointer;">+ Add</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    renderDetectionChip(text, index, type) {
+        const colors = {
+            trustConcern: '#f0883e',
+            callerFeelsIgnored: '#f85149',
+            refusedSlot: '#8b949e',
+            describingProblem: '#58a6ff',
+            wantsBooking: '#3fb950'
+        };
+        return `
+            <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: ${colors[type]}20; border: 1px solid ${colors[type]}40; border-radius: 16px; color: ${colors[type]}; font-size: 0.8rem;">
+                "${text}"
+                <button onclick="window.frontDeskBehaviorManager.removeDetection('${type}', ${index})" 
+                    style="background: none; border: none; color: ${colors[type]}; cursor: pointer; font-size: 1rem; padding: 0; line-height: 1;">×</button>
+            </span>
+        `;
+    }
+    
+    addDetection(type) {
+        const input = document.getElementById(`fdb-new-${type}`);
+        if (!input || !input.value.trim()) return;
+        
+        if (!this.config.detectionTriggers) this.config.detectionTriggers = {};
+        if (!this.config.detectionTriggers[type]) this.config.detectionTriggers[type] = [];
+        
+        this.config.detectionTriggers[type].push(input.value.trim().toLowerCase());
+        input.value = '';
+        this.isDirty = true;
+        
+        const container = document.querySelector('.front-desk-behavior-panel');
+        if (container) this.switchTab('detection', container);
+    }
+    
+    removeDetection(type, index) {
+        if (this.config.detectionTriggers?.[type]) {
+            this.config.detectionTriggers[type].splice(index, 1);
+            this.isDirty = true;
+            
+            const container = document.querySelector('.front-desk-behavior-panel');
+            if (container) this.switchTab('detection', container);
+        }
+    }
+    
+    // ════════════════════════════════════════════════════════════════════
+    // NEW TAB: Fallback Responses
+    // ════════════════════════════════════════════════════════════════════
+    renderFallbacksTab() {
+        const fb = this.config.fallbackResponses || {};
+        return `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
+                <h3 style="margin: 0 0 16px 0; color: #f85149;">🆘 Fallback Responses</h3>
+                <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">
+                    What the AI says when the LLM fails or times out. These ensure the call never goes silent.
+                </p>
+                
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            🔍 Discovery Fallback <span style="color: #8b949e; font-weight: normal;">(when figuring out what they need)</span>
+                        </label>
+                        <input type="text" id="fdb-fb-discovery" value="${fb.discovery || ''}" 
+                            style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            👤 Ask Name Fallback
+                        </label>
+                        <input type="text" id="fdb-fb-askName" value="${fb.askName || ''}" 
+                            style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            📞 Ask Phone Fallback
+                        </label>
+                        <input type="text" id="fdb-fb-askPhone" value="${fb.askPhone || ''}" 
+                            style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            📍 Ask Address Fallback
+                        </label>
+                        <input type="text" id="fdb-fb-askAddress" value="${fb.askAddress || ''}" 
+                            style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            🕐 Ask Time Fallback
+                        </label>
+                        <input type="text" id="fdb-fb-askTime" value="${fb.askTime || ''}" 
+                            style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            👂 Didn't Hear Fallback <span style="color: #8b949e; font-weight: normal;">(when STT fails)</span>
+                        </label>
+                        <input type="text" id="fdb-fb-didNotHear" value="${fb.didNotHear || ''}" 
+                            style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            📶 Connection Issue Fallback <span style="color: #8b949e; font-weight: normal;">(blame the connection, not caller)</span>
+                        </label>
+                        <input type="text" id="fdb-fb-connectionIssue" value="${fb.connectionIssue || ''}" 
+                            style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            📞 Transfer Message <span style="color: #8b949e; font-weight: normal;">(before connecting to human)</span>
+                        </label>
+                        <input type="text" id="fdb-fb-transfering" value="${fb.transfering || ''}" 
+                            style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // ════════════════════════════════════════════════════════════════════
+    // NEW TAB: Mode Switching
+    // ════════════════════════════════════════════════════════════════════
+    renderModesTab() {
+        const ms = this.config.modeSwitching || {};
+        return `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
+                <h3 style="margin: 0 0 16px 0; color: #a371f7;">🔀 Mode Switching</h3>
+                <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">
+                    Control when the AI switches between Discovery, Booking, Triage, and Rescue modes.
+                </p>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            Minimum Turns Before Booking: <span style="color: #58a6ff;">${ms.minTurnsBeforeBooking || 2}</span>
+                        </label>
+                        <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 8px;">
+                            AI won't jump to booking until this many conversation turns
+                        </p>
+                        <input type="range" id="fdb-ms-minTurns" min="0" max="5" value="${ms.minTurnsBeforeBooking || 2}" 
+                            style="width: 100%; accent-color: #58a6ff;">
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            Booking Confidence Threshold: <span style="color: #58a6ff;">${((ms.bookingConfidenceThreshold || 0.75) * 100).toFixed(0)}%</span>
+                        </label>
+                        <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 8px;">
+                            How confident AI must be before locking into booking mode
+                        </p>
+                        <input type="range" id="fdb-ms-confidence" min="50" max="100" value="${((ms.bookingConfidenceThreshold || 0.75) * 100).toFixed(0)}" 
+                            style="width: 100%; accent-color: #58a6ff;">
+                    </div>
+                </div>
+                
+                <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
+                        <input type="checkbox" id="fdb-ms-autoRescue" ${ms.autoRescueOnFrustration !== false ? 'checked' : ''} 
+                            style="accent-color: #f85149; width: 18px; height: 18px;">
+                        <div>
+                            <span style="color: #c9d1d9; font-weight: 500;">🆘 Auto-switch to Rescue on Frustration</span>
+                            <p style="color: #8b949e; font-size: 0.8rem; margin: 4px 0 0 0;">
+                                When frustration is detected, immediately switch to rescue mode
+                            </p>
+                        </div>
+                    </label>
+                    
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
+                        <input type="checkbox" id="fdb-ms-autoTriage" ${ms.autoTriageOnProblem !== false ? 'checked' : ''} 
+                            style="accent-color: #58a6ff; width: 18px; height: 18px;">
+                        <div>
+                            <span style="color: #c9d1d9; font-weight: 500;">🔧 Auto-switch to Triage on Problem Description</span>
+                            <p style="color: #8b949e; font-size: 0.8rem; margin: 4px 0 0 0;">
+                                When caller describes their issue, switch to diagnostic mode
+                            </p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+        `;
+    }
+
     renderTestTab() {
         return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
@@ -575,6 +899,9 @@ class FrontDeskBehaviorManager {
             case 'escalation': content.innerHTML = this.renderEscalationTab(); break;
             case 'loops': content.innerHTML = this.renderLoopsTab(); break;
             case 'forbidden': content.innerHTML = this.renderForbiddenTab(); break;
+            case 'detection': content.innerHTML = this.renderDetectionTab(); break;
+            case 'fallbacks': content.innerHTML = this.renderFallbacksTab(); break;
+            case 'modes': content.innerHTML = this.renderModesTab(); break;
             case 'test': content.innerHTML = this.renderTestTab(); break;
         }
 
@@ -680,6 +1007,30 @@ class FrontDeskBehaviorManager {
                 maxSameQuestion: parseInt(document.getElementById('fdb-max-same-q')?.value) || 2,
                 onLoop: get('fdb-on-loop'),
                 rephraseIntro: get('fdb-rephrase-intro')
+            };
+        }
+        
+        // Fallback responses
+        if (document.getElementById('fdb-fb-discovery')) {
+            this.config.fallbackResponses = {
+                discovery: get('fdb-fb-discovery'),
+                askName: get('fdb-fb-askName'),
+                askPhone: get('fdb-fb-askPhone'),
+                askAddress: get('fdb-fb-askAddress'),
+                askTime: get('fdb-fb-askTime'),
+                didNotHear: get('fdb-fb-didNotHear'),
+                connectionIssue: get('fdb-fb-connectionIssue'),
+                transfering: get('fdb-fb-transfering')
+            };
+        }
+        
+        // Mode switching
+        if (document.getElementById('fdb-ms-minTurns')) {
+            this.config.modeSwitching = {
+                minTurnsBeforeBooking: parseInt(document.getElementById('fdb-ms-minTurns')?.value) || 2,
+                bookingConfidenceThreshold: (parseInt(document.getElementById('fdb-ms-confidence')?.value) || 75) / 100,
+                autoRescueOnFrustration: getChecked('fdb-ms-autoRescue'),
+                autoTriageOnProblem: getChecked('fdb-ms-autoTriage')
             };
         }
     }

@@ -1401,20 +1401,47 @@ class LLM0TurnHandler {
         let currentMode = callState.conversationMode || 'booking';
         const lowerInput = userInput.toLowerCase();
         
-        // 🚨 UI-CONTROLLED: Frustration detection uses triggers from frontDeskBehavior.frustrationTriggers
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🚨 100% UI-CONTROLLED DETECTION - NO HARDCODED PATTERNS
+        // All detection triggers come from: company.aiAgentSettings.frontDeskBehavior.detectionTriggers
+        // ════════════════════════════════════════════════════════════════════════════
+        const detectionTriggers = frontDeskConfig.detectionTriggers || {};
+        
+        // Helper to check if any trigger matches
+        const matchesTriggers = (triggers) => {
+            if (!triggers || triggers.length === 0) return false;
+            return triggers.some(t => t && lowerInput.includes(t.toLowerCase()));
+        };
+        
+        // UI-CONTROLLED: Frustration detection
         const isFrustrated = HybridReceptionistLLM.detectFrustration(userInput, company);
         
-        // TRUST CONCERN: Caller questions our competence
-        const trustConcern = /can you (do|handle|fix)|are you able|know what you'?re doing|qualified|sure you can|is this going to work|you guys any good/i.test(userInput);
+        // UI-CONTROLLED: Trust Concern (caller questions AI competence)
+        const trustConcern = matchesTriggers(detectionTriggers.trustConcern);
         
-        // FEELS IGNORED: Caller explicitly says we're not listening
-        const callerFeelsIgnored = /you'?re not listen|didn'?t listen|you didn'?t (hear|understand|acknowledge|sympathize)|you'?re ignoring|you don'?t get it|that'?s not what i (said|meant)|you missed|you'?re not getting/i.test(userInput);
+        // UI-CONTROLLED: Caller feels ignored
+        const callerFeelsIgnored = matchesTriggers(detectionTriggers.callerFeelsIgnored);
         
-        // REFUSED SLOT: Caller is refusing to give info we asked for
-        const refusedSlot = /i don'?t (want to|wanna)|not going to (give|tell)|don'?t want to share|not comfortable|rather not/i.test(userInput);
+        // UI-CONTROLLED: Caller refuses to give info
+        const refusedSlot = matchesTriggers(detectionTriggers.refusedSlot);
         
-        // DESCRIBING PROBLEM: Caller is giving issue details (not answering booking question)
-        const describingProblem = /water (leak|dripping)|thermostat|not cool|no cool|won'?t (turn|start)|making (noise|sound)|smell|broken|not working|problem is|issue is|been here before|came out|was here|technician.*before/i.test(userInput);
+        // UI-CONTROLLED: Caller describing problem
+        const describingProblem = matchesTriggers(detectionTriggers.describingProblem);
+        
+        // UI-CONTROLLED: Booking intent detection
+        const wantsBookingFromTriggers = matchesTriggers(detectionTriggers.wantsBooking);
+        
+        logger.debug('[LLM0 TURN HANDLER] 🔍 UI Detection Results', {
+            companyId, callId,
+            isFrustrated, trustConcern, callerFeelsIgnored, refusedSlot, describingProblem, wantsBookingFromTriggers,
+            triggersConfigured: {
+                trustConcern: (detectionTriggers.trustConcern || []).length,
+                callerFeelsIgnored: (detectionTriggers.callerFeelsIgnored || []).length,
+                refusedSlot: (detectionTriggers.refusedSlot || []).length,
+                describingProblem: (detectionTriggers.describingProblem || []).length,
+                wantsBooking: (detectionTriggers.wantsBooking || []).length
+            }
+        });
         
         // Track last question we asked for don't-repeat rule
         const lastAskField = callState.lastAskField || null;
@@ -1726,7 +1753,12 @@ class LLM0TurnHandler {
             phrase && lowerInput.includes(phrase.toLowerCase())
         );
         const isFrustrated = matchedFrustration.length > 0;
-        const wantsBooking = /fix|repair|service|appointment|schedule|technician|someone|come out|send/i.test(lowerInput);
+        
+        // 🚨 UI-CONTROLLED: Booking intent detection
+        const bookingTriggers = frontDeskConfig.detectionTriggers?.wantsBooking || [];
+        const wantsBooking = bookingTriggers.length > 0 
+            ? bookingTriggers.some(t => t && lowerInput.includes(t.toLowerCase()))
+            : false; // If no triggers configured, don't detect
         
         if (isFrustrated) {
             logger.info('[LLM0 TURN HANDLER] 😤 FRUSTRATION DETECTED (UI Config)', {
