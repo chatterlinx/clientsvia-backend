@@ -1060,7 +1060,86 @@ const QuickLog = {
     }}),
     
   bookingComplete: (callId, companyId, turn, collected) =>
-    logEvent({ callId, companyId, type: 'BOOKING_COMPLETE', turn, data: { collected } })
+    logEvent({ callId, companyId, type: 'BOOKING_COMPLETE', turn, data: { collected } }),
+    
+  // ════════════════════════════════════════════════════════════════════════════
+  // SYSTEM/INFRASTRUCTURE EVENTS (replaces Render log searching)
+  // ════════════════════════════════════════════════════════════════════════════
+  
+  // Redis/Cache events
+  redisConnected: (callId, companyId) =>
+    logEvent({ callId, companyId, type: 'REDIS_CONNECTED', turn: 0, data: { status: 'connected' } }),
+    
+  redisFailed: (callId, companyId, error) =>
+    logEvent({ callId, companyId, type: 'REDIS_FAILED', turn: 0, data: { error: truncate(error, 200), fallback: 'memory' } }),
+    
+  cacheHit: (callId, companyId, turn, key, source) =>
+    logEvent({ callId, companyId, type: 'CACHE_HIT', turn, data: { key, source } }),
+    
+  cacheMiss: (callId, companyId, turn, key) =>
+    logEvent({ callId, companyId, type: 'CACHE_MISS', turn, data: { key } }),
+    
+  // TTS/Voice events
+  ttsStarted: (callId, companyId, turn, voiceId, textLength) =>
+    logEvent({ callId, companyId, type: 'TTS_STARTED', turn, data: { voiceId, textLength } }),
+    
+  ttsCompleted: (callId, companyId, turn, voiceId, latencyMs) =>
+    logEvent({ callId, companyId, type: 'TTS_COMPLETED', turn, data: { voiceId, latencyMs } }),
+    
+  ttsFailed: (callId, companyId, turn, error, fallback) =>
+    logEvent({ callId, companyId, type: 'TTS_FAILED', turn, data: { error: truncate(error, 200), fallback } }),
+    
+  // LLM events
+  llmRequestStarted: (callId, companyId, turn, brain, promptLength) =>
+    logEvent({ callId, companyId, type: 'LLM_REQUEST_STARTED', turn, data: { brain, promptLength } }),
+    
+  llmTimeout: (callId, companyId, turn, brain, timeoutMs) =>
+    logEvent({ callId, companyId, type: 'LLM_TIMEOUT', turn, data: { brain, timeoutMs, suggestion: 'Consider increasing timeout or optimizing prompt' } }),
+    
+  llmError: (callId, companyId, turn, brain, error) =>
+    logEvent({ callId, companyId, type: 'LLM_ERROR', turn, data: { brain, error: truncate(error, 200) } }),
+    
+  // Call lifecycle events
+  callerHangup: (callId, companyId, turn, afterEvent) =>
+    logEvent({ callId, companyId, type: 'CALLER_HANGUP', turn, data: { afterEvent, reason: 'Caller disconnected' } }),
+    
+  gatherTimeout: (callId, companyId, turn, timeoutSeconds, nextAction) =>
+    logEvent({ callId, companyId, type: 'GATHER_TIMEOUT', turn, data: { timeoutSeconds, nextAction } }),
+    
+  noSpeechDetected: (callId, companyId, turn, promptedAgain) =>
+    logEvent({ callId, companyId, type: 'NO_SPEECH_DETECTED', turn, data: { promptedAgain, suggestion: 'Caller may be on hold or connection issue' } }),
+    
+  // Phase/Flow events
+  phaseTransition: (callId, companyId, turn, fromPhase, toPhase, reason) =>
+    logEvent({ callId, companyId, type: 'PHASE_TRANSITION', turn, data: { fromPhase, toPhase, reason } }),
+    
+  fallbackUsed: (callId, companyId, turn, fallbackType, reason) =>
+    logEvent({ callId, companyId, type: 'FALLBACK_USED', turn, data: { fallbackType, reason } }),
+    
+  // Configuration events
+  configLoaded: (callId, companyId, configType, success) =>
+    logEvent({ callId, companyId, type: 'CONFIG_LOADED', turn: 0, data: { configType, success } }),
+    
+  configMissing: (callId, companyId, configType, usingDefault) =>
+    logEvent({ callId, companyId, type: 'CONFIG_MISSING', turn: 0, data: { configType, usingDefault } }),
+    
+  // Error/Exception events  
+  exceptionCaught: (callId, companyId, turn, location, error, recovered) =>
+    logEvent({ callId, companyId, type: 'EXCEPTION_CAUGHT', turn, data: { 
+      location, 
+      error: truncate(error, 300),
+      recovered,
+      severity: recovered ? 'WARNING' : 'CRITICAL'
+    } }),
+    
+  // Performance events
+  slowOperation: (callId, companyId, turn, operation, latencyMs, threshold) =>
+    logEvent({ callId, companyId, type: 'SLOW_OPERATION', turn, data: { 
+      operation, 
+      latencyMs, 
+      threshold,
+      suggestion: `${operation} took ${latencyMs}ms (threshold: ${threshold}ms)`
+    } })
 };
 
 // ============================================================================

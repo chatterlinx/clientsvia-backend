@@ -1237,7 +1237,7 @@ router.post('/voice', async (req, res) => {
       const defaultHints = ['appointment', 'schedule', 'emergency', 'question', 'help'];
       const hints = [...new Set([...tradeHints, ...serviceHints, ...defaultHints])].join(', ');
       
-      const gather = twiml.gather({
+      const gatherConfig = {
         input: 'speech',
         action: actionUrl,
         method: 'POST',
@@ -1249,7 +1249,26 @@ router.post('/voice', async (req, res) => {
         hints: hints,
         partialResultCallback: `https://${req.get('host')}/api/twilio/v2-agent-partial/${company._id}`,
         partialResultCallbackMethod: 'POST'
-      });
+      };
+      
+      const gather = twiml.gather(gatherConfig);
+      
+      // 📼 BLACK BOX: Log gather configuration for debugging
+      if (BlackBoxLogger) {
+        BlackBoxLogger.logEvent({
+          callId: req.body.CallSid,
+          companyId: company._id,
+          type: 'GATHER_CONFIGURED',
+          turn: 0,
+          data: {
+            actionUrl: actionUrl,
+            timeout: gatherConfig.timeout,
+            speechTimeout: gatherConfig.speechTimeout,
+            bargeIn: gatherConfig.bargeIn,
+            hintsCount: hints.split(',').length
+          }
+        }).catch(() => {});
+      }
 
       // Use V2 Voice Settings for TTS
       const elevenLabsVoice = initResult.voiceSettings?.voiceId;
@@ -1262,8 +1281,18 @@ router.post('/voice', async (req, res) => {
       if (elevenLabsVoice && initResult.greeting) {
         try {
           logger.debug(`[TTS START] ✅ Using ElevenLabs voice ${elevenLabsVoice} for initial greeting`);
-          logger.debug(`[TTS START] [TTS] Starting AI Agent Logic greeting TTS synthesis...`);
           const ttsStartTime = Date.now();
+          
+          // 📼 BLACK BOX: Log TTS started
+          if (BlackBoxLogger) {
+            BlackBoxLogger.QuickLog.ttsStarted(
+              req.body.CallSid,
+              company._id,
+              0,
+              elevenLabsVoice,
+              initResult.greeting.length
+            ).catch(() => {});
+          }
           
           const buffer = await synthesizeSpeech({
             text: initResult.greeting,
@@ -1277,6 +1306,17 @@ router.post('/voice', async (req, res) => {
           
           const ttsTime = Date.now() - ttsStartTime;
           logger.info(`[TTS COMPLETE] [OK] AI Agent Logic greeting TTS completed in ${ttsTime}ms`);
+          
+          // 📼 BLACK BOX: Log TTS completed
+          if (BlackBoxLogger) {
+            BlackBoxLogger.QuickLog.ttsCompleted(
+              req.body.CallSid,
+              company._id,
+              0,
+              elevenLabsVoice,
+              ttsTime
+            ).catch(() => {});
+          }
           
           const fileName = `ai_greet_${Date.now()}.mp3`;
           const audioDir = path.join(__dirname, '../public/audio');
@@ -1296,7 +1336,18 @@ router.post('/voice', async (req, res) => {
           }
         } catch (err) {
           logger.error('❌ AI Agent Logic TTS failed, using Say:', err);
-          logger.error('❌ Error details:', err.message);
+          
+          // 📼 BLACK BOX: Log TTS failure
+          if (BlackBoxLogger) {
+            BlackBoxLogger.QuickLog.ttsFailed(
+              req.body.CallSid,
+              company._id,
+              0,
+              err.message,
+              'twilio_say'
+            ).catch(() => {});
+          }
+          
           gather.say(escapeTwiML(initResult.greeting));
         }
       } else {
@@ -1315,6 +1366,21 @@ router.post('/voice', async (req, res) => {
     } catch (v2Error) {
       logger.error(`[V2 AGENT ERROR] Failed to initialize V2 Agent: ${v2Error.message}`);
       logger.debug(`[FALLBACK] Using simple fallback for call`);
+      
+      // 📼 BLACK BOX: Log V2 Agent initialization failure
+      if (BlackBoxLogger) {
+        BlackBoxLogger.logEvent({
+          callId: req.body.CallSid,
+          companyId: company._id,
+          type: 'V2_AGENT_INIT_FAILED',
+          turn: 0,
+          data: {
+            error: v2Error.message,
+            stack: v2Error.stack?.substring(0, 300),
+            usingFallback: true
+          }
+        }).catch(() => {});
+      }
       
       // Fallback to simple greeting if V2 Agent fails
       const fallbackGreeting = `Configuration error - V2 Agent not configured for ${company.businessName || company.companyName}`;
@@ -1337,6 +1403,25 @@ router.post('/voice', async (req, res) => {
 
     res.type('text/xml');
     const twimlString = twiml.toString();
+    
+    // 📼 BLACK BOX: Log TwiML sent - this is the last thing we control before Twilio takes over
+    if (BlackBoxLogger) {
+      BlackBoxLogger.logEvent({
+        callId: req.body.CallSid,
+        companyId: company._id,
+        type: 'TWIML_SENT',
+        turn: 0,
+        data: {
+          route: '/voice',
+          twimlLength: twimlString.length,
+          hasGather: twimlString.includes('<Gather'),
+          hasPlay: twimlString.includes('<Play'),
+          hasSay: twimlString.includes('<Say'),
+          actionUrl: `https://${req.get('host')}/api/twilio/v2-agent-respond/${company._id}`,
+          twimlPreview: twimlString.substring(0, 500)
+        }
+      }).catch(() => {});
+    }
     
     // 🐰 RABBIT HOLE CHECKPOINT #2: WHAT TWIML ARE WE SENDING TO TWILIO?
     console.log('═'.repeat(80));
@@ -3272,14 +3357,24 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       
       gather.say('');
       
-      // Fallback - use configurable response [[memory:8276820]]
-      // Note: company already loaded above for ElevenLabs integration
-      // V2: Use company-specific timeout message or intelligent default
-      const timeoutMessage = company.connectionMessages?.voice?.timeoutMessage || 
-                            company.connectionMessages?.voice?.text ||
-                            "Thank you for calling. Please call back if you need further assistance.";
-      twiml.say(timeoutMessage);
-      twiml.hangup();
+      // 🚫 NEVER HANG UP - If caller is silent, prompt them
+      // 📼 BLACK BOX: Log gather timeout
+      if (BlackBoxLogger) {
+        BlackBoxLogger.logEvent({
+          callId: callState?.CallSid || callState?.callId,
+          companyId: companyID,
+          type: 'GATHER_TIMEOUT',
+          turn: turnCount,
+          data: {
+            reason: 'No speech detected after response',
+            nextAction: 'prompting_again'
+          }
+        }).catch(() => {});
+      }
+      
+      // Prompt caller instead of hanging up
+      twiml.say("I'm sorry, the connection seems choppy. Are you still there?");
+      twiml.redirect(`/api/twilio/v2-agent-respond/${companyID}`);
     }
     
     const twimlString = twiml.toString();
