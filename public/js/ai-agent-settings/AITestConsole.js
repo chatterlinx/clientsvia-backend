@@ -454,29 +454,46 @@ class AITestConsole {
             document.getElementById(typingId)?.remove();
             
             if (data.success) {
-                // Save debug info FIRST so it's available for the bubble
+                // ═══════════════════════════════════════════════════════════════
+                // UPDATE EVERYTHING SIMULTANEOUSLY
+                // ═══════════════════════════════════════════════════════════════
+                
+                // 1. Save debug info FIRST
                 this.lastDebug = data.debug;
-                console.log('[AI Test] Debug info:', data.debug);
+                this.lastMetadata = data.metadata;
+                console.log('[AI Test] Response received:', {
+                    source: data.debug?.wasQuickAnswer ? 'QUICK_ANSWER' : 
+                            data.debug?.triageMatched ? 'TRIAGE' : 'LLM',
+                    latency: data.metadata?.latencyMs,
+                    mode: data.metadata?.mode
+                });
                 
-                // Add AI response with source badge
-                this.addChatBubble(data.reply, 'ai', data.metadata, false, data.debug);
-                
-                // 🔊 SPEAK the response!
-                this.speakResponse(data.reply);
-                
-                // Update conversation history
+                // 2. Update conversation history
                 this.conversationHistory.push(
                     { role: 'user', content: message },
                     { role: 'assistant', content: data.reply }
                 );
                 
-                // Update slots if any collected
+                // 3. Update slots if any collected
                 if (data.metadata?.slots) {
                     this.knownSlots = { ...this.knownSlots, ...data.metadata.slots };
                 }
                 
-                // Update analysis panel
+                // 4. Add AI response bubble with source badge (uses debug)
+                this.addChatBubble(data.reply, 'ai', data.metadata, false, data.debug);
+                
+                // 5. Update analysis panel immediately (both panels sync)
                 this.updateAnalysis(data.metadata);
+                
+                // 6. Flash the debug panel to show it updated
+                const debugPanel = document.querySelector('[style*="border: 1px solid #f0883e"]');
+                if (debugPanel) {
+                    debugPanel.style.boxShadow = '0 0 10px #f0883e';
+                    setTimeout(() => { debugPanel.style.boxShadow = 'none'; }, 500);
+                }
+                
+                // 7. Speak the response (async, doesn't block)
+                this.speakResponse(data.reply);
             } else {
                 this.addChatBubble(`Error: ${data.error}`, 'ai', null, true);
             }
