@@ -216,6 +216,10 @@ router.post('/clear-cache/:companyId', authenticateJWT, async (req, res) => {
 router.use('/account-deletion', accountDeletionRoutes);
 router.use('/ai-agent-monitoring', aiAgentMonitoringRoutes);
 
+// 🧪 AI Test Console - Test agent without making real calls
+const aiTestRoutes = require('./admin/aiTest');
+router.use('/ai-test', aiTestRoutes);
+
 // 🔥 NEW: Fix user-company association routes
 const fixUserCompanyRoutes = require('./admin/fixUserCompany');
 router.use('/', fixUserCompanyRoutes);
