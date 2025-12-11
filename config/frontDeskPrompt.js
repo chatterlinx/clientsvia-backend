@@ -218,16 +218,27 @@ const DEFAULT_FRONT_DESK_CONFIG = {
 
     // ════════════════════════════════════════════════════════════════════════
     // FALLBACK RESPONSES - What AI says when LLM fails
+    // These ensure the call NEVER goes silent
     // ════════════════════════════════════════════════════════════════════════
     fallbackResponses: {
+        // Initial & Discovery
+        greeting: 'Thanks for calling! How can I help you today?',
         discovery: 'Got it, what\'s going on — is it not cooling, not heating, making noise, or something else?',
+        // Booking Slots
         askName: 'May I have your name please?',
-        askPhone: 'What\'s the best phone number to reach you?',
+        askPhone: 'And what\'s the best phone number to reach you?',
         askAddress: 'What\'s the service address?',
-        askTime: 'When works best for you — morning or afternoon?',
+        askTime: 'When works best for you — morning or afternoon? Or I can send someone as soon as possible.',
+        // Confirmation
+        confirmBooking: 'Let me confirm — I have you scheduled. Does that sound right?',
+        bookingComplete: 'You\'re all set! A technician will be out and you\'ll receive a confirmation text shortly. Is there anything else?',
+        // Error Recovery
         didNotHear: 'I\'m sorry, I didn\'t quite catch that. Could you please repeat?',
-        connectionIssue: 'I\'m sorry, I think our connection isn\'t great. Could you please repeat?',
-        transfering: 'Let me connect you with someone who can help you right away.'
+        connectionIssue: 'I\'m sorry, I think our connection isn\'t great. Could you please repeat that?',
+        clarification: 'I want to make sure I understand correctly. Could you tell me a bit more?',
+        // Transfer & Catch-All
+        transfering: 'Let me connect you with someone who can help you right away. Please hold.',
+        generic: 'I\'m here to help. What can I do for you?'
     },
 
     // ════════════════════════════════════════════════════════════════════════

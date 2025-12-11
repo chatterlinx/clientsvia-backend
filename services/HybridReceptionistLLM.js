@@ -118,15 +118,26 @@ function loadFrontDeskConfig(company) {
         },
         
         // Fallback responses (from UI) - WHAT AI SAYS WHEN LLM FAILS
+        // These ensure the call NEVER goes silent
         fallbackResponses: {
+            // Initial & Discovery
+            greeting: config.fallbackResponses?.greeting || "Thanks for calling! How can I help you today?",
             discovery: config.fallbackResponses?.discovery || "Got it, what's going on — is it not cooling, not heating, making noise, or something else?",
+            // Booking Slots
             askName: config.fallbackResponses?.askName || "May I have your name please?",
-            askPhone: config.fallbackResponses?.askPhone || "What's the best phone number to reach you?",
+            askPhone: config.fallbackResponses?.askPhone || "And what's the best phone number to reach you?",
             askAddress: config.fallbackResponses?.askAddress || "What's the service address?",
-            askTime: config.fallbackResponses?.askTime || "When works best for you — morning or afternoon?",
+            askTime: config.fallbackResponses?.askTime || "When works best for you — morning or afternoon? Or I can send someone as soon as possible.",
+            // Confirmation
+            confirmBooking: config.fallbackResponses?.confirmBooking || "Let me confirm — I have you scheduled. Does that sound right?",
+            bookingComplete: config.fallbackResponses?.bookingComplete || "You're all set! A technician will be out and you'll receive a confirmation text shortly. Is there anything else?",
+            // Error Recovery
             didNotHear: config.fallbackResponses?.didNotHear || "I'm sorry, I didn't quite catch that. Could you please repeat?",
-            connectionIssue: config.fallbackResponses?.connectionIssue || "I'm sorry, I think our connection isn't great. Could you please repeat?",
-            transfering: config.fallbackResponses?.transfering || "Let me connect you with someone who can help you right away."
+            connectionIssue: config.fallbackResponses?.connectionIssue || "I'm sorry, I think our connection isn't great. Could you please repeat that?",
+            clarification: config.fallbackResponses?.clarification || "I want to make sure I understand correctly. Could you tell me a bit more?",
+            // Transfer & Catch-All
+            transfering: config.fallbackResponses?.transfering || "Let me connect you with someone who can help you right away. Please hold.",
+            generic: config.fallbackResponses?.generic || "I'm here to help. What can I do for you?"
         },
         
         // Mode switching (from UI) - WHEN TO SWITCH MODES

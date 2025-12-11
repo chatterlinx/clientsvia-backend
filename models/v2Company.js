@@ -1677,16 +1677,27 @@ const companySchema = new mongoose.Schema({
             
             // ═══════════════════════════════════════════════════════════════
             // FALLBACK RESPONSES - What AI says when LLM fails
+            // These ensure the call NEVER goes silent
             // ═══════════════════════════════════════════════════════════════
             fallbackResponses: {
+                // Initial & Discovery
+                greeting: { type: String, default: "Thanks for calling! How can I help you today?", trim: true },
                 discovery: { type: String, default: "Got it, what's going on — is it not cooling, not heating, making noise, or something else?", trim: true },
+                // Booking Slots
                 askName: { type: String, default: "May I have your name please?", trim: true },
-                askPhone: { type: String, default: "What's the best phone number to reach you?", trim: true },
+                askPhone: { type: String, default: "And what's the best phone number to reach you?", trim: true },
                 askAddress: { type: String, default: "What's the service address?", trim: true },
-                askTime: { type: String, default: "When works best for you — morning or afternoon?", trim: true },
+                askTime: { type: String, default: "When works best for you — morning or afternoon? Or I can send someone as soon as possible.", trim: true },
+                // Confirmation
+                confirmBooking: { type: String, default: "Let me confirm — I have you scheduled. Does that sound right?", trim: true },
+                bookingComplete: { type: String, default: "You're all set! A technician will be out and you'll receive a confirmation text shortly. Is there anything else?", trim: true },
+                // Error Recovery
                 didNotHear: { type: String, default: "I'm sorry, I didn't quite catch that. Could you please repeat?", trim: true },
-                connectionIssue: { type: String, default: "I'm sorry, I think our connection isn't great. Could you please repeat?", trim: true },
-                transfering: { type: String, default: "Let me connect you with someone who can help you right away.", trim: true }
+                connectionIssue: { type: String, default: "I'm sorry, I think our connection isn't great. Could you please repeat that?", trim: true },
+                clarification: { type: String, default: "I want to make sure I understand correctly. Could you tell me a bit more?", trim: true },
+                // Transfer & Catch-All
+                transfering: { type: String, default: "Let me connect you with someone who can help you right away. Please hold.", trim: true },
+                generic: { type: String, default: "I'm here to help. What can I do for you?", trim: true }
             },
             
             // ═══════════════════════════════════════════════════════════════
