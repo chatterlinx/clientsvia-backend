@@ -2416,6 +2416,21 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           }
         }).catch(() => {});
       }
+      
+      // 💡 Save any suggestions detected during STT processing (async, don't block)
+      if (sttProcessResult.suggestions && sttProcessResult.suggestions.length > 0 && templateId) {
+        Promise.all(sttProcessResult.suggestions.map(suggestion => 
+          STTPreprocessor.addSuggestion(templateId, suggestion, callSid)
+        )).catch(err => {
+          logger.debug('[STT INTELLIGENCE] Failed to save suggestions', { error: err.message });
+        });
+        
+        logger.info('[STT INTELLIGENCE] 💡 Detected suggestions for review', {
+          callSid,
+          suggestionCount: sttProcessResult.suggestions.length,
+          types: sttProcessResult.suggestions.map(s => s.type)
+        });
+      }
     }
   } catch (sttErr) {
     logger.warn('[STT INTELLIGENCE] Preprocessing failed - using raw speech', {
