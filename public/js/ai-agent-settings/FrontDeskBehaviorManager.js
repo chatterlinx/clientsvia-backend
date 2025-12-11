@@ -87,7 +87,9 @@ class FrontDeskBehaviorManager {
                 stressed: { enabled: true, acknowledgments: ["I understand, that sounds stressful."], followUp: "Let me help you get this taken care of." },
                 frustrated: { enabled: true, acknowledgments: ["I completely understand."], followUp: "I'll get someone scheduled right away.", reduceFriction: true },
                 angry: { enabled: true, acknowledgments: ["I'm really sorry you're dealing with this."], followUp: "Let me make this right.", offerEscalation: true },
-                friendly: { enabled: true, allowSmallTalk: true }
+                friendly: { enabled: true, allowSmallTalk: true },
+                joking: { enabled: true, acknowledgments: ["Ha! I like that.", "That's a good one!"], respondInKind: true },
+                panicked: { enabled: true, acknowledgments: ["I hear you, that sounds serious."], followUp: "Let me get someone out there right away.", bypassAllQuestions: true, confirmFirst: true }
             },
             frustrationTriggers: ["i don't care", "just send someone", "this is ridiculous", "you're not listening", "i already told you", "stop asking", "forget it", "whatever"],
             escalation: {
@@ -353,11 +355,23 @@ class FrontDeskBehaviorManager {
                 <h3 style="margin: 0 0 16px 0; color: #58a6ff;">💭 Emotion Responses</h3>
                 <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">How the AI responds when it detects different emotions from the caller.</p>
                 
+                <!-- INFO BOX: Jokes vs Emergencies -->
+                <div style="background: #1c2128; border: 1px solid #f0883e; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 8px 0; color: #f0883e; font-size: 14px;">🎭 Jokes vs Emergencies</h4>
+                    <p style="color: #8b949e; font-size: 13px; margin: 0;">
+                        AI knows the difference:<br>
+                        <strong style="color: #3fb950;">✅ Humor:</strong> "I'm dying here" = just hot (respond playfully)<br>
+                        <strong style="color: #f85149;">🚨 Emergency:</strong> "I smell gas" = real danger (dispatch NOW)
+                    </p>
+                </div>
+                
                 <div style="display: flex; flex-direction: column; gap: 16px;">
                     ${this.renderEmotionSection('stressed', '😟 Stressed', er.stressed)}
                     ${this.renderEmotionSection('frustrated', '😤 Frustrated', er.frustrated)}
                     ${this.renderEmotionSection('angry', '😠 Angry', er.angry)}
                     ${this.renderEmotionSection('friendly', '😊 Friendly', er.friendly)}
+                    ${this.renderEmotionSection('joking', '😄 Joking/Playful', er.joking)}
+                    ${this.renderEmotionSection('panicked', '🚨 Panicked/Emergency', er.panicked)}
                 </div>
             </div>
         `;
@@ -365,8 +379,13 @@ class FrontDeskBehaviorManager {
 
     renderEmotionSection(emotion, label, config = {}) {
         const acks = (config.acknowledgments || []).join('\\n');
+        
+        // Determine border color based on emotion type
+        const borderColor = emotion === 'panicked' ? '#f85149' : 
+                           emotion === 'joking' ? '#3fb950' : '#30363d';
+        
         return `
-            <div style="border: 1px solid #30363d; border-radius: 8px; padding: 16px; background: #0d1117;">
+            <div style="border: 1px solid ${borderColor}; border-radius: 8px; padding: 16px; background: #0d1117;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                     <span style="color: #c9d1d9; font-weight: 600;">${label}</span>
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
@@ -374,6 +393,20 @@ class FrontDeskBehaviorManager {
                         <span style="color: #8b949e; font-size: 0.875rem;">Enabled</span>
                     </label>
                 </div>
+                
+                ${emotion === 'joking' ? `
+                    <div style="background: #1c2128; border-radius: 6px; padding: 10px; margin-bottom: 12px; font-size: 12px; color: #8b949e;">
+                        <strong style="color: #3fb950;">NOT emergencies:</strong> "I'm dying", "killing me", "disaster", "my house is an oven"<br>
+                        AI will respond playfully, not panic.
+                    </div>
+                ` : ''}
+                
+                ${emotion === 'panicked' ? `
+                    <div style="background: #2a1c1c; border-radius: 6px; padding: 10px; margin-bottom: 12px; font-size: 12px; color: #f85149;">
+                        <strong>REAL emergencies:</strong> gas leak, smoke, fire, sparks, flooding, "no heat + elderly/baby"<br>
+                        AI will bypass questions and dispatch immediately.
+                    </div>
+                ` : ''}
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div>
@@ -402,6 +435,24 @@ class FrontDeskBehaviorManager {
                             <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer;">
                                 <input type="checkbox" id="fdb-emotion-friendly-smalltalk" ${config.allowSmallTalk ? 'checked' : ''} style="accent-color: #3fb950;">
                                 <span style="color: #3fb950; font-size: 0.875rem;">Allow small talk</span>
+                            </label>
+                        ` : ''}
+                        
+                        ${emotion === 'joking' ? `
+                            <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer;">
+                                <input type="checkbox" id="fdb-emotion-joking-respond" ${config.respondInKind !== false ? 'checked' : ''} style="accent-color: #3fb950;">
+                                <span style="color: #3fb950; font-size: 0.875rem;">Match their playful energy</span>
+                            </label>
+                        ` : ''}
+                        
+                        ${emotion === 'panicked' ? `
+                            <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer;">
+                                <input type="checkbox" id="fdb-emotion-panicked-bypass" ${config.bypassAllQuestions !== false ? 'checked' : ''} style="accent-color: #f85149;">
+                                <span style="color: #f85149; font-size: 0.875rem;">Skip all questions (emergency dispatch)</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; margin-top: 8px; cursor: pointer;">
+                                <input type="checkbox" id="fdb-emotion-panicked-confirm" ${config.confirmFirst !== false ? 'checked' : ''} style="accent-color: #f0883e;">
+                                <span style="color: #f0883e; font-size: 0.875rem;">Ask "Are you in danger?" first</span>
                             </label>
                         ` : ''}
                     </div>
@@ -1051,7 +1102,8 @@ class FrontDeskBehaviorManager {
             };
         }
 
-        ['stressed', 'frustrated', 'angry', 'friendly'].forEach(emotion => {
+        // Process all emotion types including joking and panicked
+        ['stressed', 'frustrated', 'angry', 'friendly', 'joking', 'panicked'].forEach(emotion => {
             const acksEl = document.getElementById(`fdb-emotion-${emotion}-acks`);
             if (acksEl) {
                 if (!this.config.emotionResponses) this.config.emotionResponses = {};
@@ -1069,6 +1121,13 @@ class FrontDeskBehaviorManager {
                 }
                 if (emotion === 'friendly') {
                     this.config.emotionResponses[emotion].allowSmallTalk = getChecked('fdb-emotion-friendly-smalltalk');
+                }
+                if (emotion === 'joking') {
+                    this.config.emotionResponses[emotion].respondInKind = getChecked('fdb-emotion-joking-respond');
+                }
+                if (emotion === 'panicked') {
+                    this.config.emotionResponses[emotion].bypassAllQuestions = getChecked('fdb-emotion-panicked-bypass');
+                    this.config.emotionResponses[emotion].confirmFirst = getChecked('fdb-emotion-panicked-confirm');
                 }
             }
         });
