@@ -365,6 +365,15 @@ class FrontDeskBehaviorManager {
         const isFirst = index === 0;
         const isLast = index === totalSlots - 1;
         const typeOptions = ['text', 'phone', 'address', 'time', 'custom'];
+        const defaultConfirmPrompts = {
+            phone: "Just to confirm, that's {value}, correct?",
+            address: "So that's {value}, right?",
+            name: "Got it, {value}. Did I get that right?",
+            text: "Just to confirm, {value}?",
+            time: "So {value} works for you?",
+            custom: "Just to confirm, {value}?"
+        };
+        const confirmPrompt = slot.confirmPrompt || defaultConfirmPrompts[slot.type] || defaultConfirmPrompts.text;
         
         return `
             <div class="booking-slot" data-slot-index="${index}" style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;">
@@ -407,6 +416,19 @@ class FrontDeskBehaviorManager {
                             <input type="text" class="slot-question" data-index="${index}" value="${slot.question || ''}" placeholder="May I have your full name?" 
                                 style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9;">
                         </div>
+                        
+                        <!-- Row 3: Confirm Back (collapsible) -->
+                        <div style="display: flex; align-items: center; gap: 12px; padding: 8px; background: #161b22; border-radius: 4px; border: 1px solid ${slot.confirmBack ? '#238636' : '#30363d'};">
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;" title="Repeat value back for confirmation">
+                                <input type="checkbox" class="slot-confirmBack" data-index="${index}" ${slot.confirmBack ? 'checked' : ''} 
+                                    style="accent-color: #238636;" onchange="window.frontDeskManager.toggleConfirmPrompt(${index}, this.checked)">
+                                <span style="font-size: 12px; color: ${slot.confirmBack ? '#3fb950' : '#8b949e'};">🔄 Confirm Back</span>
+                            </label>
+                            <input type="text" class="slot-confirmPrompt" data-index="${index}" value="${confirmPrompt}" 
+                                placeholder="Just to confirm, that's {value}, correct?"
+                                style="flex: 1; padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; ${slot.confirmBack ? '' : 'opacity: 0.5;'}"
+                                ${slot.confirmBack ? '' : 'disabled'}>
+                        </div>
                     </div>
                     
                     <!-- Required Toggle & Delete -->
@@ -424,14 +446,28 @@ class FrontDeskBehaviorManager {
         `;
     }
     
+    toggleConfirmPrompt(index, enabled) {
+        const promptInput = document.querySelector(`.slot-confirmPrompt[data-index="${index}"]`);
+        const container = promptInput?.parentElement;
+        if (promptInput) {
+            promptInput.disabled = !enabled;
+            promptInput.style.opacity = enabled ? '1' : '0.5';
+        }
+        if (container) {
+            container.style.borderColor = enabled ? '#238636' : '#30363d';
+            const label = container.querySelector('span');
+            if (label) label.style.color = enabled ? '#3fb950' : '#8b949e';
+        }
+    }
+    
     getDefaultBookingSlots() {
         // Generate from legacy bookingPrompts if they exist
         const bp = this.config.bookingPrompts || {};
         return [
-            { id: 'name', label: 'Full Name', question: bp.askName || "May I have your name?", required: true, order: 0, type: 'text' },
-            { id: 'phone', label: 'Phone Number', question: bp.askPhone || "What's the best phone number to reach you?", required: true, order: 1, type: 'phone' },
-            { id: 'address', label: 'Service Address', question: bp.askAddress || "What's the service address?", required: true, order: 2, type: 'address' },
-            { id: 'time', label: 'Preferred Time', question: bp.askTime || "When works best for you - morning or afternoon?", required: false, order: 3, type: 'time' }
+            { id: 'name', label: 'Full Name', question: bp.askName || "May I have your name?", required: true, order: 0, type: 'text', confirmBack: false, confirmPrompt: "Got it, {value}. Did I get that right?" },
+            { id: 'phone', label: 'Phone Number', question: bp.askPhone || "What's the best phone number to reach you?", required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?" },
+            { id: 'address', label: 'Service Address', question: bp.askAddress || "What's the service address?", required: true, order: 2, type: 'address', confirmBack: false, confirmPrompt: "So that's {value}, right?" },
+            { id: 'time', label: 'Preferred Time', question: bp.askTime || "When works best for you - morning or afternoon?", required: false, order: 3, type: 'time', confirmBack: false, confirmPrompt: "So {value} works for you?" }
         ];
     }
     
@@ -509,7 +545,9 @@ class FrontDeskBehaviorManager {
                 question: el.querySelector('.slot-question')?.value?.trim() || '',
                 required: el.querySelector('.slot-required')?.checked ?? true,
                 order: index,
-                type: el.querySelector('.slot-type')?.value || 'text'
+                type: el.querySelector('.slot-type')?.value || 'text',
+                confirmBack: el.querySelector('.slot-confirmBack')?.checked ?? false,
+                confirmPrompt: el.querySelector('.slot-confirmPrompt')?.value?.trim() || "Just to confirm, that's {value}, correct?"
             });
         });
         

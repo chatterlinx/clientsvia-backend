@@ -1591,7 +1591,9 @@ const companySchema = new mongoose.Schema({
                 required: { type: Boolean, default: true },
                 order: { type: Number, default: 0 }, // For sorting
                 type: { type: String, enum: ['text', 'phone', 'address', 'time', 'custom'], default: 'text' },
-                validation: { type: String, default: null } // Optional: 'full_name', '10_digits', etc.
+                validation: { type: String, default: null }, // Optional: 'full_name', '10_digits', etc.
+                confirmBack: { type: Boolean, default: false }, // Repeat value back for confirmation
+                confirmPrompt: { type: String, default: "Just to confirm, that's {value}, correct?" } // What to say when confirming
             }],
             
             // ═══════════════════════════════════════════════════════════════

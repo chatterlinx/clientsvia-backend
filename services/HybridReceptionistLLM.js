@@ -529,12 +529,12 @@ class HybridReceptionistLLM {
         if (behaviorConfig.bookingSlots?.length > 0) {
             return [...behaviorConfig.bookingSlots].sort((a, b) => a.order - b.order);
         }
-        // Default slots
+        // Default slots - phone has confirmBack enabled by default
         return [
-            { id: 'name', label: 'Full Name', question: 'May I have your name?', required: true, order: 0, type: 'text' },
-            { id: 'phone', label: 'Phone Number', question: 'What is the best phone number to reach you?', required: true, order: 1, type: 'phone' },
-            { id: 'address', label: 'Service Address', question: 'What is the service address?', required: true, order: 2, type: 'address' },
-            { id: 'time', label: 'Preferred Time', question: 'When works best for you?', required: false, order: 3, type: 'time' }
+            { id: 'name', label: 'Full Name', question: 'May I have your name?', required: true, order: 0, type: 'text', confirmBack: false },
+            { id: 'phone', label: 'Phone Number', question: 'What is the best phone number to reach you?', required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?" },
+            { id: 'address', label: 'Service Address', question: 'What is the service address?', required: true, order: 2, type: 'address', confirmBack: false },
+            { id: 'time', label: 'Preferred Time', question: 'When works best for you?', required: false, order: 3, type: 'time', confirmBack: false }
         ];
     }
     
@@ -602,11 +602,21 @@ NEVER say any of these phrases. They make you sound robotic.
         // Get missing slots based on dynamic config
         const missingSlots = slotIds.filter(s => !knownSlots[s]).join(',') || 'none';
         
-        // Build slot prompts for the AI
+        // Build slot prompts for the AI with confirm-back instructions
         const slotPromptsSection = bookingSlots.map(slot => {
             const status = knownSlots[slot.id] ? `✓ collected: "${knownSlots[slot.id]}"` : `○ missing ${slot.required ? '(REQUIRED)' : '(optional)'}`;
-            return `  ${slot.id}: "${slot.question}" [${status}]`;
+            const confirmNote = slot.confirmBack ? ` → CONFIRM BACK: "${slot.confirmPrompt?.replace('{value}', '[their answer]') || 'confirm the value'}"` : '';
+            return `  ${slot.id}: "${slot.question}" [${status}]${confirmNote}`;
         }).join('\n');
+        
+        // Build list of slots that need confirmation
+        const slotsNeedingConfirm = bookingSlots
+            .filter(s => s.confirmBack)
+            .map(s => s.id);
+        
+        const confirmInstructions = slotsNeedingConfirm.length > 0
+            ? `\nCONFIRM BACK: For ${slotsNeedingConfirm.join(', ')} - repeat the value back to verify you heard correctly.`
+            : '';
         
         // Customer context
         const isReturning = customerContext?.isReturning || customerContext?.totalCalls > 1;
@@ -691,6 +701,11 @@ ${missingSlots !== 'none' ? `STILL NEED: ${missingSlots}` : 'ALL INFO COLLECTED 
         if (customerNote) prompt += `\n${customerNote}`;
         if (serviceAreaSection) prompt += `\n${serviceAreaSection}`;
         if (triageSection) prompt += `\n${triageSection}`;
+        
+        // Add confirm-back instructions if any slots need it
+        if (confirmInstructions) {
+            prompt += confirmInstructions;
+        }
         
         // Forbidden phrases (keep minimal)
         if (uiConfig.forbiddenPhrases.length > 0 && uiConfig.forbiddenPhrases.length <= 5) {
