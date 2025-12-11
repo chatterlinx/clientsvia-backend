@@ -572,6 +572,7 @@ ${triageContext.explanation ? `Explain: ${triageContext.explanation}` : ''}
 ${questions ? `Possible questions:\n  - ${questions}` : ''}
 Type: ${triageContext.suggestedServiceType || 'repair'}
 `;
+        }
         
         // ════════════════════════════════════════════════════════════════════
         // 🚨 100% UI-CONTROLLED SYSTEM PROMPT
