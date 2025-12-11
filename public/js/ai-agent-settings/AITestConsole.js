@@ -333,11 +333,12 @@ class AITestConsole {
         const typingId = this.addTypingIndicator();
         
         try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
             const response = await fetch(`/api/admin/ai-test/${this.companyId}/chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
                     message,
@@ -597,9 +598,10 @@ class AITestConsole {
         `;
         
         try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
             const response = await fetch(`/api/admin/ai-test/${this.companyId}/failures`, {
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    'Authorization': `Bearer ${token}`
                 }
             });
             
