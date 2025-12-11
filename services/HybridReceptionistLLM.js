@@ -245,7 +245,10 @@ class HybridReceptionistLLM {
                         nextGoal: currentMode === 'booking' ? this.getNextMissingSlot(knownSlots) : 'discover_intent',
                         filledSlots: {},
                         signals: { answeredQuestion: true, quickAnswerUsed: true },
-                        fromQuickAnswers: true
+                        fromQuickAnswers: true,
+                        wasQuickAnswer: true,
+                        source: 'quick_answer',
+                        quickAnswerCategory: quickMatch.category
                     };
                 }
             }

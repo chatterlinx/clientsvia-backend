@@ -103,8 +103,13 @@ router.post('/:companyId/chat', authenticateJWT, async (req, res) => {
                 })),
                 userInputReceived: message.substring(0, 100),
                 replyLength: result.reply?.length || 0,
+                // Source tracking for UI badges
                 wasQuickAnswer: result.wasQuickAnswer || false,
-                triageMatched: result.triageMatched || false
+                triageMatched: result.triageMatched || false,
+                wasEmergency: result.wasEmergency || result.signals?.emergency || false,
+                wasFallback: result.wasFallback || result.usedFallback || false,
+                source: result.source || 'llm',
+                confidence: result.confidence || null
             }
         });
         

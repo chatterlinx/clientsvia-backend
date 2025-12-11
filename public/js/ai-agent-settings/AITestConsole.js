@@ -454,8 +454,12 @@ class AITestConsole {
             document.getElementById(typingId)?.remove();
             
             if (data.success) {
-                // Add AI response
-                this.addChatBubble(data.reply, 'ai', data.metadata);
+                // Save debug info FIRST so it's available for the bubble
+                this.lastDebug = data.debug;
+                console.log('[AI Test] Debug info:', data.debug);
+                
+                // Add AI response with source badge
+                this.addChatBubble(data.reply, 'ai', data.metadata, false, data.debug);
                 
                 // 🔊 SPEAK the response!
                 this.speakResponse(data.reply);
@@ -470,10 +474,6 @@ class AITestConsole {
                 if (data.metadata?.slots) {
                     this.knownSlots = { ...this.knownSlots, ...data.metadata.slots };
                 }
-                
-                // Save debug info for analysis panel
-                this.lastDebug = data.debug;
-                console.log('[AI Test] Debug info:', data.debug);
                 
                 // Update analysis panel
                 this.updateAnalysis(data.metadata);
@@ -490,7 +490,7 @@ class AITestConsole {
     /**
      * Add a chat bubble to the conversation
      */
-    addChatBubble(text, sender, metadata = null, isError = false) {
+    addChatBubble(text, sender, metadata = null, isError = false, debug = null) {
         const container = document.getElementById('test-chat-messages');
         
         // Clear placeholder if first message
@@ -505,11 +505,19 @@ class AITestConsole {
         
         // Add metadata for AI responses
         if (sender === 'ai' && metadata && !isError) {
+            // Determine the source of this response (use passed debug or fallback to lastDebug)
+            const debugInfo = debug || this.lastDebug || {};
+            const source = this.getResponseSource(debugInfo, metadata);
+            
             html += `
-                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11px; color: #8b949e;">
-                    ${metadata.latencyMs ? `⚡ ${metadata.latencyMs}ms` : ''}
-                    ${metadata.needsInfo && metadata.needsInfo !== 'none' ? ` | 📋 Needs: ${metadata.needsInfo}` : ''}
-                    ${metadata.tokensUsed ? ` | 🎯 ${metadata.tokensUsed} tokens` : ''}
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                    <!-- Source Badge -->
+                    <span style="background: ${source.color}; color: ${source.textColor}; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 10px;">
+                        ${source.icon} ${source.label}
+                    </span>
+                    ${metadata.latencyMs ? `<span style="color: ${metadata.latencyMs < 500 ? '#3fb950' : metadata.latencyMs < 1500 ? '#f0883e' : '#f85149'};">⚡ ${metadata.latencyMs}ms</span>` : ''}
+                    ${metadata.tokensUsed ? `<span style="color: #8b949e;">🎯 ${metadata.tokensUsed} tokens</span>` : ''}
+                    ${metadata.mode ? `<span style="color: #58a6ff;">📍 ${metadata.mode}</span>` : ''}
                 </div>
             `;
         }
@@ -517,6 +525,61 @@ class AITestConsole {
         bubble.innerHTML = html;
         container.appendChild(bubble);
         container.scrollTop = container.scrollHeight;
+    }
+    
+    /**
+     * Determine the source of an AI response
+     */
+    getResponseSource(debug, metadata) {
+        // Check what generated this response
+        if (debug.wasQuickAnswer) {
+            return {
+                label: 'QUICK ANSWER',
+                icon: '⚡',
+                color: '#238636',
+                textColor: 'white',
+                description: 'Matched FAQ database'
+            };
+        }
+        
+        if (debug.triageMatched) {
+            return {
+                label: 'TRIAGE',
+                icon: '🔍',
+                color: '#1f6feb',
+                textColor: 'white',
+                description: 'Matched triage card'
+            };
+        }
+        
+        if (debug.wasEmergency) {
+            return {
+                label: 'EMERGENCY',
+                icon: '🚨',
+                color: '#da3633',
+                textColor: 'white',
+                description: 'Emergency detected'
+            };
+        }
+        
+        if (debug.wasFallback) {
+            return {
+                label: 'FALLBACK',
+                icon: '⚠️',
+                color: '#f0883e',
+                textColor: 'white',
+                description: 'LLM failed, used fallback'
+            };
+        }
+        
+        // Default: LLM generated
+        return {
+            label: 'LLM',
+            icon: '🤖',
+            color: '#8b5cf6',
+            textColor: 'white',
+            description: 'Generated by GPT-4o-mini'
+        };
     }
 
     /**
