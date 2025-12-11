@@ -395,7 +395,7 @@ class STTSettingsManager {
                                 One-click preset for human-like conversation timing. Reduces dead air, enables interruption, speeds up response.
                             </p>
                         </div>
-                        <button onclick="window.sttManager.applyAshleyMode()" style="
+                        <button id="ashley-mode-btn" onclick="window.sttManager.applyAshleyMode()" style="
                             padding: 12px 24px;
                             background: ${ashleyModeActive ? '#10b981' : 'rgba(255,255,255,0.2)'};
                             color: white;
@@ -434,7 +434,7 @@ class STTSettingsManager {
                                 </div>
                                 <input type="range" id="call-exp-speech-timeout" min="1" max="5" step="0.5" value="${speechTimeout}" 
                                     style="width: 100%; cursor: pointer;"
-                                    oninput="document.getElementById('speech-timeout-value').textContent = this.value + 's'">
+                                    oninput="document.getElementById('speech-timeout-value').textContent = this.value + 's'; window.sttManager.onSliderChange();">
                                 <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
                                     How long to wait after caller stops talking. Lower = faster response. (Rec: 1.5-2s)
                                 </p>
@@ -447,7 +447,7 @@ class STTSettingsManager {
                                 </div>
                                 <input type="range" id="call-exp-end-silence" min="0.5" max="3" step="0.1" value="${endSilenceTimeout}" 
                                     style="width: 100%; cursor: pointer;"
-                                    oninput="document.getElementById('end-silence-value').textContent = this.value + 's'">
+                                    oninput="document.getElementById('end-silence-value').textContent = this.value + 's'; window.sttManager.onSliderChange();">
                                 <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
                                     Extra silence detection. This is the #1 cause of dead air. (Rec: 0.7-0.9s)
                                 </p>
@@ -460,7 +460,7 @@ class STTSettingsManager {
                                 </div>
                                 <input type="range" id="call-exp-initial-timeout" min="3" max="15" step="1" value="${initialTimeout}" 
                                     style="width: 100%; cursor: pointer;"
-                                    oninput="document.getElementById('initial-timeout-value').textContent = this.value + 's'">
+                                    oninput="document.getElementById('initial-timeout-value').textContent = this.value + 's'; window.sttManager.onSliderChange();">
                                 <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
                                     Max wait for caller to start talking after greeting. (Rec: 5s)
                                 </p>
@@ -477,7 +477,8 @@ class STTSettingsManager {
                         <div style="display: grid; gap: 16px;">
                             <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
                                 <input type="checkbox" id="call-exp-allow-interrupt" ${allowInterruption ? 'checked' : ''} 
-                                    style="width: 20px; height: 20px; cursor: pointer;">
+                                    style="width: 20px; height: 20px; cursor: pointer;"
+                                    onchange="window.sttManager.onCheckboxChange();">
                                 <div>
                                     <span style="font-weight: 500;">Allow Caller to Interrupt (Barge-in)</span>
                                     <p style="color: #64748b; font-size: 12px; margin: 2px 0 0 0;">
@@ -526,7 +527,7 @@ class STTSettingsManager {
                                 </div>
                                 <input type="range" id="call-exp-speaking-speed" min="0.8" max="1.5" step="0.05" value="${speakingSpeed}" 
                                     style="width: 100%; cursor: pointer;"
-                                    oninput="document.getElementById('speaking-speed-value').textContent = this.value + 'x'">
+                                    oninput="document.getElementById('speaking-speed-value').textContent = this.value + 'x'; window.sttManager.onSliderChange();">
                                 <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
                                     1.0x = normal. 1.2x = confident receptionist. (Rec: 1.15-1.25x)
                                 </p>
@@ -539,7 +540,7 @@ class STTSettingsManager {
                                 </div>
                                 <input type="range" id="call-exp-pause" min="0" max="0.5" step="0.05" value="${pauseBetweenSentences}" 
                                     style="width: 100%; cursor: pointer;"
-                                    oninput="document.getElementById('pause-value').textContent = this.value + 's'">
+                                    oninput="document.getElementById('pause-value').textContent = this.value + 's'; window.sttManager.onSliderChange();">
                                 <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
                                     Micro-pause for natural breathing. 0s = run-on robot. (Rec: 0.15-0.25s)
                                 </p>
@@ -561,7 +562,7 @@ class STTSettingsManager {
                                 </div>
                                 <input type="range" id="call-exp-llm-timeout" min="2" max="10" step="0.5" value="${llmTimeout}" 
                                     style="width: 100%; cursor: pointer;"
-                                    oninput="document.getElementById('llm-timeout-value').textContent = this.value + 's'">
+                                    oninput="document.getElementById('llm-timeout-value').textContent = this.value + 's'; window.sttManager.onSliderChange();">
                                 <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
                                     Max wait for AI response. Uses smart fallback if exceeded. (Rec: 4s)
                                 </p>
@@ -574,7 +575,7 @@ class STTSettingsManager {
                                 </div>
                                 <input type="range" id="call-exp-max-silence" min="3" max="15" step="1" value="${maxSilenceBeforePrompt}" 
                                     style="width: 100%; cursor: pointer;"
-                                    oninput="document.getElementById('max-silence-value').textContent = this.value + 's'">
+                                    oninput="document.getElementById('max-silence-value').textContent = this.value + 's'; window.sttManager.onSliderChange();">
                                 <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
                                     If caller goes quiet, AI says "Still there?" (Rec: 5s)
                                 </p>
@@ -603,19 +604,21 @@ class STTSettingsManager {
                         </div>
                     </div>
                     
-                    <button onclick="window.sttManager.saveCallExperienceSettings()" style="
+                    <!-- Auto-save status indicator -->
+                    <div id="auto-save-indicator" style="
                         padding: 14px 28px;
-                        background: #10b981;
-                        color: white;
-                        border: none;
+                        background: #f0fdf4;
+                        color: #10b981;
+                        border: 2px solid #10b981;
                         border-radius: 8px;
-                        cursor: pointer;
                         font-weight: 600;
                         font-size: 15px;
                         width: 100%;
+                        text-align: center;
+                        box-sizing: border-box;
                     ">
-                        💾 Save Call Experience Settings
-                    </button>
+                        ✅ Auto-save enabled — changes save automatically
+                    </div>
                 </div>
             </div>
         `;
@@ -665,60 +668,142 @@ class STTSettingsManager {
     setInterruptSensitivity(level) {
         this.profile.callExperience = this.profile.callExperience || {};
         this.profile.callExperience.interruptSensitivity = level;
-        this.render();
+        // Update button styling immediately
+        this.updateInterruptButtons(level);
+        // Auto-save
+        this.autoSaveCallExperience();
     }
     
     setResponseLength(length) {
         this.profile.callExperience = this.profile.callExperience || {};
         this.profile.callExperience.responseLength = length;
-        this.render();
+        // Update button styling immediately
+        this.updateResponseLengthButtons(length);
+        // Auto-save
+        this.autoSaveCallExperience();
     }
     
-    async saveCallExperienceSettings() {
-        console.log('[STT SETTINGS] 🟢 saveCallExperienceSettings() CALLED!');
+    updateInterruptButtons(selected) {
+        ['low', 'medium', 'high'].forEach(level => {
+            const btn = document.querySelector(`button[onclick*="setInterruptSensitivity('${level}')"]`);
+            if (btn) {
+                const isSelected = level === selected;
+                btn.style.border = `2px solid ${isSelected ? '#3b82f6' : '#e2e8f0'}`;
+                btn.style.background = isSelected ? '#eff6ff' : 'white';
+            }
+        });
+    }
+    
+    updateResponseLengthButtons(selected) {
+        ['short', 'medium', 'long'].forEach(length => {
+            const btn = document.querySelector(`button[onclick*="setResponseLength('${length}')"]`);
+            if (btn) {
+                const isSelected = length === selected;
+                btn.style.border = `2px solid ${isSelected ? '#3b82f6' : '#e2e8f0'}`;
+                btn.style.background = isSelected ? '#eff6ff' : 'white';
+            }
+        });
+    }
+    
+    // Ashley Mode preset values for comparison
+    static ASHLEY_PRESET = {
+        speechTimeout: 1.5,
+        endSilenceTimeout: 0.8,
+        initialTimeout: 5,
+        allowInterruption: true,
+        interruptSensitivity: 'high',
+        speakingSpeed: 1.2,
+        pauseBetweenSentences: 0.2,
+        llmTimeout: 4,
+        maxSilenceBeforePrompt: 5,
+        responseLength: 'medium'
+    };
+    
+    // Check if current settings match Ashley Mode preset
+    settingsMatchAshleyPreset(settings) {
+        const preset = STTSettingsManager.ASHLEY_PRESET;
+        return (
+            Math.abs(settings.speechTimeout - preset.speechTimeout) < 0.01 &&
+            Math.abs(settings.endSilenceTimeout - preset.endSilenceTimeout) < 0.01 &&
+            settings.initialTimeout === preset.initialTimeout &&
+            settings.allowInterruption === preset.allowInterruption &&
+            settings.interruptSensitivity === preset.interruptSensitivity &&
+            Math.abs(settings.speakingSpeed - preset.speakingSpeed) < 0.01 &&
+            Math.abs(settings.pauseBetweenSentences - preset.pauseBetweenSentences) < 0.01 &&
+            Math.abs(settings.llmTimeout - preset.llmTimeout) < 0.01 &&
+            settings.maxSilenceBeforePrompt === preset.maxSilenceBeforePrompt &&
+            settings.responseLength === preset.responseLength
+        );
+    }
+    
+    // Debounced auto-save (500ms delay)
+    autoSaveCallExperience() {
+        if (this._autoSaveTimeout) {
+            clearTimeout(this._autoSaveTimeout);
+        }
         
-        // Debug: Check if elements exist
+        // Show saving indicator
+        this.updateSaveStatus('saving');
+        
+        this._autoSaveTimeout = setTimeout(() => {
+            this.performAutoSave();
+        }, 500);
+    }
+    
+    updateSaveStatus(status) {
+        const indicator = document.getElementById('auto-save-indicator');
+        if (!indicator) return;
+        
+        if (status === 'saving') {
+            indicator.innerHTML = '💾 Saving...';
+            indicator.style.color = '#f59e0b';
+        } else if (status === 'saved') {
+            indicator.innerHTML = '✅ Saved';
+            indicator.style.color = '#10b981';
+        } else if (status === 'error') {
+            indicator.innerHTML = '❌ Save failed';
+            indicator.style.color = '#ef4444';
+        }
+    }
+    
+    async performAutoSave() {
         const speechTimeoutEl = document.getElementById('call-exp-speech-timeout');
         const endSilenceEl = document.getElementById('call-exp-end-silence');
         const initialTimeoutEl = document.getElementById('call-exp-initial-timeout');
         const allowInterruptEl = document.getElementById('call-exp-allow-interrupt');
-        
-        console.log('[STT SETTINGS] 🔵 Element check:', {
-            speechTimeout: !!speechTimeoutEl,
-            endSilence: !!endSilenceEl,
-            initialTimeout: !!initialTimeoutEl,
-            allowInterrupt: !!allowInterruptEl
-        });
+        const speakingSpeedEl = document.getElementById('call-exp-speaking-speed');
+        const pauseEl = document.getElementById('call-exp-pause');
+        const llmTimeoutEl = document.getElementById('call-exp-llm-timeout');
+        const maxSilenceEl = document.getElementById('call-exp-max-silence');
         
         if (!speechTimeoutEl || !endSilenceEl) {
-            console.error('[STT SETTINGS] ❌ Form elements not found!');
-            alert('Error: Form elements not found. Please refresh the page.');
+            console.error('[STT SETTINGS] ❌ Cannot auto-save: form elements not found');
+            this.updateSaveStatus('error');
             return;
         }
         
         const settings = {
-            ashleyMode: false, // Manual settings = not Ashley Mode
             speechTimeout: parseFloat(speechTimeoutEl.value),
             endSilenceTimeout: parseFloat(endSilenceEl.value),
             initialTimeout: parseInt(initialTimeoutEl.value),
             allowInterruption: allowInterruptEl?.checked ?? false,
             interruptSensitivity: this.profile.callExperience?.interruptSensitivity || 'medium',
-            speakingSpeed: parseFloat(document.getElementById('call-exp-speaking-speed').value),
-            pauseBetweenSentences: parseFloat(document.getElementById('call-exp-pause').value),
-            llmTimeout: parseFloat(document.getElementById('call-exp-llm-timeout').value),
-            maxSilenceBeforePrompt: parseInt(document.getElementById('call-exp-max-silence').value),
+            speakingSpeed: parseFloat(speakingSpeedEl?.value || 1.0),
+            pauseBetweenSentences: parseFloat(pauseEl?.value || 0.3),
+            llmTimeout: parseFloat(llmTimeoutEl?.value || 6),
+            maxSilenceBeforePrompt: parseInt(maxSilenceEl?.value || 8),
             responseLength: this.profile.callExperience?.responseLength || 'medium'
         };
         
-        console.log('[STT SETTINGS] 🔵 Saving call experience settings:', settings);
-        console.log('[STT SETTINGS] 🔵 Company ID:', this.companyId);
+        // Smart Ashley Mode detection - preserve if settings match preset!
+        settings.ashleyMode = this.settingsMatchAshleyPreset(settings);
+        
+        console.log('[STT SETTINGS] 🔄 Auto-saving:', settings);
+        console.log('[STT SETTINGS] 🔄 Ashley Mode preserved:', settings.ashleyMode);
         
         try {
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const url = `/api/company/${this.companyId}/call-experience`;
-            console.log('[STT SETTINGS] 🔵 PUT URL:', url);
-            
-            const response = await fetch(url, {
+            const response = await fetch(`/api/company/${this.companyId}/call-experience`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -727,38 +812,47 @@ class STTSettingsManager {
                 body: JSON.stringify(settings)
             });
             
-            console.log('[STT SETTINGS] 🔵 Response status:', response.status);
-            const responseData = await response.json();
-            console.log('[STT SETTINGS] 🔵 Response body:', JSON.stringify(responseData, null, 2));
-            console.log('[STT SETTINGS] 🔵 Saved (top-level):', responseData.savedTopLevel);
-            console.log('[STT SETTINGS] 🔵 Saved (nested):', responseData.savedNested);
-            console.log('[STT SETTINGS] 🔵 Verified (top-level):', responseData.verifiedTopLevel);
-            console.log('[STT SETTINGS] 🔵 Verified (nested):', responseData.verifiedNested);
-            
             if (response.ok) {
                 this.profile.callExperience = settings;
-                
-                // Check if data actually persisted
-                const savedOk = responseData.savedTopLevel || responseData.savedNested;
-                const verifiedOk = responseData.verifiedTopLevel || responseData.verifiedNested;
-                
-                if (verifiedOk) {
-                    console.log('[STT SETTINGS] ✅ Data verified in MongoDB!');
-                    alert('✅ Call Experience settings saved and verified!');
-                } else if (savedOk) {
-                    console.warn('[STT SETTINGS] ⚠️ Data saved but fresh verification failed');
-                    alert('⚠️ Settings saved but verification failed - check Render logs');
-                } else {
-                    console.error('[STT SETTINGS] ❌ MongoDB save failed completely');
-                    alert('❌ Save returned success but no data persisted - check Render logs for CHECKPOINT errors');
-                }
+                this.updateSaveStatus('saved');
+                this.updateAshleyButtonState(settings.ashleyMode);
+                console.log('[STT SETTINGS] ✅ Auto-saved successfully');
             } else {
-                throw new Error(responseData.error || 'Failed to save settings');
+                throw new Error('Save failed');
             }
         } catch (error) {
-            console.error('[STT SETTINGS] ❌ Save failed:', error);
-            alert('Failed to save: ' + error.message);
+            console.error('[STT SETTINGS] ❌ Auto-save failed:', error);
+            this.updateSaveStatus('error');
         }
+    }
+    
+    updateAshleyButtonState(isActive) {
+        const ashleyBtn = document.getElementById('ashley-mode-btn');
+        if (!ashleyBtn) return;
+        
+        if (isActive) {
+            ashleyBtn.innerHTML = '✓ Active';
+            ashleyBtn.style.background = '#10b981';
+        } else {
+            ashleyBtn.innerHTML = 'Enable Ashley Mode';
+            ashleyBtn.style.background = 'rgba(255,255,255,0.2)';
+        }
+    }
+    
+    // Trigger auto-save from slider change
+    onSliderChange() {
+        this.autoSaveCallExperience();
+    }
+    
+    // Trigger auto-save from checkbox change
+    onCheckboxChange() {
+        this.autoSaveCallExperience();
+    }
+    
+    // Legacy method - kept for compatibility but not used
+    async saveCallExperienceSettings() {
+        // Just trigger auto-save
+        this.autoSaveCallExperience();
     }
     
     renderFillersTab() {
