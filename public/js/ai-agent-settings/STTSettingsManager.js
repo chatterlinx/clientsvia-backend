@@ -360,6 +360,82 @@ class STTSettingsManager {
         `;
     }
     
+    // Helper: Generate info icon with tooltip popup
+    infoIcon(id, explanation) {
+        // Escape quotes for the data attribute
+        const escapedExp = explanation.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        return `
+            <span class="info-icon-wrapper" style="position: relative; display: inline-flex; margin-left: 6px;">
+                <span class="info-icon" 
+                    data-tooltip-id="${id}"
+                    onclick="window.sttManager.showTooltip('${id}')"
+                    style="
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 18px;
+                        height: 18px;
+                        background: #e2e8f0;
+                        border-radius: 50%;
+                        cursor: pointer;
+                        font-size: 11px;
+                        color: #64748b;
+                        font-weight: bold;
+                        transition: all 0.2s;
+                    "
+                    onmouseover="this.style.background='#3b82f6'; this.style.color='white';"
+                    onmouseout="this.style.background='#e2e8f0'; this.style.color='#64748b';"
+                >ℹ</span>
+                <div id="tooltip-${id}" class="info-tooltip" style="
+                    display: none;
+                    position: absolute;
+                    bottom: 100%;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: #1e293b;
+                    color: white;
+                    padding: 12px 16px;
+                    border-radius: 8px;
+                    font-size: 13px;
+                    line-height: 1.5;
+                    width: 320px;
+                    max-width: 90vw;
+                    z-index: 1000;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                    margin-bottom: 8px;
+                    text-align: left;
+                    font-weight: normal;
+                ">${explanation}</div>
+            </span>
+        `;
+    }
+    
+    showTooltip(id) {
+        // Close any other open tooltips
+        document.querySelectorAll('.info-tooltip').forEach(t => {
+            if (t.id !== `tooltip-${id}`) t.style.display = 'none';
+        });
+        
+        const tooltip = document.getElementById(`tooltip-${id}`);
+        if (tooltip) {
+            const isVisible = tooltip.style.display !== 'none';
+            tooltip.style.display = isVisible ? 'none' : 'block';
+            
+            // Add click-outside listener to close tooltip
+            if (!isVisible) {
+                setTimeout(() => {
+                    const closeHandler = (e) => {
+                        if (!e.target.closest('.info-icon-wrapper')) {
+                            tooltip.style.display = 'none';
+                            document.removeEventListener('click', closeHandler);
+                        }
+                    };
+                    document.addEventListener('click', closeHandler);
+                }, 10);
+            }
+        }
+    }
+    
     renderCallExperienceSettingsTop() {
         // Get current settings from profile or defaults
         const callExp = this.profile.callExperience || {};
@@ -374,6 +450,29 @@ class STTSettingsManager {
         const maxSilenceBeforePrompt = callExp.maxSilenceBeforePrompt ?? 8;
         const responseLength = callExp.responseLength || 'medium';
         const ashleyModeActive = callExp.ashleyMode === true;
+        
+        // Tooltip explanations
+        const TOOLTIPS = {
+            speechTimeout: `<b>Speech Timeout</b><br><br>How long the AI waits after the caller stops speaking before responding.<br><br>• <b>1-2s</b> = Snappy, responsive (recommended)<br>• <b>3-4s</b> = Relaxed, gives caller time to think<br>• <b>5s</b> = Very patient, may feel slow<br><br>💡 Lower = faster conversation, less dead air`,
+            
+            endSilence: `<b>End Silence Timeout</b><br><br>Extra silence detection to determine when caller is truly done speaking.<br><br>• <b>0.5-0.9s</b> = Quick detection (recommended)<br>• <b>1-2s</b> = More patient<br>• <b>3s</b> = Very slow to respond<br><br>⚠️ This is the #1 cause of dead air. Keep it low!`,
+            
+            initialTimeout: `<b>Initial Timeout</b><br><br>How long to wait for the caller to start talking after the AI greeting.<br><br>• <b>5s</b> = Standard (recommended)<br>• <b>8-10s</b> = Patient, good for elderly callers<br>• <b>15s</b> = Very patient<br><br>After this timeout, AI will prompt: "Are you still there?"`,
+            
+            bargeIn: `<b>Allow Caller to Interrupt (Barge-in)</b><br><br>✅ <b>ON (Recommended)</b>: Caller can cut off the AI mid-sentence. If they start talking while AI is speaking, AI stops immediately and listens. Makes conversations feel natural and alive.<br><br>⬜ <b>OFF</b>: Caller must wait for AI to finish. Use only if you have important info (disclaimers, legal) that MUST be spoken completely.`,
+            
+            interruptSensitivity: `<b>Interrupt Sensitivity</b><br><br>How easily the caller's voice triggers an interrupt (only works when barge-in is ON).<br><br>• <b>Low</b>: Caller must speak clearly/loudly. Less sensitive to background noise.<br>• <b>Medium</b>: Balanced threshold.<br>• <b>High</b> ⭐: Very responsive - even soft speech triggers interrupt. Best for natural conversation but might cut off on background noise.`,
+            
+            speakingSpeed: `<b>Speaking Speed</b><br><br>How fast the AI voice talks.<br><br>• <b>0.8-0.9x</b> = Slow, deliberate<br>• <b>1.0x</b> = Normal speed<br>• <b>1.15-1.25x</b> = Confident receptionist (recommended)<br>• <b>1.3-1.5x</b> = Fast, energetic<br><br>💡 Slightly faster (1.2x) sounds more human and professional`,
+            
+            pauseBetweenSentences: `<b>Pause Between Sentences</b><br><br>Micro-pause for natural breathing between sentences.<br><br>• <b>0s</b> = Run-on robot, no pauses<br>• <b>0.15-0.25s</b> = Natural breathing (recommended)<br>• <b>0.3-0.5s</b> = Dramatic pauses<br><br>💡 Small pauses make AI sound more human`,
+            
+            llmTimeout: `<b>LLM Timeout</b><br><br>Maximum time to wait for the AI brain to generate a response.<br><br>• <b>2-3s</b> = Fast fallback, but complex questions might not get good answers<br>• <b>4s</b> = Balanced (recommended)<br>• <b>5-8s</b> = More thinking time, but caller waits in silence<br><br>If exceeded, uses smart fallback like "Sorry, I think our connection dropped. What was that?"`,
+            
+            maxSilence: `<b>Max Silence Before Prompt</b><br><br>If the caller goes quiet for this long, the AI jumps in with a prompt.<br><br>• <b>3-4s</b> = AI jumps in quickly, keeps conversation moving<br>• <b>5s</b> = Standard (recommended)<br>• <b>8-15s</b> = Very patient, gives caller time to think<br><br>AI will say something like "Still there?" or "Take your time, I'm here when you're ready."`,
+            
+            responseLength: `<b>Response Length</b><br><br>How wordy the AI responses are.<br><br>• <b>Short (~12 words)</b>: "Got it! What's your address?"<br><br>• <b>Medium (~20 words)</b> ⭐: "Okay, sounds like an AC issue. Can you give me your address so I can get a tech out there?"<br><br>• <b>Long (~35 words)</b>: "I understand, it sounds like your air conditioning isn't cooling properly. That's definitely something we can help with. Let me get your address."<br><br>💡 Medium is usually best - conversational without rambling`
+        };
         
         return `
             <div style="max-width: 700px; margin-top: 32px; border-top: 2px solid #e2e8f0; padding-top: 24px;">
@@ -428,8 +527,10 @@ class STTSettingsManager {
                         
                         <div style="display: grid; gap: 16px;">
                             <div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <label style="font-weight: 500;">Speech Timeout</label>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label style="font-weight: 500; display: flex; align-items: center;">
+                                        Speech Timeout ${this.infoIcon('speechTimeout', TOOLTIPS.speechTimeout)}
+                                    </label>
                                     <span id="speech-timeout-value" style="color: #3b82f6; font-weight: 600;">${speechTimeout}s</span>
                                 </div>
                                 <input type="range" id="call-exp-speech-timeout" min="1" max="5" step="0.5" value="${speechTimeout}" 
@@ -441,8 +542,10 @@ class STTSettingsManager {
                             </div>
                             
                             <div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <label style="font-weight: 500;">End Silence Timeout</label>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label style="font-weight: 500; display: flex; align-items: center;">
+                                        End Silence Timeout ${this.infoIcon('endSilence', TOOLTIPS.endSilence)}
+                                    </label>
                                     <span id="end-silence-value" style="color: #3b82f6; font-weight: 600;">${endSilenceTimeout}s</span>
                                 </div>
                                 <input type="range" id="call-exp-end-silence" min="0.5" max="3" step="0.1" value="${endSilenceTimeout}" 
@@ -454,8 +557,10 @@ class STTSettingsManager {
                             </div>
                             
                             <div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <label style="font-weight: 500;">Initial Timeout</label>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label style="font-weight: 500; display: flex; align-items: center;">
+                                        Initial Timeout ${this.infoIcon('initialTimeout', TOOLTIPS.initialTimeout)}
+                                    </label>
                                     <span id="initial-timeout-value" style="color: #3b82f6; font-weight: 600;">${initialTimeout}s</span>
                                 </div>
                                 <input type="range" id="call-exp-initial-timeout" min="3" max="15" step="1" value="${initialTimeout}" 
@@ -475,12 +580,14 @@ class STTSettingsManager {
                         </h4>
                         
                         <div style="display: grid; gap: 16px;">
-                            <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                            <label style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;">
                                 <input type="checkbox" id="call-exp-allow-interrupt" ${allowInterruption ? 'checked' : ''} 
-                                    style="width: 20px; height: 20px; cursor: pointer;"
+                                    style="width: 20px; height: 20px; cursor: pointer; margin-top: 2px;"
                                     onchange="window.sttManager.onCheckboxChange();">
                                 <div>
-                                    <span style="font-weight: 500;">Allow Caller to Interrupt (Barge-in)</span>
+                                    <span style="font-weight: 500; display: flex; align-items: center;">
+                                        Allow Caller to Interrupt (Barge-in) ${this.infoIcon('bargeIn', TOOLTIPS.bargeIn)}
+                                    </span>
                                     <p style="color: #64748b; font-size: 12px; margin: 2px 0 0 0;">
                                         Caller can cut off AI mid-sentence. Makes it feel alive. (Rec: ON)
                                     </p>
@@ -488,7 +595,9 @@ class STTSettingsManager {
                             </label>
                             
                             <div>
-                                <label style="font-weight: 500; display: block; margin-bottom: 8px;">Interrupt Sensitivity</label>
+                                <label style="font-weight: 500; display: flex; align-items: center; margin-bottom: 8px;">
+                                    Interrupt Sensitivity ${this.infoIcon('interruptSensitivity', TOOLTIPS.interruptSensitivity)}
+                                </label>
                                 <div style="display: flex; gap: 8px;">
                                     <button onclick="window.sttManager.setInterruptSensitivity('low')" 
                                         style="flex: 1; padding: 10px; border: 2px solid ${interruptSensitivity === 'low' ? '#3b82f6' : '#e2e8f0'}; 
@@ -521,8 +630,10 @@ class STTSettingsManager {
                         
                         <div style="display: grid; gap: 16px;">
                             <div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <label style="font-weight: 500;">Speaking Speed</label>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label style="font-weight: 500; display: flex; align-items: center;">
+                                        Speaking Speed ${this.infoIcon('speakingSpeed', TOOLTIPS.speakingSpeed)}
+                                    </label>
                                     <span id="speaking-speed-value" style="color: #3b82f6; font-weight: 600;">${speakingSpeed}x</span>
                                 </div>
                                 <input type="range" id="call-exp-speaking-speed" min="0.8" max="1.5" step="0.05" value="${speakingSpeed}" 
@@ -534,8 +645,10 @@ class STTSettingsManager {
                             </div>
                             
                             <div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <label style="font-weight: 500;">Pause Between Sentences</label>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label style="font-weight: 500; display: flex; align-items: center;">
+                                        Pause Between Sentences ${this.infoIcon('pauseBetweenSentences', TOOLTIPS.pauseBetweenSentences)}
+                                    </label>
                                     <span id="pause-value" style="color: #3b82f6; font-weight: 600;">${pauseBetweenSentences}s</span>
                                 </div>
                                 <input type="range" id="call-exp-pause" min="0" max="0.5" step="0.05" value="${pauseBetweenSentences}" 
@@ -556,8 +669,10 @@ class STTSettingsManager {
                         
                         <div style="display: grid; gap: 16px;">
                             <div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <label style="font-weight: 500;">LLM Timeout</label>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label style="font-weight: 500; display: flex; align-items: center;">
+                                        LLM Timeout ${this.infoIcon('llmTimeout', TOOLTIPS.llmTimeout)}
+                                    </label>
                                     <span id="llm-timeout-value" style="color: #3b82f6; font-weight: 600;">${llmTimeout}s</span>
                                 </div>
                                 <input type="range" id="call-exp-llm-timeout" min="2" max="10" step="0.5" value="${llmTimeout}" 
@@ -569,8 +684,10 @@ class STTSettingsManager {
                             </div>
                             
                             <div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <label style="font-weight: 500;">Max Silence Before Prompt</label>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label style="font-weight: 500; display: flex; align-items: center;">
+                                        Max Silence Before Prompt ${this.infoIcon('maxSilence', TOOLTIPS.maxSilence)}
+                                    </label>
                                     <span id="max-silence-value" style="color: #3b82f6; font-weight: 600;">${maxSilenceBeforePrompt}s</span>
                                 </div>
                                 <input type="range" id="call-exp-max-silence" min="3" max="15" step="1" value="${maxSilenceBeforePrompt}" 
@@ -582,7 +699,9 @@ class STTSettingsManager {
                             </div>
                             
                             <div>
-                                <label style="font-weight: 500; display: block; margin-bottom: 8px;">Response Length</label>
+                                <label style="font-weight: 500; display: flex; align-items: center; margin-bottom: 8px;">
+                                    Response Length ${this.infoIcon('responseLength', TOOLTIPS.responseLength)}
+                                </label>
                                 <div style="display: flex; gap: 8px;">
                                     <button onclick="window.sttManager.setResponseLength('short')" 
                                         style="flex: 1; padding: 10px; border: 2px solid ${responseLength === 'short' ? '#3b82f6' : '#e2e8f0'}; 
