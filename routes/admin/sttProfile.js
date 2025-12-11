@@ -1337,12 +1337,17 @@ router.post('/:templateId/clean-bad-fillers', authenticateJWT, requireRole('admi
 router.post('/:templateId/seed-all', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const { templateId } = req.params;
+        logger.info('[STT PROFILE API] Seed-all CHECKPOINT 1: Starting', { templateId });
+        
         const results = { keywords: 0, corrections: 0, fillersRemoved: 0 };
         
         const profile = await STTProfile.findOne({ templateId, isActive: true });
         if (!profile) {
+            logger.warn('[STT PROFILE API] Seed-all: Profile not found', { templateId });
             return res.status(404).json({ success: false, error: 'Profile not found' });
         }
+        
+        logger.info('[STT PROFILE API] Seed-all CHECKPOINT 2: Profile found');
         
         // 1. CLEAN BAD FILLERS
         const PROTECTED_WORDS = new Set([
@@ -1359,6 +1364,8 @@ router.post('/:templateId/seed-all', authenticateJWT, requireRole('admin'), asyn
         const originalFillers = profile.fillerWords || [];
         profile.fillerWords = originalFillers.filter(f => !PROTECTED_WORDS.has((f.phrase || '').toLowerCase().trim()));
         results.fillersRemoved = originalFillers.length - profile.fillerWords.length;
+        
+        logger.info('[STT PROFILE API] Seed-all CHECKPOINT 3: Fillers cleaned', { fillersRemoved: results.fillersRemoved });
         
         // 2. SEED KEYWORDS (HVAC for now - template-specific in future)
         const hvacKeywords = [
@@ -1381,7 +1388,7 @@ router.post('/:templateId/seed-all', authenticateJWT, requireRole('admin'), asyn
         
         profile.vocabulary = profile.vocabulary || {};
         profile.vocabulary.boostedKeywords = profile.vocabulary.boostedKeywords || [];
-        const existingPhrases = new Set(profile.vocabulary.boostedKeywords.map(k => k.phrase.toLowerCase()));
+        const existingPhrases = new Set((profile.vocabulary.boostedKeywords || []).map(k => (k.phrase || '').toLowerCase()));
         
         for (const kw of hvacKeywords) {
             if (!existingPhrases.has(kw.phrase.toLowerCase())) {
@@ -1389,6 +1396,8 @@ router.post('/:templateId/seed-all', authenticateJWT, requireRole('admin'), asyn
                 results.keywords++;
             }
         }
+        
+        logger.info('[STT PROFILE API] Seed-all CHECKPOINT 4: Keywords seeded', { keywordsAdded: results.keywords });
         
         // 3. SEED COMMON CORRECTIONS
         const commonCorrections = [
@@ -1400,7 +1409,7 @@ router.post('/:templateId/seed-all', authenticateJWT, requireRole('admin'), asyn
         ];
         
         profile.corrections = profile.corrections || [];
-        const existingCorrections = new Set(profile.corrections.map(c => c.mishearing?.toLowerCase()));
+        const existingCorrections = new Set((profile.corrections || []).map(c => (c.mishearing || '').toLowerCase()));
         
         for (const corr of commonCorrections) {
             if (!existingCorrections.has(corr.mishearing.toLowerCase())) {
@@ -1409,11 +1418,21 @@ router.post('/:templateId/seed-all', authenticateJWT, requireRole('admin'), asyn
             }
         }
         
+        logger.info('[STT PROFILE API] Seed-all CHECKPOINT 5: Corrections seeded', { correctionsAdded: results.corrections });
+        
         profile.updatedBy = req.user._id;
+        
+        logger.info('[STT PROFILE API] Seed-all CHECKPOINT 6: Saving profile...');
         await profile.save();
+        logger.info('[STT PROFILE API] Seed-all CHECKPOINT 7: Profile saved successfully');
         
         // Clear cache
-        STTPreprocessor.clearCache(templateId);
+        try {
+            STTPreprocessor.clearCache(templateId);
+            logger.info('[STT PROFILE API] Seed-all CHECKPOINT 8: Cache cleared');
+        } catch (cacheErr) {
+            logger.warn('[STT PROFILE API] Seed-all: Cache clear failed (non-fatal)', { error: cacheErr.message });
+        }
         
         logger.info('[STT PROFILE API] Seeded all defaults', { templateId, results });
         
@@ -1424,7 +1443,11 @@ router.post('/:templateId/seed-all', authenticateJWT, requireRole('admin'), asyn
         });
         
     } catch (error) {
-        logger.error('[STT PROFILE API] Failed to seed all', { error: error.message });
+        logger.error('[STT PROFILE API] Failed to seed all', { 
+            error: error.message,
+            stack: error.stack,
+            name: error.name
+        });
         res.status(500).json({ success: false, error: error.message });
     }
 });

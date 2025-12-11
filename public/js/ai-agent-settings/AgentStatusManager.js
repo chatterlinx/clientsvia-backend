@@ -126,6 +126,11 @@ class AgentStatusManager {
    * Render the complete dashboard
    */
   async render(status, metrics, health) {
+    // Use instance properties if parameters not passed
+    status = status || this.status;
+    metrics = metrics || this.metrics;
+    health = health || this.health || { status: 'unknown' };
+    
     const container = document.getElementById('agent-status-container');
     if (!container) {
       console.error('[AGENT STATUS] Container not found');
@@ -133,7 +138,7 @@ class AgentStatusManager {
     }
 
     // Update tab indicator color based on health status
-    this.updateTabIndicator(health.status);
+    this.updateTabIndicator(health?.status || 'unknown');
 
     // Render LLM config (async)
     const llmConfigHtml = await this.renderLLMConfig();
