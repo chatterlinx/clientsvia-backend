@@ -46,12 +46,23 @@ try {
 // ============================================================================
 
 const CONFIG = {
-    LLM0_MODEL: process.env.LLM0_MODEL || 'gpt-4.1-mini',
-    TIER3_MODEL: process.env.TIER3_MODEL || 'gpt-4.1-mini',
+    // ⚠️ CORRECT MODEL NAMES - OpenAI uses 'o' (letter), not '1' (number)
+    // gpt-4o-mini = Fast, cheap, good for most tasks
+    // gpt-4o = Premium, accurate, expensive
+    LLM0_MODEL: process.env.LLM0_MODEL || 'gpt-4o-mini',
+    TIER3_MODEL: process.env.TIER3_MODEL || 'gpt-4o-mini',
     LLM0_TIMEOUT_MS: parseInt(process.env.LLM0_TIMEOUT_MS) || 4000,
     TIER3_TIMEOUT_MS: parseInt(process.env.TIER3_TIMEOUT_MS) || 5000,
     LOG_PROMPTS: process.env.LOG_LLM_PROMPTS === 'true'
 };
+
+// 🔥 STARTUP LOG - Verify model names are correct
+logger.info('[LLM REGISTRY] 🧠 CONFIG LOADED', {
+    llm0Model: CONFIG.LLM0_MODEL,
+    tier3Model: CONFIG.TIER3_MODEL,
+    llm0TimeoutMs: CONFIG.LLM0_TIMEOUT_MS,
+    openaiClientLoaded: !!openaiClient
+});
 
 // ============================================================================
 // LLM-0: FRONTLINE BRAIN
