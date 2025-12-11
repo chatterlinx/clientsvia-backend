@@ -352,114 +352,111 @@ class FrontDeskBehaviorManager {
         const er = this.config.emotionResponses || {};
         return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
-                <h3 style="margin: 0 0 16px 0; color: #58a6ff;">💭 Emotion Responses</h3>
-                <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">How the AI responds when it detects different emotions from the caller.</p>
+                <h3 style="margin: 0 0 16px 0; color: #58a6ff;">💭 Emotion Intelligence</h3>
+                <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">
+                    AI naturally detects emotions and responds appropriately. These toggles control <strong>behavior rules</strong>, not scripts.
+                </p>
                 
-                <!-- INFO BOX: Jokes vs Emergencies -->
-                <div style="background: #1c2128; border: 1px solid #f0883e; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 8px 0; color: #f0883e; font-size: 14px;">🎭 Jokes vs Emergencies</h4>
-                    <p style="color: #8b949e; font-size: 13px; margin: 0;">
-                        AI knows the difference:<br>
-                        <strong style="color: #3fb950;">✅ Humor:</strong> "I'm dying here" = just hot (respond playfully)<br>
-                        <strong style="color: #f85149;">🚨 Emergency:</strong> "I smell gas" = real danger (dispatch NOW)
-                    </p>
-                </div>
-                
-                <div style="display: flex; flex-direction: column; gap: 16px;">
-                    ${this.renderEmotionSection('stressed', '😟 Stressed', er.stressed)}
-                    ${this.renderEmotionSection('frustrated', '😤 Frustrated', er.frustrated)}
-                    ${this.renderEmotionSection('angry', '😠 Angry', er.angry)}
-                    ${this.renderEmotionSection('friendly', '😊 Friendly', er.friendly)}
-                    ${this.renderEmotionSection('joking', '😄 Joking/Playful', er.joking)}
-                    ${this.renderEmotionSection('panicked', '🚨 Panicked/Emergency', er.panicked)}
+                <!-- SIMPLE TOGGLES - Let AI generate its own words -->
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    
+                    <!-- Stressed -->
+                    <label style="display: flex; align-items: center; gap: 12px; padding: 14px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="fdb-emotion-stressed-enabled" ${er.stressed?.enabled !== false ? 'checked' : ''} style="accent-color: #58a6ff; width: 18px; height: 18px;">
+                        <div>
+                            <span style="color: #c9d1d9; font-weight: 600;">😟 Stressed</span>
+                            <p style="margin: 4px 0 0 0; color: #8b949e; font-size: 12px;">AI will be reassuring and helpful</p>
+                        </div>
+                    </label>
+                    
+                    <!-- Frustrated -->
+                    <div style="padding: 14px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
+                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                            <input type="checkbox" id="fdb-emotion-frustrated-enabled" ${er.frustrated?.enabled !== false ? 'checked' : ''} style="accent-color: #58a6ff; width: 18px; height: 18px;">
+                            <div>
+                                <span style="color: #c9d1d9; font-weight: 600;">😤 Frustrated</span>
+                                <p style="margin: 4px 0 0 0; color: #8b949e; font-size: 12px;">AI will empathize and move faster</p>
+                            </div>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; margin: 10px 0 0 30px; cursor: pointer;">
+                            <input type="checkbox" id="fdb-emotion-frustrated-reduce" ${er.frustrated?.reduceFriction ? 'checked' : ''} style="accent-color: #f0883e;">
+                            <span style="color: #f0883e; font-size: 13px;">Skip optional questions</span>
+                        </label>
+                    </div>
+                    
+                    <!-- Angry -->
+                    <div style="padding: 14px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
+                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                            <input type="checkbox" id="fdb-emotion-angry-enabled" ${er.angry?.enabled !== false ? 'checked' : ''} style="accent-color: #58a6ff; width: 18px; height: 18px;">
+                            <div>
+                                <span style="color: #c9d1d9; font-weight: 600;">😠 Angry</span>
+                                <p style="margin: 4px 0 0 0; color: #8b949e; font-size: 12px;">AI will apologize and de-escalate</p>
+                            </div>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; margin: 10px 0 0 30px; cursor: pointer;">
+                            <input type="checkbox" id="fdb-emotion-angry-escalate" ${er.angry?.offerEscalation ? 'checked' : ''} style="accent-color: #f85149;">
+                            <span style="color: #f85149; font-size: 13px;">Offer escalation to human</span>
+                        </label>
+                    </div>
+                    
+                    <!-- Friendly -->
+                    <div style="padding: 14px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
+                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                            <input type="checkbox" id="fdb-emotion-friendly-enabled" ${er.friendly?.enabled !== false ? 'checked' : ''} style="accent-color: #58a6ff; width: 18px; height: 18px;">
+                            <div>
+                                <span style="color: #c9d1d9; font-weight: 600;">😊 Friendly</span>
+                                <p style="margin: 4px 0 0 0; color: #8b949e; font-size: 12px;">AI will be warm and personable</p>
+                            </div>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; margin: 10px 0 0 30px; cursor: pointer;">
+                            <input type="checkbox" id="fdb-emotion-friendly-smalltalk" ${er.friendly?.allowSmallTalk ? 'checked' : ''} style="accent-color: #3fb950;">
+                            <span style="color: #3fb950; font-size: 13px;">Allow brief small talk</span>
+                        </label>
+                    </div>
+                    
+                    <!-- Joking -->
+                    <div style="padding: 14px; background: #0d1117; border: 1px solid #3fb950; border-radius: 8px;">
+                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                            <input type="checkbox" id="fdb-emotion-joking-enabled" ${er.joking?.enabled !== false ? 'checked' : ''} style="accent-color: #58a6ff; width: 18px; height: 18px;">
+                            <div>
+                                <span style="color: #c9d1d9; font-weight: 600;">😄 Joking/Playful</span>
+                                <p style="margin: 4px 0 0 0; color: #8b949e; font-size: 12px;">AI knows "I'm dying here" is hyperbole, not emergency</p>
+                            </div>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; margin: 10px 0 0 30px; cursor: pointer;">
+                            <input type="checkbox" id="fdb-emotion-joking-respond" ${er.joking?.respondInKind !== false ? 'checked' : ''} style="accent-color: #3fb950;">
+                            <span style="color: #3fb950; font-size: 13px;">Match their playful energy</span>
+                        </label>
+                    </div>
+                    
+                    <!-- Panicked/Emergency -->
+                    <div style="padding: 14px; background: #1a0d0d; border: 1px solid #f85149; border-radius: 8px;">
+                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                            <input type="checkbox" id="fdb-emotion-panicked-enabled" ${er.panicked?.enabled !== false ? 'checked' : ''} style="accent-color: #58a6ff; width: 18px; height: 18px;">
+                            <div>
+                                <span style="color: #f85149; font-weight: 600;">🚨 Emergency/Panicked</span>
+                                <p style="margin: 4px 0 0 0; color: #8b949e; font-size: 12px;">AI recognizes real danger: gas leak, smoke, fire, flooding</p>
+                            </div>
+                        </label>
+                        <div style="margin: 10px 0 0 30px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="fdb-emotion-panicked-bypass" ${er.panicked?.bypassAllQuestions !== false ? 'checked' : ''} style="accent-color: #f85149;">
+                                <span style="color: #f85149; font-size: 13px;">Skip questions, dispatch immediately</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer;">
+                                <input type="checkbox" id="fdb-emotion-panicked-confirm" ${er.panicked?.confirmFirst !== false ? 'checked' : ''} style="accent-color: #f0883e;">
+                                <span style="color: #f0883e; font-size: 13px;">Ask "Are you in immediate danger?" first</span>
+                            </label>
+                        </div>
+                    </div>
+                    
                 </div>
             </div>
         `;
     }
 
-    renderEmotionSection(emotion, label, config = {}) {
-        const acks = (config.acknowledgments || []).join('\\n');
-        
-        // Determine border color based on emotion type
-        const borderColor = emotion === 'panicked' ? '#f85149' : 
-                           emotion === 'joking' ? '#3fb950' : '#30363d';
-        
-        return `
-            <div style="border: 1px solid ${borderColor}; border-radius: 8px; padding: 16px; background: #0d1117;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <span style="color: #c9d1d9; font-weight: 600;">${label}</span>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                        <input type="checkbox" id="fdb-emotion-${emotion}-enabled" ${config.enabled !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
-                        <span style="color: #8b949e; font-size: 0.875rem;">Enabled</span>
-                    </label>
-                </div>
-                
-                ${emotion === 'joking' ? `
-                    <div style="background: #1c2128; border-radius: 6px; padding: 10px; margin-bottom: 12px; font-size: 12px; color: #8b949e;">
-                        <strong style="color: #3fb950;">NOT emergencies:</strong> "I'm dying", "killing me", "disaster", "my house is an oven"<br>
-                        AI will respond playfully, not panic.
-                    </div>
-                ` : ''}
-                
-                ${emotion === 'panicked' ? `
-                    <div style="background: #2a1c1c; border-radius: 6px; padding: 10px; margin-bottom: 12px; font-size: 12px; color: #f85149;">
-                        <strong>REAL emergencies:</strong> gas leak, smoke, fire, sparks, flooding, "no heat + elderly/baby"<br>
-                        AI will bypass questions and dispatch immediately.
-                    </div>
-                ` : ''}
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                    <div>
-                        <label style="display: block; margin-bottom: 6px; color: #8b949e; font-size: 0.875rem;">Acknowledgment Phrases (one per line)</label>
-                        <textarea id="fdb-emotion-${emotion}-acks" rows="3" style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.875rem; resize: vertical;">${acks}</textarea>
-                    </div>
-                    <div>
-                        <label style="display: block; margin-bottom: 6px; color: #8b949e; font-size: 0.875rem;">Follow-up Phrase</label>
-                        <input type="text" id="fdb-emotion-${emotion}-followup" value="${config.followUp || ''}" style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                        
-                        ${emotion === 'frustrated' ? `
-                            <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer;">
-                                <input type="checkbox" id="fdb-emotion-frustrated-reduce" ${config.reduceFriction ? 'checked' : ''} style="accent-color: #f0883e;">
-                                <span style="color: #f0883e; font-size: 0.875rem;">Skip optional questions</span>
-                            </label>
-                        ` : ''}
-                        
-                        ${emotion === 'angry' ? `
-                            <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer;">
-                                <input type="checkbox" id="fdb-emotion-angry-escalate" ${config.offerEscalation ? 'checked' : ''} style="accent-color: #f85149;">
-                                <span style="color: #f85149; font-size: 0.875rem;">Offer escalation to human</span>
-                            </label>
-                        ` : ''}
-                        
-                        ${emotion === 'friendly' ? `
-                            <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer;">
-                                <input type="checkbox" id="fdb-emotion-friendly-smalltalk" ${config.allowSmallTalk ? 'checked' : ''} style="accent-color: #3fb950;">
-                                <span style="color: #3fb950; font-size: 0.875rem;">Allow small talk</span>
-                            </label>
-                        ` : ''}
-                        
-                        ${emotion === 'joking' ? `
-                            <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer;">
-                                <input type="checkbox" id="fdb-emotion-joking-respond" ${config.respondInKind !== false ? 'checked' : ''} style="accent-color: #3fb950;">
-                                <span style="color: #3fb950; font-size: 0.875rem;">Match their playful energy</span>
-                            </label>
-                        ` : ''}
-                        
-                        ${emotion === 'panicked' ? `
-                            <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer;">
-                                <input type="checkbox" id="fdb-emotion-panicked-bypass" ${config.bypassAllQuestions !== false ? 'checked' : ''} style="accent-color: #f85149;">
-                                <span style="color: #f85149; font-size: 0.875rem;">Skip all questions (emergency dispatch)</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 8px; margin-top: 8px; cursor: pointer;">
-                                <input type="checkbox" id="fdb-emotion-panicked-confirm" ${config.confirmFirst !== false ? 'checked' : ''} style="accent-color: #f0883e;">
-                                <span style="color: #f0883e; font-size: 0.875rem;">Ask "Are you in danger?" first</span>
-                            </label>
-                        ` : ''}
-                    </div>
-                </div>
-            </div>
-        `;
-    }
+    // REMOVED: renderEmotionSection - No longer needed
+    // AI generates its own words. We only control behavior rules via toggles.
 
     renderFrustrationTab() {
         const triggers = this.config.frustrationTriggers || [];
@@ -1102,35 +1099,38 @@ class FrontDeskBehaviorManager {
             };
         }
 
-        // Process all emotion types including joking and panicked
+        // Simplified emotion toggles - AI generates its own words
+        if (!this.config.emotionResponses) this.config.emotionResponses = {};
+        
+        // Simple enabled toggles for each emotion
         ['stressed', 'frustrated', 'angry', 'friendly', 'joking', 'panicked'].forEach(emotion => {
-            const acksEl = document.getElementById(`fdb-emotion-${emotion}-acks`);
-            if (acksEl) {
-                if (!this.config.emotionResponses) this.config.emotionResponses = {};
+            const enabledEl = document.getElementById(`fdb-emotion-${emotion}-enabled`);
+            if (enabledEl) {
                 this.config.emotionResponses[emotion] = {
-                    enabled: getChecked(`fdb-emotion-${emotion}-enabled`),
-                    acknowledgments: acksEl.value.split('\\n').filter(a => a.trim()),
-                    followUp: get(`fdb-emotion-${emotion}-followup`)
+                    enabled: enabledEl.checked
                 };
-                
-                if (emotion === 'frustrated') {
-                    this.config.emotionResponses[emotion].reduceFriction = getChecked('fdb-emotion-frustrated-reduce');
-                }
-                if (emotion === 'angry') {
-                    this.config.emotionResponses[emotion].offerEscalation = getChecked('fdb-emotion-angry-escalate');
-                }
-                if (emotion === 'friendly') {
-                    this.config.emotionResponses[emotion].allowSmallTalk = getChecked('fdb-emotion-friendly-smalltalk');
-                }
-                if (emotion === 'joking') {
-                    this.config.emotionResponses[emotion].respondInKind = getChecked('fdb-emotion-joking-respond');
-                }
-                if (emotion === 'panicked') {
-                    this.config.emotionResponses[emotion].bypassAllQuestions = getChecked('fdb-emotion-panicked-bypass');
-                    this.config.emotionResponses[emotion].confirmFirst = getChecked('fdb-emotion-panicked-confirm');
-                }
             }
         });
+        
+        // Extra behavior rules for specific emotions
+        if (document.getElementById('fdb-emotion-frustrated-reduce')) {
+            this.config.emotionResponses.frustrated.reduceFriction = getChecked('fdb-emotion-frustrated-reduce');
+        }
+        if (document.getElementById('fdb-emotion-angry-escalate')) {
+            this.config.emotionResponses.angry.offerEscalation = getChecked('fdb-emotion-angry-escalate');
+        }
+        if (document.getElementById('fdb-emotion-friendly-smalltalk')) {
+            this.config.emotionResponses.friendly.allowSmallTalk = getChecked('fdb-emotion-friendly-smalltalk');
+        }
+        if (document.getElementById('fdb-emotion-joking-respond')) {
+            this.config.emotionResponses.joking.respondInKind = getChecked('fdb-emotion-joking-respond');
+        }
+        if (document.getElementById('fdb-emotion-panicked-bypass')) {
+            this.config.emotionResponses.panicked.bypassAllQuestions = getChecked('fdb-emotion-panicked-bypass');
+        }
+        if (document.getElementById('fdb-emotion-panicked-confirm')) {
+            this.config.emotionResponses.panicked.confirmFirst = getChecked('fdb-emotion-panicked-confirm');
+        }
 
         if (document.getElementById('fdb-escalation-enabled') !== null) {
             this.config.escalation = {

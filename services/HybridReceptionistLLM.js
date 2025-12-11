@@ -543,22 +543,46 @@ NEVER say any of these phrases. They make you sound robotic.
         }
         
         // ════════════════════════════════════════════════════════════════════
-        // EMOTION RESPONSES FROM UI
+        // EMOTION HANDLING (behavior rules, not scripts)
+        // AI generates its own natural responses - we just tell it what to DO
         // ════════════════════════════════════════════════════════════════════
         let emotionSection = '';
         const emotions = uiConfig.emotionResponses;
         if (emotions && Object.keys(emotions).length > 0) {
-            const emotionRules = Object.entries(emotions)
-                .filter(([_, v]) => v.enabled !== false)
-                .map(([emotion, config]) => {
-                    const acks = config.acknowledgments?.join(' OR ') || 'Acknowledge briefly';
-                    return `- ${emotion.toUpperCase()}: ${acks}${config.followUp ? ` → "${config.followUp}"` : ''}`;
-                })
-                .join('\n');
-            if (emotionRules) {
+            const emotionRules = [];
+            
+            if (emotions.stressed?.enabled !== false) {
+                emotionRules.push('- If stressed/worried → Be reassuring and helpful');
+            }
+            if (emotions.frustrated?.enabled !== false) {
+                const extra = emotions.frustrated?.reduceFriction ? ' (skip optional questions)' : '';
+                emotionRules.push(`- If frustrated → Empathize and move faster${extra}`);
+            }
+            if (emotions.angry?.enabled !== false) {
+                const extra = emotions.angry?.offerEscalation ? ' (offer human if needed)' : '';
+                emotionRules.push(`- If angry → Apologize and de-escalate${extra}`);
+            }
+            if (emotions.friendly?.enabled !== false) {
+                const extra = emotions.friendly?.allowSmallTalk ? ' (brief pleasantries OK)' : '';
+                emotionRules.push(`- If friendly/chatty → Be warm${extra}`);
+            }
+            if (emotions.joking?.enabled !== false) {
+                emotionRules.push('- If joking/hyperbole ("I\'m dying!") → Match playful energy, NOT an emergency');
+            }
+            if (emotions.panicked?.enabled !== false) {
+                const action = emotions.panicked?.bypassAllQuestions 
+                    ? 'DISPATCH IMMEDIATELY' 
+                    : 'Prioritize urgency';
+                const confirm = emotions.panicked?.confirmFirst 
+                    ? ' (ask "Are you in immediate danger?" first)' 
+                    : '';
+                emotionRules.push(`- If REAL emergency (gas, fire, flooding) → ${action}${confirm}`);
+            }
+            
+            if (emotionRules.length > 0) {
                 emotionSection = `
-═══ EMOTION RESPONSES (from UI settings) ═══
-${emotionRules}
+═══ EMOTION HANDLING ═══
+${emotionRules.join('\n')}
 `;
             }
         }

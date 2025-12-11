@@ -94,84 +94,38 @@ const DEFAULT_FRONT_DESK_CONFIG = {
     },
 
     // ════════════════════════════════════════════════════════════════════════
-    // EMOTION RESPONSES (What to say when caller is emotional)
+    // EMOTION RESPONSES (Behavior rules - AI generates its own words)
     // ════════════════════════════════════════════════════════════════════════
+    // NOTE: These are BEHAVIOR RULES, not scripts. The AI (GPT-4o-mini) 
+    // naturally knows how to be empathetic, apologetic, playful, etc.
+    // We just tell it WHAT TO DO, not WHAT TO SAY.
     emotionResponses: {
         stressed: {
-            label: 'Stressed',
-            description: 'Caller sounds worried or anxious',
-            acknowledgments: [
-                'I understand, that sounds stressful.',
-                'I can hear this is frustrating.',
-                'That must be really uncomfortable.'
-            ],
-            followUp: 'Let me help you get this taken care of.'
+            enabled: true,
+            // AI behavior: Be reassuring and helpful
         },
         frustrated: {
-            label: 'Frustrated',
-            description: 'Caller is annoyed or impatient',
-            acknowledgments: [
-                'I completely understand.',
-                'I hear you, let\'s get this sorted.',
-                'I get it - let\'s just get this done.'
-            ],
-            followUp: 'I\'ll get someone scheduled right away.',
-            reduceFriction: true  // Skip optional questions
+            enabled: true,
+            reduceFriction: true  // Skip optional questions, move faster
         },
         angry: {
-            label: 'Angry',
-            description: 'Caller is upset or hostile',
-            acknowledgments: [
-                'I\'m really sorry you\'re dealing with this.',
-                'I understand you\'re upset.',
-                'I apologize for the frustration.'
-            ],
-            followUp: 'Let me make this right.',
-            offerEscalation: true,
-            maxTriesBeforeEscalate: 2
+            enabled: true,
+            offerEscalation: true  // Offer to connect to human
         },
         friendly: {
-            label: 'Friendly',
-            description: 'Caller is pleasant and chatty',
-            acknowledgments: [],  // No special acknowledgment needed
-            allowSmallTalk: true,
-            smallTalkLimit: 1  // One exchange of pleasantries, then focus
+            enabled: true,
+            allowSmallTalk: true  // Brief pleasantries OK
         },
         joking: {
-            label: 'Joking',
-            description: 'Caller is humorous or playful (hyperbole like "I\'m dying here" is NOT an emergency)',
-            acknowledgments: [
-                'Ha! I like that.',
-                'That\'s a good one!'
-            ],
-            respondInKind: true,  // Match their energy briefly
-            // IMPORTANT: Common hyperbole that is NOT urgent:
-            // - "I'm dying" / "killing me" (usually = just very hot/uncomfortable)
-            // - "It's a disaster" (usually = just inconvenient)
-            // - "My house is an oven" (usually = just hot, not fire)
-            notEmergencyPhrases: [
-                'dying', 'killing me', 'disaster', 'oven', 'freezing to death',
-                'roasting', 'melting', 'going crazy'
-            ]
+            enabled: true,
+            respondInKind: true,  // Match their playful energy
+            // AI knows "I'm dying" is hyperbole, not emergency
         },
         panicked: {
-            label: 'Panicked/Emergency',
-            description: 'Caller describes actual danger - TREAT URGENTLY',
-            acknowledgments: [
-                'I hear you, that sounds serious.',
-                'I understand - that needs immediate attention.'
-            ],
-            followUp: 'Let me get someone out there right away.',
-            bypassAllQuestions: true,  // Skip name/phone, just dispatch
-            confirmFirst: true,  // But confirm it's real emergency
-            // THESE ARE REAL EMERGENCIES (not jokes):
-            emergencyPhrases: [
-                'gas leak', 'smell gas', 'carbon monoxide', 'co detector',
-                'smoke', 'fire', 'sparks', 'burning smell', 'electrical fire',
-                'flooding', 'burst pipe', 'water everywhere', 'sewage',
-                'no heat' + 'elderly', 'no heat' + 'baby', 'no heat' + 'freezing',
-                'chest pain', 'can\'t breathe', 'having trouble breathing'
-            ]
+            enabled: true,
+            bypassAllQuestions: true,  // Skip name/phone, dispatch NOW
+            confirmFirst: true,  // Ask "Are you in immediate danger?" first
+            // AI recognizes real emergencies: gas, smoke, fire, flooding
         },
         neutral: {
             label: 'Neutral',
