@@ -18,6 +18,7 @@ class AITestConsole {
         this.conversationHistory = [];
         this.testSessionId = `test-${Date.now()}`;
         this.knownSlots = {};
+        this.debugLog = []; // Running log of all turns
         
         // Voice features
         this.isListening = false;
@@ -461,9 +462,29 @@ class AITestConsole {
                 // 1. Save debug info FIRST
                 this.lastDebug = data.debug;
                 this.lastMetadata = data.metadata;
+                
+                // Add to running debug log
+                const source = data.debug?.wasQuickAnswer ? 'QUICK_ANSWER' : 
+                               data.debug?.triageMatched ? 'TRIAGE' : 
+                               data.debug?.wasFallback ? 'FALLBACK' : 'LLM';
+                               
+                this.debugLog.push({
+                    turn: data.debug?.turnCount || this.debugLog.length + 1,
+                    userMessage: message,
+                    aiResponse: data.reply,
+                    source,
+                    latencyMs: data.metadata?.latencyMs,
+                    tokens: data.metadata?.tokensUsed,
+                    mode: data.metadata?.mode,
+                    needsInfo: data.metadata?.needsInfo,
+                    historySent: data.debug?.historyReceived,
+                    quickAnswer: data.debug?.wasQuickAnswer,
+                    triageMatch: data.debug?.triageMatched,
+                    timestamp: new Date().toISOString()
+                });
+                
                 console.log('[AI Test] Response received:', {
-                    source: data.debug?.wasQuickAnswer ? 'QUICK_ANSWER' : 
-                            data.debug?.triageMatched ? 'TRIAGE' : 'LLM',
+                    source,
                     latency: data.metadata?.latencyMs,
                     mode: data.metadata?.mode
                 });
@@ -666,6 +687,7 @@ class AITestConsole {
         this.conversationHistory = [];
         this.knownSlots = {};
         this.lastDebug = null;
+        this.debugLog = [];
         this.testSessionId = `test-${Date.now()}`;
         
         const container = document.getElementById('test-chat-messages');
@@ -681,89 +703,52 @@ class AITestConsole {
     }
     
     /**
-     * Rate a response as good or bad (feedback for learning)
-     */
-    async rateFeedback(feedbackId, rating, responseText, source) {
-        const container = document.getElementById(feedbackId);
-        if (!container) return;
-        
-        // Get the last user message that prompted this response
-        const lastUserMessage = this.conversationHistory
-            .filter(h => h.role === 'user')
-            .slice(-1)[0]?.content || 'Unknown';
-        
-        // Visual feedback immediately
-        if (rating === 'good') {
-            container.innerHTML = `<span style="color: #3fb950; font-size: 11px;">✅ Saved as good example</span>`;
-        } else {
-            // For bad ratings, ask what was wrong
-            const reason = prompt('What was wrong with this response?\n\nOptions:\n- Too generic\n- Wrong tone\n- Asked wrong question\n- Should have moved to booking\n- Other');
-            
-            if (!reason) {
-                container.innerHTML = `<span style="color: #8b949e; font-size: 11px;">Cancelled</span>`;
-                return;
-            }
-            
-            container.innerHTML = `<span style="color: #f0883e; font-size: 11px;">📝 Feedback saved</span>`;
-        }
-        
-        // Save to backend
-        try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            await fetch(`/api/admin/ai-test/${this.companyId}/feedback`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    sessionId: this.testSessionId,
-                    userMessage: lastUserMessage,
-                    aiResponse: responseText.substring(0, 500),
-                    rating,
-                    reason: rating === 'bad' ? (typeof reason !== 'undefined' ? reason : null) : null,
-                    source,
-                    timestamp: new Date().toISOString(),
-                    conversationContext: this.conversationHistory.slice(-4)
-                })
-            });
-            
-            console.log('[AI Test] Feedback saved:', { rating, source });
-        } catch (error) {
-            console.error('[AI Test] Failed to save feedback:', error);
-        }
-    }
-    
-    /**
-     * Copy debug info to clipboard for sharing
+     * Copy full debug log to clipboard for sharing
      */
     copyDebug() {
-        const debug = this.lastDebug;
-        const history = this.conversationHistory;
+        const separator = '═'.repeat(50);
+        const thinSeparator = '─'.repeat(50);
         
-        const text = `
-=== AI TEST CONSOLE DEBUG ===
+        let text = `${separator}
+AI TEST CONSOLE - FULL DEBUG LOG
+${separator}
 Session: ${this.testSessionId}
-Total Turns: ${history.length / 2}
+Total Turns: ${this.debugLog.length}
+Slots Collected: ${Object.entries(this.knownSlots).filter(([k,v]) => v).map(([k,v]) => `${k}=${v}`).join(', ') || 'None'}
+${separator}
 
---- Last Turn Debug ---
-Turn #: ${debug?.turnCount || 'N/A'}
-History Sent: ${debug?.historyReceived || 0} messages
-Quick Answer: ${debug?.wasQuickAnswer ? 'Yes' : 'No'}
-Triage Match: ${debug?.triageMatched ? 'Yes' : 'No'}
+`;
+        
+        // Add each turn
+        this.debugLog.forEach((entry, i) => {
+            text += `${thinSeparator}
+TURN ${entry.turn}
+${thinSeparator}
+Source: ${entry.source}
+Latency: ${entry.latencyMs}ms | Tokens: ${entry.tokens} | Mode: ${entry.mode}
+History Sent: ${entry.historySent} messages
+Quick Answer: ${entry.quickAnswer ? 'Yes' : 'No'} | Triage: ${entry.triageMatch ? 'Yes' : 'No'}
 
---- Conversation History ---
-${history.map((h, i) => `${i+1}. [${h.role}]: ${h.content}`).join('\n')}
+USER: ${entry.userMessage}
 
---- Slots Collected ---
-${Object.entries(this.knownSlots).filter(([k,v]) => v).map(([k,v]) => `${k}: ${v}`).join('\n') || 'None'}
-`.trim();
+AI: ${entry.aiResponse}
+
+`;
+        });
+        
+        text += `${separator}
+END OF DEBUG LOG
+${separator}`;
         
         navigator.clipboard.writeText(text).then(() => {
-            alert('✅ Debug info copied to clipboard!');
+            // Show brief toast instead of alert
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: #238636; color: white; padding: 12px 20px; border-radius: 8px; font-size: 14px; z-index: 99999;';
+            toast.textContent = '✅ Debug log copied!';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
         }).catch(err => {
             console.error('Failed to copy:', err);
-            // Fallback: show in prompt
             prompt('Copy this debug info:', text);
         });
     }
@@ -803,91 +788,83 @@ ${Object.entries(this.knownSlots).filter(([k,v]) => v).map(([k,v]) => `${k}: ${v
             .map(s => `<span style="background: #f0883e; padding: 2px 8px; border-radius: 4px; font-size: 11px;">${s}</span>`)
             .join(' ') || '<span style="color: #3fb950;">All collected! ✓</span>';
         
+        // Build the running debug log
+        const debugLogHtml = this.debugLog.length > 0 
+            ? this.debugLog.map((entry, i) => `
+                <div style="padding: 8px 0; ${i > 0 ? 'border-top: 1px dashed #30363d;' : ''}">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="color: #58a6ff; font-weight: bold;">Turn ${entry.turn}</span>
+                        <span style="background: ${this.getSourceColor(entry.source)}; color: white; padding: 1px 6px; border-radius: 3px; font-size: 9px;">${entry.source}</span>
+                    </div>
+                    <div style="color: #3fb950; font-size: 11px; margin-bottom: 2px;">
+                        👤 ${entry.userMessage?.substring(0, 60)}${entry.userMessage?.length > 60 ? '...' : ''}
+                    </div>
+                    <div style="color: #8b949e; font-size: 11px; margin-bottom: 4px;">
+                        🤖 ${entry.aiResponse?.substring(0, 60)}${entry.aiResponse?.length > 60 ? '...' : ''}
+                    </div>
+                    <div style="display: flex; gap: 8px; font-size: 10px; color: #6e7681;">
+                        <span>⚡${entry.latencyMs}ms</span>
+                        <span>🎯${entry.tokens}</span>
+                        <span>📍${entry.mode}</span>
+                        <span>📨${entry.historySent} hist</span>
+                    </div>
+                </div>
+            `).join('')
+            : '<div style="text-align: center; color: #6e7681; padding: 12px;">Send a message to see debug log</div>';
+        
         content.innerHTML = `
-            <div style="display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: flex; flex-direction: column; gap: 12px;">
                 
-                <!-- Session Info -->
-                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px;">
-                    <h4 style="margin: 0 0 8px 0; color: #8b949e; font-size: 12px;">SESSION</h4>
-                    <div style="color: #c9d1d9; font-family: monospace; font-size: 11px;">${this.testSessionId}</div>
-                    <div style="margin-top: 4px; color: #8b949e; font-size: 11px;">${this.conversationHistory.length / 2} turns</div>
-                </div>
-                
-                <!-- Slots Collected -->
-                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px;">
-                    <h4 style="margin: 0 0 8px 0; color: #3fb950; font-size: 12px;">✓ COLLECTED</h4>
-                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">${slotsCollected}</div>
-                </div>
-                
-                <!-- Slots Missing -->
-                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px;">
-                    <h4 style="margin: 0 0 8px 0; color: #f0883e; font-size: 12px;">⏳ STILL NEED</h4>
-                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">${slotsMissing}</div>
-                </div>
-                
-                ${metadata ? `
-                <!-- Last Response Metrics -->
-                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px;">
-                    <h4 style="margin: 0 0 8px 0; color: #58a6ff; font-size: 12px;">📊 LAST RESPONSE</h4>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
-                        <div style="color: #8b949e;">Latency:</div>
-                        <div style="color: ${metadata.latencyMs < 500 ? '#3fb950' : metadata.latencyMs < 1000 ? '#f0883e' : '#f85149'};">${metadata.latencyMs || '—'}ms</div>
-                        
-                        <div style="color: #8b949e;">Tokens:</div>
-                        <div style="color: #c9d1d9;">${metadata.tokensUsed || '—'}</div>
-                        
-                        <div style="color: #8b949e;">Mode:</div>
-                        <div style="color: #c9d1d9;">${metadata.mode || 'discovery'}</div>
-                        
-                        <div style="color: #8b949e;">Next:</div>
-                        <div style="color: #c9d1d9;">${metadata.needsInfo || 'none'}</div>
+                <!-- Session Header -->
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #161b22; border-radius: 6px;">
+                    <div>
+                        <span style="color: #8b949e; font-size: 10px;">SESSION</span>
+                        <div style="color: #c9d1d9; font-size: 11px; font-family: monospace;">${this.testSessionId.substring(0, 20)}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="color: #58a6ff; font-size: 18px; font-weight: bold;">${this.debugLog.length}</span>
+                        <div style="color: #8b949e; font-size: 10px;">turns</div>
                     </div>
                 </div>
-                ` : ''}
                 
-                <!-- Debug Panel - Shows what LLM received -->
-                <div style="background: #1a1d23; border: 1px solid #f0883e; border-radius: 8px; padding: 12px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <h4 style="margin: 0; color: #f0883e; font-size: 12px;">🔧 DEBUG (What LLM Received)</h4>
-                        <button onclick="window.aiTestConsole.copyDebug()" style="background: #30363d; border: none; color: #8b949e; padding: 4px 8px; border-radius: 4px; font-size: 10px; cursor: pointer;">📋 Copy</button>
+                <!-- Slots Summary -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div style="background: #161b22; border-radius: 6px; padding: 8px;">
+                        <div style="color: #3fb950; font-size: 10px; margin-bottom: 4px;">✓ COLLECTED</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">${slotsCollected}</div>
                     </div>
-                    ${this.lastDebug ? `
-                    <div style="font-size: 11px; color: #8b949e; display: grid; gap: 6px;">
-                        <div><strong style="color: #c9d1d9;">Turn #:</strong> ${this.lastDebug.turnCount || 1}</div>
-                        <div><strong style="color: #c9d1d9;">History sent:</strong> ${this.lastDebug.historyReceived || 0} messages</div>
-                        ${this.lastDebug.historyPreview?.length > 0 ? `
-                        <div style="background: #161b22; padding: 6px; border-radius: 4px; margin-top: 4px;">
-                            <div style="color: #58a6ff; font-size: 10px; margin-bottom: 4px;">Last history sent:</div>
-                            ${this.lastDebug.historyPreview.map(h => `
-                                <div style="color: ${h.role === 'user' ? '#3fb950' : '#58a6ff'}; font-size: 10px;">
-                                    ${h.role}: ${h.content}
-                                </div>
-                            `).join('')}
-                        </div>
-                        ` : ''}
-                        <div><strong style="color: #c9d1d9;">Quick Answer:</strong> ${this.lastDebug.wasQuickAnswer ? '✅ Yes' : '❌ No'}</div>
-                        <div><strong style="color: #c9d1d9;">Triage Match:</strong> ${this.lastDebug.triageMatched ? '✅ Yes' : '❌ No'}</div>
+                    <div style="background: #161b22; border-radius: 6px; padding: 8px;">
+                        <div style="color: #f0883e; font-size: 10px; margin-bottom: 4px;">⏳ NEED</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">${slotsMissing}</div>
                     </div>
-                    ` : `
-                    <div style="font-size: 11px; color: #6e7681; text-align: center; padding: 8px;">
-                        Send a message to see debug info
-                    </div>
-                    `}
                 </div>
                 
-                <!-- Tips -->
-                <div style="background: #1c2128; border: 1px solid #30363d; border-radius: 8px; padding: 12px;">
-                    <h4 style="margin: 0 0 8px 0; color: #a371f7; font-size: 12px;">💡 TESTING TIPS</h4>
-                    <ul style="margin: 0; padding-left: 16px; color: #8b949e; font-size: 11px; line-height: 1.6;">
-                        <li>Try interrupting mid-booking</li>
-                        <li>Ask off-topic questions</li>
-                        <li>Be vague or give partial info</li>
-                        <li>Test with frustration phrases</li>
-                        <li>Check emergency detection</li>
-                    </ul>
+                <!-- Running Debug Log -->
+                <div style="background: #0d1117; border: 1px solid #f0883e; border-radius: 8px; overflow: hidden;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #161b22; border-bottom: 1px solid #30363d;">
+                        <h4 style="margin: 0; color: #f0883e; font-size: 12px;">🔧 DEBUG LOG (All Turns)</h4>
+                        <button onclick="window.aiTestConsole.copyDebug()" style="background: #238636; border: none; color: white; padding: 4px 10px; border-radius: 4px; font-size: 10px; cursor: pointer; font-weight: bold;">📋 Copy All</button>
+                    </div>
+                    <div style="max-height: 300px; overflow-y: auto; padding: 8px 12px; font-family: monospace;">
+                        ${debugLogHtml}
+                    </div>
                 </div>
             </div>
         `;
+    }
+    
+    /**
+     * Get color for source badge
+     */
+    getSourceColor(source) {
+        const colors = {
+            'LLM': '#8b5cf6',
+            'QUICK_ANSWER': '#238636',
+            'TRIAGE': '#1f6feb',
+            'FALLBACK': '#f0883e',
+            'EMERGENCY': '#da3633'
+        };
+        return colors[source] || '#6e7681';
     }
 
     /**
