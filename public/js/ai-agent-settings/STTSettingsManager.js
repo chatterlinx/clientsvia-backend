@@ -689,9 +689,15 @@ class STTSettingsManager {
             responseLength: this.profile.callExperience?.responseLength || 'medium'
         };
         
+        console.log('[STT SETTINGS] 🔵 Saving call experience settings:', settings);
+        console.log('[STT SETTINGS] 🔵 Company ID:', this.companyId);
+        
         try {
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const response = await fetch(`/api/company/${this.companyId}/call-experience`, {
+            const url = `/api/company/${this.companyId}/call-experience`;
+            console.log('[STT SETTINGS] 🔵 PUT URL:', url);
+            
+            const response = await fetch(url, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -700,14 +706,18 @@ class STTSettingsManager {
                 body: JSON.stringify(settings)
             });
             
+            console.log('[STT SETTINGS] 🔵 Response status:', response.status);
+            const responseData = await response.json();
+            console.log('[STT SETTINGS] 🔵 Response body:', responseData);
+            
             if (response.ok) {
                 this.profile.callExperience = settings;
                 alert('✅ Call Experience settings saved!');
             } else {
-                throw new Error('Failed to save settings');
+                throw new Error(responseData.error || 'Failed to save settings');
             }
         } catch (error) {
-            console.error('[STT SETTINGS] Save failed:', error);
+            console.error('[STT SETTINGS] ❌ Save failed:', error);
             alert('Failed to save: ' + error.message);
         }
     }

@@ -2697,11 +2697,11 @@ router.put('/:companyId/call-experience', async (req, res) => {
     const { companyId } = req.params;
     const settings = req.body;
     
-    logger.info(`[CALL EXPERIENCE] PUT request for company: ${companyId}`, {
-        ashleyMode: settings.ashleyMode,
-        speechTimeout: settings.speechTimeout,
-        endSilenceTimeout: settings.endSilenceTimeout
-    });
+    logger.info(`[CALL EXPERIENCE] ═══════════════════════════════════════════`);
+    logger.info(`[CALL EXPERIENCE] 🔵 PUT REQUEST RECEIVED`);
+    logger.info(`[CALL EXPERIENCE] Company: ${companyId}`);
+    logger.info(`[CALL EXPERIENCE] Settings:`, JSON.stringify(settings, null, 2));
+    logger.info(`[CALL EXPERIENCE] ═══════════════════════════════════════════`);
     
     try {
         // Validate companyId
@@ -2740,6 +2740,10 @@ router.put('/:companyId/call-experience', async (req, res) => {
             }
         };
         
+        logger.info(`[CALL EXPERIENCE] 🔵 Executing MongoDB update...`);
+        logger.info(`[CALL EXPERIENCE] 🔵 Update path: ${updatePath}`);
+        logger.info(`[CALL EXPERIENCE] 🔵 Update object:`, JSON.stringify(update, null, 2));
+        
         const result = await Company.findByIdAndUpdate(
             companyId,
             update,
@@ -2747,11 +2751,17 @@ router.put('/:companyId/call-experience', async (req, res) => {
         );
         
         if (!result) {
+            logger.error(`[CALL EXPERIENCE] ❌ Company not found: ${companyId}`);
             return res.status(404).json({ error: 'Company not found' });
         }
         
+        // Log what was actually saved
+        logger.info(`[CALL EXPERIENCE] ✅ MongoDB update successful`);
+        logger.info(`[CALL EXPERIENCE] 🔵 Saved callExperience:`, JSON.stringify(result.aiAgentSettings?.callExperience, null, 2));
+        
         // CRITICAL: Clear Redis cache so live calls use new settings
-        await clearCompanyCache(companyId, 'CALL_EXPERIENCE_UPDATE');
+        const cacheCleared = await clearCompanyCache(companyId, 'CALL_EXPERIENCE_UPDATE');
+        logger.info(`[CALL EXPERIENCE] 🔵 Cache cleared: ${cacheCleared}`);
         
         logger.info(`[CALL EXPERIENCE] ✅ Settings saved for ${companyId}`, {
             ashleyMode: settings.ashleyMode,
@@ -2759,7 +2769,7 @@ router.put('/:companyId/call-experience', async (req, res) => {
             endSilenceTimeout: settings.endSilenceTimeout
         });
         
-        res.json({ success: true, message: 'Call experience settings saved' });
+        res.json({ success: true, message: 'Call experience settings saved', saved: result.aiAgentSettings?.callExperience });
         
     } catch (error) {
         logger.error('[CALL EXPERIENCE] PUT Error:', error);
