@@ -626,6 +626,13 @@ class STTSettingsManager {
     
     // Call Experience Methods
     async applyAshleyMode() {
+        // Check if already active - don't reset user's tweaks!
+        if (this.profile.callExperience?.ashleyMode === true) {
+            console.log('[STT SETTINGS] Ashley Mode already active - no reset needed');
+            alert('✨ Ashley Mode is already active! Your settings are optimized for natural flow.');
+            return;
+        }
+        
         // Ashley Mode optimal settings
         const ashleySettings = {
             ashleyMode: true,
@@ -795,8 +802,10 @@ class STTSettingsManager {
             responseLength: this.profile.callExperience?.responseLength || 'medium'
         };
         
-        // Smart Ashley Mode detection - preserve if settings match preset!
-        settings.ashleyMode = this.settingsMatchAshleyPreset(settings);
+        // PRESERVE Ashley Mode state - slider adjustments don't change it!
+        // Ashley Mode is a USER CHOICE, not automatically calculated.
+        // User can tweak sliders while keeping Ashley Mode "active" (it's their base).
+        settings.ashleyMode = this.profile.callExperience?.ashleyMode || false;
         
         console.log('[STT SETTINGS] 🔄 Auto-saving:', settings);
         console.log('[STT SETTINGS] 🔄 Ashley Mode preserved:', settings.ashleyMode);
@@ -815,7 +824,7 @@ class STTSettingsManager {
             if (response.ok) {
                 this.profile.callExperience = settings;
                 this.updateSaveStatus('saved');
-                this.updateAshleyButtonState(settings.ashleyMode);
+                // Don't change Ashley button - it stays whatever it was
                 console.log('[STT SETTINGS] ✅ Auto-saved successfully');
             } else {
                 throw new Error('Save failed');
