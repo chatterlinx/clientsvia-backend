@@ -218,18 +218,42 @@ function sanitizeLLM0ReplyForPhase({
     callId,
     companyId,
     trade = 'HVAC',
-    turnNumber = 1
+    turnNumber = 1,
+    guardSettings = {} // 🎛️ UI-CONTROLLED: comes from company.aiAgentSettings.frontDeskBehavior.aiGuards
 }) {
+    // ════════════════════════════════════════════════════════════════════════
+    // 🎛️ UI-CONTROLLED GUARDS
+    // ════════════════════════════════════════════════════════════════════════
+    // All guard settings come from the UI (STT Settings → Guards tab)
+    // Default: ALL GUARDS OFF - trust the AI to talk naturally
+    // ════════════════════════════════════════════════════════════════════════
+    
+    const {
+        phaseGuardEnabled = false,
+        turn1GuardEnabled = false,
+        minTurnsForSlots = 1
+    } = guardSettings;
+    
+    // If all guards are disabled, just return the AI's response as-is
+    if (!phaseGuardEnabled && !turn1GuardEnabled) {
+        return {
+            reply: reply,
+            phase: phase || 'DISCOVERY',
+            wantsBooking: !!wantsBooking,
+            wasViolation: false
+        };
+    }
+    
     let sanitizedReply = reply;
     let sanitizedPhase = phase || 'DISCOVERY';
     let sanitizedWantsBooking = !!wantsBooking;
     let wasViolation = false;
 
-    // Only police slot-asking when NOT in BOOKING phase
-    if (sanitizedPhase !== 'BOOKING' && replyIsAskingForSlots(reply)) {
+    // Phase Guard: Only police slot-asking when enabled AND not in BOOKING phase
+    if (phaseGuardEnabled && sanitizedPhase !== 'BOOKING' && turnNumber >= minTurnsForSlots && replyIsAskingForSlots(reply)) {
         wasViolation = true;
         
-        logger.warn('[PHASE SANITIZER] 🚫 VIOLATION: LLM tried to ask for slots in DISCOVERY/DECISION', {
+        logger.warn('[PHASE SANITIZER] 🚫 VIOLATION (UI Guard Active)', {
             callId,
             companyId,
             phase: sanitizedPhase,
@@ -237,27 +261,22 @@ function sanitizeLLM0ReplyForPhase({
             originalReply: reply?.substring(0, 100)
         });
 
-        // Override with a proper discovery question
         sanitizedReply = buildDiscoveryFollowup(userText, problemSummary, trade);
-
-        // Force the model to stay in DISCOVERY logically
         sanitizedPhase = 'DISCOVERY';
         sanitizedWantsBooking = false;
     }
 
-    // Extra safety: Turn 1 should ALWAYS be discovery-style
-    if (turnNumber <= 1 && sanitizedPhase === 'BOOKING') {
+    // Turn 1 Guard: Prevent booking on first turn (when enabled)
+    if (turn1GuardEnabled && turnNumber <= 1 && sanitizedPhase === 'BOOKING') {
         wasViolation = true;
-        logger.warn('[PHASE SANITIZER] 🚫 VIOLATION: LLM tried to go to BOOKING on turn 1', {
+        logger.warn('[PHASE SANITIZER] 🚫 VIOLATION: Turn 1 booking blocked (UI Guard Active)', {
             callId,
-            companyId,
-            originalPhase: sanitizedPhase
+            companyId
         });
         
         sanitizedPhase = 'DISCOVERY';
         sanitizedWantsBooking = false;
         
-        // If the reply looks slot-grabby, override it
         if (replyIsAskingForSlots(reply)) {
             sanitizedReply = buildDiscoveryFollowup(userText, problemSummary, trade);
         }
@@ -423,16 +442,24 @@ function sanitizeGenericReply({
     trade = 'HVAC',
     callId,
     companyId,
-    turnNumber
+    turnNumber,
+    guardSettings = {} // 🎛️ UI-CONTROLLED: comes from company.aiAgentSettings.frontDeskBehavior.aiGuards
 }) {
     let sanitizedReply = reply;
     let wasGenericViolation = false;
+
+    const { genericGuardEnabled = false } = guardSettings;
+    
+    // 🎛️ UI-CONTROLLED: Only run this guard if enabled in UI
+    if (!genericGuardEnabled) {
+        return { reply, wasGenericViolation: false };
+    }
 
     // Only check in DISCOVERY phase - in BOOKING, generic responses are less harmful
     if (phase === 'DISCOVERY' && replyIsGenericAndUseless(reply)) {
         wasGenericViolation = true;
         
-        logger.warn('[GENERIC SANITIZER] 🚫 VIOLATION: LLM gave useless generic response', {
+        logger.warn('[GENERIC SANITIZER] 🚫 VIOLATION (UI Guard Active): LLM gave useless generic response', {
             callId,
             companyId,
             phase,
@@ -2524,11 +2551,21 @@ class LLM0TurnHandler {
         const latencyMs = Date.now() - startTime;
         
         // ════════════════════════════════════════════════════════════════════════════
-        // 🚧 PHASE SANITIZER: Catch and correct LLM misbehavior
+        // 🎛️ UI-CONTROLLED GUARDS
         // ════════════════════════════════════════════════════════════════════════════
-        // If LLM tries to ask for name/phone/address during DISCOVERY, override it.
-        // This is the HARD GUARD that ensures "listen first, book second" behavior.
+        // Guard settings come from: STT Settings → Guards tab
+        // Default: ALL OFF - let the AI talk naturally
         // ════════════════════════════════════════════════════════════════════════════
+        const guardSettings = company?.aiAgentSettings?.frontDeskBehavior?.aiGuards || {
+            phaseGuardEnabled: false,
+            genericGuardEnabled: false,
+            turn1GuardEnabled: false,
+            minTurnsForSlots: 1
+        };
+        
+        console.log('🛡️ Guard Settings:', guardSettings);
+        
+        // 🚧 PHASE SANITIZER: Only runs if guard is enabled in UI
         const phaseSafety = sanitizeLLM0ReplyForPhase({
             phase: rawLlmResult.phase,
             reply: rawLlmResult.reply,
@@ -2538,16 +2575,11 @@ class LLM0TurnHandler {
             callId,
             companyId,
             trade,
-            turnNumber
+            turnNumber,
+            guardSettings
         });
         
-        // ════════════════════════════════════════════════════════════════════════════
-        // 🚧 GENERIC REPLY SANITIZER: Catch useless chatbot responses
-        // ════════════════════════════════════════════════════════════════════════════
-        // Even if the reply doesn't ask for slots, it might be garbage like
-        // "I can help you with that. What would you like to know?"
-        // We catch and override these with smart, contextual responses.
-        // ════════════════════════════════════════════════════════════════════════════
+        // 🚧 GENERIC REPLY SANITIZER: Only runs if guard is enabled in UI
         const genericSafety = sanitizeGenericReply({
             phase: phaseSafety.phase,
             reply: phaseSafety.reply,
@@ -2556,7 +2588,8 @@ class LLM0TurnHandler {
             trade,
             callId,
             companyId,
-            turnNumber
+            turnNumber,
+            guardSettings
         });
         
         // Build sanitized llmResult - keep original fields, override sanitized ones

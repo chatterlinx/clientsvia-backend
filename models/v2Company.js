@@ -1711,6 +1711,27 @@ const companySchema = new mongoose.Schema({
             },
             
             // ═══════════════════════════════════════════════════════════════
+            // AI GUARDS - Control post-processing safety checks
+            // These guards can OVERRIDE what the LLM says
+            // Set to false to let AI talk freely
+            // ═══════════════════════════════════════════════════════════════
+            aiGuards: {
+                // Phase Guard: Blocks AI from asking for booking slots (name/phone/address)
+                // unless in BOOKING phase. Disable to let AI naturally flow.
+                phaseGuardEnabled: { type: Boolean, default: false },
+                
+                // Generic Reply Guard: Replaces "generic chatbot" responses
+                // with smarter discovery questions
+                genericGuardEnabled: { type: Boolean, default: false },
+                
+                // Turn 1 Guard: Prevents AI from jumping to booking on first turn
+                turn1GuardEnabled: { type: Boolean, default: false },
+                
+                // Minimum turns before allowing slot collection (if phase guard enabled)
+                minTurnsForSlots: { type: Number, default: 1, min: 0, max: 5 }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
             // METADATA
             // ═══════════════════════════════════════════════════════════════
             lastUpdated: { type: Date, default: Date.now },

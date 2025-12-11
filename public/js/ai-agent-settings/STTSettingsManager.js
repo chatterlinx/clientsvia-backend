@@ -82,7 +82,7 @@ class STTSettingsManager {
     async loadProfile() {
         const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
         
-        const [profileRes, metricsRes, callExpRes] = await Promise.all([
+        const [profileRes, metricsRes, callExpRes, companyRes] = await Promise.all([
             fetch(`/api/admin/stt-profile/${this.templateId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }),
@@ -90,6 +90,9 @@ class STTSettingsManager {
                 headers: { 'Authorization': `Bearer ${token}` }
             }),
             fetch(`/api/company/${this.companyId}/call-experience`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }),
+            fetch(`/api/company/${this.companyId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
         ]);
@@ -111,6 +114,18 @@ class STTSettingsManager {
             const callExpData = await callExpRes.json();
             this.profile.callExperience = callExpData.data;
             console.log('[STT SETTINGS] Call experience loaded:', this.profile.callExperience);
+        }
+        
+        // Load AI Guards settings from company
+        if (companyRes.ok) {
+            const companyData = await companyRes.json();
+            this.aiGuards = companyData.aiAgentSettings?.frontDeskBehavior?.aiGuards || {
+                phaseGuardEnabled: false,
+                genericGuardEnabled: false,
+                turn1GuardEnabled: false,
+                minTurnsForSlots: 1
+            };
+            console.log('[STT SETTINGS] AI Guards loaded:', this.aiGuards);
         }
         
         console.log('[STT SETTINGS] Profile loaded:', {
@@ -221,6 +236,7 @@ class STTSettingsManager {
                     ${this.renderTab('speaking', '🗣️ Speaking', this.activeTab === 'speaking')}
                     ${this.renderTab('impossible', '🚫 Impossible', this.activeTab === 'impossible')}
                     ${this.renderTab('suggestions', '💡 Suggestions', this.activeTab === 'suggestions', pendingSuggestions)}
+                    ${this.renderTab('guards', '🛡️ Guards', this.activeTab === 'guards')}
                     ${this.renderTab('test', '🧪 Test', this.activeTab === 'test')}
                 </div>
                 
@@ -277,8 +293,169 @@ class STTSettingsManager {
             case 'speaking': return this.renderSpeakingTab();
             case 'impossible': return this.renderImpossibleTab();
             case 'suggestions': return this.renderSuggestionsTab();
+            case 'guards': return this.renderGuardsTab();
             case 'test': return this.renderTestTab();
             default: return '<p>Unknown tab</p>';
+        }
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════
+    // GUARDS TAB - Control AI post-processing safety checks
+    // ════════════════════════════════════════════════════════════════════════
+    renderGuardsTab() {
+        // Load from company frontDeskBehavior.aiGuards
+        const guards = this.aiGuards || {
+            phaseGuardEnabled: false,
+            genericGuardEnabled: false,
+            turn1GuardEnabled: false,
+            minTurnsForSlots: 1
+        };
+        
+        return `
+            <div style="max-width: 700px;">
+                <div style="background: linear-gradient(135deg, #0d1117, #161b22); border: 1px solid #30363d; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 8px 0; color: #f0883e;">🛡️ AI Guards</h3>
+                    <p style="margin: 0; color: #8b949e; font-size: 14px;">
+                        These guards can <strong>OVERRIDE</strong> what the AI wants to say. 
+                        Disable them to let the AI talk freely and naturally.
+                    </p>
+                </div>
+                
+                <!-- Phase Guard -->
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                        <div>
+                            <h4 style="margin: 0 0 4px 0; color: #c9d1d9;">📋 Phase Guard</h4>
+                            <p style="margin: 0; color: #8b949e; font-size: 13px;">
+                                Blocks AI from asking for booking info (name, phone, address) unless in BOOKING phase.
+                            </p>
+                        </div>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="guard-phase-enabled" ${guards.phaseGuardEnabled ? 'checked' : ''} 
+                                style="accent-color: #f0883e; width: 18px; height: 18px;">
+                            <span style="color: ${guards.phaseGuardEnabled ? '#3fb950' : '#f85149'}; font-size: 12px; font-weight: 600;">
+                                ${guards.phaseGuardEnabled ? 'ACTIVE' : 'OFF'}
+                            </span>
+                        </label>
+                    </div>
+                    <div style="background: ${guards.phaseGuardEnabled ? '#2a1c1c' : '#1c2a1c'}; border-radius: 6px; padding: 10px; font-size: 12px; color: #8b949e;">
+                        ${guards.phaseGuardEnabled 
+                            ? '⚠️ <strong style="color: #f85149;">BLOCKING</strong>: AI cannot ask for booking slots until phase is BOOKING. This may feel robotic.'
+                            : '✅ <strong style="color: #3fb950;">TRUSTING AI</strong>: AI will naturally ask for booking info when appropriate.'}
+                    </div>
+                </div>
+                
+                <!-- Generic Reply Guard -->
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                        <div>
+                            <h4 style="margin: 0 0 4px 0; color: #c9d1d9;">🤖 Generic Reply Guard</h4>
+                            <p style="margin: 0; color: #8b949e; font-size: 13px;">
+                                Replaces "generic chatbot" responses with smarter discovery questions.
+                            </p>
+                        </div>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="guard-generic-enabled" ${guards.genericGuardEnabled ? 'checked' : ''} 
+                                style="accent-color: #f0883e; width: 18px; height: 18px;">
+                            <span style="color: ${guards.genericGuardEnabled ? '#3fb950' : '#f85149'}; font-size: 12px; font-weight: 600;">
+                                ${guards.genericGuardEnabled ? 'ACTIVE' : 'OFF'}
+                            </span>
+                        </label>
+                    </div>
+                    <div style="background: ${guards.genericGuardEnabled ? '#2a1c1c' : '#1c2a1c'}; border-radius: 6px; padding: 10px; font-size: 12px; color: #8b949e;">
+                        ${guards.genericGuardEnabled 
+                            ? '⚠️ <strong style="color: #f85149;">OVERRIDING</strong>: "How can I help you?" type responses will be replaced.'
+                            : '✅ <strong style="color: #3fb950;">TRUSTING AI</strong>: AI responses used as-is.'}
+                    </div>
+                </div>
+                
+                <!-- Turn 1 Guard -->
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                        <div>
+                            <h4 style="margin: 0 0 4px 0; color: #c9d1d9;">1️⃣ Turn 1 Guard</h4>
+                            <p style="margin: 0; color: #8b949e; font-size: 13px;">
+                                Prevents AI from jumping to booking on the very first turn.
+                            </p>
+                        </div>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="guard-turn1-enabled" ${guards.turn1GuardEnabled ? 'checked' : ''} 
+                                style="accent-color: #f0883e; width: 18px; height: 18px;">
+                            <span style="color: ${guards.turn1GuardEnabled ? '#3fb950' : '#f85149'}; font-size: 12px; font-weight: 600;">
+                                ${guards.turn1GuardEnabled ? 'ACTIVE' : 'OFF'}
+                            </span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Min Turns Slider -->
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 10px; padding: 16px; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div>
+                            <h4 style="margin: 0 0 4px 0; color: #c9d1d9;">⏱️ Min Turns Before Slots</h4>
+                            <p style="margin: 0; color: #8b949e; font-size: 13px;">
+                                (Only applies if Phase Guard is ON)
+                            </p>
+                        </div>
+                        <span id="guard-min-turns-display" style="background: #21262d; padding: 6px 12px; border-radius: 6px; color: #58a6ff; font-weight: bold;">
+                            ${guards.minTurnsForSlots}
+                        </span>
+                    </div>
+                    <input type="range" id="guard-min-turns" min="0" max="5" value="${guards.minTurnsForSlots}" 
+                        style="width: 100%; accent-color: #58a6ff;"
+                        oninput="document.getElementById('guard-min-turns-display').textContent = this.value">
+                </div>
+                
+                <!-- Save Button -->
+                <button onclick="window.sttManager.saveGuardSettings()" 
+                    style="width: 100%; padding: 14px; background: linear-gradient(135deg, #238636, #2ea043); color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer;">
+                    💾 Save Guard Settings
+                </button>
+                
+                <!-- Recommendation -->
+                <div style="margin-top: 16px; background: #1c2128; border: 1px solid #3fb950; border-radius: 8px; padding: 12px;">
+                    <p style="margin: 0; color: #3fb950; font-size: 13px;">
+                        <strong>💡 Recommendation:</strong> Keep all guards <strong>OFF</strong>. 
+                        GPT-4o-mini is smart enough to handle conversations naturally. 
+                        The guards were causing the AI to repeat discovery questions instead of progressing to booking.
+                    </p>
+                </div>
+            </div>
+        `;
+    }
+    
+    async saveGuardSettings() {
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+        
+        const guards = {
+            phaseGuardEnabled: document.getElementById('guard-phase-enabled')?.checked || false,
+            genericGuardEnabled: document.getElementById('guard-generic-enabled')?.checked || false,
+            turn1GuardEnabled: document.getElementById('guard-turn1-enabled')?.checked || false,
+            minTurnsForSlots: parseInt(document.getElementById('guard-min-turns')?.value) || 1
+        };
+        
+        try {
+            const response = await fetch(`/api/company/${this.companyId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    'aiAgentSettings.frontDeskBehavior.aiGuards': guards
+                })
+            });
+            
+            if (response.ok) {
+                this.aiGuards = guards;
+                this.showToast('✅ Guard settings saved!', 'success');
+                this.render(); // Re-render to update status displays
+            } else {
+                const error = await response.json();
+                this.showToast(`❌ Save failed: ${error.message || 'Unknown error'}`, 'error');
+            }
+        } catch (error) {
+            this.showToast(`❌ Save failed: ${error.message}`, 'error');
         }
     }
     
