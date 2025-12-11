@@ -417,7 +417,7 @@ class FrontDeskBehaviorManager {
                                 style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9;">
                         </div>
                         
-                        <!-- Row 3: Confirm Back (collapsible) -->
+                        <!-- Row 3: Confirm Back -->
                         <div style="display: flex; align-items: center; gap: 12px; padding: 8px; background: #161b22; border-radius: 4px; border: 1px solid ${slot.confirmBack ? '#238636' : '#30363d'};">
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;" title="Repeat value back for confirmation">
                                 <input type="checkbox" class="slot-confirmBack" data-index="${index}" ${slot.confirmBack ? 'checked' : ''} 
@@ -429,6 +429,21 @@ class FrontDeskBehaviorManager {
                                 style="flex: 1; padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; ${slot.confirmBack ? '' : 'opacity: 0.5;'}"
                                 ${slot.confirmBack ? '' : 'disabled'}>
                         </div>
+                        
+                        <!-- Row 4: Name-specific options (only show for name slots) -->
+                        ${slot.id === 'name' || slot.type === 'text' && slot.label?.toLowerCase().includes('name') ? `
+                        <div style="display: flex; align-items: center; gap: 16px; padding: 8px; background: #161b22; border-radius: 4px; border: 1px solid #30363d;">
+                            <span style="font-size: 11px; color: #8b949e;">👤 Name Options:</span>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Ask for first AND last name">
+                                <input type="checkbox" class="slot-askFullName" data-index="${index}" ${slot.askFullName !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                <span style="font-size: 12px; color: #c9d1d9;">Ask full name</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="When referring to caller later, use first name only">
+                                <input type="checkbox" class="slot-useFirstNameOnly" data-index="${index}" ${slot.useFirstNameOnly !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                <span style="font-size: 12px; color: #c9d1d9;">Call by first name</span>
+                            </label>
+                        </div>
+                        ` : ''}
                     </div>
                     
                     <!-- Required Toggle & Delete -->
@@ -464,7 +479,7 @@ class FrontDeskBehaviorManager {
         // Generate from legacy bookingPrompts if they exist
         const bp = this.config.bookingPrompts || {};
         return [
-            { id: 'name', label: 'Full Name', question: bp.askName || "May I have your name?", required: true, order: 0, type: 'text', confirmBack: false, confirmPrompt: "Got it, {value}. Did I get that right?" },
+            { id: 'name', label: 'Full Name', question: bp.askName || "May I have your full name?", required: true, order: 0, type: 'text', confirmBack: false, confirmPrompt: "Got it, {value}. Did I get that right?", askFullName: true, useFirstNameOnly: true },
             { id: 'phone', label: 'Phone Number', question: bp.askPhone || "What's the best phone number to reach you?", required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?" },
             { id: 'address', label: 'Service Address', question: bp.askAddress || "What's the service address?", required: true, order: 2, type: 'address', confirmBack: false, confirmPrompt: "So that's {value}, right?" },
             { id: 'time', label: 'Preferred Time', question: bp.askTime || "When works best for you - morning or afternoon?", required: false, order: 3, type: 'time', confirmBack: false, confirmPrompt: "So {value} works for you?" }
@@ -539,7 +554,7 @@ class FrontDeskBehaviorManager {
         const slotElements = document.querySelectorAll('.booking-slot');
         
         slotElements.forEach((el, index) => {
-            slots.push({
+            const slotData = {
                 id: el.querySelector('.slot-id')?.value?.trim() || `slot_${index}`,
                 label: el.querySelector('.slot-label')?.value?.trim() || 'Unnamed',
                 question: el.querySelector('.slot-question')?.value?.trim() || '',
@@ -548,7 +563,15 @@ class FrontDeskBehaviorManager {
                 type: el.querySelector('.slot-type')?.value || 'text',
                 confirmBack: el.querySelector('.slot-confirmBack')?.checked ?? false,
                 confirmPrompt: el.querySelector('.slot-confirmPrompt')?.value?.trim() || "Just to confirm, that's {value}, correct?"
-            });
+            };
+            
+            // Name-specific options (only if the elements exist)
+            const askFullNameEl = el.querySelector('.slot-askFullName');
+            const useFirstNameOnlyEl = el.querySelector('.slot-useFirstNameOnly');
+            if (askFullNameEl) slotData.askFullName = askFullNameEl.checked;
+            if (useFirstNameOnlyEl) slotData.useFirstNameOnly = useFirstNameOnlyEl.checked;
+            
+            slots.push(slotData);
         });
         
         return slots.length > 0 ? slots : this.getDefaultBookingSlots();

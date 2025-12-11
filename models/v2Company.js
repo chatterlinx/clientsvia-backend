@@ -1593,7 +1593,10 @@ const companySchema = new mongoose.Schema({
                 type: { type: String, enum: ['text', 'phone', 'address', 'time', 'custom'], default: 'text' },
                 validation: { type: String, default: null }, // Optional: 'full_name', '10_digits', etc.
                 confirmBack: { type: Boolean, default: false }, // Repeat value back for confirmation
-                confirmPrompt: { type: String, default: "Just to confirm, that's {value}, correct?" } // What to say when confirming
+                confirmPrompt: { type: String, default: "Just to confirm, that's {value}, correct?" }, // What to say when confirming
+                // Name-specific options
+                askFullName: { type: Boolean, default: true }, // Ask for first + last name
+                useFirstNameOnly: { type: Boolean, default: true } // When referring back, use first name only
             }],
             
             // ═══════════════════════════════════════════════════════════════

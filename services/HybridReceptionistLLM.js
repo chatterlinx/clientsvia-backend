@@ -529,9 +529,9 @@ class HybridReceptionistLLM {
         if (behaviorConfig.bookingSlots?.length > 0) {
             return [...behaviorConfig.bookingSlots].sort((a, b) => a.order - b.order);
         }
-        // Default slots - phone has confirmBack enabled by default
+        // Default slots - phone has confirmBack enabled, name has full name + first name options
         return [
-            { id: 'name', label: 'Full Name', question: 'May I have your name?', required: true, order: 0, type: 'text', confirmBack: false },
+            { id: 'name', label: 'Full Name', question: 'May I have your full name?', required: true, order: 0, type: 'text', confirmBack: false, askFullName: true, useFirstNameOnly: true },
             { id: 'phone', label: 'Phone Number', question: 'What is the best phone number to reach you?', required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?" },
             { id: 'address', label: 'Service Address', question: 'What is the service address?', required: true, order: 2, type: 'address', confirmBack: false },
             { id: 'time', label: 'Preferred Time', question: 'When works best for you?', required: false, order: 3, type: 'time', confirmBack: false }
@@ -617,6 +617,22 @@ NEVER say any of these phrases. They make you sound robotic.
         const confirmInstructions = slotsNeedingConfirm.length > 0
             ? `\nCONFIRM BACK: For ${slotsNeedingConfirm.join(', ')} - repeat the value back to verify you heard correctly.`
             : '';
+        
+        // Build name handling instructions from slot config
+        const nameSlot = bookingSlots.find(s => s.id === 'name');
+        let nameInstructions = '';
+        if (nameSlot) {
+            const rules = [];
+            if (nameSlot.askFullName !== false) {
+                rules.push('Ask for FULL NAME (first + last)');
+            }
+            if (nameSlot.useFirstNameOnly !== false) {
+                rules.push('When addressing caller later, use FIRST NAME only (e.g., "Great, John!" not "Great, John Smith!")');
+            }
+            if (rules.length > 0) {
+                nameInstructions = `\n👤 NAME HANDLING: ${rules.join('. ')}`;
+            }
+        }
         
         // Customer context
         const isReturning = customerContext?.isReturning || customerContext?.totalCalls > 1;
@@ -716,6 +732,11 @@ ${missingSlots !== 'none' ? `STILL NEED: ${missingSlots}` : 'ALL INFO COLLECTED 
         // Add confirm-back instructions if any slots need it
         if (confirmInstructions) {
             prompt += confirmInstructions;
+        }
+        
+        // Add name handling instructions if configured
+        if (nameInstructions) {
+            prompt += nameInstructions;
         }
         
         // Forbidden phrases (keep minimal)
