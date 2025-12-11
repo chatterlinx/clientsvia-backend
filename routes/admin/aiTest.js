@@ -92,6 +92,19 @@ router.post('/:companyId/chat', authenticateJWT, async (req, res) => {
                 mode: result.conversationMode || 'discovery',
                 nextGoal: result.nextGoal,
                 slots: result.filledSlots
+            },
+            // Debug info to help diagnose issues
+            debug: {
+                turnCount,
+                historyReceived: conversationHistory?.length || 0,
+                historyPreview: conversationHistory?.slice(-2).map(h => ({
+                    role: h.role,
+                    content: h.content?.substring(0, 50) + '...'
+                })),
+                userInputReceived: message.substring(0, 100),
+                replyLength: result.reply?.length || 0,
+                wasQuickAnswer: result.wasQuickAnswer || false,
+                triageMatched: result.triageMatched || false
             }
         });
         

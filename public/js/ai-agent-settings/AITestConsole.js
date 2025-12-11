@@ -471,6 +471,10 @@ class AITestConsole {
                     this.knownSlots = { ...this.knownSlots, ...data.metadata.slots };
                 }
                 
+                // Save debug info for analysis panel
+                this.lastDebug = data.debug;
+                console.log('[AI Test] Debug info:', data.debug);
+                
                 // Update analysis panel
                 this.updateAnalysis(data.metadata);
             } else {
@@ -666,6 +670,29 @@ class AITestConsole {
                         
                         <div style="color: #8b949e;">Next:</div>
                         <div style="color: #c9d1d9;">${metadata.needsInfo || 'none'}</div>
+                    </div>
+                </div>
+                ` : ''}
+                
+                ${this.lastDebug ? `
+                <!-- Debug Panel - Shows what LLM received -->
+                <div style="background: #1a1d23; border: 1px solid #f0883e; border-radius: 8px; padding: 12px;">
+                    <h4 style="margin: 0 0 8px 0; color: #f0883e; font-size: 12px;">🔧 DEBUG (What LLM Received)</h4>
+                    <div style="font-size: 11px; color: #8b949e; display: grid; gap: 6px;">
+                        <div><strong style="color: #c9d1d9;">Turn #:</strong> ${this.lastDebug.turnCount || 1}</div>
+                        <div><strong style="color: #c9d1d9;">History sent:</strong> ${this.lastDebug.historyReceived || 0} messages</div>
+                        ${this.lastDebug.historyPreview?.length > 0 ? `
+                        <div style="background: #161b22; padding: 6px; border-radius: 4px; margin-top: 4px;">
+                            <div style="color: #58a6ff; font-size: 10px; margin-bottom: 4px;">Last history sent:</div>
+                            ${this.lastDebug.historyPreview.map(h => `
+                                <div style="color: ${h.role === 'user' ? '#3fb950' : '#58a6ff'}; font-size: 10px;">
+                                    ${h.role}: ${h.content}
+                                </div>
+                            `).join('')}
+                        </div>
+                        ` : ''}
+                        <div><strong style="color: #c9d1d9;">Quick Answer:</strong> ${this.lastDebug.wasQuickAnswer ? '✅ Yes' : '❌ No'}</div>
+                        <div><strong style="color: #c9d1d9;">Triage Match:</strong> ${this.lastDebug.triageMatched ? '✅ Yes' : '❌ No'}</div>
                     </div>
                 </div>
                 ` : ''}

@@ -647,7 +647,8 @@ RESPOND with JSON:
         const recent = history.slice(-6);
         
         return recent.map(turn => ({
-            role: turn.role === 'caller' ? 'user' : 'assistant',
+            // Handle both 'caller'/'user' for compatibility (AI Test sends 'user', real calls send 'caller')
+            role: (turn.role === 'caller' || turn.role === 'user') ? 'user' : 'assistant',
             // Truncate long messages to save tokens
             content: (turn.content || turn.text || '').substring(0, 200)
         }));
