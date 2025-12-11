@@ -1310,7 +1310,7 @@ router.post('/voice', async (req, res) => {
       logger.debug(`[GATHER FALLBACK] No speech detected - prompting again`);
       twiml.say("I'm sorry, I think our connection isn't great. I didn't catch that. Could you please repeat?");
       // Redirect back to continue listening
-      twiml.redirect(`https://${req.get('host')}/api/twilio/${companyID}/voice`);
+      twiml.redirect(`https://${req.get('host')}/api/twilio/${company._id}/voice`);
       
     } catch (v2Error) {
       logger.error(`[V2 AGENT ERROR] Failed to initialize V2 Agent: ${v2Error.message}`);
@@ -1332,7 +1332,7 @@ router.post('/voice', async (req, res) => {
       
       // 🚫 NEVER HANG UP - Blame connection, not caller
       twiml.say("I'm sorry, the connection seems a bit choppy. Could you repeat that?");
-      twiml.redirect(`https://${req.get('host')}/api/twilio/${companyID}/voice`);
+      twiml.redirect(`https://${req.get('host')}/api/twilio/${company._id}/voice`);
     }
 
     res.type('text/xml');
