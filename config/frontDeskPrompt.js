@@ -139,12 +139,39 @@ const DEFAULT_FRONT_DESK_CONFIG = {
         },
         joking: {
             label: 'Joking',
-            description: 'Caller is humorous or playful',
+            description: 'Caller is humorous or playful (hyperbole like "I\'m dying here" is NOT an emergency)',
             acknowledgments: [
                 'Ha! I like that.',
                 'That\'s a good one!'
             ],
-            respondInKind: true  // Match their energy briefly
+            respondInKind: true,  // Match their energy briefly
+            // IMPORTANT: Common hyperbole that is NOT urgent:
+            // - "I'm dying" / "killing me" (usually = just very hot/uncomfortable)
+            // - "It's a disaster" (usually = just inconvenient)
+            // - "My house is an oven" (usually = just hot, not fire)
+            notEmergencyPhrases: [
+                'dying', 'killing me', 'disaster', 'oven', 'freezing to death',
+                'roasting', 'melting', 'going crazy'
+            ]
+        },
+        panicked: {
+            label: 'Panicked/Emergency',
+            description: 'Caller describes actual danger - TREAT URGENTLY',
+            acknowledgments: [
+                'I hear you, that sounds serious.',
+                'I understand - that needs immediate attention.'
+            ],
+            followUp: 'Let me get someone out there right away.',
+            bypassAllQuestions: true,  // Skip name/phone, just dispatch
+            confirmFirst: true,  // But confirm it's real emergency
+            // THESE ARE REAL EMERGENCIES (not jokes):
+            emergencyPhrases: [
+                'gas leak', 'smell gas', 'carbon monoxide', 'co detector',
+                'smoke', 'fire', 'sparks', 'burning smell', 'electrical fire',
+                'flooding', 'burst pipe', 'water everywhere', 'sewage',
+                'no heat' + 'elderly', 'no heat' + 'baby', 'no heat' + 'freezing',
+                'chest pain', 'can\'t breathe', 'having trouble breathing'
+            ]
         },
         neutral: {
             label: 'Neutral',
