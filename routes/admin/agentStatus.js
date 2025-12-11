@@ -227,6 +227,7 @@ router.get('/:companyId', async (req, res) => {
 
 // ============================================================================
 // GET /api/admin/agent-status/:companyId/metrics - Performance Metrics
+// Now reads from BlackBox where HybridReceptionistLLM actually logs data
 // ============================================================================
 
 router.get('/:companyId/metrics', async (req, res) => {
@@ -239,80 +240,152 @@ router.get('/:companyId/metrics', async (req, res) => {
     // Calculate time window
     const timeWindow = getTimeWindow(timeRange);
 
-    // Query routing decision logs for metrics
-    const metrics = await RoutingDecisionLog.aggregate([
+    // Query BlackBox for actual metrics (this is where HybridReceptionistLLM logs)
+    const BlackBoxRecording = require('../../models/BlackBoxRecording');
+    
+    // Get unique calls in time window
+    const callStats = await BlackBoxRecording.aggregate([
       {
         $match: {
           companyId: companyId,
-          timestamp: { $gte: timeWindow }
+          createdAt: { $gte: timeWindow }
         }
       },
       {
         $group: {
           _id: null,
           totalCalls: { $sum: 1 },
-          avgLatency: { $avg: '$latency' },
-          maxLatency: { $max: '$latency' },
-          avgTokens: { $avg: '$llmTokensUsed' },
-          totalTokens: { $sum: '$llmTokensUsed' },
-          emotionDetections: {
-            $push: '$emotionDetected'
-          },
-          correctRoutes: {
-            $sum: { $cond: [{ $eq: ['$wasCorrect', true] }, 1, 0] }
-          }
+          avgDuration: { $avg: '$duration' }
+        }
+      }
+    ]);
+    
+    // Get LLM response events for latency/token metrics
+    const llmEvents = await BlackBoxRecording.aggregate([
+      {
+        $match: {
+          companyId: companyId,
+          createdAt: { $gte: timeWindow }
+        }
+      },
+      { $unwind: '$events' },
+      {
+        $match: {
+          'events.type': { $in: ['LLM_RESPONSE', 'HYBRID_LLM_RESPONSE'] }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalResponses: { $sum: 1 },
+          avgLatency: { $avg: '$events.data.latencyMs' },
+          maxLatency: { $max: '$events.data.latencyMs' },
+          totalTokens: { $sum: '$events.data.tokensUsed' }
+        }
+      }
+    ]);
+    
+    // Get fallback count (errors)
+    const fallbackEvents = await BlackBoxRecording.aggregate([
+      {
+        $match: {
+          companyId: companyId,
+          createdAt: { $gte: timeWindow }
+        }
+      },
+      { $unwind: '$events' },
+      {
+        $match: {
+          'events.type': { $in: ['LLM_FALLBACK_USED', 'EMERGENCY_FALLBACK'] }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          fallbackCount: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    // Get emotion detections
+    const emotionEvents = await BlackBoxRecording.aggregate([
+      {
+        $match: {
+          companyId: companyId,
+          createdAt: { $gte: timeWindow }
+        }
+      },
+      { $unwind: '$events' },
+      {
+        $match: {
+          'events.type': 'EMOTION_DETECTED'
+        }
+      },
+      {
+        $group: {
+          _id: '$events.data.emotion',
+          count: { $sum: 1 }
         }
       }
     ]);
 
-    const stats = metrics[0] || {
-      totalCalls: 0,
-      avgLatency: 0,
-      maxLatency: 0,
-      avgTokens: 0,
-      totalTokens: 0,
-      emotionDetections: [],
-      correctRoutes: 0
-    };
+    const calls = callStats[0] || { totalCalls: 0 };
+    const llm = llmEvents[0] || { totalResponses: 0, avgLatency: 0, maxLatency: 0, totalTokens: 0 };
+    const fallbacks = fallbackEvents[0] || { fallbackCount: 0 };
+    
+    // Calculate routing accuracy (successful responses vs fallbacks)
+    const totalResponses = llm.totalResponses || 0;
+    const fallbackCount = fallbacks.fallbackCount || 0;
+    const successCount = Math.max(0, totalResponses - fallbackCount);
+    const routingAccuracy = totalResponses > 0 
+      ? ((successCount / totalResponses) * 100).toFixed(1)
+      : 100; // If no calls, show 100%
 
-    // Calculate routing accuracy
-    const routingAccuracy = stats.totalCalls > 0 
-      ? ((stats.correctRoutes / stats.totalCalls) * 100).toFixed(1)
-      : 0;
+    // Build emotion distribution from actual events
+    const emotionDistribution = {};
+    const defaultEmotions = ['neutral', 'frustrated', 'angry', 'panicked', 'humorous', 'stressed', 'sad'];
+    defaultEmotions.forEach(e => { emotionDistribution[e] = { count: 0, percentage: 0 }; });
+    
+    const totalEmotions = emotionEvents.reduce((sum, e) => sum + e.count, 0) || 1;
+    emotionEvents.forEach(e => {
+      const emotion = (e._id || 'neutral').toLowerCase();
+      emotionDistribution[emotion] = {
+        count: e.count,
+        percentage: ((e.count / totalEmotions) * 100).toFixed(1)
+      };
+    });
 
-    // Calculate emotion distribution
-    const emotionDistribution = calculateEmotionDistribution(stats.emotionDetections);
-
-    // Estimated cost (GPT-4o-mini pricing: $0.150 / 1M input tokens, $0.600 / 1M output tokens)
-    const estimatedCost = (stats.totalTokens / 1000000) * 0.375; // Average of input/output
+    // Estimated cost (GPT-4o-mini pricing)
+    const estimatedCost = ((llm.totalTokens || 0) / 1000000) * 0.375;
 
     res.json({
       success: true,
       companyId,
       timeRange,
       timestamp: new Date().toISOString(),
+      dataSource: 'BlackBox', // So we know where data comes from
       metrics: {
         calls: {
-          total: stats.totalCalls,
-          avgPerHour: calculateAvgPerHour(stats.totalCalls, timeRange)
+          total: calls.totalCalls,
+          avgPerHour: calculateAvgPerHour(calls.totalCalls, timeRange)
         },
         performance: {
-          avgLatency: Math.round(stats.avgLatency) || 0,
-          maxLatency: Math.round(stats.maxLatency) || 0,
+          avgLatency: Math.round(llm.avgLatency) || 0,
+          maxLatency: Math.round(llm.maxLatency) || 0,
           target: 500,
-          status: stats.avgLatency < 500 ? 'good' : stats.avgLatency < 1000 ? 'warning' : 'critical'
+          status: (llm.avgLatency || 0) < 500 ? 'good' : (llm.avgLatency || 0) < 1000 ? 'warning' : 'critical'
         },
         routing: {
           accuracy: routingAccuracy,
-          correctRoutes: stats.correctRoutes,
-          incorrectRoutes: stats.totalCalls - stats.correctRoutes,
+          correctRoutes: successCount,
+          incorrectRoutes: fallbackCount,
           target: 95.0,
           status: routingAccuracy >= 95 ? 'good' : routingAccuracy >= 85 ? 'warning' : 'critical'
         },
         emotions: emotionDistribution,
         tokens: {
-          total: stats.totalTokens,
-          avgPerCall: Math.round(stats.avgTokens) || 0,
+          total: llm.totalTokens || 0,
+          avgPerCall: totalResponses > 0 ? Math.round((llm.totalTokens || 0) / totalResponses) : 0,
           estimatedCost: estimatedCost.toFixed(4)
         }
       }
