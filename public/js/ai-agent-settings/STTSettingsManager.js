@@ -1260,7 +1260,9 @@ class STTSettingsManager {
                                     <td style="padding: 12px; color: #64748b;">${this.escapeHtml(iw.reason || '-')}</td>
                                     <td style="padding: 12px; font-family: monospace; color: #10b981;">${this.escapeHtml(iw.suggestCorrection || '-')}</td>
                                     <td style="padding: 12px; text-align: center;">
-                                        <button onclick="window.sttManager.deleteImpossible('${iw.word}')" style="background: none; border: none; color: #ef4444; cursor: pointer;">🗑️</button>
+                                        <button onclick="window.sttManager.showEditImpossibleModal('${this.escapeHtml(iw.word)}', '${this.escapeHtml(iw.reason || '')}', '${this.escapeHtml(iw.suggestCorrection || '')}')" 
+                                            style="background: none; border: none; color: #3b82f6; cursor: pointer; margin-right: 8px;" title="Edit">✏️</button>
+                                        <button onclick="window.sttManager.deleteImpossible('${iw.word}')" style="background: none; border: none; color: #ef4444; cursor: pointer;" title="Delete">🗑️</button>
                                     </td>
                                 </tr>
                             `).join('')}
@@ -1915,13 +1917,186 @@ class STTSettingsManager {
     }
     
     showAddImpossibleModal() {
-        const word = prompt('Enter the IMPOSSIBLE word (should never appear in this industry):');
-        if (!word) return;
+        this.showImpossibleModal({ word: '', reason: '', suggestCorrection: '' }, false);
+    }
+    
+    showEditImpossibleModal(word, reason, suggestCorrection) {
+        this.showImpossibleModal({ word, reason, suggestCorrection }, true);
+    }
+    
+    showImpossibleModal(data, isEdit) {
+        // Remove any existing modal
+        const existingModal = document.getElementById('impossible-word-modal');
+        if (existingModal) existingModal.remove();
         
-        const reason = prompt('Why is this word impossible? (optional)') || '';
-        const suggestCorrection = prompt(`If "${word}" is heard, what might they actually mean? (optional)`) || '';
+        const modal = document.createElement('div');
+        modal.id = 'impossible-word-modal';
+        modal.innerHTML = `
+            <div style="
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+            " onclick="if(event.target === this) this.parentElement.remove()">
+                <div style="
+                    background: white;
+                    border-radius: 16px;
+                    padding: 24px;
+                    width: 90%;
+                    max-width: 480px;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                " onclick="event.stopPropagation()">
+                    <h3 style="margin: 0 0 20px 0; display: flex; align-items: center; gap: 8px;">
+                        🚫 ${isEdit ? 'Edit' : 'Add'} Impossible Word
+                    </h3>
+                    
+                    <div style="display: grid; gap: 16px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151;">
+                                Impossible Word <span style="color: #ef4444;">*</span>
+                            </label>
+                            <input type="text" id="impossible-word-input" value="${this.escapeHtml(data.word)}" 
+                                placeholder="e.g., toothache, attorney, surgery"
+                                ${isEdit ? 'disabled' : ''}
+                                style="
+                                    width: 100%;
+                                    padding: 12px;
+                                    border: 2px solid #e2e8f0;
+                                    border-radius: 8px;
+                                    font-size: 15px;
+                                    box-sizing: border-box;
+                                    ${isEdit ? 'background: #f1f5f9; color: #64748b;' : ''}
+                                ">
+                            <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
+                                Word that should NEVER appear in HVAC calls
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151;">
+                                Reason <span style="color: #94a3b8; font-weight: normal;">(optional)</span>
+                            </label>
+                            <input type="text" id="impossible-reason-input" value="${this.escapeHtml(data.reason)}" 
+                                placeholder="e.g., Medical term, Legal term, Dental term"
+                                style="
+                                    width: 100%;
+                                    padding: 12px;
+                                    border: 2px solid #e2e8f0;
+                                    border-radius: 8px;
+                                    font-size: 15px;
+                                    box-sizing: border-box;
+                                ">
+                            <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
+                                Note to remind you why this word is flagged
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #374151;">
+                                Suggest Instead <span style="color: #94a3b8; font-weight: normal;">(optional)</span>
+                            </label>
+                            <input type="text" id="impossible-suggest-input" value="${this.escapeHtml(data.suggestCorrection)}" 
+                                placeholder="e.g., ductwork, warranty, service"
+                                style="
+                                    width: 100%;
+                                    padding: 12px;
+                                    border: 2px solid #e2e8f0;
+                                    border-radius: 8px;
+                                    font-size: 15px;
+                                    box-sizing: border-box;
+                                ">
+                            <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0;">
+                                What the caller probably meant to say
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; margin-top: 24px;">
+                        <button onclick="document.getElementById('impossible-word-modal').remove()" style="
+                            flex: 1;
+                            padding: 12px;
+                            background: #f1f5f9;
+                            color: #64748b;
+                            border: none;
+                            border-radius: 8px;
+                            cursor: pointer;
+                            font-size: 15px;
+                            font-weight: 500;
+                        ">Cancel</button>
+                        <button onclick="window.sttManager.saveImpossibleFromModal(${isEdit})" style="
+                            flex: 1;
+                            padding: 12px;
+                            background: #10b981;
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            cursor: pointer;
+                            font-size: 15px;
+                            font-weight: 600;
+                        ">${isEdit ? 'Save Changes' : 'Add Word'}</button>
+                    </div>
+                </div>
+            </div>
+        `;
         
-        this.addImpossible(word, reason, suggestCorrection);
+        document.body.appendChild(modal);
+        
+        // Focus the first input
+        if (!isEdit) {
+            document.getElementById('impossible-word-input').focus();
+        } else {
+            document.getElementById('impossible-reason-input').focus();
+        }
+    }
+    
+    async saveImpossibleFromModal(isEdit) {
+        const word = document.getElementById('impossible-word-input').value.trim();
+        const reason = document.getElementById('impossible-reason-input').value.trim();
+        const suggestCorrection = document.getElementById('impossible-suggest-input').value.trim();
+        
+        if (!word) {
+            alert('Please enter a word');
+            return;
+        }
+        
+        // Close modal
+        document.getElementById('impossible-word-modal').remove();
+        
+        if (isEdit) {
+            await this.updateImpossible(word, reason, suggestCorrection);
+        } else {
+            await this.addImpossible(word, reason, suggestCorrection);
+        }
+    }
+    
+    async updateImpossible(word, reason, suggestCorrection) {
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+        
+        try {
+            // Delete old and add new (since word is the key)
+            await fetch(`/api/admin/stt-profile/${this.templateId}/impossible-words/${encodeURIComponent(word)}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            await fetch(`/api/admin/stt-profile/${this.templateId}/impossible-words`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ word, reason, suggestCorrection })
+            });
+            
+            await this.loadProfile();
+            this.render();
+            this.showToast('Impossible word updated!', 'success');
+        } catch (error) {
+            this.showToast('Error updating impossible word', 'error');
+        }
     }
     
     async addImpossible(word, reason, suggestCorrection) {
