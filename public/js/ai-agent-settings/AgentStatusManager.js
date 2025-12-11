@@ -241,7 +241,13 @@ class AgentStatusManager {
    * Render performance metrics section
    */
   renderMetrics(metrics) {
-    const { calls, performance, routing, tokens } = metrics.metrics;
+    // Safe defaults for all metrics
+    const metricsData = metrics?.metrics || {};
+    const calls = metricsData.calls || { total: 0, avgPerHour: 0 };
+    const performance = metricsData.performance || { status: 'good', avgLatency: 0, target: 500 };
+    const routing = metricsData.routing || { status: 'good', accuracy: 100, correctRoutes: 0, incorrectRoutes: 0 };
+    const tokens = metricsData.tokens || { estimatedCost: '0.00', total: 0 };
+    const emotions = metricsData.emotions || [];
 
     const getStatusColor = (status) => {
       return status === 'good' ? '#10b981' : status === 'warning' ? '#f59e0b' : '#ef4444';
@@ -257,36 +263,36 @@ class AgentStatusManager {
           <!-- Calls -->
           <div style="background: #f9fafb; border-radius: 8px; padding: 20px;">
             <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Total Calls</div>
-            <div style="font-size: 32px; font-weight: 700; color: #1f2937;">${calls.total}</div>
-            <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">${calls.avgPerHour}/hr avg</div>
+            <div style="font-size: 32px; font-weight: 700; color: #1f2937;">${calls.total || 0}</div>
+            <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">${calls.avgPerHour || 0}/hr avg</div>
           </div>
 
           <!-- Latency -->
           <div style="background: #f9fafb; border-radius: 8px; padding: 20px; border-left: 4px solid ${getStatusColor(performance.status)};">
             <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Avg Latency</div>
-            <div style="font-size: 32px; font-weight: 700; color: ${getStatusColor(performance.status)};">${performance.avgLatency}ms</div>
-            <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">Target: ${performance.target}ms</div>
+            <div style="font-size: 32px; font-weight: 700; color: ${getStatusColor(performance.status)};">${performance.avgLatency || 0}ms</div>
+            <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">Target: ${performance.target || 500}ms</div>
           </div>
 
           <!-- Routing Accuracy -->
           <div style="background: #f9fafb; border-radius: 8px; padding: 20px; border-left: 4px solid ${getStatusColor(routing.status)};">
             <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Routing Accuracy</div>
-            <div style="font-size: 32px; font-weight: 700; color: ${getStatusColor(routing.status)};">${routing.accuracy}%</div>
-            <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">${routing.correctRoutes} correct / ${routing.incorrectRoutes} errors</div>
+            <div style="font-size: 32px; font-weight: 700; color: ${getStatusColor(routing.status)};">${routing.accuracy || 100}%</div>
+            <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">${routing.correctRoutes || 0} correct / ${routing.incorrectRoutes || 0} errors</div>
           </div>
 
           <!-- Cost -->
           <div style="background: #f9fafb; border-radius: 8px; padding: 20px;">
             <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Estimated Cost</div>
-            <div style="font-size: 32px; font-weight: 700; color: #1f2937;">$${tokens.estimatedCost}</div>
-            <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">${tokens.total.toLocaleString()} tokens</div>
+            <div style="font-size: 32px; font-weight: 700; color: #1f2937;">$${tokens.estimatedCost || '0.00'}</div>
+            <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">${(tokens.total || 0).toLocaleString()} tokens</div>
           </div>
         </div>
 
         <!-- Emotion Distribution -->
         <div style="margin-top: 25px; padding-top: 25px; border-top: 1px solid #e5e7eb;">
           <h4 style="margin: 0 0 15px 0; font-size: 16px; font-weight: 600; color: #1f2937;">Emotion Detection Distribution</h4>
-          ${this.renderEmotionDistribution(metrics.metrics.emotions)}
+          ${this.renderEmotionDistribution(emotions)}
         </div>
       </div>
     `;
@@ -306,14 +312,26 @@ class AgentStatusManager {
       SAD: '😢'
     };
 
+    // Ensure emotions is an array
+    const emotionArray = Array.isArray(emotions) ? emotions : [];
+    
+    if (emotionArray.length === 0) {
+      return `
+        <div style="text-align: center; padding: 20px; color: #6b7280;">
+          <div style="font-size: 36px; margin-bottom: 8px;">📊</div>
+          <div>No emotion data yet. Make some test calls!</div>
+        </div>
+      `;
+    }
+
     return `
-      <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 15px;">
-        ${emotions.map(({ emotion, count, percentage }) => `
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 15px;">
+        ${emotionArray.map(({ emotion, count, percentage }) => `
           <div style="text-align: center;">
             <div style="font-size: 36px; margin-bottom: 8px;">${emotionIcons[emotion] || '❓'}</div>
-            <div style="font-size: 18px; font-weight: 700; color: #1f2937;">${percentage}%</div>
-            <div style="font-size: 12px; color: #6b7280; margin-top: 3px;">${emotion}</div>
-            <div style="font-size: 11px; color: #9ca3af;">(${count})</div>
+            <div style="font-size: 18px; font-weight: 700; color: #1f2937;">${percentage || 0}%</div>
+            <div style="font-size: 12px; color: #6b7280; margin-top: 3px;">${emotion || 'UNKNOWN'}</div>
+            <div style="font-size: 11px; color: #9ca3af;">(${count || 0})</div>
           </div>
         `).join('')}
       </div>
