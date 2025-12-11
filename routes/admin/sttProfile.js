@@ -1405,21 +1405,28 @@ router.post('/:templateId/seed-all', authenticateJWT, requireRole('admin'), asyn
         
         logger.info('[STT PROFILE API] Seed-all CHECKPOINT 4: Keywords seeded', { keywordsAdded: results.keywords });
         
-        // 3. SEED COMMON CORRECTIONS
+        // 3. SEED COMMON CORRECTIONS (using correct field names: heard/normalized)
         const commonCorrections = [
-            { mishearing: 'condition in', correction: 'conditioning', context: 'air' },
-            { mishearing: 'AC unit', correction: 'AC unit', context: '' },
-            { mishearing: 'thermal stat', correction: 'thermostat', context: '' },
-            { mishearing: 'air condition', correction: 'air conditioning', context: '' },
-            { mishearing: 'fridge rant', correction: 'refrigerant', context: '' }
+            { heard: 'condition in', normalized: 'conditioning', context: ['air'], notes: 'air conditioning mishear' },
+            { heard: 'thermal stat', normalized: 'thermostat', context: [], notes: 'thermostat mishear' },
+            { heard: 'air condition', normalized: 'air conditioning', context: [], notes: 'missing "ing"' },
+            { heard: 'fridge rant', normalized: 'refrigerant', context: [], notes: 'refrigerant mishear' },
+            { heard: 'condition are', normalized: 'conditioner', context: ['air'], notes: 'air conditioner mishear' },
+            { heard: 'hey vac', normalized: 'HVAC', context: [], notes: 'HVAC mishear' }
         ];
         
         profile.corrections = profile.corrections || [];
-        const existingCorrections = new Set((profile.corrections || []).map(c => (c.mishearing || '').toLowerCase()));
+        const existingCorrections = new Set((profile.corrections || []).map(c => (c.heard || '').toLowerCase()));
         
         for (const corr of commonCorrections) {
-            if (!existingCorrections.has(corr.mishearing.toLowerCase())) {
-                profile.corrections.push({ ...corr, enabled: true, addedBy: 'seed' });
+            if (!existingCorrections.has(corr.heard.toLowerCase())) {
+                profile.corrections.push({ 
+                    heard: corr.heard,
+                    normalized: corr.normalized,
+                    context: corr.context || [],
+                    notes: corr.notes || '',
+                    enabled: true 
+                });
                 results.corrections++;
             }
         }
