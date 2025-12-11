@@ -3230,29 +3230,16 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }
       
       // 🛡️ Filter out forbidden/robotic phrases
-      // Load from company's configured list (UI-controlled) + hardcoded defaults
-      const defaultForbiddenPhrases = [
-        "let me clarify",
-        "I'm here to help. Can you please tell me",
-        "tell me more about what you need",
-        "what specific issues are you experiencing"
-      ];
+      // 100% UI-CONTROLLED - No hardcoded defaults. You control the full list.
+      // If you want certain phrases blocked, add them in the UI.
+      // If you delete them from UI, they're gone.
+      const forbiddenPhrases = company?.frontDeskBehavior?.forbiddenPhrases || [];
       
-      // Get company's custom forbidden phrases from UI (frontDeskBehavior.forbiddenPhrases)
-      const companyForbiddenPhrases = company?.frontDeskBehavior?.forbiddenPhrases || [];
-      
-      // Merge: Company's UI list takes priority, defaults as backup
-      const forbiddenPhrases = companyForbiddenPhrases.length > 0 
-        ? [...new Set([...companyForbiddenPhrases, ...defaultForbiddenPhrases])]
-        : defaultForbiddenPhrases;
-      
-      if (companyForbiddenPhrases.length > 0) {
-        logger.debug('[TWILIO] 🚫 Using company forbidden phrases from UI', {
-          companyId: companyID,
-          count: companyForbiddenPhrases.length,
-          phrases: companyForbiddenPhrases.slice(0, 5) // Log first 5
-        });
-      }
+      logger.debug('[TWILIO] 🚫 Forbidden phrases from UI', {
+        companyId: companyID,
+        count: forbiddenPhrases.length,
+        phrases: forbiddenPhrases.slice(0, 5) // Log first 5
+      });
       
       const lowerResponse = responseText.toLowerCase();
       for (const phrase of forbiddenPhrases) {
@@ -3268,7 +3255,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               data: {
                 phrase: phrase,
                 originalResponse: responseText.substring(0, 100),
-                source: companyForbiddenPhrases.includes(phrase) ? 'UI_CONFIGURED' : 'DEFAULT'
+                source: 'UI_CONFIGURED'
               }
             }).catch(() => {});
           }
