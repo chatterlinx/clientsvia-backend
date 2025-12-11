@@ -522,8 +522,35 @@ class LLM0TurnHandler {
                 } catch (e) {}
                 
                 // 🧠 SMART FALLBACK - Actually understands context
+                // ⚠️ THIS MEANS LLM FAILED - We're on autopilot!
                 const trade = company?.trade || 'HVAC';
                 let smartResponse = `Got it, I can help with your ${trade.toLowerCase()} needs. `;
+                
+                // 📼 BLACK BOX: Log that we're using fallback (LLM failed!)
+                try {
+                    const BlackBoxLogger = require('./BlackBoxLogger');
+                    if (BlackBoxLogger) {
+                    BlackBoxLogger.logEvent({
+                        callId,
+                        companyId,
+                        type: 'LLM_FALLBACK_USED',
+                        data: {
+                            reason: hybridError.message,
+                            fallbackType: 'HYBRID_PATH_FAILED',
+                            userInput: userInput?.substring(0, 100),
+                            severity: 'WARNING',
+                            suggestion: 'LLM is not responding - check OpenAI API status and timeout settings'
+                        }
+                    }).catch(() => {});
+                    }
+                } catch (logErr) {}
+                
+                logger.warn('[LLM0 TURN HANDLER] ⚠️ USING FALLBACK - LLM NOT WORKING', {
+                    callId,
+                    companyId,
+                    error: hybridError.message,
+                    fallbackResponse: smartResponse.substring(0, 50)
+                });
                 
                 // Detect what they likely want
                 const input = (userInput || '').toLowerCase();
