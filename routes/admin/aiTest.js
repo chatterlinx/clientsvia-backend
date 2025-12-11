@@ -6,7 +6,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { authMiddleware } = require('../../middleware/auth');
+const { authenticateJWT } = require('../../middleware/auth');
 const Company = require('../../models/v2Company');
 const HybridReceptionistLLM = require('../../services/HybridReceptionistLLM');
 const BlackBoxLogger = require('../../services/BlackBoxLogger');
@@ -16,7 +16,7 @@ const logger = require('../../utils/logger');
 // POST /api/admin/ai-test/:companyId/chat
 // Simulate a conversation turn with the AI
 // ============================================================================
-router.post('/:companyId/chat', authMiddleware, async (req, res) => {
+router.post('/:companyId/chat', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
         const { message, sessionId, conversationHistory, knownSlots } = req.body;
@@ -94,7 +94,7 @@ router.post('/:companyId/chat', authMiddleware, async (req, res) => {
 // GET /api/admin/ai-test/:companyId/failures
 // Get failure report from BlackBox logs
 // ============================================================================
-router.get('/:companyId/failures', authMiddleware, async (req, res) => {
+router.get('/:companyId/failures', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
         
