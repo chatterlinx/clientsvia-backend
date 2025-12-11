@@ -2,13 +2,20 @@
 // LLM-0 CONTROLS ADMIN ROUTES
 // ============================================================================
 // 📋 PURPOSE: Configurable settings for LLM-0 (Brain-1) behavior
-// 🎯 FEATURES:
+// 🎯 FEATURES (Dec 2025 - Single Source of Truth):
 //    - Silence handling (thresholds, prompts, callback offers)
-//    - Loop detection (thresholds, escalation actions)
 //    - Spam filter (Layer 3 LLM detection of telemarketer phrases)
 //    - Customer patience mode (never hang up on real customers)
-//    - Bailout rules (escalation thresholds, transfer targets)
 //    - Confidence thresholds (high/medium/low/fallback)
+//    - Low confidence handling (STT quality guard)
+//    - Smart confirmation (confirm critical actions)
+//
+// ⚠️ MOVED TO FRONT DESK BEHAVIOR (Dec 2025):
+//    - Loop detection → Front Desk > Loops tab
+//    - Bailout/escalation rules → Front Desk > Escalation tab
+//    - Frustration detection → Front Desk > Frustration tab
+//    - Response timing → STT Settings > Call Experience
+//
 // 🔒 AUTH: Admin only
 // 💾 STORAGE: company.aiAgentSettings.llm0Controls
 // ============================================================================
@@ -23,6 +30,9 @@ const { redisClient } = require('../../clients');
 // ============================================================================
 // DEFAULT LLM-0 CONTROLS (for new companies or reset)
 // ============================================================================
+// NOTE: loopDetection, bailoutRules, frustrationDetection, responseTiming
+// are now in Front Desk Behavior tab for unified user control
+// ============================================================================
 const DEFAULT_LLM0_CONTROLS = {
     silenceHandling: {
         enabled: true,
@@ -34,13 +44,8 @@ const DEFAULT_LLM0_CONTROLS = {
         offerCallback: true,
         callbackMessage: "Would you like me to have someone call you back at this number?"
     },
-    loopDetection: {
-        enabled: true,
-        maxRepeatedResponses: 3,
-        detectionWindow: 5,
-        onLoopAction: 'escalate',
-        escalationMessage: "I want to make sure I'm helping you correctly. Let me connect you with someone who can assist."
-    },
+    // REMOVED: loopDetection - Now in Front Desk Behavior > Loops tab
+    // REMOVED: bailoutRules - Now in Front Desk Behavior > Escalation tab
     spamFilter: {
         enabled: true,
         telemarketerPhrases: [
@@ -67,14 +72,6 @@ const DEFAULT_LLM0_CONTROLS = {
         alwaysOfferCallback: true,
         patienceMessage: "No rush at all. I'm here whenever you're ready."
     },
-    bailoutRules: {
-        enabled: true,
-        maxTurnsBeforeEscalation: 10,
-        confusionThreshold: 0.3,
-        escalateOnBailout: true,
-        bailoutMessage: "I want to make sure you get the help you need. Let me transfer you to our team.",
-        transferTarget: null
-    },
     confidenceThresholds: {
         highConfidence: 0.85,
         mediumConfidence: 0.65,
@@ -98,34 +95,8 @@ const DEFAULT_LLM0_CONTROLS = {
         deepgramFallbackThreshold: 60,
         deepgramAcceptThreshold: 80
     },
-    // FRUSTRATION DETECTION - Escalate immediately on emotional keywords
-    frustrationDetection: {
-        enabled: true,
-        frustrationKeywords: [
-            "that's not what I said",
-            "you're not listening",
-            "this is ridiculous",
-            "I already told you",
-            "are you even listening",
-            "I said no",
-            "stop asking me",
-            "just transfer me",
-            "let me talk to a human",
-            "speak to a person",
-            "real person",
-            "actual human"
-        ],
-        onFrustration: 'apologize_and_escalate',
-        escalationPhrase: "I understand, and I apologize for any confusion. Let me connect you with someone who can help right away.",
-        logToBlackBox: true
-    },
-    // RESPONSE TIMING - Natural-feeling delays
-    responseTiming: {
-        enabled: true,
-        minDelayMs: 80,
-        maxDelayMs: 140,
-        postSpeechDelayMs: 200
-    },
+    // REMOVED: frustrationDetection - Now in Front Desk Behavior > Frustration tab
+    // REMOVED: responseTiming - Now in STT Settings > Call Experience
     // SMART CONFIRMATION - Prevent wrong decisions on critical actions
     smartConfirmation: {
         enabled: true,
@@ -162,18 +133,18 @@ router.get('/:companyId', authenticateJWT, requireRole('admin'), async (req, res
         }
 
         // Get LLM-0 controls, merge with defaults for any missing fields
+        // NOTE: loopDetection, bailoutRules, frustrationDetection, responseTiming
+        // are now managed in Front Desk Behavior tab for unified control
         const llm0Controls = {
             ...DEFAULT_LLM0_CONTROLS,
             ...(company.aiAgentSettings?.llm0Controls || {}),
-            // Deep merge nested objects
+            // Deep merge nested objects (only ones still managed here)
             silenceHandling: {
                 ...DEFAULT_LLM0_CONTROLS.silenceHandling,
                 ...(company.aiAgentSettings?.llm0Controls?.silenceHandling || {})
             },
-            loopDetection: {
-                ...DEFAULT_LLM0_CONTROLS.loopDetection,
-                ...(company.aiAgentSettings?.llm0Controls?.loopDetection || {})
-            },
+            // REMOVED: loopDetection - Now in Front Desk Behavior > Loops tab
+            // REMOVED: bailoutRules - Now in Front Desk Behavior > Escalation tab
             spamFilter: {
                 ...DEFAULT_LLM0_CONTROLS.spamFilter,
                 ...(company.aiAgentSettings?.llm0Controls?.spamFilter || {})
@@ -181,10 +152,6 @@ router.get('/:companyId', authenticateJWT, requireRole('admin'), async (req, res
             customerPatience: {
                 ...DEFAULT_LLM0_CONTROLS.customerPatience,
                 ...(company.aiAgentSettings?.llm0Controls?.customerPatience || {})
-            },
-            bailoutRules: {
-                ...DEFAULT_LLM0_CONTROLS.bailoutRules,
-                ...(company.aiAgentSettings?.llm0Controls?.bailoutRules || {})
             },
             confidenceThresholds: {
                 ...DEFAULT_LLM0_CONTROLS.confidenceThresholds,
@@ -194,14 +161,8 @@ router.get('/:companyId', authenticateJWT, requireRole('admin'), async (req, res
                 ...DEFAULT_LLM0_CONTROLS.lowConfidenceHandling,
                 ...(company.aiAgentSettings?.llm0Controls?.lowConfidenceHandling || {})
             },
-            frustrationDetection: {
-                ...DEFAULT_LLM0_CONTROLS.frustrationDetection,
-                ...(company.aiAgentSettings?.llm0Controls?.frustrationDetection || {})
-            },
-            responseTiming: {
-                ...DEFAULT_LLM0_CONTROLS.responseTiming,
-                ...(company.aiAgentSettings?.llm0Controls?.responseTiming || {})
-            },
+            // REMOVED: frustrationDetection - Now in Front Desk Behavior > Frustration tab
+            // REMOVED: responseTiming - Now in STT Settings > Call Experience
             smartConfirmation: {
                 ...DEFAULT_LLM0_CONTROLS.smartConfirmation,
                 ...(company.aiAgentSettings?.llm0Controls?.smartConfirmation || {})
@@ -249,6 +210,8 @@ router.put('/:companyId', authenticateJWT, requireRole('admin'), async (req, res
         }
 
         // Merge updates with existing controls
+        // NOTE: loopDetection, bailoutRules, frustrationDetection, responseTiming
+        // are now managed in Front Desk Behavior tab
         const existingControls = company.aiAgentSettings.llm0Controls || {};
         
         company.aiAgentSettings.llm0Controls = {
@@ -257,11 +220,8 @@ router.put('/:companyId', authenticateJWT, requireRole('admin'), async (req, res
                 ...existingControls.silenceHandling,
                 ...(updates.silenceHandling || {})
             },
-            loopDetection: {
-                ...DEFAULT_LLM0_CONTROLS.loopDetection,
-                ...existingControls.loopDetection,
-                ...(updates.loopDetection || {})
-            },
+            // REMOVED: loopDetection - Now in Front Desk Behavior > Loops tab
+            // REMOVED: bailoutRules - Now in Front Desk Behavior > Escalation tab
             spamFilter: {
                 ...DEFAULT_LLM0_CONTROLS.spamFilter,
                 ...existingControls.spamFilter,
@@ -276,11 +236,6 @@ router.put('/:companyId', authenticateJWT, requireRole('admin'), async (req, res
                 ...existingControls.customerPatience,
                 ...(updates.customerPatience || {})
             },
-            bailoutRules: {
-                ...DEFAULT_LLM0_CONTROLS.bailoutRules,
-                ...existingControls.bailoutRules,
-                ...(updates.bailoutRules || {})
-            },
             confidenceThresholds: {
                 ...DEFAULT_LLM0_CONTROLS.confidenceThresholds,
                 ...existingControls.confidenceThresholds,
@@ -291,20 +246,8 @@ router.put('/:companyId', authenticateJWT, requireRole('admin'), async (req, res
                 ...existingControls.lowConfidenceHandling,
                 ...(updates.lowConfidenceHandling || {})
             },
-            frustrationDetection: {
-                ...DEFAULT_LLM0_CONTROLS.frustrationDetection,
-                ...existingControls.frustrationDetection,
-                ...(updates.frustrationDetection || {}),
-                // Special handling for array field
-                frustrationKeywords: updates.frustrationDetection?.frustrationKeywords || 
-                    existingControls.frustrationDetection?.frustrationKeywords || 
-                    DEFAULT_LLM0_CONTROLS.frustrationDetection.frustrationKeywords
-            },
-            responseTiming: {
-                ...DEFAULT_LLM0_CONTROLS.responseTiming,
-                ...existingControls.responseTiming,
-                ...(updates.responseTiming || {})
-            },
+            // REMOVED: frustrationDetection - Now in Front Desk Behavior > Frustration tab
+            // REMOVED: responseTiming - Now in STT Settings > Call Experience
             smartConfirmation: {
                 ...DEFAULT_LLM0_CONTROLS.smartConfirmation,
                 ...existingControls.smartConfirmation,
@@ -555,153 +498,9 @@ router.delete('/:companyId/spam-phrase', authenticateJWT, requireRole('admin'), 
 });
 
 // ============================================================================
-// ADD FRUSTRATION KEYWORD
+// REMOVED: ADD/REMOVE FRUSTRATION KEYWORD endpoints
+// Now managed in Front Desk Behavior > Frustration tab
 // ============================================================================
-router.post('/:companyId/frustration-keyword', authenticateJWT, requireRole('admin'), async (req, res) => {
-    try {
-        const { companyId } = req.params;
-        const { keyword } = req.body;
-
-        if (!keyword || keyword.trim().length < 3) {
-            return res.status(400).json({
-                success: false,
-                message: 'Keyword must be at least 3 characters'
-            });
-        }
-
-        logger.info(`😤 [LLM-0 CONTROLS] Adding frustration keyword: "${keyword}" for company: ${companyId}`);
-
-        const company = await v2Company.findById(companyId);
-        if (!company) {
-            return res.status(404).json({
-                success: false,
-                message: 'Company not found'
-            });
-        }
-
-        // Initialize if needed
-        if (!company.aiAgentSettings) {
-            company.aiAgentSettings = {};
-        }
-        if (!company.aiAgentSettings.llm0Controls) {
-            company.aiAgentSettings.llm0Controls = { ...DEFAULT_LLM0_CONTROLS };
-        }
-        if (!company.aiAgentSettings.llm0Controls.frustrationDetection) {
-            company.aiAgentSettings.llm0Controls.frustrationDetection = { ...DEFAULT_LLM0_CONTROLS.frustrationDetection };
-        }
-        if (!Array.isArray(company.aiAgentSettings.llm0Controls.frustrationDetection.frustrationKeywords)) {
-            company.aiAgentSettings.llm0Controls.frustrationDetection.frustrationKeywords = [...DEFAULT_LLM0_CONTROLS.frustrationDetection.frustrationKeywords];
-        }
-
-        const normalizedKeyword = keyword.toLowerCase().trim();
-        const existingKeywords = company.aiAgentSettings.llm0Controls.frustrationDetection.frustrationKeywords;
-
-        // Check if already exists
-        if (existingKeywords.includes(normalizedKeyword)) {
-            return res.status(409).json({
-                success: false,
-                message: 'Keyword already exists in frustration detection'
-            });
-        }
-
-        // Add keyword
-        existingKeywords.push(normalizedKeyword);
-        company.aiAgentSettings.llm0Controls.frustrationDetection.frustrationKeywords = existingKeywords;
-        company.aiAgentSettings.llm0Controls.lastUpdated = new Date();
-        company.aiAgentSettings.llm0Controls.updatedBy = req.user?.email || 'admin';
-
-        company.markModified('aiAgentSettings.llm0Controls');
-        await company.save();
-
-        // Clear Redis cache
-        try {
-            await redisClient.del(`company:${companyId}`);
-        } catch (cacheError) {
-            logger.warn(`⚠️ [LLM-0 CONTROLS] Cache clear failed:`, cacheError.message);
-        }
-
-        logger.info(`✅ [LLM-0 CONTROLS] Frustration keyword added: "${normalizedKeyword}"`);
-
-        res.json({
-            success: true,
-            message: `Keyword "${normalizedKeyword}" added to frustration detection`,
-            keywords: existingKeywords
-        });
-
-    } catch (error) {
-        logger.error(`❌ [LLM-0 CONTROLS] Add frustration keyword failed:`, error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to add frustration keyword',
-            error: error.message
-        });
-    }
-});
-
-// ============================================================================
-// REMOVE FRUSTRATION KEYWORD
-// ============================================================================
-router.delete('/:companyId/frustration-keyword', authenticateJWT, requireRole('admin'), async (req, res) => {
-    try {
-        const { companyId } = req.params;
-        const { keyword } = req.body;
-
-        if (!keyword) {
-            return res.status(400).json({
-                success: false,
-                message: 'Keyword is required'
-            });
-        }
-
-        logger.info(`😤 [LLM-0 CONTROLS] Removing frustration keyword: "${keyword}" for company: ${companyId}`);
-
-        const company = await v2Company.findById(companyId);
-        if (!company) {
-            return res.status(404).json({
-                success: false,
-                message: 'Company not found'
-            });
-        }
-
-        const normalizedKeyword = keyword.toLowerCase().trim();
-        const existingKeywords = company.aiAgentSettings?.llm0Controls?.frustrationDetection?.frustrationKeywords || [];
-        
-        const updatedKeywords = existingKeywords.filter(k => k !== normalizedKeyword);
-
-        if (updatedKeywords.length === existingKeywords.length) {
-            return res.status(404).json({
-                success: false,
-                message: 'Keyword not found in frustration detection'
-            });
-        }
-
-        company.aiAgentSettings.llm0Controls.frustrationDetection.frustrationKeywords = updatedKeywords;
-        company.aiAgentSettings.llm0Controls.lastUpdated = new Date();
-        company.markModified('aiAgentSettings.llm0Controls');
-        await company.save();
-
-        // Clear Redis cache
-        try {
-            await redisClient.del(`company:${companyId}`);
-        } catch (cacheError) {
-            logger.warn(`⚠️ [LLM-0 CONTROLS] Cache clear failed:`, cacheError.message);
-        }
-
-        res.json({
-            success: true,
-            message: `Keyword "${normalizedKeyword}" removed from frustration detection`,
-            keywords: updatedKeywords
-        });
-
-    } catch (error) {
-        logger.error(`❌ [LLM-0 CONTROLS] Remove frustration keyword failed:`, error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to remove frustration keyword',
-            error: error.message
-        });
-    }
-});
 
 // ============================================================================
 // GET DEFAULTS (for UI reference)
