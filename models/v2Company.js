@@ -394,10 +394,10 @@ const companySchema = new mongoose.Schema({
     // 🚨 AI AGENT SETTINGS - EMERGENCY RESTORE (2025-11-26)
     // This field was removed but v2AIAgentRuntime still requires it
     // Contains: enabled flag, voiceSettings, and other AI configuration
-    aiAgentSettings: {
-        type: mongoose.Schema.Types.Mixed,
-        default: () => ({ enabled: true })  // Default to enabled
-    },
+    // ============================================================================
+    // 🗑️ REMOVED: Duplicate aiAgentSettings Mixed type (was conflicting with structured schema)
+    // The full aiAgentSettings schema is defined below at line ~455
+    // ============================================================================
     
     // ============================================================================
     // 🚀 INTELLIGENCE MODE SELECTOR - Global vs Custom Settings
