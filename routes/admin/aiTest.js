@@ -31,25 +31,35 @@ router.post('/:companyId/chat', authenticateJWT, async (req, res) => {
             return res.status(404).json({ success: false, error: 'Company not found' });
         }
         
+        const turnCount = (conversationHistory?.length || 0) / 2 + 1;
+        const testCallId = sessionId || `test-${Date.now()}`;
+        
         logger.info('[AI TEST] Processing test message', {
             companyId,
-            sessionId,
+            sessionId: testCallId,
             messagePreview: message.substring(0, 50),
-            historyLength: conversationHistory?.length || 0
+            historyLength: conversationHistory?.length || 0,
+            turnCount
         });
         
         // Call the same HybridReceptionistLLM that real calls use
         const startTime = Date.now();
         
-        const result = await HybridReceptionistLLM.processConversationTurn({
-            companyId,
+        // Get the front desk behavior config (same as real calls)
+        const frontDeskConfig = company?.aiAgentSettings?.frontDeskBehavior || {};
+        
+        const result = await HybridReceptionistLLM.processConversation({
             company,
-            userInput: message,
-            conversationHistory: conversationHistory || [],
-            knownSlots: knownSlots || {},
+            callContext: {
+                callId: testCallId,
+                companyId,
+                isTest: true
+            },
             currentMode: 'discovery',
-            turnCount: (conversationHistory?.length || 0) / 2 + 1,
-            callId: sessionId || `test-${Date.now()}`
+            knownSlots: knownSlots || {},
+            conversationHistory: conversationHistory || [],
+            userInput: message,
+            behaviorConfig: frontDeskConfig
         });
         
         const latencyMs = Date.now() - startTime;
