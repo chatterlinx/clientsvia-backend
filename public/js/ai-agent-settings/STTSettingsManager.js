@@ -730,10 +730,20 @@ class STTSettingsManager {
             console.log('[STT SETTINGS] 🔵 Response status:', response.status);
             const responseData = await response.json();
             console.log('[STT SETTINGS] 🔵 Response body:', responseData);
+            console.log('[STT SETTINGS] 🔵 Saved data:', responseData.saved);
+            console.log('[STT SETTINGS] 🔵 Verified data:', responseData.verified);
             
             if (response.ok) {
                 this.profile.callExperience = settings;
-                alert('✅ Call Experience settings saved!');
+                
+                // Check if data actually persisted
+                if (responseData.verified) {
+                    console.log('[STT SETTINGS] ✅ Data verified in MongoDB!');
+                    alert('✅ Call Experience settings saved and verified!');
+                } else {
+                    console.warn('[STT SETTINGS] ⚠️ Data saved but verification returned undefined');
+                    alert('⚠️ Settings saved but verification failed - check Render logs');
+                }
             } else {
                 throw new Error(responseData.error || 'Failed to save settings');
             }

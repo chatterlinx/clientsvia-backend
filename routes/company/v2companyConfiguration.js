@@ -2645,17 +2645,32 @@ router.get('/:companyId/warmup-analytics', async (req, res) => {
 router.get('/:companyId/call-experience', async (req, res) => {
     const { companyId } = req.params;
     
-    logger.info(`[CALL EXPERIENCE] GET request for company: ${companyId}`);
+    logger.info(`[CALL EXPERIENCE GET] ═══════════════════════════════════════════`);
+    logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 1: Request received`);
+    logger.info(`[CALL EXPERIENCE GET] Company ID: ${companyId}`);
     
     try {
+        // CHECKPOINT 2: Query MongoDB
+        logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 2: Querying MongoDB...`);
         const company = await Company.findById(companyId).lean();
+        
         if (!company) {
+            logger.error(`[CALL EXPERIENCE GET] ❌ Company not found: ${companyId}`);
             return res.status(404).json({ error: 'Company not found' });
         }
+        
+        // CHECKPOINT 3: Check what's in the database
+        logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 3: Company found: ${company.companyName}`);
+        logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 4: Raw aiAgentSettings exists: ${!!company.aiAgentSettings}`);
+        logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 5: Raw callExperience exists: ${!!company.aiAgentSettings?.callExperience}`);
+        logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 6: Raw callExperience data:`, JSON.stringify(company.aiAgentSettings?.callExperience || 'UNDEFINED', null, 2));
         
         // Call experience settings can come from multiple places
         const settings = company.aiAgentSettings?.callExperience || {};
         const speechDetection = company.aiAgentSettings?.speechDetection || {};
+        
+        logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 7: Settings object:`, JSON.stringify(settings, null, 2));
+        logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 8: speechDetection object:`, JSON.stringify(speechDetection, null, 2));
         
         // Merge legacy speechDetection with new callExperience
         const merged = {
@@ -2677,10 +2692,13 @@ router.get('/:companyId/call-experience', async (req, res) => {
             ashleyMode: settings.ashleyMode ?? false
         };
         
+        logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 9: Merged result:`, JSON.stringify(merged, null, 2));
+        logger.info(`[CALL EXPERIENCE GET] ✅ CHECKPOINT 10: Returning data to frontend`);
+        
         res.json({ success: true, data: merged });
         
     } catch (error) {
-        logger.error('[CALL EXPERIENCE] GET Error:', error);
+        logger.error('[CALL EXPERIENCE GET] ❌ ERROR:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -2697,82 +2715,107 @@ router.put('/:companyId/call-experience', async (req, res) => {
     const { companyId } = req.params;
     const settings = req.body;
     
-    logger.info(`[CALL EXPERIENCE] ═══════════════════════════════════════════`);
-    logger.info(`[CALL EXPERIENCE] 🔵 PUT REQUEST RECEIVED`);
-    logger.info(`[CALL EXPERIENCE] Company: ${companyId}`);
-    logger.info(`[CALL EXPERIENCE] Settings:`, JSON.stringify(settings, null, 2));
-    logger.info(`[CALL EXPERIENCE] ═══════════════════════════════════════════`);
+    logger.info(`[CALL EXPERIENCE PUT] ═══════════════════════════════════════════`);
+    logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 1: PUT REQUEST RECEIVED`);
+    logger.info(`[CALL EXPERIENCE PUT] Company: ${companyId}`);
+    logger.info(`[CALL EXPERIENCE PUT] Settings received:`, JSON.stringify(settings, null, 2));
     
     try {
-        // Validate companyId
+        // CHECKPOINT 2: Validate companyId
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 2: Validating companyId...`);
         if (!mongoose.Types.ObjectId.isValid(companyId)) {
+            logger.error(`[CALL EXPERIENCE PUT] ❌ Invalid company ID: ${companyId}`);
             return res.status(400).json({ error: 'Invalid company ID' });
         }
+        logger.info(`[CALL EXPERIENCE PUT] ✅ CompanyId is valid`);
         
-        // Update the call experience settings
-        const updatePath = 'aiAgentSettings.callExperience';
-        const update = {
-            $set: {
-                [updatePath]: {
-                    // Timing
-                    speechTimeout: settings.speechTimeout ?? 3,
-                    initialTimeout: settings.initialTimeout ?? 5,
-                    endSilenceTimeout: settings.endSilenceTimeout ?? 2.0,
-                    // Interruption
-                    allowInterruption: settings.allowInterruption ?? false,
-                    interruptSensitivity: settings.interruptSensitivity ?? 'medium',
-                    // Voice & Speed
-                    speakingSpeed: settings.speakingSpeed ?? 1.0,
-                    pauseBetweenSentences: settings.pauseBetweenSentences ?? 0.3,
-                    // AI Behavior
-                    llmTimeout: settings.llmTimeout ?? 6,
-                    maxSilenceBeforePrompt: settings.maxSilenceBeforePrompt ?? 8,
-                    responseLength: settings.responseLength ?? 'medium',
-                    // Ashley Mode flag
-                    ashleyMode: settings.ashleyMode ?? false,
-                    // Meta
-                    updatedAt: new Date()
-                },
-                // Also sync to speechDetection for backwards compatibility
-                'aiAgentSettings.speechDetection.speechTimeout': settings.speechTimeout ?? 3,
-                'aiAgentSettings.speechDetection.initialTimeout': settings.initialTimeout ?? 5,
-                'aiAgentSettings.speechDetection.bargeIn': settings.allowInterruption ?? false
-            }
+        // CHECKPOINT 3: Check if company exists BEFORE update
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 3: Checking company exists...`);
+        const existingCompany = await Company.findById(companyId).lean();
+        if (!existingCompany) {
+            logger.error(`[CALL EXPERIENCE PUT] ❌ Company not found: ${companyId}`);
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        logger.info(`[CALL EXPERIENCE PUT] ✅ Company found: ${existingCompany.companyName}`);
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 4: BEFORE UPDATE - aiAgentSettings:`, JSON.stringify(existingCompany.aiAgentSettings?.callExperience || 'UNDEFINED', null, 2));
+        
+        // CHECKPOINT 5: Build update object
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 5: Building update object...`);
+        const callExperienceData = {
+            // Timing
+            speechTimeout: settings.speechTimeout ?? 3,
+            initialTimeout: settings.initialTimeout ?? 5,
+            endSilenceTimeout: settings.endSilenceTimeout ?? 2.0,
+            // Interruption
+            allowInterruption: settings.allowInterruption ?? false,
+            interruptSensitivity: settings.interruptSensitivity ?? 'medium',
+            // Voice & Speed
+            speakingSpeed: settings.speakingSpeed ?? 1.0,
+            pauseBetweenSentences: settings.pauseBetweenSentences ?? 0.3,
+            // AI Behavior
+            llmTimeout: settings.llmTimeout ?? 6,
+            maxSilenceBeforePrompt: settings.maxSilenceBeforePrompt ?? 8,
+            responseLength: settings.responseLength ?? 'medium',
+            // Ashley Mode flag
+            ashleyMode: settings.ashleyMode ?? false,
+            // Meta
+            updatedAt: new Date()
         };
         
-        logger.info(`[CALL EXPERIENCE] 🔵 Executing MongoDB update...`);
-        logger.info(`[CALL EXPERIENCE] 🔵 Update path: ${updatePath}`);
-        logger.info(`[CALL EXPERIENCE] 🔵 Update object:`, JSON.stringify(update, null, 2));
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 6: callExperienceData to save:`, JSON.stringify(callExperienceData, null, 2));
+        
+        // CHECKPOINT 7: Execute MongoDB update
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 7: Executing MongoDB findByIdAndUpdate...`);
         
         const result = await Company.findByIdAndUpdate(
             companyId,
-            update,
-            { new: true }
+            {
+                $set: {
+                    'aiAgentSettings.callExperience': callExperienceData,
+                    // Also sync to speechDetection for backwards compatibility
+                    'aiAgentSettings.speechDetection.speechTimeout': callExperienceData.speechTimeout,
+                    'aiAgentSettings.speechDetection.initialTimeout': callExperienceData.initialTimeout,
+                    'aiAgentSettings.speechDetection.bargeIn': callExperienceData.allowInterruption
+                }
+            },
+            { new: true, runValidators: false }  // runValidators: false to bypass schema validation issues
         );
         
+        // CHECKPOINT 8: Check result
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 8: MongoDB update result received`);
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 Result is null: ${result === null}`);
+        
         if (!result) {
-            logger.error(`[CALL EXPERIENCE] ❌ Company not found: ${companyId}`);
-            return res.status(404).json({ error: 'Company not found' });
+            logger.error(`[CALL EXPERIENCE PUT] ❌ findByIdAndUpdate returned null`);
+            return res.status(404).json({ error: 'Company not found after update' });
         }
         
-        // Log what was actually saved
-        logger.info(`[CALL EXPERIENCE] ✅ MongoDB update successful`);
-        logger.info(`[CALL EXPERIENCE] 🔵 Saved callExperience:`, JSON.stringify(result.aiAgentSettings?.callExperience, null, 2));
+        // CHECKPOINT 9: Verify what was saved
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 9: AFTER UPDATE - aiAgentSettings.callExperience:`, JSON.stringify(result.aiAgentSettings?.callExperience || 'UNDEFINED', null, 2));
         
-        // CRITICAL: Clear Redis cache so live calls use new settings
+        // CHECKPOINT 10: Verify with a fresh query
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 10: Verifying with fresh query...`);
+        const verification = await Company.findById(companyId).lean();
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 11: Fresh query callExperience:`, JSON.stringify(verification?.aiAgentSettings?.callExperience || 'UNDEFINED', null, 2));
+        
+        // CHECKPOINT 12: Clear Redis cache
+        logger.info(`[CALL EXPERIENCE PUT] 🔵 CHECKPOINT 12: Clearing Redis cache...`);
         const cacheCleared = await clearCompanyCache(companyId, 'CALL_EXPERIENCE_UPDATE');
-        logger.info(`[CALL EXPERIENCE] 🔵 Cache cleared: ${cacheCleared}`);
+        logger.info(`[CALL EXPERIENCE PUT] ✅ Cache cleared: ${cacheCleared}`);
         
-        logger.info(`[CALL EXPERIENCE] ✅ Settings saved for ${companyId}`, {
-            ashleyMode: settings.ashleyMode,
-            speechTimeout: settings.speechTimeout,
-            endSilenceTimeout: settings.endSilenceTimeout
+        logger.info(`[CALL EXPERIENCE PUT] ✅ CHECKPOINT 13: SUCCESS - Sending response`);
+        logger.info(`[CALL EXPERIENCE PUT] ═══════════════════════════════════════════`);
+        
+        res.json({ 
+            success: true, 
+            message: 'Call experience settings saved', 
+            saved: result.aiAgentSettings?.callExperience,
+            verified: verification?.aiAgentSettings?.callExperience
         });
         
-        res.json({ success: true, message: 'Call experience settings saved', saved: result.aiAgentSettings?.callExperience });
-        
     } catch (error) {
-        logger.error('[CALL EXPERIENCE] PUT Error:', error);
+        logger.error(`[CALL EXPERIENCE PUT] ❌ ERROR at checkpoint:`, error.message);
+        logger.error(`[CALL EXPERIENCE PUT] ❌ Full error:`, error);
         res.status(500).json({ error: error.message });
     }
 });
