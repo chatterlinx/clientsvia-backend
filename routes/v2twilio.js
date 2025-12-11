@@ -3141,9 +3141,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       logger.info(`🗣️ AI Response: "${result.response}"`);
       
       // 🎤 V2 ELEVENLABS INTEGRATION: Use ElevenLabs if configured
-      // 🔧 PHASE 2 FIX: Explicitly load voice settings (was incomplete before)
+      // 🔧 PHASE 2 FIX: Explicitly load voice settings + frontDeskBehavior for forbidden phrases
       const company = await Company.findById(companyID)
-        .select('+aiAgentSettings')
+        .select('+aiAgentSettings +frontDeskBehavior')
         .lean();
       
       // 🎯 PHASE 2 DIAGNOSTIC: Enhanced voice settings debug
@@ -3230,17 +3230,49 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }
       
       // 🛡️ Filter out forbidden/robotic phrases
-      const forbiddenPhrases = [
+      // Load from company's configured list (UI-controlled) + hardcoded defaults
+      const defaultForbiddenPhrases = [
         "let me clarify",
         "I'm here to help. Can you please tell me",
         "tell me more about what you need",
         "what specific issues are you experiencing"
       ];
       
+      // Get company's custom forbidden phrases from UI (frontDeskBehavior.forbiddenPhrases)
+      const companyForbiddenPhrases = company?.frontDeskBehavior?.forbiddenPhrases || [];
+      
+      // Merge: Company's UI list takes priority, defaults as backup
+      const forbiddenPhrases = companyForbiddenPhrases.length > 0 
+        ? [...new Set([...companyForbiddenPhrases, ...defaultForbiddenPhrases])]
+        : defaultForbiddenPhrases;
+      
+      if (companyForbiddenPhrases.length > 0) {
+        logger.debug('[TWILIO] 🚫 Using company forbidden phrases from UI', {
+          companyId: companyID,
+          count: companyForbiddenPhrases.length,
+          phrases: companyForbiddenPhrases.slice(0, 5) // Log first 5
+        });
+      }
+      
       const lowerResponse = responseText.toLowerCase();
       for (const phrase of forbiddenPhrases) {
-        if (lowerResponse.includes(phrase.toLowerCase())) {
+        if (phrase && lowerResponse.includes(phrase.toLowerCase())) {
           logger.warn(`[TWILIO] ⚠️ Forbidden phrase detected: "${phrase}" - replacing response`);
+          
+          // 📼 BLACK BOX: Log forbidden phrase caught
+          if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+              callId: callSid,
+              companyId: companyID,
+              type: 'FORBIDDEN_PHRASE_CAUGHT',
+              data: {
+                phrase: phrase,
+                originalResponse: responseText.substring(0, 100),
+                source: companyForbiddenPhrases.includes(phrase) ? 'UI_CONFIGURED' : 'DEFAULT'
+              }
+            }).catch(() => {});
+          }
+          
           responseText = "I can definitely help with that! May I have your name so I can get you scheduled?";
           break;
         }
