@@ -73,7 +73,23 @@ function loadFrontDeskConfig(company) {
             agentName: config.personality?.agentName || 'Ashley'
         },
         
-        // Booking prompts
+        // Dynamic booking slots (new system)
+        bookingSlots: config.bookingSlots?.length > 0 ? config.bookingSlots : [
+            { id: 'name', label: 'Full Name', question: config.bookingPrompts?.askName || "May I have your name?", required: true, order: 0, type: 'text' },
+            { id: 'phone', label: 'Phone Number', question: config.bookingPrompts?.askPhone || "What's the best phone number to reach you?", required: true, order: 1, type: 'phone' },
+            { id: 'address', label: 'Service Address', question: config.bookingPrompts?.askAddress || "What's the service address?", required: true, order: 2, type: 'address' },
+            { id: 'time', label: 'Preferred Time', question: config.bookingPrompts?.askTime || "When works best for you - morning or afternoon?", required: false, order: 3, type: 'time' }
+        ],
+        
+        // Booking templates for confirmation/completion
+        bookingTemplates: {
+            confirmTemplate: config.bookingTemplates?.confirmTemplate || config.bookingPrompts?.confirmTemplate || "Let me confirm — I have {name} at {address}, {time}. Does that sound right?",
+            completeTemplate: config.bookingTemplates?.completeTemplate || config.bookingPrompts?.completeTemplate || "You're all set, {name}! A technician will be out {time}. You'll receive a confirmation text shortly.",
+            offerAsap: config.bookingTemplates?.offerAsap !== false,
+            asapPhrase: config.bookingTemplates?.asapPhrase || "Or I can send someone as soon as possible."
+        },
+        
+        // Legacy booking prompts (for backward compatibility)
         bookingPrompts: {
             askName: config.bookingPrompts?.askName || "May I have your name?",
             askPhone: config.bookingPrompts?.askPhone || "What's the best phone number to reach you?",
@@ -448,35 +464,78 @@ class HybridReceptionistLLM {
     
     /**
      * Get the next missing slot that needs to be collected
+     * Uses dynamic bookingSlots from UI config
      */
-    static getNextMissingSlot(knownSlots) {
-        const slotOrder = ['name', 'phone', 'address', 'time'];
-        for (const slot of slotOrder) {
-            if (!knownSlots[slot]) {
-                return slot;
+    static getNextMissingSlot(knownSlots, behaviorConfig = {}) {
+        // Use dynamic slots sorted by order, or fallback to defaults
+        const slots = behaviorConfig.bookingSlots?.length > 0 
+            ? [...behaviorConfig.bookingSlots].sort((a, b) => a.order - b.order)
+            : [
+                { id: 'name', required: true },
+                { id: 'phone', required: true },
+                { id: 'address', required: true },
+                { id: 'time', required: false }
+            ];
+        
+        // Find first required slot that's not filled
+        for (const slot of slots) {
+            if (slot.required && !knownSlots[slot.id]) {
+                return slot.id;
             }
         }
-        return null;
+        
+        // Then check optional slots
+        for (const slot of slots) {
+            if (!slot.required && !knownSlots[slot.id]) {
+                return slot.id;
+            }
+        }
+        
+        return null; // All slots filled
     }
     
     /**
-     * Get a prompt for a specific slot (for bridging from Quick Answers)
+     * Get the question for a specific slot
+     * Uses dynamic bookingSlots from UI config
      */
     static getSlotPrompt(slotName, behaviorConfig = {}) {
-        const prompts = behaviorConfig.bookingPrompts || {};
+        // Check dynamic slots first
+        const slots = behaviorConfig.bookingSlots || [];
+        const dynamicSlot = slots.find(s => s.id === slotName);
+        if (dynamicSlot?.question) {
+            return dynamicSlot.question;
+        }
         
+        // Fallback to legacy bookingPrompts
+        const prompts = behaviorConfig.bookingPrompts || {};
         switch (slotName) {
             case 'name':
-                return prompts.name || 'may I have your name?';
+                return prompts.askName || 'May I have your name?';
             case 'phone':
-                return prompts.phone || 'what is the best phone number to reach you?';
+                return prompts.askPhone || 'What is the best phone number to reach you?';
             case 'address':
-                return prompts.address || 'what is the address where service is needed?';
+                return prompts.askAddress || 'What is the address where service is needed?';
             case 'time':
-                return prompts.time || 'what day and time works best for you?';
+                return prompts.askTime || 'What day and time works best for you?';
             default:
-                return 'how can I help you?';
+                return 'How can I help you?';
         }
+    }
+    
+    /**
+     * Get all configured booking slots sorted by order
+     */
+    static getBookingSlots(behaviorConfig = {}) {
+        if (behaviorConfig.bookingSlots?.length > 0) {
+            return [...behaviorConfig.bookingSlots].sort((a, b) => a.order - b.order);
+        }
+        // Default slots
+        return [
+            { id: 'name', label: 'Full Name', question: 'May I have your name?', required: true, order: 0, type: 'text' },
+            { id: 'phone', label: 'Phone Number', question: 'What is the best phone number to reach you?', required: true, order: 1, type: 'phone' },
+            { id: 'address', label: 'Service Address', question: 'What is the service address?', required: true, order: 2, type: 'address' },
+            { id: 'time', label: 'Preferred Time', question: 'When works best for you?', required: false, order: 3, type: 'time' }
+        ];
     }
     
     /**
@@ -528,14 +587,26 @@ NEVER say any of these phrases. They make you sound robotic.
         // GPT-4o-mini knows how to be empathetic, ask for info, etc.
         // We trust the AI to be a good receptionist.
         
+        // ════════════════════════════════════════════════════════════════════
+        // DYNAMIC BOOKING SLOTS FROM UI
+        // ════════════════════════════════════════════════════════════════════
+        const bookingSlots = this.getBookingSlots(uiConfig);
+        const slotIds = bookingSlots.map(s => s.id);
+        
         // Compact slot display
         const hasSlots = Object.entries(knownSlots).filter(([k, v]) => v);
         const slotsList = hasSlots.length > 0 
             ? hasSlots.map(([k, v]) => `${k}:${v}`).join(', ')
             : 'none';
         
-        const missingSlots = ['name', 'phone', 'address', 'time']
-            .filter(s => !knownSlots[s]).join(',') || 'none';
+        // Get missing slots based on dynamic config
+        const missingSlots = slotIds.filter(s => !knownSlots[s]).join(',') || 'none';
+        
+        // Build slot prompts for the AI
+        const slotPromptsSection = bookingSlots.map(slot => {
+            const status = knownSlots[slot.id] ? `✓ collected: "${knownSlots[slot.id]}"` : `○ missing ${slot.required ? '(REQUIRED)' : '(optional)'}`;
+            return `  ${slot.id}: "${slot.question}" [${status}]`;
+        }).join('\n');
         
         // Customer context
         const isReturning = customerContext?.isReturning || customerContext?.totalCalls > 1;
@@ -609,9 +680,11 @@ Type: ${triageContext.suggestedServiceType || 'repair'}
 STYLE: ${toneDesc}, max ${maxWords} words per response.
 ${speakingStyleSection}
 GOAL: Help caller, schedule service if needed.
-COLLECT (when booking): name, phone, address, preferred time.
 
-KNOWN SO FAR: ${slotsList}
+═══ BOOKING SLOTS (ask in order) ═══
+${slotPromptsSection}
+
+KNOWN: ${slotsList}
 ${missingSlots !== 'none' ? `STILL NEED: ${missingSlots}` : 'ALL INFO COLLECTED - confirm and complete.'}`;
 
         // Add only what's RELEVANT to this specific turn
@@ -629,11 +702,14 @@ ${missingSlots !== 'none' ? `STILL NEED: ${missingSlots}` : 'ALL INFO COLLECTED 
             prompt += `\n\nYOU JUST SAID: "${lastAgentResponse.substring(0, 50)}..." - say something DIFFERENT.`;
         }
         
+        // Build needsInfo options from dynamic slots
+        const needsInfoOptions = slotIds.join('|') + '|none';
+        
         // SIMPLE output format - just reply + one useful field
         prompt += `
 
 RESPOND with JSON:
-{"reply":"<what you say>","needsInfo":"name|phone|address|time|none"}`;
+{"reply":"<what you say>","needsInfo":"${needsInfoOptions}"}`;
         
         return prompt;
     }
@@ -662,8 +738,9 @@ RESPOND with JSON:
      */
     /**
      * Determine next goal based on phase (3-Phase System)
+     * Uses dynamic booking slots from UI config
      */
-    static phaseToNextGoal(phase, filledSlots = {}) {
+    static phaseToNextGoal(phase, filledSlots = {}, behaviorConfig = {}) {
         if (phase === 'DISCOVERY') {
             return 'UNDERSTAND_PROBLEM';
         }
@@ -671,11 +748,13 @@ RESPOND with JSON:
             return 'CONFIRM_WANTS_BOOKING';
         }
         if (phase === 'BOOKING') {
-            // In booking phase, determine which slot to ask for next
-            if (!filledSlots.name) return 'ASK_NAME';
-            if (!filledSlots.phone) return 'ASK_PHONE';
-            if (!filledSlots.address) return 'ASK_ADDRESS';
-            if (!filledSlots.time) return 'ASK_TIME';
+            // Use dynamic slots from config
+            const slots = this.getBookingSlots(behaviorConfig);
+            for (const slot of slots) {
+                if (!filledSlots[slot.id]) {
+                    return `ASK_${slot.id.toUpperCase()}`;
+                }
+            }
             return 'CONFIRM_BOOKING';
         }
         return 'UNDERSTAND_PROBLEM';

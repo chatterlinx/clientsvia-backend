@@ -312,40 +312,208 @@ class FrontDeskBehaviorManager {
     }
 
     renderBookingPromptsTab() {
-        const bp = this.config.bookingPrompts || {};
+        // Use new bookingSlots if available, otherwise migrate from legacy bookingPrompts
+        const slots = this.config.bookingSlots || this.getDefaultBookingSlots();
+        const templates = this.config.bookingTemplates || this.config.bookingPrompts || {};
+        
         return `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <div>
+                        <h3 style="margin: 0; color: #58a6ff;">📋 Booking Slots</h3>
+                        <p style="color: #8b949e; font-size: 0.8rem; margin: 4px 0 0 0;">Information AI collects during booking. Drag to reorder, add custom fields.</p>
+                    </div>
+                    <button onclick="window.frontDeskManager.addBookingSlot()" style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                        + Add Slot
+                    </button>
+                </div>
+                
+                <div id="booking-slots-container" style="display: flex; flex-direction: column; gap: 8px;">
+                    ${slots.map((slot, idx) => this.renderBookingSlot(slot, idx, slots.length)).join('')}
+                </div>
+                
+                ${slots.length === 0 ? '<p style="color: #f85149; text-align: center; padding: 20px;">No booking slots configured. Click "+ Add Slot" to add one.</p>' : ''}
+            </div>
+            
+            <!-- Templates Section -->
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
-                <h3 style="margin: 0 0 16px 0; color: #58a6ff;">📅 Booking Prompts</h3>
-                <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">What the AI says when collecting booking information. Use {name}, {address}, {time} as placeholders.</p>
+                <h3 style="margin: 0 0 16px 0; color: #58a6ff;">💬 Booking Messages</h3>
+                <p style="color: #8b949e; margin-bottom: 16px; font-size: 0.8rem;">Use {slotId} placeholders matching your slot IDs above (e.g., {name}, {phone}, {address}).</p>
                 
                 <div style="display: flex; flex-direction: column; gap: 16px;">
                     <div>
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Ask for Name</label>
-                        <input type="text" id="fdb-askName" value="${bp.askName || "May I have your name?"}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                    </div>
-                    <div>
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Ask for Phone</label>
-                        <input type="text" id="fdb-askPhone" value="${bp.askPhone || "What's the best phone number to reach you?"}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                    </div>
-                    <div>
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Ask for Address</label>
-                        <input type="text" id="fdb-askAddress" value="${bp.askAddress || "What's the service address?"}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                    </div>
-                    <div>
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Ask for Time</label>
-                        <input type="text" id="fdb-askTime" value="${bp.askTime || "When works best for you - morning or afternoon?"}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                    </div>
-                    <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Confirmation Template</label>
-                        <textarea id="fdb-confirmTemplate" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${bp.confirmTemplate || "So I have {name} at {address}, {time}. Does that sound right?"}</textarea>
+                        <textarea id="fdb-confirmTemplate" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${templates.confirmTemplate || "Let me confirm — I have {name} at {address}, {time}. Does that sound right?"}</textarea>
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Completion Message</label>
-                        <textarea id="fdb-completeTemplate" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${bp.completeTemplate || "You're all set, {name}! A technician will be out {time}. You'll receive a confirmation text shortly."}</textarea>
+                        <textarea id="fdb-completeTemplate" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${templates.completeTemplate || "You're all set, {name}! A technician will be out {time}. You'll receive a confirmation text shortly."}</textarea>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="fdb-offerAsap" ${templates.offerAsap !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
+                            <span style="color: #c9d1d9;">Offer "ASAP" option</span>
+                        </label>
+                        <input type="text" id="fdb-asapPhrase" value="${templates.asapPhrase || "Or I can send someone as soon as possible."}" style="flex: 1; padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                     </div>
                 </div>
             </div>
         `;
+    }
+    
+    renderBookingSlot(slot, index, totalSlots) {
+        const isFirst = index === 0;
+        const isLast = index === totalSlots - 1;
+        const typeOptions = ['text', 'phone', 'address', 'time', 'custom'];
+        
+        return `
+            <div class="booking-slot" data-slot-index="${index}" style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;">
+                <div style="display: flex; align-items: flex-start; gap: 12px;">
+                    <!-- Reorder Buttons -->
+                    <div style="display: flex; flex-direction: column; gap: 4px; padding-top: 4px;">
+                        <button onclick="window.frontDeskManager.moveSlot(${index}, -1)" ${isFirst ? 'disabled' : ''} 
+                            style="width: 28px; height: 24px; background: ${isFirst ? '#21262d' : '#30363d'}; border: none; border-radius: 4px; color: ${isFirst ? '#484f58' : '#c9d1d9'}; cursor: ${isFirst ? 'not-allowed' : 'pointer'}; font-size: 14px;"
+                            title="Move up">▲</button>
+                        <button onclick="window.frontDeskManager.moveSlot(${index}, 1)" ${isLast ? 'disabled' : ''} 
+                            style="width: 28px; height: 24px; background: ${isLast ? '#21262d' : '#30363d'}; border: none; border-radius: 4px; color: ${isLast ? '#484f58' : '#c9d1d9'}; cursor: ${isLast ? 'not-allowed' : 'pointer'}; font-size: 14px;"
+                            title="Move down">▼</button>
+                    </div>
+                    
+                    <!-- Slot Content -->
+                    <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                        <!-- Row 1: Label, ID, Type -->
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <div style="flex: 2;">
+                                <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Label</label>
+                                <input type="text" class="slot-label" data-index="${index}" value="${slot.label || ''}" placeholder="Full Name" 
+                                    style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9;">
+                            </div>
+                            <div style="flex: 1;">
+                                <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Slot ID</label>
+                                <input type="text" class="slot-id" data-index="${index}" value="${slot.id || ''}" placeholder="name" 
+                                    style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-family: monospace;">
+                            </div>
+                            <div style="flex: 1;">
+                                <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Type</label>
+                                <select class="slot-type" data-index="${index}" style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9;">
+                                    ${typeOptions.map(t => `<option value="${t}" ${slot.type === t ? 'selected' : ''}>${t}</option>`).join('')}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Row 2: Question -->
+                        <div>
+                            <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Question AI Asks</label>
+                            <input type="text" class="slot-question" data-index="${index}" value="${slot.question || ''}" placeholder="May I have your full name?" 
+                                style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9;">
+                        </div>
+                    </div>
+                    
+                    <!-- Required Toggle & Delete -->
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 16px;">
+                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;" title="Required field">
+                            <input type="checkbox" class="slot-required" data-index="${index}" ${slot.required !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
+                            <span style="font-size: 11px; color: #8b949e;">Req</span>
+                        </label>
+                        <button onclick="window.frontDeskManager.removeSlot(${index})" 
+                            style="width: 28px; height: 28px; background: #21262d; border: 1px solid #f8514950; border-radius: 4px; color: #f85149; cursor: pointer; font-size: 14px;"
+                            title="Delete slot">🗑</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    getDefaultBookingSlots() {
+        // Generate from legacy bookingPrompts if they exist
+        const bp = this.config.bookingPrompts || {};
+        return [
+            { id: 'name', label: 'Full Name', question: bp.askName || "May I have your name?", required: true, order: 0, type: 'text' },
+            { id: 'phone', label: 'Phone Number', question: bp.askPhone || "What's the best phone number to reach you?", required: true, order: 1, type: 'phone' },
+            { id: 'address', label: 'Service Address', question: bp.askAddress || "What's the service address?", required: true, order: 2, type: 'address' },
+            { id: 'time', label: 'Preferred Time', question: bp.askTime || "When works best for you - morning or afternoon?", required: false, order: 3, type: 'time' }
+        ];
+    }
+    
+    addBookingSlot() {
+        const slots = this.collectBookingSlots();
+        const newId = `custom_${Date.now()}`;
+        slots.push({
+            id: newId,
+            label: 'New Field',
+            question: 'What is your...?',
+            required: false,
+            order: slots.length,
+            type: 'custom'
+        });
+        
+        // Update config and re-render
+        this.config.bookingSlots = slots;
+        document.getElementById('booking-slots-container').innerHTML = 
+            slots.map((slot, idx) => this.renderBookingSlot(slot, idx, slots.length)).join('');
+        
+        // Focus the new slot's label input
+        setTimeout(() => {
+            const inputs = document.querySelectorAll('.slot-label');
+            if (inputs.length > 0) {
+                inputs[inputs.length - 1].focus();
+                inputs[inputs.length - 1].select();
+            }
+        }, 100);
+    }
+    
+    removeSlot(index) {
+        const slots = this.collectBookingSlots();
+        if (slots.length <= 1) {
+            alert('You must have at least one booking slot.');
+            return;
+        }
+        
+        const slot = slots[index];
+        if (!confirm(`Delete "${slot.label}" slot?`)) return;
+        
+        slots.splice(index, 1);
+        // Re-index order
+        slots.forEach((s, i) => s.order = i);
+        
+        this.config.bookingSlots = slots;
+        document.getElementById('booking-slots-container').innerHTML = 
+            slots.map((slot, idx) => this.renderBookingSlot(slot, idx, slots.length)).join('');
+    }
+    
+    moveSlot(index, direction) {
+        const slots = this.collectBookingSlots();
+        const newIndex = index + direction;
+        
+        if (newIndex < 0 || newIndex >= slots.length) return;
+        
+        // Swap slots
+        [slots[index], slots[newIndex]] = [slots[newIndex], slots[index]];
+        
+        // Update order values
+        slots.forEach((s, i) => s.order = i);
+        
+        this.config.bookingSlots = slots;
+        document.getElementById('booking-slots-container').innerHTML = 
+            slots.map((slot, idx) => this.renderBookingSlot(slot, idx, slots.length)).join('');
+    }
+    
+    collectBookingSlots() {
+        const slots = [];
+        const slotElements = document.querySelectorAll('.booking-slot');
+        
+        slotElements.forEach((el, index) => {
+            slots.push({
+                id: el.querySelector('.slot-id')?.value?.trim() || `slot_${index}`,
+                label: el.querySelector('.slot-label')?.value?.trim() || 'Unnamed',
+                question: el.querySelector('.slot-question')?.value?.trim() || '',
+                required: el.querySelector('.slot-required')?.checked ?? true,
+                order: index,
+                type: el.querySelector('.slot-type')?.value || 'text'
+            });
+        });
+        
+        return slots.length > 0 ? slots : this.getDefaultBookingSlots();
     }
 
     renderEmotionsTab() {
@@ -1088,12 +1256,22 @@ class FrontDeskBehaviorManager {
             };
         }
 
-        if (document.getElementById('fdb-askName')) {
+        // Collect dynamic booking slots
+        if (document.getElementById('booking-slots-container')) {
+            this.config.bookingSlots = this.collectBookingSlots();
+            this.config.bookingTemplates = {
+                confirmTemplate: get('fdb-confirmTemplate'),
+                completeTemplate: get('fdb-completeTemplate'),
+                offerAsap: getChecked('fdb-offerAsap'),
+                asapPhrase: get('fdb-asapPhrase')
+            };
+            // Also update legacy bookingPrompts for backward compatibility
+            const slots = this.config.bookingSlots;
             this.config.bookingPrompts = {
-                askName: get('fdb-askName'),
-                askPhone: get('fdb-askPhone'),
-                askAddress: get('fdb-askAddress'),
-                askTime: get('fdb-askTime'),
+                askName: slots.find(s => s.id === 'name')?.question || '',
+                askPhone: slots.find(s => s.id === 'phone')?.question || '',
+                askAddress: slots.find(s => s.id === 'address')?.question || '',
+                askTime: slots.find(s => s.id === 'time')?.question || '',
                 confirmTemplate: get('fdb-confirmTemplate'),
                 completeTemplate: get('fdb-completeTemplate')
             };

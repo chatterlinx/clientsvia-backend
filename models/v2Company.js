@@ -1582,8 +1582,29 @@ const companySchema = new mongoose.Schema({
             },
             
             // ═══════════════════════════════════════════════════════════════
-            // BOOKING PROMPTS - What to say when collecting info
+            // BOOKING SLOTS - Dynamic, customizable slots for booking
             // ═══════════════════════════════════════════════════════════════
+            bookingSlots: [{
+                id: { type: String, required: true }, // e.g., 'name', 'phone', 'custom_insurance'
+                label: { type: String, required: true }, // Display name: "Full Name", "Phone Number"
+                question: { type: String, required: true }, // What AI asks: "May I have your full name?"
+                required: { type: Boolean, default: true },
+                order: { type: Number, default: 0 }, // For sorting
+                type: { type: String, enum: ['text', 'phone', 'address', 'time', 'custom'], default: 'text' },
+                validation: { type: String, default: null } // Optional: 'full_name', '10_digits', etc.
+            }],
+            
+            // ═══════════════════════════════════════════════════════════════
+            // BOOKING TEMPLATES - Confirmation and completion messages
+            // ═══════════════════════════════════════════════════════════════
+            bookingTemplates: {
+                confirmTemplate: { type: String, default: "Let me confirm — I have {name} at {address}, {time}. Does that sound right?", trim: true },
+                completeTemplate: { type: String, default: "You're all set, {name}! A technician will be out {time}. You'll receive a confirmation text shortly.", trim: true },
+                offerAsap: { type: Boolean, default: true },
+                asapPhrase: { type: String, default: "Or I can send someone as soon as possible.", trim: true }
+            },
+            
+            // LEGACY: Keep old bookingPrompts for backward compatibility
             bookingPrompts: {
                 askName: { type: String, default: "May I have your name?", trim: true },
                 askPhone: { type: String, default: "What's the best phone number to reach you?", trim: true },
