@@ -22,11 +22,36 @@ class AITestConsole {
         // Voice features
         this.isListening = false;
         this.recognition = null;
-        this.synthesis = window.speechSynthesis;
         this.voiceEnabled = true;
+        this.voiceInfo = null; // ElevenLabs voice info
+        this.audioContext = null;
+        this.currentAudio = null;
         
         // Initialize speech recognition
         this.initSpeechRecognition();
+        
+        // Load voice info
+        this.loadVoiceInfo();
+    }
+    
+    /**
+     * Load ElevenLabs voice info for this company
+     */
+    async loadVoiceInfo() {
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const response = await fetch(`/api/admin/ai-test/${this.companyId}/voice-info`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                this.voiceInfo = data.voice;
+                console.log('[AI Test] Voice loaded:', this.voiceInfo);
+            }
+        } catch (error) {
+            console.error('[AI Test] Failed to load voice info:', error);
+        }
     }
     
     /**
@@ -115,21 +140,88 @@ class AITestConsole {
     }
     
     /**
-     * Speak the AI response using text-to-speech
+     * Speak the AI response using ElevenLabs TTS
      */
-    speakResponse(text) {
-        if (!this.voiceEnabled || !this.synthesis) return;
+    async speakResponse(text) {
+        if (!this.voiceEnabled) return;
         
-        // Cancel any ongoing speech
-        this.synthesis.cancel();
+        // Stop any current audio
+        if (this.currentAudio) {
+            this.currentAudio.pause();
+            this.currentAudio = null;
+        }
+        
+        // Check if voice is configured
+        if (!this.voiceInfo?.hasVoice) {
+            console.warn('[AI Test] No ElevenLabs voice configured, using browser TTS fallback');
+            this.speakBrowserFallback(text);
+            return;
+        }
+        
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const response = await fetch(`/api/admin/ai-test/${this.companyId}/tts`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ text })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.audio) {
+                // Play the audio
+                const audioBlob = this.base64ToBlob(data.audio, 'audio/mpeg');
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                this.currentAudio = new Audio(audioUrl);
+                this.currentAudio.play();
+                
+                // Clean up URL after playback
+                this.currentAudio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                };
+                
+                console.log('[AI Test] 🔊 Playing ElevenLabs audio:', this.voiceInfo.voiceName);
+            } else {
+                console.error('[AI Test] TTS failed:', data.error);
+                this.speakBrowserFallback(text);
+            }
+        } catch (error) {
+            console.error('[AI Test] TTS error:', error);
+            this.speakBrowserFallback(text);
+        }
+    }
+    
+    /**
+     * Convert base64 to blob
+     */
+    base64ToBlob(base64, mimeType) {
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        return new Blob([byteArray], { type: mimeType });
+    }
+    
+    /**
+     * Browser TTS fallback (when ElevenLabs not available)
+     */
+    speakBrowserFallback(text) {
+        if (!window.speechSynthesis) return;
+        
+        window.speechSynthesis.cancel();
         
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
         utterance.volume = 1.0;
         
-        // Try to use a natural voice
-        const voices = this.synthesis.getVoices();
+        const voices = window.speechSynthesis.getVoices();
         const preferredVoice = voices.find(v => 
             v.name.includes('Samantha') || 
             v.name.includes('Karen') || 
@@ -141,7 +233,7 @@ class AITestConsole {
             utterance.voice = preferredVoice;
         }
         
-        this.synthesis.speak(utterance);
+        window.speechSynthesis.speak(utterance);
     }
     
     /**
@@ -183,8 +275,16 @@ class AITestConsole {
                             <h2 style="margin: 0; color: #58a6ff; font-size: 18px;">🧪 AI Test Console</h2>
                             <p style="margin: 4px 0 0 0; color: #8b949e; font-size: 12px;">Test conversations without making real calls</p>
                         </div>
-                        <button onclick="document.getElementById('ai-test-console-modal').remove()" 
-                            style="background: none; border: none; color: #8b949e; font-size: 24px; cursor: pointer;">×</button>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div id="voice-status" style="background: #21262d; padding: 6px 12px; border-radius: 6px; font-size: 11px;">
+                                ${this.voiceInfo?.hasVoice 
+                                    ? `<span style="color: #3fb950;">🔊 ${this.voiceInfo.voiceName || 'ElevenLabs'}</span>`
+                                    : `<span style="color: #f0883e;">⚠️ No voice set</span>`
+                                }
+                            </div>
+                            <button onclick="document.getElementById('ai-test-console-modal').remove()" 
+                                style="background: none; border: none; color: #8b949e; font-size: 24px; cursor: pointer;">×</button>
+                        </div>
                     </div>
                     
                     <!-- Main Content -->

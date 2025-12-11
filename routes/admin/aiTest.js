@@ -10,6 +10,7 @@ const { authenticateJWT } = require('../../middleware/auth');
 const Company = require('../../models/v2Company');
 const HybridReceptionistLLM = require('../../services/HybridReceptionistLLM');
 const BlackBoxLogger = require('../../services/BlackBoxLogger');
+const elevenLabsService = require('../../services/v2elevenLabsService');
 const logger = require('../../utils/logger');
 
 // ============================================================================
@@ -190,6 +191,104 @@ router.get('/:companyId/failures', authenticateJWT, async (req, res) => {
         
     } catch (error) {
         logger.error('[AI TEST] Failures report error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// POST /api/admin/ai-test/:companyId/tts
+// Synthesize speech using company's ElevenLabs voice
+// ============================================================================
+router.post('/:companyId/tts', authenticateJWT, async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { text } = req.body;
+        
+        if (!text) {
+            return res.status(400).json({ success: false, error: 'Text is required' });
+        }
+        
+        // Load company to get voice settings
+        const company = await Company.findById(companyId).lean();
+        if (!company) {
+            return res.status(404).json({ success: false, error: 'Company not found' });
+        }
+        
+        // Get voice settings
+        const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
+        const voiceId = voiceSettings.voiceId;
+        
+        if (!voiceId) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'No voice selected. Go to Voice Settings to select an ElevenLabs voice.' 
+            });
+        }
+        
+        logger.info('[AI TEST] Synthesizing speech', {
+            companyId,
+            voiceId,
+            textLength: text.length
+        });
+        
+        // Synthesize with ElevenLabs
+        const audioBuffer = await elevenLabsService.synthesizeSpeech({
+            text,
+            voiceId,
+            stability: voiceSettings.stability || 0.5,
+            similarity_boost: voiceSettings.similarityBoost || 0.7,
+            style: voiceSettings.style || 0.0,
+            use_speaker_boost: voiceSettings.useSpeakerBoost !== false,
+            model_id: voiceSettings.modelId || 'eleven_turbo_v2_5',
+            company
+        });
+        
+        // Send audio as base64
+        const base64Audio = audioBuffer.toString('base64');
+        
+        res.json({
+            success: true,
+            audio: base64Audio,
+            format: 'mp3',
+            voiceId,
+            voiceName: voiceSettings.voiceName || voiceId
+        });
+        
+    } catch (error) {
+        logger.error('[AI TEST] TTS Error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// GET /api/admin/ai-test/:companyId/voice-info
+// Get current voice settings for the company
+// ============================================================================
+router.get('/:companyId/voice-info', authenticateJWT, async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        const company = await Company.findById(companyId).lean();
+        if (!company) {
+            return res.status(404).json({ success: false, error: 'Company not found' });
+        }
+        
+        const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
+        
+        res.json({
+            success: true,
+            voice: {
+                voiceId: voiceSettings.voiceId,
+                voiceName: voiceSettings.voiceName || 'Not set',
+                stability: voiceSettings.stability || 0.5,
+                similarityBoost: voiceSettings.similarityBoost || 0.7,
+                apiSource: voiceSettings.apiSource || 'clientsvia',
+                hasVoice: !!voiceSettings.voiceId
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[AI TEST] Voice info error:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
