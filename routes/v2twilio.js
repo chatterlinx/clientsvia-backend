@@ -2797,19 +2797,27 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             let recoveryAction = 'DISCOVERY';
             
             // Check if we're in booking mode - don't reset!
+            // 🚨 Use UI-configured questions for recovery
             if (callState?.bookingModeLocked || callState?.bookingState === 'ACTIVE') {
               const currentStep = callState?.currentBookingStep;
+              const HybridReceptionistLLM = require('../services/HybridReceptionistLLM');
+              const frontDeskConfig = company?.aiAgentSettings?.frontDeskBehavior || {};
+              
               if (currentStep === 'ASK_NAME' || currentStep === 'name') {
-                recoveryText = "I'm sorry, I think the connection dropped. Could you tell me your name again?";
+                const nameQ = HybridReceptionistLLM.getSlotPrompt('name', frontDeskConfig);
+                recoveryText = `I'm sorry, I think the connection dropped. ${nameQ}`;
                 recoveryAction = 'BOOKING';
               } else if (currentStep === 'ASK_ADDRESS' || currentStep === 'address') {
-                recoveryText = "Sorry, I didn't catch that. What's your address?";
+                const addressQ = HybridReceptionistLLM.getSlotPrompt('address', frontDeskConfig);
+                recoveryText = `Sorry, I didn't catch that. ${addressQ}`;
                 recoveryAction = 'BOOKING';
               } else if (currentStep === 'ASK_PHONE' || currentStep === 'phone') {
-                recoveryText = "The connection cut out. What's a good phone number for you?";
+                const phoneQ = HybridReceptionistLLM.getSlotPrompt('phone', frontDeskConfig);
+                recoveryText = `The connection cut out. ${phoneQ}`;
                 recoveryAction = 'BOOKING';
               } else if (currentStep === 'ASK_TIME' || currentStep === 'time') {
-                recoveryText = "Sorry about that, the line was choppy. When works best for you?";
+                const timeQ = HybridReceptionistLLM.getSlotPrompt('time', frontDeskConfig);
+                recoveryText = `Sorry about that, the line was choppy. ${timeQ}`;
                 recoveryAction = 'BOOKING';
               } else {
                 recoveryText = "I'm sorry, I missed that. Could you say that again?";
@@ -2886,16 +2894,23 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       let errorRecoveryText = "I'm sorry, the connection isn't great. What can I help you with?";
       let errorRecoveryAction = 'DISCOVERY';
       
+      // 🚨 Use UI-configured questions for error recovery
       if (callState?.bookingModeLocked || callState?.bookingState === 'ACTIVE') {
         const currentStep = callState?.currentBookingStep;
+        const HybridReceptionistLLM = require('../services/HybridReceptionistLLM');
+        const frontDeskConfig = company?.aiAgentSettings?.frontDeskBehavior || {};
+        
         if (currentStep === 'ASK_NAME' || currentStep === 'name') {
-          errorRecoveryText = "Sorry, I think the connection dropped. What's your name?";
+          const nameQ = HybridReceptionistLLM.getSlotPrompt('name', frontDeskConfig);
+          errorRecoveryText = `Sorry, I think the connection dropped. ${nameQ}`;
           errorRecoveryAction = 'BOOKING';
         } else if (currentStep === 'ASK_ADDRESS' || currentStep === 'address') {
-          errorRecoveryText = "The line was a bit choppy. What's your address?";
+          const addressQ = HybridReceptionistLLM.getSlotPrompt('address', frontDeskConfig);
+          errorRecoveryText = `The line was a bit choppy. ${addressQ}`;
           errorRecoveryAction = 'BOOKING';
         } else if (currentStep === 'ASK_PHONE' || currentStep === 'phone') {
-          errorRecoveryText = "I missed that. What's a good phone number for you?";
+          const phoneQ = HybridReceptionistLLM.getSlotPrompt('phone', frontDeskConfig);
+          errorRecoveryText = `I missed that. ${phoneQ}`;
           errorRecoveryAction = 'BOOKING';
         } else {
           errorRecoveryText = "Sorry, the connection cut out. Could you repeat that?";
@@ -3260,7 +3275,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             }).catch(() => {});
           }
           
-          responseText = "I can definitely help with that! May I have your name so I can get you scheduled?";
+          // 🚨 Use UI-configured question for forbidden phrase replacement
+          const HybridReceptionistLLM = require('../services/HybridReceptionistLLM');
+          const frontDeskConfig = company?.aiAgentSettings?.frontDeskBehavior || {};
+          const nameQ = HybridReceptionistLLM.getSlotPrompt('name', frontDeskConfig);
+          responseText = `I can definitely help with that! ${nameQ}`;
           break;
         }
       }
