@@ -755,11 +755,13 @@ GOAL: Help caller, schedule service if needed.
    - Then help with their actual request
 4. LISTEN for what they're actually asking - don't just collect slots robotically
 
-═══ BOOKING SLOTS - USE EXACT WORDING ═══
-⚠️ IMPORTANT: When asking for a slot, use the EXACT question shown below.
-⚠️ DO NOT paraphrase, reword, or add extra words like "please" or "if you don't mind".
-⚠️ The wording is CONFIGURED BY THE BUSINESS. Use it VERBATIM.
+═══ BOOKING SLOTS - COPY/PASTE ONLY ═══
+🚨🚨🚨 CRITICAL: The questions below are LEGALLY REQUIRED by the business.
+🚨🚨🚨 You MUST copy/paste them EXACTLY - character for character.
+🚨🚨🚨 DO NOT change "is" to "'s", DO NOT add "please", DO NOT reword AT ALL.
+🚨🚨🚨 If you change even ONE WORD, the system will FAIL and the call will DROP.
 
+COPY THESE EXACTLY WHEN ASKING:
 ${slotPromptsSection}
 
 KNOWN: ${slotsList}
