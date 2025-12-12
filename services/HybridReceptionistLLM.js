@@ -604,10 +604,16 @@ NEVER say any of these phrases. They make you sound robotic.
         const missingSlots = slotIds.filter(s => !knownSlots[s]).join(',') || 'none';
         
         // Build slot prompts for the AI with confirm-back instructions
+        // 🚨 CRITICAL: Tell LLM to use EXACT questions, no paraphrasing
         const slotPromptsSection = bookingSlots.map(slot => {
-            const status = knownSlots[slot.id] ? `✓ collected: "${knownSlots[slot.id]}"` : `○ missing ${slot.required ? '(REQUIRED)' : '(optional)'}`;
-            const confirmNote = slot.confirmBack ? ` → CONFIRM BACK: "${slot.confirmPrompt?.replace('{value}', '[their answer]') || 'confirm the value'}"` : '';
-            return `  ${slot.id}: "${slot.question}" [${status}]${confirmNote}`;
+            const collected = knownSlots[slot.id];
+            if (collected) {
+                return `  ${slot.id}: ✓ COLLECTED → "${collected}"`;
+            } else {
+                const requiredTag = slot.required ? 'REQUIRED' : 'optional';
+                const confirmNote = slot.confirmBack ? `\n    → After they answer, CONFIRM: "${slot.confirmPrompt?.replace('{value}', '[their answer]') || 'Is that correct?'}"` : '';
+                return `  ${slot.id}: ASK EXACTLY → "${slot.question}" (${requiredTag})${confirmNote}`;
+            }
         }).join('\n');
         
         // Build list of slots that need confirmation
@@ -737,13 +743,16 @@ GOAL: Help caller, schedule service if needed.
 2. If caller says something UNCLEAR or gets CUT OFF:
    - Reference what you DID hear ("You mentioned something about...")
    - Ask them to finish/clarify ("What were you saying about that?")
-   - Do NOT restart from "May I have your name"
-3. If caller mentions a specific person/technician (like "Dustin"):
-   - Acknowledge it: "You want Dustin specifically?"
+3. If caller mentions a specific person/technician:
+   - Acknowledge it: "You want [name] specifically?"
    - Then help with their actual request
 4. LISTEN for what they're actually asking - don't just collect slots robotically
 
-═══ BOOKING SLOTS (ask in order) ═══
+═══ BOOKING SLOTS - USE EXACT WORDING ═══
+⚠️ IMPORTANT: When asking for a slot, use the EXACT question shown below.
+⚠️ DO NOT paraphrase, reword, or add extra words like "please" or "if you don't mind".
+⚠️ The wording is CONFIGURED BY THE BUSINESS. Use it VERBATIM.
+
 ${slotPromptsSection}
 
 KNOWN: ${slotsList}

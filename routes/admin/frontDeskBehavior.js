@@ -167,12 +167,22 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
             data: {
                 enabled: config.enabled,
                 personality: config.personality,
+                // 🚨 Dynamic booking slots (new system)
+                bookingSlots: config.bookingSlots || null,
+                bookingTemplates: config.bookingTemplates || null,
+                // Legacy booking prompts (for backward compatibility)
                 bookingPrompts: config.bookingPrompts,
                 emotionResponses: config.emotionResponses,
                 frustrationTriggers: config.frustrationTriggers,
                 escalation: config.escalation,
                 loopPrevention: config.loopPrevention,
                 forbiddenPhrases: config.forbiddenPhrases,
+                // New UI-controlled fields
+                detectionTriggers: config.detectionTriggers || null,
+                fallbackResponses: config.fallbackResponses || null,
+                modeSwitching: config.modeSwitching || null,
+                serviceAreaResponses: config.serviceAreaResponses || null,
+                inquiryResponses: config.inquiryResponses || null,
                 lastUpdated: saved.lastUpdated || null
             }
         });
@@ -241,6 +251,58 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
         
         if (updates.forbiddenPhrases) {
             updateObj['aiAgentSettings.frontDeskBehavior.forbiddenPhrases'] = updates.forbiddenPhrases;
+        }
+        
+        // 🚨 CRITICAL: Save dynamic booking slots
+        if (updates.bookingSlots) {
+            updateObj['aiAgentSettings.frontDeskBehavior.bookingSlots'] = updates.bookingSlots;
+            logger.info('[FRONT DESK BEHAVIOR] Saving bookingSlots', {
+                companyId,
+                slotCount: updates.bookingSlots.length,
+                slots: updates.bookingSlots.map(s => ({ id: s.id, question: s.question?.substring(0, 30) }))
+            });
+        }
+        
+        // Save booking templates
+        if (updates.bookingTemplates) {
+            Object.entries(updates.bookingTemplates).forEach(([key, value]) => {
+                updateObj[`aiAgentSettings.frontDeskBehavior.bookingTemplates.${key}`] = value;
+            });
+        }
+        
+        // Save detection triggers
+        if (updates.detectionTriggers) {
+            Object.entries(updates.detectionTriggers).forEach(([key, value]) => {
+                updateObj[`aiAgentSettings.frontDeskBehavior.detectionTriggers.${key}`] = value;
+            });
+        }
+        
+        // Save fallback responses
+        if (updates.fallbackResponses) {
+            Object.entries(updates.fallbackResponses).forEach(([key, value]) => {
+                updateObj[`aiAgentSettings.frontDeskBehavior.fallbackResponses.${key}`] = value;
+            });
+        }
+        
+        // Save mode switching
+        if (updates.modeSwitching) {
+            Object.entries(updates.modeSwitching).forEach(([key, value]) => {
+                updateObj[`aiAgentSettings.frontDeskBehavior.modeSwitching.${key}`] = value;
+            });
+        }
+        
+        // Save service area responses
+        if (updates.serviceAreaResponses) {
+            Object.entries(updates.serviceAreaResponses).forEach(([key, value]) => {
+                updateObj[`aiAgentSettings.frontDeskBehavior.serviceAreaResponses.${key}`] = value;
+            });
+        }
+        
+        // Save inquiry responses
+        if (updates.inquiryResponses) {
+            Object.entries(updates.inquiryResponses).forEach(([key, value]) => {
+                updateObj[`aiAgentSettings.frontDeskBehavior.inquiryResponses.${key}`] = value;
+            });
         }
         
         updateObj['aiAgentSettings.frontDeskBehavior.lastUpdated'] = new Date();
