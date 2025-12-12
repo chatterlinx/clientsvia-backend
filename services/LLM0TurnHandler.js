@@ -1308,17 +1308,18 @@ class LLM0TurnHandler {
         let prompt = '';
         
         for (const slot of bookingSlots) {
-            if (!bookingCollected[slot.id]) {
-                currentStep = `ASK_${slot.id.toUpperCase()}`;
+            const slotId = slot.slotId || slot.id; // Handle both normalized and legacy format
+            if (!bookingCollected[slotId]) {
+                currentStep = `ASK_${slotId.toUpperCase()}`;
                 // Use the UI-configured question from the slot
-                const slotQuestion = slot.question || HybridReceptionistLLM.getSlotPrompt(slot.id, frontDeskConfig);
+                const slotQuestion = slot.question || HybridReceptionistLLM.getSlotPrompt(slotId, frontDeskConfig);
                 
                 // Add a nice intro for the first slot
-                if (slot.id === 'name' && !contact.name) {
+                if (slotId === 'name' && !contact.name) {
                     prompt = `I'd be happy to schedule that for you. ${slotQuestion}`;
-                } else if (slot.id === 'phone' && contact.name) {
+                } else if (slotId === 'phone' && contact.name) {
                     // Use first name if useFirstNameOnly is enabled
-                    const nameSlot = bookingSlots.find(s => s.id === 'name');
+                    const nameSlot = bookingSlots.find(s => (s.slotId || s.id) === 'name');
                     const firstName = (nameSlot?.useFirstNameOnly !== false && contact.name) 
                         ? contact.name.split(' ')[0] 
                         : contact.name;

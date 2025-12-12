@@ -29,6 +29,7 @@ const logger = require('../utils/logger');
 const { callLLM0 } = require('./llmRegistry');
 const TriageContextProvider = require('./TriageContextProvider');
 const STTProfile = require('../models/STTProfile');
+const BookingScriptEngine = require('./BookingScriptEngine');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 🎯 VERSION BANNER - This log PROVES the new code is deployed
@@ -464,32 +465,13 @@ class HybridReceptionistLLM {
      * Get the next missing slot that needs to be collected
      * Uses dynamic bookingSlots from UI config
      */
-    static getNextMissingSlot(knownSlots, behaviorConfig = {}) {
-        // Use dynamic slots sorted by order, or fallback to defaults
-        const slots = behaviorConfig.bookingSlots?.length > 0 
-            ? [...behaviorConfig.bookingSlots].sort((a, b) => a.order - b.order)
-            : [
-                { id: 'name', required: true },
-                { id: 'phone', required: true },
-                { id: 'address', required: true },
-                { id: 'time', required: false }
-            ];
+    static getNextMissingSlot(knownSlots, behaviorConfig = {}, company = null) {
+        // Use BookingScriptEngine as single source of truth
+        const slots = this.getBookingSlots(behaviorConfig, company);
         
-        // Find first required slot that's not filled
-        for (const slot of slots) {
-            if (slot.required && !knownSlots[slot.id]) {
-                return slot.id;
-            }
-        }
-        
-        // Then check optional slots
-        for (const slot of slots) {
-            if (!slot.required && !knownSlots[slot.id]) {
-                return slot.id;
-            }
-        }
-        
-        return null; // All slots filled
+        // Use BookingScriptEngine helper
+        const nextSlot = BookingScriptEngine.getNextRequiredSlot(slots, knownSlots);
+        return nextSlot?.slotId || null;
     }
     
     /**
@@ -497,14 +479,15 @@ class HybridReceptionistLLM {
      * Uses dynamic bookingSlots from UI config
      */
     static getSlotPrompt(slotName, behaviorConfig = {}) {
-        // Check dynamic slots first
-        const slots = behaviorConfig.bookingSlots || [];
-        const dynamicSlot = slots.find(s => s.id === slotName);
-        if (dynamicSlot?.question) {
-            return dynamicSlot.question;
+        // Use BookingScriptEngine for consistent slot lookup
+        const slots = this.getBookingSlots(behaviorConfig);
+        const question = BookingScriptEngine.getSlotQuestion(slots, slotName);
+        
+        if (question) {
+            return question;
         }
         
-        // Check legacy bookingPrompts (no hardcoded defaults)
+        // Fallback: Check legacy bookingPrompts directly
         const prompts = behaviorConfig.bookingPrompts || {};
         switch (slotName) {
             case 'name':
@@ -522,15 +505,32 @@ class HybridReceptionistLLM {
     
     /**
      * Get all configured booking slots sorted by order
-     * 🚨 NO DEFAULTS - Returns empty array if not configured
+     * 🚨 Uses BookingScriptEngine as single source of truth
+     * 
+     * @param {Object} behaviorConfig - From loadFrontDeskConfig()
+     * @param {Object} company - Full company object (optional, for legacy path fallback)
      */
-    static getBookingSlots(behaviorConfig = {}) {
-        if (behaviorConfig.bookingSlots?.length > 0) {
-            return [...behaviorConfig.bookingSlots].sort((a, b) => a.order - b.order);
+    static getBookingSlots(behaviorConfig = {}, company = null) {
+        // If company object provided, use BookingScriptEngine for full path checking
+        if (company) {
+            const result = BookingScriptEngine.getBookingSlotsFromCompany(company);
+            return result.slots;
         }
-        // 🚨 NO HARDCODED DEFAULTS - Return empty array
-        // The UI must be configured. If empty, buildSystemPrompt will show a warning.
-        logger.warn('[HYBRID LLM] ⚠️ NO BOOKING SLOTS CONFIGURED - Company needs to save Front Desk Behavior');
+        
+        // Fallback: use behaviorConfig directly (already loaded)
+        if (behaviorConfig.bookingSlots?.length > 0) {
+            return BookingScriptEngine.normalizeBookingSlots(behaviorConfig.bookingSlots);
+        }
+        
+        // Check legacy bookingPrompts
+        if (behaviorConfig.bookingPrompts) {
+            const converted = BookingScriptEngine.convertLegacyBookingPrompts(behaviorConfig.bookingPrompts);
+            if (converted.length > 0) {
+                return converted;
+            }
+        }
+        
+        logger.warn('[HYBRID LLM] ⚠️ NO BOOKING SLOTS - Company needs to save Front Desk Behavior');
         return [];
     }
     
@@ -584,16 +584,19 @@ NEVER say any of these phrases. They make you sound robotic.
         // We trust the AI to be a good receptionist.
         
         // ════════════════════════════════════════════════════════════════════
-        // DYNAMIC BOOKING SLOTS FROM UI
+        // DYNAMIC BOOKING SLOTS FROM UI (via BookingScriptEngine)
         // ════════════════════════════════════════════════════════════════════
-        const bookingSlots = this.getBookingSlots(uiConfig);
-        const slotIds = bookingSlots.map(s => s.id);
+        const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company);
+        const bookingSlots = bookingConfig.slots;
+        const slotIds = bookingSlots.map(s => s.slotId);
+        const bookingIsConfigured = bookingConfig.isConfigured;
         
         // 🚨 DEBUG: Log exactly what questions are being used
-        logger.info('[HYBRID LLM] 📋 BOOKING SLOTS BEING USED:', {
-            source: uiConfig.bookingSlots?.length > 0 ? 'DATABASE' : 'DEFAULT_FALLBACK',
+        logger.info('[HYBRID LLM] 📋 BOOKING CONFIG:', {
+            source: bookingConfig.source,
+            isConfigured: bookingIsConfigured,
             slotCount: bookingSlots.length,
-            questions: bookingSlots.map(s => ({ id: s.id, question: s.question }))
+            questions: bookingSlots.map(s => ({ id: s.slotId, question: s.question }))
         });
         
         // Compact slot display
@@ -605,23 +608,27 @@ NEVER say any of these phrases. They make you sound robotic.
         // Get missing slots based on dynamic config
         const missingSlots = slotIds.filter(s => !knownSlots[s]).join(',') || 'none';
         
-        // Build slot prompts for the AI with confirm-back instructions
-        // 🚨 CRITICAL: Tell LLM to use EXACT questions, no paraphrasing
-        const slotPromptsSection = bookingSlots.map(slot => {
-            const collected = knownSlots[slot.id];
-            if (collected) {
-                return `  ${slot.id}: ✓ COLLECTED → "${collected}"`;
-            } else {
-                const requiredTag = slot.required ? 'REQUIRED' : 'optional';
-                const confirmNote = slot.confirmBack ? `\n    → After they answer, CONFIRM: "${slot.confirmPrompt?.replace('{value}', '[their answer]') || 'Is that correct?'}"` : '';
-                return `  ${slot.id}: ASK EXACTLY → "${slot.question}" (${requiredTag})${confirmNote}`;
-            }
-        }).join('\n');
+        // Build slot prompts section - ONLY if configured
+        let slotPromptsSection = '';
+        if (bookingIsConfigured) {
+            slotPromptsSection = bookingSlots.map(slot => {
+                const collected = knownSlots[slot.slotId];
+                if (collected) {
+                    return `  ${slot.slotId}: ✓ COLLECTED → "${collected}"`;
+                } else {
+                    const requiredTag = slot.required ? 'REQUIRED' : 'optional';
+                    const confirmNote = slot.confirmBack 
+                        ? `\n    → After answer, confirm: "${slot.confirmPrompt?.replace('{value}', '[their answer]') || 'Is that correct?'}"`
+                        : '';
+                    return `  ${slot.slotId}: ASK → "${slot.question}" (${requiredTag})${confirmNote}`;
+                }
+            }).join('\n');
+        }
         
         // Build list of slots that need confirmation
         const slotsNeedingConfirm = bookingSlots
             .filter(s => s.confirmBack)
-            .map(s => s.id);
+            .map(s => s.slotId);
         
         const confirmInstructions = slotsNeedingConfirm.length > 0
             ? `\nCONFIRM BACK: For ${slotsNeedingConfirm.join(', ')} - repeat the value back to verify you heard correctly.`
@@ -750,17 +757,15 @@ GOAL: Help caller, schedule service if needed.
    - Then help with their actual request
 4. LISTEN for what they're actually asking - don't just collect slots robotically
 
-═══ BOOKING SLOTS - COPY/PASTE ONLY ═══
-🚨🚨🚨 CRITICAL: The questions below are LEGALLY REQUIRED by the business.
-🚨🚨🚨 You MUST copy/paste them EXACTLY - character for character.
-🚨🚨🚨 DO NOT change "is" to "'s", DO NOT add "please", DO NOT reword AT ALL.
-🚨🚨🚨 If you change even ONE WORD, the system will FAIL and the call will DROP.
-
-COPY THESE EXACTLY WHEN ASKING:
+${bookingIsConfigured ? `═══ BOOKING SLOTS (DO NOT READ THIS ALOUD - INTERNAL ONLY) ═══
+When collecting booking info, use these EXACT questions:
 ${slotPromptsSection}
 
 KNOWN: ${slotsList}
-${missingSlots !== 'none' ? `STILL NEED: ${missingSlots}` : 'ALL INFO COLLECTED - confirm and complete.'}`;
+${missingSlots !== 'none' ? `STILL NEED: ${missingSlots}` : 'ALL INFO COLLECTED - confirm and complete.'}` : `═══ BOOKING STATUS ═══
+KNOWN: ${slotsList}
+No booking questions configured. Have a natural conversation.
+If caller wants to book, say you'll take their info and have someone call back.`}`;
 
         // Add only what's RELEVANT to this specific turn
         if (customerNote) prompt += `\n${customerNote}`;
@@ -843,11 +848,12 @@ RESPOND with JSON:
             return 'CONFIRM_WANTS_BOOKING';
         }
         if (phase === 'BOOKING') {
-            // Use dynamic slots from config
+            // Use BookingScriptEngine for consistent slot handling
             const slots = this.getBookingSlots(behaviorConfig);
             for (const slot of slots) {
-                if (!filledSlots[slot.id]) {
-                    return `ASK_${slot.id.toUpperCase()}`;
+                const slotId = slot.slotId || slot.id;
+                if (!filledSlots[slotId]) {
+                    return `ASK_${slotId.toUpperCase()}`;
                 }
             }
             return 'CONFIRM_BOOKING';

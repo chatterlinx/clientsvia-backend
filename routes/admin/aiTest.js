@@ -9,6 +9,7 @@ const router = express.Router();
 const { authenticateJWT } = require('../../middleware/auth');
 const Company = require('../../models/v2Company');
 const HybridReceptionistLLM = require('../../services/HybridReceptionistLLM');
+const BookingScriptEngine = require('../../services/BookingScriptEngine');
 const BlackBoxLogger = require('../../services/BlackBoxLogger');
 const elevenLabsService = require('../../services/v2elevenLabsService');
 const logger = require('../../utils/logger');
@@ -49,13 +50,15 @@ router.post('/:companyId/chat', authenticateJWT, async (req, res) => {
         // Get the front desk behavior config (same as real calls)
         const frontDeskConfig = company?.aiAgentSettings?.frontDeskBehavior || {};
         
-        // 🚨 DEBUG: Log what booking slots are configured
-        const bookingSlots = frontDeskConfig.bookingSlots;
-        logger.info('[AI TEST] 📋 BOOKING SLOTS CONFIG:', {
+        // 🚨 Use BookingScriptEngine as single source of truth
+        const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company);
+        
+        logger.info('[AI TEST] 📋 BOOKING CONFIG:', {
             companyId,
-            hasBookingSlots: !!bookingSlots,
-            slotCount: bookingSlots?.length || 0,
-            questions: bookingSlots?.map(s => ({ id: s.id, question: s.question?.substring(0, 40) })) || 'NONE - will use defaults'
+            source: bookingConfig.source,
+            isConfigured: bookingConfig.isConfigured,
+            slotCount: bookingConfig.slots.length,
+            questions: bookingConfig.slots.map(s => ({ id: s.slotId, question: s.question?.substring(0, 40) }))
         });
         
         const result = await HybridReceptionistLLM.processConversation({
@@ -146,21 +149,21 @@ router.post('/:companyId/chat', authenticateJWT, async (req, res) => {
                 },
                 
                 // ════════════════════════════════════════════════════════════════
-                // 📋 BOOKING SLOTS CONFIGURATION
-                // ════════════════════════════════════════════════════════════════
-                // 🚨 NO HARDCODED DEFAULTS - bookingSlots must be in database
+                // 📋 BOOKING CONFIGURATION (via BookingScriptEngine)
                 // ════════════════════════════════════════════════════════════════
                 bookingConfig: {
-                    source: bookingSlots?.length > 0 ? '✅ CONFIGURED IN DATABASE' : '🚨 NOT CONFIGURED - AI will fail gracefully',
-                    slotCount: bookingSlots?.length || 0,
-                    configuredQuestions: bookingSlots?.length > 0 
-                        ? bookingSlots.map(s => `${s.id}: "${s.question}"`)
+                    source: bookingConfig.isConfigured 
+                        ? `✅ ${bookingConfig.source}` 
+                        : `🚨 ${bookingConfig.source}`,
+                    slotCount: bookingConfig.slots.length,
+                    isConfigured: bookingConfig.isConfigured,
+                    configuredQuestions: bookingConfig.isConfigured 
+                        ? bookingConfig.slots.map(s => `${s.slotId}: "${s.question}"`)
                         : [
-                            '🚨 NO BOOKING SLOTS IN DATABASE',
-                            '→ New companies auto-seed defaults on creation',
-                            '→ Existing companies need migration OR manual save',
+                            '⚠️ Booking not fully configured',
+                            `Source checked: ${bookingConfig.source}`,
                             '→ Go to Front Desk Behavior → Booking Prompts → SAVE',
-                            '(NO hardcoded fallbacks - this is intentional)'
+                            'AI will have a natural conversation but cannot collect booking slots.'
                         ]
                 },
                 
