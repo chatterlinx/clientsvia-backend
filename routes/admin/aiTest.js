@@ -355,11 +355,38 @@ router.get('/:companyId/voice-info', authenticateJWT, async (req, res) => {
         
         const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
         
+        // If we have a voiceId but no voiceName, try to look it up from ElevenLabs
+        let voiceName = voiceSettings.voiceName;
+        if (voiceSettings.voiceId && !voiceName) {
+            try {
+                // Fetch voices from ElevenLabs to get the name
+                const { getSharedElevenLabsConfig } = require('../../clients/index');
+                const elevenLabsConfig = await getSharedElevenLabsConfig();
+                
+                if (elevenLabsConfig?.apiKey) {
+                    const voicesResponse = await fetch('https://api.elevenlabs.io/v1/voices', {
+                        headers: { 'xi-api-key': elevenLabsConfig.apiKey }
+                    });
+                    
+                    if (voicesResponse.ok) {
+                        const voicesData = await voicesResponse.json();
+                        const voice = voicesData.voices?.find(v => v.voice_id === voiceSettings.voiceId);
+                        if (voice) {
+                            voiceName = voice.name;
+                            logger.debug(`[AI TEST] Looked up voice name: ${voiceName}`);
+                        }
+                    }
+                }
+            } catch (lookupError) {
+                logger.debug('[AI TEST] Could not look up voice name:', lookupError.message);
+            }
+        }
+        
         res.json({
             success: true,
             voice: {
                 voiceId: voiceSettings.voiceId,
-                voiceName: voiceSettings.voiceName || 'Not set',
+                voiceName: voiceName || (voiceSettings.voiceId ? 'Voice configured' : 'Not set'),
                 stability: voiceSettings.stability || 0.5,
                 similarityBoost: voiceSettings.similarityBoost || 0.7,
                 apiSource: voiceSettings.apiSource || 'clientsvia',

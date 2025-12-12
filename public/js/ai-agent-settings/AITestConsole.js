@@ -49,6 +49,14 @@ class AITestConsole {
             if (data.success) {
                 this.voiceInfo = data.voice;
                 console.log('[AI Test] Voice loaded:', this.voiceInfo);
+                
+                // Update voice status badge if modal is already rendered
+                const voiceStatus = document.getElementById('voice-status');
+                if (voiceStatus) {
+                    voiceStatus.innerHTML = this.voiceInfo?.hasVoice 
+                        ? `<span style="color: #3fb950;">🔊 ${this.voiceInfo.voiceName || 'ElevenLabs'}</span>`
+                        : `<span style="color: #f0883e;">⚠️ No voice set</span>`;
+                }
             }
         } catch (error) {
             console.error('[AI Test] Failed to load voice info:', error);
