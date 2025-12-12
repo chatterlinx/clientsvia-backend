@@ -1596,7 +1596,10 @@ const companySchema = new mongoose.Schema({
                 confirmPrompt: { type: String, default: "Just to confirm, that's {value}, correct?" }, // What to say when confirming
                 // Name-specific options
                 askFullName: { type: Boolean, default: true }, // Ask for first + last name
-                useFirstNameOnly: { type: Boolean, default: true } // When referring back, use first name only
+                useFirstNameOnly: { type: Boolean, default: true }, // When referring back, use first name only
+                // Phone-specific options
+                offerCallerId: { type: Boolean, default: true }, // Offer to use caller ID instead of asking
+                callerIdPrompt: { type: String, default: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" }
             }],
             
             // ═══════════════════════════════════════════════════════════════

@@ -431,7 +431,7 @@ class FrontDeskBehaviorManager {
                         </div>
                         
                         <!-- Row 4: Name-specific options (only show for name slots) -->
-                        ${slot.id === 'name' || slot.type === 'text' && slot.label?.toLowerCase().includes('name') ? `
+                        ${slot.id === 'name' || (slot.type === 'text' && slot.label?.toLowerCase().includes('name')) ? `
                         <div style="display: flex; align-items: center; gap: 16px; padding: 8px; background: #161b22; border-radius: 4px; border: 1px solid #30363d;">
                             <span style="font-size: 11px; color: #8b949e;">👤 Name Options:</span>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Ask for first AND last name">
@@ -442,6 +442,25 @@ class FrontDeskBehaviorManager {
                                 <input type="checkbox" class="slot-useFirstNameOnly" data-index="${index}" ${slot.useFirstNameOnly !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
                                 <span style="font-size: 12px; color: #c9d1d9;">Call by first name</span>
                             </label>
+                        </div>
+                        ` : ''}
+                        
+                        <!-- Row 5: Phone-specific options (only show for phone slots) -->
+                        ${slot.id === 'phone' || slot.type === 'phone' ? `
+                        <div style="display: flex; flex-direction: column; gap: 8px; padding: 8px; background: #161b22; border-radius: 4px; border: 1px solid ${slot.offerCallerId !== false ? '#238636' : '#30363d'};">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <span style="font-size: 11px; color: #8b949e;">📞 Phone Options:</span>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Offer to use the number they're calling from">
+                                    <input type="checkbox" class="slot-offerCallerId" data-index="${index}" ${slot.offerCallerId !== false ? 'checked' : ''} 
+                                        style="accent-color: #238636;" onchange="window.frontDeskManager.toggleCallerIdPrompt(${index}, this.checked)">
+                                    <span style="font-size: 12px; color: ${slot.offerCallerId !== false ? '#3fb950' : '#c9d1d9'};">Offer to use caller ID</span>
+                                </label>
+                            </div>
+                            <input type="text" class="slot-callerIdPrompt" data-index="${index}" 
+                                value="${slot.callerIdPrompt || "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?"}" 
+                                placeholder="I see you're calling from {callerId} - is that good for texts?"
+                                style="width: 100%; padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; ${slot.offerCallerId !== false ? '' : 'opacity: 0.5;'}"
+                                ${slot.offerCallerId !== false ? '' : 'disabled'}>
                         </div>
                         ` : ''}
                     </div>
@@ -475,12 +494,26 @@ class FrontDeskBehaviorManager {
         }
     }
     
+    toggleCallerIdPrompt(index, enabled) {
+        const promptInput = document.querySelector(`.slot-callerIdPrompt[data-index="${index}"]`);
+        const container = promptInput?.parentElement;
+        if (promptInput) {
+            promptInput.disabled = !enabled;
+            promptInput.style.opacity = enabled ? '1' : '0.5';
+        }
+        if (container) {
+            container.style.borderColor = enabled ? '#238636' : '#30363d';
+            const label = container.querySelector('span:last-of-type');
+            if (label) label.style.color = enabled ? '#3fb950' : '#c9d1d9';
+        }
+    }
+    
     getDefaultBookingSlots() {
         // Generate from legacy bookingPrompts if they exist
         const bp = this.config.bookingPrompts || {};
         return [
             { id: 'name', label: 'Full Name', question: bp.askName || "May I have your full name?", required: true, order: 0, type: 'text', confirmBack: false, confirmPrompt: "Got it, {value}. Did I get that right?", askFullName: true, useFirstNameOnly: true },
-            { id: 'phone', label: 'Phone Number', question: bp.askPhone || "What's the best phone number to reach you?", required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?" },
+            { id: 'phone', label: 'Phone Number', question: bp.askPhone || "What's the best phone number to reach you?", required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?", offerCallerId: true, callerIdPrompt: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
             { id: 'address', label: 'Service Address', question: bp.askAddress || "What's the service address?", required: true, order: 2, type: 'address', confirmBack: false, confirmPrompt: "So that's {value}, right?" },
             { id: 'time', label: 'Preferred Time', question: bp.askTime || "When works best for you - morning or afternoon?", required: false, order: 3, type: 'time', confirmBack: false, confirmPrompt: "So {value} works for you?" }
         ];
@@ -570,6 +603,12 @@ class FrontDeskBehaviorManager {
             const useFirstNameOnlyEl = el.querySelector('.slot-useFirstNameOnly');
             if (askFullNameEl) slotData.askFullName = askFullNameEl.checked;
             if (useFirstNameOnlyEl) slotData.useFirstNameOnly = useFirstNameOnlyEl.checked;
+            
+            // Phone-specific options (only if the elements exist)
+            const offerCallerIdEl = el.querySelector('.slot-offerCallerId');
+            const callerIdPromptEl = el.querySelector('.slot-callerIdPrompt');
+            if (offerCallerIdEl) slotData.offerCallerId = offerCallerIdEl.checked;
+            if (callerIdPromptEl) slotData.callerIdPrompt = callerIdPromptEl.value?.trim() || "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?";
             
             slots.push(slotData);
         });

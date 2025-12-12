@@ -375,7 +375,8 @@ class HybridReceptionistLLM {
                 customerContext: callContext.customerContext || { isReturning: false, totalCalls: 0 },
                 lastAgentResponse,  // Prevent repetition
                 turnCount: callContext.turnCount || 1,
-                speakingCorrections  // What words NOT to use
+                speakingCorrections,  // What words NOT to use
+                callerId: callContext.callerId || callContext.callerPhone || null  // For caller ID confirmation
             });
             
             // ════════════════════════════════════════════════════════════════
@@ -529,10 +530,10 @@ class HybridReceptionistLLM {
         if (behaviorConfig.bookingSlots?.length > 0) {
             return [...behaviorConfig.bookingSlots].sort((a, b) => a.order - b.order);
         }
-        // Default slots - phone has confirmBack enabled, name has full name + first name options
+        // Default slots - phone has confirmBack + caller ID enabled, name has full name options
         return [
             { id: 'name', label: 'Full Name', question: 'May I have your full name?', required: true, order: 0, type: 'text', confirmBack: false, askFullName: true, useFirstNameOnly: true },
-            { id: 'phone', label: 'Phone Number', question: 'What is the best phone number to reach you?', required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?" },
+            { id: 'phone', label: 'Phone Number', question: 'What is the best phone number to reach you?', required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?", offerCallerId: true, callerIdPrompt: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
             { id: 'address', label: 'Service Address', question: 'What is the service address?', required: true, order: 2, type: 'address', confirmBack: false },
             { id: 'time', label: 'Preferred Time', question: 'When works best for you?', required: false, order: 3, type: 'time', confirmBack: false }
         ];
@@ -542,7 +543,7 @@ class HybridReceptionistLLM {
      * Build the system prompt with all context
      * 🚨 100% UI-CONTROLLED - All instructions come from frontDeskBehavior config
      */
-    static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext, customerContext, serviceAreaInfo, detectedServices, lastAgentResponse, turnCount, speakingCorrections }) {
+    static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext, customerContext, serviceAreaInfo, detectedServices, lastAgentResponse, turnCount, speakingCorrections, callerId }) {
         const companyName = company.name || 'our company';
         const trade = company.trade || 'HVAC';
         
@@ -632,6 +633,17 @@ NEVER say any of these phrases. They make you sound robotic.
             if (rules.length > 0) {
                 nameInstructions = `\n👤 NAME HANDLING: ${rules.join('. ')}`;
             }
+        }
+        
+        // Build phone/caller ID instructions from slot config
+        const phoneSlot = bookingSlots.find(s => s.id === 'phone' || s.type === 'phone');
+        let phoneInstructions = '';
+        if (phoneSlot && phoneSlot.offerCallerId !== false && callerId && !knownSlots.phone) {
+            // Format caller ID for display (e.g., 239-565-2202)
+            const formattedCallerId = callerId.replace(/^\+1/, '').replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+            const prompt = (phoneSlot.callerIdPrompt || "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?")
+                .replace('{callerId}', formattedCallerId);
+            phoneInstructions = `\n📞 CALLER ID AVAILABLE: ${formattedCallerId}\n   When asking for phone, offer: "${prompt}"\n   If they say YES/that's fine/correct → use ${formattedCallerId} as their phone\n   If they give a different number → use that instead`;
         }
         
         // Customer context
@@ -737,6 +749,11 @@ ${missingSlots !== 'none' ? `STILL NEED: ${missingSlots}` : 'ALL INFO COLLECTED 
         // Add name handling instructions if configured
         if (nameInstructions) {
             prompt += nameInstructions;
+        }
+        
+        // Add phone/caller ID instructions if configured
+        if (phoneInstructions) {
+            prompt += phoneInstructions;
         }
         
         // Forbidden phrases (keep minimal)

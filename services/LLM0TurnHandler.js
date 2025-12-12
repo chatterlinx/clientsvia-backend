@@ -1582,6 +1582,8 @@ class LLM0TurnHandler {
                 callId,
                 companyId: company?._id || company?.id,
                 turnCount: turnNumber,
+                // Caller ID for phone confirmation feature
+                callerId: callState.from || callState.callerPhone || null,
                 // Pass full customer context for empathy
                 customerContext: {
                     isReturning: callState.customerContext?.isReturning || false,
@@ -2533,7 +2535,11 @@ class LLM0TurnHandler {
                 serviceAreas: company?.serviceAreas || [],
                 id: companyId
             },
-            callContext: { callId, turnCount: turnNumber },
+            callContext: { 
+                callId, 
+                turnCount: turnNumber,
+                callerId: callState?.from || callState?.callerPhone || null  // For caller ID confirmation
+            },
             currentMode: convState.currentMode,
             knownSlots: convState.collectedSlots,
             conversationHistory: convState.conversationHistory.slice(-4), // Last 4 turns for speed
