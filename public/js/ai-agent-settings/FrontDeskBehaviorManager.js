@@ -521,13 +521,16 @@ class FrontDeskBehaviorManager {
     }
     
     getDefaultBookingSlots() {
-        // Generate from legacy bookingPrompts if they exist
+        // ════════════════════════════════════════════════════════════════
+        // UI DEFAULTS for new/unconfigured companies
+        // These are ONLY shown in UI before first save - then database is used
+        // ════════════════════════════════════════════════════════════════
         const bp = this.config.bookingPrompts || {};
         return [
             { id: 'name', label: 'Full Name', question: bp.askName || "May I have your full name?", required: true, order: 0, type: 'text', confirmBack: false, confirmPrompt: "Got it, {value}. Did I get that right?", askFullName: true, useFirstNameOnly: true },
-            { id: 'phone', label: 'Phone Number', question: bp.askPhone || "What's the best phone number to reach you?", required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?", offerCallerId: true, callerIdPrompt: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
-            { id: 'address', label: 'Service Address', question: bp.askAddress || "What's the service address?", required: true, order: 2, type: 'address', confirmBack: false, confirmPrompt: "So that's {value}, right?", addressConfirmLevel: 'street_city' },
-            { id: 'time', label: 'Preferred Time', question: bp.askTime || "When works best for you - morning or afternoon?", required: false, order: 3, type: 'time', confirmBack: false, confirmPrompt: "So {value} works for you?" }
+            { id: 'phone', label: 'Phone Number', question: bp.askPhone || "What is the best phone number to reach you?", required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?", offerCallerId: true, callerIdPrompt: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
+            { id: 'address', label: 'Service Address', question: bp.askAddress || "What is the service address?", required: true, order: 2, type: 'address', confirmBack: false, confirmPrompt: "So that's {value}, right?", addressConfirmLevel: 'street_city' },
+            { id: 'time', label: 'Preferred Time', question: bp.askTime || "When works best for you?", required: false, order: 3, type: 'time', confirmBack: false, confirmPrompt: "So {value} works for you?" }
         ];
     }
     

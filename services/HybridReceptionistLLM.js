@@ -58,73 +58,76 @@ const ServiceAreaHandler = require('./ServiceAreaHandler');
 
 /**
  * Load Front Desk Behavior config from company
- * This is the SINGLE SOURCE OF TRUTH for AI behavior
+ * 🚨 ZERO HARDCODED DEFAULTS - Everything comes from database
+ * If config is missing, the system will show clear errors in UI
  */
 function loadFrontDeskConfig(company) {
     const config = company?.aiAgentSettings?.frontDeskBehavior || {};
     
+    // 🚨 FLAG: Is this company properly configured?
+    const isConfigured = !!(config.bookingSlots?.length > 0);
+    
     return {
-        // Personality
+        // Meta: Is this company configured?
+        _isConfigured: isConfigured,
+        _configSource: isConfigured ? 'DATABASE' : 'NOT_CONFIGURED',
+        
+        // Personality - from database ONLY
         personality: {
-            tone: config.personality?.tone || 'warm',
-            verbosity: config.personality?.verbosity || 'concise',
-            maxResponseWords: config.personality?.maxResponseWords || 30,
-            useCallerName: config.personality?.useCallerName !== false,
-            agentName: config.personality?.agentName || 'Ashley'
+            tone: config.personality?.tone || null,
+            verbosity: config.personality?.verbosity || null,
+            maxResponseWords: config.personality?.maxResponseWords || null,
+            useCallerName: config.personality?.useCallerName,
+            agentName: config.personality?.agentName || null
         },
         
-        // Dynamic booking slots (new system)
-        bookingSlots: config.bookingSlots?.length > 0 ? config.bookingSlots : [
-            { id: 'name', label: 'Full Name', question: config.bookingPrompts?.askName || "May I have your name?", required: true, order: 0, type: 'text' },
-            { id: 'phone', label: 'Phone Number', question: config.bookingPrompts?.askPhone || "What's the best phone number to reach you?", required: true, order: 1, type: 'phone' },
-            { id: 'address', label: 'Service Address', question: config.bookingPrompts?.askAddress || "What's the service address?", required: true, order: 2, type: 'address' },
-            { id: 'time', label: 'Preferred Time', question: config.bookingPrompts?.askTime || "When works best for you - morning or afternoon?", required: false, order: 3, type: 'time' }
-        ],
+        // 🚨 BOOKING SLOTS - NO DEFAULTS - Must be in database
+        bookingSlots: config.bookingSlots || [],
         
-        // Booking templates for confirmation/completion
+        // Booking templates - from database ONLY
         bookingTemplates: {
-            confirmTemplate: config.bookingTemplates?.confirmTemplate || config.bookingPrompts?.confirmTemplate || "Let me confirm — I have {name} at {address}, {time}. Does that sound right?",
-            completeTemplate: config.bookingTemplates?.completeTemplate || config.bookingPrompts?.completeTemplate || "You're all set, {name}! A technician will be out {time}. You'll receive a confirmation text shortly.",
-            offerAsap: config.bookingTemplates?.offerAsap !== false,
-            asapPhrase: config.bookingTemplates?.asapPhrase || "Or I can send someone as soon as possible."
+            confirmTemplate: config.bookingTemplates?.confirmTemplate || config.bookingPrompts?.confirmTemplate || null,
+            completeTemplate: config.bookingTemplates?.completeTemplate || config.bookingPrompts?.completeTemplate || null,
+            offerAsap: config.bookingTemplates?.offerAsap,
+            asapPhrase: config.bookingTemplates?.asapPhrase || null
         },
         
-        // Legacy booking prompts (for backward compatibility)
+        // Legacy booking prompts - from database ONLY
         bookingPrompts: {
-            askName: config.bookingPrompts?.askName || "May I have your name?",
-            askPhone: config.bookingPrompts?.askPhone || "What's the best phone number to reach you?",
-            askAddress: config.bookingPrompts?.askAddress || "What's the service address?",
-            askTime: config.bookingPrompts?.askTime || "When works best for you - morning or afternoon?",
-            confirmTemplate: config.bookingPrompts?.confirmTemplate || "So I have {name} at {address}, {time}. Does that sound right?",
-            completeTemplate: config.bookingPrompts?.completeTemplate || "You're all set, {name}! A technician will be out {time}. You'll receive a confirmation text shortly."
+            askName: config.bookingPrompts?.askName || null,
+            askPhone: config.bookingPrompts?.askPhone || null,
+            askAddress: config.bookingPrompts?.askAddress || null,
+            askTime: config.bookingPrompts?.askTime || null,
+            confirmTemplate: config.bookingPrompts?.confirmTemplate || null,
+            completeTemplate: config.bookingPrompts?.completeTemplate || null
         },
         
-        // Emotion responses (from UI)
+        // Emotion responses - from database ONLY
         emotionResponses: config.emotionResponses || {},
         
-        // Frustration triggers (from UI) - THESE CONTROL DETECTION
+        // Frustration triggers - from database ONLY
         frustrationTriggers: config.frustrationTriggers || [],
         
-        // Escalation settings (from UI)
+        // Escalation settings - from database ONLY
         escalation: {
-            enabled: config.escalation?.enabled !== false,
-            maxLoopsBeforeOffer: config.escalation?.maxLoopsBeforeOffer || 3,
+            enabled: config.escalation?.enabled,
+            maxLoopsBeforeOffer: config.escalation?.maxLoopsBeforeOffer || null,
             triggerPhrases: config.escalation?.triggerPhrases || [],
-            offerMessage: config.escalation?.offerMessage || "I can connect you to someone directly. Would you like that?",
-            transferMessage: config.escalation?.transferMessage || "Let me connect you to our team now."
+            offerMessage: config.escalation?.offerMessage || null,
+            transferMessage: config.escalation?.transferMessage || null
         },
         
-        // Loop prevention (from UI)
+        // Loop prevention - from database ONLY
         loopPrevention: {
-            enabled: config.loopPrevention?.enabled !== false,
-            maxSameQuestion: config.loopPrevention?.maxSameQuestion || 2,
-            onLoop: config.loopPrevention?.onLoop || 'rephrase'
+            enabled: config.loopPrevention?.enabled,
+            maxSameQuestion: config.loopPrevention?.maxSameQuestion || null,
+            onLoop: config.loopPrevention?.onLoop || null
         },
         
-        // Forbidden phrases (from UI) - THESE ARE CHECKED AGAINST LLM OUTPUT
+        // Forbidden phrases - from database ONLY
         forbiddenPhrases: config.forbiddenPhrases || [],
         
-        // Detection triggers (from UI) - THESE CONTROL WHAT AI DETECTS
+        // Detection triggers - from database ONLY
         detectionTriggers: {
             trustConcern: config.detectionTriggers?.trustConcern || [],
             callerFeelsIgnored: config.detectionTriggers?.callerFeelsIgnored || [],
@@ -133,27 +136,21 @@ function loadFrontDeskConfig(company) {
             wantsBooking: config.detectionTriggers?.wantsBooking || []
         },
         
-        // Fallback responses (from UI) - WHAT AI SAYS WHEN LLM FAILS
-        // These ensure the call NEVER goes silent
+        // Fallback responses - from database ONLY
         fallbackResponses: {
-            // Initial & Discovery
-            greeting: config.fallbackResponses?.greeting || "Thanks for calling! How can I help you today?",
-            discovery: config.fallbackResponses?.discovery || "Got it, what's going on — is it not cooling, not heating, making noise, or something else?",
-            // Booking Slots
-            askName: config.fallbackResponses?.askName || "May I have your name please?",
-            askPhone: config.fallbackResponses?.askPhone || "And what's the best phone number to reach you?",
-            askAddress: config.fallbackResponses?.askAddress || "What's the service address?",
-            askTime: config.fallbackResponses?.askTime || "When works best for you — morning or afternoon? Or I can send someone as soon as possible.",
-            // Confirmation
-            confirmBooking: config.fallbackResponses?.confirmBooking || "Let me confirm — I have you scheduled. Does that sound right?",
-            bookingComplete: config.fallbackResponses?.bookingComplete || "You're all set! A technician will be out and you'll receive a confirmation text shortly. Is there anything else?",
-            // Error Recovery
-            didNotHear: config.fallbackResponses?.didNotHear || "I'm sorry, I didn't quite catch that. Could you please repeat?",
-            connectionIssue: config.fallbackResponses?.connectionIssue || "I'm sorry, I think our connection isn't great. Could you please repeat that?",
-            clarification: config.fallbackResponses?.clarification || "I want to make sure I understand correctly. Could you tell me a bit more?",
-            // Transfer & Catch-All
-            transfering: config.fallbackResponses?.transfering || "Let me connect you with someone who can help you right away. Please hold.",
-            generic: config.fallbackResponses?.generic || "I'm here to help. What can I do for you?"
+            greeting: config.fallbackResponses?.greeting || null,
+            discovery: config.fallbackResponses?.discovery || null,
+            askName: config.fallbackResponses?.askName || null,
+            askPhone: config.fallbackResponses?.askPhone || null,
+            askAddress: config.fallbackResponses?.askAddress || null,
+            askTime: config.fallbackResponses?.askTime || null,
+            confirmBooking: config.fallbackResponses?.confirmBooking || null,
+            bookingComplete: config.fallbackResponses?.bookingComplete || null,
+            didNotHear: config.fallbackResponses?.didNotHear || null,
+            connectionIssue: config.fallbackResponses?.connectionIssue || null,
+            clarification: config.fallbackResponses?.clarification || null,
+            transfering: config.fallbackResponses?.transfering || null,
+            generic: config.fallbackResponses?.generic || null
         },
         
         // Mode switching (from UI) - WHEN TO SWITCH MODES
@@ -507,36 +504,34 @@ class HybridReceptionistLLM {
             return dynamicSlot.question;
         }
         
-        // Fallback to legacy bookingPrompts
+        // Check legacy bookingPrompts (no hardcoded defaults)
         const prompts = behaviorConfig.bookingPrompts || {};
         switch (slotName) {
             case 'name':
-                return prompts.askName || 'May I have your name?';
+                return prompts.askName || null;
             case 'phone':
-                return prompts.askPhone || 'What is the best phone number to reach you?';
+                return prompts.askPhone || null;
             case 'address':
-                return prompts.askAddress || 'What is the address where service is needed?';
+                return prompts.askAddress || null;
             case 'time':
-                return prompts.askTime || 'What day and time works best for you?';
+                return prompts.askTime || null;
             default:
-                return 'How can I help you?';
+                return null;
         }
     }
     
     /**
      * Get all configured booking slots sorted by order
+     * 🚨 NO DEFAULTS - Returns empty array if not configured
      */
     static getBookingSlots(behaviorConfig = {}) {
         if (behaviorConfig.bookingSlots?.length > 0) {
             return [...behaviorConfig.bookingSlots].sort((a, b) => a.order - b.order);
         }
-        // Default slots - phone has confirmBack + caller ID enabled, name has full name options
-        return [
-            { id: 'name', label: 'Full Name', question: 'May I have your full name?', required: true, order: 0, type: 'text', confirmBack: false, askFullName: true, useFirstNameOnly: true },
-            { id: 'phone', label: 'Phone Number', question: 'What is the best phone number to reach you?', required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?", offerCallerId: true, callerIdPrompt: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
-            { id: 'address', label: 'Service Address', question: 'What is the service address?', required: true, order: 2, type: 'address', confirmBack: false, addressConfirmLevel: 'street_city' },
-            { id: 'time', label: 'Preferred Time', question: 'When works best for you?', required: false, order: 3, type: 'time', confirmBack: false }
-        ];
+        // 🚨 NO HARDCODED DEFAULTS - Return empty array
+        // The UI must be configured. If empty, buildSystemPrompt will show a warning.
+        logger.warn('[HYBRID LLM] ⚠️ NO BOOKING SLOTS CONFIGURED - Company needs to save Front Desk Behavior');
+        return [];
     }
     
     /**
@@ -911,39 +906,55 @@ RESPOND with JSON:
     }
     
     /**
-     * Emergency fallback when LLM fails - MUST be smart, NOT generic
-     * 🚨 Uses UI-configured booking slot questions
+     * Emergency fallback when LLM fails
+     * 🚨 Uses UI-configured responses ONLY - no hardcoded defaults
      */
     static emergencyFallback(mode, knownSlots, behaviorConfig = {}) {
-        // 🧠 SMART FALLBACK - Even in emergency, sound like a receptionist not a chatbot
-        // Use UI-configured fallback responses
         const fallbacks = behaviorConfig.fallbackResponses || {};
-        let reply = fallbacks.discovery || "Got it, what's going on — is it not cooling, not heating, making noise, or something else?";
         
-        if (mode === 'booking') {
+        // Check if config is complete
+        const isConfigured = behaviorConfig._isConfigured || behaviorConfig.bookingSlots?.length > 0;
+        
+        let reply;
+        
+        if (!isConfigured) {
+            // 🚨 NOT CONFIGURED - Tell the caller to hold (config error)
+            reply = "One moment please, let me check on something.";
+            logger.error('[HYBRID LLM] 🚨 EMERGENCY FALLBACK - Company not configured! No bookingSlots in database.');
+        } else if (mode === 'booking') {
             // Use UI-configured slot questions
             const bookingSlots = this.getBookingSlots(behaviorConfig);
             const nameSlot = bookingSlots.find(s => s.id === 'name');
             
             if (!knownSlots.name) {
                 const nameQ = this.getSlotPrompt('name', behaviorConfig);
-                reply = `Perfect, let me get you on the schedule. ${nameQ}`;
+                reply = nameQ ? `Perfect, let me get you on the schedule. ${nameQ}` : fallbacks.askName;
             } else if (!knownSlots.phone) {
-                // Use first name if configured
                 const firstName = (nameSlot?.useFirstNameOnly !== false && knownSlots.name) 
                     ? knownSlots.name.split(' ')[0] 
                     : knownSlots.name;
                 const phoneQ = this.getSlotPrompt('phone', behaviorConfig);
-                reply = `Great ${firstName}, ${phoneQ}`;
+                reply = phoneQ ? `Great ${firstName}, ${phoneQ}` : fallbacks.askPhone;
             } else if (!knownSlots.address) {
-                reply = this.getSlotPrompt('address', behaviorConfig);
+                reply = this.getSlotPrompt('address', behaviorConfig) || fallbacks.askAddress;
             } else if (!knownSlots.time) {
-                reply = this.getSlotPrompt('time', behaviorConfig);
+                reply = this.getSlotPrompt('time', behaviorConfig) || fallbacks.askTime;
+            } else {
+                reply = fallbacks.generic || "How can I help you?";
             }
+        } else {
+            reply = fallbacks.discovery || fallbacks.generic || "How can I help you?";
+        }
+        
+        // Final safety - if still null, use absolute minimum
+        if (!reply) {
+            reply = "I'm here to help. What can I do for you?";
+            logger.error('[HYBRID LLM] 🚨 CRITICAL: No fallback response configured in database!');
         }
         
         logger.warn('[HYBRID LLM] 🚨 Emergency fallback used - LLM was not called', {
             mode,
+            isConfigured,
             hasSlots: Object.keys(knownSlots || {}).filter(k => knownSlots[k]).length
         });
         
@@ -956,7 +967,8 @@ RESPOND with JSON:
             signals: { frustrated: false, wantsHuman: false },
             latencyMs: 0,
             tokensUsed: 0,
-            isEmergencyFallback: true
+            isEmergencyFallback: true,
+            configError: !isConfigured
         };
     }
     

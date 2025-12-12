@@ -81,16 +81,17 @@ function convertNumberWordsToDigits(input) {
 // STEP-TO-PROMPT ENFORCER
 // ════════════════════════════════════════════════════════════════════════════
 // If LLM returns garbage, we FORCE the correct prompt
-// 🚨 NOTE: These are FALLBACK ONLY - UI-configured questions take priority
-// Use HybridReceptionistLLM.getSlotPrompt() to get UI-configured questions
+// 🚨 NO HARDCODED BOOKING PROMPTS - All booking questions come from database
+// Use HybridReceptionistLLM.getSlotPrompt() for UI-configured questions
+// These are only non-booking flow control prompts
 const STEP_PROMPTS = {
-    'ASK_SERVICE_TYPE': 'Is this for a repair issue, or routine maintenance?',
-    'ASK_NAME': 'May I have your full name?',  // Default - UI config overrides
-    'ASK_PHONE': "What's the best phone number to reach you?",  // Default - UI config overrides
-    'ASK_ADDRESS': "What's the service address?",  // Default - UI config overrides
-    'ASK_TIME': 'When works best for you?',  // Default - UI config overrides
-    'CONFIRM': 'Does that sound right?',
-    'POST_BOOKING': 'Is there anything else I can help you with?'
+    'ASK_SERVICE_TYPE': null,  // 🚨 DEPRECATED - triage handles this
+    'ASK_NAME': null,          // 🚨 USE DATABASE - HybridReceptionistLLM.getSlotPrompt('name')
+    'ASK_PHONE': null,         // 🚨 USE DATABASE - HybridReceptionistLLM.getSlotPrompt('phone')
+    'ASK_ADDRESS': null,       // 🚨 USE DATABASE - HybridReceptionistLLM.getSlotPrompt('address')
+    'ASK_TIME': null,          // 🚨 USE DATABASE - HybridReceptionistLLM.getSlotPrompt('time')
+    'CONFIRM': null,           // 🚨 USE DATABASE - bookingTemplates.confirmTemplate
+    'POST_BOOKING': null       // 🚨 USE DATABASE - fallbackResponses.generic
 };
 
 const STEP_KEYWORDS = {

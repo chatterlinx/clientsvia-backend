@@ -1583,26 +1583,36 @@ const companySchema = new mongoose.Schema({
             
             // ═══════════════════════════════════════════════════════════════
             // BOOKING SLOTS - Dynamic, customizable slots for booking
+            // 🚨 AUTO-SEEDED on company creation - no hardcoded fallbacks elsewhere
             // ═══════════════════════════════════════════════════════════════
-            bookingSlots: [{
-                id: { type: String, required: true }, // e.g., 'name', 'phone', 'custom_insurance'
-                label: { type: String, required: true }, // Display name: "Full Name", "Phone Number"
-                question: { type: String, required: true }, // What AI asks: "May I have your full name?"
-                required: { type: Boolean, default: true },
-                order: { type: Number, default: 0 }, // For sorting
-                type: { type: String, enum: ['text', 'phone', 'address', 'time', 'custom'], default: 'text' },
-                validation: { type: String, default: null }, // Optional: 'full_name', '10_digits', etc.
-                confirmBack: { type: Boolean, default: false }, // Repeat value back for confirmation
-                confirmPrompt: { type: String, default: "Just to confirm, that's {value}, correct?" }, // What to say when confirming
-                // Name-specific options
-                askFullName: { type: Boolean, default: true }, // Ask for first + last name
-                useFirstNameOnly: { type: Boolean, default: true }, // When referring back, use first name only
-                // Phone-specific options
-                offerCallerId: { type: Boolean, default: true }, // Offer to use caller ID instead of asking
-                callerIdPrompt: { type: String, default: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
-                // Address-specific options
-                addressConfirmLevel: { type: String, enum: ['street_only', 'street_city', 'full'], default: 'street_city' } // How much to repeat back
-            }],
+            bookingSlots: {
+                type: [{
+                    id: { type: String, required: true }, // e.g., 'name', 'phone', 'custom_insurance'
+                    label: { type: String, required: true }, // Display name: "Full Name", "Phone Number"
+                    question: { type: String, required: true }, // What AI asks: "May I have your full name?"
+                    required: { type: Boolean, default: true },
+                    order: { type: Number, default: 0 }, // For sorting
+                    type: { type: String, enum: ['text', 'phone', 'address', 'time', 'custom'], default: 'text' },
+                    validation: { type: String, default: null }, // Optional: 'full_name', '10_digits', etc.
+                    confirmBack: { type: Boolean, default: false }, // Repeat value back for confirmation
+                    confirmPrompt: { type: String, default: "Just to confirm, that's {value}, correct?" }, // What to say when confirming
+                    // Name-specific options
+                    askFullName: { type: Boolean, default: true }, // Ask for first + last name
+                    useFirstNameOnly: { type: Boolean, default: true }, // When referring back, use first name only
+                    // Phone-specific options
+                    offerCallerId: { type: Boolean, default: true }, // Offer to use caller ID instead of asking
+                    callerIdPrompt: { type: String, default: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
+                    // Address-specific options
+                    addressConfirmLevel: { type: String, enum: ['street_only', 'street_city', 'full'], default: 'street_city' } // How much to repeat back
+                }],
+                // 🚨 AUTO-SEED: These defaults are applied when company is created
+                default: [
+                    { id: 'name', label: 'Full Name', question: 'May I have your full name?', required: true, order: 0, type: 'text', confirmBack: false, askFullName: true, useFirstNameOnly: true },
+                    { id: 'phone', label: 'Phone Number', question: 'What is the best phone number to reach you?', required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?", offerCallerId: true, callerIdPrompt: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
+                    { id: 'address', label: 'Service Address', question: 'What is the service address?', required: true, order: 2, type: 'address', confirmBack: false, addressConfirmLevel: 'street_city' },
+                    { id: 'time', label: 'Preferred Time', question: 'When works best for you?', required: false, order: 3, type: 'time', confirmBack: false }
+                ]
+            },
             
             // ═══════════════════════════════════════════════════════════════
             // BOOKING TEMPLATES - Confirmation and completion messages

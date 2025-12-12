@@ -1860,18 +1860,20 @@ class LLM0TurnHandler {
             // Use random acknowledgment from UI config + follow-up + the booking prompt
             const ack = isFrustrated ? `${randomAck} ${frustratedFollowUp} ` : '';
             
+            // 🚨 NO HARDCODED DEFAULTS - Use database values only
             switch (field) {
                 case 'phone':
-                    return `${namePrefix}${ack}${bookingPrompts.askPhone || "What's the best phone number to reach you?"}`;
+                    return bookingPrompts.askPhone ? `${namePrefix}${ack}${bookingPrompts.askPhone}` : null;
                 case 'address':
-                    return `${ack}${bookingPrompts.askAddress || "What's the service address?"}`;
+                    return bookingPrompts.askAddress ? `${ack}${bookingPrompts.askAddress}` : null;
                 case 'time':
-                    const asapOffer = bookingPrompts.offerAsap !== false 
-                        ? ` ${bookingPrompts.asapPhrase || "Or I can send someone as soon as possible."}` 
+                    if (!bookingPrompts.askTime) return null;
+                    const asapOffer = (bookingPrompts.offerAsap !== false && bookingPrompts.asapPhrase) 
+                        ? ` ${bookingPrompts.asapPhrase}` 
                         : '';
-                    return `${ack}${bookingPrompts.askTime || "When works best for you?"}${asapOffer}`;
+                    return `${ack}${bookingPrompts.askTime}${asapOffer}`;
                 case 'name':
-                    return `${ack}${bookingPrompts.askName || "May I have your name?"}`;
+                    return bookingPrompts.askName ? `${ack}${bookingPrompts.askName}` : null;
                 default:
                     return null;
             }

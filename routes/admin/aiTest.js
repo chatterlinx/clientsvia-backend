@@ -148,19 +148,19 @@ router.post('/:companyId/chat', authenticateJWT, async (req, res) => {
                 // ════════════════════════════════════════════════════════════════
                 // 📋 BOOKING SLOTS CONFIGURATION
                 // ════════════════════════════════════════════════════════════════
+                // 🚨 NO HARDCODED DEFAULTS - bookingSlots must be in database
+                // ════════════════════════════════════════════════════════════════
                 bookingConfig: {
-                    source: bookingSlots?.length > 0 ? '✅ SAVED IN DATABASE' : '⚠️ NOT SAVED (using hardcoded defaults)',
-                    slotCount: bookingSlots?.length || 4,
+                    source: bookingSlots?.length > 0 ? '✅ CONFIGURED IN DATABASE' : '🚨 NOT CONFIGURED - AI will fail gracefully',
+                    slotCount: bookingSlots?.length || 0,
                     configuredQuestions: bookingSlots?.length > 0 
                         ? bookingSlots.map(s => `${s.id}: "${s.question}"`)
                         : [
-                            '⚠️ bookingSlots NOT in company database',
+                            '🚨 NO BOOKING SLOTS IN DATABASE',
+                            '→ New companies auto-seed defaults on creation',
+                            '→ Existing companies need migration OR manual save',
                             '→ Go to Front Desk Behavior → Booking Prompts → SAVE',
-                            'Currently using these hardcoded defaults:',
-                            'name: "May I have your full name?"',
-                            'phone: "What is the best phone number to reach you?"',
-                            'address: "What is the service address?"',
-                            'time: "When works best for you?"'
+                            '(NO hardcoded fallbacks - this is intentional)'
                         ]
                 },
                 
