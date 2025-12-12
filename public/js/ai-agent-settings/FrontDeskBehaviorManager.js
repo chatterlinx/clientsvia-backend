@@ -463,6 +463,18 @@ class FrontDeskBehaviorManager {
                                 ${slot.offerCallerId !== false ? '' : 'disabled'}>
                         </div>
                         ` : ''}
+                        
+                        <!-- Row 6: Address-specific options (only show for address slots) -->
+                        ${slot.id === 'address' || slot.type === 'address' ? `
+                        <div style="display: flex; align-items: center; gap: 12px; padding: 8px; background: #161b22; border-radius: 4px; border: 1px solid #30363d;">
+                            <span style="font-size: 11px; color: #8b949e;">📍 When confirming back:</span>
+                            <select class="slot-addressConfirmLevel" data-index="${index}" style="padding: 6px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
+                                <option value="street_only" ${slot.addressConfirmLevel === 'street_only' ? 'selected' : ''}>Street only (123 Market Place)</option>
+                                <option value="street_city" ${(slot.addressConfirmLevel === 'street_city' || !slot.addressConfirmLevel) ? 'selected' : ''}>Street + City (123 Market Place, Naples)</option>
+                                <option value="full" ${slot.addressConfirmLevel === 'full' ? 'selected' : ''}>Full address (123 Market Place, Naples, FL 34102)</option>
+                            </select>
+                        </div>
+                        ` : ''}
                     </div>
                     
                     <!-- Required Toggle & Delete -->
@@ -514,7 +526,7 @@ class FrontDeskBehaviorManager {
         return [
             { id: 'name', label: 'Full Name', question: bp.askName || "May I have your full name?", required: true, order: 0, type: 'text', confirmBack: false, confirmPrompt: "Got it, {value}. Did I get that right?", askFullName: true, useFirstNameOnly: true },
             { id: 'phone', label: 'Phone Number', question: bp.askPhone || "What's the best phone number to reach you?", required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?", offerCallerId: true, callerIdPrompt: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
-            { id: 'address', label: 'Service Address', question: bp.askAddress || "What's the service address?", required: true, order: 2, type: 'address', confirmBack: false, confirmPrompt: "So that's {value}, right?" },
+            { id: 'address', label: 'Service Address', question: bp.askAddress || "What's the service address?", required: true, order: 2, type: 'address', confirmBack: false, confirmPrompt: "So that's {value}, right?", addressConfirmLevel: 'street_city' },
             { id: 'time', label: 'Preferred Time', question: bp.askTime || "When works best for you - morning or afternoon?", required: false, order: 3, type: 'time', confirmBack: false, confirmPrompt: "So {value} works for you?" }
         ];
     }
@@ -609,6 +621,10 @@ class FrontDeskBehaviorManager {
             const callerIdPromptEl = el.querySelector('.slot-callerIdPrompt');
             if (offerCallerIdEl) slotData.offerCallerId = offerCallerIdEl.checked;
             if (callerIdPromptEl) slotData.callerIdPrompt = callerIdPromptEl.value?.trim() || "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?";
+            
+            // Address-specific options (only if the elements exist)
+            const addressConfirmLevelEl = el.querySelector('.slot-addressConfirmLevel');
+            if (addressConfirmLevelEl) slotData.addressConfirmLevel = addressConfirmLevelEl.value || 'street_city';
             
             slots.push(slotData);
         });

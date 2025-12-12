@@ -1599,7 +1599,9 @@ const companySchema = new mongoose.Schema({
                 useFirstNameOnly: { type: Boolean, default: true }, // When referring back, use first name only
                 // Phone-specific options
                 offerCallerId: { type: Boolean, default: true }, // Offer to use caller ID instead of asking
-                callerIdPrompt: { type: String, default: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" }
+                callerIdPrompt: { type: String, default: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
+                // Address-specific options
+                addressConfirmLevel: { type: String, enum: ['street_only', 'street_city', 'full'], default: 'street_city' } // How much to repeat back
             }],
             
             // ═══════════════════════════════════════════════════════════════
