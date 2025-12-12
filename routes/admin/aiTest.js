@@ -49,6 +49,15 @@ router.post('/:companyId/chat', authenticateJWT, async (req, res) => {
         // Get the front desk behavior config (same as real calls)
         const frontDeskConfig = company?.aiAgentSettings?.frontDeskBehavior || {};
         
+        // 🚨 DEBUG: Log what booking slots are configured
+        const bookingSlots = frontDeskConfig.bookingSlots;
+        logger.info('[AI TEST] 📋 BOOKING SLOTS CONFIG:', {
+            companyId,
+            hasBookingSlots: !!bookingSlots,
+            slotCount: bookingSlots?.length || 0,
+            questions: bookingSlots?.map(s => ({ id: s.id, question: s.question?.substring(0, 40) })) || 'NONE - will use defaults'
+        });
+        
         const result = await HybridReceptionistLLM.processConversation({
             company,
             callContext: {
@@ -97,19 +106,68 @@ router.post('/:companyId/chat', authenticateJWT, async (req, res) => {
             debug: {
                 turnCount,
                 historyReceived: conversationHistory?.length || 0,
-                historyPreview: conversationHistory?.slice(-2).map(h => ({
-                    role: h.role,
-                    content: h.content?.substring(0, 50) + '...'
-                })),
                 userInputReceived: message.substring(0, 100),
-                replyLength: result.reply?.length || 0,
-                // Source tracking for UI badges
-                wasQuickAnswer: result.wasQuickAnswer || false,
-                triageMatched: result.triageMatched || false,
-                wasEmergency: result.wasEmergency || result.signals?.emergency || false,
-                wasFallback: result.wasFallback || result.usedFallback || false,
-                source: result.source || 'llm',
-                confidence: result.confidence || null
+                
+                // ════════════════════════════════════════════════════════════════
+                // 🧠 AI THINKING PROCESS (Process of Elimination)
+                // ════════════════════════════════════════════════════════════════
+                thinkingProcess: {
+                    // Step 1: Quick Answers check
+                    quickAnswers: {
+                        checked: true,
+                        matched: result.wasQuickAnswer || result.fromQuickAnswers || false,
+                        result: result.wasQuickAnswer ? '✅ MATCHED - Used Quick Answer' : '❌ No match - continued to next check'
+                    },
+                    // Step 2: Triage check
+                    triage: {
+                        checked: true,
+                        matched: result.triageMatched || result.fromTriage || false,
+                        cardName: result.triageCardName || null,
+                        result: result.triageMatched ? `✅ MATCHED - Triage card: ${result.triageCardName || 'unknown'}` : '❌ No triage match - continued to LLM'
+                    },
+                    // Step 3: Emergency detection
+                    emergency: {
+                        detected: result.wasEmergency || result.signals?.emergency || false,
+                        result: result.wasEmergency ? '⚠️ EMERGENCY detected' : '✅ Not an emergency'
+                    },
+                    // Step 4: What actually generated the response
+                    responseSource: {
+                        source: result.responseSource || result.source || 'LLM',
+                        wasLLM: !result.wasQuickAnswer && !result.triageMatched && !result.wasFallback,
+                        wasFallback: result.wasFallback || result.usedFallback || false,
+                        result: result.wasFallback 
+                            ? '🔄 FALLBACK used (LLM failed or returned invalid response)'
+                            : result.wasQuickAnswer 
+                                ? '⚡ Quick Answer (instant, no LLM cost)'
+                                : result.triageMatched
+                                    ? '🎯 Triage Response (industry-specific)'
+                                    : '🤖 LLM Generated (GPT-4o-mini)'
+                    }
+                },
+                
+                // ════════════════════════════════════════════════════════════════
+                // 📋 BOOKING SLOTS CONFIGURATION
+                // ════════════════════════════════════════════════════════════════
+                bookingConfig: {
+                    source: bookingSlots?.length > 0 ? '✅ FROM DATABASE' : '⚠️ DEFAULT FALLBACK (not saved yet!)',
+                    slotCount: bookingSlots?.length || 4,
+                    configuredQuestions: bookingSlots?.length > 0 
+                        ? bookingSlots.map(s => `${s.id}: "${s.question}"`)
+                        : [
+                            '⚠️ Using hardcoded defaults because bookingSlots not in database:',
+                            'name: "May I have your full name?"',
+                            'phone: "What is the best phone number to reach you?"',
+                            'address: "What is the service address?"',
+                            'time: "When works best for you?"',
+                            '→ Go to Front Desk Behavior → Booking Prompts → Save to fix!'
+                        ]
+                },
+                
+                // Latency breakdown
+                performance: {
+                    totalLatencyMs: latencyMs,
+                    tokensUsed: result.tokensUsed || 0
+                }
             }
         });
         

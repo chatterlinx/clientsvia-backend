@@ -594,6 +594,13 @@ NEVER say any of these phrases. They make you sound robotic.
         const bookingSlots = this.getBookingSlots(uiConfig);
         const slotIds = bookingSlots.map(s => s.id);
         
+        // 🚨 DEBUG: Log exactly what questions are being used
+        logger.info('[HYBRID LLM] 📋 BOOKING SLOTS BEING USED:', {
+            source: uiConfig.bookingSlots?.length > 0 ? 'DATABASE' : 'DEFAULT_FALLBACK',
+            slotCount: bookingSlots.length,
+            questions: bookingSlots.map(s => ({ id: s.id, question: s.question }))
+        });
+        
         // Compact slot display
         const hasSlots = Object.entries(knownSlots).filter(([k, v]) => v);
         const slotsList = hasSlots.length > 0 
