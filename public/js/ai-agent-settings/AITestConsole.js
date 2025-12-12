@@ -41,7 +41,8 @@ class AITestConsole {
     async loadVoiceInfo() {
         try {
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const response = await fetch(`/api/admin/ai-test/${this.companyId}/voice-info`, {
+            // Add cache-bust to always get fresh data
+            const response = await fetch(`/api/admin/ai-test/${this.companyId}/voice-info?_=${Date.now()}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
@@ -260,7 +261,10 @@ class AITestConsole {
     /**
      * Open the test console modal
      */
-    open() {
+    async open() {
+        // Reload voice info to get latest settings (in case user changed voice in settings)
+        await this.loadVoiceInfo();
+        
         const modal = document.createElement('div');
         modal.id = 'ai-test-console-modal';
         modal.innerHTML = this.render();

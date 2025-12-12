@@ -82,6 +82,9 @@ class VoiceSettingsManager {
             // Populate dropdown
             this.populateVoiceDropdown();
             
+            // Update current voice display (in case settings loaded before voices)
+            this.updateCurrentVoiceDisplay();
+            
         } catch (error) {
             console.error('❌ [VOICE MANAGER] Failed to load voices:', error);
             const voiceSelector = document.getElementById('voice-selector');
@@ -136,12 +139,52 @@ class VoiceSettingsManager {
             this.currentSettings = data.settings;
             
             console.log('✅ [VOICE MANAGER] Loaded current settings');
+            console.log('📋 [VOICE MANAGER] Current saved voiceId:', this.currentSettings?.voiceId);
+            
+            // Update the "Current Voice" status display
+            this.updateCurrentVoiceDisplay();
             
             // Populate form fields with current settings
             this.populateFormFields();
             
         } catch (error) {
             console.error('❌ [VOICE MANAGER] Failed to load settings:', error);
+        }
+    }
+    
+    /**
+     * Update the "Current Voice" status indicator
+     */
+    updateCurrentVoiceDisplay() {
+        const voiceNameEl = document.getElementById('current-voice-name');
+        const saveIndicator = document.getElementById('voice-save-indicator');
+        
+        if (!voiceNameEl) return;
+        
+        if (this.currentSettings?.voiceId) {
+            // Find the voice name from the voices list
+            const voice = this.voices.find(v => v.voice_id === this.currentSettings.voiceId);
+            const voiceName = voice?.name || 'Unknown Voice';
+            
+            voiceNameEl.textContent = voiceName;
+            voiceNameEl.classList.remove('text-red-500');
+            voiceNameEl.classList.add('text-blue-700');
+            
+            // Show save indicator
+            if (saveIndicator) {
+                saveIndicator.classList.remove('hidden');
+            }
+            
+            console.log('🎤 [VOICE MANAGER] Current saved voice:', voiceName);
+        } else {
+            voiceNameEl.textContent = '⚠️ Not configured - select and save a voice';
+            voiceNameEl.classList.remove('text-blue-700');
+            voiceNameEl.classList.add('text-red-500');
+            
+            // Hide save indicator
+            if (saveIndicator) {
+                saveIndicator.classList.add('hidden');
+            }
         }
     }
 
@@ -646,7 +689,17 @@ class VoiceSettingsManager {
             const data = await response.json();
             this.currentSettings = data.settings;
             
+            // IMPORTANT: Update current settings with the selected voice ID
+            // (the backend response might not include it, so ensure we have it)
+            if (!this.currentSettings.voiceId) {
+                this.currentSettings.voiceId = voiceSelector.value;
+            }
+            
             console.log('✅ [VOICE MANAGER] Settings saved successfully');
+            console.log('📋 [VOICE MANAGER] Saved voiceId:', this.currentSettings.voiceId);
+            
+            // Update the "Current Voice" status display
+            this.updateCurrentVoiceDisplay();
             
             // Show success message
             saveBtn.innerHTML = '<i class="fas fa-check mr-2"></i>Saved!';
