@@ -31,6 +31,47 @@ const RunningSummaryService = require('../../services/RunningSummaryService');
 const HybridReceptionistLLM = require('../../services/HybridReceptionistLLM');
 const logger = require('../../utils/logger');
 
+// ════════════════════════════════════════════════════════════════════════════
+// OPTIONAL AUTH - Works with or without authentication
+// ════════════════════════════════════════════════════════════════════════════
+// - Website visitors: No auth required (public API)
+// - AI Test Console: Can use auth if desired
+// - Rate limiting should be added for production security
+// ════════════════════════════════════════════════════════════════════════════
+const jwt = require('jsonwebtoken');
+
+const optionalAuth = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            req.user = decoded;
+            logger.debug('[CHAT API] Authenticated user:', { userId: decoded.userId || decoded.id });
+        } catch (err) {
+            // Token invalid, but that's OK - this auth is optional
+            logger.debug('[CHAT API] Invalid token provided, continuing as anonymous');
+        }
+    }
+    next();
+};
+
+// Apply optional auth to all routes
+router.use(optionalAuth);
+
+/**
+ * GET /api/chat/health
+ * Simple health check to verify the route is loaded
+ */
+router.get('/health', (req, res) => {
+    res.json({ 
+        success: true, 
+        service: 'chat-api',
+        timestamp: new Date().toISOString(),
+        authenticated: !!req.user
+    });
+});
+
 /**
  * POST /api/chat/message
  * 
