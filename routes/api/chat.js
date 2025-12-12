@@ -139,7 +139,14 @@ router.post('/message', async (req, res) => {
         // ═══════════════════════════════════════════════════════════════
         // STEP 1: Load company
         // ═══════════════════════════════════════════════════════════════
-        const company = await Company.findById(companyId);
+        logger.info('[CHAT API] CHECKPOINT 1: Loading company...');
+        let company;
+        try {
+            company = await Company.findById(companyId);
+        } catch (companyErr) {
+            companyErr.checkpoint = 'company_load';
+            throw companyErr;
+        }
         
         if (!company) {
             logger.warn('[CHAT API] Company not found', { companyId });
@@ -148,47 +155,54 @@ router.post('/message', async (req, res) => {
                 error: 'Company not found'
             });
         }
+        logger.info('[CHAT API] CHECKPOINT 1: ✅ Company loaded:', company.companyName);
         
         // ═══════════════════════════════════════════════════════════════
-        // STEP 2: Find or create customer
+        // STEP 2: Find or create customer (OPTIONAL - don't fail if no customer)
         // ═══════════════════════════════════════════════════════════════
+        logger.info('[CHAT API] CHECKPOINT 2: Customer lookup...');
         let customer = null;
         let isNewCustomer = false;
         
-        // Try to identify customer by phone or email
-        if (visitorInfo.phone || visitorInfo.email) {
-            const result = await CustomerService.findOrCreate(
-                companyId,
-                {
-                    phone: visitorInfo.phone,
-                    email: visitorInfo.email,
-                    name: visitorInfo.name,
-                    sessionId: providedSessionId
-                },
-                'website'
-            );
-            customer = result.customer;
-            isNewCustomer = result.isNew;
-        } else if (providedSessionId) {
-            // Try to find by session ID
-            customer = await CustomerService.findBySession(companyId, providedSessionId);
-            
-            if (!customer) {
-                // Create temporary customer for this session
+        // Generate session ID first
+        const sessionId = providedSessionId || `web-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        try {
+            // Try to identify customer by phone or email
+            if (visitorInfo.phone || visitorInfo.email) {
                 const result = await CustomerService.findOrCreate(
                     companyId,
-                    { sessionId: providedSessionId },
+                    {
+                        phone: visitorInfo.phone,
+                        email: visitorInfo.email,
+                        name: visitorInfo.name,
+                        sessionId
+                    },
                     'website'
                 );
                 customer = result.customer;
                 isNewCustomer = result.isNew;
+            } else if (providedSessionId) {
+                // Try to find by session ID
+                customer = await CustomerService.findBySession(companyId, providedSessionId);
+                
+                if (!customer) {
+                    // Create temporary customer for this session
+                    const result = await CustomerService.findOrCreate(
+                        companyId,
+                        { sessionId },
+                        'website'
+                    );
+                    customer = result.customer;
+                    isNewCustomer = result.isNew;
+                }
             }
+        } catch (custErr) {
+            // Customer lookup failed - log but continue without customer
+            logger.warn('[CHAT API] Customer lookup failed, continuing without customer:', custErr.message);
         }
         
-        // Generate session ID if not provided
-        const sessionId = providedSessionId || `web-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        
-        logger.info('[CHAT API] Customer lookup', {
+        logger.info('[CHAT API] CHECKPOINT 2: ✅ Customer lookup done', {
             hasCustomer: !!customer,
             isNewCustomer,
             customerId: customer?._id
@@ -197,101 +211,151 @@ router.post('/message', async (req, res) => {
         // ═══════════════════════════════════════════════════════════════
         // STEP 3: Get or create session
         // ═══════════════════════════════════════════════════════════════
-        const session = await SessionService.getOrCreate({
-            companyId,
-            channel: 'website',
-            identifiers: {
-                sessionId,
-                ip: visitorInfo.ip || req.ip,
-                userAgent: visitorInfo.userAgent || req.get('user-agent'),
-                pageUrl: visitorInfo.pageUrl
-            },
-            customer
-        });
+        logger.info('[CHAT API] CHECKPOINT 3: Creating session...');
+        let session;
+        try {
+            session = await SessionService.getOrCreate({
+                companyId,
+                channel: 'website',
+                identifiers: {
+                    sessionId,
+                    ip: visitorInfo.ip || req.ip,
+                    userAgent: visitorInfo.userAgent || req.get('user-agent'),
+                    pageUrl: visitorInfo.pageUrl
+                },
+                customer
+            });
+        } catch (sessErr) {
+            sessErr.checkpoint = 'session_create';
+            throw sessErr;
+        }
         
-        logger.info('[CHAT API] Session', {
+        logger.info('[CHAT API] CHECKPOINT 3: ✅ Session ready', {
             sessionId: session._id,
-            turns: session.metrics.totalTurns
+            turns: session.metrics?.totalTurns || 0
         });
         
         // ═══════════════════════════════════════════════════════════════
         // STEP 4: Build customer context
         // ═══════════════════════════════════════════════════════════════
-        const customerContext = customer 
-            ? CustomerService.buildContextForAI(customer)
-            : { isKnown: false, summary: 'New website visitor' };
+        logger.info('[CHAT API] CHECKPOINT 4: Building customer context...');
+        let customerContext;
+        try {
+            customerContext = customer 
+                ? CustomerService.buildContextForAI(customer)
+                : { isKnown: false, summary: 'New website visitor' };
+        } catch (ctxErr) {
+            // Fall back to simple context if builder fails
+            logger.warn('[CHAT API] buildContextForAI failed, using simple context:', ctxErr.message);
+            customerContext = { isKnown: false, summary: 'New website visitor' };
+        }
+        logger.info('[CHAT API] CHECKPOINT 4: ✅ Customer context built');
         
         // ═══════════════════════════════════════════════════════════════
         // STEP 5: Build running summary
         // ═══════════════════════════════════════════════════════════════
-        const { bullets: summaryBullets, formatted: summaryFormatted } = 
-            RunningSummaryService.buildAndFormat({
+        logger.info('[CHAT API] CHECKPOINT 5: Building running summary...');
+        let summaryBullets = [];
+        let summaryFormatted = '';
+        try {
+            const summaryResult = RunningSummaryService.buildAndFormat({
                 previousSummary: session.runningSummary || [],
                 customerContext,
                 currentTurn: { userMessage: message },
                 conversationState: {
-                    phase: session.phase,
-                    knownSlots: session.collectedSlots,
-                    signals: session.signals
+                    phase: session.phase || 'greeting',
+                    knownSlots: session.collectedSlots || {},
+                    signals: session.signals || {}
                 },
                 company
             });
+            summaryBullets = summaryResult.bullets;
+            summaryFormatted = summaryResult.formatted;
+        } catch (sumErr) {
+            logger.warn('[CHAT API] Running summary failed, continuing without:', sumErr.message);
+        }
+        logger.info('[CHAT API] CHECKPOINT 5: ✅ Running summary built');
         
         // ═══════════════════════════════════════════════════════════════
         // STEP 6: Get conversation history
         // ═══════════════════════════════════════════════════════════════
-        const conversationHistory = session.getHistoryForAI();
+        logger.info('[CHAT API] CHECKPOINT 6: Getting conversation history...');
+        let conversationHistory = [];
+        try {
+            conversationHistory = session.getHistoryForAI ? session.getHistoryForAI() : [];
+        } catch (histErr) {
+            logger.warn('[CHAT API] getHistoryForAI failed, using empty history:', histErr.message);
+        }
+        logger.info('[CHAT API] CHECKPOINT 6: ✅ History retrieved, turns:', conversationHistory.length);
         
         // ═══════════════════════════════════════════════════════════════
         // STEP 7: Process through AI brain
         // ═══════════════════════════════════════════════════════════════
-        // CRITICAL: Must match HybridReceptionistLLM.processConversation signature exactly
-        const aiResult = await HybridReceptionistLLM.processConversation({
-            company,
-            callContext: {
-                callId: session._id.toString(),
-                companyId,
-                customerContext,
-                runningSummary: summaryFormatted,
-                turnCount: (session.metrics?.totalTurns || 0) + 1,
-                channel: 'website'
-            },
-            currentMode: session.phase === 'booking' ? 'booking' : 'free',
-            knownSlots: session.collectedSlots || {},
-            conversationHistory,
-            userInput: message,
-            behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
-        });
+        logger.info('[CHAT API] CHECKPOINT 7: Calling AI brain...');
+        let aiResult;
+        try {
+            // CRITICAL: Must match HybridReceptionistLLM.processConversation signature exactly
+            aiResult = await HybridReceptionistLLM.processConversation({
+                company,
+                callContext: {
+                    callId: session._id.toString(),
+                    companyId,
+                    customerContext,
+                    runningSummary: summaryFormatted,
+                    turnCount: (session.metrics?.totalTurns || 0) + 1,
+                    channel: 'website'
+                },
+                currentMode: session.phase === 'booking' ? 'booking' : 'free',
+                knownSlots: session.collectedSlots || {},
+                conversationHistory,
+                userInput: message,
+                behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
+            });
+        } catch (aiErr) {
+            aiErr.checkpoint = 'ai_processing';
+            throw aiErr;
+        }
+        logger.info('[CHAT API] CHECKPOINT 7: ✅ AI response generated');
         
         const latencyMs = Date.now() - startTime;
         
         // ═══════════════════════════════════════════════════════════════
         // STEP 8: Update session
         // ═══════════════════════════════════════════════════════════════
+        logger.info('[CHAT API] CHECKPOINT 8: Updating session...');
         // CRITICAL: HybridReceptionistLLM returns { reply, conversationMode, needsInfo, filledSlots, latencyMs, tokensUsed }
-        const aiResponse = aiResult.reply || aiResult.response || 'I apologize, I could not process your request.';
+        const aiResponse = aiResult?.reply || aiResult?.response || 'I apologize, I could not process your request.';
         
-        await SessionService.addTurn({
-            session,
-            userMessage: message,
-            aiResponse,
-            metadata: {
-                latencyMs,
-                tokensUsed: aiResult.tokensUsed || 0,
-                responseSource: aiResult.fromQuickAnswers ? 'quick_answer' : 'llm',
-                confidence: aiResult.confidence,
-                slotsExtracted: aiResult.filledSlots || {}
-            },
-            company
-        });
+        try {
+            await SessionService.addTurn({
+                session,
+                userMessage: message,
+                aiResponse,
+                metadata: {
+                    latencyMs,
+                    tokensUsed: aiResult?.tokensUsed || 0,
+                    responseSource: aiResult?.fromQuickAnswers ? 'quick_answer' : 'llm',
+                    confidence: aiResult?.confidence,
+                    slotsExtracted: aiResult?.filledSlots || {}
+                },
+                company
+            });
+        } catch (turnErr) {
+            logger.warn('[CHAT API] Failed to save turn, continuing:', turnErr.message);
+        }
         
         // Update phase based on conversationMode
-        const newPhase = aiResult.conversationMode === 'booking' ? 'booking' : 
-                         aiResult.conversationMode === 'complete' ? 'complete' : 
-                         session.phase;
-        if (newPhase !== session.phase) {
-            await SessionService.updatePhase(session, newPhase);
+        const newPhase = aiResult?.conversationMode === 'booking' ? 'booking' : 
+                         aiResult?.conversationMode === 'complete' ? 'complete' : 
+                         session.phase || 'greeting';
+        try {
+            if (newPhase !== session.phase) {
+                await SessionService.updatePhase(session, newPhase);
+            }
+        } catch (phaseErr) {
+            logger.warn('[CHAT API] Failed to update phase:', phaseErr.message);
         }
+        logger.info('[CHAT API] CHECKPOINT 8: ✅ Session updated');
         
         // ═══════════════════════════════════════════════════════════════
         // STEP 9: Check for booking completion
@@ -348,13 +412,18 @@ router.post('/message', async (req, res) => {
     } catch (error) {
         logger.error('[CHAT API] ❌ Error processing message', {
             error: error.message,
-            stack: error.stack
+            stack: error.stack,
+            companyId: req.body?.companyId,
+            messagePreview: req.body?.message?.substring(0, 50)
         });
         
+        // Always return error details for debugging (can restrict later)
         return res.status(500).json({
             success: false,
             error: 'Failed to process message',
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            details: error.message,
+            errorType: error.name,
+            checkpoint: error.checkpoint || 'unknown'
         });
     }
 });
