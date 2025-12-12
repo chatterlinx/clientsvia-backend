@@ -204,23 +204,22 @@ router.post('/message', async (req, res) => {
         // ═══════════════════════════════════════════════════════════════
         // STEP 7: Process through AI brain
         // ═══════════════════════════════════════════════════════════════
+        // CRITICAL: Must match HybridReceptionistLLM.processConversation signature exactly
         const aiResult = await HybridReceptionistLLM.processConversation({
-            userMessage: message,
-            history: conversationHistory,
             company,
-            companyId,
-            
-            // Customer context and running summary
-            customerContext,
-            runningSummary: summaryFormatted,
-            
-            // Channel context
-            channel: 'website',
-            callSid: session._id.toString(),
-            
-            // Session state
-            bookingState: session.collectedSlots,
-            phase: session.phase
+            callContext: {
+                callId: session._id.toString(),
+                companyId,
+                customerContext,
+                runningSummary: summaryFormatted,
+                turnCount: (session.metrics?.totalTurns || 0) + 1,
+                channel: 'website'
+            },
+            currentMode: session.phase === 'booking' ? 'booking' : 'free',
+            knownSlots: session.collectedSlots || {},
+            conversationHistory,
+            userInput: message,
+            behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
         });
         
         const latencyMs = Date.now() - startTime;
@@ -228,59 +227,71 @@ router.post('/message', async (req, res) => {
         // ═══════════════════════════════════════════════════════════════
         // STEP 8: Update session
         // ═══════════════════════════════════════════════════════════════
+        // CRITICAL: HybridReceptionistLLM returns { reply, conversationMode, needsInfo, filledSlots, latencyMs, tokensUsed }
+        const aiResponse = aiResult.reply || aiResult.response || 'I apologize, I could not process your request.';
+        
         await SessionService.addTurn({
             session,
             userMessage: message,
-            aiResponse: aiResult.response,
+            aiResponse,
             metadata: {
                 latencyMs,
-                tokensUsed: aiResult.tokensUsed,
-                responseSource: aiResult.responseSource || 'llm',
+                tokensUsed: aiResult.tokensUsed || 0,
+                responseSource: aiResult.fromQuickAnswers ? 'quick_answer' : 'llm',
                 confidence: aiResult.confidence,
-                slotsExtracted: aiResult.slotsCollected
+                slotsExtracted: aiResult.filledSlots || {}
             },
             company
         });
         
-        // Update phase if changed
-        if (aiResult.phase && aiResult.phase !== session.phase) {
-            await SessionService.updatePhase(session, aiResult.phase);
+        // Update phase based on conversationMode
+        const newPhase = aiResult.conversationMode === 'booking' ? 'booking' : 
+                         aiResult.conversationMode === 'complete' ? 'complete' : 
+                         session.phase;
+        if (newPhase !== session.phase) {
+            await SessionService.updatePhase(session, newPhase);
         }
         
         // ═══════════════════════════════════════════════════════════════
         // STEP 9: Check for booking completion
         // ═══════════════════════════════════════════════════════════════
-        if (aiResult.bookingComplete) {
-            await SessionService.end(session, 'booked', {
-                appointmentId: aiResult.appointmentId
-            });
+        // Check if all slots are filled
+        const slots = session.collectedSlots || {};
+        const requiredSlots = ['name', 'phone', 'address'];
+        const allSlotsFilled = requiredSlots.every(s => slots[s]);
+        
+        if (allSlotsFilled && aiResult.conversationMode === 'booking') {
+            // Booking is complete
+            await SessionService.end(session, 'booked');
         }
         
         // ═══════════════════════════════════════════════════════════════
         // STEP 10: Build response
         // ═══════════════════════════════════════════════════════════════
-        const response = {
+        const responsePayload = {
             success: true,
-            response: aiResult.response,
+            response: aiResponse,
             sessionId: sessionId,
             conversationSessionId: session._id.toString()
         };
         
         // Include debug info if requested (for AI Test Console)
         if (includeDebug) {
-            response.debug = {
+            responsePayload.debug = {
                 latencyMs,
-                tokensUsed: aiResult.tokensUsed,
-                responseSource: aiResult.responseSource,
+                tokensUsed: aiResult.tokensUsed || 0,
+                responseSource: aiResult.fromQuickAnswers ? 'quick_answer' : 'llm',
                 confidence: aiResult.confidence,
-                phase: session.phase,
+                phase: newPhase,
+                conversationMode: aiResult.conversationMode,
+                needsInfo: aiResult.needsInfo,
                 customerContext: {
                     isKnown: customerContext.isKnown,
                     isReturning: customerContext.isReturning,
                     name: customerContext.name
                 },
                 runningSummary: summaryBullets,
-                slotsCollected: session.collectedSlots,
+                slotsCollected: { ...session.collectedSlots, ...(aiResult.filledSlots || {}) },
                 turnNumber: session.metrics.totalTurns
             };
         }
@@ -288,10 +299,10 @@ router.post('/message', async (req, res) => {
         logger.info('[CHAT API] ✅ Response sent', {
             sessionId: session._id,
             latencyMs,
-            responseLength: aiResult.response?.length
+            responseLength: aiResponse?.length
         });
         
-        return res.json(response);
+        return res.json(responsePayload);
         
     } catch (error) {
         logger.error('[CHAT API] ❌ Error processing message', {

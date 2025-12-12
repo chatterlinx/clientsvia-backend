@@ -135,26 +135,28 @@ class SMSConversationHandler {
             // ═══════════════════════════════════════════════════════════════
             // STEP 7: Process through AI brain
             // ═══════════════════════════════════════════════════════════════
+            // CRITICAL: Must match HybridReceptionistLLM.processConversation signature exactly
             const aiResult = await HybridReceptionistLLM.processConversation({
-                userMessage: message,
-                history: conversationHistory,
                 company,
-                companyId,
-                
-                // NEW: Customer context and running summary
-                customerContext,
-                runningSummary: summaryFormatted,
-                
-                // Channel context
-                channel: 'sms',
-                callSid: messageSid,
-                
-                // Session state
-                bookingState: session.collectedSlots,
-                phase: session.phase
+                callContext: {
+                    callId: messageSid,
+                    companyId,
+                    customerContext,
+                    runningSummary: summaryFormatted,
+                    turnCount: (session.metrics?.totalTurns || 0) + 1,
+                    channel: 'sms'
+                },
+                currentMode: session.phase === 'booking' ? 'booking' : 'free',
+                knownSlots: session.collectedSlots || {},
+                conversationHistory,
+                userInput: message,
+                behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
             });
             
             const latencyMs = Date.now() - startTime;
+            
+            // CRITICAL: HybridReceptionistLLM returns { reply, not response }
+            const aiResponse = aiResult.reply || 'I apologize, I could not process your message.';
             
             // ═══════════════════════════════════════════════════════════════
             // STEP 8: Update session with this turn
@@ -162,29 +164,35 @@ class SMSConversationHandler {
             await SessionService.addTurn({
                 session,
                 userMessage: message,
-                aiResponse: aiResult.response,
+                aiResponse,
                 metadata: {
                     latencyMs,
-                    tokensUsed: aiResult.tokensUsed,
-                    responseSource: aiResult.responseSource || 'llm',
+                    tokensUsed: aiResult.tokensUsed || 0,
+                    responseSource: aiResult.fromQuickAnswers ? 'quick_answer' : 'llm',
                     confidence: aiResult.confidence,
-                    slotsExtracted: aiResult.slotsCollected
+                    slotsExtracted: aiResult.filledSlots || {}
                 },
                 company
             });
             
-            // Update session phase if changed
-            if (aiResult.phase && aiResult.phase !== session.phase) {
-                await SessionService.updatePhase(session, aiResult.phase);
+            // Update session phase based on conversationMode
+            const newPhase = aiResult.conversationMode === 'booking' ? 'booking' : 
+                             aiResult.conversationMode === 'complete' ? 'complete' : 
+                             session.phase;
+            if (newPhase !== session.phase) {
+                await SessionService.updatePhase(session, newPhase);
             }
             
             // ═══════════════════════════════════════════════════════════════
             // STEP 9: Check for booking completion
             // ═══════════════════════════════════════════════════════════════
-            if (aiResult.bookingComplete) {
-                await SessionService.end(session, 'booked', {
-                    appointmentId: aiResult.appointmentId
-                });
+            // Check if all required slots are filled
+            const slots = { ...session.collectedSlots, ...(aiResult.filledSlots || {}) };
+            const requiredSlots = ['name', 'phone', 'address'];
+            const allSlotsFilled = requiredSlots.every(s => slots[s]);
+            
+            if (allSlotsFilled && aiResult.conversationMode === 'booking') {
+                await SessionService.end(session, 'booked');
                 
                 logger.info('[SMS HANDLER] ✅ Booking completed via SMS', {
                     sessionId: session._id,
@@ -195,12 +203,12 @@ class SMSConversationHandler {
             logger.info('[SMS HANDLER] ✅ Response generated', {
                 sessionId: session._id,
                 latencyMs,
-                responseLength: aiResult.response?.length,
-                source: aiResult.responseSource
+                responseLength: aiResponse?.length,
+                source: aiResult.fromQuickAnswers ? 'quick_answer' : 'llm'
             });
             
             return {
-                response: aiResult.response,
+                response: aiResponse,
                 shouldReply: true,
                 sessionId: session._id,
                 customerId: customer._id
