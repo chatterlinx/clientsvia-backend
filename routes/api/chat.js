@@ -397,7 +397,8 @@ router.post('/message', async (req, res) => {
                 },
                 runningSummary: summaryBullets,
                 slotsCollected: { ...session.collectedSlots, ...(aiResult.filledSlots || {}) },
-                turnNumber: session.metrics.totalTurns
+                turnNumber: session.metrics?.totalTurns || 0,
+                historySent: conversationHistory.length  // Add history count for debugging
             };
         }
         

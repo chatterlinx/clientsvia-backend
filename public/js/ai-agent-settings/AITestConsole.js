@@ -522,6 +522,7 @@ class AITestConsole {
                     customerContext: debug.customerContext,
                     runningSummary: debug.runningSummary,
                     slotsCollected: debug.slotsCollected,
+                    historySent: debug.historySent || 0,  // How many messages in conversation history
                     timestamp: new Date().toISOString()
                 });
                 

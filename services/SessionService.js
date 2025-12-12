@@ -218,6 +218,17 @@ class SessionService {
             confidence: metadata.confidence
         });
         
+        // ══════════════════════════════════════════════════════════════════════
+        // CRITICAL: Update collected slots from AI extraction
+        // ══════════════════════════════════════════════════════════════════════
+        if (metadata.slotsExtracted && Object.keys(metadata.slotsExtracted).length > 0) {
+            session.collectedSlots = { 
+                ...session.collectedSlots, 
+                ...metadata.slotsExtracted 
+            };
+            logger.info('[SESSION SERVICE] Slots updated:', metadata.slotsExtracted);
+        }
+        
         // Update running summary
         const customerContext = session.customerId 
             ? CustomerService.buildContextForAI(await require('../models/Customer').findById(session.customerId))
