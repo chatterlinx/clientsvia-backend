@@ -894,20 +894,33 @@ RESPOND with JSON:
     
     /**
      * Emergency fallback when LLM fails - MUST be smart, NOT generic
+     * 🚨 Uses UI-configured booking slot questions
      */
-    static emergencyFallback(mode, knownSlots) {
+    static emergencyFallback(mode, knownSlots, behaviorConfig = {}) {
         // 🧠 SMART FALLBACK - Even in emergency, sound like a receptionist not a chatbot
-        let reply = "Got it, what's going on — is it not cooling, not heating, making noise, or something else?";
+        // Use UI-configured fallback responses
+        const fallbacks = behaviorConfig.fallbackResponses || {};
+        let reply = fallbacks.discovery || "Got it, what's going on — is it not cooling, not heating, making noise, or something else?";
         
         if (mode === 'booking') {
+            // Use UI-configured slot questions
+            const bookingSlots = this.getBookingSlots(behaviorConfig);
+            const nameSlot = bookingSlots.find(s => s.id === 'name');
+            
             if (!knownSlots.name) {
-                reply = "Perfect, let me get you on the schedule. What's your name?";
+                const nameQ = this.getSlotPrompt('name', behaviorConfig);
+                reply = `Perfect, let me get you on the schedule. ${nameQ}`;
             } else if (!knownSlots.phone) {
-                reply = `Great ${knownSlots.name}, and what's the best number to reach you?`;
+                // Use first name if configured
+                const firstName = (nameSlot?.useFirstNameOnly !== false && knownSlots.name) 
+                    ? knownSlots.name.split(' ')[0] 
+                    : knownSlots.name;
+                const phoneQ = this.getSlotPrompt('phone', behaviorConfig);
+                reply = `Great ${firstName}, ${phoneQ}`;
             } else if (!knownSlots.address) {
-                reply = "What's the address where service is needed?";
+                reply = this.getSlotPrompt('address', behaviorConfig);
             } else if (!knownSlots.time) {
-                reply = "When works best for you — morning or afternoon?";
+                reply = this.getSlotPrompt('time', behaviorConfig);
             }
         }
         

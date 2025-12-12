@@ -1288,9 +1288,12 @@ class LLM0TurnHandler {
         // This prevents ALL subsequent turns from going through triage/Brain-1
         // ════════════════════════════════════════════════════════════════════════════
         
-        // Determine which slot to ask for next
-        let currentStep = 'ASK_NAME';
-        let prompt = "I'd be happy to schedule that for you. May I have your name please?";
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🚨 USE UI-CONFIGURED BOOKING SLOTS - NO HARDCODED QUESTIONS!
+        // ════════════════════════════════════════════════════════════════════════════
+        const frontDeskConfig = company?.aiAgentSettings?.frontDeskBehavior || {};
+        const bookingSlots = HybridReceptionistLLM.getBookingSlots(frontDeskConfig);
+        const bookingTemplates = frontDeskConfig.bookingTemplates || frontDeskConfig.bookingPrompts || {};
         
         // Build initial collected data
         const bookingCollected = {
@@ -1300,23 +1303,42 @@ class LLM0TurnHandler {
             time: scheduling.preferredDate || scheduling.preferredWindow || null
         };
         
-        // Determine next step based on what we have
-        if (!contact.name) {
-            currentStep = 'ASK_NAME';
-            prompt = "I'd be happy to schedule that for you. May I have your name please?";
-        } else if (!contact.phone) {
-            currentStep = 'ASK_PHONE';
-            prompt = `Thanks, ${contact.name}. And what's the best phone number to reach you?`;
-        } else if (!location.addressLine1) {
-            currentStep = 'ASK_ADDRESS';
-            prompt = "Great. What's the service address?";
-        } else if (!scheduling.preferredDate && !scheduling.preferredWindow) {
-            currentStep = 'ASK_TIME';
-            prompt = "When would be a good time for us to come out?";
-        } else {
-            currentStep = 'CONFIRM';
+        // Find the first missing required slot
+        let currentStep = 'CONFIRM';
+        let prompt = '';
+        
+        for (const slot of bookingSlots) {
+            if (!bookingCollected[slot.id]) {
+                currentStep = `ASK_${slot.id.toUpperCase()}`;
+                // Use the UI-configured question from the slot
+                const slotQuestion = slot.question || HybridReceptionistLLM.getSlotPrompt(slot.id, frontDeskConfig);
+                
+                // Add a nice intro for the first slot
+                if (slot.id === 'name' && !contact.name) {
+                    prompt = `I'd be happy to schedule that for you. ${slotQuestion}`;
+                } else if (slot.id === 'phone' && contact.name) {
+                    // Use first name if useFirstNameOnly is enabled
+                    const nameSlot = bookingSlots.find(s => s.id === 'name');
+                    const firstName = (nameSlot?.useFirstNameOnly !== false && contact.name) 
+                        ? contact.name.split(' ')[0] 
+                        : contact.name;
+                    prompt = `Thanks, ${firstName}! ${slotQuestion}`;
+                } else {
+                    prompt = slotQuestion;
+                }
+                break;
+            }
+        }
+        
+        // If all slots filled, do confirmation
+        if (currentStep === 'CONFIRM') {
             const timeText = scheduling.preferredDate || scheduling.preferredWindow || 'soon';
-            prompt = `Perfect! I have ${contact.name} at ${location.addressLine1} for ${timeText}. I'll get that scheduled and someone will confirm with you shortly. Is there anything else I can help you with?`;
+            const confirmTemplate = bookingTemplates.completeTemplate || 
+                `Perfect! I have ${contact.name} at ${location.addressLine1} for ${timeText}. I'll get that scheduled and someone will confirm with you shortly. Is there anything else I can help you with?`;
+            prompt = confirmTemplate
+                .replace('{name}', contact.name || '')
+                .replace('{address}', location.addressLine1 || '')
+                .replace('{time}', timeText);
         }
         
         const slotsRemaining = [
@@ -1864,7 +1886,8 @@ class LLM0TurnHandler {
             case 'service_type_clarification':
                 // ServiceTypeClarifier REMOVED - fall through to ask name
                 nextStep = 'ASK_NAME';
-                responseText = "May I have your name please?";
+                // Use UI-configured question
+                responseText = HybridReceptionistLLM.getSlotPrompt('name', frontDeskConfig);
                 break;
                 
             // LEGACY CODE BELOW - kept for reference but unreachable
@@ -1890,7 +1913,7 @@ class LLM0TurnHandler {
                     
                     // Use appropriate response based on type
                     const typeLabel = detectedServiceType.label || detectedServiceType.key;
-                    responseText = `Got it, I'll schedule a ${typeLabel.toLowerCase()} appointment. May I have your name please?`;
+                    responseText = `Got it, I'll schedule a ${typeLabel.toLowerCase()} appointment. ${HybridReceptionistLLM.getSlotPrompt('name', frontDeskConfig)}`;
                     
                     logger.info('[LLM0 TURN HANDLER] 🔧 SERVICE TYPE CLARIFIED', {
                         companyId,
@@ -1964,11 +1987,13 @@ class LLM0TurnHandler {
                 if (extractedName) {
                     newCollected.name = extractedName;
                     nextStep = 'ASK_PHONE';
+                    // Use UI-configured phone question
+                    const phoneQuestion = HybridReceptionistLLM.getSlotPrompt('phone', frontDeskConfig);
                     // If frustrated, acknowledge and move faster
                     if (isFrustrated) {
-                        responseText = `Got it ${extractedName}, I'll get someone scheduled for you right away. What's the best phone number to reach you?`;
+                        responseText = `Got it ${extractedName}, I'll get someone scheduled for you right away. ${phoneQuestion}`;
                     } else {
-                        responseText = `Thanks, ${extractedName}. And what's the best phone number to reach you?`;
+                        responseText = `Thanks, ${extractedName}. ${phoneQuestion}`;
                     }
                     logger.info('[LLM0 TURN HANDLER] ✅ Name captured successfully', {
                         companyId,
@@ -2005,9 +2030,11 @@ class LLM0TurnHandler {
                 if (extractedPhone) {
                     newCollected.phone = extractedPhone;
                     nextStep = 'ASK_ADDRESS';
+                    // Use UI-configured address question
+                    const addressQuestion = HybridReceptionistLLM.getSlotPrompt('address', frontDeskConfig);
                     responseText = isFrustrated 
-                        ? "Got it. What's the service address?"
-                        : "Great. What's the service address?";
+                        ? `Got it. ${addressQuestion}`
+                        : `Great. ${addressQuestion}`;
                 } else {
                     // No phone extracted - if frustrated & wants booking, be empathetic
                     if (isFrustrated && wantsBooking) {
@@ -2021,7 +2048,7 @@ class LLM0TurnHandler {
                         // Frustrated but no clear booking intent - still be empathetic
                         responseText = getEmpathicAsk('phone', collected?.name);
                     } else {
-                        responseText = "I need your phone number so we can reach you. What's the best number?";
+                        responseText = `I need your phone number so we can reach you. ${HybridReceptionistLLM.getSlotPrompt('phone', frontDeskConfig)}`;
                     }
                 }
                 break;
@@ -2219,7 +2246,8 @@ class LLM0TurnHandler {
                 break;
                 
             default:
-                responseText = "I'd be happy to schedule that for you. May I have your name please?";
+                // Use UI-configured name question
+                responseText = `I'd be happy to schedule that for you. ${HybridReceptionistLLM.getSlotPrompt('name', frontDeskConfig)}`;
                 nextStep = 'ASK_NAME';
         }
         

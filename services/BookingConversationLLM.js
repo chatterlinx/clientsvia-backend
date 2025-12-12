@@ -81,12 +81,14 @@ function convertNumberWordsToDigits(input) {
 // STEP-TO-PROMPT ENFORCER
 // ════════════════════════════════════════════════════════════════════════════
 // If LLM returns garbage, we FORCE the correct prompt
+// 🚨 NOTE: These are FALLBACK ONLY - UI-configured questions take priority
+// Use HybridReceptionistLLM.getSlotPrompt() to get UI-configured questions
 const STEP_PROMPTS = {
     'ASK_SERVICE_TYPE': 'Is this for a repair issue, or routine maintenance?',
-    'ASK_NAME': 'May I have your name please?',
-    'ASK_PHONE': "What's the best phone number to reach you?",
-    'ASK_ADDRESS': "What's the service address?",
-    'ASK_TIME': 'When would be a good time for us to come out?',
+    'ASK_NAME': 'May I have your full name?',  // Default - UI config overrides
+    'ASK_PHONE': "What's the best phone number to reach you?",  // Default - UI config overrides
+    'ASK_ADDRESS': "What's the service address?",  // Default - UI config overrides
+    'ASK_TIME': 'When works best for you?',  // Default - UI config overrides
     'CONFIRM': 'Does that sound right?',
     'POST_BOOKING': 'Is there anything else I can help you with?'
 };
@@ -124,23 +126,34 @@ function validateResponseMatchesStep(response, targetStep, collected) {
 
 /**
  * Build the correct prompt for a step, including collected info
+ * 🚨 Uses UI-configured booking slots from HybridReceptionistLLM
  */
 function buildStepPrompt(step, collected, frontDeskConfig) {
-    const bp = frontDeskConfig?.bookingPrompts || {};
+    // Import HybridReceptionistLLM for UI-configured questions
+    const HybridReceptionistLLM = require('./HybridReceptionistLLM');
+    
     const name = collected?.name || '';
-    const namePrefix = name ? `${name}, ` : '';
+    // Get first name only if configured
+    const bookingSlots = HybridReceptionistLLM.getBookingSlots(frontDeskConfig);
+    const nameSlot = bookingSlots.find(s => s.id === 'name');
+    const firstName = (nameSlot?.useFirstNameOnly !== false && name) ? name.split(' ')[0] : name;
     
     switch (step) {
         case 'ASK_SERVICE_TYPE':
-            return bp.askServiceType || 'Is this for a repair issue, or routine maintenance?';
+            return frontDeskConfig?.bookingPrompts?.askServiceType || 'Is this for a repair issue, or routine maintenance?';
         case 'ASK_NAME':
-            return bp.askName || 'May I have your name please?';
+            // Use UI-configured question
+            return HybridReceptionistLLM.getSlotPrompt('name', frontDeskConfig);
         case 'ASK_PHONE':
-            return `Thanks${name ? `, ${name}` : ''}! ${bp.askPhone || "What's the best phone number to reach you?"}`;
+            // Use UI-configured question with name prefix
+            const phoneQ = HybridReceptionistLLM.getSlotPrompt('phone', frontDeskConfig);
+            return firstName ? `Thanks, ${firstName}! ${phoneQ}` : phoneQ;
         case 'ASK_ADDRESS':
-            return bp.askAddress || "What's the service address?";
+            // Use UI-configured question
+            return HybridReceptionistLLM.getSlotPrompt('address', frontDeskConfig);
         case 'ASK_TIME':
-            return bp.askTime || 'When would be a good time for us to come out?';
+            // Use UI-configured question
+            return HybridReceptionistLLM.getSlotPrompt('time', frontDeskConfig);
         case 'CONFIRM':
             // Build confirmation with all collected data
             const parts = [];
@@ -151,7 +164,9 @@ function buildStepPrompt(step, collected, frontDeskConfig) {
             if (collected.time) parts.push(collected.time);
             return `Got it! So I have ${parts.join(', ')}. Does that sound right?`;
         case 'POST_BOOKING':
-            return "You're all set! A technician will call before arriving. Is there anything else I can help you with?";
+            const templates = frontDeskConfig?.bookingTemplates || frontDeskConfig?.bookingPrompts || {};
+            return templates.completeTemplate?.replace('{name}', firstName) || 
+                "You're all set! A technician will call before arriving. Is there anything else I can help you with?";
         default:
             return 'How can I help you?';
     }
