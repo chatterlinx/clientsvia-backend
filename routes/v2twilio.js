@@ -4554,12 +4554,25 @@ router.post('/sms', async (req, res) => {
         }
         
         // ====================================================================
-        // NOT A RECOGNIZED COMMAND - Send help message
+        // CUSTOMER CONVERSATION - Route to AI Brain
         // ====================================================================
-        logger.info(`ℹ️ [SMS WEBHOOK] Unrecognized command from ${from}`);
+        // If we get here, it's not an admin command - treat as customer SMS
+        logger.info(`💬 [SMS WEBHOOK] Customer message from ${from}, routing to AI Brain`);
         
-        const twiml = new twilio.twiml.MessagingResponse();
-        twiml.message(`
+        try {
+            const SMSConversationHandler = require('../services/SMSConversationHandler');
+            const to = req.body.To;
+            const messageSid = req.body.MessageSid;
+            
+            // Check if this is an admin phone (if so, show help instead)
+            const isAdmin = await SMSConversationHandler.isAdminPhone(from);
+            
+            if (isAdmin) {
+                // Admin sent unrecognized command - show help
+                logger.info(`ℹ️ [SMS WEBHOOK] Admin ${from} sent unrecognized command`);
+                
+                const twiml = new twilio.twiml.MessagingResponse();
+                twiml.message(`
 ClientsVia Alert Commands:
 • TEST - Verify SMS system
 • ACK ALT-###-### - Acknowledge alert
@@ -4567,10 +4580,47 @@ ClientsVia Alert Commands:
 • REOPEN ALT-###-### - Reopen alert
 
 Example: ACK ALT-20251020-001
-        `.trim());
-        
-        res.type('text/xml');
-        res.send(twiml.toString());
+                `.trim());
+                
+                res.type('text/xml');
+                res.send(twiml.toString());
+                return;
+            }
+            
+            // Process as customer conversation
+            const result = await SMSConversationHandler.processMessage({
+                fromPhone: from,
+                toPhone: to,
+                message,
+                messageSid
+            });
+            
+            // Send AI response
+            const twiml = new twilio.twiml.MessagingResponse();
+            
+            if (result.shouldReply && result.response) {
+                twiml.message(result.response);
+            }
+            
+            res.type('text/xml');
+            res.send(twiml.toString());
+            
+            logger.info(`✅ [SMS WEBHOOK] Customer conversation processed`, {
+                from,
+                sessionId: result.sessionId,
+                customerId: result.customerId
+            });
+            
+        } catch (error) {
+            logger.error(`❌ [SMS WEBHOOK] Failed to process customer SMS:`, error);
+            
+            // Fallback - still acknowledge the message
+            const twiml = new twilio.twiml.MessagingResponse();
+            twiml.message("Thanks for your message! We'll get back to you shortly.");
+            
+            res.type('text/xml');
+            res.send(twiml.toString());
+        }
         
     } catch (error) {
         logger.error('❌ [SMS WEBHOOK] Error processing SMS:', error);

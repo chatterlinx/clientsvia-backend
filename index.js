@@ -226,6 +226,7 @@ async function loadAllRoutes() {
         routes.healthRoutes = await loadRouteWithTimeout('./routes/health', 'healthRoutes');
         // llm0TraceRoutes REMOVED Dec 2025 - LLM-0 Cortex-Intel nuked, Black Box is better
         routes.frontlineScriptBuilderRoutes = await loadRouteWithTimeout('./routes/admin/frontlineScriptBuilder', 'frontlineScriptBuilderRoutes'); // Frontline Script Builder: LLM-powered script generation
+        routes.chatRoutes = await loadRouteWithTimeout('./routes/api/chat', 'chatRoutes'); // 🌐 Website Chat API (unified AI brain for website visitors)
         
         // REMOVED: Legacy V2 AI Intelligence routes - archived to prevent external LLM dependencies
         
@@ -464,6 +465,7 @@ function registerRoutes(routes) {
     app.use('/api', routes.healthRoutes); // SYSTEM: Health check endpoint for systems (Call Archives, Spam Filter)
     // llm0TraceRoutes REMOVED Dec 2025 - nuked
     app.use('/api/admin/frontline-script', routes.frontlineScriptBuilderRoutes); // Frontline Script Builder: LLM-powered script generation
+    app.use('/api/chat', routes.chatRoutes); // 🌐 Website Chat API (unified AI brain for website visitors, also used by AI Test Console)
     // app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system
 

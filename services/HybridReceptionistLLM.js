@@ -371,6 +371,7 @@ class HybridReceptionistLLM {
                 serviceAreaInfo,  // Include service area detection
                 detectedServices,  // Include detected service needs
                 customerContext: callContext.customerContext || { isReturning: false, totalCalls: 0 },
+                runningSummary: callContext.runningSummary || null,  // Running conversation summary
                 lastAgentResponse,  // Prevent repetition
                 turnCount: callContext.turnCount || 1,
                 speakingCorrections,  // What words NOT to use
@@ -538,7 +539,7 @@ class HybridReceptionistLLM {
      * Build the system prompt with all context
      * 🚨 100% UI-CONTROLLED - All instructions come from frontDeskBehavior config
      */
-    static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext, customerContext, serviceAreaInfo, detectedServices, lastAgentResponse, turnCount, speakingCorrections, callerId }) {
+    static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext, customerContext, runningSummary, serviceAreaInfo, detectedServices, lastAgentResponse, turnCount, speakingCorrections, callerId }) {
         const companyName = company.name || 'our company';
         const trade = company.trade || 'HVAC';
         
@@ -769,6 +770,12 @@ If caller wants to book, say you'll take their info and have someone call back.`
 
         // Add only what's RELEVANT to this specific turn
         if (customerNote) prompt += `\n${customerNote}`;
+        
+        // Add running summary for conversation context
+        if (runningSummary && typeof runningSummary === 'string' && runningSummary.trim()) {
+            prompt += `\n${runningSummary}`;
+        }
+        
         if (serviceAreaSection) prompt += `\n${serviceAreaSection}`;
         if (triageSection) prompt += `\n${triageSection}`;
         

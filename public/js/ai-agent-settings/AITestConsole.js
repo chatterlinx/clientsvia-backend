@@ -419,6 +419,12 @@ class AITestConsole {
 
     /**
      * Send a message to the AI
+     * 
+     * CRITICAL: Uses the unified chat API (/api/chat/message)
+     * This means ALL test interactions are treated as REAL customer interactions:
+     * - Sessions appear in Call Center with channel: 'website'
+     * - Customer profiles are created/updated
+     * - AI doesn't know it's a "test"
      */
     async sendMessage(customMessage = null) {
         const input = document.getElementById('test-user-input');
@@ -434,18 +440,21 @@ class AITestConsole {
         const typingId = this.addTypingIndicator();
         
         try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const response = await fetch(`/api/admin/ai-test/${this.companyId}/chat`, {
+            // Use the unified chat API - same as website visitors
+            const response = await fetch(`/api/chat/message`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
+                    companyId: this.companyId,
                     message,
                     sessionId: this.testSessionId,
-                    conversationHistory: this.conversationHistory,
-                    knownSlots: this.knownSlots
+                    includeDebug: true,  // Get debug info for the console
+                    visitorInfo: {
+                        userAgent: navigator.userAgent,
+                        pageUrl: window.location.href
+                    }
                 })
             });
             
@@ -459,55 +468,67 @@ class AITestConsole {
                 // UPDATE EVERYTHING SIMULTANEOUSLY
                 // ═══════════════════════════════════════════════════════════════
                 
+                // Map new API response format to expected format
+                const debug = data.debug || {};
+                const metadata = {
+                    latencyMs: debug.latencyMs,
+                    tokensUsed: debug.tokensUsed,
+                    mode: debug.phase || 'booking',
+                    slots: debug.slotsCollected || {},
+                    needsInfo: null
+                };
+                
                 // 1. Save debug info FIRST
-                this.lastDebug = data.debug;
-                this.lastMetadata = data.metadata;
+                this.lastDebug = debug;
+                this.lastMetadata = metadata;
+                
+                // Store session ID for future requests
+                if (data.sessionId) {
+                    this.testSessionId = data.sessionId;
+                }
                 
                 // Add to running debug log
-                const source = data.debug?.wasQuickAnswer ? 'QUICK_ANSWER' : 
-                               data.debug?.triageMatched ? 'TRIAGE' : 
-                               data.debug?.wasFallback ? 'FALLBACK' : 'LLM';
+                const source = debug.responseSource === 'quick_answer' ? 'QUICK_ANSWER' : 
+                               debug.responseSource === 'triage' ? 'TRIAGE' : 
+                               debug.responseSource === 'template' ? 'TEMPLATE' : 'LLM';
                                
                 this.debugLog.push({
-                    turn: data.debug?.turnCount || this.debugLog.length + 1,
+                    turn: debug.turnNumber || this.debugLog.length + 1,
                     userMessage: message,
-                    aiResponse: data.reply,
+                    aiResponse: data.response,
                     source,
-                    latencyMs: data.metadata?.latencyMs,
-                    tokens: data.metadata?.tokensUsed,
-                    mode: data.metadata?.mode,
-                    needsInfo: data.metadata?.needsInfo,
-                    historySent: data.debug?.historyReceived,
-                    quickAnswer: data.debug?.wasQuickAnswer,
-                    triageMatch: data.debug?.triageMatched,
-                    timestamp: new Date().toISOString(),
-                    // 🧠 NEW: AI Thinking Process
-                    thinkingProcess: data.debug?.thinkingProcess || null,
-                    bookingConfig: data.debug?.bookingConfig || null
+                    latencyMs: debug.latencyMs,
+                    tokens: debug.tokensUsed,
+                    mode: debug.phase,
+                    customerContext: debug.customerContext,
+                    runningSummary: debug.runningSummary,
+                    slotsCollected: debug.slotsCollected,
+                    timestamp: new Date().toISOString()
                 });
                 
                 console.log('[AI Test] Response received:', {
                     source,
-                    latency: data.metadata?.latencyMs,
-                    mode: data.metadata?.mode
+                    latency: debug.latencyMs,
+                    phase: debug.phase,
+                    customer: debug.customerContext?.name || 'unknown'
                 });
                 
                 // 2. Update conversation history
                 this.conversationHistory.push(
                     { role: 'user', content: message },
-                    { role: 'assistant', content: data.reply }
+                    { role: 'assistant', content: data.response }
                 );
                 
                 // 3. Update slots if any collected
-                if (data.metadata?.slots) {
-                    this.knownSlots = { ...this.knownSlots, ...data.metadata.slots };
+                if (debug.slotsCollected) {
+                    this.knownSlots = { ...this.knownSlots, ...debug.slotsCollected };
                 }
                 
-                // 4. Add AI response bubble with source badge (uses debug)
-                this.addChatBubble(data.reply, 'ai', data.metadata, false, data.debug);
+                // 4. Add AI response bubble with source badge
+                this.addChatBubble(data.response, 'ai', metadata, false, debug);
                 
                 // 5. Update analysis panel immediately (both panels sync)
-                this.updateAnalysis(data.metadata);
+                this.updateAnalysis(metadata);
                 
                 // 6. Flash the debug panel to show it updated
                 const debugPanel = document.querySelector('[style*="border: 1px solid #f0883e"]');
@@ -517,7 +538,7 @@ class AITestConsole {
                 }
                 
                 // 7. Speak the response (async, doesn't block)
-                this.speakResponse(data.reply);
+                this.speakResponse(data.response);
             } else {
                 this.addChatBubble(`Error: ${data.error}`, 'ai', null, true);
             }

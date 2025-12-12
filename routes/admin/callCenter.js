@@ -1568,6 +1568,139 @@ router.get('/health', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// MULTI-CHANNEL SESSIONS (Voice, SMS, Website)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SessionService = require('../../services/SessionService');
+const ConversationSession = require('../../models/ConversationSession');
+
+/**
+ * GET /api/admin/call-center/:companyId/sessions
+ * List all conversation sessions across all channels
+ */
+router.get('/:companyId/sessions',
+  auditLog.logAccess('sessions.list_viewed'),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const {
+        page = 1,
+        limit = 50,
+        channel,   // 'voice', 'sms', 'website', or 'all'
+        outcome,
+        since
+      } = req.query;
+      
+      const filters = {
+        channel: channel || 'all',
+        outcome: outcome || null,
+        since: since ? new Date(since) : null,
+        limit: Math.min(parseInt(limit), 100),
+        skip: (parseInt(page) - 1) * Math.min(parseInt(limit), 100)
+      };
+      
+      const sessions = await SessionService.getForCallCenter(companyId, filters);
+      
+      // Get total count for pagination
+      const totalQuery = { companyId };
+      if (channel && channel !== 'all') totalQuery.channel = channel;
+      if (outcome) totalQuery.outcome = outcome;
+      const total = await ConversationSession.countDocuments(totalQuery);
+      
+      res.json({
+        success: true,
+        data: sessions,
+        pagination: {
+          page: parseInt(page),
+          limit: filters.limit,
+          total,
+          pages: Math.ceil(total / filters.limit)
+        }
+      });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error listing sessions', {
+        error: error.message,
+        companyId: req.params.companyId
+      });
+      res.status(500).json({ success: false, error: 'Failed to fetch sessions' });
+    }
+  }
+);
+
+/**
+ * GET /api/admin/call-center/:companyId/sessions/:sessionId
+ * Get single session with full transcript
+ */
+router.get('/:companyId/sessions/:sessionId',
+  auditLog.logAccess('session.viewed'),
+  async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      
+      const session = await SessionService.findById(sessionId);
+      
+      if (!session) {
+        return res.status(404).json({ success: false, error: 'Session not found' });
+      }
+      
+      res.json({
+        success: true,
+        data: {
+          ...session.toObject(),
+          transcript: session.getTranscript(),
+          channelIcon: session.getChannelIcon(),
+          statusBadge: session.getStatusBadge()
+        }
+      });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error fetching session', {
+        error: error.message,
+        sessionId: req.params.sessionId
+      });
+      res.status(500).json({ success: false, error: 'Failed to fetch session' });
+    }
+  }
+);
+
+/**
+ * GET /api/admin/call-center/:companyId/sessions/stats/channels
+ * Get channel breakdown statistics
+ */
+router.get('/:companyId/sessions/stats/channels',
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { since } = req.query;
+      
+      const sinceDate = since ? new Date(since) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // Last 30 days
+      
+      const stats = await SessionService.getStats(companyId, sinceDate);
+      
+      res.json({
+        success: true,
+        data: {
+          ...stats,
+          channels: {
+            voice: { count: stats.voice, icon: '📞' },
+            sms: { count: stats.sms, icon: '💬' },
+            website: { count: stats.website, icon: '🌐' }
+          }
+        }
+      });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error fetching channel stats', {
+        error: error.message,
+        companyId: req.params.companyId
+      });
+      res.status(500).json({ success: false, error: 'Failed to fetch stats' });
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MODULE EXPORT
 // ═══════════════════════════════════════════════════════════════════════════
 
