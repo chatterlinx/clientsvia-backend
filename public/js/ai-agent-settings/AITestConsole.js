@@ -834,12 +834,12 @@ ${separator}`;
                 let bookingHtml = '';
                 if (entry.bookingConfig && entry.bookingConfig.source) {
                     const bc = entry.bookingConfig;
-                    const isDefault = bc.source?.includes('DEFAULT') || bc.source?.includes('FALLBACK');
+                    const isNotSaved = bc.source?.includes('NOT SAVED') || bc.source?.includes('hardcoded');
                     bookingHtml = `
-                        <div style="background: ${isDefault ? '#3d1f00' : '#0d2818'}; border: 1px solid ${isDefault ? '#f0883e' : '#238636'}; border-radius: 4px; padding: 6px 8px; margin: 6px 0; font-size: 10px;">
-                            <div style="color: ${isDefault ? '#f0883e' : '#3fb950'}; font-weight: bold; margin-bottom: 4px;">📋 BOOKING QUESTIONS: ${bc.source}</div>
-                            ${bc.configuredQuestions?.slice(0, 4).map(q => `<div style="color: #8b949e; font-size: 9px; margin-left: 8px;">• ${q}</div>`).join('') || ''}
-                            ${isDefault ? '<div style="color: #f0883e; font-size: 9px; margin-top: 4px;">⚠️ Save Front Desk Behavior to fix!</div>' : ''}
+                        <div style="background: ${isNotSaved ? '#3d1f00' : '#0d2818'}; border: 1px solid ${isNotSaved ? '#f0883e' : '#238636'}; border-radius: 4px; padding: 6px 8px; margin: 6px 0; font-size: 10px;">
+                            <div style="color: ${isNotSaved ? '#f0883e' : '#3fb950'}; font-weight: bold; margin-bottom: 4px;">📋 BOOKING QUESTIONS: ${bc.source}</div>
+                            ${bc.configuredQuestions?.slice(0, 5).map(q => `<div style="color: #8b949e; font-size: 9px; margin-left: 8px;">• ${q}</div>`).join('') || ''}
+                            ${isNotSaved ? '<div style="color: #f0883e; font-size: 9px; margin-top: 4px;">⚠️ Questions not in database - using code defaults!</div>' : ''}
                         </div>
                     `;
                 }

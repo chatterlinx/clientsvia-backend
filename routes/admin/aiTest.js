@@ -149,17 +149,18 @@ router.post('/:companyId/chat', authenticateJWT, async (req, res) => {
                 // 📋 BOOKING SLOTS CONFIGURATION
                 // ════════════════════════════════════════════════════════════════
                 bookingConfig: {
-                    source: bookingSlots?.length > 0 ? '✅ FROM DATABASE' : '⚠️ DEFAULT FALLBACK (not saved yet!)',
+                    source: bookingSlots?.length > 0 ? '✅ SAVED IN DATABASE' : '⚠️ NOT SAVED (using hardcoded defaults)',
                     slotCount: bookingSlots?.length || 4,
                     configuredQuestions: bookingSlots?.length > 0 
                         ? bookingSlots.map(s => `${s.id}: "${s.question}"`)
                         : [
-                            '⚠️ Using hardcoded defaults because bookingSlots not in database:',
+                            '⚠️ bookingSlots NOT in company database',
+                            '→ Go to Front Desk Behavior → Booking Prompts → SAVE',
+                            'Currently using these hardcoded defaults:',
                             'name: "May I have your full name?"',
                             'phone: "What is the best phone number to reach you?"',
                             'address: "What is the service address?"',
-                            'time: "When works best for you?"',
-                            '→ Go to Front Desk Behavior → Booking Prompts → Save to fix!'
+                            'time: "When works best for you?"'
                         ]
                 },
                 
