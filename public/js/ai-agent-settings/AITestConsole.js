@@ -480,7 +480,10 @@ class AITestConsole {
                     historySent: data.debug?.historyReceived,
                     quickAnswer: data.debug?.wasQuickAnswer,
                     triageMatch: data.debug?.triageMatched,
-                    timestamp: new Date().toISOString()
+                    timestamp: new Date().toISOString(),
+                    // 🧠 NEW: AI Thinking Process
+                    thinkingProcess: data.debug?.thinkingProcess || null,
+                    bookingConfig: data.debug?.bookingConfig || null
                 });
                 
                 console.log('[AI Test] Response received:', {
@@ -727,13 +730,34 @@ ${thinSeparator}
 Source: ${entry.source}
 Latency: ${entry.latencyMs}ms | Tokens: ${entry.tokens} | Mode: ${entry.mode}
 History Sent: ${entry.historySent} messages
-Quick Answer: ${entry.quickAnswer ? 'Yes' : 'No'} | Triage: ${entry.triageMatch ? 'Yes' : 'No'}
 
 USER: ${entry.userMessage}
 
 AI: ${entry.aiResponse}
 
 `;
+            // Add thinking process if available
+            if (entry.thinkingProcess) {
+                const tp = entry.thinkingProcess;
+                text += `🧠 AI THINKING PROCESS:
+  1. Quick Answers: ${tp.quickAnswers?.result || 'N/A'}
+  2. Triage: ${tp.triage?.result || 'N/A'}
+  3. Emergency: ${tp.emergency?.result || 'N/A'}
+  4. Response Source: ${tp.responseSource?.result || 'N/A'}
+
+`;
+            }
+            
+            // Add booking config if available
+            if (entry.bookingConfig) {
+                const bc = entry.bookingConfig;
+                text += `📋 BOOKING CONFIG:
+  Source: ${bc.source || 'N/A'}
+  Questions:
+${bc.configuredQuestions?.map(q => `    - ${q}`).join('\n') || '    (not available)'}
+
+`;
+            }
         });
         
         text += `${separator}
@@ -788,9 +812,39 @@ ${separator}`;
             .map(s => `<span style="background: #f0883e; padding: 2px 8px; border-radius: 4px; font-size: 11px;">${s}</span>`)
             .join(' ') || '<span style="color: #3fb950;">All collected! ✓</span>';
         
-        // Build the running debug log
+        // Build the running debug log with thinking process
         const debugLogHtml = this.debugLog.length > 0 
-            ? this.debugLog.map((entry, i) => `
+            ? this.debugLog.map((entry, i) => {
+                // Build thinking process section if available
+                let thinkingHtml = '';
+                if (entry.thinkingProcess) {
+                    const tp = entry.thinkingProcess;
+                    thinkingHtml = `
+                        <div style="background: #161b22; border-radius: 4px; padding: 6px 8px; margin: 6px 0; font-size: 10px;">
+                            <div style="color: #f0883e; font-weight: bold; margin-bottom: 4px;">🧠 AI THINKING:</div>
+                            <div style="color: ${tp.quickAnswers?.matched ? '#3fb950' : '#6e7681'};">1. Quick Answers: ${tp.quickAnswers?.matched ? '✅ MATCHED' : '❌ No match'}</div>
+                            <div style="color: ${tp.triage?.matched ? '#3fb950' : '#6e7681'};">2. Triage: ${tp.triage?.matched ? '✅ ' + (tp.triage?.cardName || 'MATCHED') : '❌ No match'}</div>
+                            <div style="color: ${tp.emergency?.detected ? '#f85149' : '#6e7681'};">3. Emergency: ${tp.emergency?.detected ? '⚠️ DETECTED' : '✅ Normal'}</div>
+                            <div style="color: #58a6ff;">4. Source: ${tp.responseSource?.result || entry.source}</div>
+                        </div>
+                    `;
+                }
+                
+                // Build booking config section if available
+                let bookingHtml = '';
+                if (entry.bookingConfig && entry.bookingConfig.source) {
+                    const bc = entry.bookingConfig;
+                    const isDefault = bc.source?.includes('DEFAULT') || bc.source?.includes('FALLBACK');
+                    bookingHtml = `
+                        <div style="background: ${isDefault ? '#3d1f00' : '#0d2818'}; border: 1px solid ${isDefault ? '#f0883e' : '#238636'}; border-radius: 4px; padding: 6px 8px; margin: 6px 0; font-size: 10px;">
+                            <div style="color: ${isDefault ? '#f0883e' : '#3fb950'}; font-weight: bold; margin-bottom: 4px;">📋 BOOKING QUESTIONS: ${bc.source}</div>
+                            ${bc.configuredQuestions?.slice(0, 4).map(q => `<div style="color: #8b949e; font-size: 9px; margin-left: 8px;">• ${q}</div>`).join('') || ''}
+                            ${isDefault ? '<div style="color: #f0883e; font-size: 9px; margin-top: 4px;">⚠️ Save Front Desk Behavior to fix!</div>' : ''}
+                        </div>
+                    `;
+                }
+                
+                return `
                 <div style="padding: 8px 0; ${i > 0 ? 'border-top: 1px dashed #30363d;' : ''}">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                         <span style="color: #58a6ff; font-weight: bold;">Turn ${entry.turn}</span>
@@ -808,8 +862,11 @@ ${separator}`;
                         <span>📍${entry.mode}</span>
                         <span>📨${entry.historySent} hist</span>
                     </div>
+                    ${thinkingHtml}
+                    ${bookingHtml}
                 </div>
-            `).join('')
+            `;
+            }).join('')
             : '<div style="text-align: center; color: #6e7681; padding: 12px;">Send a message to see debug log</div>';
         
         content.innerHTML = `
