@@ -29,6 +29,7 @@ const CustomerService = require('../../services/CustomerService');
 const SessionService = require('../../services/SessionService');
 const RunningSummaryService = require('../../services/RunningSummaryService');
 const HybridReceptionistLLM = require('../../services/HybridReceptionistLLM');
+const LLM0TurnHandler = require('../../services/LLM0TurnHandler');
 const logger = require('../../utils/logger');
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -289,6 +290,49 @@ router.post('/message', async (req, res) => {
         logger.info('[CHAT API] CHECKPOINT 6: ✅ History retrieved, turns:', conversationHistory.length);
         
         // ═══════════════════════════════════════════════════════════════
+        // STEP 6.5: Extract slots from user message
+        // ═══════════════════════════════════════════════════════════════
+        logger.info('[CHAT API] CHECKPOINT 6.5: Extracting slots from user input...');
+        const currentSlots = { ...(session.collectedSlots || {}) };
+        const extractedThisTurn = {};
+        
+        try {
+            // Extract name if we don't have one
+            if (!currentSlots.name) {
+                const extractedName = LLM0TurnHandler.extractName(message);
+                if (extractedName) {
+                    currentSlots.name = extractedName;
+                    extractedThisTurn.name = extractedName;
+                    logger.info('[CHAT API] 📝 Extracted name:', extractedName);
+                }
+            }
+            
+            // Extract phone if we don't have one
+            if (!currentSlots.phone) {
+                const extractedPhone = LLM0TurnHandler.extractPhone(message);
+                if (extractedPhone) {
+                    currentSlots.phone = extractedPhone;
+                    extractedThisTurn.phone = extractedPhone;
+                    logger.info('[CHAT API] 📞 Extracted phone:', extractedPhone);
+                }
+            }
+            
+            // Extract address if we don't have one
+            if (!currentSlots.address) {
+                const extractedAddress = LLM0TurnHandler.extractAddress(message);
+                if (extractedAddress) {
+                    currentSlots.address = extractedAddress;
+                    extractedThisTurn.address = extractedAddress;
+                    logger.info('[CHAT API] 📍 Extracted address:', extractedAddress);
+                }
+            }
+        } catch (extractErr) {
+            logger.warn('[CHAT API] Slot extraction error (non-fatal):', extractErr.message);
+        }
+        
+        logger.info('[CHAT API] CHECKPOINT 6.5: ✅ Slots after extraction:', currentSlots);
+        
+        // ═══════════════════════════════════════════════════════════════
         // STEP 7: Process through AI brain
         // ═══════════════════════════════════════════════════════════════
         logger.info('[CHAT API] CHECKPOINT 7: Calling AI brain...');
@@ -306,11 +350,14 @@ router.post('/message', async (req, res) => {
                     channel: 'website'
                 },
                 currentMode: session.phase === 'booking' ? 'booking' : 'free',
-                knownSlots: session.collectedSlots || {},
+                knownSlots: currentSlots,  // Use slots with extractions
                 conversationHistory,
                 userInput: message,
                 behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
             });
+            
+            // Merge extracted slots into AI result
+            aiResult.filledSlots = { ...(aiResult.filledSlots || {}), ...extractedThisTurn };
         } catch (aiErr) {
             aiErr.checkpoint = 'ai_processing';
             throw aiErr;
