@@ -170,6 +170,17 @@ class FrontDeskBehaviorManager {
     async save() {
         try {
             console.log('[FRONT DESK BEHAVIOR] Saving config...');
+            // Log booking slots specifically to debug askMissingNamePart
+            if (this.config.bookingSlots) {
+                console.log('[FRONT DESK BEHAVIOR] 📋 Booking slots being saved:', 
+                    this.config.bookingSlots.map(s => ({
+                        id: s.id,
+                        askFullName: s.askFullName,
+                        useFirstNameOnly: s.useFirstNameOnly,
+                        askMissingNamePart: s.askMissingNamePart
+                    }))
+                );
+            }
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
             
             const response = await fetch(`/api/admin/front-desk-behavior/${this.companyId}`, {

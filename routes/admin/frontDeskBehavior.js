@@ -259,7 +259,13 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
             logger.info('[FRONT DESK BEHAVIOR] Saving bookingSlots', {
                 companyId,
                 slotCount: updates.bookingSlots.length,
-                slots: updates.bookingSlots.map(s => ({ id: s.id, question: s.question?.substring(0, 30) }))
+                slots: updates.bookingSlots.map(s => ({ 
+                    id: s.id, 
+                    question: s.question?.substring(0, 30),
+                    askFullName: s.askFullName,
+                    useFirstNameOnly: s.useFirstNameOnly,
+                    askMissingNamePart: s.askMissingNamePart  // Log this specifically
+                }))
             });
         }
         
