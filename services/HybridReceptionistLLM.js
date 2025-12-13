@@ -695,13 +695,28 @@ NEVER say any of these phrases. They make you sound robotic.
             // Break down if unclear (UI-configurable)
             if (phoneSlot.breakDownIfUnclear === true) {
                 phoneRules.push(`
-🔢 BREAK DOWN PROTOCOL (ENABLED):
-   If you don't understand the phone number they gave:
-   → Say: "I'm sorry, I didn't catch that. Let's start with your area code?"
-   → Wait for area code (3 digits like "239")
-   → Then ask: "Got it, ${knownSlots.partialAreaCode || '___'}. And the rest of the number?"
-   → Wait for remaining 7 digits
-   → Combine into full number`);
+🔢 PHONE NUMBER VALIDATION & BREAK-DOWN (ENABLED):
+
+   CRITICAL: A valid US phone number MUST have exactly 10 digits (or 11 with leading 1).
+   Examples of VALID: "239-313-9099", "2393139099", "1-239-313-9099"
+   Examples of INVALID: "12321", "239", "313-9099" (missing digits)
+
+   IF THE CALLER GIVES AN INVALID/INCOMPLETE PHONE NUMBER:
+   → Do NOT confirm garbage like "Just to confirm, that's 12321?"
+   → Instead say: "I'm sorry, we must have a poor connection. Let me get your number step by step."
+   → Ask: "What's your area code?" 
+   → Wait for 3 digits (e.g., "239")
+   → Confirm: "Got it, 239. And the remaining seven digits?"
+   → Wait for 7 digits
+   → Combine into full number and confirm the complete number
+
+   IF THEY CORRECT YOU (e.g., "no it's 239"):
+   → They're trying to fix it - ask for the rest: "Got it, 239. And what's the rest of the number?"`);
+            } else {
+                // Even without breakDownIfUnclear, still validate
+                phoneRules.push(`
+📞 PHONE VALIDATION: A valid phone number must have 10 digits. 
+   If caller gives fewer than 10 digits, politely ask them to repeat the full number.`);
             }
             
             if (phoneRules.length > 0) {
@@ -881,6 +896,23 @@ If caller wants to book, say you'll take their info and have someone call back.`
         // Build needsInfo options from dynamic slots
         const needsInfoOptions = slotIds.join('|') + '|none';
         
+        // ════════════════════════════════════════════════════════════════════
+        // UNIVERSAL PHONE NUMBER VALIDATION (Always active)
+        // ════════════════════════════════════════════════════════════════════
+        prompt += `
+
+🚨 CRITICAL - PHONE NUMBER VALIDATION:
+A valid US phone number has EXACTLY 10 digits (or 11 starting with 1).
+- VALID: "239-313-9099", "(239) 313-9099", "2393139099"
+- INVALID: "12321" (5 digits), "239" (3 digits), "313-9099" (7 digits)
+
+When someone gives you a phone number:
+1. COUNT THE DIGITS (ignore dashes, spaces, parentheses)
+2. If 10 digits → Valid! Confirm it back
+3. If NOT 10 digits → INVALID! Say: "I'm sorry, the connection might be choppy. Let's try this - what's your area code?" Then get the rest separately.
+
+NEVER confirm an invalid phone number like "Just to confirm, that's 12321?" - that's obviously wrong!`;
+
         // SIMPLE output format - just reply + one useful field
         prompt += `
 
