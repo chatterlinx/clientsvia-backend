@@ -139,30 +139,14 @@ class FrontDeskBehaviorManager {
             },
             
             // ════════════════════════════════════════════════════════════════════
-            // NEW: Fallback Responses - What AI says when LLM fails
-            // These ensure the call NEVER goes silent
+            // SIMPLIFIED: Recovery Protocol
+            // Step 1: Simple fallback (FREE), Step 4: Escalation (last resort)
             // ════════════════════════════════════════════════════════════════════
             fallbackResponses: {
-                // Initial greeting if LLM fails on first turn
-                greeting: "Thanks for calling! How can I help you today?",
-                // Discovery phase - figuring out what they need
-                discovery: "Got it, what's going on — is it not cooling, not heating, making noise, or something else?",
-                // Booking slot collection
-                askName: "May I have your name please?",
-                askPhone: "And what's the best phone number to reach you?",
-                askAddress: "What's the service address?",
-                askTime: "When works best for you — morning or afternoon? Or I can send someone as soon as possible.",
-                // Confirmation
-                confirmBooking: "Let me confirm — I have you scheduled. Does that sound right?",
-                bookingComplete: "You're all set! A technician will be out and you'll receive a confirmation text shortly. Is there anything else?",
-                // Error recovery
-                didNotHear: "I'm sorry, I didn't quite catch that. Could you please repeat?",
-                connectionIssue: "I'm sorry, I think our connection isn't great. Could you please repeat that?",
-                clarification: "I want to make sure I understand correctly. Could you tell me a bit more?",
-                // Transfer
-                transfering: "Let me connect you with someone who can help you right away. Please hold.",
-                // Generic catch-all (last resort)
-                generic: "I'm here to help. What can I do for you?"
+                // Step 1: Didn't understand - ask to repeat (FREE)
+                didNotUnderstand: "I'm sorry, could you repeat that?",
+                // Step 4: Escalation - transfer or callback (last resort)
+                escalation: "Let me get someone who can help you better. One moment please."
             },
             
             // ════════════════════════════════════════════════════════════════════
@@ -1421,150 +1405,77 @@ class FrontDeskBehaviorManager {
     }
     
     // ════════════════════════════════════════════════════════════════════
-    // NEW TAB: Fallback Responses
+    // SIMPLIFIED: Recovery Protocol
     // ════════════════════════════════════════════════════════════════════
     renderFallbacksTab() {
         const fb = this.config.fallbackResponses || {};
-        // Get defaults for prefilling
-        const defaults = this.getDefaultConfig().fallbackResponses;
+        const defaults = {
+            didNotUnderstand: "I'm sorry, could you repeat that?",
+            escalation: "Let me get someone who can help you better. One moment please."
+        };
         
         return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
-                <h3 style="margin: 0 0 16px 0; color: #f85149;">🆘 Fallback Responses</h3>
-                <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">
-                    What the AI says when the LLM fails or times out. <strong>These ensure the call NEVER goes silent.</strong>
+                <h3 style="margin: 0 0 8px 0; color: #f0883e;">🔄 Recovery Protocol</h3>
+                <p style="color: #8b949e; margin-bottom: 24px; font-size: 0.875rem;">
+                    Simple fallbacks when AI doesn't understand. These ensure the call <strong>never goes silent</strong>.
                 </p>
                 
-                <div style="display: flex; flex-direction: column; gap: 16px;">
-                    
-                    <!-- Section: Initial & Discovery -->
-                    <div style="border-bottom: 1px solid #30363d; padding-bottom: 16px; margin-bottom: 8px;">
-                        <h4 style="color: #58a6ff; margin: 0 0 12px 0; font-size: 0.9rem;">🎬 Initial & Discovery</h4>
-                        
-                        <div style="margin-bottom: 12px;">
-                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                                👋 Greeting Fallback <span style="color: #8b949e; font-weight: normal;">(first turn if LLM fails)</span>
-                            </label>
-                            <input type="text" id="fdb-fb-greeting" value="${fb.greeting || defaults.greeting}" 
-                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                <!-- Protocol Diagram -->
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                    <div style="font-size: 12px; color: #8b949e; font-family: monospace; line-height: 1.8;">
+                        <div style="color: #58a6ff; margin-bottom: 8px;">📞 CALL HANDLING PROTOCOL:</div>
+                        <div style="margin-left: 16px;">
+                            <div>1️⃣ Normal → AI responds normally ✅</div>
+                            <div style="margin-top: 4px;">2️⃣ Unclear → <span style="color: #3fb950;">"Step 1 Fallback"</span> (ask to repeat)</div>
+                            <div style="margin-top: 4px;">3️⃣ Still unclear → Try 3-Tier AI again</div>
+                            <div style="margin-top: 4px;">4️⃣ Can't resolve → <span style="color: #f0883e;">"Escalation"</span> (transfer/callback)</div>
                         </div>
-                        
-                        <div>
-                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                                🔍 Discovery Fallback <span style="color: #8b949e; font-weight: normal;">(figuring out what they need)</span>
-                            </label>
-                            <input type="text" id="fdb-fb-discovery" value="${fb.discovery || defaults.discovery}" 
-                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        <div style="color: #8b949e; margin-top: 12px; font-size: 11px;">
+                            💡 Most issues resolve at Step 2. Escalation is rare (~1% of calls).
                         </div>
                     </div>
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: 20px;">
                     
-                    <!-- Section: Booking Slots -->
-                    <div style="border-bottom: 1px solid #30363d; padding-bottom: 16px; margin-bottom: 8px;">
-                        <h4 style="color: #3fb950; margin: 0 0 12px 0; font-size: 0.9rem;">📅 Booking Slot Collection</h4>
-                        
-                        <div style="margin-bottom: 12px;">
-                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                                👤 Ask Name
-                            </label>
-                            <input type="text" id="fdb-fb-askName" value="${fb.askName || defaults.askName}" 
-                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                    <!-- Step 1: Simple Fallback -->
+                    <div style="background: #0d2818; border: 1px solid #238636; border-radius: 8px; padding: 16px;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                            <span style="background: #238636; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">STEP 1</span>
+                            <span style="color: #3fb950; font-weight: 600;">Didn't Understand</span>
+                            <span style="color: #8b949e; font-size: 12px;">(FREE - just asks to repeat)</span>
                         </div>
-                        
-                        <div style="margin-bottom: 12px;">
-                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                                📞 Ask Phone
-                            </label>
-                            <input type="text" id="fdb-fb-askPhone" value="${fb.askPhone || defaults.askPhone}" 
-                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                        </div>
-                        
-                        <div style="margin-bottom: 12px;">
-                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                                📍 Ask Address
-                            </label>
-                            <input type="text" id="fdb-fb-askAddress" value="${fb.askAddress || defaults.askAddress}" 
-                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                        </div>
-                        
-                        <div>
-                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                                🕐 Ask Time
-                            </label>
-                            <input type="text" id="fdb-fb-askTime" value="${fb.askTime || defaults.askTime}" 
-                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                        </div>
+                        <input type="text" id="fdb-fb-didNotUnderstand" value="${fb.didNotUnderstand || defaults.didNotUnderstand}" 
+                            placeholder="I'm sorry, could you repeat that?"
+                            style="width: 100%; padding: 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                        <p style="color: #8b949e; font-size: 11px; margin: 8px 0 0 0;">
+                            Used when AI can't understand what caller said. Simple, polite, gives them another chance.
+                        </p>
                     </div>
                     
-                    <!-- Section: Confirmation -->
-                    <div style="border-bottom: 1px solid #30363d; padding-bottom: 16px; margin-bottom: 8px;">
-                        <h4 style="color: #a371f7; margin: 0 0 12px 0; font-size: 0.9rem;">✅ Confirmation</h4>
-                        
-                        <div style="margin-bottom: 12px;">
-                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                                ✔️ Confirm Booking
-                            </label>
-                            <input type="text" id="fdb-fb-confirmBooking" value="${fb.confirmBooking || defaults.confirmBooking}" 
-                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                    <!-- Step 4: Escalation -->
+                    <div style="background: #3d1f00; border: 1px solid #f0883e; border-radius: 8px; padding: 16px;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                            <span style="background: #f0883e; color: black; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">STEP 4</span>
+                            <span style="color: #f0883e; font-weight: 600;">Escalation</span>
+                            <span style="color: #8b949e; font-size: 12px;">(when all else fails)</span>
                         </div>
-                        
-                        <div>
-                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                                🎉 Booking Complete
-                            </label>
-                            <input type="text" id="fdb-fb-bookingComplete" value="${fb.bookingComplete || defaults.bookingComplete}" 
-                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                        </div>
+                        <input type="text" id="fdb-fb-escalation" value="${fb.escalation || defaults.escalation}" 
+                            placeholder="Let me get someone who can help you better. One moment please."
+                            style="width: 100%; padding: 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                        <p style="color: #8b949e; font-size: 11px; margin: 8px 0 0 0;">
+                            Last resort - transfers to human or takes callback number. Rare but ensures no caller is abandoned.
+                        </p>
                     </div>
                     
-                    <!-- Section: Error Recovery -->
-                    <div style="border-bottom: 1px solid #30363d; padding-bottom: 16px; margin-bottom: 8px;">
-                        <h4 style="color: #f0883e; margin: 0 0 12px 0; font-size: 0.9rem;">🔄 Error Recovery</h4>
-                        
-                        <div style="margin-bottom: 12px;">
-                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                                👂 Didn't Hear <span style="color: #8b949e; font-weight: normal;">(STT failed)</span>
-                            </label>
-                            <input type="text" id="fdb-fb-didNotHear" value="${fb.didNotHear || defaults.didNotHear}" 
-                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                        </div>
-                        
-                        <div style="margin-bottom: 12px;">
-                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                                📶 Connection Issue <span style="color: #8b949e; font-weight: normal;">(blame connection, not caller)</span>
-                            </label>
-                            <input type="text" id="fdb-fb-connectionIssue" value="${fb.connectionIssue || defaults.connectionIssue}" 
-                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                        </div>
-                        
-                        <div>
-                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                                🤔 Clarification <span style="color: #8b949e; font-weight: normal;">(need more info)</span>
-                            </label>
-                            <input type="text" id="fdb-fb-clarification" value="${fb.clarification || defaults.clarification}" 
-                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                        </div>
-                    </div>
-                    
-                    <!-- Section: Transfer & Catch-All -->
-                    <div>
-                        <h4 style="color: #f85149; margin: 0 0 12px 0; font-size: 0.9rem;">📞 Transfer & Catch-All</h4>
-                        
-                        <div style="margin-bottom: 12px;">
-                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                                📞 Transferring <span style="color: #8b949e; font-weight: normal;">(before connecting to human)</span>
-                            </label>
-                            <input type="text" id="fdb-fb-transfering" value="${fb.transfering || defaults.transfering}" 
-                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                        </div>
-                        
-                        <div>
-                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                                🆘 Generic Fallback <span style="color: #8b949e; font-weight: normal;">(absolute last resort)</span>
-                            </label>
-                            <input type="text" id="fdb-fb-generic" value="${fb.generic || defaults.generic}" 
-                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                        </div>
-                    </div>
+                </div>
+                
+                <!-- Future Notice -->
+                <div style="background: #161b22; border: 1px dashed #30363d; border-radius: 8px; padding: 12px; margin-top: 20px;">
+                    <p style="color: #8b949e; font-size: 12px; margin: 0;">
+                        🚀 <strong>Coming soon:</strong> Advanced escalation options (transfer to specific number, take callback, SMS follow-up)
+                    </p>
                 </div>
             </div>
         `;
@@ -1841,27 +1752,11 @@ class FrontDeskBehaviorManager {
             };
         }
         
-        // Fallback responses (all 12 fields)
-        if (document.getElementById('fdb-fb-discovery')) {
+        // Simplified Recovery Protocol (just 2 fields)
+        if (document.getElementById('fdb-fb-didNotUnderstand')) {
             this.config.fallbackResponses = {
-                // Initial & Discovery
-                greeting: get('fdb-fb-greeting'),
-                discovery: get('fdb-fb-discovery'),
-                // Booking Slots
-                askName: get('fdb-fb-askName'),
-                askPhone: get('fdb-fb-askPhone'),
-                askAddress: get('fdb-fb-askAddress'),
-                askTime: get('fdb-fb-askTime'),
-                // Confirmation
-                confirmBooking: get('fdb-fb-confirmBooking'),
-                bookingComplete: get('fdb-fb-bookingComplete'),
-                // Error Recovery
-                didNotHear: get('fdb-fb-didNotHear'),
-                connectionIssue: get('fdb-fb-connectionIssue'),
-                clarification: get('fdb-fb-clarification'),
-                // Transfer & Catch-All
-                transfering: get('fdb-fb-transfering'),
-                generic: get('fdb-fb-generic')
+                didNotUnderstand: get('fdb-fb-didNotUnderstand') || "I'm sorry, could you repeat that?",
+                escalation: get('fdb-fb-escalation') || "Let me get someone who can help you better. One moment please."
             };
         }
         
