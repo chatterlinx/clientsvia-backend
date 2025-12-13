@@ -2,13 +2,19 @@
  * ============================================================================
  * AI TEST ROUTES - Test the AI agent without making real calls
  * ============================================================================
+ * 
+ * NOTE: The main AI Test Console now uses /api/chat/message which goes through
+ * ConversationEngine. This legacy endpoint is kept for backward compatibility
+ * and also uses ConversationEngine for consistent behavior.
+ * 
+ * ============================================================================
  */
 
 const express = require('express');
 const router = express.Router();
 const { authenticateJWT } = require('../../middleware/auth');
 const Company = require('../../models/v2Company');
-const HybridReceptionistLLM = require('../../services/HybridReceptionistLLM');
+const ConversationEngine = require('../../services/ConversationEngine');
 const BookingScriptEngine = require('../../services/BookingScriptEngine');
 const BlackBoxLogger = require('../../services/BlackBoxLogger');
 const elevenLabsService = require('../../services/v2elevenLabsService');
@@ -17,162 +23,62 @@ const logger = require('../../utils/logger');
 // ============================================================================
 // POST /api/admin/ai-test/:companyId/chat
 // Simulate a conversation turn with the AI
+// NOTE: Uses ConversationEngine for unified behavior across all channels
 // ============================================================================
 router.post('/:companyId/chat', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
-        const { message, sessionId, conversationHistory, knownSlots } = req.body;
+        const { message, sessionId } = req.body;
         
         if (!message) {
             return res.status(400).json({ success: false, error: 'Message is required' });
         }
         
-        // Load company
-        const company = await Company.findById(companyId).lean();
-        if (!company) {
-            return res.status(404).json({ success: false, error: 'Company not found' });
-        }
-        
-        const turnCount = (conversationHistory?.length || 0) / 2 + 1;
-        const testCallId = sessionId || `test-${Date.now()}`;
-        
-        logger.info('[AI TEST] Processing test message', {
+        logger.info('[AI TEST] Processing test message via ConversationEngine', {
             companyId,
-            sessionId: testCallId,
-            messagePreview: message.substring(0, 50),
-            historyLength: conversationHistory?.length || 0,
-            turnCount
+            sessionId,
+            messagePreview: message.substring(0, 50)
         });
         
-        // Call the same HybridReceptionistLLM that real calls use
-        const startTime = Date.now();
-        
-        // Get the front desk behavior config (same as real calls)
-        const frontDeskConfig = company?.aiAgentSettings?.frontDeskBehavior || {};
-        
-        // 🚨 Use BookingScriptEngine as single source of truth
-        const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company);
-        
-        logger.info('[AI TEST] 📋 BOOKING CONFIG:', {
+        // ═══════════════════════════════════════════════════════════════════
+        // Call ConversationEngine (same as all other channels)
+        // ═══════════════════════════════════════════════════════════════════
+        const result = await ConversationEngine.processTurn({
             companyId,
-            source: bookingConfig.source,
-            isConfigured: bookingConfig.isConfigured,
-            slotCount: bookingConfig.slots.length,
-            questions: bookingConfig.slots.map(s => ({ id: s.slotId, question: s.question?.substring(0, 40) }))
+            channel: 'test',
+            userText: message,
+            sessionId,
+            includeDebug: true
         });
-        
-        const result = await HybridReceptionistLLM.processConversation({
-            company,
-            callContext: {
-                callId: testCallId,
-                companyId,
-                isTest: true
-            },
-            currentMode: 'discovery',
-            knownSlots: knownSlots || {},
-            conversationHistory: conversationHistory || [],
-            userInput: message,
-            behaviorConfig: frontDeskConfig
-        });
-        
-        const latencyMs = Date.now() - startTime;
         
         // Log to BlackBox for the failure report
         if (BlackBoxLogger) {
             BlackBoxLogger.logEvent({
-                callId: sessionId,
+                callId: result.sessionId,
                 companyId,
                 type: 'AI_TEST_TURN',
                 data: {
                     userInput: message.substring(0, 100),
                     reply: result.reply?.substring(0, 100),
-                    latencyMs,
-                    needsInfo: result.needsInfo,
+                    latencyMs: result.latencyMs,
                     mode: result.conversationMode,
+                    engine: 'ConversationEngine',
                     isTest: true
                 }
             }).catch(() => {});
         }
         
         res.json({
-            success: true,
+            success: result.success,
             reply: result.reply,
             metadata: {
-                latencyMs,
-                tokensUsed: result.tokensUsed || 0,
-                needsInfo: result.needsInfo || 'none',
+                latencyMs: result.latencyMs,
+                tokensUsed: result.debug?.tokensUsed || 0,
+                needsInfo: result.debug?.needsInfo || 'none',
                 mode: result.conversationMode || 'discovery',
-                nextGoal: result.nextGoal,
-                slots: result.filledSlots
+                slots: result.slotsCollected
             },
-            // Debug info to help diagnose issues
-            debug: {
-                turnCount,
-                historyReceived: conversationHistory?.length || 0,
-                userInputReceived: message.substring(0, 100),
-                
-                // ════════════════════════════════════════════════════════════════
-                // 🧠 AI THINKING PROCESS (Process of Elimination)
-                // ════════════════════════════════════════════════════════════════
-                thinkingProcess: {
-                    // Step 1: Quick Answers check
-                    quickAnswers: {
-                        checked: true,
-                        matched: result.wasQuickAnswer || result.fromQuickAnswers || false,
-                        result: result.wasQuickAnswer ? '✅ MATCHED - Used Quick Answer' : '❌ No match - continued to next check'
-                    },
-                    // Step 2: Triage check
-                    triage: {
-                        checked: true,
-                        matched: result.triageMatched || result.fromTriage || false,
-                        cardName: result.triageCardName || null,
-                        result: result.triageMatched ? `✅ MATCHED - Triage card: ${result.triageCardName || 'unknown'}` : '❌ No triage match - continued to LLM'
-                    },
-                    // Step 3: Emergency detection
-                    emergency: {
-                        detected: result.wasEmergency || result.signals?.emergency || false,
-                        result: result.wasEmergency ? '⚠️ EMERGENCY detected' : '✅ Not an emergency'
-                    },
-                    // Step 4: What actually generated the response
-                    responseSource: {
-                        source: result.responseSource || result.source || 'LLM',
-                        wasLLM: !result.wasQuickAnswer && !result.triageMatched && !result.wasFallback,
-                        wasFallback: result.wasFallback || result.usedFallback || false,
-                        result: result.wasFallback 
-                            ? '🔄 FALLBACK used (LLM failed or returned invalid response)'
-                            : result.wasQuickAnswer 
-                                ? '⚡ Quick Answer (instant, no LLM cost)'
-                                : result.triageMatched
-                                    ? '🎯 Triage Response (industry-specific)'
-                                    : '🤖 LLM Generated (GPT-4o-mini)'
-                    }
-                },
-                
-                // ════════════════════════════════════════════════════════════════
-                // 📋 BOOKING CONFIGURATION (via BookingScriptEngine)
-                // ════════════════════════════════════════════════════════════════
-                bookingConfig: {
-                    source: bookingConfig.isConfigured 
-                        ? `✅ ${bookingConfig.source}` 
-                        : `🚨 ${bookingConfig.source}`,
-                    slotCount: bookingConfig.slots.length,
-                    isConfigured: bookingConfig.isConfigured,
-                    configuredQuestions: bookingConfig.isConfigured 
-                        ? bookingConfig.slots.map(s => `${s.slotId}: "${s.question}"`)
-                        : [
-                            '⚠️ Booking not fully configured',
-                            `Source checked: ${bookingConfig.source}`,
-                            '→ Go to Front Desk Behavior → Booking Prompts → SAVE',
-                            'AI will have a natural conversation but cannot collect booking slots.'
-                        ]
-                },
-                
-                // Latency breakdown
-                performance: {
-                    totalLatencyMs: latencyMs,
-                    tokensUsed: result.tokensUsed || 0
-                }
-            }
+            debug: result.debug
         });
         
     } catch (error) {
