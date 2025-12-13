@@ -157,6 +157,23 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
         const saved = company.aiAgentSettings?.frontDeskBehavior || {};
         const config = deepMerge(UI_DEFAULTS, saved);
         
+        // 🔍 DEBUG: Log what we're returning
+        if (config.bookingSlots) {
+            logger.info('[FRONT DESK BEHAVIOR] GET - Returning bookingSlots:', {
+                companyId,
+                slotCount: config.bookingSlots.length,
+                slots: config.bookingSlots.map(s => ({
+                    id: s.id,
+                    type: s.type,
+                    askFullName: s.askFullName,
+                    useFirstNameOnly: s.useFirstNameOnly,
+                    askMissingNamePart: s.askMissingNamePart
+                }))
+            });
+        } else {
+            logger.info('[FRONT DESK BEHAVIOR] GET - No bookingSlots saved', { companyId });
+        }
+        
         // Ensure enabled defaults to true
         if (config.enabled === undefined) {
             config.enabled = true;

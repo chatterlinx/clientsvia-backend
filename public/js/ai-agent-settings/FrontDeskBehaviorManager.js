@@ -54,6 +54,21 @@ class FrontDeskBehaviorManager {
             this.config = result.data;
             console.log('[FRONT DESK BEHAVIOR] Config loaded:', this.config);
             
+            // 🔍 DEBUG: Log exactly what bookingSlots came from API
+            if (this.config.bookingSlots) {
+                console.log('[FRONT DESK BEHAVIOR] 📥 Booking slots from API:', 
+                    this.config.bookingSlots.map(s => ({
+                        id: s.id,
+                        type: s.type,
+                        askFullName: s.askFullName,
+                        useFirstNameOnly: s.useFirstNameOnly,
+                        askMissingNamePart: s.askMissingNamePart
+                    }))
+                );
+            } else {
+                console.log('[FRONT DESK BEHAVIOR] ⚠️ No bookingSlots in API response!');
+            }
+            
             return this.config;
         } catch (error) {
             console.error('[FRONT DESK BEHAVIOR] Load error:', error);
