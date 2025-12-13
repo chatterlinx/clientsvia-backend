@@ -126,16 +126,90 @@ class FrontDeskBehaviorManager {
             // NEW: Detection Triggers - Control what AI detects
             // ════════════════════════════════════════════════════════════════════
             detectionTriggers: {
-                // Trust Concern: Caller questions AI competence
-                trustConcern: ["can you do", "can you handle", "can you fix", "are you able", "know what you're doing", "qualified", "sure you can", "is this going to work", "you guys any good"],
-                // Caller feels ignored
-                callerFeelsIgnored: ["you're not listening", "didn't listen", "you didn't hear", "you're ignoring", "you don't get it", "that's not what I said", "you missed"],
-                // Caller refuses to give info
-                refusedSlot: ["i don't want to", "not going to give", "don't want to share", "not comfortable", "rather not"],
-                // Caller describing problem (not answering booking question)
-                describingProblem: ["water leak", "thermostat", "not cooling", "not cool", "won't turn", "won't start", "making noise", "making sound", "smell", "broken", "not working", "problem is", "issue is"],
-                // Booking intent detection
-                wantsBooking: ["fix", "repair", "service", "appointment", "schedule", "technician", "someone", "come out", "send"]
+                // ════════════════════════════════════════════════════════════════════
+                // 🤔 TRUST CONCERN: Caller questions if AI can help (5-8 examples)
+                // AI should reassure: "Absolutely! I can help with that..."
+                // ════════════════════════════════════════════════════════════════════
+                trustConcern: [
+                    "are you a robot",
+                    "are you real",
+                    "is this AI",
+                    "am I talking to a computer",
+                    "can I speak to a person",
+                    "let me talk to a human",
+                    "can you actually help",
+                    "do you know what you're doing"
+                ],
+                
+                // ════════════════════════════════════════════════════════════════════
+                // 😤 CALLER FEELS IGNORED: Caller says AI isn't listening (5-8 examples)
+                // AI should acknowledge: "I hear you, let me make sure I understand..."
+                // ════════════════════════════════════════════════════════════════════
+                callerFeelsIgnored: [
+                    "you're not listening",
+                    "that's not what I said",
+                    "I already told you",
+                    "you keep asking the same thing",
+                    "hello are you there",
+                    "did you hear me",
+                    "you're not getting it",
+                    "I just said that"
+                ],
+                
+                // ════════════════════════════════════════════════════════════════════
+                // 🙅 REFUSED SLOT: Caller refuses to give info (8-12 examples)
+                // AI should respect: "No problem, we can work around that..."
+                // ════════════════════════════════════════════════════════════════════
+                refusedSlot: [
+                    "I don't want to give",
+                    "why do you need that",
+                    "that's private",
+                    "I'd rather not say",
+                    "none of your business",
+                    "just send someone",
+                    "skip that",
+                    "I'll tell the technician",
+                    "can we skip this",
+                    "I'm not comfortable"
+                ],
+                
+                // ════════════════════════════════════════════════════════════════════
+                // 🔧 DESCRIBING PROBLEM: Caller describing issue (10-15 examples)
+                // These are GENERIC - work for any industry. AI should listen & acknowledge.
+                // ════════════════════════════════════════════════════════════════════
+                describingProblem: [
+                    "not working",
+                    "broken",
+                    "stopped working",
+                    "won't turn on",
+                    "won't start",
+                    "making noise",
+                    "making a sound",
+                    "leaking",
+                    "smells weird",
+                    "something's wrong",
+                    "having issues with",
+                    "problem with",
+                    "acting up",
+                    "doesn't work",
+                    "quit working"
+                ],
+                
+                // ════════════════════════════════════════════════════════════════════
+                // 📅 WANTS BOOKING: Caller wants to schedule (5-8 examples)
+                // AI should transition to booking: "I can help with that! Let me get..."
+                // ════════════════════════════════════════════════════════════════════
+                wantsBooking: [
+                    "schedule",
+                    "appointment",
+                    "send someone",
+                    "come out",
+                    "fix this",
+                    "repair",
+                    "service call",
+                    "book a time",
+                    "get someone here"
+                ]
             },
             
             // ════════════════════════════════════════════════════════════════════
