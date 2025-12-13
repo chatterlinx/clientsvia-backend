@@ -375,19 +375,51 @@ class FrontDeskBehaviorManager {
     renderBookingSlot(slot, index, totalSlots) {
         const isFirst = index === 0;
         const isLast = index === totalSlots - 1;
-        const typeOptions = ['text', 'phone', 'address', 'time', 'custom'];
+        
+        // Extended type options with descriptions
+        const typeOptions = [
+            { value: 'name', label: '👤 Name', desc: 'Customer name with smart options' },
+            { value: 'phone', label: '📞 Phone', desc: 'Phone number with caller ID options' },
+            { value: 'address', label: '📍 Address', desc: 'Service/mailing address' },
+            { value: 'email', label: '📧 Email', desc: 'Email address' },
+            { value: 'date', label: '📅 Date', desc: 'Date picker' },
+            { value: 'time', label: '🕐 Time', desc: 'Preferred time slot' },
+            { value: 'datetime', label: '📆 Date & Time', desc: 'Combined date and time' },
+            { value: 'select', label: '📋 Choice List', desc: 'Select from options you define' },
+            { value: 'yesno', label: '✅ Yes/No', desc: 'Simple yes or no question' },
+            { value: 'number', label: '🔢 Number', desc: 'Numeric value' },
+            { value: 'text', label: '📝 Text', desc: 'Free-form text input' },
+            { value: 'textarea', label: '📄 Long Text', desc: 'Multi-line description' },
+            { value: 'custom', label: '⚙️ Custom', desc: 'Custom field type' }
+        ];
+        
         const defaultConfirmPrompts = {
+            name: "Got it, {value}. Did I get that right?",
             phone: "Just to confirm, that's {value}, correct?",
             address: "So that's {value}, right?",
-            name: "Got it, {value}. Did I get that right?",
-            text: "Just to confirm, {value}?",
+            email: "I have {value} as your email. Is that correct?",
+            date: "So that's {value}?",
             time: "So {value} works for you?",
+            datetime: "So {value}?",
+            select: "You selected {value}, correct?",
+            yesno: "Just to confirm, {value}?",
+            number: "That's {value}?",
+            text: "Just to confirm, {value}?",
+            textarea: "Got it, thank you for those details.",
             custom: "Just to confirm, {value}?"
         };
         const confirmPrompt = slot.confirmPrompt || defaultConfirmPrompts[slot.type] || defaultConfirmPrompts.text;
         
+        // Determine which type-specific options to show
+        const isNameType = slot.type === 'name' || slot.id === 'name';
+        const isPhoneType = slot.type === 'phone' || slot.id === 'phone';
+        const isAddressType = slot.type === 'address' || slot.id === 'address';
+        const isSelectType = slot.type === 'select';
+        const isDateTimeType = ['date', 'time', 'datetime'].includes(slot.type);
+        const isNumberType = slot.type === 'number';
+        
         return `
-            <div class="booking-slot" data-slot-index="${index}" style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;">
+            <div class="booking-slot" data-slot-index="${index}" data-slot-type="${slot.type}" style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;">
                 <div style="display: flex; align-items: flex-start; gap: 12px;">
                     <!-- Reorder Buttons -->
                     <div style="display: flex; flex-direction: column; gap: 4px; padding-top: 4px;">
@@ -402,34 +434,35 @@ class FrontDeskBehaviorManager {
                     <!-- Slot Content -->
                     <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
                         <!-- Row 1: Label, ID, Type -->
-                        <div style="display: flex; gap: 12px; align-items: center;">
+                        <div style="display: flex; gap: 12px; align-items: flex-end;">
                             <div style="flex: 2;">
-                                <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Label</label>
-                                <input type="text" class="slot-label" data-index="${index}" value="${slot.label || ''}" placeholder="Full Name" 
+                                <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Label (what admin sees)</label>
+                                <input type="text" class="slot-label" data-index="${index}" value="${slot.label || ''}" placeholder="e.g. Full Name" 
                                     style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9;">
                             </div>
                             <div style="flex: 1;">
-                                <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Slot ID</label>
-                                <input type="text" class="slot-id" data-index="${index}" value="${slot.id || ''}" placeholder="name" 
-                                    style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-family: monospace;">
+                                <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Slot ID (code reference)</label>
+                                <input type="text" class="slot-id" data-index="${index}" value="${slot.id || ''}" placeholder="e.g. name" 
+                                    style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-family: monospace; font-size: 12px;">
                             </div>
-                            <div style="flex: 1;">
+                            <div style="flex: 1.5;">
                                 <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Type</label>
-                                <select class="slot-type" data-index="${index}" style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9;">
-                                    ${typeOptions.map(t => `<option value="${t}" ${slot.type === t ? 'selected' : ''}>${t}</option>`).join('')}
+                                <select class="slot-type" data-index="${index}" onchange="window.frontDeskManager.onSlotTypeChange(${index}, this.value)"
+                                    style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9;">
+                                    ${typeOptions.map(t => `<option value="${t.value}" ${slot.type === t.value ? 'selected' : ''}>${t.label}</option>`).join('')}
                                 </select>
                             </div>
                         </div>
                         
                         <!-- Row 2: Question -->
                         <div>
-                            <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Question AI Asks</label>
+                            <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">🎙️ Question AI Asks (exact wording)</label>
                             <input type="text" class="slot-question" data-index="${index}" value="${slot.question || ''}" placeholder="May I have your full name?" 
-                                style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9;">
+                                style="width: 100%; padding: 10px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px;">
                         </div>
                         
                         <!-- Row 3: Confirm Back -->
-                        <div style="display: flex; align-items: center; gap: 12px; padding: 8px; background: #161b22; border-radius: 4px; border: 1px solid ${slot.confirmBack ? '#238636' : '#30363d'};">
+                        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #161b22; border-radius: 4px; border: 1px solid ${slot.confirmBack ? '#238636' : '#30363d'};">
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;" title="Repeat value back for confirmation">
                                 <input type="checkbox" class="slot-confirmBack" data-index="${index}" ${slot.confirmBack ? 'checked' : ''} 
                                     style="accent-color: #238636;" onchange="window.frontDeskManager.toggleConfirmPrompt(${index}, this.checked)">
@@ -441,62 +474,47 @@ class FrontDeskBehaviorManager {
                                 ${slot.confirmBack ? '' : 'disabled'}>
                         </div>
                         
-                        <!-- Row 4: Name-specific options (only show for name slots) -->
-                        ${slot.id === 'name' || (slot.type === 'text' && slot.label?.toLowerCase().includes('name')) ? `
-                        <div style="display: flex; align-items: center; gap: 16px; padding: 8px; background: #161b22; border-radius: 4px; border: 1px solid #30363d; flex-wrap: wrap;">
-                            <span style="font-size: 11px; color: #8b949e;">👤 Name Options:</span>
-                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Ask for first AND last name">
-                                <input type="checkbox" class="slot-askFullName" data-index="${index}" ${slot.askFullName !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
-                                <span style="font-size: 12px; color: #c9d1d9;">Ask full name</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="When referring to caller later, use first name only">
-                                <input type="checkbox" class="slot-useFirstNameOnly" data-index="${index}" ${slot.useFirstNameOnly !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
-                                <span style="font-size: 12px; color: #c9d1d9;">Call by first name</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="If caller gives only first or last name, politely ask once for the other part">
-                                <input type="checkbox" class="slot-askMissingNamePart" data-index="${index}" ${slot.askMissingNamePart ? 'checked' : ''} style="accent-color: #58a6ff;">
-                                <span style="font-size: 12px; color: #c9d1d9;">Ask once for missing part</span>
-                            </label>
+                        <!-- Type-Specific Options Container -->
+                        <div class="slot-type-options" data-index="${index}">
+                            ${this.renderSlotTypeOptions(slot, index)}
                         </div>
-                        ` : ''}
                         
-                        <!-- Row 5: Phone-specific options (only show for phone slots) -->
-                        ${slot.id === 'phone' || slot.type === 'phone' ? `
-                        <div style="display: flex; flex-direction: column; gap: 8px; padding: 8px; background: #161b22; border-radius: 4px; border: 1px solid ${slot.offerCallerId !== false ? '#238636' : '#30363d'};">
-                            <div style="display: flex; align-items: center; gap: 12px;">
-                                <span style="font-size: 11px; color: #8b949e;">📞 Phone Options:</span>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Offer to use the number they're calling from">
-                                    <input type="checkbox" class="slot-offerCallerId" data-index="${index}" ${slot.offerCallerId !== false ? 'checked' : ''} 
-                                        style="accent-color: #238636;" onchange="window.frontDeskManager.toggleCallerIdPrompt(${index}, this.checked)">
-                                    <span style="font-size: 12px; color: ${slot.offerCallerId !== false ? '#3fb950' : '#c9d1d9'};">Offer to use caller ID</span>
+                        <!-- Advanced Options (collapsible) -->
+                        <details style="background: #161b22; border-radius: 4px; border: 1px solid #30363d;">
+                            <summary style="padding: 8px 12px; cursor: pointer; font-size: 12px; color: #8b949e; user-select: none;">
+                                ⚙️ Advanced Options
+                            </summary>
+                            <div style="padding: 12px; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid #30363d;">
+                                <!-- Validation Pattern -->
+                                <div>
+                                    <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Validation Pattern (regex, optional)</label>
+                                    <input type="text" class="slot-validation" data-index="${index}" value="${slot.validation || ''}" 
+                                        placeholder="e.g. ^[a-zA-Z ]+$ for text only"
+                                        style="width: 100%; padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-family: monospace; font-size: 11px;">
+                                </div>
+                                
+                                <!-- Skip If Known -->
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" class="slot-skipIfKnown" data-index="${index}" ${slot.skipIfKnown ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                    <span style="font-size: 12px; color: #c9d1d9;">Skip if already known (returning customer)</span>
                                 </label>
+                                
+                                <!-- Help Text -->
+                                <div>
+                                    <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">AI Helper Note (internal, not spoken)</label>
+                                    <input type="text" class="slot-helperNote" data-index="${index}" value="${slot.helperNote || ''}" 
+                                        placeholder="e.g. Accept partial address if caller is unsure"
+                                        style="width: 100%; padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
+                                </div>
                             </div>
-                            <input type="text" class="slot-callerIdPrompt" data-index="${index}" 
-                                value="${slot.callerIdPrompt || "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?"}" 
-                                placeholder="I see you're calling from {callerId} - is that good for texts?"
-                                style="width: 100%; padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; ${slot.offerCallerId !== false ? '' : 'opacity: 0.5;'}"
-                                ${slot.offerCallerId !== false ? '' : 'disabled'}>
-                        </div>
-                        ` : ''}
-                        
-                        <!-- Row 6: Address-specific options (only show for address slots) -->
-                        ${slot.id === 'address' || slot.type === 'address' ? `
-                        <div style="display: flex; align-items: center; gap: 12px; padding: 8px; background: #161b22; border-radius: 4px; border: 1px solid #30363d;">
-                            <span style="font-size: 11px; color: #8b949e;">📍 When confirming back:</span>
-                            <select class="slot-addressConfirmLevel" data-index="${index}" style="padding: 6px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
-                                <option value="street_only" ${slot.addressConfirmLevel === 'street_only' ? 'selected' : ''}>Street only (123 Market Place)</option>
-                                <option value="street_city" ${(slot.addressConfirmLevel === 'street_city' || !slot.addressConfirmLevel) ? 'selected' : ''}>Street + City (123 Market Place, Naples)</option>
-                                <option value="full" ${slot.addressConfirmLevel === 'full' ? 'selected' : ''}>Full address (123 Market Place, Naples, FL 34102)</option>
-                            </select>
-                        </div>
-                        ` : ''}
+                        </details>
                     </div>
                     
                     <!-- Required Toggle & Delete -->
                     <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 16px;">
                         <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;" title="Required field">
-                            <input type="checkbox" class="slot-required" data-index="${index}" ${slot.required !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
-                            <span style="font-size: 11px; color: #8b949e;">Req</span>
+                            <input type="checkbox" class="slot-required" data-index="${index}" ${slot.required !== false ? 'checked' : ''} style="accent-color: #f85149;">
+                            <span style="font-size: 11px; color: ${slot.required !== false ? '#f85149' : '#8b949e'};">Req</span>
                         </label>
                         <button onclick="window.frontDeskManager.removeSlot(${index})" 
                             style="width: 28px; height: 28px; background: #21262d; border: 1px solid #f8514950; border-radius: 4px; color: #f85149; cursor: pointer; font-size: 14px;"
@@ -505,6 +523,207 @@ class FrontDeskBehaviorManager {
                 </div>
             </div>
         `;
+    }
+    
+    // Render type-specific options based on slot type
+    renderSlotTypeOptions(slot, index) {
+        const type = slot.type || 'text';
+        
+        // Name type options
+        if (type === 'name' || slot.id === 'name') {
+            return `
+                <div style="display: flex; align-items: center; gap: 16px; padding: 10px 12px; background: #1a2233; border-radius: 4px; border: 1px solid #58a6ff40; flex-wrap: wrap;">
+                    <span style="font-size: 11px; color: #58a6ff; font-weight: 600;">👤 Name Options:</span>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Ask for first AND last name">
+                        <input type="checkbox" class="slot-askFullName" data-index="${index}" ${slot.askFullName !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
+                        <span style="font-size: 12px; color: #c9d1d9;">Ask full name</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="When referring to caller later, use first name only">
+                        <input type="checkbox" class="slot-useFirstNameOnly" data-index="${index}" ${slot.useFirstNameOnly !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
+                        <span style="font-size: 12px; color: #c9d1d9;">Call by first name</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="If caller gives only first or last name, politely ask once for the other part">
+                        <input type="checkbox" class="slot-askMissingNamePart" data-index="${index}" ${slot.askMissingNamePart ? 'checked' : ''} style="accent-color: #58a6ff;">
+                        <span style="font-size: 12px; color: #c9d1d9;">Ask once for missing part</span>
+                    </label>
+                </div>
+            `;
+        }
+        
+        // Phone type options
+        if (type === 'phone' || slot.id === 'phone') {
+            return `
+                <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: #1a2233; border-radius: 4px; border: 1px solid ${slot.offerCallerId !== false ? '#238636' : '#58a6ff40'};">
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <span style="font-size: 11px; color: #58a6ff; font-weight: 600;">📞 Phone Options:</span>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Offer to use the number they're calling from">
+                            <input type="checkbox" class="slot-offerCallerId" data-index="${index}" ${slot.offerCallerId !== false ? 'checked' : ''} 
+                                style="accent-color: #238636;" onchange="window.frontDeskManager.toggleCallerIdPrompt(${index}, this.checked)">
+                            <span style="font-size: 12px; color: ${slot.offerCallerId !== false ? '#3fb950' : '#c9d1d9'};">Offer to use caller ID</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Accept 'text me' as confirmation they can receive SMS">
+                            <input type="checkbox" class="slot-acceptTextMe" data-index="${index}" ${slot.acceptTextMe !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
+                            <span style="font-size: 12px; color: #c9d1d9;">Accept "text me" response</span>
+                        </label>
+                    </div>
+                    <input type="text" class="slot-callerIdPrompt" data-index="${index}" 
+                        value="${slot.callerIdPrompt || "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?"}" 
+                        placeholder="I see you're calling from {callerId} - is that good for texts?"
+                        style="width: 100%; padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; ${slot.offerCallerId !== false ? '' : 'opacity: 0.5;'}"
+                        ${slot.offerCallerId !== false ? '' : 'disabled'}>
+                </div>
+            `;
+        }
+        
+        // Address type options
+        if (type === 'address' || slot.id === 'address') {
+            return `
+                <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: #1a2233; border-radius: 4px; border: 1px solid #58a6ff40;">
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <span style="font-size: 11px; color: #58a6ff; font-weight: 600;">📍 Address Options:</span>
+                        <label style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: #8b949e;">
+                            Confirm back:
+                            <select class="slot-addressConfirmLevel" data-index="${index}" style="padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                <option value="street_only" ${slot.addressConfirmLevel === 'street_only' ? 'selected' : ''}>Street only</option>
+                                <option value="street_city" ${(slot.addressConfirmLevel === 'street_city' || !slot.addressConfirmLevel) ? 'selected' : ''}>Street + City</option>
+                                <option value="full" ${slot.addressConfirmLevel === 'full' ? 'selected' : ''}>Full address</option>
+                            </select>
+                        </label>
+                    </div>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="checkbox" class="slot-acceptPartialAddress" data-index="${index}" ${slot.acceptPartialAddress ? 'checked' : ''} style="accent-color: #58a6ff;">
+                        <span style="font-size: 12px; color: #c9d1d9;">Accept partial address if caller unsure (e.g. "somewhere on Main St")</span>
+                    </label>
+                </div>
+            `;
+        }
+        
+        // Email type options
+        if (type === 'email') {
+            return `
+                <div style="display: flex; align-items: center; gap: 16px; padding: 10px 12px; background: #1a2233; border-radius: 4px; border: 1px solid #58a6ff40; flex-wrap: wrap;">
+                    <span style="font-size: 11px; color: #58a6ff; font-weight: 600;">📧 Email Options:</span>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="checkbox" class="slot-spellOutEmail" data-index="${index}" ${slot.spellOutEmail !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
+                        <span style="font-size: 12px; color: #c9d1d9;">AI spells back email for confirmation</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="checkbox" class="slot-offerToSendText" data-index="${index}" ${slot.offerToSendText ? 'checked' : ''} style="accent-color: #58a6ff;">
+                        <span style="font-size: 12px; color: #c9d1d9;">Offer "I can text you to confirm the spelling"</span>
+                    </label>
+                </div>
+            `;
+        }
+        
+        // Date/Time type options
+        if (['date', 'time', 'datetime'].includes(type)) {
+            return `
+                <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: #1a2233; border-radius: 4px; border: 1px solid #58a6ff40;">
+                    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                        <span style="font-size: 11px; color: #58a6ff; font-weight: 600;">🕐 Scheduling Options:</span>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input type="checkbox" class="slot-offerAsap" data-index="${index}" ${slot.offerAsap !== false ? 'checked' : ''} style="accent-color: #238636;">
+                            <span style="font-size: 12px; color: #c9d1d9;">Offer "as soon as possible"</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input type="checkbox" class="slot-offerMorningAfternoon" data-index="${index}" ${slot.offerMorningAfternoon ? 'checked' : ''} style="accent-color: #58a6ff;">
+                            <span style="font-size: 12px; color: #c9d1d9;">Accept "morning" or "afternoon"</span>
+                        </label>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label style="font-size: 12px; color: #8b949e;">ASAP phrase:</label>
+                        <input type="text" class="slot-asapPhrase" data-index="${index}" value="${slot.asapPhrase || 'first available'}" 
+                            style="flex: 1; padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Select/Choice type options
+        if (type === 'select') {
+            const options = slot.selectOptions || [];
+            return `
+                <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: #1a2233; border-radius: 4px; border: 1px solid #58a6ff40;">
+                    <span style="font-size: 11px; color: #58a6ff; font-weight: 600;">📋 Choice Options (one per line):</span>
+                    <textarea class="slot-selectOptions" data-index="${index}" rows="4" 
+                        placeholder="Option 1\nOption 2\nOption 3"
+                        style="width: 100%; padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; resize: vertical;">${options.join('\n')}</textarea>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="checkbox" class="slot-allowOther" data-index="${index}" ${slot.allowOther ? 'checked' : ''} style="accent-color: #58a6ff;">
+                        <span style="font-size: 12px; color: #c9d1d9;">Allow "Other" option (AI will ask to specify)</span>
+                    </label>
+                </div>
+            `;
+        }
+        
+        // Yes/No type options
+        if (type === 'yesno') {
+            return `
+                <div style="display: flex; align-items: center; gap: 16px; padding: 10px 12px; background: #1a2233; border-radius: 4px; border: 1px solid #58a6ff40; flex-wrap: wrap;">
+                    <span style="font-size: 11px; color: #58a6ff; font-weight: 600;">✅ Yes/No Options:</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label style="font-size: 12px; color: #8b949e;">If Yes:</label>
+                        <input type="text" class="slot-yesAction" data-index="${index}" value="${slot.yesAction || ''}" 
+                            placeholder="continue to next slot"
+                            style="width: 150px; padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label style="font-size: 12px; color: #8b949e;">If No:</label>
+                        <input type="text" class="slot-noAction" data-index="${index}" value="${slot.noAction || ''}" 
+                            placeholder="skip to slot X"
+                            style="width: 150px; padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Number type options
+        if (type === 'number') {
+            return `
+                <div style="display: flex; align-items: center; gap: 16px; padding: 10px 12px; background: #1a2233; border-radius: 4px; border: 1px solid #58a6ff40; flex-wrap: wrap;">
+                    <span style="font-size: 11px; color: #58a6ff; font-weight: 600;">🔢 Number Options:</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label style="font-size: 12px; color: #8b949e;">Min:</label>
+                        <input type="number" class="slot-minValue" data-index="${index}" value="${slot.minValue || ''}" 
+                            style="width: 60px; padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label style="font-size: 12px; color: #8b949e;">Max:</label>
+                        <input type="number" class="slot-maxValue" data-index="${index}" value="${slot.maxValue || ''}" 
+                            style="width: 60px; padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label style="font-size: 12px; color: #8b949e;">Unit:</label>
+                        <input type="text" class="slot-unit" data-index="${index}" value="${slot.unit || ''}" 
+                            placeholder="e.g. years, units"
+                            style="width: 80px; padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Default - no special options
+        return '';
+    }
+    
+    // Handle slot type change - re-render type-specific options
+    onSlotTypeChange(index, newType) {
+        const slot = this.collectBookingSlots()[index];
+        if (!slot) return;
+        
+        slot.type = newType;
+        
+        // Update the type options container
+        const optionsContainer = document.querySelector(`.slot-type-options[data-index="${index}"]`);
+        if (optionsContainer) {
+            optionsContainer.innerHTML = this.renderSlotTypeOptions(slot, index);
+        }
+        
+        // Update the slot container's data attribute
+        const slotContainer = document.querySelector(`.booking-slot[data-slot-index="${index}"]`);
+        if (slotContainer) {
+            slotContainer.setAttribute('data-slot-type', newType);
+        }
     }
     
     toggleConfirmPrompt(index, enabled) {
@@ -542,10 +761,57 @@ class FrontDeskBehaviorManager {
         // ════════════════════════════════════════════════════════════════
         const bp = this.config.bookingPrompts || {};
         return [
-            { id: 'name', label: 'Full Name', question: bp.askName || "May I have your full name?", required: true, order: 0, type: 'text', confirmBack: false, confirmPrompt: "Got it, {value}. Did I get that right?", askFullName: true, useFirstNameOnly: true, askMissingNamePart: false },
-            { id: 'phone', label: 'Phone Number', question: bp.askPhone || "What is the best phone number to reach you?", required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?", offerCallerId: true, callerIdPrompt: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
-            { id: 'address', label: 'Service Address', question: bp.askAddress || "What is the service address?", required: true, order: 2, type: 'address', confirmBack: false, confirmPrompt: "So that's {value}, right?", addressConfirmLevel: 'street_city' },
-            { id: 'time', label: 'Preferred Time', question: bp.askTime || "When works best for you?", required: false, order: 3, type: 'time', confirmBack: false, confirmPrompt: "So {value} works for you?" }
+            { 
+                id: 'name', 
+                label: 'Full Name', 
+                question: bp.askName || "May I have your name please?", 
+                required: true, 
+                order: 0, 
+                type: 'name',  // Use the new 'name' type
+                confirmBack: false, 
+                confirmPrompt: "Got it, {value}. Did I get that right?", 
+                askFullName: true, 
+                useFirstNameOnly: true, 
+                askMissingNamePart: false 
+            },
+            { 
+                id: 'phone', 
+                label: 'Phone Number', 
+                question: bp.askPhone || "What is the best phone number to reach you?", 
+                required: true, 
+                order: 1, 
+                type: 'phone', 
+                confirmBack: true, 
+                confirmPrompt: "Just to confirm, that's {value}, correct?", 
+                offerCallerId: true, 
+                acceptTextMe: true,
+                callerIdPrompt: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" 
+            },
+            { 
+                id: 'address', 
+                label: 'Service Address', 
+                question: bp.askAddress || "What is the service address?", 
+                required: true, 
+                order: 2, 
+                type: 'address', 
+                confirmBack: false, 
+                confirmPrompt: "So that's {value}, right?", 
+                addressConfirmLevel: 'street_city',
+                acceptPartialAddress: false
+            },
+            { 
+                id: 'time', 
+                label: 'Preferred Time', 
+                question: bp.askTime || "When works best for you?", 
+                required: false, 
+                order: 3, 
+                type: 'time', 
+                confirmBack: false, 
+                confirmPrompt: "So {value} works for you?",
+                offerAsap: true,
+                offerMorningAfternoon: true,
+                asapPhrase: "first available"
+            }
         ];
     }
     
@@ -555,10 +821,12 @@ class FrontDeskBehaviorManager {
         slots.push({
             id: newId,
             label: 'New Field',
-            question: 'What is your...?',
+            question: '',
             required: false,
             order: slots.length,
-            type: 'custom'
+            type: 'text',  // Start with text, user can change to any type
+            confirmBack: false,
+            confirmPrompt: "Just to confirm, {value}?"
         });
         
         // Update config and re-render
@@ -617,34 +885,113 @@ class FrontDeskBehaviorManager {
         const slotElements = document.querySelectorAll('.booking-slot');
         
         slotElements.forEach((el, index) => {
-            const slotData = {
-                id: el.querySelector('.slot-id')?.value?.trim() || `slot_${index}`,
-                label: el.querySelector('.slot-label')?.value?.trim() || 'Unnamed',
-                question: el.querySelector('.slot-question')?.value?.trim() || '',
-                required: el.querySelector('.slot-required')?.checked ?? true,
-                order: index,
-                type: el.querySelector('.slot-type')?.value || 'text',
-                confirmBack: el.querySelector('.slot-confirmBack')?.checked ?? false,
-                confirmPrompt: el.querySelector('.slot-confirmPrompt')?.value?.trim() || "Just to confirm, that's {value}, correct?"
+            // Helper function to safely get element value
+            const getVal = (selector) => el.querySelector(selector)?.value?.trim() || '';
+            const getChecked = (selector) => el.querySelector(selector)?.checked ?? false;
+            const getCheckedDefault = (selector, defaultVal) => {
+                const elem = el.querySelector(selector);
+                return elem ? elem.checked : defaultVal;
             };
             
-            // Name-specific options (only if the elements exist)
-            const askFullNameEl = el.querySelector('.slot-askFullName');
-            const useFirstNameOnlyEl = el.querySelector('.slot-useFirstNameOnly');
-            const askMissingNamePartEl = el.querySelector('.slot-askMissingNamePart');
-            if (askFullNameEl) slotData.askFullName = askFullNameEl.checked;
-            if (useFirstNameOnlyEl) slotData.useFirstNameOnly = useFirstNameOnlyEl.checked;
-            if (askMissingNamePartEl) slotData.askMissingNamePart = askMissingNamePartEl.checked;
+            const slotData = {
+                // Basic fields
+                id: getVal('.slot-id') || `slot_${index}`,
+                label: getVal('.slot-label') || 'Unnamed',
+                question: getVal('.slot-question') || '',
+                required: getCheckedDefault('.slot-required', true),
+                order: index,
+                type: el.querySelector('.slot-type')?.value || 'text',
+                confirmBack: getChecked('.slot-confirmBack'),
+                confirmPrompt: getVal('.slot-confirmPrompt') || "Just to confirm, that's {value}, correct?",
+                
+                // Advanced options (all types)
+                validation: getVal('.slot-validation') || null,
+                skipIfKnown: getChecked('.slot-skipIfKnown'),
+                helperNote: getVal('.slot-helperNote') || null
+            };
             
-            // Phone-specific options (only if the elements exist)
-            const offerCallerIdEl = el.querySelector('.slot-offerCallerId');
-            const callerIdPromptEl = el.querySelector('.slot-callerIdPrompt');
-            if (offerCallerIdEl) slotData.offerCallerId = offerCallerIdEl.checked;
-            if (callerIdPromptEl) slotData.callerIdPrompt = callerIdPromptEl.value?.trim() || "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?";
+            // ═══════════════════════════════════════════════════════════════
+            // TYPE-SPECIFIC OPTIONS
+            // ═══════════════════════════════════════════════════════════════
             
-            // Address-specific options (only if the elements exist)
-            const addressConfirmLevelEl = el.querySelector('.slot-addressConfirmLevel');
-            if (addressConfirmLevelEl) slotData.addressConfirmLevel = addressConfirmLevelEl.value || 'street_city';
+            // NAME options
+            if (el.querySelector('.slot-askFullName')) {
+                slotData.askFullName = getCheckedDefault('.slot-askFullName', true);
+            }
+            if (el.querySelector('.slot-useFirstNameOnly')) {
+                slotData.useFirstNameOnly = getCheckedDefault('.slot-useFirstNameOnly', true);
+            }
+            if (el.querySelector('.slot-askMissingNamePart')) {
+                slotData.askMissingNamePart = getChecked('.slot-askMissingNamePart');
+            }
+            
+            // PHONE options
+            if (el.querySelector('.slot-offerCallerId')) {
+                slotData.offerCallerId = getCheckedDefault('.slot-offerCallerId', true);
+            }
+            if (el.querySelector('.slot-callerIdPrompt')) {
+                slotData.callerIdPrompt = getVal('.slot-callerIdPrompt') || "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?";
+            }
+            if (el.querySelector('.slot-acceptTextMe')) {
+                slotData.acceptTextMe = getCheckedDefault('.slot-acceptTextMe', true);
+            }
+            
+            // ADDRESS options
+            if (el.querySelector('.slot-addressConfirmLevel')) {
+                slotData.addressConfirmLevel = el.querySelector('.slot-addressConfirmLevel')?.value || 'street_city';
+            }
+            if (el.querySelector('.slot-acceptPartialAddress')) {
+                slotData.acceptPartialAddress = getChecked('.slot-acceptPartialAddress');
+            }
+            
+            // EMAIL options
+            if (el.querySelector('.slot-spellOutEmail')) {
+                slotData.spellOutEmail = getCheckedDefault('.slot-spellOutEmail', true);
+            }
+            if (el.querySelector('.slot-offerToSendText')) {
+                slotData.offerToSendText = getChecked('.slot-offerToSendText');
+            }
+            
+            // DATE/TIME options
+            if (el.querySelector('.slot-offerAsap')) {
+                slotData.offerAsap = getCheckedDefault('.slot-offerAsap', true);
+            }
+            if (el.querySelector('.slot-offerMorningAfternoon')) {
+                slotData.offerMorningAfternoon = getChecked('.slot-offerMorningAfternoon');
+            }
+            if (el.querySelector('.slot-asapPhrase')) {
+                slotData.asapPhrase = getVal('.slot-asapPhrase') || 'first available';
+            }
+            
+            // SELECT options
+            if (el.querySelector('.slot-selectOptions')) {
+                const optionsText = getVal('.slot-selectOptions');
+                slotData.selectOptions = optionsText ? optionsText.split('\n').map(o => o.trim()).filter(o => o) : [];
+            }
+            if (el.querySelector('.slot-allowOther')) {
+                slotData.allowOther = getChecked('.slot-allowOther');
+            }
+            
+            // YES/NO options
+            if (el.querySelector('.slot-yesAction')) {
+                slotData.yesAction = getVal('.slot-yesAction') || null;
+            }
+            if (el.querySelector('.slot-noAction')) {
+                slotData.noAction = getVal('.slot-noAction') || null;
+            }
+            
+            // NUMBER options
+            if (el.querySelector('.slot-minValue')) {
+                const minVal = el.querySelector('.slot-minValue')?.value;
+                slotData.minValue = minVal !== '' ? parseFloat(minVal) : null;
+            }
+            if (el.querySelector('.slot-maxValue')) {
+                const maxVal = el.querySelector('.slot-maxValue')?.value;
+                slotData.maxValue = maxVal !== '' ? parseFloat(maxVal) : null;
+            }
+            if (el.querySelector('.slot-unit')) {
+                slotData.unit = getVal('.slot-unit') || null;
+            }
             
             slots.push(slotData);
         });
