@@ -2719,25 +2719,53 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               }).catch(() => {});
             }
             
-            // Call LLM0TurnHandler directly - it has hybrid logic inside
-            // Add timeout protection (4 seconds max)
+            // ════════════════════════════════════════════════════════════════════════
+            // 🧠 UNIFIED BRAIN: Call ConversationEngine (same as chat/SMS)
+            // ════════════════════════════════════════════════════════════════════════
+            // This is THE FIX for "phone and chat behave differently".
+            // ConversationEngine uses: SessionService, HybridReceptionistLLM, same prompts
+            // Phone route only handles: TwiML, TTS, Twilio-specific stuff
+            // ════════════════════════════════════════════════════════════════════════
+            const ConversationEngine = require('../services/ConversationEngine');
             
-            // SAFETY: Check LLM0TurnHandler exists (might be null if load failed)
-            if (!LLM0TurnHandler) {
-              throw new Error('LLM0TurnHandler not loaded - check startup logs');
-            }
-            
-            result = await Promise.race([
-              LLM0TurnHandler.handle({
-                decision: { action: 'AUTO', intentTag: null, confidence: 0 }, // Minimal decision - LLM figures it out
-                company,
-                callState,
-                userInput: speechResult
+            const engineResult = await Promise.race([
+              ConversationEngine.processTurn({
+                companyId: companyID,
+                channel: 'phone',
+                userText: speechResult,
+                callSid,
+                callerPhone: fromNumber,
+                metadata: {
+                  calledNumber: req.body.To,
+                  confidence: parseFloat(req.body.Confidence) || 0,
+                  sttProcessResult
+                },
+                includeDebug: false  // No debug for production calls
               }),
               new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Hybrid path timeout (4s)')), 4000)
+                setTimeout(() => reject(new Error('ConversationEngine timeout (4s)')), 4000)
               )
             ]);
+            
+            // Map ConversationEngine result to expected format
+            result = {
+              text: engineResult.reply,
+              response: engineResult.reply,
+              action: engineResult.conversationMode === 'complete' ? 'COMPLETE' : 
+                      engineResult.wantsBooking ? 'BOOKING' : 'DISCOVERY',
+              callState: {
+                ...callState,
+                sessionId: engineResult.sessionId,
+                phase: engineResult.phase,
+                collectedSlots: engineResult.slotsCollected
+              },
+              debug: {
+                mode: engineResult.conversationMode,
+                filledSlots: engineResult.slotsCollected,
+                latencyMs: engineResult.latencyMs,
+                engine: 'ConversationEngine'
+              }
+            };
             
             const hybridLatencyMs = Date.now() - hybridStartTime;
             

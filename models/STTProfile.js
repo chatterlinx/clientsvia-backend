@@ -405,20 +405,22 @@ STTProfileSchema.statics.getByTemplateId = async function(templateId) {
 };
 
 STTProfileSchema.statics.createDefaultForTemplate = async function(template) {
+    // ════════════════════════════════════════════════════════════════════════
+    // DEFAULT FILLERS - Only TRUE fillers that are SAFE to remove
+    // ════════════════════════════════════════════════════════════════════════
+    // CRITICAL: Do NOT add words that can be verbs or important phrases!
+    // - "like" REMOVED: "I'd like to schedule" → "i'd to schedule" (BROKEN!)
+    // - "you know" REMOVED: "Do you know what time" → "do what time" (BROKEN!)
+    // Only add: um, uh, and true interjections that are never part of meaning
+    // ════════════════════════════════════════════════════════════════════════
     const defaultFillers = [
         { phrase: 'uh', scope: 'global', enabled: true, addedBy: 'system' },
         { phrase: 'um', scope: 'global', enabled: true, addedBy: 'system' },
-        { phrase: 'like', scope: 'global', enabled: true, addedBy: 'system' },
-        { phrase: 'you know', scope: 'global', enabled: true, addedBy: 'system' },
-        { phrase: 'basically', scope: 'global', enabled: true, addedBy: 'system' },
-        { phrase: 'i mean', scope: 'global', enabled: true, addedBy: 'system' },
-        { phrase: 'sort of', scope: 'global', enabled: true, addedBy: 'system' },
-        { phrase: 'kind of', scope: 'global', enabled: true, addedBy: 'system' },
-        { phrase: 'okay so', scope: 'global', enabled: true, addedBy: 'system' },
-        { phrase: 'well', scope: 'global', enabled: true, addedBy: 'system' },
-        { phrase: 'hi', scope: 'global', enabled: true, addedBy: 'system' },
-        { phrase: 'hello', scope: 'global', enabled: true, addedBy: 'system' },
-        { phrase: 'hey', scope: 'global', enabled: true, addedBy: 'system' },
+        { phrase: 'er', scope: 'global', enabled: true, addedBy: 'system' },
+        { phrase: 'ah', scope: 'global', enabled: true, addedBy: 'system' },
+        // NOTE: "like", "you know", "basically", "i mean" REMOVED
+        // These words can be meaningful: "I like it", "Do you know", "I mean it"
+        // Better to leave them than break sentence structure
         { phrase: 'honey', scope: 'template', enabled: true, addedBy: 'system' },
         { phrase: 'dear', scope: 'template', enabled: true, addedBy: 'system' }
     ];
