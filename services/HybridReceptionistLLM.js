@@ -757,6 +757,12 @@ GOAL: Help caller, schedule service if needed.
    - Acknowledge it: "You want [name] specifically?"
    - Then help with their actual request
 4. LISTEN for what they're actually asking - don't just collect slots robotically
+5. PARTIAL NAME PROTOCOL (polite, not pushy):
+   - If they give ONLY first name: "Thank you [First]! May I also have your last name?"
+   - If they give ONLY last name: "Thank you Mr./Ms. [Last]! May I have your first name?"
+   - Ask for the missing part ONE TIME ONLY - don't insist
+   - If they still don't give full name, accept what you have and continue
+   - NEVER get stuck asking for name repeatedly - move forward gracefully
 
 ${bookingIsConfigured ? `═══ BOOKING SLOTS (DO NOT READ THIS ALOUD - INTERNAL ONLY) ═══
 When collecting booking info, use these EXACT questions:
