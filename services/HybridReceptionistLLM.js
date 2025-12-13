@@ -640,18 +640,27 @@ NEVER say any of these phrases. They make you sound robotic.
         let nameInstructions = '';
         if (nameSlot) {
             const rules = [];
-            if (nameSlot.askFullName !== false) {
-                rules.push('Ask for FULL NAME (first + last)');
-            }
             if (nameSlot.useFirstNameOnly !== false) {
                 rules.push('When addressing caller later, use FIRST NAME only (e.g., "Great, John!" not "Great, John Smith!")');
             }
-            // UI-configurable: Ask once for missing name part
+            
+            // UI-configurable: Ask once for missing name part - make this VERY prominent
             if (nameSlot.askMissingNamePart === true) {
-                rules.push('If caller gives ONLY first name, politely ask once for last name ("Thank you [First]! May I also have your last name?"). If caller gives ONLY last name, ask once for first name. Ask ONE TIME ONLY - do not insist if they don\'t provide it');
+                rules.push(`
+🚨 PARTIAL NAME PROTOCOL (ENABLED):
+   When caller gives ONLY first name (like "Marc" or "John"):
+   → DO NOT proceed to phone number yet!
+   → Say: "Thank you, [Name]! May I also have your last name?"
+   → Wait for their response before continuing.
+   
+   When caller gives ONLY last name (like "Smith" or "Walter"):
+   → Say: "Thank you, Mr./Ms. [Name]! And your first name?"
+   
+   ⚠️ Ask ONE TIME ONLY. If they don't provide it, that's fine - continue with booking.`);
             }
+            
             if (rules.length > 0) {
-                nameInstructions = `\n👤 NAME HANDLING: ${rules.join('. ')}`;
+                nameInstructions = `\n👤 NAME HANDLING: ${rules.join('\n')}`;
             }
         }
         
