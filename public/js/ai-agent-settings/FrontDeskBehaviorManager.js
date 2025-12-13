@@ -1350,7 +1350,21 @@ class FrontDeskBehaviorManager {
     // NEW TAB: Detection Triggers
     // ════════════════════════════════════════════════════════════════════
     renderDetectionTab() {
-        const dt = this.config.detectionTriggers || {};
+        // Get defaults for pre-population
+        const defaults = this.getDefaultConfig().detectionTriggers;
+        
+        // Ensure detectionTriggers exists
+        if (!this.config.detectionTriggers) this.config.detectionTriggers = {};
+        const dt = this.config.detectionTriggers;
+        
+        // Pre-populate with defaults if arrays are empty (for existing companies)
+        const categories = ['trustConcern', 'callerFeelsIgnored', 'refusedSlot', 'describingProblem', 'wantsBooking'];
+        categories.forEach(key => {
+            if (!dt[key] || dt[key].length === 0) {
+                dt[key] = defaults[key] || [];
+            }
+        });
+        
         return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
                 <h3 style="margin: 0 0 16px 0; color: #a371f7;">🔍 Detection Triggers</h3>
