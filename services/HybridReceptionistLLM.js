@@ -375,7 +375,8 @@ class HybridReceptionistLLM {
                 lastAgentResponse,  // Prevent repetition
                 turnCount: callContext.turnCount || 1,
                 speakingCorrections,  // What words NOT to use
-                callerId: callContext.callerId || callContext.callerPhone || null  // For caller ID confirmation
+                callerId: callContext.callerId || callContext.callerPhone || null,  // For caller ID confirmation
+                partialName: callContext.partialName || knownSlots.partialName || null  // For asking for missing name part
             });
             
             // ════════════════════════════════════════════════════════════════
@@ -539,7 +540,7 @@ class HybridReceptionistLLM {
      * Build the system prompt with all context
      * 🚨 100% UI-CONTROLLED - All instructions come from frontDeskBehavior config
      */
-    static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext, customerContext, runningSummary, serviceAreaInfo, detectedServices, lastAgentResponse, turnCount, speakingCorrections, callerId }) {
+    static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext, customerContext, runningSummary, serviceAreaInfo, detectedServices, lastAgentResponse, turnCount, speakingCorrections, callerId, partialName }) {
         const companyName = company.name || 'our company';
         const trade = company.trade || 'HVAC';
         
@@ -646,7 +647,19 @@ NEVER say any of these phrases. They make you sound robotic.
             
             // UI-configurable: Ask once for missing name part - make this VERY prominent
             if (nameSlot.askMissingNamePart === true) {
-                rules.push(`
+                // Check if we have a partial name passed in
+                if (partialName) {
+                    // We have a partial name - AI should ask for the missing part NOW
+                    rules.push(`
+🚨 PARTIAL NAME DETECTED - ASK FOR LAST NAME NOW:
+   Caller gave: "${partialName}" (first name only)
+   → Your VERY NEXT response must ask for their last name
+   → Say: "Thank you, ${partialName}! May I also have your last name?"
+   → Do NOT ask for phone/address yet - get the last name first
+   → If they give it, great! If they ignore, accept "${partialName}" and continue.`);
+                } else {
+                    // No partial name yet - just include the general instruction
+                    rules.push(`
 🚨 PARTIAL NAME PROTOCOL (ENABLED):
    When caller gives ONLY first name (like "Marc" or "John"):
    → DO NOT proceed to phone number yet!
@@ -657,6 +670,7 @@ NEVER say any of these phrases. They make you sound robotic.
    → Say: "Thank you, Mr./Ms. [Name]! And your first name?"
    
    ⚠️ Ask ONE TIME ONLY. If they don't provide it, that's fine - continue with booking.`);
+                }
             }
             
             if (rules.length > 0) {

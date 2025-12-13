@@ -297,14 +297,56 @@ router.post('/message', async (req, res) => {
         const currentSlots = { ...(session.collectedSlots || {}) };
         const extractedThisTurn = {};
         
+        // Get booking config to check askMissingNamePart setting
+        const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company);
+        const nameSlotConfig = bookingConfig.slots.find(s => s.slotId === 'name' || s.id === 'name');
+        const askMissingNamePart = nameSlotConfig?.askMissingNamePart === true;
+        
         try {
             // Extract name if we don't have one
             if (!currentSlots.name) {
                 const extractedName = LLM0TurnHandler.extractName(message);
                 if (extractedName) {
-                    currentSlots.name = extractedName;
-                    extractedThisTurn.name = extractedName;
-                    logger.info('[CHAT API] 📝 Extracted name:', extractedName);
+                    // Check if askMissingNamePart is enabled and name is partial (single word)
+                    const isPartialName = !extractedName.includes(' '); // No space = single word
+                    const alreadyAskedForMissingPart = session.askedForMissingNamePart === true;
+                    
+                    if (askMissingNamePart && isPartialName && !alreadyAskedForMissingPart) {
+                        // Store partial name but DON'T mark slot as complete
+                        // This lets AI ask for the full name
+                        currentSlots.partialName = extractedName;
+                        extractedThisTurn.partialName = extractedName;
+                        logger.info('[CHAT API] 📝 Partial name detected (askMissingNamePart enabled):', extractedName);
+                        logger.info('[CHAT API] 👤 Will let AI ask for full name');
+                    } else {
+                        // Either:
+                        // - askMissingNamePart is disabled
+                        // - Name has both first and last (has space)
+                        // - We already asked once (don't insist)
+                        
+                        // If we had a partial name and now got more, combine them
+                        if (currentSlots.partialName && isPartialName) {
+                            currentSlots.name = `${currentSlots.partialName} ${extractedName}`;
+                            delete currentSlots.partialName;
+                            logger.info('[CHAT API] 📝 Combined partial names into full name:', currentSlots.name);
+                        } else if (currentSlots.partialName) {
+                            // Had partial, got full name now - use the full one
+                            currentSlots.name = extractedName;
+                            delete currentSlots.partialName;
+                            logger.info('[CHAT API] 📝 Got full name after partial:', currentSlots.name);
+                        } else {
+                            currentSlots.name = extractedName;
+                            logger.info('[CHAT API] 📝 Extracted name:', extractedName);
+                        }
+                        extractedThisTurn.name = currentSlots.name;
+                    }
+                } else if (currentSlots.partialName) {
+                    // User didn't give a name this turn, but we have a partial
+                    // Accept the partial name and move on (only ask once)
+                    currentSlots.name = currentSlots.partialName;
+                    delete currentSlots.partialName;
+                    extractedThisTurn.name = currentSlots.name;
+                    logger.info('[CHAT API] 📝 Accepting partial name as complete:', currentSlots.name);
                 }
             }
             
@@ -331,7 +373,13 @@ router.post('/message', async (req, res) => {
             logger.warn('[CHAT API] Slot extraction error (non-fatal):', extractErr.message);
         }
         
-        logger.info('[CHAT API] CHECKPOINT 6.5: ✅ Slots after extraction:', currentSlots);
+        // Track if we're about to ask for missing name part (for the flag)
+        const willAskForMissingNamePart = currentSlots.partialName && !currentSlots.name;
+        
+        logger.info('[CHAT API] CHECKPOINT 6.5: ✅ Slots after extraction:', {
+            ...currentSlots,
+            _willAskForMissingNamePart: willAskForMissingNamePart
+        });
         
         // ═══════════════════════════════════════════════════════════════
         // STEP 7: Process through AI brain
@@ -348,7 +396,8 @@ router.post('/message', async (req, res) => {
                     customerContext,
                     runningSummary: summaryFormatted,
                     turnCount: (session.metrics?.totalTurns || 0) + 1,
-                    channel: 'website'
+                    channel: 'website',
+                    partialName: currentSlots.partialName || null  // Pass partial name so AI can reference it
                 },
                 currentMode: session.phase === 'booking' ? 'booking' : 'free',
                 knownSlots: currentSlots,  // Use slots with extractions
@@ -359,6 +408,12 @@ router.post('/message', async (req, res) => {
             
             // Merge extracted slots into AI result
             aiResult.filledSlots = { ...(aiResult.filledSlots || {}), ...extractedThisTurn };
+            
+            // If we asked for missing name part this turn, set the flag so we don't ask again
+            if (willAskForMissingNamePart) {
+                session.askedForMissingNamePart = true;
+                logger.info('[CHAT API] 👤 Set askedForMissingNamePart flag - will not ask again');
+            }
         } catch (aiErr) {
             aiErr.checkpoint = 'ai_processing';
             throw aiErr;
@@ -400,8 +455,18 @@ router.post('/message', async (req, res) => {
             if (newPhase !== session.phase) {
                 await SessionService.updatePhase(session, newPhase);
             }
+            
+            // Save askedForMissingNamePart flag and partialName if set
+            if (session.askedForMissingNamePart || currentSlots.partialName) {
+                await session.constructor.findByIdAndUpdate(session._id, {
+                    $set: {
+                        askedForMissingNamePart: session.askedForMissingNamePart || false,
+                        'collectedSlots.partialName': currentSlots.partialName || null
+                    }
+                });
+            }
         } catch (phaseErr) {
-            logger.warn('[CHAT API] Failed to update phase:', phaseErr.message);
+            logger.warn('[CHAT API] Failed to update phase/flags:', phaseErr.message);
         }
         logger.info('[CHAT API] CHECKPOINT 8: ✅ Session updated');
         
