@@ -432,7 +432,7 @@ class FrontDeskBehaviorManager {
                         
                         <!-- Row 4: Name-specific options (only show for name slots) -->
                         ${slot.id === 'name' || (slot.type === 'text' && slot.label?.toLowerCase().includes('name')) ? `
-                        <div style="display: flex; align-items: center; gap: 16px; padding: 8px; background: #161b22; border-radius: 4px; border: 1px solid #30363d;">
+                        <div style="display: flex; align-items: center; gap: 16px; padding: 8px; background: #161b22; border-radius: 4px; border: 1px solid #30363d; flex-wrap: wrap;">
                             <span style="font-size: 11px; color: #8b949e;">👤 Name Options:</span>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Ask for first AND last name">
                                 <input type="checkbox" class="slot-askFullName" data-index="${index}" ${slot.askFullName !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
@@ -441,6 +441,10 @@ class FrontDeskBehaviorManager {
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="When referring to caller later, use first name only">
                                 <input type="checkbox" class="slot-useFirstNameOnly" data-index="${index}" ${slot.useFirstNameOnly !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
                                 <span style="font-size: 12px; color: #c9d1d9;">Call by first name</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="If caller gives only first or last name, politely ask once for the other part">
+                                <input type="checkbox" class="slot-askMissingNamePart" data-index="${index}" ${slot.askMissingNamePart ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                <span style="font-size: 12px; color: #c9d1d9;">Ask once for missing part</span>
                             </label>
                         </div>
                         ` : ''}
@@ -527,7 +531,7 @@ class FrontDeskBehaviorManager {
         // ════════════════════════════════════════════════════════════════
         const bp = this.config.bookingPrompts || {};
         return [
-            { id: 'name', label: 'Full Name', question: bp.askName || "May I have your full name?", required: true, order: 0, type: 'text', confirmBack: false, confirmPrompt: "Got it, {value}. Did I get that right?", askFullName: true, useFirstNameOnly: true },
+            { id: 'name', label: 'Full Name', question: bp.askName || "May I have your full name?", required: true, order: 0, type: 'text', confirmBack: false, confirmPrompt: "Got it, {value}. Did I get that right?", askFullName: true, useFirstNameOnly: true, askMissingNamePart: false },
             { id: 'phone', label: 'Phone Number', question: bp.askPhone || "What is the best phone number to reach you?", required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?", offerCallerId: true, callerIdPrompt: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
             { id: 'address', label: 'Service Address', question: bp.askAddress || "What is the service address?", required: true, order: 2, type: 'address', confirmBack: false, confirmPrompt: "So that's {value}, right?", addressConfirmLevel: 'street_city' },
             { id: 'time', label: 'Preferred Time', question: bp.askTime || "When works best for you?", required: false, order: 3, type: 'time', confirmBack: false, confirmPrompt: "So {value} works for you?" }
@@ -616,8 +620,10 @@ class FrontDeskBehaviorManager {
             // Name-specific options (only if the elements exist)
             const askFullNameEl = el.querySelector('.slot-askFullName');
             const useFirstNameOnlyEl = el.querySelector('.slot-useFirstNameOnly');
+            const askMissingNamePartEl = el.querySelector('.slot-askMissingNamePart');
             if (askFullNameEl) slotData.askFullName = askFullNameEl.checked;
             if (useFirstNameOnlyEl) slotData.useFirstNameOnly = useFirstNameOnlyEl.checked;
+            if (askMissingNamePartEl) slotData.askMissingNamePart = askMissingNamePartEl.checked;
             
             // Phone-specific options (only if the elements exist)
             const offerCallerIdEl = el.querySelector('.slot-offerCallerId');

@@ -646,6 +646,10 @@ NEVER say any of these phrases. They make you sound robotic.
             if (nameSlot.useFirstNameOnly !== false) {
                 rules.push('When addressing caller later, use FIRST NAME only (e.g., "Great, John!" not "Great, John Smith!")');
             }
+            // UI-configurable: Ask once for missing name part
+            if (nameSlot.askMissingNamePart === true) {
+                rules.push('If caller gives ONLY first name, politely ask once for last name ("Thank you [First]! May I also have your last name?"). If caller gives ONLY last name, ask once for first name. Ask ONE TIME ONLY - do not insist if they don\'t provide it');
+            }
             if (rules.length > 0) {
                 nameInstructions = `\n👤 NAME HANDLING: ${rules.join('. ')}`;
             }
@@ -757,12 +761,6 @@ GOAL: Help caller, schedule service if needed.
    - Acknowledge it: "You want [name] specifically?"
    - Then help with their actual request
 4. LISTEN for what they're actually asking - don't just collect slots robotically
-5. PARTIAL NAME PROTOCOL (polite, not pushy):
-   - If they give ONLY first name: "Thank you [First]! May I also have your last name?"
-   - If they give ONLY last name: "Thank you Mr./Ms. [Last]! May I have your first name?"
-   - Ask for the missing part ONE TIME ONLY - don't insist
-   - If they still don't give full name, accept what you have and continue
-   - NEVER get stuck asking for name repeatedly - move forward gracefully
 
 ${bookingIsConfigured ? `═══ BOOKING SLOTS (DO NOT READ THIS ALOUD - INTERNAL ONLY) ═══
 When collecting booking info, use these EXACT questions:
