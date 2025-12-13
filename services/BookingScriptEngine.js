@@ -103,6 +103,7 @@ function normalizeSlot(slot, index) {
         offerCallerId: slot.offerCallerId || false,
         callerIdPrompt: slot.callerIdPrompt || null,
         acceptTextMe: slot.acceptTextMe !== false,
+        breakDownIfUnclear: slot.breakDownIfUnclear || false, // Works for phone AND address
         // Address-specific
         addressConfirmLevel: slot.addressConfirmLevel || 'street_city',
         acceptPartialAddress: slot.acceptPartialAddress || false,

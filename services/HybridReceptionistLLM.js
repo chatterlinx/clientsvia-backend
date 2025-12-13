@@ -681,25 +681,67 @@ NEVER say any of these phrases. They make you sound robotic.
         // Build phone/caller ID instructions from slot config
         const phoneSlot = bookingSlots.find(s => s.id === 'phone' || s.type === 'phone');
         let phoneInstructions = '';
-        if (phoneSlot && phoneSlot.offerCallerId !== false && callerId && !knownSlots.phone) {
-            // Format caller ID for display (e.g., 239-565-2202)
-            const formattedCallerId = callerId.replace(/^\+1/, '').replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
-            const prompt = (phoneSlot.callerIdPrompt || "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?")
-                .replace('{callerId}', formattedCallerId);
-            phoneInstructions = `\n📞 CALLER ID AVAILABLE: ${formattedCallerId}\n   When asking for phone, offer: "${prompt}"\n   If they say YES/that's fine/correct → use ${formattedCallerId} as their phone\n   If they give a different number → use that instead`;
+        if (phoneSlot) {
+            const phoneRules = [];
+            
+            // Caller ID offer
+            if (phoneSlot.offerCallerId !== false && callerId && !knownSlots.phone) {
+                const formattedCallerId = callerId.replace(/^\+1/, '').replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+                const prompt = (phoneSlot.callerIdPrompt || "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?")
+                    .replace('{callerId}', formattedCallerId);
+                phoneRules.push(`CALLER ID AVAILABLE: ${formattedCallerId}\n   When asking for phone, offer: "${prompt}"\n   If they say YES/that's fine/correct → use ${formattedCallerId} as their phone`);
+            }
+            
+            // Break down if unclear (UI-configurable)
+            if (phoneSlot.breakDownIfUnclear === true) {
+                phoneRules.push(`
+🔢 BREAK DOWN PROTOCOL (ENABLED):
+   If you don't understand the phone number they gave:
+   → Say: "I'm sorry, I didn't catch that. Let's start with your area code?"
+   → Wait for area code (3 digits like "239")
+   → Then ask: "Got it, ${knownSlots.partialAreaCode || '___'}. And the rest of the number?"
+   → Wait for remaining 7 digits
+   → Combine into full number`);
+            }
+            
+            if (phoneRules.length > 0) {
+                phoneInstructions = `\n📞 PHONE HANDLING: ${phoneRules.join('\n')}`;
+            }
         }
         
-        // Build address confirmation instructions from slot config
+        // Build address instructions from slot config
         const addressSlot = bookingSlots.find(s => s.id === 'address' || s.type === 'address');
         let addressInstructions = '';
-        if (addressSlot && addressSlot.confirmBack) {
-            const level = addressSlot.addressConfirmLevel || 'street_city';
-            const levelDesc = {
-                'street_only': 'ONLY the street (e.g., "123 Market Place") - NO city/state/zip',
-                'street_city': 'street + city (e.g., "123 Market Place, Naples") - NO state/zip',
-                'full': 'full address including city, state, zip'
-            };
-            addressInstructions = `\n📍 ADDRESS CONFIRM: When confirming address back, say ${levelDesc[level]}`;
+        if (addressSlot) {
+            const addressRules = [];
+            
+            // Confirm back level
+            if (addressSlot.confirmBack) {
+                const level = addressSlot.addressConfirmLevel || 'street_city';
+                const levelDesc = {
+                    'street_only': 'ONLY the street (e.g., "123 Market Place") - NO city/state/zip',
+                    'street_city': 'street + city (e.g., "123 Market Place, Naples") - NO state/zip',
+                    'full': 'full address including city, state, zip'
+                };
+                addressRules.push(`When confirming address back, say ${levelDesc[level]}`);
+            }
+            
+            // Break down if unclear (UI-configurable)
+            if (addressSlot.breakDownIfUnclear === true) {
+                addressRules.push(`
+🏠 BREAK DOWN PROTOCOL (ENABLED):
+   If you don't understand the address they gave:
+   → Say: "I'm sorry, I didn't catch that. Let's start with the street number and name?"
+   → Wait for street (e.g., "123 Main Street")
+   → Then ask: "Got it. And what city is that in?"
+   → Wait for city
+   → If needed: "And the zip code?"
+   → Combine into full address`);
+            }
+            
+            if (addressRules.length > 0) {
+                addressInstructions = `\n📍 ADDRESS HANDLING: ${addressRules.join('\n')}`;
+            }
         }
         
         // Customer context

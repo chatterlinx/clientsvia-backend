@@ -1623,12 +1623,14 @@ const companySchema = new mongoose.Schema({
                     offerCallerId: { type: Boolean, default: true }, // Offer to use caller ID
                     callerIdPrompt: { type: String, default: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
                     acceptTextMe: { type: Boolean, default: true }, // Accept "text me" as confirmation
+                    breakDownIfUnclear: { type: Boolean, default: false }, // If unclear, ask area code first then rest of number
                     
                     // ═══════════════════════════════════════════════════════════════
                     // ADDRESS-SPECIFIC OPTIONS
                     // ═══════════════════════════════════════════════════════════════
                     addressConfirmLevel: { type: String, enum: ['street_only', 'street_city', 'full'], default: 'street_city' },
                     acceptPartialAddress: { type: Boolean, default: false }, // Accept partial if caller unsure
+                    breakDownIfUnclear: { type: Boolean, default: false }, // If unclear, ask street → city → zip step by step
                     
                     // ═══════════════════════════════════════════════════════════════
                     // EMAIL-SPECIFIC OPTIONS

@@ -581,6 +581,10 @@ class FrontDeskBehaviorManager {
                             <input type="checkbox" class="slot-acceptTextMe" data-index="${index}" ${slot.acceptTextMe !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
                             <span style="font-size: 12px; color: #c9d1d9;">Accept "text me" response</span>
                         </label>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="If AI doesn't understand, ask area code first then rest of number">
+                            <input type="checkbox" class="slot-breakDownIfUnclear" data-index="${index}" ${slot.breakDownIfUnclear ? 'checked' : ''} style="accent-color: #f0883e;">
+                            <span style="font-size: 12px; color: #c9d1d9;">Break down if unclear (area code → number)</span>
+                        </label>
                     </div>
                     <input type="text" class="slot-callerIdPrompt" data-index="${index}" 
                         value="${slot.callerIdPrompt || "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?"}" 
@@ -609,6 +613,10 @@ class FrontDeskBehaviorManager {
                     <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
                         <input type="checkbox" class="slot-acceptPartialAddress" data-index="${index}" ${slot.acceptPartialAddress ? 'checked' : ''} style="accent-color: #58a6ff;">
                         <span style="font-size: 12px; color: #c9d1d9;">Accept partial address if caller unsure (e.g. "somewhere on Main St")</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="If AI doesn't understand, ask street → city → zip step by step">
+                        <input type="checkbox" class="slot-breakDownIfUnclear" data-index="${index}" ${slot.breakDownIfUnclear ? 'checked' : ''} style="accent-color: #f0883e;">
+                        <span style="font-size: 12px; color: #c9d1d9;">Break down if unclear (street → city → zip)</span>
                     </label>
                 </div>
             `;
@@ -950,6 +958,11 @@ class FrontDeskBehaviorManager {
             }
             if (el.querySelector('.slot-acceptTextMe')) {
                 slotData.acceptTextMe = getCheckedDefault('.slot-acceptTextMe', true);
+            }
+            
+            // BREAK DOWN IF UNCLEAR (works for phone AND address)
+            if (el.querySelector('.slot-breakDownIfUnclear')) {
+                slotData.breakDownIfUnclear = getChecked('.slot-breakDownIfUnclear');
             }
             
             // ADDRESS options

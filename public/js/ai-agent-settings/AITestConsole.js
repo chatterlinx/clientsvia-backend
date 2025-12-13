@@ -825,6 +825,7 @@ AI: ${entry.aiResponse}
                             const opts = [];
                             if (s.phoneOptions.offerCallerId) opts.push('offerCallerId✅');
                             if (s.phoneOptions.acceptTextMe) opts.push('acceptTextMe✅');
+                            if (s.phoneOptions.breakDownIfUnclear) opts.push('breakDownIfUnclear✅');
                             if (opts.length) slotLine += `\n      📞 Phone: ${opts.join(', ')}`;
                         }
                         
@@ -832,6 +833,7 @@ AI: ${entry.aiResponse}
                         if (s.addressOptions) {
                             slotLine += `\n      📍 Address: level=${s.addressOptions.addressConfirmLevel}`;
                             if (s.addressOptions.acceptPartialAddress) slotLine += ', acceptPartial✅';
+                            if (s.addressOptions.breakDownIfUnclear) slotLine += ', breakDownIfUnclear✅';
                         }
                         
                         // Show confirm back

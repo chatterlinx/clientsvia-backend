@@ -546,13 +546,15 @@ router.post('/message', async (req, res) => {
                         if (s.type === 'phone' || s.slotId === 'phone') {
                             slotDebug.phoneOptions = {
                                 offerCallerId: s.offerCallerId,
-                                acceptTextMe: s.acceptTextMe
+                                acceptTextMe: s.acceptTextMe,
+                                breakDownIfUnclear: s.breakDownIfUnclear  // Ask area code → rest if unclear
                             };
                         }
                         if (s.type === 'address' || s.slotId === 'address') {
                             slotDebug.addressOptions = {
                                 addressConfirmLevel: s.addressConfirmLevel,
-                                acceptPartialAddress: s.acceptPartialAddress
+                                acceptPartialAddress: s.acceptPartialAddress,
+                                breakDownIfUnclear: s.breakDownIfUnclear  // Ask street → city → zip if unclear
                             };
                         }
                         if (s.confirmBack) {
