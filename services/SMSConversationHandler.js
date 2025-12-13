@@ -1,17 +1,19 @@
 /**
  * ============================================================================
- * SMS CONVERSATION HANDLER - AI Brain for SMS Conversations
+ * SMS CONVERSATION HANDLER - Adapter for SMS Channel
  * ============================================================================
  * 
- * Handles CUSTOMER SMS messages (not admin commands).
- * Routes SMS to the same AI brain as voice calls.
+ * This is a THIN ADAPTER that routes SMS to ConversationEngine.
+ * ALL conversation logic is in ConversationEngine.
  * 
  * FLOW:
  * 1. Incoming SMS → Twilio webhook
  * 2. Detect if admin command or customer message
- * 3. If customer → find/create customer + session
- * 4. Pass to AI brain (same as voice)
- * 5. Send AI response via Twilio SMS
+ * 3. If customer → call ConversationEngine.processTurn()
+ * 4. Send AI response via Twilio SMS
+ * 
+ * CRITICAL: This file does NOT contain AI logic!
+ * It only: validates input → calls ConversationEngine → formats output
  * 
  * MULTI-TENANT: Company is identified by the "To" number (the company's phone)
  * 
@@ -19,16 +21,14 @@
  */
 
 const Company = require('../models/v2Company');
-const CustomerService = require('./CustomerService');
-const SessionService = require('./SessionService');
-const RunningSummaryService = require('./RunningSummaryService');
-const HybridReceptionistLLM = require('./HybridReceptionistLLM');
+const ConversationEngine = require('./ConversationEngine');
 const logger = require('../utils/logger');
 
 class SMSConversationHandler {
     
     /**
      * Process an incoming SMS message
+     * This is a THIN ADAPTER - all logic is in ConversationEngine
      * 
      * @param {Object} params
      * @param {string} params.fromPhone - Customer's phone number
@@ -43,9 +43,7 @@ class SMSConversationHandler {
         message,
         messageSid
     }) {
-        const startTime = Date.now();
-        
-        logger.info('[SMS HANDLER] 💬 Processing customer SMS', {
+        logger.info('[SMS HANDLER] 💬 Processing customer SMS via ConversationEngine', {
             fromPhone,
             toPhone,
             messageLength: message?.length,
@@ -54,7 +52,7 @@ class SMSConversationHandler {
         
         try {
             // ═══════════════════════════════════════════════════════════════
-            // STEP 1: Find company by phone number
+            // STEP 1: Find company by phone number (adapter responsibility)
             // ═══════════════════════════════════════════════════════════════
             const company = await this.findCompanyByPhone(toPhone);
             
@@ -73,145 +71,37 @@ class SMSConversationHandler {
             });
             
             // ═══════════════════════════════════════════════════════════════
-            // STEP 2: Find or create customer
+            // STEP 2: Call ConversationEngine (the unified brain)
             // ═══════════════════════════════════════════════════════════════
-            const { customer, isNew } = await CustomerService.findOrCreate(
-                companyId,
-                { phone: fromPhone },
-                'sms'
-            );
-            
-            logger.info('[SMS HANDLER] Customer lookup', {
-                customerId: customer._id,
-                isNew,
-                name: customer.getDisplayName()
-            });
-            
-            // ═══════════════════════════════════════════════════════════════
-            // STEP 3: Get or create session
-            // ═══════════════════════════════════════════════════════════════
-            const session = await SessionService.getOrCreate({
+            const result = await ConversationEngine.processTurn({
                 companyId,
                 channel: 'sms',
-                identifiers: {
-                    smsPhone: fromPhone,
-                    smsThreadId: `sms-${fromPhone}-${toPhone}`
-                },
-                customer
-            });
-            
-            logger.info('[SMS HANDLER] Session', {
-                sessionId: session._id,
-                isNewSession: session.metrics.totalTurns === 0,
-                turns: session.metrics.totalTurns
-            });
-            
-            // ═══════════════════════════════════════════════════════════════
-            // STEP 4: Build customer context
-            // ═══════════════════════════════════════════════════════════════
-            const customerContext = CustomerService.buildContextForAI(customer);
-            
-            // ═══════════════════════════════════════════════════════════════
-            // STEP 5: Build running summary
-            // ═══════════════════════════════════════════════════════════════
-            const { bullets: summaryBullets, formatted: summaryFormatted } = 
-                RunningSummaryService.buildAndFormat({
-                    previousSummary: session.runningSummary || [],
-                    customerContext,
-                    currentTurn: { userMessage: message },
-                    conversationState: {
-                        phase: session.phase,
-                        knownSlots: session.collectedSlots,
-                        signals: session.signals
-                    },
-                    company
-                });
-            
-            // ═══════════════════════════════════════════════════════════════
-            // STEP 6: Get conversation history from session
-            // ═══════════════════════════════════════════════════════════════
-            const conversationHistory = session.getHistoryForAI();
-            
-            // ═══════════════════════════════════════════════════════════════
-            // STEP 7: Process through AI brain
-            // ═══════════════════════════════════════════════════════════════
-            // CRITICAL: Must match HybridReceptionistLLM.processConversation signature exactly
-            const aiResult = await HybridReceptionistLLM.processConversation({
-                company,
-                callContext: {
-                    callId: messageSid,
-                    companyId,
-                    customerContext,
-                    runningSummary: summaryFormatted,
-                    turnCount: (session.metrics?.totalTurns || 0) + 1,
-                    channel: 'sms'
-                },
-                currentMode: session.phase === 'booking' ? 'booking' : 'free',
-                knownSlots: session.collectedSlots || {},
-                conversationHistory,
-                userInput: message,
-                behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
-            });
-            
-            const latencyMs = Date.now() - startTime;
-            
-            // CRITICAL: HybridReceptionistLLM returns { reply, not response }
-            const aiResponse = aiResult.reply || 'I apologize, I could not process your message.';
-            
-            // ═══════════════════════════════════════════════════════════════
-            // STEP 8: Update session with this turn
-            // ═══════════════════════════════════════════════════════════════
-            await SessionService.addTurn({
-                session,
-                userMessage: message,
-                aiResponse,
+                userText: message,
+                sessionId: `sms-${fromPhone}-${toPhone}`,
+                callerPhone: fromPhone,
                 metadata: {
-                    latencyMs,
-                    tokensUsed: aiResult.tokensUsed || 0,
-                    responseSource: aiResult.fromQuickAnswers ? 'quick_answer' : 'llm',
-                    confidence: aiResult.confidence,
-                    slotsExtracted: aiResult.filledSlots || {}
+                    messageSid,
+                    toPhone
                 },
-                company
+                includeDebug: false
             });
             
-            // Update session phase based on conversationMode
-            const newPhase = aiResult.conversationMode === 'booking' ? 'booking' : 
-                             aiResult.conversationMode === 'complete' ? 'complete' : 
-                             session.phase;
-            if (newPhase !== session.phase) {
-                await SessionService.updatePhase(session, newPhase);
-            }
-            
             // ═══════════════════════════════════════════════════════════════
-            // STEP 9: Check for booking completion
+            // STEP 3: Format response (adapter responsibility)
             // ═══════════════════════════════════════════════════════════════
-            // Check if all required slots are filled
-            const slots = { ...session.collectedSlots, ...(aiResult.filledSlots || {}) };
-            const requiredSlots = ['name', 'phone', 'address'];
-            const allSlotsFilled = requiredSlots.every(s => slots[s]);
-            
-            if (allSlotsFilled && aiResult.conversationMode === 'booking') {
-                await SessionService.end(session, 'booked');
-                
-                logger.info('[SMS HANDLER] ✅ Booking completed via SMS', {
-                    sessionId: session._id,
-                    customerId: customer._id
-                });
-            }
-            
-            logger.info('[SMS HANDLER] ✅ Response generated', {
-                sessionId: session._id,
-                latencyMs,
-                responseLength: aiResponse?.length,
-                source: aiResult.fromQuickAnswers ? 'quick_answer' : 'llm'
+            logger.info('[SMS HANDLER] ✅ Response generated via ConversationEngine', {
+                sessionId: result.sessionId,
+                latencyMs: result.latencyMs,
+                responseLength: result.reply?.length,
+                phase: result.phase
             });
             
             return {
-                response: aiResponse,
+                response: result.reply || 'I apologize, I could not process your message.',
                 shouldReply: true,
-                sessionId: session._id,
-                customerId: customer._id
+                sessionId: result.sessionId,
+                phase: result.phase,
+                slotsCollected: result.slotsCollected
             };
             
         } catch (error) {
@@ -283,7 +173,6 @@ class SMSConversationHandler {
     static async isAdminPhone(phoneNumber) {
         const normalizedPhone = phoneNumber.replace(/\D/g, '');
         
-        const Company = require('../models/v2Company');
         const notificationCenter = await Company.findOne({
             'metadata.isNotificationCenter': true,
             'contacts.phoneNumber': { $regex: normalizedPhone }
@@ -294,4 +183,3 @@ class SMSConversationHandler {
 }
 
 module.exports = SMSConversationHandler;
-
