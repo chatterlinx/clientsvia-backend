@@ -30,6 +30,7 @@ const SessionService = require('../../services/SessionService');
 const RunningSummaryService = require('../../services/RunningSummaryService');
 const HybridReceptionistLLM = require('../../services/HybridReceptionistLLM');
 const LLM0TurnHandler = require('../../services/LLM0TurnHandler');
+const BookingScriptEngine = require('../../services/BookingScriptEngine');
 const logger = require('../../utils/logger');
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -429,6 +430,10 @@ router.post('/message', async (req, res) => {
         
         // Include debug info if requested (for AI Test Console)
         if (includeDebug) {
+            // Get booking config for debug - shows what prompts AI was given
+            const frontDeskBehavior = company.aiAgentSettings?.frontDeskBehavior || {};
+            const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company);
+            
             responsePayload.debug = {
                 latencyMs,
                 tokensUsed: aiResult.tokensUsed || 0,
@@ -445,7 +450,19 @@ router.post('/message', async (req, res) => {
                 runningSummary: summaryBullets,
                 slotsCollected: { ...session.collectedSlots, ...(aiResult.filledSlots || {}) },
                 turnNumber: session.metrics?.totalTurns || 0,
-                historySent: conversationHistory.length  // Add history count for debugging
+                historySent: conversationHistory.length,
+                // ═══════════════════════════════════════════════════════════════
+                // BOOKING CONFIG DEBUG - Shows exactly what prompts AI sees
+                // ═══════════════════════════════════════════════════════════════
+                bookingConfig: {
+                    source: bookingConfig.source,  // 'DATABASE' or 'NOT_CONFIGURED'
+                    isConfigured: bookingConfig.isConfigured,
+                    slots: bookingConfig.slots.map(s => ({
+                        id: s.slotId,
+                        question: s.question,  // THE ACTUAL QUESTION AI SHOULD USE
+                        required: s.required
+                    }))
+                }
             };
         }
         

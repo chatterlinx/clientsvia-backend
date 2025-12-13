@@ -522,7 +522,8 @@ class AITestConsole {
                     customerContext: debug.customerContext,
                     runningSummary: debug.runningSummary,
                     slotsCollected: debug.slotsCollected,
-                    historySent: debug.historySent || 0,  // How many messages in conversation history
+                    historySent: debug.historySent || 0,
+                    bookingConfig: debug.bookingConfig,  // Shows what prompts AI was given
                     timestamp: new Date().toISOString()
                 });
                 
@@ -789,13 +790,14 @@ AI: ${entry.aiResponse}
 `;
             }
             
-            // Add booking config if available
+            // Add booking config if available - shows what prompts AI was given
             if (entry.bookingConfig) {
                 const bc = entry.bookingConfig;
-                text += `📋 BOOKING CONFIG:
-  Source: ${bc.source || 'N/A'}
-  Questions:
-${bc.configuredQuestions?.map(q => `    - ${q}`).join('\n') || '    (not available)'}
+                const slotsInfo = bc.slots?.map(s => `    - [${s.id}] "${s.question}" ${s.required ? '(required)' : '(optional)'}`).join('\n') || '    (none configured)';
+                text += `📋 BOOKING CONFIG (What AI sees):
+  Source: ${bc.source || 'N/A'} ${bc.isConfigured ? '✅' : '⚠️ NOT CONFIGURED'}
+  Slot Questions:
+${slotsInfo}
 
 `;
             }
