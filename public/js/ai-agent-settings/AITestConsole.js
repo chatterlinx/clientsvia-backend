@@ -754,12 +754,24 @@ class AITestConsole {
         const separator = '═'.repeat(50);
         const thinSeparator = '─'.repeat(50);
         
+        // Calculate totals
+        const totalTokens = this.debugLog.reduce((sum, entry) => sum + (entry.tokens || 0), 0);
+        const totalLatency = this.debugLog.reduce((sum, entry) => sum + (entry.latencyMs || 0), 0);
+        // GPT-4o-mini pricing: ~$0.15 per 1M input tokens, ~$0.60 per 1M output tokens
+        // Rough estimate: ~$0.30 per 1M tokens average
+        const estimatedCost = (totalTokens / 1000000) * 0.30;
+        
         let text = `${separator}
 AI TEST CONSOLE - FULL DEBUG LOG
 ${separator}
 Session: ${this.testSessionId}
 Total Turns: ${this.debugLog.length}
 Slots Collected: ${Object.entries(this.knownSlots).filter(([k,v]) => v).map(([k,v]) => `${k}=${v}`).join(', ') || 'None'}
+${separator}
+💰 CONVERSATION COST:
+   Total Tokens: ${totalTokens.toLocaleString()}
+   Total Latency: ${(totalLatency / 1000).toFixed(1)}s
+   Est. Cost: $${estimatedCost.toFixed(6)} (~$${(estimatedCost * 1000).toFixed(3)} per 1000 calls)
 ${separator}
 
 `;
@@ -912,8 +924,42 @@ ${separator}`;
             }).join('')
             : '<div style="text-align: center; color: #6e7681; padding: 12px;">Send a message to see debug log</div>';
         
+        // Calculate totals for live display
+        const totalTokens = this.debugLog.reduce((sum, entry) => sum + (entry.tokens || 0), 0);
+        const totalLatency = this.debugLog.reduce((sum, entry) => sum + (entry.latencyMs || 0), 0);
+        const avgLatency = this.debugLog.length > 0 ? Math.round(totalLatency / this.debugLog.length) : 0;
+        // GPT-4o-mini pricing estimate
+        const estimatedCost = (totalTokens / 1000000) * 0.30;
+        const costPer1000 = estimatedCost * 1000;
+        
         content.innerHTML = `
             <div style="display: flex; flex-direction: column; gap: 12px;">
+                
+                <!-- 💰 COST TRACKER - Shows total tokens and estimated cost -->
+                <div style="background: linear-gradient(135deg, #1a1f35 0%, #0d1117 100%); border: 1px solid #58a6ff; border-radius: 8px; padding: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="color: #58a6ff; font-weight: bold; font-size: 12px;">💰 CONVERSATION COST</span>
+                        <span style="color: #8b949e; font-size: 10px;">GPT-4o-mini rates</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center;">
+                        <div>
+                            <div style="color: #f0883e; font-size: 20px; font-weight: bold;">${totalTokens.toLocaleString()}</div>
+                            <div style="color: #8b949e; font-size: 9px;">TOKENS</div>
+                        </div>
+                        <div>
+                            <div style="color: #3fb950; font-size: 20px; font-weight: bold;">$${estimatedCost.toFixed(4)}</div>
+                            <div style="color: #8b949e; font-size: 9px;">THIS CALL</div>
+                        </div>
+                        <div>
+                            <div style="color: #a371f7; font-size: 20px; font-weight: bold;">$${costPer1000.toFixed(2)}</div>
+                            <div style="color: #8b949e; font-size: 9px;">PER 1K CALLS</div>
+                        </div>
+                        <div>
+                            <div style="color: #58a6ff; font-size: 20px; font-weight: bold;">${avgLatency}ms</div>
+                            <div style="color: #8b949e; font-size: 9px;">AVG LATENCY</div>
+                        </div>
+                    </div>
+                </div>
                 
                 <!-- Session Header -->
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #161b22; border-radius: 6px;">
