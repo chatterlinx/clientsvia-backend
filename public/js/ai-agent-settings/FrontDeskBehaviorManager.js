@@ -56,15 +56,15 @@ class FrontDeskBehaviorManager {
             
             // 🔍 DEBUG: Log exactly what bookingSlots came from API
             if (this.config.bookingSlots) {
-                console.log('[FRONT DESK BEHAVIOR] 📥 Booking slots from API:', 
-                    this.config.bookingSlots.map(s => ({
-                        id: s.id,
-                        type: s.type,
-                        askFullName: s.askFullName,
-                        useFirstNameOnly: s.useFirstNameOnly,
-                        askMissingNamePart: s.askMissingNamePart
-                    }))
-                );
+                const nameSlot = this.config.bookingSlots.find(s => s.id === 'name');
+                console.log('[FRONT DESK BEHAVIOR] 📥 NAME SLOT FROM API:', {
+                    id: nameSlot?.id,
+                    type: nameSlot?.type,
+                    askFullName: nameSlot?.askFullName,
+                    useFirstNameOnly: nameSlot?.useFirstNameOnly,
+                    askMissingNamePart: nameSlot?.askMissingNamePart,
+                    '🔴 askMissingNamePart value': nameSlot?.askMissingNamePart === true ? '✅ TRUE' : '❌ FALSE/UNDEFINED'
+                });
             } else {
                 console.log('[FRONT DESK BEHAVIOR] ⚠️ No bookingSlots in API response!');
             }
@@ -187,14 +187,15 @@ class FrontDeskBehaviorManager {
             console.log('[FRONT DESK BEHAVIOR] Saving config...');
             // Log booking slots specifically to debug askMissingNamePart
             if (this.config.bookingSlots) {
-                console.log('[FRONT DESK BEHAVIOR] 📋 Booking slots being saved:', 
-                    this.config.bookingSlots.map(s => ({
-                        id: s.id,
-                        askFullName: s.askFullName,
-                        useFirstNameOnly: s.useFirstNameOnly,
-                        askMissingNamePart: s.askMissingNamePart
-                    }))
-                );
+                const nameSlot = this.config.bookingSlots.find(s => s.id === 'name');
+                console.log('[FRONT DESK BEHAVIOR] 📋 NAME SLOT BEING SAVED:', {
+                    id: nameSlot?.id,
+                    type: nameSlot?.type,
+                    askFullName: nameSlot?.askFullName,
+                    useFirstNameOnly: nameSlot?.useFirstNameOnly,
+                    askMissingNamePart: nameSlot?.askMissingNamePart,
+                    '🔴 askMissingNamePart value': nameSlot?.askMissingNamePart === true ? '✅ TRUE' : '❌ FALSE/UNDEFINED'
+                });
             }
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
             

@@ -341,6 +341,19 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
             return res.status(404).json({ success: false, message: 'Company not found' });
         }
         
+        // 🔍 DEBUG: Log what was actually saved to MongoDB
+        const savedSlots = result.aiAgentSettings?.frontDeskBehavior?.bookingSlots;
+        if (savedSlots) {
+            const nameSlot = savedSlots.find(s => s.id === 'name');
+            logger.info('[FRONT DESK BEHAVIOR] ✅ SAVED TO MONGODB - Name slot:', {
+                companyId,
+                id: nameSlot?.id,
+                type: nameSlot?.type,
+                askMissingNamePart: nameSlot?.askMissingNamePart,
+                askMissingNamePartType: typeof nameSlot?.askMissingNamePart
+            });
+        }
+        
         // Clear Redis cache
         try {
             const redis = require('../../config/redis');
