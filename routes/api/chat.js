@@ -427,7 +427,12 @@ router.post('/message', async (req, res) => {
         // ═══════════════════════════════════════════════════════════════
         logger.info('[CHAT API] CHECKPOINT 8: Updating session...');
         // CRITICAL: HybridReceptionistLLM returns { reply, conversationMode, needsInfo, filledSlots, latencyMs, tokensUsed }
-        const aiResponse = aiResult?.reply || aiResult?.response || 'I apologize, I could not process your request.';
+        // 🔴 FIX: Trim and check for empty/whitespace responses
+        let aiResponse = (aiResult?.reply || aiResult?.response || '').trim();
+        if (!aiResponse) {
+            logger.error('[CHAT API] 🚨 Empty/whitespace response from LLM! Tokens wasted:', aiResult?.tokensUsed);
+            aiResponse = "I'm sorry, could you repeat that?";  // Graceful fallback
+        }
         
         try {
             await SessionService.addTurn({
