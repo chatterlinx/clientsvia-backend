@@ -2341,11 +2341,40 @@ class LLM0TurnHandler {
     
     static extractAddress(input) {
         if (!input) return null;
-        if (/\d/.test(input) && input.length > 5) return input.trim();
-        if (/\b(street|st|road|rd|avenue|ave|lane|ln|drive|dr|court|ct|way|place|pl)\b/i.test(input)) {
+        
+        const normalized = input.toLowerCase().trim();
+        
+        // Skip if this looks like a complaint/issue description (not an address)
+        const issuePatterns = [
+            /not (working|cooling|heating|running)/i,
+            /broken|leaking|leak|noise|problem|issue|help/i,
+            /my (system|unit|ac|air|heat|furnace)/i,
+            /doesn't|won't|can't|isn't/i
+        ];
+        if (issuePatterns.some(p => p.test(normalized))) {
+            return null;
+        }
+        
+        // Pattern 1: Starts with a number (street number) followed by words
+        // e.g., "123 Main Street", "456 Oak Ave Apt 2"
+        const streetNumberPattern = /^\d+\s+[a-z]/i;
+        if (streetNumberPattern.test(input.trim())) {
             return input.trim();
         }
-        if (input.length > 10) return input.trim();
+        
+        // Pattern 2: Contains street type words AND has reasonable length
+        const streetTypes = /\b(street|st|road|rd|avenue|ave|lane|ln|drive|dr|court|ct|way|place|pl|boulevard|blvd|circle|cir|terrace|ter|highway|hwy)\b/i;
+        if (streetTypes.test(input) && input.length >= 8 && input.length <= 100) {
+            return input.trim();
+        }
+        
+        // Pattern 3: "my address is X" or "at X" patterns
+        const addressPhrasePattern = /(?:my address is|address is|i(?:'m| am) at|live at|located at)\s+(.+)/i;
+        const phraseMatch = input.match(addressPhrasePattern);
+        if (phraseMatch && phraseMatch[1]) {
+            return phraseMatch[1].trim();
+        }
+        
         return null;
     }
     
