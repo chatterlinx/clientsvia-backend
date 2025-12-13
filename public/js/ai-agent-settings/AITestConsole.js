@@ -805,10 +805,49 @@ AI: ${entry.aiResponse}
             // Add booking config if available - shows what prompts AI was given
             if (entry.bookingConfig) {
                 const bc = entry.bookingConfig;
-                const slotsInfo = bc.slots?.map(s => `    - [${s.id}] "${s.question}" ${s.required ? '(required)' : '(optional)'}`).join('\n') || '    (none configured)';
+                let slotsInfo = '';
+                if (bc.slots && bc.slots.length > 0) {
+                    slotsInfo = bc.slots.map(s => {
+                        let slotLine = `    - [${s.id}] "${s.question}" ${s.required ? '(required)' : '(optional)'}`;
+                        
+                        // Show name options
+                        if (s.nameOptions) {
+                            const opts = [];
+                            if (s.nameOptions.askFullName) opts.push('askFullName✅');
+                            if (s.nameOptions.useFirstNameOnly) opts.push('useFirstNameOnly✅');
+                            if (s.nameOptions.askMissingNamePart) opts.push('askMissingNamePart✅');
+                            else opts.push('askMissingNamePart❌');
+                            slotLine += `\n      👤 Name: ${opts.join(', ')}`;
+                        }
+                        
+                        // Show phone options
+                        if (s.phoneOptions) {
+                            const opts = [];
+                            if (s.phoneOptions.offerCallerId) opts.push('offerCallerId✅');
+                            if (s.phoneOptions.acceptTextMe) opts.push('acceptTextMe✅');
+                            if (opts.length) slotLine += `\n      📞 Phone: ${opts.join(', ')}`;
+                        }
+                        
+                        // Show address options
+                        if (s.addressOptions) {
+                            slotLine += `\n      📍 Address: level=${s.addressOptions.addressConfirmLevel}`;
+                            if (s.addressOptions.acceptPartialAddress) slotLine += ', acceptPartial✅';
+                        }
+                        
+                        // Show confirm back
+                        if (s.confirmBack) {
+                            slotLine += `\n      🔄 ConfirmBack: "${s.confirmBack}"`;
+                        }
+                        
+                        return slotLine;
+                    }).join('\n');
+                } else {
+                    slotsInfo = '    (none configured)';
+                }
+                
                 text += `📋 BOOKING CONFIG (What AI sees):
   Source: ${bc.source || 'N/A'} ${bc.isConfigured ? '✅' : '⚠️ NOT CONFIGURED'}
-  Slot Questions:
+  Slots with Options:
 ${slotsInfo}
 
 `;

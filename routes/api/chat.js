@@ -457,11 +457,40 @@ router.post('/message', async (req, res) => {
                 bookingConfig: {
                     source: bookingConfig.source,  // 'DATABASE' or 'NOT_CONFIGURED'
                     isConfigured: bookingConfig.isConfigured,
-                    slots: bookingConfig.slots.map(s => ({
-                        id: s.slotId,
-                        question: s.question,  // THE ACTUAL QUESTION AI SHOULD USE
-                        required: s.required
-                    }))
+                    slots: bookingConfig.slots.map(s => {
+                        const slotDebug = {
+                            id: s.slotId,
+                            type: s.type,
+                            question: s.question,  // THE ACTUAL QUESTION AI SHOULD USE
+                            required: s.required
+                        };
+                        
+                        // Show type-specific options that AI will read
+                        if (s.type === 'name' || s.slotId === 'name') {
+                            slotDebug.nameOptions = {
+                                askFullName: s.askFullName,
+                                useFirstNameOnly: s.useFirstNameOnly,
+                                askMissingNamePart: s.askMissingNamePart  // 🔴 The key setting!
+                            };
+                        }
+                        if (s.type === 'phone' || s.slotId === 'phone') {
+                            slotDebug.phoneOptions = {
+                                offerCallerId: s.offerCallerId,
+                                acceptTextMe: s.acceptTextMe
+                            };
+                        }
+                        if (s.type === 'address' || s.slotId === 'address') {
+                            slotDebug.addressOptions = {
+                                addressConfirmLevel: s.addressConfirmLevel,
+                                acceptPartialAddress: s.acceptPartialAddress
+                            };
+                        }
+                        if (s.confirmBack) {
+                            slotDebug.confirmBack = s.confirmPrompt;
+                        }
+                        
+                        return slotDebug;
+                    })
                 }
             };
         }
