@@ -86,6 +86,7 @@ function normalizeSlot(slot, index) {
     
     return {
         slotId: slotId,
+        id: slotId, // Also include 'id' for backward compatibility with HybridReceptionistLLM
         label: slot.label || slotId,
         question: (slot.question || '').trim(),
         type: slot.type || 'text',
@@ -97,11 +98,34 @@ function normalizeSlot(slot, index) {
         // Name-specific
         askFullName: slot.askFullName !== false,
         useFirstNameOnly: slot.useFirstNameOnly !== false,
+        askMissingNamePart: slot.askMissingNamePart === true, // 🔴 Was missing! Must be explicitly true
         // Phone-specific
         offerCallerId: slot.offerCallerId || false,
         callerIdPrompt: slot.callerIdPrompt || null,
+        acceptTextMe: slot.acceptTextMe !== false,
         // Address-specific
-        addressConfirmLevel: slot.addressConfirmLevel || 'street_city'
+        addressConfirmLevel: slot.addressConfirmLevel || 'street_city',
+        acceptPartialAddress: slot.acceptPartialAddress || false,
+        // Email-specific
+        spellOutEmail: slot.spellOutEmail !== false,
+        offerToSendText: slot.offerToSendText || false,
+        // DateTime-specific
+        offerAsap: slot.offerAsap !== false,
+        offerMorningAfternoon: slot.offerMorningAfternoon || false,
+        asapPhrase: slot.asapPhrase || 'first available',
+        // Select-specific
+        selectOptions: slot.selectOptions || [],
+        allowOther: slot.allowOther || false,
+        // YesNo-specific
+        yesAction: slot.yesAction || null,
+        noAction: slot.noAction || null,
+        // Number-specific
+        minValue: slot.minValue || null,
+        maxValue: slot.maxValue || null,
+        unit: slot.unit || null,
+        // Advanced
+        skipIfKnown: slot.skipIfKnown || false,
+        helperNote: slot.helperNote || null
     };
 }
 
