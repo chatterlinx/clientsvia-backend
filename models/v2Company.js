@@ -1587,30 +1587,87 @@ const companySchema = new mongoose.Schema({
             // ═══════════════════════════════════════════════════════════════
             bookingSlots: {
                 type: [{
+                    // ═══════════════════════════════════════════════════════════════
+                    // CORE FIELDS (all slot types)
+                    // ═══════════════════════════════════════════════════════════════
                     id: { type: String, required: true }, // e.g., 'name', 'phone', 'custom_insurance'
                     label: { type: String, required: true }, // Display name: "Full Name", "Phone Number"
                     question: { type: String, required: true }, // What AI asks: "May I have your full name?"
                     required: { type: Boolean, default: true },
                     order: { type: Number, default: 0 }, // For sorting
-                    type: { type: String, enum: ['text', 'phone', 'address', 'time', 'custom'], default: 'text' },
-                    validation: { type: String, default: null }, // Optional: 'full_name', '10_digits', etc.
+                    type: { 
+                        type: String, 
+                        enum: ['name', 'phone', 'address', 'email', 'date', 'time', 'datetime', 'select', 'yesno', 'number', 'text', 'textarea', 'custom'], 
+                        default: 'text' 
+                    },
+                    validation: { type: String, default: null }, // Regex pattern for custom validation
                     confirmBack: { type: Boolean, default: false }, // Repeat value back for confirmation
-                    confirmPrompt: { type: String, default: "Just to confirm, that's {value}, correct?" }, // What to say when confirming
-                    // Name-specific options
+                    confirmPrompt: { type: String, default: "Just to confirm, that's {value}, correct?" },
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // ADVANCED OPTIONS (all slot types)
+                    // ═══════════════════════════════════════════════════════════════
+                    skipIfKnown: { type: Boolean, default: false }, // Skip for returning customers
+                    helperNote: { type: String, default: null }, // Internal AI guidance note
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // NAME-SPECIFIC OPTIONS
+                    // ═══════════════════════════════════════════════════════════════
                     askFullName: { type: Boolean, default: true }, // Ask for first + last name
                     useFirstNameOnly: { type: Boolean, default: true }, // When referring back, use first name only
-                    // Phone-specific options
-                    offerCallerId: { type: Boolean, default: true }, // Offer to use caller ID instead of asking
+                    askMissingNamePart: { type: Boolean, default: false }, // 🔴 Ask once for missing first/last name
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // PHONE-SPECIFIC OPTIONS
+                    // ═══════════════════════════════════════════════════════════════
+                    offerCallerId: { type: Boolean, default: true }, // Offer to use caller ID
                     callerIdPrompt: { type: String, default: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
-                    // Address-specific options
-                    addressConfirmLevel: { type: String, enum: ['street_only', 'street_city', 'full'], default: 'street_city' } // How much to repeat back
+                    acceptTextMe: { type: Boolean, default: true }, // Accept "text me" as confirmation
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // ADDRESS-SPECIFIC OPTIONS
+                    // ═══════════════════════════════════════════════════════════════
+                    addressConfirmLevel: { type: String, enum: ['street_only', 'street_city', 'full'], default: 'street_city' },
+                    acceptPartialAddress: { type: Boolean, default: false }, // Accept partial if caller unsure
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // EMAIL-SPECIFIC OPTIONS
+                    // ═══════════════════════════════════════════════════════════════
+                    spellOutEmail: { type: Boolean, default: true }, // AI spells back email
+                    offerToSendText: { type: Boolean, default: false }, // Offer to text for confirmation
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // DATE/TIME-SPECIFIC OPTIONS
+                    // ═══════════════════════════════════════════════════════════════
+                    offerAsap: { type: Boolean, default: true }, // Offer "as soon as possible"
+                    offerMorningAfternoon: { type: Boolean, default: false }, // Accept "morning"/"afternoon"
+                    asapPhrase: { type: String, default: 'first available' },
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // SELECT/CHOICE-SPECIFIC OPTIONS
+                    // ═══════════════════════════════════════════════════════════════
+                    selectOptions: [{ type: String }], // Options for dropdown/choice
+                    allowOther: { type: Boolean, default: false }, // Allow "Other" option
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // YES/NO-SPECIFIC OPTIONS
+                    // ═══════════════════════════════════════════════════════════════
+                    yesAction: { type: String, default: null }, // What to do if yes
+                    noAction: { type: String, default: null }, // What to do if no
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // NUMBER-SPECIFIC OPTIONS
+                    // ═══════════════════════════════════════════════════════════════
+                    minValue: { type: Number, default: null },
+                    maxValue: { type: Number, default: null },
+                    unit: { type: String, default: null } // e.g., "years", "units"
                 }],
                 // 🚨 AUTO-SEED: These defaults are applied when company is created
                 default: [
-                    { id: 'name', label: 'Full Name', question: 'May I have your full name?', required: true, order: 0, type: 'text', confirmBack: false, askFullName: true, useFirstNameOnly: true },
-                    { id: 'phone', label: 'Phone Number', question: 'What is the best phone number to reach you?', required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?", offerCallerId: true, callerIdPrompt: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
-                    { id: 'address', label: 'Service Address', question: 'What is the service address?', required: true, order: 2, type: 'address', confirmBack: false, addressConfirmLevel: 'street_city' },
-                    { id: 'time', label: 'Preferred Time', question: 'When works best for you?', required: false, order: 3, type: 'time', confirmBack: false }
+                    { id: 'name', label: 'Full Name', question: 'May I have your name please?', required: true, order: 0, type: 'name', confirmBack: false, askFullName: true, useFirstNameOnly: true, askMissingNamePart: false },
+                    { id: 'phone', label: 'Phone Number', question: 'What is the best phone number to reach you?', required: true, order: 1, type: 'phone', confirmBack: true, confirmPrompt: "Just to confirm, that's {value}, correct?", offerCallerId: true, acceptTextMe: true, callerIdPrompt: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
+                    { id: 'address', label: 'Service Address', question: 'What is the service address?', required: true, order: 2, type: 'address', confirmBack: false, addressConfirmLevel: 'street_city', acceptPartialAddress: false },
+                    { id: 'time', label: 'Preferred Time', question: 'When works best for you?', required: false, order: 3, type: 'time', confirmBack: false, offerAsap: true, offerMorningAfternoon: true }
                 ]
             },
             
