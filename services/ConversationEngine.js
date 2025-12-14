@@ -60,26 +60,32 @@ logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
 const SlotExtractors = {
     /**
      * Extract name from user input
+     * Handles any case (STT may output lowercase)
      */
     extractName(text) {
         if (!text || typeof text !== 'string') return null;
         
-        // Common patterns: "my name is X", "this is X", "I'm X", "it's X calling"
+        // Common patterns - use [a-zA-Z] to handle any case from STT
         const patterns = [
-            /my name is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-            /this is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-            /i'?m\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-            /it'?s\s+([A-Z][a-z]+)\s+(?:calling|here)/i,
-            /(?:^|\s)([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s*$|\s+(?:here|calling))/i
+            /my name is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i,
+            /this is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i,
+            /i'?m\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i,
+            /it'?s\s+([a-zA-Z]+)\s+(?:calling|here)/i,
+            /(?:name\s*(?:is)?\s*)([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i,  // "name Mark" or "name is Mark"
+            /(?:^|\s)([a-zA-Z]+\s+[a-zA-Z]+)(?:\s*$|\s+(?:here|calling))/i  // "John Smith" at start/end
         ];
         
         for (const pattern of patterns) {
             const match = text.match(pattern);
             if (match && match[1]) {
-                const name = match[1].trim();
+                const rawName = match[1].trim();
                 // Filter out common false positives
-                const falsePositives = ['the', 'that', 'this', 'what', 'just', 'yeah', 'yes', 'sure'];
-                if (!falsePositives.includes(name.toLowerCase())) {
+                const falsePositives = ['the', 'that', 'this', 'what', 'just', 'yeah', 'yes', 'sure', 'hi', 'hello', 'hey', 'good', 'morning', 'afternoon'];
+                if (!falsePositives.includes(rawName.toLowerCase())) {
+                    // Title case the name: "mark" -> "Mark", "mark smith" -> "Mark Smith"
+                    const name = rawName.split(' ')
+                        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                        .join(' ');
                     return name;
                 }
             }
@@ -346,8 +352,12 @@ async function processTurn({
         const askMissingNamePart = nameSlotConfig?.askMissingNamePart === true;
         
         // Extract name
-        if (!currentSlots.name && userText) {
+        if (currentSlots.name) {
+            log('📝 Name already collected:', currentSlots.name);
+        } else if (userText) {
+            log('🔍 Attempting name extraction from:', userText.substring(0, 50));
             const extractedName = SlotExtractors.extractName(userText);
+            log('🔍 Extraction result:', extractedName || '(none)');
             if (extractedName) {
                 const isPartialName = !extractedName.includes(' ');
                 const alreadyAskedForMissingPart = session.askedForMissingNamePart === true;
