@@ -34,7 +34,7 @@ const BookingScriptEngine = require('./BookingScriptEngine');
 // ═══════════════════════════════════════════════════════════════════════════════
 // 🎯 VERSION BANNER - This log PROVES the new code is deployed
 // ═══════════════════════════════════════════════════════════════════════════════
-const HYBRID_LLM_VERSION = '2025-12-11-V1-100-PERCENT-UI-CONTROLLED';
+const HYBRID_LLM_VERSION = '2025-12-14-LEAN-PROMPT-V1';
 logger.info(`[HYBRID RECEPTIONIST LLM] 🧠 LOADED VERSION: ${HYBRID_LLM_VERSION}`, {
     features: [
         '🚨 100% UI-CONTROLLED - NO HARDCODED AI INSTRUCTIONS',
@@ -415,29 +415,30 @@ class HybridReceptionistLLM {
             const content = response.choices[0]?.message?.content;
             
             // ════════════════════════════════════════════════════════════════
-            // LLMQNA: LLM decides WHAT, our code decides HOW
+            // LEAN PROMPT: LLM decides WHAT, Engine decides WORDS
             // ════════════════════════════════════════════════════════════════
-            // LLM outputs: { collectSlot, acknowledgment, freeformReply }
-            // Our code: looks up EXACT question from config, combines with ack
-            // Result: 99.9% verbatim compliance - LLM never generates sacred text
+            // New lean format: { "slot": "name|phone|none", "ack": "brief acknowledgment" }
+            // Engine looks up EXACT question from DB and combines with ack
+            // Result: ~350 token prompt, 99.9% verbatim compliance
             // ════════════════════════════════════════════════════════════════
             let parsed;
             try {
                 parsed = JSON.parse(content);
+                logger.info('[HYBRID LLM] 📥 Parsed LLM response:', parsed);
             } catch (parseErr) {
-                logger.warn('[HYBRID LLM] JSON parse failed, using raw content');
-                parsed = { freeformReply: content.replace(/[{}"\n]/g, '').trim() };
+                logger.warn('[HYBRID LLM] JSON parse failed, using raw content as ack');
+                parsed = { slot: 'none', ack: content.replace(/[{}"\n]/g, '').trim() };
             }
             
             // ════════════════════════════════════════════════════════════════
-            // LLMQNA RESPONSE ASSEMBLY
+            // ENGINE RESPONSE ASSEMBLY - Inject exact questions from DB
             // ════════════════════════════════════════════════════════════════
-            // Get booking slots from company config for exact question lookup
             const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company);
             const bookingSlots = bookingConfig.slots || [];
             
             let finalReply;
-            let collectingSlot = parsed.collectSlot || parsed.needsInfo;
+            // Support both old format (collectSlot) and new lean format (slot)
+            let collectingSlot = parsed.slot || parsed.collectSlot || parsed.needsInfo;
             
             // Normalize collectSlot value
             if (collectingSlot === 'none' || collectingSlot === '|none' || !collectingSlot) {
@@ -492,8 +493,10 @@ class HybridReceptionistLLM {
             } else {
                 // ═══════════════════════════════════════════════════════════
                 // NON-COLLECTION TURN - LLM can be conversational
+                // In lean format: slot="none" and ack contains the full reply
                 // ═══════════════════════════════════════════════════════════
-                finalReply = parsed.reply || parsed.freeformReply || parsed.response || 'How can I help you?';
+                finalReply = parsed.ack || parsed.reply || parsed.freeformReply || parsed.response || 'How can I help you?';
+                logger.info('[HYBRID LLM] 💬 Non-collection turn, using ack as reply:', finalReply.substring(0, 60));
             }
             
             // Determine mode from what we still need
@@ -608,459 +611,98 @@ class HybridReceptionistLLM {
     }
     
     /**
-     * Build the system prompt with all context
-     * 🚨 100% UI-CONTROLLED - All instructions come from frontDeskBehavior config
+     * ════════════════════════════════════════════════════════════════════════════
+     * 🎯 LEAN SYSTEM PROMPT - Under 400 tokens
+     * ════════════════════════════════════════════════════════════════════════════
+     * 
+     * ARCHITECTURE: "Thin LLM, Thick Engine"
+     * - LLM decides WHAT to do (which slot, acknowledgment)
+     * - Engine decides exact WORDING (questions from DB)
+     * 
+     * This prompt works for ANY trade - HVAC, dental, legal, plumbing, etc.
+     * All company-specific behavior comes from database config.
+     * 
+     * ════════════════════════════════════════════════════════════════════════════
      */
     static buildSystemPrompt({ company, currentMode, knownSlots, behaviorConfig, triageContext, customerContext, runningSummary, serviceAreaInfo, detectedServices, lastAgentResponse, turnCount, speakingCorrections, callerId, partialName }) {
-        const companyName = company.name || 'our company';
-        const trade = company.trade || 'HVAC';
+        const companyName = company.companyName || company.name || 'our company';
+        const trade = company.tradeType || company.trade || 'service';
         
-        // ════════════════════════════════════════════════════════════════════
-        // 🚨 LOAD ALL CONFIG FROM UI - NO HARDCODED DEFAULTS
-        // ════════════════════════════════════════════════════════════════════
-        const uiConfig = loadFrontDeskConfig(company);
-        
-        logger.debug('[HYBRID LLM] Building prompt from UI config', {
-            personality: uiConfig.personality,
-            forbiddenCount: uiConfig.forbiddenPhrases.length,
-            frustrationTriggersCount: uiConfig.frustrationTriggers.length,
-            bookingPromptsConfigured: Object.keys(uiConfig.bookingPrompts).length
-        });
-        
-        // Build speaking style rules from corrections
-        let speakingStyleSection = '';
-        if (speakingCorrections && speakingCorrections.length > 0) {
-            const rules = speakingCorrections
-                .map(sc => `- Say "${sc.sayInstead}" NOT "${sc.dontSay}"`)
-                .join('\n');
-            speakingStyleSection = `
-═══ SPEAKING STYLE (CRITICAL) ═══
-${rules}
-Never use the words on the left - always use the replacement on the right.
-`;
-        }
-        
-        // ════════════════════════════════════════════════════════════════════
-        // FORBIDDEN PHRASES FROM UI (not hardcoded!)
-        // ════════════════════════════════════════════════════════════════════
-        let forbiddenSection = '';
-        if (uiConfig.forbiddenPhrases.length > 0) {
-            forbiddenSection = `
-═══ FORBIDDEN PHRASES (from UI settings) ═══
-${uiConfig.forbiddenPhrases.map(p => `- "${p}"`).join('\n')}
-NEVER say any of these phrases. They make you sound robotic.
-`;
-        }
-        
-        // NOTE: Emotion handling and booking prompts removed - AI handles naturally
-        // GPT-4o-mini knows how to be empathetic, ask for info, etc.
-        // We trust the AI to be a good receptionist.
-        
-        // ════════════════════════════════════════════════════════════════════
-        // DYNAMIC BOOKING SLOTS FROM UI (via BookingScriptEngine)
-        // ════════════════════════════════════════════════════════════════════
+        // Get booking slots for determining what to collect
         const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company);
-        const bookingSlots = bookingConfig.slots;
-        const slotIds = bookingSlots.map(s => s.slotId);
-        const bookingIsConfigured = bookingConfig.isConfigured;
+        const bookingSlots = bookingConfig.slots || [];
+        const slotIds = bookingSlots.map(s => s.slotId || s.id);
         
-        // 🚨 DEBUG: Log exactly what questions are being used
-        logger.info('[HYBRID LLM] 📋 BOOKING CONFIG:', {
-            source: bookingConfig.source,
-            isConfigured: bookingIsConfigured,
-            slotCount: bookingSlots.length,
-            questions: bookingSlots.map(s => ({ id: s.slotId, question: s.question }))
+        // Build slot status - what we have vs need
+        const collected = [];
+        const needed = [];
+        for (const slotId of slotIds) {
+            if (knownSlots[slotId]) {
+                collected.push(`${slotId}:${knownSlots[slotId]}`);
+            } else {
+                needed.push(slotId);
+            }
+        }
+        
+        // Conversation style from config
+        const style = behaviorConfig?.conversationStyle || 'balanced';
+        const styleHint = {
+            confident: 'Be decisive and lead. "Let\'s get you scheduled."',
+            balanced: 'Be friendly and helpful. "I can help with that!"',
+            polite: 'Be courteous and ask permission. "Would you like me to...?"'
+        }[style] || 'Be friendly and helpful.';
+        
+        // Customer context (brief)
+        const callerInfo = customerContext?.isReturning 
+            ? `Returning customer${customerContext.name ? `: ${customerContext.name}` : ''}`
+            : 'New caller';
+        
+        // Forbidden phrases from config (keep short)
+        const uiConfig = loadFrontDeskConfig(company);
+        const forbidden = uiConfig.forbiddenPhrases?.slice(0, 3).join(', ') || '';
+        
+        // 🔍 DEBUG: Log what we're sending to LLM
+        logger.info('[HYBRID LLM] 📋 LEAN PROMPT CONTEXT:', {
+            company: companyName,
+            trade,
+            style,
+            collected: collected.join(', ') || 'none',
+            needed: needed.join(', ') || 'none',
+            callerInfo
         });
         
-        // Compact slot display
-        const hasSlots = Object.entries(knownSlots).filter(([k, v]) => v);
-        const slotsList = hasSlots.length > 0 
-            ? hasSlots.map(([k, v]) => `${k}:${v}`).join(', ')
-            : 'none';
-        
-        // Get missing slots based on dynamic config
-        const missingSlots = slotIds.filter(s => !knownSlots[s]).join(',') || 'none';
-        
-        // Build slot prompts section - ONLY if configured
-        let slotPromptsSection = '';
-        if (bookingIsConfigured) {
-            // 🔍 DEBUG: Log exactly what slots the LLM will see
-            logger.info('[HYBRID LLM] 🔍 SLOT STATUS FOR LLM:', {
-                knownSlots: JSON.stringify(knownSlots),
-                bookingSlotIds: bookingSlots.map(s => s.slotId || s.id),
-                nameInKnownSlots: knownSlots.name || knownSlots['name'] || '(not found)',
-                phoneInKnownSlots: knownSlots.phone || knownSlots['phone'] || '(not found)'
-            });
-            
-            // LLMQNA: LLM only sees slot status, not exact questions
-            // The exact questions are looked up by code AFTER LLM decides which slot to collect
-            slotPromptsSection = bookingSlots.map(slot => {
-                // Check both slotId and id for compatibility
-                const slotKey = slot.slotId || slot.id;
-                const collected = knownSlots[slotKey];
-                if (collected) {
-                    return `✓ ${slotKey.toUpperCase()}: COLLECTED → "${collected}"`;
-                } else {
-                    const requiredTag = slot.required ? '⚠️ NEED' : 'optional';
-                    return `○ ${slotKey.toUpperCase()}: ${requiredTag}`;
-                }
-            }).join('\n');
-            
-            logger.info('[HYBRID LLM] 📋 Slot prompts for LLM:', slotPromptsSection);
-        }
-        
-        // Build list of slots that need confirmation
-        const slotsNeedingConfirm = bookingSlots
-            .filter(s => s.confirmBack)
-            .map(s => s.slotId);
-        
-        const confirmInstructions = slotsNeedingConfirm.length > 0
-            ? `\nCONFIRM BACK: For ${slotsNeedingConfirm.join(', ')} - repeat the value back to verify you heard correctly.`
-            : '';
-        
-        // Build name handling instructions from slot config
-        const nameSlot = bookingSlots.find(s => s.id === 'name');
-        let nameInstructions = '';
-        if (nameSlot) {
-            const rules = [];
-            if (nameSlot.useFirstNameOnly !== false) {
-                rules.push('When addressing caller later, use FIRST NAME only (e.g., "Great, John!" not "Great, John Smith!")');
-            }
-            
-            // UI-configurable: Ask once for missing name part - make this VERY prominent
-            if (nameSlot.askMissingNamePart === true) {
-                // Check if we have a partial name passed in
-                if (partialName) {
-                    // We have a partial name - AI should ask for the missing part NOW
-                    rules.push(`
-🚨 PARTIAL NAME DETECTED - ASK FOR LAST NAME NOW:
-   Caller gave: "${partialName}" (first name only)
-   → Your VERY NEXT response must ask for their last name
-   → Say: "Thank you, ${partialName}! May I also have your last name?"
-   → Do NOT ask for phone/address yet - get the last name first
-   → If they give it, great! If they ignore, accept "${partialName}" and continue.`);
-                } else {
-                    // No partial name yet - just include the general instruction
-                    rules.push(`
-🚨 PARTIAL NAME PROTOCOL (ENABLED):
-   When caller gives ONLY first name (like "Marc" or "John"):
-   → DO NOT proceed to phone number yet!
-   → Say: "Thank you, [Name]! May I also have your last name?"
-   → Wait for their response before continuing.
-   
-   When caller gives ONLY last name (like "Smith" or "Walter"):
-   → Say: "Thank you, Mr./Ms. [Name]! And your first name?"
-   
-   ⚠️ Ask ONE TIME ONLY. If they don't provide it, that's fine - continue with booking.`);
-                }
-            }
-            
-            if (rules.length > 0) {
-                nameInstructions = `\n👤 NAME HANDLING: ${rules.join('\n')}`;
-            }
-        }
-        
-        // Build phone/caller ID instructions from slot config
-        const phoneSlot = bookingSlots.find(s => s.id === 'phone' || s.type === 'phone');
-        let phoneInstructions = '';
-        if (phoneSlot) {
-            const phoneRules = [];
-            
-            // Caller ID offer
-            if (phoneSlot.offerCallerId !== false && callerId && !knownSlots.phone) {
-                const formattedCallerId = callerId.replace(/^\+1/, '').replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
-                const prompt = (phoneSlot.callerIdPrompt || "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?")
-                    .replace('{callerId}', formattedCallerId);
-                phoneRules.push(`CALLER ID AVAILABLE: ${formattedCallerId}\n   When asking for phone, offer: "${prompt}"\n   If they say YES/that's fine/correct → use ${formattedCallerId} as their phone`);
-            }
-            
-            // Break down if unclear (UI-configurable)
-            if (phoneSlot.breakDownIfUnclear === true) {
-                phoneRules.push(`
-🔢 PHONE NUMBER VALIDATION & BREAK-DOWN (ENABLED):
-
-   CRITICAL: A valid US phone number MUST have exactly 10 digits (or 11 with leading 1).
-   Examples of VALID: "239-313-9099", "2393139099", "1-239-313-9099"
-   Examples of INVALID: "12321", "239", "313-9099" (missing digits)
-
-   IF THE CALLER GIVES AN INVALID/INCOMPLETE PHONE NUMBER:
-   → Do NOT confirm garbage like "Just to confirm, that's 12321?"
-   → Instead say: "I'm sorry, we must have a poor connection. Let me get your number step by step."
-   → Ask: "What's your area code?" 
-   → Wait for 3 digits (e.g., "239")
-   → Confirm: "Got it, 239. And the remaining seven digits?"
-   → Wait for 7 digits
-   → Combine into full number and confirm the complete number
-
-   IF THEY CORRECT YOU (e.g., "no it's 239"):
-   → They're trying to fix it - ask for the rest: "Got it, 239. And what's the rest of the number?"`);
-            } else {
-                // Even without breakDownIfUnclear, still validate
-                phoneRules.push(`
-📞 PHONE VALIDATION: A valid phone number must have 10 digits. 
-   If caller gives fewer than 10 digits, politely ask them to repeat the full number.`);
-            }
-            
-            if (phoneRules.length > 0) {
-                phoneInstructions = `\n📞 PHONE HANDLING: ${phoneRules.join('\n')}`;
-            }
-        }
-        
-        // Build address instructions from slot config
-        const addressSlot = bookingSlots.find(s => s.id === 'address' || s.type === 'address');
-        let addressInstructions = '';
-        if (addressSlot) {
-            const addressRules = [];
-            
-            // Confirm back level
-            if (addressSlot.confirmBack) {
-                const level = addressSlot.addressConfirmLevel || 'street_city';
-                const levelDesc = {
-                    'street_only': 'ONLY the street (e.g., "123 Market Place") - NO city/state/zip',
-                    'street_city': 'street + city (e.g., "123 Market Place, Naples") - NO state/zip',
-                    'full': 'full address including city, state, zip'
-                };
-                addressRules.push(`When confirming address back, say ${levelDesc[level]}`);
-            }
-            
-            // Break down if unclear (UI-configurable)
-            if (addressSlot.breakDownIfUnclear === true) {
-                addressRules.push(`
-🏠 BREAK DOWN PROTOCOL (ENABLED):
-   If you don't understand the address they gave:
-   → Say: "I'm sorry, I didn't catch that. Let's start with the street number and name?"
-   → Wait for street (e.g., "123 Main Street")
-   → Then ask: "Got it. And what city is that in?"
-   → Wait for city
-   → If needed: "And the zip code?"
-   → Combine into full address`);
-            }
-            
-            if (addressRules.length > 0) {
-                addressInstructions = `\n📍 ADDRESS HANDLING: ${addressRules.join('\n')}`;
-            }
-        }
-        
-        // Customer context
-        const isReturning = customerContext?.isReturning || customerContext?.totalCalls > 1;
-        const customerNote = isReturning 
-            ? `RETURNING CUSTOMER (${customerContext?.totalCalls || 'multiple'} previous calls). Acknowledge this!` 
-            : '';
-        
         // ════════════════════════════════════════════════════════════════════
-        // SERVICE AREA & NEEDS SECTION
+        // THE LEAN PROMPT - ~350 tokens
         // ════════════════════════════════════════════════════════════════════
-        let serviceAreaSection = '';
-        if (serviceAreaInfo) {
-            if (serviceAreaInfo.detected?.isKnownArea) {
-                serviceAreaSection = `
-═══ SERVICE AREA QUESTION ═══
-CALLER ASKED ABOUT: ${serviceAreaInfo.detected.city}
-WE SERVICE THIS AREA: YES!
-RESPOND: "Yes, we absolutely service ${serviceAreaInfo.detected.city}!"`;
-            } else if (serviceAreaInfo.detected) {
-                serviceAreaSection = `
-═══ SERVICE AREA QUESTION ═══
-CALLER ASKED ABOUT: ${serviceAreaInfo.detected.city}
-WE SERVICE THIS AREA: Likely yes (Southwest Florida)
-RESPOND: "I believe we service ${serviceAreaInfo.detected.city}, let me get your info..."`;
-            }
-        }
-        
-        // Build triage context section if available
-        let triageSection = '';
-        if (triageContext?.matched) {
-            const questions = triageContext.diagnosticQuestions?.slice(0, 2).join('\n  - ') || '';
-            triageSection = `
-═══ ISSUE MATCHED ═══
-Issue: ${triageContext.cardName || 'AC Issue'}
-Urgency: ${triageContext.urgency?.toUpperCase() || 'NORMAL'}
-${triageContext.explanation ? `Explain: ${triageContext.explanation}` : ''}
-${questions ? `Possible questions:\n  - ${questions}` : ''}
-Type: ${triageContext.suggestedServiceType || 'repair'}
-`;
-        }
-        
-        // ════════════════════════════════════════════════════════════════════
-        // 🚨 100% UI-CONTROLLED SYSTEM PROMPT
-        // All behavior comes from frontDeskBehavior config
-        // ════════════════════════════════════════════════════════════════════
-        
-        // Map personality tone to description
-        const toneDescriptions = {
-            warm: 'warm, friendly, and approachable',
-            professional: 'professional, polished, and efficient',
-            casual: 'casual, relaxed, and conversational',
-            formal: 'formal, respectful, and businesslike'
-        };
-        const toneDesc = toneDescriptions[uiConfig.personality.tone] || toneDescriptions.warm;
-        
-        // Map verbosity to word limit
-        const verbosityLimits = {
-            concise: 30,
-            balanced: 50,
-            detailed: 75
-        };
-        const maxWords = uiConfig.personality.maxResponseWords || verbosityLimits[uiConfig.personality.verbosity] || 30;
-        
-        // ════════════════════════════════════════════════════════════════════
-        // CONVERSATION STYLE - How the AI approaches booking
-        // confident: assumptive, guides caller, "Let's get you scheduled"
-        // balanced: friendly, natural, "I can help with that"  
-        // polite: deferential, respectful, "Would you like me to...?"
-        // ════════════════════════════════════════════════════════════════════
-        const conversationStyle = behaviorConfig.conversationStyle || 'balanced';
-        
-        // Build tone-specific acknowledgment guidance
-        const toneGuidance = {
-            confident: `
-═══ CONVERSATION STYLE: CONFIDENT ═══
-When transitioning to booking or asking for information:
-- Use decisive, assumptive language
-- Lead the caller forward: "Let's get you scheduled", "I'll take care of that"
-- Keep momentum: "Alright —", "Perfect —", "Got it —"
-- Do NOT ask permission unless caller is resisting
-- You are the guide — callers feel safer when you lead`,
-            balanced: `
-═══ CONVERSATION STYLE: BALANCED ═══
-When transitioning to booking or asking for information:
-- Use friendly, natural language
-- Be confident but not pushy: "I can help with that", "No problem"
-- Transition phrases: "Sounds good —", "Alright —", "Let me help you with that —"
-- Professional and warm — this is the universal style`,
-            polite: `
-═══ CONVERSATION STYLE: POLITE ═══
-When transitioning to booking or asking for information:
-- Use courteous, deferential language
-- Ask permission: "Would you like me to schedule that?", "May I get your information?"
-- Transition phrases: "If it's okay —", "Whenever you're ready —", "May I ask —"
-- Respect caller autonomy — never assume they want to book`
-        };
-        
-        // ════════════════════════════════════════════════════════════════════
-        // STREAMLINED PROMPT - Let AI be an AI, not a form-filler
-        // ════════════════════════════════════════════════════════════════════
-        
-        // Build a MINIMAL, FOCUSED prompt
-        let prompt = `You are ${uiConfig.personality.agentName || 'the receptionist'} at ${companyName} (${trade}). LIVE PHONE CALL.
+        const prompt = `You are ${companyName}'s receptionist (${trade}). ${styleHint}
 
-STYLE: ${toneDesc}, max ${maxWords} words per response.
-${speakingStyleSection}
-GOAL: Help caller, schedule service if needed.
-${toneGuidance[conversationStyle] || toneGuidance.balanced}
+CALLER: ${callerInfo}
+HAVE: ${collected.join(', ') || 'nothing yet'}
+NEED: ${needed.join(', ') || 'nothing - ready to confirm'}
 
-═══ CRITICAL CONVERSATION RULES ═══
-1. NEVER ask for info you already have (check KNOWN below)
-2. If caller says something UNCLEAR or gets CUT OFF:
-   - Reference what you DID hear ("You mentioned something about...")
-   - Ask them to finish/clarify ("What were you saying about that?")
-3. If caller mentions a specific person/technician:
-   - Acknowledge it: "You want [name] specifically?"
-   - Then help with their actual request
-4. LISTEN for what they're actually asking - don't just collect slots robotically
-5. ADAPT your tone if caller seems confused (softer), urgent (more decisive), or emotional (more empathetic)
+${runningSummary ? `CONTEXT: ${runningSummary}\n` : ''}OUTPUT JSON:
+{"slot":"${slotIds.join('|')}|none","ack":"your acknowledgment"}
 
-${bookingIsConfigured ? `═══ BOOKING SLOTS TO COLLECT ═══
-${slotPromptsSection}
+RULES:
+- If caller wants service → collect missing info ONE slot at a time
+- slot = which info to collect next (system adds the question)
+- ack = brief, natural acknowledgment of what caller said
+- If slot is "none", ack is your full reply
+- Never re-ask for info already in HAVE
+- Keep responses under 2 sentences
+${forbidden ? `- Never say: ${forbidden}` : ''}
+${lastAgentResponse ? `- You just said: "${lastAgentResponse.substring(0, 40)}..." - don't repeat` : ''}
 
-KNOWN: ${slotsList}
-${missingSlots !== 'none' ? `STILL NEED: ${missingSlots}
+Examples:
+User: "My AC is broken"
+{"slot":"name","ack":"That sounds uncomfortable! Let me help."}
 
-IMPORTANT: When you need to collect a slot, output "collectSlot" with the slot name.
-The system will automatically use the EXACT configured question - you don't write it.
-You can add a brief acknowledgment like "Got it!" or "Perfect!" but the question comes from config.` : 'ALL INFO COLLECTED - confirm and complete.'}` : `═══ BOOKING STATUS ═══
-KNOWN: ${slotsList}
-No booking questions configured. Have a natural conversation.
-If caller wants to book, say you'll take their info and have someone call back.`}`;
+User: "This is John"
+{"slot":"phone","ack":"Thanks, John!"}
 
-        // Add only what's RELEVANT to this specific turn
-        if (customerNote) prompt += `\n${customerNote}`;
-        
-        // Add running summary for conversation context
-        if (runningSummary && typeof runningSummary === 'string' && runningSummary.trim()) {
-            prompt += `\n${runningSummary}`;
-        }
-        
-        if (serviceAreaSection) prompt += `\n${serviceAreaSection}`;
-        if (triageSection) prompt += `\n${triageSection}`;
-        
-        // Add confirm-back instructions if any slots need it
-        if (confirmInstructions) {
-            prompt += confirmInstructions;
-        }
-        
-        // Add name handling instructions if configured
-        if (nameInstructions) {
-            prompt += nameInstructions;
-        }
-        
-        // Add phone/caller ID instructions if configured
-        if (phoneInstructions) {
-            prompt += phoneInstructions;
-        }
-        
-        // Add address confirmation instructions if configured
-        if (addressInstructions) {
-            prompt += addressInstructions;
-        }
-        
-        // Forbidden phrases (keep minimal)
-        if (uiConfig.forbiddenPhrases.length > 0 && uiConfig.forbiddenPhrases.length <= 5) {
-            prompt += `\nDON'T SAY: ${uiConfig.forbiddenPhrases.slice(0, 5).join(', ')}`;
-        }
-        
-        // Last response anti-repeat
-        if (lastAgentResponse) {
-            prompt += `\n\nYOU JUST SAID: "${lastAgentResponse.substring(0, 50)}..." - say something DIFFERENT.`;
-        }
-        
-        // Build needsInfo options from dynamic slots
-        const needsInfoOptions = slotIds.join('|') + '|none';
-        
-        // ════════════════════════════════════════════════════════════════════
-        // UNIVERSAL PHONE NUMBER VALIDATION (Always active)
-        // ════════════════════════════════════════════════════════════════════
-        prompt += `
+User: "What time do you open?"
+{"slot":"none","ack":"We're open 8am to 6pm Monday through Friday."}`;
 
-🚨 CRITICAL - PHONE NUMBER VALIDATION:
-A valid US phone number has EXACTLY 10 digits (or 11 starting with 1).
-- VALID: "239-313-9099", "(239) 313-9099", "2393139099"
-- INVALID: "12321" (5 digits), "239" (3 digits), "313-9099" (7 digits)
-
-When someone gives you a phone number:
-1. COUNT THE DIGITS (ignore dashes, spaces, parentheses)
-2. If 10 digits → Valid! Confirm it back
-3. If NOT 10 digits → INVALID! Say: "I'm sorry, the connection might be choppy. Let's try this - what's your area code?" Then get the rest separately.
-
-NEVER confirm an invalid phone number like "Just to confirm, that's 12321?" - that's obviously wrong!`;
-
-        // LLMQNA output format - LLM decides WHAT to collect, system decides HOW to ask
-        prompt += `
-
-═══ RESPONSE FORMAT ═══
-RESPOND with JSON. Two modes:
-
-MODE A - Collecting a booking slot (ALWAYS include acknowledgment!):
-{"collectSlot":"name","acknowledgment":"<REQUIRED - acknowledge what they said first>"}
-→ System will automatically add the exact configured question AFTER your acknowledgment
-→ The acknowledgment is REQUIRED - never leave it empty!
-→ Match your acknowledgment to the conversation style and what they just said
-
-Examples based on style:
-- Confident: {"collectSlot":"name","acknowledgment":"Let's get this taken care of."}
-- Balanced: {"collectSlot":"name","acknowledgment":"I can help with that!"}
-- Polite: {"collectSlot":"name","acknowledgment":"I'm sorry to hear that."}
-
-If caller mentions a problem (heat, leak, emergency):
-- ALWAYS acknowledge the problem first: "That sounds uncomfortable!" or "I understand, that's no good."
-- THEN the system adds the booking question
-
-MODE B - General conversation (no slot to collect):
-{"reply":"<your conversational response>","collectSlot":"none"}
-→ Use this for greetings, questions, clarification, etc.
-
-Valid collectSlot values: ${needsInfoOptions}`;
-        
         return prompt;
     }
     
