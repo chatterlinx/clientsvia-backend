@@ -427,6 +427,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/agent-status', require('./routes/admin/agentStatus')); // 🔴 Live Agent Status & System Health (Enterprise Visibility)
     app.use('/api/admin/agent-excellence', require('./routes/admin/agentExcellence')); // 🧠 AI Agent Excellence Center (Scores, Suggestions, Learning)
     app.use('/api/debug', require('./routes/api/debug')); // 🔍 Debug API - Session inspection for troubleshooting
+    app.use('/api/openai-health', require('./routes/api/openai-health')); // 🏥 OpenAI Health - ACTUALLY tests if OpenAI API works
     app.use('/api/admin/call-center', require('./routes/admin/callCenter')); // 📞 Call Center Module V2 (Call History, Customers, Analytics)
     app.use('/api/v2global/admin', routes.v2GlobalAdminRoutes); // V2 Global Admin Dashboard
     // REMOVED: Legacy v2global/directory and v2global/addcompany routes - replaced with new versions
