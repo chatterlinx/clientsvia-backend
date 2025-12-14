@@ -83,6 +83,7 @@ class FrontDeskBehaviorManager {
     getDefaultConfig() {
         return {
             enabled: true,
+            conversationStyle: 'balanced', // confident | balanced | polite
             personality: {
                 tone: 'warm',
                 verbosity: 'concise',
@@ -389,6 +390,37 @@ class FrontDeskBehaviorManager {
                         <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
                             <input type="checkbox" id="fdb-use-name" ${p.useCallerName !== false ? 'checked' : ''} style="accent-color: #58a6ff; width: 18px; height: 18px;">
                             <span style="color: #c9d1d9;">Address caller by name once known</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Conversation Style - Full Width Section -->
+                <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #30363d;">
+                    <h4 style="margin: 0 0 8px 0; color: #58a6ff;">🎯 Conversation Style</h4>
+                    <p style="color: #8b949e; margin-bottom: 16px; font-size: 0.8rem;">
+                        How should the AI approach booking? This affects how decisively the AI guides callers toward scheduling.
+                    </p>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                        <label style="display: flex; flex-direction: column; padding: 16px; background: ${(this.config.conversationStyle || 'balanced') === 'confident' ? '#238636' : '#0d1117'}; border: 2px solid ${(this.config.conversationStyle || 'balanced') === 'confident' ? '#238636' : '#30363d'}; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+                            <input type="radio" name="fdb-conversation-style" value="confident" ${(this.config.conversationStyle || 'balanced') === 'confident' ? 'checked' : ''} style="display: none;">
+                            <span style="font-size: 1.5rem; margin-bottom: 8px;">⭐</span>
+                            <span style="font-weight: 600; color: #c9d1d9; margin-bottom: 4px;">Confident</span>
+                            <span style="font-size: 0.75rem; color: #8b949e;">"Let's get you scheduled"</span>
+                            <span style="font-size: 0.7rem; color: #8b949e; margin-top: 8px;">Best for: HVAC, Plumbing, Medical</span>
+                        </label>
+                        <label style="display: flex; flex-direction: column; padding: 16px; background: ${(this.config.conversationStyle || 'balanced') === 'balanced' ? '#238636' : '#0d1117'}; border: 2px solid ${(this.config.conversationStyle || 'balanced') === 'balanced' ? '#238636' : '#30363d'}; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+                            <input type="radio" name="fdb-conversation-style" value="balanced" ${(this.config.conversationStyle || 'balanced') === 'balanced' ? 'checked' : ''} style="display: none;">
+                            <span style="font-size: 1.5rem; margin-bottom: 8px;">🤝</span>
+                            <span style="font-weight: 600; color: #c9d1d9; margin-bottom: 4px;">Balanced</span>
+                            <span style="font-size: 0.75rem; color: #8b949e;">"I can help with that"</span>
+                            <span style="font-size: 0.7rem; color: #8b949e; margin-top: 8px;">Universal default - works for all</span>
+                        </label>
+                        <label style="display: flex; flex-direction: column; padding: 16px; background: ${(this.config.conversationStyle || 'balanced') === 'polite' ? '#238636' : '#0d1117'}; border: 2px solid ${(this.config.conversationStyle || 'balanced') === 'polite' ? '#238636' : '#30363d'}; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+                            <input type="radio" name="fdb-conversation-style" value="polite" ${(this.config.conversationStyle || 'balanced') === 'polite' ? 'checked' : ''} style="display: none;">
+                            <span style="font-size: 1.5rem; margin-bottom: 8px;">🎩</span>
+                            <span style="font-weight: 600; color: #c9d1d9; margin-bottom: 4px;">Polite</span>
+                            <span style="font-size: 0.75rem; color: #8b949e;">"Would you like me to...?"</span>
+                            <span style="font-size: 0.7rem; color: #8b949e; margin-top: 8px;">Best for: Legal, Luxury, Consulting</span>
                         </label>
                     </div>
                 </div>
@@ -1687,6 +1719,26 @@ class FrontDeskBehaviorManager {
         // Test button
         container.querySelector('#fdb-test-btn')?.addEventListener('click', () => this.testPhrase(container));
 
+        // Conversation style radio buttons - update card highlighting
+        container.querySelectorAll('input[name="fdb-conversation-style"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                // Update all card styles
+                container.querySelectorAll('input[name="fdb-conversation-style"]').forEach(r => {
+                    const label = r.closest('label');
+                    if (label) {
+                        if (r.checked) {
+                            label.style.background = '#238636';
+                            label.style.borderColor = '#238636';
+                        } else {
+                            label.style.background = '#0d1117';
+                            label.style.borderColor = '#30363d';
+                        }
+                    }
+                });
+                console.log('[FRONT DESK BEHAVIOR] 🎯 Style changed to:', e.target.value);
+            });
+        });
+
         // Make manager globally accessible
         window.frontDeskBehaviorManager = this;
     }
@@ -1765,6 +1817,13 @@ class FrontDeskBehaviorManager {
                 maxResponseWords: parseInt(get('fdb-max-words')) || 30,
                 useCallerName: getChecked('fdb-use-name')
             };
+        }
+        
+        // Collect conversation style from radio buttons
+        const styleRadio = document.querySelector('input[name="fdb-conversation-style"]:checked');
+        if (styleRadio) {
+            this.config.conversationStyle = styleRadio.value;
+            console.log('[FRONT DESK BEHAVIOR] 🎯 Conversation style:', this.config.conversationStyle);
         }
 
         // Collect dynamic booking slots

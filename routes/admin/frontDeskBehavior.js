@@ -27,6 +27,11 @@ const { DEFAULT_FRONT_DESK_CONFIG } = require('../../config/frontDeskPrompt');
 // ============================================================================
 
 const UI_DEFAULTS = {
+    // 🎯 Conversation Style - How AI approaches booking
+    // confident: "Let's get you scheduled" - assumptive, guides caller
+    // balanced: "I can help with that" - friendly, universal default
+    // polite: "Would you like me to...?" - deferential, respects autonomy
+    conversationStyle: 'balanced',
     personality: {
         tone: 'warm',
         verbosity: 'concise',
@@ -183,6 +188,8 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
             success: true,
             data: {
                 enabled: config.enabled,
+                // 🎯 Conversation Style - confident/balanced/polite
+                conversationStyle: config.conversationStyle || 'balanced',
                 personality: config.personality,
                 // 🚨 Dynamic booking slots (new system)
                 bookingSlots: config.bookingSlots || null,
@@ -252,6 +259,12 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
         
         if (updates.frustrationTriggers) {
             updateObj['aiAgentSettings.frontDeskBehavior.frustrationTriggers'] = updates.frustrationTriggers;
+        }
+        
+        // 🎯 CONVERSATION STYLE - How AI approaches booking (confident/balanced/polite)
+        if (updates.conversationStyle) {
+            updateObj['aiAgentSettings.frontDeskBehavior.conversationStyle'] = updates.conversationStyle;
+            logger.info('[FRONT DESK BEHAVIOR] 🎯 Saving conversationStyle:', updates.conversationStyle);
         }
         
         if (updates.escalation) {

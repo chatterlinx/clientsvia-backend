@@ -1582,6 +1582,19 @@ const companySchema = new mongoose.Schema({
             },
             
             // ═══════════════════════════════════════════════════════════════
+            // CONVERSATION STYLE - How the AI approaches booking
+            // ═══════════════════════════════════════════════════════════════
+            // confident: "Let's get you scheduled" - assumptive, decisive, guides caller
+            // balanced: "I can help with that" - friendly, natural, universal default
+            // polite: "Would you like me to...?" - deferential, respects autonomy
+            // ═══════════════════════════════════════════════════════════════
+            conversationStyle: { 
+                type: String, 
+                enum: ['confident', 'balanced', 'polite'], 
+                default: 'balanced' 
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
             // BOOKING SLOTS - Dynamic, customizable slots for booking
             // 🚨 AUTO-SEEDED on company creation - no hardcoded fallbacks elsewhere
             // ═══════════════════════════════════════════════════════════════
