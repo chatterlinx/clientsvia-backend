@@ -644,13 +644,13 @@ class HybridReceptionistLLM {
             }
         }
         
-        // Conversation style from config
+        // Conversation style from config - just the tone, no example phrases to parrot
         const style = behaviorConfig?.conversationStyle || 'balanced';
         const styleHint = {
-            confident: 'Be decisive and lead. "Let\'s get you scheduled."',
-            balanced: 'Be friendly and helpful. "I can help with that!"',
-            polite: 'Be courteous and ask permission. "Would you like me to...?"'
-        }[style] || 'Be friendly and helpful.';
+            confident: 'Be decisive and confident.',
+            balanced: 'Be friendly and professional.',
+            polite: 'Be courteous and respectful.'
+        }[style] || 'Be friendly and professional.';
         
         // Customer context (brief)
         const callerInfo = customerContext?.isReturning 
@@ -674,28 +674,36 @@ class HybridReceptionistLLM {
         // ════════════════════════════════════════════════════════════════════
         // THE LEAN PROMPT - ~350 tokens
         // ════════════════════════════════════════════════════════════════════
+        
+        // Determine first missing slot for order guidance
+        const firstMissingSlot = needed[0] || 'none';
+        
         const prompt = `You are ${companyName}'s receptionist (${trade}). ${styleHint}
 
 CALLER: ${callerInfo}
 HAVE: ${collected.join(', ') || 'nothing yet'}
-NEED: ${needed.join(', ') || 'nothing - ready to confirm'}
+NEED (in order): ${needed.join(' → ') || 'nothing - ready to confirm'}
 
 ${runningSummary ? `CONTEXT: ${runningSummary}\n` : ''}OUTPUT JSON:
-{"slot":"${slotIds.join('|')}|none","ack":"your acknowledgment"}
+{"slot":"${slotIds.join('|')}|none","ack":"your response"}
 
 RULES:
-- If caller wants service → collect missing info ONE slot at a time
-- slot = which info to collect next (system adds the question)
-- ack = brief, natural acknowledgment of what caller said
-- If slot is "none", ack is your full reply
-- Never re-ask for info already in HAVE
-- Keep responses under 2 sentences
-${forbidden ? `- Never say: ${forbidden}` : ''}
+1. If caller just says "hi/hello" → slot:"none", greet them and ask how you can help
+2. If caller mentions a problem/service need → start collecting info
+3. Collect slots IN ORDER: ${needed.join(' → ')} (start with ${firstMissingSlot})
+4. slot = which info to collect next (system adds the exact question)
+5. ack = your natural response (greeting, acknowledgment, or full reply if slot is "none")
+6. Never re-ask for info already in HAVE
+7. Keep responses under 2 sentences
+${forbidden ? `8. Never say: ${forbidden}` : ''}
 ${lastAgentResponse ? `- You just said: "${lastAgentResponse.substring(0, 40)}..." - don't repeat` : ''}
 
 Examples:
+User: "Hi good morning"
+{"slot":"none","ack":"Good morning! How can I help you today?"}
+
 User: "My AC is broken"
-{"slot":"name","ack":"That sounds uncomfortable! Let me help."}
+{"slot":"${firstMissingSlot}","ack":"That sounds uncomfortable! Let me get you scheduled."}
 
 User: "This is John"
 {"slot":"phone","ack":"Thanks, John!"}
