@@ -556,6 +556,8 @@ async function processTurn({
                         required: s.required
                     }))
                 },
+                // 🧠 LLM BRAIN DEBUG - What the LLM decided and why
+                llmBrain: aiResult.debug || null,
                 debugLog
             };
         }

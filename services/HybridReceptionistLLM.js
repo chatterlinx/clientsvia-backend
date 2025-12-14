@@ -504,6 +504,42 @@ class HybridReceptionistLLM {
             const conversationMode = hasAllSlots ? 'confirmation' : 
                                      collectingSlot ? 'booking' : 'discovery';
             
+            // ════════════════════════════════════════════════════════════════
+            // BUILD COMPREHENSIVE DEBUG INFO
+            // ════════════════════════════════════════════════════════════════
+            const debugInfo = {
+                // What the LLM saw
+                promptSummary: {
+                    companyName: company.companyName || company.name,
+                    trade: company.tradeType || company.trade,
+                    style: behaviorConfig?.conversationStyle || 'balanced',
+                    callerInfo: customerContext?.isReturning ? 'returning' : 'new',
+                    slotsHave: Object.entries(knownSlots).filter(([k,v]) => v).map(([k,v]) => `${k}:${v}`),
+                    slotsNeed: bookingSlots.filter(s => !knownSlots[s.slotId || s.id]).map(s => s.slotId || s.id),
+                    promptTokens: response.usage?.prompt_tokens || 0
+                },
+                // What the LLM returned
+                llmRawOutput: parsed,
+                llmDecision: {
+                    slotChosen: parsed.slot || parsed.collectSlot || 'none',
+                    acknowledgment: parsed.ack || parsed.acknowledgment || '(none)',
+                    wasValidSlot: !!collectingSlot
+                },
+                // What the Engine did
+                engineAction: {
+                    normalizedSlot: collectingSlot || 'none',
+                    questionInjected: collectingSlot ? (bookingSlots.find(s => (s.slotId || s.id) === collectingSlot)?.question || 'NOT FOUND') : null,
+                    finalResponse: finalReply
+                },
+                // Performance
+                performance: {
+                    latencyMs,
+                    tokensUsed: response.usage?.total_tokens || 0,
+                    promptTokens: response.usage?.prompt_tokens || 0,
+                    completionTokens: response.usage?.completion_tokens || 0
+                }
+            };
+            
             const result = {
                 reply: finalReply,
                 conversationMode,
@@ -512,14 +548,17 @@ class HybridReceptionistLLM {
                 filledSlots: knownSlots,
                 latencyMs,
                 tokensUsed: response.usage?.total_tokens || 0,
-                llmqnaUsed: !!collectingSlot  // Flag for debugging
+                llmqnaUsed: !!collectingSlot,
+                // 🔍 COMPREHENSIVE DEBUG
+                debug: debugInfo
             };
             
             logger.info('[HYBRID LLM] ✅ Response', {
                 callId,
                 reply: finalReply.substring(0, 60) + '...',
                 collectingSlot: collectingSlot || 'none',
-                llmqna: !!collectingSlot,
+                llmDecision: parsed.slot || 'none',
+                llmAck: (parsed.ack || '').substring(0, 40),
                 latencyMs
             });
             

@@ -524,6 +524,8 @@ class AITestConsole {
                     slotsCollected: debug.slotsCollected,
                     historySent: debug.historySent || 0,
                     bookingConfig: debug.bookingConfig,  // Shows what prompts AI was given
+                    slotDiagnostics: debug.slotDiagnostics,  // Slot extraction details
+                    llmBrain: debug.llmBrain,  // 🧠 LLM decision details
                     timestamp: new Date().toISOString()
                 });
                 
@@ -940,6 +942,40 @@ ${separator}`;
                     `;
                 }
                 
+                // 🧠 LLM BRAIN DECISION - Show what the LLM decided and what the engine did
+                let llmBrainHtml = '';
+                if (entry.llmBrain) {
+                    const brain = entry.llmBrain;
+                    llmBrainHtml = `
+                        <div style="background: #1c1c3a; border: 1px solid #8957e5; border-radius: 4px; padding: 6px 8px; margin: 6px 0; font-size: 10px;">
+                            <div style="color: #8957e5; font-weight: bold; margin-bottom: 6px;">🧠 LLM BRAIN DECISION</div>
+                            
+                            <div style="margin-bottom: 6px;">
+                                <div style="color: #58a6ff; font-size: 9px; margin-bottom: 2px;">📥 What LLM saw:</div>
+                                <div style="color: #8b949e; font-size: 9px; margin-left: 8px;">• Have: ${brain.promptSummary?.slotsHave?.join(', ') || 'nothing'}</div>
+                                <div style="color: #8b949e; font-size: 9px; margin-left: 8px;">• Need: ${brain.promptSummary?.slotsNeed?.join(' → ') || 'nothing'}</div>
+                                <div style="color: #8b949e; font-size: 9px; margin-left: 8px;">• Style: ${brain.promptSummary?.style || 'balanced'}</div>
+                            </div>
+                            
+                            <div style="margin-bottom: 6px;">
+                                <div style="color: #f0883e; font-size: 9px; margin-bottom: 2px;">📤 What LLM returned:</div>
+                                <div style="color: #f0883e; font-size: 9px; margin-left: 8px;">• slot: "${brain.llmDecision?.slotChosen || 'none'}"</div>
+                                <div style="color: #f0883e; font-size: 9px; margin-left: 8px;">• ack: "${brain.llmDecision?.acknowledgment || '(none)'}"</div>
+                            </div>
+                            
+                            <div>
+                                <div style="color: #3fb950; font-size: 9px; margin-bottom: 2px;">⚙️ What Engine did:</div>
+                                <div style="color: #3fb950; font-size: 9px; margin-left: 8px;">• Slot: ${brain.engineAction?.normalizedSlot || 'none'}</div>
+                                ${brain.engineAction?.questionInjected ? `<div style="color: #3fb950; font-size: 9px; margin-left: 8px;">• Question injected: "${brain.engineAction.questionInjected}"</div>` : ''}
+                            </div>
+                            
+                            <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #30363d;">
+                                <div style="color: #6e7681; font-size: 9px;">📊 Prompt: ${brain.performance?.promptTokens || 0} tokens | Completion: ${brain.performance?.completionTokens || 0} tokens</div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
                 return `
                 <div style="padding: 8px 0; ${i > 0 ? 'border-top: 1px dashed #30363d;' : ''}">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
@@ -959,6 +995,7 @@ ${separator}`;
                         <span>📨${entry.historySent} hist</span>
                     </div>
                     ${thinkingHtml}
+                    ${llmBrainHtml}
                     ${bookingHtml}
                 </div>
             `;
