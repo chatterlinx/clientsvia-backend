@@ -285,7 +285,10 @@ async function processTurn({
         log('CHECKPOINT 4: ✅ Session ready', { 
             sessionId: session._id, 
             turns: session.metrics?.totalTurns || 0,
-            phase: session.phase
+            phase: session.phase,
+            // 🔍 DIAGNOSTIC: Show what slots were already saved in this session
+            existingSlots: JSON.stringify(session.collectedSlots || {}),
+            isSessionReused: (session.metrics?.totalTurns || 0) > 0
         });
         
         // ═══════════════════════════════════════════════════════════════════
@@ -408,7 +411,11 @@ async function processTurn({
         }
         
         const willAskForMissingNamePart = currentSlots.partialName && !currentSlots.name;
-        log('CHECKPOINT 8: ✅ Slots extracted', { ...currentSlots, willAskForMissingNamePart });
+        log('CHECKPOINT 8: ✅ Slots extracted', { 
+            currentSlots: JSON.stringify(currentSlots),
+            extractedThisTurn: JSON.stringify(extractedThisTurn),
+            willAskForMissingNamePart
+        });
         
         // ═══════════════════════════════════════════════════════════════════
         // STEP 8: Call AI brain
@@ -530,6 +537,15 @@ async function processTurn({
                 runningSummary: summaryBullets,
                 turnNumber: session.metrics?.totalTurns || 0,
                 historySent: conversationHistory.length,
+                // 🔍 SLOT DIAGNOSTICS - Shows exactly what happened with slots
+                slotDiagnostics: {
+                    sessionId: session._id.toString(),
+                    wasSessionReused: (session.metrics?.totalTurns || 0) > 0,
+                    slotsBeforeThisTurn: session.collectedSlots || {},
+                    extractedThisTurn: extractedThisTurn,
+                    slotsAfterMerge: { ...session.collectedSlots, ...(aiResult.filledSlots || {}) },
+                    whatLLMSaw: currentSlots
+                },
                 bookingConfig: {
                     source: bookingConfig.source,
                     isConfigured: bookingConfig.isConfigured,

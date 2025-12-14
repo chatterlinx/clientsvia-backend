@@ -684,17 +684,29 @@ NEVER say any of these phrases. They make you sound robotic.
         // Build slot prompts section - ONLY if configured
         let slotPromptsSection = '';
         if (bookingIsConfigured) {
+            // 🔍 DEBUG: Log exactly what slots the LLM will see
+            logger.info('[HYBRID LLM] 🔍 SLOT STATUS FOR LLM:', {
+                knownSlots: JSON.stringify(knownSlots),
+                bookingSlotIds: bookingSlots.map(s => s.slotId || s.id),
+                nameInKnownSlots: knownSlots.name || knownSlots['name'] || '(not found)',
+                phoneInKnownSlots: knownSlots.phone || knownSlots['phone'] || '(not found)'
+            });
+            
             // LLMQNA: LLM only sees slot status, not exact questions
             // The exact questions are looked up by code AFTER LLM decides which slot to collect
             slotPromptsSection = bookingSlots.map(slot => {
-                const collected = knownSlots[slot.slotId];
+                // Check both slotId and id for compatibility
+                const slotKey = slot.slotId || slot.id;
+                const collected = knownSlots[slotKey];
                 if (collected) {
-                    return `✓ ${slot.slotId.toUpperCase()}: COLLECTED → "${collected}"`;
+                    return `✓ ${slotKey.toUpperCase()}: COLLECTED → "${collected}"`;
                 } else {
                     const requiredTag = slot.required ? '⚠️ NEED' : 'optional';
-                    return `○ ${slot.slotId.toUpperCase()}: ${requiredTag}`;
+                    return `○ ${slotKey.toUpperCase()}: ${requiredTag}`;
                 }
             }).join('\n');
+            
+            logger.info('[HYBRID LLM] 📋 Slot prompts for LLM:', slotPromptsSection);
         }
         
         // Build list of slots that need confirmation

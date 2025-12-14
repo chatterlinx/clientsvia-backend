@@ -165,6 +165,29 @@ class SessionService {
         if (channel === 'website' && sessionId) {
             // Find active website session
             const cutoff = new Date(Date.now() - this.WEBSITE_SESSION_TIMEOUT);
+            
+            // Try to find by MongoDB _id first (frontend sends back session._id)
+            const mongoose = require('mongoose');
+            if (mongoose.Types.ObjectId.isValid(sessionId)) {
+                const byId = await ConversationSession.findOne({
+                    _id: sessionId,
+                    companyId,
+                    channel: 'website',
+                    status: 'active',
+                    lastActivityAt: { $gte: cutoff }
+                });
+                
+                if (byId) {
+                    logger.debug('[SESSION SERVICE] Found existing website session by _id', { 
+                        sessionId: byId._id,
+                        collectedSlots: byId.collectedSlots,
+                        turns: byId.turns?.length
+                    });
+                    return byId;
+                }
+            }
+            
+            // Fallback: look for channelIdentifiers.websiteSessionId (original sessionId)
             const existing = await ConversationSession.findOne({
                 companyId,
                 channel: 'website',
@@ -174,7 +197,10 @@ class SessionService {
             });
             
             if (existing) {
-                logger.debug('[SESSION SERVICE] Found existing website session', { sessionId: existing._id });
+                logger.debug('[SESSION SERVICE] Found existing website session by websiteSessionId', { 
+                    sessionId: existing._id,
+                    collectedSlots: existing.collectedSlots
+                });
                 return existing;
             }
         }
