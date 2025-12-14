@@ -289,8 +289,11 @@ router.patch('/', async (req, res) => {
 
     // Clear Redis cache for this company (if using caching)
     try {
-      const redisClient = require('../../src/config/redisClient');
-      await redisClient.del(`company:${companyId}`);
+      const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+      if (isRedisConfigured()) {
+        const redisClient = getSharedRedisClient();
+        await redisClient.del(`company:${companyId}`);
+      }
       logger.info('[CompanyOps NotificationSettings] Redis cache cleared', { companyId });
     } catch (redisError) {
       // Non-critical error

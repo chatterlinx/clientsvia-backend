@@ -869,8 +869,8 @@ router.patch('/company/:id', async (req, res) => {
         
         // Clear AI Agent Logic cache when aiAgentSettings is updated (includes keywords)
         if (req.body.aiAgentSettings) {
-            const aiLoader = require('../src/config/aiLoader');
-            await aiLoader.invalidate(companyId);
+            const CacheHelper = require('../utils/cacheHelper');
+            await CacheHelper.invalidateCompanyAndRelated(companyId);
             logger.debug(`⚡ AI Agent Logic cache invalidated for company: ${companyId}`);
         }
 
@@ -2617,8 +2617,8 @@ router.patch('/company/:companyId/intelligence-mode', authenticateJWT, async (re
         await CacheHelper.invalidateCompany(companyId);
         
         // Clear AI Agent Logic cache
-        const aiLoader = require('../src/config/aiLoader');
-        await aiLoader.invalidate(companyId);
+        const CacheHelper = require('../utils/cacheHelper');
+        await CacheHelper.invalidateCompanyAndRelated(companyId);
         
         logger.info(`🗑️ [MODE SWITCH] Cache cleared for company: ${companyId}`);
         

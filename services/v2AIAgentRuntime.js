@@ -33,13 +33,13 @@ const FrontlineIntel = require('./FrontlineIntel');
 const CallFlowExecutor = require('./CallFlowExecutor');
 
 // ═══════════════════════════════════════════════════════════════════
-// BRAIN-1 RUNTIME - New Clean Architecture
+// BRAIN-1 REMOVED (Dec 2025) - Now using ConversationEngine
 // ═══════════════════════════════════════════════════════════════════
-// Brain-1 is the mandatory gateway for all caller turns.
-// Every utterance flows through Brain-1 before anything else.
-// Brain-1 decides actions, Brain-2 (3-Tier) provides knowledge.
+// Old Brain-1 architecture was deleted in clean sweep.
+// v2AIAgentRuntime now falls through to standard 3-Tier processing.
+// For new architecture, see: services/ConversationEngine.js
 // ═══════════════════════════════════════════════════════════════════
-const { processTurn: brain1ProcessTurn } = require('../src/services/brain1');
+const brain1ProcessTurn = null; // REMOVED - stub to prevent crashes
 
 // ═══════════════════════════════════════════════════════════════════
 // LAZY-LOADED SERVICES (moved from inline requires to top-level)
@@ -476,100 +476,21 @@ class V2AIAgentRuntime {
             }
             
             // ═════════════════════════════════════════════════════════════════
-            // 🧠 BRAIN-1 RUNTIME - NEW CLEAN ARCHITECTURE
+            // 🧠 BRAIN-1 REMOVED (Dec 2025) - Using 3-Tier path below
             // ═════════════════════════════════════════════════════════════════
-            // Brain-1 is the MANDATORY GATEWAY for all caller turns.
-            // Every utterance flows through Brain-1 before anything else.
-            // Brain-1 decides actions, Brain-2 (3-Tier) provides knowledge.
-            // 
-            // To enable: AdminSettings.globalProductionIntelligence.brain1Enabled
-            //        OR: company.agentSettings.brain1Enabled
+            // Old Brain-1 architecture was deleted in clean sweep.
+            // Now falling through to standard 3-Tier processing below.
+            // For new unified architecture, see: services/ConversationEngine.js
             // ═════════════════════════════════════════════════════════════════
             
-            // ═════════════════════════════════════════════════════════════════
-            // 🚨 SINGLE VOICE ARCHITECTURE - BRAIN-1 IS ALWAYS ENABLED
-            // ═════════════════════════════════════════════════════════════════
-            // Brain-1 is the MANDATORY GATEWAY. Legacy path is DEAD.
-            // This ensures single voice through ResponseConstructor.
-            // 
-            // DO NOT add fallback to legacy path here.
-            // If Brain-1 fails, return error through ResponseConstructor.
-            // ═════════════════════════════════════════════════════════════════
-            const { buildSimpleResponse } = require('./ResponseConstructor');
-            
-            logger.info('[V2 AGENT] 🧠 Using Brain-1 Runtime (MANDATORY - single voice architecture)', {
+            logger.info('[V2 AGENT] 🔄 Using 3-Tier path (Brain-1 removed)', {
                 companyId: companyID,
                 callId,
                 turn: (callState?.turnCount || 0) + 1
             });
             
-            try {
-                const brain1Result = await brain1ProcessTurn(
-                    companyID,
-                    callId,
-                    userInput,
-                    callState
-                );
-                
-                logger.info('[V2 AGENT] ✅ Brain-1 turn complete', {
-                    companyId: companyID,
-                    callId,
-                    action: brain1Result.action,
-                    shouldTransfer: brain1Result.shouldTransfer,
-                    shouldHangup: brain1Result.shouldHangup,
-                    responseLength: brain1Result.text?.length
-                });
-                
-                // Return Brain-1 result directly (already built via ResponseConstructor)
-                return {
-                    text: brain1Result.text,
-                    response: brain1Result.text,
-                    ssml: brain1Result.ssml,
-                    action: brain1Result.action,
-                    shouldTransfer: brain1Result.shouldTransfer,
-                    shouldHangup: brain1Result.shouldHangup,
-                    callState: brain1Result.callState
-                };
-                
-            } catch (brain1Error) {
-                // ═════════════════════════════════════════════════════════════════
-                // 🚨 BRAIN-1 FAILED - Return error via ResponseConstructor
-                // DO NOT fall back to legacy path!
-                // ═════════════════════════════════════════════════════════════════
-                logger.error('[V2 AGENT] ❌ Brain-1 failed - returning error response (NO LEGACY FALLBACK)', {
-                    companyId: companyID,
-                    callId,
-                    error: brain1Error.message,
-                    stack: brain1Error.stack
-                });
-                
-                const errorResponse = buildSimpleResponse({
-                    context: { callId, companyId: companyID, turnNumber: (callState?.turnCount || 0) + 1 },
-                    text: "I'm here to help. Could you please tell me more about what you need?",
-                    source: 'brain1.error.fallback'
-                });
-                
-                return {
-                    text: errorResponse.text,
-                    response: errorResponse.text,
-                    ssml: errorResponse.ssml,
-                    action: 'continue',
-                    shouldTransfer: false,
-                    shouldHangup: false,
-                    callState: {
-                        ...callState,
-                        turnCount: (callState?.turnCount || 0) + 1,
-                        lastError: brain1Error.message
-                    }
-                };
-            }
-            
             // ═════════════════════════════════════════════════════════════════
-            // 🚨 LEGACY PATH BELOW IS DEAD CODE - KEPT FOR REFERENCE ONLY
-            // ═════════════════════════════════════════════════════════════════
-            // The code below this point should NEVER execute.
-            // It remains for reference during transition period only.
-            // TODO: Remove after confirming Brain-1 is stable in production.
+            // 🔄 3-TIER INTELLIGENCE PATH - Primary processing
             // ═════════════════════════════════════════════════════════════════
             
             /* LEGACY PATH - DEAD CODE - DO NOT EXECUTE

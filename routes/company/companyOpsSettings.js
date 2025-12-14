@@ -176,8 +176,11 @@ router.patch('/ai-agent', async (req, res) => {
 
     // Clear Redis cache
     try {
-      const redisClient = require('../../src/config/redisClient');
-      await redisClient.del(`company:${companyId}`);
+      const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+      if (isRedisConfigured()) {
+        const redisClient = getSharedRedisClient();
+        await redisClient.del(`company:${companyId}`);
+      }
     } catch (redisError) {
       logger.warn('[CompanyOps Settings] Failed to clear Redis cache', {
         companyId,
@@ -263,8 +266,11 @@ router.patch('/operating-hours', async (req, res) => {
 
     // Clear Redis cache
     try {
-      const redisClient = require('../../src/config/redisClient');
-      await redisClient.del(`company:${companyId}`);
+      const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+      if (isRedisConfigured()) {
+        const redisClient = getSharedRedisClient();
+        await redisClient.del(`company:${companyId}`);
+      }
     } catch (redisError) {
       logger.warn('[CompanyOps Settings] Failed to clear Redis cache', {
         companyId,
@@ -337,8 +343,11 @@ router.patch('/telephony', async (req, res) => {
 
     // Clear Redis cache
     try {
-      const redisClient = require('../../src/config/redisClient');
-      await redisClient.del(`company:${companyId}`);
+      const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+      if (isRedisConfigured()) {
+        const redisClient = getSharedRedisClient();
+        await redisClient.del(`company:${companyId}`);
+      }
     } catch (redisError) {
       logger.warn('[CompanyOps Settings] Failed to clear Redis cache', {
         companyId,
@@ -420,8 +429,11 @@ router.patch('/risk-safety', async (req, res) => {
 
     // Clear Redis cache
     try {
-      const redisClient = require('../../src/config/redisClient');
-      await redisClient.del(`company:${companyId}`);
+      const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+      if (isRedisConfigured()) {
+        const redisClient = getSharedRedisClient();
+        await redisClient.del(`company:${companyId}`);
+      }
     } catch (redisError) {
       logger.warn('[CompanyOps Settings] Failed to clear Redis cache', {
         companyId,

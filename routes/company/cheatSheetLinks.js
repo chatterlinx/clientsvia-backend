@@ -224,8 +224,11 @@ router.post('/', async (req, res) => {
 
     // Clear Redis cache
     try {
-      const redisClient = require('../../src/config/redisClient');
-      await redisClient.del(`company:${companyId}`);
+      const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+      if (isRedisConfigured()) {
+        const redisClient = getSharedRedisClient();
+        await redisClient.del(`company:${companyId}`);
+      }
       logger.info('[Cheat Sheet Links] Redis cache cleared', { companyId });
     } catch (redisError) {
       logger.warn('[Cheat Sheet Links] Failed to clear Redis cache', {
@@ -344,8 +347,11 @@ router.put('/:linkId', async (req, res) => {
 
     // Clear Redis cache
     try {
-      const redisClient = require('../../src/config/redisClient');
-      await redisClient.del(`company:${companyId}`);
+      const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+      if (isRedisConfigured()) {
+        const redisClient = getSharedRedisClient();
+        await redisClient.del(`company:${companyId}`);
+      }
     } catch (redisError) {
       logger.warn('[Cheat Sheet Links] Failed to clear Redis cache', {
         companyId,
@@ -424,8 +430,11 @@ router.delete('/:linkId', async (req, res) => {
 
     // Clear Redis cache
     try {
-      const redisClient = require('../../src/config/redisClient');
-      await redisClient.del(`company:${companyId}`);
+      const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+      if (isRedisConfigured()) {
+        const redisClient = getSharedRedisClient();
+        await redisClient.del(`company:${companyId}`);
+      }
     } catch (redisError) {
       logger.warn('[Cheat Sheet Links] Failed to clear Redis cache', {
         companyId,

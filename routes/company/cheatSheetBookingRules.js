@@ -246,8 +246,11 @@ router.patch('/', async (req, res) => {
 
     // Clear Redis cache
     try {
-      const redisClient = require('../../src/config/redisClient');
-      await redisClient.del(`company:${companyId}`);
+      const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+      if (isRedisConfigured()) {
+        const redisClient = getSharedRedisClient();
+        await redisClient.del(`company:${companyId}`);
+      }
       logger.info('[Cheat Sheet BookingRules] Redis cache cleared', { companyId });
     } catch (redisError) {
       logger.warn('[Cheat Sheet BookingRules] Failed to clear Redis cache', {
