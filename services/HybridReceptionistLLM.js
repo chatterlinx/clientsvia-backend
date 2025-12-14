@@ -415,7 +415,7 @@ class HybridReceptionistLLM {
             const content = response.choices[0]?.message?.content;
             
             // ════════════════════════════════════════════════════════════════
-            // TIER 3 ARCHITECTURE: LLM decides WHAT, our code decides HOW
+            // LLMQNA: LLM decides WHAT, our code decides HOW
             // ════════════════════════════════════════════════════════════════
             // LLM outputs: { collectSlot, acknowledgment, freeformReply }
             // Our code: looks up EXACT question from config, combines with ack
@@ -430,7 +430,7 @@ class HybridReceptionistLLM {
             }
             
             // ════════════════════════════════════════════════════════════════
-            // TIER 3 RESPONSE ASSEMBLY
+            // LLMQNA RESPONSE ASSEMBLY
             // ════════════════════════════════════════════════════════════════
             let finalReply;
             let collectingSlot = parsed.collectSlot || parsed.needsInfo;
@@ -461,7 +461,7 @@ class HybridReceptionistLLM {
                     // Combine: "Got it! " + "May I have your name please?"
                     finalReply = ack ? `${ack} ${exactQuestion}` : exactQuestion;
                     
-                    logger.info('[HYBRID LLM] 🎯 TIER 3: Using EXACT configured question', {
+                    logger.info('[HYBRID LLM] 🎯 LLMQNA: Using EXACT configured question', {
                         slotId: collectingSlot,
                         acknowledgment: ack || '(none)',
                         exactQuestion: exactQuestion,
@@ -492,14 +492,14 @@ class HybridReceptionistLLM {
                 filledSlots: knownSlots,
                 latencyMs,
                 tokensUsed: response.usage?.total_tokens || 0,
-                tier3Used: !!collectingSlot  // Flag for debugging
+                llmqnaUsed: !!collectingSlot  // Flag for debugging
             };
             
             logger.info('[HYBRID LLM] ✅ Response', {
                 callId,
                 reply: finalReply.substring(0, 60) + '...',
                 collectingSlot: collectingSlot || 'none',
-                tier3: !!collectingSlot,
+                llmqna: !!collectingSlot,
                 latencyMs
             });
             
@@ -661,7 +661,7 @@ NEVER say any of these phrases. They make you sound robotic.
         // Build slot prompts section - ONLY if configured
         let slotPromptsSection = '';
         if (bookingIsConfigured) {
-            // TIER 3: LLM only sees slot status, not exact questions
+            // LLMQNA: LLM only sees slot status, not exact questions
             // The exact questions are looked up by code AFTER LLM decides which slot to collect
             slotPromptsSection = bookingSlots.map(slot => {
                 const collected = knownSlots[slot.slotId];
@@ -963,7 +963,7 @@ When someone gives you a phone number:
 
 NEVER confirm an invalid phone number like "Just to confirm, that's 12321?" - that's obviously wrong!`;
 
-        // TIER 3 output format - LLM decides WHAT to collect, system decides HOW to ask
+        // LLMQNA output format - LLM decides WHAT to collect, system decides HOW to ask
         prompt += `
 
 ═══ RESPONSE FORMAT ═══
