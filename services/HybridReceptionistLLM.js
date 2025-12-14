@@ -432,6 +432,10 @@ class HybridReceptionistLLM {
             // ════════════════════════════════════════════════════════════════
             // LLMQNA RESPONSE ASSEMBLY
             // ════════════════════════════════════════════════════════════════
+            // Get booking slots from company config for exact question lookup
+            const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company);
+            const bookingSlots = bookingConfig.slots || [];
+            
             let finalReply;
             let collectingSlot = parsed.collectSlot || parsed.needsInfo;
             
