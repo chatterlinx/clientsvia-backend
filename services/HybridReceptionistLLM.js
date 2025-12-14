@@ -616,15 +616,17 @@ NEVER say any of these phrases. They make you sound robotic.
             slotPromptsSection = bookingSlots.map(slot => {
                 const collected = knownSlots[slot.slotId];
                 if (collected) {
-                    return `  ${slot.slotId}: ✓ COLLECTED → "${collected}"`;
+                    return `✓ ${slot.slotId.toUpperCase()}: Already have → "${collected}"`;
                 } else {
-                    const requiredTag = slot.required ? 'REQUIRED' : 'optional';
+                    const requiredTag = slot.required ? '⚠️ REQUIRED' : 'optional';
                     const confirmNote = slot.confirmBack 
-                        ? `\n    → After answer, confirm: "${slot.confirmPrompt?.replace('{value}', '[their answer]') || 'Is that correct?'}"`
+                        ? `\n   THEN CONFIRM: "${slot.confirmPrompt?.replace('{value}', '[their answer]') || 'Is that correct?'}"`
                         : '';
-                    return `  ${slot.slotId}: ASK → "${slot.question}" (${requiredTag})${confirmNote}`;
+                    // Make the question VERY prominent so LLM uses it exactly
+                    return `→ ${slot.slotId.toUpperCase()} (${requiredTag}):
+   SAY EXACTLY: "${slot.question}"${confirmNote}`;
                 }
-            }).join('\n');
+            }).join('\n\n');
         }
         
         // Build list of slots that need confirmation
@@ -842,9 +844,17 @@ GOAL: Help caller, schedule service if needed.
    - Then help with their actual request
 4. LISTEN for what they're actually asking - don't just collect slots robotically
 
-${bookingIsConfigured ? `═══ BOOKING SLOTS (DO NOT READ THIS ALOUD - INTERNAL ONLY) ═══
-When collecting booking info, use these EXACT questions:
+${bookingIsConfigured ? `═══ BOOKING QUESTIONS - MEMORIZE THESE ═══
+🚨🚨🚨 CRITICAL: You MUST ask these questions WORD-FOR-WORD. NO paraphrasing! 🚨🚨🚨
+
 ${slotPromptsSection}
+
+⚠️ WRONG: "May I have your last name?" (you changed it!)
+✅ RIGHT: "${bookingSlots.find(s => s.slotId === 'name' || s.id === 'name')?.question || 'May I have your name please?'}" (exact wording)
+
+If the configured question asks for "name" → ask for NAME (full name, not just last name)
+If the configured question asks for "phone number" → ask for PHONE NUMBER (not callback number)
+DO NOT add words. DO NOT remove words. DO NOT substitute words.
 
 KNOWN: ${slotsList}
 ${missingSlots !== 'none' ? `STILL NEED: ${missingSlots}` : 'ALL INFO COLLECTED - confirm and complete.'}` : `═══ BOOKING STATUS ═══
