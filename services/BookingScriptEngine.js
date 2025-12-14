@@ -6,7 +6,7 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
  * This service is the ONLY place that loads and normalizes booking configuration.
- * All other services (HybridReceptionistLLM, LLM0TurnHandler, etc.) must use this.
+ * All other services (HybridReceptionistLLM, ConversationEngine, etc.) must use this.
  * 
  * Why this exists:
  * - UI saves to: company.aiAgentSettings.frontDeskBehavior.bookingSlots

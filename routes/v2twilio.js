@@ -37,19 +37,11 @@ const { initializeCall } = require('../services/v2AIAgentRuntime');
 // LLM-0 is the master orchestrator that sits BEFORE the 3-Tier system.
 // It decides: ask question, run scenario, book appointment, transfer, etc.
 // The 3-Tier system (Brain 2) only runs when LLM-0 says "RUN_SCENARIO".
-// Feature flag: AdminSettings.globalProductionIntelligence.llm0Enabled
 // ============================================================================
-// SAFE IMPORT: Wrap in try/catch to prevent startup crash if dependencies fail
-let LLM0TurnHandler;
-try {
-    LLM0TurnHandler = require('../services/LLM0TurnHandler');
-    logger.info('[V2TWILIO] ✅ LLM0TurnHandler (HybridReceptionistLLM) loaded successfully');
-} catch (err) {
-    logger.error('[V2TWILIO] ❌ CRITICAL: LLM0TurnHandler failed to load!', { error: err.message, stack: err.stack });
-    LLM0TurnHandler = null;
-}
-// NOTE: decideNextStep/LLM0OrchestratorService REMOVED - HybridReceptionistLLM is the only brain
-// V2 DELETED: CompanyKnowledgeQnA model removed (AI Brain only)
+// ARCHITECTURE (Dec 2025): ConversationEngine → HybridReceptionistLLM → OpenAI
+// LLM0TurnHandler, LLM0OrchestratorService, decideNextStep - ALL REMOVED
+// The only AI brain is HybridReceptionistLLM with lean ~400 token prompt
+// ============================================================================
 
 // ============================================================================
 // 📞 CALL CENTER MODULE V2 - Customer Recognition
@@ -2686,13 +2678,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       if (llm0Enabled && company) {
         
         // ════════════════════════════════════════════════════════════════════════════════════
-        // 🚀 HYBRID FAST PATH - BYPASS SLOW decideNextStep (Dec 2025)
+        // 🚀 UNIFIED AI PATH (Dec 2025)
         // ════════════════════════════════════════════════════════════════════════════════════
-        // The old path: decideNextStep (7+ seconds) → LLM0TurnHandler
-        // The new path: LLM0TurnHandler directly (uses HybridReceptionistLLM internally)
-        // 
-        // This is THE FIX for the "dumb robot" problem.
-        // HybridReceptionistLLM handles: intent detection, slot extraction, empathy - all in <1.5s
+        // ConversationEngine → HybridReceptionistLLM → OpenAI (lean ~400 token prompt)
+        // Handles: intent detection, slot extraction, empathy - all in <1.5s
         // ════════════════════════════════════════════════════════════════════════════════════
         
         const useHybridPath = company?.aiAgentSettings?.callFlowEngine?.enabled !== false; // Default ON
@@ -2885,7 +2874,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             type: 'TURN_COMPLETE',
             turn: turnCount,
             data: {
-              handler: 'LLM0TurnHandler',
+              handler: 'ConversationEngine',
               action: result.action,
               responsePreview: (result.text || result.response || '').substring(0, 100),
               bookingModeLocked: !!result.callState?.bookingModeLocked,

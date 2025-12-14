@@ -5,12 +5,11 @@
  * 
  * PURPOSE:
  * Single entry point for loading ALL company configuration needed during calls.
- * This replaces the scattered config loading across v2twilio, LLM0TurnHandler,
- * HybridReceptionistLLM, etc.
+ * Used by v2twilio, HybridReceptionistLLM, ConversationEngine.
  * 
  * USAGE:
  *   const runtimeConfig = await RuntimeConfigLoader.load(companyId);
- *   // Now pass runtimeConfig to LLM0TurnHandler, HybridReceptionistLLM, etc.
+ *   // Pass runtimeConfig to HybridReceptionistLLM, ConversationEngine, etc.
  * 
  * CACHING:
  * Uses Redis with 5-minute TTL for fast access during calls.
