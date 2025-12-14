@@ -202,7 +202,7 @@ class HybridReceptionistLLM {
         // Note: callLLM0 is imported from llmRegistry - it handles OpenAI config internally
         if (!callLLM0) {
             logger.error('[HYBRID LLM] llmRegistry.callLLM0 not available!');
-            return this.emergencyFallback(currentMode, knownSlots);
+            return this.emergencyFallback(currentMode, knownSlots, behaviorConfig);
         }
         
         try {
@@ -506,8 +506,14 @@ class HybridReceptionistLLM {
             return result;
             
         } catch (error) {
-            logger.error('[HYBRID LLM] Error:', error.message);
-            return this.emergencyFallback(currentMode, knownSlots);
+            logger.error('[HYBRID LLM] ❌ Error in processConversation:', {
+                message: error.message,
+                stack: error.stack?.substring(0, 500),
+                callId,
+                companyId,
+                userInput: userInput?.substring(0, 50)
+            });
+            return this.emergencyFallback(currentMode, knownSlots, behaviorConfig);
         }
     }
     
