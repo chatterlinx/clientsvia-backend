@@ -457,17 +457,30 @@ class HybridReceptionistLLM {
                 );
                 
                 if (slot && slot.question) {
-                    // Get acknowledgment from LLM (optional empathy wrapper)
-                    const ack = (parsed.acknowledgment || parsed.ack || '').trim();
+                    // Get acknowledgment from LLM
+                    let ack = (parsed.acknowledgment || parsed.ack || '').trim();
+                    
+                    // If LLM didn't provide an acknowledgment, use style-based default
+                    if (!ack) {
+                        const style = behaviorConfig.conversationStyle || 'balanced';
+                        const defaultAcks = {
+                            confident: "Let's get this taken care of.",
+                            balanced: "I can help with that!",
+                            polite: "I'd be happy to help."
+                        };
+                        ack = defaultAcks[style] || defaultAcks.balanced;
+                        logger.info('[HYBRID LLM] 📝 Using default acknowledgment for style:', style);
+                    }
+                    
                     // Get EXACT question from database config - LLM NEVER generates this
                     const exactQuestion = slot.question;
                     
-                    // Combine: "Got it! " + "May I have your name please?"
-                    finalReply = ack ? `${ack} ${exactQuestion}` : exactQuestion;
+                    // Combine: "I can help with that! " + "May I have your name please?"
+                    finalReply = `${ack} ${exactQuestion}`;
                     
                     logger.info('[HYBRID LLM] 🎯 LLMQNA: Using EXACT configured question', {
                         slotId: collectingSlot,
-                        acknowledgment: ack || '(none)',
+                        acknowledgment: ack,
                         exactQuestion: exactQuestion,
                         finalReply: finalReply.substring(0, 80)
                     });
@@ -1015,15 +1028,24 @@ NEVER confirm an invalid phone number like "Just to confirm, that's 12321?" - th
 ═══ RESPONSE FORMAT ═══
 RESPOND with JSON. Two modes:
 
-MODE A - Collecting a booking slot:
-{"collectSlot":"${slotIds[0] || 'name'}","acknowledgment":"Got it!"}
-→ System will automatically add the exact configured question
-→ You ONLY provide the slot name and optional brief acknowledgment
-→ Example output: {"collectSlot":"phone","acknowledgment":"Perfect, thank you!"}
+MODE A - Collecting a booking slot (ALWAYS include acknowledgment!):
+{"collectSlot":"name","acknowledgment":"<REQUIRED - acknowledge what they said first>"}
+→ System will automatically add the exact configured question AFTER your acknowledgment
+→ The acknowledgment is REQUIRED - never leave it empty!
+→ Match your acknowledgment to the conversation style and what they just said
+
+Examples based on style:
+- Confident: {"collectSlot":"name","acknowledgment":"Let's get this taken care of."}
+- Balanced: {"collectSlot":"name","acknowledgment":"I can help with that!"}
+- Polite: {"collectSlot":"name","acknowledgment":"I'm sorry to hear that."}
+
+If caller mentions a problem (heat, leak, emergency):
+- ALWAYS acknowledge the problem first: "That sounds uncomfortable!" or "I understand, that's no good."
+- THEN the system adds the booking question
 
 MODE B - General conversation (no slot to collect):
 {"reply":"<your conversational response>","collectSlot":"none"}
-→ Use this for greetings, questions, empathy, confirmation, etc.
+→ Use this for greetings, questions, clarification, etc.
 
 Valid collectSlot values: ${needsInfoOptions}`;
         
