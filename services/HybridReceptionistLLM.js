@@ -572,7 +572,19 @@ class HybridReceptionistLLM {
                 companyId,
                 userInput: userInput?.substring(0, 50)
             });
-            return this.emergencyFallback(currentMode, knownSlots, behaviorConfig);
+            
+            // Return fallback with error info for debugging
+            const fallback = this.emergencyFallback(currentMode, knownSlots, behaviorConfig);
+            fallback.debug = {
+                error: true,
+                errorMessage: error.message,
+                errorType: error.name,
+                promptSummary: { error: 'LLM call failed' },
+                llmDecision: { error: error.message },
+                engineAction: { error: 'Used emergency fallback' },
+                performance: { latencyMs: Date.now() - startTime, tokensUsed: 0 }
+            };
+            return fallback;
         }
     }
     
@@ -873,13 +885,16 @@ User: "What time do you open?"
             
             if (!knownSlots.name) {
                 const nameQ = this.getSlotPrompt('name', behaviorConfig);
-                reply = nameQ ? `Perfect, let me get you on the schedule. ${nameQ}` : fallbacks.askName;
+                reply = nameQ ? `I can help with that. ${nameQ}` : fallbacks.askName;
             } else if (!knownSlots.phone) {
                 const firstName = (nameSlot?.useFirstNameOnly !== false && knownSlots.name) 
                     ? knownSlots.name.split(' ')[0] 
                     : knownSlots.name;
                 const phoneQ = this.getSlotPrompt('phone', behaviorConfig);
-                reply = phoneQ ? `Great ${firstName}, ${phoneQ}` : fallbacks.askPhone;
+                // Use name if available, otherwise just ask for phone
+                reply = phoneQ 
+                    ? (firstName ? `Thanks, ${firstName}. ${phoneQ}` : phoneQ) 
+                    : fallbacks.askPhone;
             } else if (!knownSlots.address) {
                 reply = this.getSlotPrompt('address', behaviorConfig) || fallbacks.askAddress;
             } else if (!knownSlots.time) {
@@ -888,7 +903,8 @@ User: "What time do you open?"
                 reply = fallbacks.generic || "How can I help you?";
             }
         } else {
-            reply = fallbacks.discovery || fallbacks.generic || "How can I help you?";
+            // Discovery mode - acknowledge and ask what they need
+            reply = fallbacks.discovery || "I hear you. How can I help you today?";
         }
         
         // Final safety - if still null, use absolute minimum
