@@ -526,18 +526,31 @@ class HybridReceptionistLLM {
                     const exactQuestion = slot.question;
                     
                     // ═══════════════════════════════════════════════════════════
-                    // DEDUP CHECK: Don't append question if LLM already included it
+                    // DEDUP CHECK: Don't append question if LLM already asked for it
                     // The LLM sometimes ignores the "system adds the question" rule
+                    // Check multiple ways the LLM might have included the request
                     // ═══════════════════════════════════════════════════════════
+                    const ackLower = ack.toLowerCase();
                     const ackEndsWithQuestion = ack.trim().endsWith('?');
-                    const ackContainsExactQuestion = exactQuestion && ack.toLowerCase().includes(exactQuestion.toLowerCase().substring(0, 20));
                     
-                    if (ackEndsWithQuestion || ackContainsExactQuestion) {
-                        // LLM already included a question - use just the ack
+                    // Slot-specific keywords that indicate LLM already asked for it
+                    const slotKeywords = {
+                        'name': ['your name', 'may i have your name', 'provide your name', 'what is your name', 'what\'s your name'],
+                        'phone': ['phone number', 'contact number', 'reach you', 'call you', 'best number'],
+                        'address': ['service address', 'your address', 'the address', 'what address', 'provide the address', 'provide address'],
+                        'time': ['what time', 'when works', 'morning or afternoon', 'schedule', 'prefer']
+                    };
+                    
+                    const keywords = slotKeywords[collectingSlot] || [];
+                    const ackContainsSlotRequest = keywords.some(kw => ackLower.includes(kw));
+                    
+                    if (ackEndsWithQuestion || ackContainsSlotRequest) {
+                        // LLM already asked for this slot - use just the ack
                         finalReply = ack;
-                        logger.info('[HYBRID LLM] 🔄 LLM included question in ack - not appending duplicate', {
+                        logger.info('[HYBRID LLM] 🔄 LLM included slot request in ack - not appending duplicate', {
                             slotId: collectingSlot,
                             ack: ack.substring(0, 60),
+                            matchedKeyword: keywords.find(kw => ackLower.includes(kw)) || 'ends with ?',
                             exactQuestion: exactQuestion.substring(0, 30)
                         });
                     } else {
