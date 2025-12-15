@@ -520,8 +520,9 @@
                 <span class="status-dot" id="status-dot"></span>
                 <span id="status-text">Ready</span>
             </div>
-            <div class="status-item">
-                <span id="voice-status">🔊 Voice</span>
+            <div class="status-item" onclick="toggleSpeak()" style="cursor: pointer;">
+                <span id="speak-btn" title="Voice On">🔊</span>
+                <span>Speak</span>
             </div>
             <div class="status-item">
                 <span id="token-count">Tokens: 0</span>
@@ -562,6 +563,7 @@
         let isDebugOpen = false;
         let recognition = null;
         let isListening = false;
+        let speakEnabled = true; // Text-to-speech toggle
         
         // ═══════════════════════════════════════════════════════════════════
         // INITIALIZATION
@@ -741,6 +743,47 @@
         }
         
         // ═══════════════════════════════════════════════════════════════════
+        // TEXT-TO-SPEECH - Speak AI responses
+        // ═══════════════════════════════════════════════════════════════════
+        function speakText(text) {
+            if (!('speechSynthesis' in window)) {
+                console.log('Text-to-speech not supported');
+                return;
+            }
+            
+            // Cancel any ongoing speech
+            window.speechSynthesis.cancel();
+            
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            
+            // Try to get a female voice
+            const voices = window.speechSynthesis.getVoices();
+            const femaleVoice = voices.find(v => 
+                v.name.includes('Samantha') || 
+                v.name.includes('Victoria') || 
+                v.name.includes('Karen') ||
+                v.name.includes('female') ||
+                v.name.includes('Female')
+            );
+            if (femaleVoice) {
+                utterance.voice = femaleVoice;
+            }
+            
+            window.speechSynthesis.speak(utterance);
+        }
+        
+        function toggleSpeak() {
+            speakEnabled = !speakEnabled;
+            const btn = document.getElementById('speak-btn');
+            btn.textContent = speakEnabled ? '🔊' : '🔇';
+            btn.title = speakEnabled ? 'Voice On' : 'Voice Off';
+            showToast(speakEnabled ? 'Voice enabled' : 'Voice disabled');
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
         // SEND MESSAGE
         // ═══════════════════════════════════════════════════════════════════
         async function sendMessage() {
@@ -797,6 +840,11 @@
                     // Add AI response
                     const aiMessage = data.response || data.reply || 'No response';
                     addMessage(aiMessage, 'ai', data.debug);
+                    
+                    // Speak the AI response (if enabled)
+                    if (speakEnabled) {
+                        speakText(aiMessage);
+                    }
                     
                     // Update tokens
                     const tokens = data.debug?.tokensUsed || 0;
