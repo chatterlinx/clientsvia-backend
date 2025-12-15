@@ -628,7 +628,7 @@ class STTSettingsManager {
         const llmTimeout = callExp.llmTimeout ?? 6;
         const maxSilenceBeforePrompt = callExp.maxSilenceBeforePrompt ?? 8;
         const responseLength = callExp.responseLength || 'medium';
-        const ashleyModeActive = callExp.ashleyMode === true;
+        const naturalFlowActive = callExp.naturalFlowMode === true;
         
         // Tooltip explanations
         const TOOLTIPS = {
@@ -655,7 +655,7 @@ class STTSettingsManager {
         
         return `
             <div style="max-width: 700px; margin-top: 32px; border-top: 2px solid #e2e8f0; padding-top: 24px;">
-                <!-- ASHLEY MODE PRESET -->
+                <!-- NATURAL FLOW MODE PRESET -->
                 <div style="
                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                     border-radius: 12px;
@@ -667,15 +667,15 @@ class STTSettingsManager {
                         <div>
                             <h3 style="margin: 0 0 8px 0; display: flex; align-items: center; gap: 8px;">
                                 <span style="font-size: 24px;">✨</span>
-                                Ashley Mode — Natural Flow
+                                Natural Flow Mode
                             </h3>
                             <p style="margin: 0; opacity: 0.9; font-size: 14px;">
                                 One-click preset for human-like conversation timing. Reduces dead air, enables interruption, speeds up response.
                             </p>
                         </div>
-                        <button id="ashley-mode-btn" onclick="window.sttManager.applyAshleyMode()" style="
+                        <button id="natural-flow-btn" onclick="window.sttManager.applyNaturalFlowMode()" style="
                             padding: 12px 24px;
-                            background: ${ashleyModeActive ? '#10b981' : 'rgba(255,255,255,0.2)'};
+                            background: ${naturalFlowActive ? '#10b981' : 'rgba(255,255,255,0.2)'};
                             color: white;
                             border: 2px solid white;
                             border-radius: 8px;
@@ -683,9 +683,9 @@ class STTSettingsManager {
                             font-weight: 600;
                             font-size: 14px;
                             transition: all 0.2s;
-                        " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='${ashleyModeActive ? '#10b981' : 'rgba(255,255,255,0.2)'}'"
+                        " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='${naturalFlowActive ? '#10b981' : 'rgba(255,255,255,0.2)'}'"
                         >
-                            ${ashleyModeActive ? '✓ Active' : 'Enable Ashley Mode'}
+                            ${naturalFlowActive ? '✓ Active' : 'Enable Natural Flow'}
                         </button>
                     </div>
                 </div>
@@ -923,17 +923,17 @@ class STTSettingsManager {
     }
     
     // Call Experience Methods
-    async applyAshleyMode() {
+    async applyNaturalFlowMode() {
         // Check if already active - don't reset user's tweaks!
-        if (this.profile.callExperience?.ashleyMode === true) {
-            console.log('[STT SETTINGS] Ashley Mode already active - no reset needed');
-            alert('✨ Ashley Mode is already active! Your settings are optimized for natural flow.');
+        if (this.profile.callExperience?.naturalFlowMode === true) {
+            console.log('[STT SETTINGS] Natural Flow Mode already active - no reset needed');
+            alert('✨ Natural Flow Mode is already active! Your settings are optimized.');
             return;
         }
         
-        // Ashley Mode optimal settings
-        const ashleySettings = {
-            ashleyMode: true,
+        // Natural Flow Mode optimal settings
+        const naturalFlowSettings = {
+            naturalFlowMode: true,
             speechTimeout: 1.5,
             endSilenceTimeout: 0.8,
             initialTimeout: 5,
@@ -954,19 +954,19 @@ class STTSettingsManager {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(ashleySettings)
+                body: JSON.stringify(naturalFlowSettings)
             });
             
             if (response.ok) {
-                this.profile.callExperience = ashleySettings;
+                this.profile.callExperience = naturalFlowSettings;
                 this.render();
-                alert('✨ Ashley Mode activated! Natural conversation flow enabled.');
+                alert('✨ Natural Flow Mode activated! Conversation timing optimized.');
             } else {
-                throw new Error('Failed to apply Ashley Mode');
+                throw new Error('Failed to apply Natural Flow Mode');
             }
         } catch (error) {
-            console.error('[STT SETTINGS] Ashley Mode failed:', error);
-            alert('Failed to apply Ashley Mode: ' + error.message);
+            console.error('[STT SETTINGS] Natural Flow Mode failed:', error);
+            alert('Failed to apply Natural Flow Mode: ' + error.message);
         }
     }
     
@@ -1010,8 +1010,8 @@ class STTSettingsManager {
         });
     }
     
-    // Ashley Mode preset values for comparison
-    static ASHLEY_PRESET = {
+    // Natural Flow Mode preset values for comparison
+    static NATURAL_FLOW_PRESET = {
         speechTimeout: 1.5,
         endSilenceTimeout: 0.8,
         initialTimeout: 5,
@@ -1024,9 +1024,9 @@ class STTSettingsManager {
         responseLength: 'medium'
     };
     
-    // Check if current settings match Ashley Mode preset
-    settingsMatchAshleyPreset(settings) {
-        const preset = STTSettingsManager.ASHLEY_PRESET;
+    // Check if current settings match Natural Flow Mode preset
+    settingsMatchNaturalFlowPreset(settings) {
+        const preset = STTSettingsManager.NATURAL_FLOW_PRESET;
         return (
             Math.abs(settings.speechTimeout - preset.speechTimeout) < 0.01 &&
             Math.abs(settings.endSilenceTimeout - preset.endSilenceTimeout) < 0.01 &&
@@ -1100,13 +1100,13 @@ class STTSettingsManager {
             responseLength: this.profile.callExperience?.responseLength || 'medium'
         };
         
-        // PRESERVE Ashley Mode state - slider adjustments don't change it!
-        // Ashley Mode is a USER CHOICE, not automatically calculated.
-        // User can tweak sliders while keeping Ashley Mode "active" (it's their base).
-        settings.ashleyMode = this.profile.callExperience?.ashleyMode || false;
+        // PRESERVE Natural Flow Mode state - slider adjustments don't change it!
+        // Natural Flow Mode is a USER CHOICE, not automatically calculated.
+        // User can tweak sliders while keeping it "active" (it's their base).
+        settings.naturalFlowMode = this.profile.callExperience?.naturalFlowMode || false;
         
         console.log('[STT SETTINGS] 🔄 Auto-saving:', settings);
-        console.log('[STT SETTINGS] 🔄 Ashley Mode preserved:', settings.ashleyMode);
+        console.log('[STT SETTINGS] 🔄 Natural Flow Mode preserved:', settings.naturalFlowMode);
         
         try {
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
@@ -1122,7 +1122,7 @@ class STTSettingsManager {
             if (response.ok) {
                 this.profile.callExperience = settings;
                 this.updateSaveStatus('saved');
-                // Don't change Ashley button - it stays whatever it was
+                // Don't change button - it stays whatever it was
                 console.log('[STT SETTINGS] ✅ Auto-saved successfully');
             } else {
                 throw new Error('Save failed');
@@ -1133,16 +1133,16 @@ class STTSettingsManager {
         }
     }
     
-    updateAshleyButtonState(isActive) {
-        const ashleyBtn = document.getElementById('ashley-mode-btn');
-        if (!ashleyBtn) return;
+    updateNaturalFlowButtonState(isActive) {
+        const btn = document.getElementById('natural-flow-btn');
+        if (!btn) return;
         
         if (isActive) {
-            ashleyBtn.innerHTML = '✓ Active';
-            ashleyBtn.style.background = '#10b981';
+            btn.innerHTML = '✓ Active';
+            btn.style.background = '#10b981';
         } else {
-            ashleyBtn.innerHTML = 'Enable Ashley Mode';
-            ashleyBtn.style.background = 'rgba(255,255,255,0.2)';
+            btn.innerHTML = 'Enable Natural Flow';
+            btn.style.background = 'rgba(255,255,255,0.2)';
         }
     }
     

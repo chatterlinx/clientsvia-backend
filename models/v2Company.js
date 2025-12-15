@@ -1050,7 +1050,7 @@ const companySchema = new mongoose.Schema({
             // CALL EXPERIENCE SETTINGS - Response Timing & Voice (Dec 2025)
             // -------------------------------------------------------------------
             // These settings control how the AI listens, responds, and speaks
-            // "Ashley Mode" is a preset that optimizes for natural conversation flow
+            // "Natural Flow Mode" is a preset that optimizes for conversation timing
             callExperience: {
                 // === Response Timing ===
                 speechTimeout: { type: Number, default: 3, min: 1, max: 5 },       // Wait after caller stops
@@ -1079,7 +1079,7 @@ const companySchema = new mongoose.Schema({
                 },
                 
                 // === Preset Flag ===
-                ashleyMode: { type: Boolean, default: false },                     // Is Ashley Mode active?
+                naturalFlowMode: { type: Boolean, default: false },                // Is Natural Flow Mode active?
                 updatedAt: { type: Date, default: Date.now }
             },
             enabled: { 
@@ -1575,6 +1575,7 @@ const companySchema = new mongoose.Schema({
             // PERSONALITY SETTINGS
             // ═══════════════════════════════════════════════════════════════
             personality: {
+                agentName: { type: String, trim: true, default: '' },   // AI receptionist name (e.g., "Sarah", "Alex") - empty = no name
                 tone: { type: String, enum: ['warm', 'professional', 'casual', 'formal'], default: 'warm' },
                 verbosity: { type: String, enum: ['concise', 'balanced', 'detailed'], default: 'concise' },
                 maxResponseWords: { type: Number, default: 30, min: 10, max: 100 },

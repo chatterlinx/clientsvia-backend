@@ -2691,8 +2691,8 @@ router.get('/:companyId/call-experience', async (req, res) => {
             llmTimeout: settings.llmTimeout ?? 6,
             maxSilenceBeforePrompt: settings.maxSilenceBeforePrompt ?? 8,
             responseLength: settings.responseLength ?? 'medium',
-            // Ashley Mode flag
-            ashleyMode: settings.ashleyMode ?? false
+            // Natural Flow Mode flag
+            naturalFlowMode: settings.naturalFlowMode ?? false
         };
         
         logger.info(`[CALL EXPERIENCE GET] 🔵 CHECKPOINT 9: Merged result:`, JSON.stringify(merged, null, 2));
@@ -2759,8 +2759,8 @@ router.put('/:companyId/call-experience', async (req, res) => {
             llmTimeout: settings.llmTimeout ?? 6,
             maxSilenceBeforePrompt: settings.maxSilenceBeforePrompt ?? 8,
             responseLength: settings.responseLength ?? 'medium',
-            // Ashley Mode flag
-            ashleyMode: settings.ashleyMode ?? false,
+            // Natural Flow Mode flag
+            naturalFlowMode: settings.naturalFlowMode ?? false,
             // Meta
             updatedAt: new Date()
         };

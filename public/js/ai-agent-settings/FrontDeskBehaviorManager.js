@@ -89,7 +89,7 @@ class FrontDeskBehaviorManager {
                 verbosity: 'concise',
                 maxResponseWords: 30,
                 useCallerName: true,
-                agentName: 'Ashley'
+                agentName: ''  // No default - must be configured per company
             },
             bookingPrompts: {
                 askName: "May I have your name?",
@@ -357,6 +357,20 @@ class FrontDeskBehaviorManager {
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
                 <h3 style="margin: 0 0 16px 0; color: #58a6ff;">🎭 Personality Settings</h3>
                 <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">Control the overall tone and style of your AI receptionist.</p>
+                
+                <!-- Agent Name - Full Width -->
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                        🤖 AI Receptionist Name
+                    </label>
+                    <input type="text" id="fdb-agent-name" 
+                        value="${p.agentName || ''}" 
+                        placeholder="e.g., Sarah, Alex, Jordan (leave empty for no name)"
+                        style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                    <p style="color: #8b949e; font-size: 0.75rem; margin-top: 4px;">
+                        The name your AI will use when introducing itself. Example: "Hi, this is <strong>${p.agentName || '[Name]'}</strong> from [Company]"
+                    </p>
+                </div>
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                     <div>
@@ -1812,6 +1826,7 @@ class FrontDeskBehaviorManager {
 
         if (document.getElementById('fdb-tone')) {
             this.config.personality = {
+                agentName: get('fdb-agent-name') || '',  // AI receptionist name
                 tone: get('fdb-tone'),
                 verbosity: get('fdb-verbosity'),
                 maxResponseWords: parseInt(get('fdb-max-words')) || 30,
