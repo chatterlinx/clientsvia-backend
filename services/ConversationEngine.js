@@ -385,7 +385,72 @@ async function processTurn({
         // STEP 7: Extract slots programmatically
         // ═══════════════════════════════════════════════════════════════════
         log('CHECKPOINT 8: Extracting slots...');
-        const currentSlots = { ...(session.collectedSlots || {}) };
+        
+        // ════════════════════════════════════════════════════════════════════
+        // SLOT VALIDATOR - Clean up obviously invalid stored values
+        // This catches corrupted data from old sessions or bad extractions
+        // ════════════════════════════════════════════════════════════════════
+        const rawSlots = { ...(session.collectedSlots || {}) };
+        const currentSlots = {};
+        
+        // Validate name - reject greetings, single letters, numbers, etc.
+        if (rawSlots.name) {
+            const nameLower = rawSlots.name.toLowerCase().trim();
+            const invalidNames = [
+                'good morning', 'good afternoon', 'good evening', 'good night',
+                'hi', 'hello', 'hey', 'hi there', 'hello there', 'good',
+                'morning', 'afternoon', 'evening', 'yes', 'no', 'yeah', 'yep',
+                'thanks', 'thank you', 'okay', 'ok', 'sure', 'please'
+            ];
+            if (invalidNames.includes(nameLower) || nameLower.length < 2) {
+                log('🚨 INVALID NAME DETECTED - clearing:', rawSlots.name);
+                // Don't copy invalid name
+            } else {
+                currentSlots.name = rawSlots.name;
+            }
+        }
+        
+        // Validate phone - must have at least 7 digits
+        if (rawSlots.phone) {
+            const digitsOnly = rawSlots.phone.replace(/\D/g, '');
+            if (digitsOnly.length >= 7) {
+                currentSlots.phone = rawSlots.phone;
+            } else {
+                log('🚨 INVALID PHONE DETECTED - clearing:', rawSlots.phone);
+            }
+        }
+        
+        // Copy other slots as-is (address, time, etc.)
+        if (rawSlots.address) currentSlots.address = rawSlots.address;
+        if (rawSlots.time) currentSlots.time = rawSlots.time;
+        if (rawSlots.partialName) currentSlots.partialName = rawSlots.partialName;
+        
+        // Copy any other custom slots
+        for (const key of Object.keys(rawSlots)) {
+            if (!['name', 'phone', 'address', 'time', 'partialName'].includes(key)) {
+                currentSlots[key] = rawSlots[key];
+            }
+        }
+        
+        log('CHECKPOINT 8a: Slots after validation', { 
+            raw: JSON.stringify(rawSlots), 
+            validated: JSON.stringify(currentSlots) 
+        });
+        
+        // If validation cleared any invalid slots, update the session to persist the cleanup
+        const slotsWereCleaned = JSON.stringify(rawSlots) !== JSON.stringify(currentSlots);
+        if (slotsWereCleaned) {
+            log('🧹 CLEANING SESSION - Invalid slots were removed');
+            session.collectedSlots = currentSlots;
+            // Save immediately so the cleanup persists
+            try {
+                await session.save();
+                log('✅ Session cleaned and saved');
+            } catch (saveErr) {
+                log('⚠️ Failed to save cleaned session (non-fatal)', { error: saveErr.message });
+            }
+        }
+        
         const extractedThisTurn = {};
         
         // Get booking config for askMissingNamePart setting
