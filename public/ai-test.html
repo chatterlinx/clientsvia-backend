@@ -1214,25 +1214,34 @@ ${separator}
         function initVoiceRecognition() {
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
                 document.getElementById('voice-btn').style.display = 'none';
+                console.log('[Voice] Speech recognition not supported');
                 return;
             }
             
+            console.log('[Voice] Initializing speech recognition');
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognition = new SpeechRecognition();
             recognition.continuous = false;
             recognition.interimResults = true;
             recognition.lang = 'en-US';
             
+            recognition.onstart = () => {
+                console.log('[Voice] Recognition started');
+                isListening = true;
+                document.getElementById('voice-btn').classList.add('listening');
+            };
+            
             recognition.onresult = (event) => {
                 const transcript = Array.from(event.results)
                     .map(result => result[0].transcript)
                     .join('');
+                console.log('[Voice] Transcript:', transcript);
                 document.getElementById('message-input').value = transcript;
             };
             
             recognition.onend = () => {
-                isListening = false;
-                document.getElementById('voice-btn').classList.remove('listening');
+                console.log('[Voice] Recognition ended');
+                resetVoiceButton();
                 
                 // Auto-send if we got a result
                 const input = document.getElementById('message-input');
@@ -1242,21 +1251,53 @@ ${separator}
             };
             
             recognition.onerror = (event) => {
-                console.error('Voice error:', event.error);
-                isListening = false;
-                document.getElementById('voice-btn').classList.remove('listening');
+                console.error('[Voice] Error:', event.error);
+                resetVoiceButton();
+                
+                // Show helpful error messages
+                if (event.error === 'not-allowed') {
+                    showToast('Mic permission denied. Check browser settings.');
+                } else if (event.error === 'no-speech') {
+                    showToast('No speech detected. Try again.');
+                } else if (event.error === 'network') {
+                    showToast('Network error. Check connection.');
+                }
             };
         }
         
+        function resetVoiceButton() {
+            isListening = false;
+            const btn = document.getElementById('voice-btn');
+            if (btn) {
+                btn.classList.remove('listening');
+                btn.disabled = false;
+            }
+        }
+        
         function toggleVoice() {
-            if (!recognition) return;
+            if (!recognition) {
+                showToast('Voice not supported on this browser');
+                return;
+            }
+            
+            const btn = document.getElementById('voice-btn');
             
             if (isListening) {
+                console.log('[Voice] Stopping...');
                 recognition.stop();
             } else {
-                isListening = true;
-                document.getElementById('voice-btn').classList.add('listening');
-                recognition.start();
+                console.log('[Voice] Starting...');
+                try {
+                    // Reset state before starting
+                    resetVoiceButton();
+                    recognition.start();
+                    // Visual feedback immediately
+                    btn.classList.add('listening');
+                } catch (e) {
+                    console.error('[Voice] Start error:', e);
+                    showToast('Mic error: ' + e.message);
+                    resetVoiceButton();
+                }
             }
         }
         
