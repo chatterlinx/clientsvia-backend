@@ -804,6 +804,18 @@ AI: ${entry.aiResponse}
 `;
             }
             
+            // 🚨 Show error info if LLM failed
+            if (entry.debug?.error || entry.error) {
+                const errorInfo = entry.debug || entry;
+                text += `🚨 ERROR DETECTED:
+  Error: ${errorInfo.errorMessage || errorInfo.error || 'Unknown error'}
+  Type: ${errorInfo.errorName || errorInfo.errorType || 'N/A'}
+  Code: ${errorInfo.errorCode || 'N/A'}
+  ${errorInfo.llmDecision?.stack ? `Stack: ${errorInfo.llmDecision.stack.substring(0, 200)}...` : ''}
+
+`;
+            }
+            
             // Add booking config if available - shows what prompts AI was given
             if (entry.bookingConfig) {
                 const bc = entry.bookingConfig;
