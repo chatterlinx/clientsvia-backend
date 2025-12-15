@@ -882,6 +882,21 @@
                 // Remove typing indicator
                 typingEl.remove();
                 
+                // ═══════════════════════════════════════════════════════════
+                // Handle 401 - JWT expired or invalid
+                // ═══════════════════════════════════════════════════════════
+                if (response.status === 401 || data.error?.includes('jwt') || data.error?.includes('expired') || data.error?.includes('unauthorized')) {
+                    addMessage('⚠️ Session expired. Please log in again.', 'ai', null, true);
+                    setStatus('Session Expired', 'error');
+                    // Clear expired token and show login
+                    localStorage.removeItem('adminToken');
+                    localStorage.removeItem('token');
+                    setTimeout(() => {
+                        showLogin();
+                    }, 1500);
+                    return;
+                }
+                
                 if (data.success) {
                     // Update session ID if returned
                     if (data.sessionId) sessionId = data.sessionId;
