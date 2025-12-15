@@ -804,14 +804,16 @@ AI: ${entry.aiResponse}
 `;
             }
             
-            // 🚨 Show error info if LLM failed
-            if (entry.debug?.error || entry.error) {
-                const errorInfo = entry.debug || entry;
-                text += `🚨 ERROR DETECTED:
-  Error: ${errorInfo.errorMessage || errorInfo.error || 'Unknown error'}
+            // 🚨 Show error info if LLM failed (llmBrain contains the error from HybridReceptionistLLM)
+            if (entry.llmBrain?.error) {
+                const errorInfo = entry.llmBrain;
+                text += `🚨 ERROR DETECTED (LLM call failed):
+  Error: ${errorInfo.errorMessage || 'Unknown error'}
   Type: ${errorInfo.errorName || errorInfo.errorType || 'N/A'}
   Code: ${errorInfo.errorCode || 'N/A'}
-  ${errorInfo.llmDecision?.stack ? `Stack: ${errorInfo.llmDecision.stack.substring(0, 200)}...` : ''}
+  Engine Action: ${errorInfo.engineAction?.error || 'N/A'}
+  LLM Decision: ${typeof errorInfo.llmDecision === 'object' ? JSON.stringify(errorInfo.llmDecision) : errorInfo.llmDecision || 'N/A'}
+  Prompt Summary: ${typeof errorInfo.promptSummary === 'object' ? JSON.stringify(errorInfo.promptSummary) : errorInfo.promptSummary || 'N/A'}
 
 `;
             }

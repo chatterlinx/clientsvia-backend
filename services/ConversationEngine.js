@@ -443,13 +443,26 @@ async function processTurn({
         
         const aiLatencyMs = Date.now() - aiStartTime;
         
+        // 🚨 DEBUG: Check if AI returned an error
+        if (aiResult.debug?.error) {
+            logger.error('[CONVERSATION ENGINE] ⚠️ AI brain returned error state:', {
+                errorMessage: aiResult.debug?.errorMessage,
+                errorName: aiResult.debug?.errorName,
+                errorCode: aiResult.debug?.errorCode,
+                tokensUsed: aiResult.tokensUsed || 0,
+                latencyMs: aiLatencyMs
+            });
+        }
+        
         // Merge extracted slots
         aiResult.filledSlots = { ...(aiResult.filledSlots || {}), ...extractedThisTurn };
         
         log('CHECKPOINT 9: ✅ AI response generated', { 
             latencyMs: aiLatencyMs, 
             tokensUsed: aiResult.tokensUsed,
-            mode: aiResult.conversationMode
+            mode: aiResult.conversationMode,
+            hasError: !!aiResult.debug?.error,
+            replyPreview: (aiResult.reply || '').substring(0, 50)
         });
         
         // ═══════════════════════════════════════════════════════════════════
