@@ -65,6 +65,31 @@ const SlotExtractors = {
     extractName(text) {
         if (!text || typeof text !== 'string') return null;
         
+        // ═══════════════════════════════════════════════════════════════════
+        // FALSE POSITIVES - Filter out common greetings and phrases
+        // ═══════════════════════════════════════════════════════════════════
+        const falsePositiveWords = [
+            'the', 'that', 'this', 'what', 'just', 'yeah', 'yes', 'sure', 
+            'hi', 'hello', 'hey', 'good', 'morning', 'afternoon', 'evening', 'night',
+            'thanks', 'thank', 'you', 'okay', 'ok', 'alright', 'well', 'please'
+        ];
+        
+        // Full phrases that look like names but aren't
+        const falsePositivePhrases = [
+            'good morning', 'good afternoon', 'good evening', 'good night',
+            'thank you', 'hi there', 'hello there', 'hey there',
+            'this is', 'that is', 'what is', 'yes please', 'okay thanks',
+            'yeah sure', 'sure thing', 'all right', 'well hello'
+        ];
+        
+        // Normalize and check if input is just a greeting/phrase
+        const normalizedInput = text.toLowerCase().trim();
+        for (const phrase of falsePositivePhrases) {
+            if (normalizedInput === phrase || normalizedInput.startsWith(phrase + ' ') || normalizedInput.endsWith(' ' + phrase)) {
+                return null; // Don't extract anything from greeting-only messages
+            }
+        }
+        
         // Common patterns - use [a-zA-Z] to handle any case from STT
         const patterns = [
             /my name is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i,
@@ -79,15 +104,29 @@ const SlotExtractors = {
             const match = text.match(pattern);
             if (match && match[1]) {
                 const rawName = match[1].trim();
-                // Filter out common false positives
-                const falsePositives = ['the', 'that', 'this', 'what', 'just', 'yeah', 'yes', 'sure', 'hi', 'hello', 'hey', 'good', 'morning', 'afternoon'];
-                if (!falsePositives.includes(rawName.toLowerCase())) {
-                    // Title case the name: "mark" -> "Mark", "mark smith" -> "Mark Smith"
-                    const name = rawName.split(' ')
-                        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                        .join(' ');
-                    return name;
+                const rawNameLower = rawName.toLowerCase();
+                
+                // Filter out single-word false positives
+                if (falsePositiveWords.includes(rawNameLower)) {
+                    continue;
                 }
+                
+                // Filter out two-word phrases that are false positives
+                if (falsePositivePhrases.includes(rawNameLower)) {
+                    continue;
+                }
+                
+                // Filter out if BOTH words are false positives (e.g., "Good Morning")
+                const words = rawNameLower.split(/\s+/);
+                if (words.length === 2 && falsePositiveWords.includes(words[0]) && falsePositiveWords.includes(words[1])) {
+                    continue;
+                }
+                
+                // Title case the name: "mark" -> "Mark", "mark smith" -> "Mark Smith"
+                const name = rawName.split(' ')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                    .join(' ');
+                return name;
             }
         }
         
