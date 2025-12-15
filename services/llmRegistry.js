@@ -89,6 +89,10 @@ async function callLLM0(payload) {
     const { callId, companyId, messages, temperature = 0.7, max_tokens = 300, response_format, metadata = {} } = payload;
     
     // Validation
+    if (!openaiClient) {
+        logger.error('[LLM REGISTRY] ❌ CRITICAL: OpenAI client not loaded! Check OPENAI_API_KEY');
+        throw new Error('[LLM REGISTRY] OpenAI client not available - check API key configuration');
+    }
     if (!callId) {
         logger.error('[LLM REGISTRY] callLLM0 called without callId - this is a bug!');
     }
@@ -223,6 +227,10 @@ async function callTier3Fallback(payload) {
     const { callId, companyId, messages, temperature = 0.5, max_tokens = 200, response_format, metadata = {} } = payload;
     
     // Validation
+    if (!openaiClient) {
+        logger.error('[LLM REGISTRY] ❌ CRITICAL: OpenAI client not loaded! Check OPENAI_API_KEY');
+        throw new Error('[LLM REGISTRY] OpenAI client not available - check API key configuration');
+    }
     if (!callId) {
         logger.error('[LLM REGISTRY] callTier3Fallback called without callId - this is a bug!');
     }
