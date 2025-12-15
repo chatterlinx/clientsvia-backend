@@ -88,6 +88,15 @@ const conversationSessionSchema = new Schema({
     runningSummary: [{ type: String }],
     collectedSlots: { type: Schema.Types.Mixed, default: {} },
     
+    // ════════════════════════════════════════════════════════════════════════
+    // STATE MACHINE FIELDS - For deterministic booking flow
+    // ════════════════════════════════════════════════════════════════════════
+    stateMachine: {
+        lastAction: { type: String, default: null },      // e.g., 'ASK_NAME', 'ASK_PHONE'
+        askCount: { type: Schema.Types.Mixed, default: {} }, // { name: 1, phone: 2 } - track attempts
+        state: { type: String, default: 'INIT' }          // INIT, COLLECTING, CONFIRMING, COMPLETE
+    },
+    
     status: {
         type: String,
         enum: ['active', 'ended', 'transferred', 'abandoned', 'error'],
@@ -187,6 +196,17 @@ conversationSessionSchema.methods.addTurn = function(role, content, metadata = {
         this.metrics.templateTurns = (this.metrics.templateTurns || 0) + 1;
     } else if (metadata.responseSource === 'quick_answer') {
         this.metrics.quickAnswerTurns = (this.metrics.quickAnswerTurns || 0) + 1;
+    } else if (metadata.responseSource === 'STATE_MACHINE') {
+        // State machine turns don't use LLM - track separately
+        this.metrics.templateTurns = (this.metrics.templateTurns || 0) + 1;
+    }
+    
+    // Update state machine state if provided
+    if (metadata.stateMachine) {
+        this.stateMachine = {
+            ...this.stateMachine,
+            ...metadata.stateMachine
+        };
     }
     
     if (metadata.tokensUsed) {

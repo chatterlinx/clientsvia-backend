@@ -38,18 +38,21 @@ const SessionService = require('./SessionService');
 const RunningSummaryService = require('./RunningSummaryService');
 const HybridReceptionistLLM = require('./HybridReceptionistLLM');
 const BookingScriptEngine = require('./BookingScriptEngine');
+const BookingStateMachine = require('./BookingStateMachine');
+const ResponseRenderer = require('./ResponseRenderer');
 const logger = require('../utils/logger');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VERSION BANNER - Proves this code is deployed
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = '2025-12-13-V1-UNIFIED-BRAIN';
+const ENGINE_VERSION = '2025-12-15-V2-STATE-MACHINE';
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ Single entry point for ALL channels',
-        '✅ SessionService for state (not Redis)',
-        '✅ Unified persona and prompts',
-        '✅ Same behavior: phone = chat = sms'
+        '✅ DETERMINISTIC booking via BookingStateMachine',
+        '✅ LLM only for interpretation (not flow control)',
+        '✅ 0 tokens for slot collection',
+        '✅ Loop prevention (3-strike rule)'
     ]
 });
 
@@ -623,51 +626,160 @@ async function processTurn({
         });
         
         // ═══════════════════════════════════════════════════════════════════
-        // STEP 8: Call AI brain
+        // STEP 8: STATE MACHINE DECISION (NEW - DETERMINISTIC)
         // ═══════════════════════════════════════════════════════════════════
-        log('CHECKPOINT 9: Calling AI brain...');
-        const aiStartTime = Date.now();
+        // 
+        // The state machine OWNS the booking flow. LLM is only called when:
+        // - User asks a question
+        // - Intent is unclear
+        // - We need smarter parsing
+        // 
+        // This gives us: 0 tokens for slot collection, 100% reliable order
+        // ═══════════════════════════════════════════════════════════════════
+        log('CHECKPOINT 9: State machine decision...');
         
-        const aiResult = await HybridReceptionistLLM.processConversation({
-            company,
-            callContext: {
-                callId: session._id.toString(),
-                companyId,
-                customerContext,
-                runningSummary: summaryFormatted,
-                turnCount: (session.metrics?.totalTurns || 0) + 1,
-                channel,
-                partialName: currentSlots.partialName || null
-            },
-            currentMode: session.phase === 'booking' ? 'booking' : 'free',
-            knownSlots: currentSlots,
-            conversationHistory,
-            userInput: userText,
-            behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
+        const stateMachine = new BookingStateMachine(session, company);
+        const renderer = new ResponseRenderer(session, company);
+        
+        // Update state machine with newly extracted slots
+        stateMachine.updateSlots(currentSlots);
+        
+        // Check if we're in booking mode OR caller mentioned booking intent
+        const bookingIntent = /\b(appointment|schedule|book|service|repair|fix|broken|not working|need help|maintenance|install|replace)\b/i;
+        const hasBookingIntent = bookingIntent.test(userText);
+        const isInBookingMode = stateMachine.isInBookingMode() || session.phase === 'booking' || hasBookingIntent;
+        
+        // Check if state machine can handle this WITHOUT LLM
+        const needsLLM = stateMachine.needsLLMInterpretation(userText, extractedThisTurn);
+        
+        log('CHECKPOINT 9a: State machine analysis', {
+            isInBookingMode,
+            hasBookingIntent,
+            needsLLM,
+            lastAction: stateMachine.lastAction,
+            askCount: stateMachine.askCount
         });
         
-        const aiLatencyMs = Date.now() - aiStartTime;
+        let aiResult;
+        let aiLatencyMs = 0;
         
-        // 🚨 DEBUG: Check if AI returned an error
-        if (aiResult.debug?.error) {
-            logger.error('[CONVERSATION ENGINE] ⚠️ AI brain returned error state:', {
-                errorMessage: aiResult.debug?.errorMessage,
-                errorName: aiResult.debug?.errorName,
-                errorCode: aiResult.debug?.errorCode,
-                tokensUsed: aiResult.tokensUsed || 0,
-                latencyMs: aiLatencyMs
+        // ═══════════════════════════════════════════════════════════════════
+        // FAST PATH: State machine handles it (0 tokens)
+        // ═══════════════════════════════════════════════════════════════════
+        if (isInBookingMode && !needsLLM) {
+            log('CHECKPOINT 9b: 🚀 FAST PATH - State machine handling (0 tokens)');
+            const aiStartTime = Date.now();
+            
+            // Get deterministic next action
+            const action = stateMachine.getNextAction();
+            
+            // Record that we asked (for loop prevention)
+            if (action.slotId) {
+                stateMachine.recordAsk(action.slotId);
+            }
+            
+            // Render human-like response
+            const response = renderer.render(action, extractedThisTurn);
+            
+            // Update session phase to booking
+            if (session.phase !== 'booking') {
+                session.phase = 'booking';
+            }
+            
+            aiLatencyMs = Date.now() - aiStartTime;
+            
+            // Build aiResult in same format as HybridReceptionistLLM
+            aiResult = {
+                reply: response.say,
+                conversationMode: 'booking',
+                intent: 'booking',
+                nextGoal: action.action,
+                filledSlots: currentSlots,
+                signals: { wantsBooking: true },
+                latencyMs: aiLatencyMs,
+                tokensUsed: 0,  // 🎯 0 tokens!
+                fromStateMachine: true,
+                debug: {
+                    source: 'STATE_MACHINE',
+                    action: action,
+                    response: response,
+                    stateMachineState: stateMachine.getStateForSession()
+                }
+            };
+            
+            // Save state machine state to session
+            session.stateMachine = stateMachine.getStateForSession();
+            
+            log('CHECKPOINT 9b: ✅ State machine response', {
+                action: action.action,
+                slotId: action.slotId,
+                tokensUsed: 0,
+                latencyMs: aiLatencyMs,
+                replyPreview: response.say.substring(0, 50)
+            });
+            
+        } else {
+            // ═══════════════════════════════════════════════════════════════════
+            // SLOW PATH: LLM needed for interpretation
+            // ═══════════════════════════════════════════════════════════════════
+            log('CHECKPOINT 9c: LLM needed for interpretation', { 
+                reason: needsLLM ? 'complex input' : 'not in booking mode' 
+            });
+            const aiStartTime = Date.now();
+            
+            aiResult = await HybridReceptionistLLM.processConversation({
+                company,
+                callContext: {
+                    callId: session._id.toString(),
+                    companyId,
+                    customerContext,
+                    runningSummary: summaryFormatted,
+                    turnCount: (session.metrics?.totalTurns || 0) + 1,
+                    channel,
+                    partialName: currentSlots.partialName || null
+                },
+                currentMode: session.phase === 'booking' ? 'booking' : 'free',
+                knownSlots: currentSlots,
+                conversationHistory,
+                userInput: userText,
+                behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
+            });
+            
+            aiLatencyMs = Date.now() - aiStartTime;
+            
+            // 🚨 DEBUG: Check if AI returned an error
+            if (aiResult.debug?.error) {
+                logger.error('[CONVERSATION ENGINE] ⚠️ AI brain returned error state:', {
+                    errorMessage: aiResult.debug?.errorMessage,
+                    errorName: aiResult.debug?.errorName,
+                    errorCode: aiResult.debug?.errorCode,
+                    tokensUsed: aiResult.tokensUsed || 0,
+                    latencyMs: aiLatencyMs
+                });
+            }
+            
+            // If LLM detected booking intent, switch to booking mode for next turn
+            if (aiResult.wantsBooking || aiResult.conversationMode === 'booking') {
+                session.phase = 'booking';
+                log('CHECKPOINT 9c: LLM detected booking intent, switching to booking mode');
+            }
+            
+            log('CHECKPOINT 9c: ✅ LLM response', {
+                latencyMs: aiLatencyMs,
+                tokensUsed: aiResult.tokensUsed,
+                mode: aiResult.conversationMode,
+                replyPreview: (aiResult.reply || '').substring(0, 50)
             });
         }
         
         // Merge extracted slots
         aiResult.filledSlots = { ...(aiResult.filledSlots || {}), ...extractedThisTurn };
         
-        log('CHECKPOINT 9: ✅ AI response generated', { 
+        log('CHECKPOINT 9: ✅ Response generated', { 
+            source: aiResult.fromStateMachine ? 'STATE_MACHINE' : 'LLM',
             latencyMs: aiLatencyMs, 
             tokensUsed: aiResult.tokensUsed,
-            mode: aiResult.conversationMode,
-            hasError: !!aiResult.debug?.error,
-            replyPreview: (aiResult.reply || '').substring(0, 50)
+            mode: aiResult.conversationMode
         });
         
         // ═══════════════════════════════════════════════════════════════════
@@ -688,6 +800,14 @@ async function processTurn({
         const latencyMs = Date.now() - startTime;
         
         try {
+            // Determine response source
+            let responseSource = 'llm';
+            if (aiResult?.fromStateMachine) {
+                responseSource = 'STATE_MACHINE';
+            } else if (aiResult?.fromQuickAnswers) {
+                responseSource = 'quick_answer';
+            }
+            
             await SessionService.addTurn({
                 session,
                 userMessage: userText,
@@ -695,10 +815,12 @@ async function processTurn({
                 metadata: {
                     latencyMs,
                     tokensUsed: aiResult?.tokensUsed || 0,
-                    responseSource: aiResult?.fromQuickAnswers ? 'quick_answer' : 'llm',
+                    responseSource,
                     confidence: aiResult?.confidence,
                     slotsExtracted: aiResult?.filledSlots || {},
-                    channel
+                    channel,
+                    // Include state machine state for debugging
+                    stateMachine: aiResult?.debug?.stateMachineState || null
                 },
                 company
             });
@@ -739,13 +861,21 @@ async function processTurn({
         
         // Add debug info if requested
         if (includeDebug) {
+            // Determine response source for display
+            let responseSource = 'LLM';
+            if (aiResult.fromStateMachine) {
+                responseSource = 'STATE_MACHINE (0 tokens)';
+            } else if (aiResult.fromQuickAnswers) {
+                responseSource = 'QUICK_ANSWER';
+            }
+            
             response.debug = {
                 engineVersion: ENGINE_VERSION,
                 channel,
                 latencyMs,
                 aiLatencyMs,
                 tokensUsed: aiResult.tokensUsed || 0,
-                responseSource: aiResult.fromQuickAnswers ? 'quick_answer' : 'llm',
+                responseSource,
                 confidence: aiResult.confidence,
                 customerContext: {
                     isKnown: customerContext.isKnown,
@@ -774,8 +904,14 @@ async function processTurn({
                         required: s.required
                     }))
                 },
-                // 🧠 LLM BRAIN DEBUG - What the LLM decided and why
-                llmBrain: aiResult.debug || null,
+                // 🤖 STATE MACHINE DEBUG - What the state machine decided
+                stateMachine: aiResult.fromStateMachine ? {
+                    action: aiResult.debug?.action,
+                    state: aiResult.debug?.stateMachineState,
+                    response: aiResult.debug?.response
+                } : null,
+                // 🧠 LLM BRAIN DEBUG - What the LLM decided (if used)
+                llmBrain: !aiResult.fromStateMachine ? (aiResult.debug || null) : null,
                 debugLog
             };
         }
