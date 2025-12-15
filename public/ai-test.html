@@ -546,19 +546,24 @@
                 return;
             }
             
-            // Load company data
+            // Load company data - try multiple methods
             try {
                 const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-                const response = await fetch(`/api/company/${companyId}`, {
-                    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-                });
                 
-                if (!response.ok) {
-                    throw new Error('Company not found or unauthorized');
+                // Try to get company info (may fail without auth, that's OK)
+                let company = null;
+                try {
+                    const response = await fetch(`/api/company/${companyId}`, {
+                        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                    });
+                    if (response.ok) {
+                        company = await response.json();
+                    }
+                } catch (e) {
+                    console.log('Could not load company details, continuing anyway');
                 }
                 
-                const company = await response.json();
-                companyName = company.companyName || company.name || 'Company';
+                companyName = company?.companyName || company?.name || 'Test Company';
                 
                 // Update UI
                 document.getElementById('company-name').textContent = companyName;
@@ -622,14 +627,14 @@
             setStatus('Thinking...', 'warning');
             
             try {
-                const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
                 const startTime = Date.now();
                 
+                // Don't send expired tokens - they cause 401 errors
+                // The chat API has optional auth, so no token is fine
                 const response = await fetch('/api/chat/message', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         companyId,
@@ -1061,19 +1066,25 @@ ${separator}
         }
         
         async function loadVoiceInfo() {
+            // Voice info requires admin auth - skip silently if not available
+            // This is optional - the test console works fine without it
             try {
                 const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+                if (!token) return; // No token, skip voice info
+                
                 const response = await fetch(`/api/admin/ai-test/${companyId}/voice-info`, {
-                    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
-                const data = await response.json();
-                if (data.success && data.voice?.hasVoice) {
-                    document.getElementById('voice-status').innerHTML = 
-                        `<span style="color: var(--accent-green);">🔊 ${data.voice.voiceName || 'Voice'}</span>`;
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.voice?.hasVoice) {
+                        document.getElementById('voice-status').innerHTML = 
+                            `<span style="color: var(--accent-green);">🔊 ${data.voice.voiceName || 'Voice'}</span>`;
+                    }
                 }
             } catch (e) {
-                console.log('Voice info not available');
+                // Silent fail - voice info is optional
             }
         }
     </script>
