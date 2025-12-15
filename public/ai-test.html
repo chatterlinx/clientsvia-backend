@@ -689,12 +689,21 @@
                     
                     // Reload page to initialize with new token
                     window.location.reload();
+                } else if (response.status === 401) {
+                    errorEl.textContent = 'Invalid email or password';
+                    errorEl.style.display = 'block';
+                } else if (response.status === 500) {
+                    // Show actual error message for debugging
+                    errorEl.textContent = data.error || data.message || 'Server error';
+                    errorEl.style.display = 'block';
+                    console.error('Login server error:', data);
                 } else {
-                    errorEl.textContent = data.message || 'Login failed. Check your credentials.';
+                    errorEl.textContent = data.message || 'Login failed';
                     errorEl.style.display = 'block';
                 }
             } catch (error) {
-                errorEl.textContent = 'Connection error. Please try again.';
+                console.error('Login fetch error:', error);
+                errorEl.textContent = 'Connection error: ' + error.message;
                 errorEl.style.display = 'block';
             }
         }
