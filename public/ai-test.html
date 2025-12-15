@@ -481,6 +481,9 @@
                 <span class="company-name" id="company-name">Loading...</span>
             </div>
             <div class="header-actions">
+                <button class="header-btn" onclick="refreshPage()" title="Refresh (keeps login)">
+                    🔄
+                </button>
                 <button class="header-btn primary" onclick="copyFullReport()" title="Copy Report">
                     📋 <span class="text">Copy</span>
                 </button>
@@ -781,6 +784,14 @@
             btn.textContent = speakEnabled ? '🔊' : '🔇';
             btn.title = speakEnabled ? 'Voice On' : 'Voice Off';
             showToast(speakEnabled ? 'Voice enabled' : 'Voice disabled');
+        }
+        
+        function refreshPage() {
+            // Token stays in localStorage, so login persists
+            showToast('Refreshing...');
+            setTimeout(() => {
+                window.location.reload(true); // true = hard refresh (bypass cache)
+            }, 300);
         }
         
         // ═══════════════════════════════════════════════════════════════════
