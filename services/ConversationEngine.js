@@ -193,7 +193,8 @@ const SlotExtractors = {
         if (!text || typeof text !== 'string') return null;
         
         // Must have a street number and street type indicator
-        const streetTypes = /\b(street|st|avenue|ave|road|rd|drive|dr|lane|ln|court|ct|boulevard|blvd|way|place|pl|circle|cir)\b/i;
+        // Comprehensive list of street types
+        const streetTypes = /\b(street|st|avenue|ave|road|rd|drive|dr|lane|ln|court|ct|boulevard|blvd|way|place|pl|circle|cir|parkway|pkwy|highway|hwy|terrace|ter|trail|trl|loop|alley|aly|path|crossing|xing|square|sq|plaza|plz|commons|point|pt|ridge|run|pass|grove|park|estates|meadow|meadows|valley|hills|heights|view|vista|landing|springs|creek|glen|cove|bay|beach|shore|pointe)\b/i;
         const hasStreetNumber = /\b\d{1,5}\s+\w+/; // e.g., "123 Main"
         
         // Check for both requirements
@@ -209,12 +210,55 @@ const SlotExtractors = {
             }
         }
         
-        // Extract address-like pattern
-        const addressPattern = /\b(\d{1,5}\s+[\w\s]+(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|court|ct|boulevard|blvd|way|place|pl|circle|cir)[\w\s,]*)/i;
+        // Extract address-like pattern (with all street types)
+        const addressPattern = /\b(\d{1,5}\s+[\w\s]+(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|court|ct|boulevard|blvd|way|place|pl|circle|cir|parkway|pkwy|highway|hwy|terrace|ter|trail|trl|loop|alley|aly|path|crossing|xing|square|sq|plaza|plz|commons|point|pt|ridge|run|pass|grove|park|estates|meadow|meadows|valley|hills|heights|view|vista|landing|springs|creek|glen|cove|bay|beach|shore|pointe)[\w\s,]*)/i;
         const match = text.match(addressPattern);
         
         if (match && match[1] && match[1].length > 10) {
             return match[1].trim();
+        }
+        
+        return null;
+    },
+    
+    /**
+     * Extract time preference from user input
+     * Catches: morning, afternoon, asap, specific times, etc.
+     */
+    extractTime(text) {
+        if (!text || typeof text !== 'string') return null;
+        
+        const lower = text.toLowerCase().trim();
+        
+        // ASAP / Urgency patterns
+        if (/as soon as possible|asap|right away|immediately|today|urgent|earliest|first available|next available/.test(lower)) {
+            return 'ASAP';
+        }
+        
+        // Time of day patterns
+        if (/\bmorning\b/.test(lower)) return 'morning';
+        if (/\bafternoon\b/.test(lower)) return 'afternoon';
+        if (/\bevening\b/.test(lower)) return 'evening';
+        
+        // Specific time patterns (e.g., "3pm", "3:00", "at 3")
+        const specificTime = lower.match(/\b(\d{1,2})\s*(?::|\.)?(\d{2})?\s*(am|pm|a\.m\.|p\.m\.)?/);
+        if (specificTime) {
+            const hour = parseInt(specificTime[1]);
+            const minutes = specificTime[2] || '00';
+            const period = specificTime[3] || (hour < 12 ? 'AM' : 'PM');
+            return `${hour}:${minutes} ${period.toUpperCase().replace('.', '')}`;
+        }
+        
+        // Relative day patterns
+        if (/\btomorrow\b/.test(lower)) return 'tomorrow';
+        if (/\btoday\b/.test(lower)) return 'today';
+        if (/\bthis week\b/.test(lower)) return 'this week';
+        if (/\bnext week\b/.test(lower)) return 'next week';
+        
+        // Day of week
+        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        for (const day of days) {
+            if (lower.includes(day)) return day.charAt(0).toUpperCase() + day.slice(1);
         }
         
         return null;
@@ -558,6 +602,16 @@ async function processTurn({
                 currentSlots.address = extractedAddress;
                 extractedThisTurn.address = extractedAddress;
                 log('Address extracted', { address: extractedAddress });
+            }
+        }
+        
+        // Extract time preference
+        if (!currentSlots.time && userText) {
+            const extractedTime = SlotExtractors.extractTime(userText);
+            if (extractedTime) {
+                currentSlots.time = extractedTime;
+                extractedThisTurn.time = extractedTime;
+                log('Time extracted', { time: extractedTime });
             }
         }
         
