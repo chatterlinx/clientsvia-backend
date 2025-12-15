@@ -86,7 +86,13 @@ const SlotExtractors = {
             'great', 'fine', 'good', 'bad', 'hot', 'cold', 'here', 'there', 'back', 'home',
             'interested', 'concerned', 'worried', 'happy', 'sorry', 'glad',
             // Filler words
-            'like', 'so', 'very', 'really', 'actually', 'basically', 'literally', 'probably'
+            'like', 'so', 'very', 'really', 'actually', 'basically', 'literally', 'probably',
+            // SERVICE/TRADE WORDS - Critical for "air conditioning service", "AC repair", etc.
+            'service', 'services', 'repair', 'repairs', 'maintenance', 'install', 'installation',
+            'conditioning', 'air', 'ac', 'hvac', 'heating', 'cooling', 'plumbing', 'electrical',
+            'unit', 'system', 'systems', 'equipment', 'furnace', 'thermostat', 'duct', 'ducts',
+            'appointment', 'schedule', 'scheduling', 'book', 'booking', 'call', 'help',
+            'need', 'needs', 'want', 'wants', 'get', 'fix', 'check', 'look', 'today', 'tomorrow'
         ];
         
         // Full phrases that look like names but aren't
@@ -96,7 +102,11 @@ const SlotExtractors = {
             'this is', 'that is', 'what is', 'yes please', 'okay thanks',
             'yeah sure', 'sure thing', 'all right', 'well hello',
             'having just', 'doing great', 'doing good', 'doing fine',
-            'having some', 'having issues', 'having problems', 'having trouble'
+            'having some', 'having issues', 'having problems', 'having trouble',
+            // Service-related phrases that look like names
+            'conditioning service', 'air conditioning', 'ac service', 'ac repair',
+            'hvac service', 'heating service', 'cooling service', 'plumbing service',
+            'electrical service', 'maintenance service', 'repair service'
         ];
         
         // Normalize and check if input is just a greeting/phrase
@@ -489,7 +499,11 @@ async function processTurn({
                 'having', 'doing', 'calling', 'looking', 'trying', 'getting', 'going',
                 'coming', 'waiting', 'hoping', 'thinking', 'wondering', 'needing',
                 'wanting', 'asking', 'dealing', 'experiencing', 'just', 'some',
-                'issues', 'problems', 'trouble', 'great', 'fine', 'good', 'bad'
+                'issues', 'problems', 'trouble', 'great', 'fine', 'good', 'bad',
+                // Service/trade words
+                'service', 'services', 'repair', 'repairs', 'maintenance', 'conditioning',
+                'air', 'ac', 'hvac', 'heating', 'cooling', 'plumbing', 'electrical',
+                'appointment', 'schedule', 'booking', 'unit', 'system'
             ];
             
             // Check if name contains any invalid word
