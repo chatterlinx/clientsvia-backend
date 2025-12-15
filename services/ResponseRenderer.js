@@ -387,8 +387,27 @@ class ResponseRenderer {
      * ════════════════════════════════════════════════════════════════════════
      * GREETING GENERATOR (for first turn)
      * ════════════════════════════════════════════════════════════════════════
+     * 
+     * UI Location: Front Desk Behavior → Fallbacks tab → "Greeting Response"
+     * If UI has a greeting configured, use that EXACTLY.
+     * Otherwise, use style-appropriate variants with company name.
      */
     renderGreeting() {
+        // 🎯 FIRST: Check for UI-configured greeting (Front Desk Behavior → Fallbacks)
+        if (this.fallbackResponses.greeting) {
+            logger.info('[RESPONSE RENDERER] Using UI-configured greeting');
+            return {
+                say: this.fallbackResponses.greeting,
+                action: 'GREETING',
+                expecting: null,
+                bargeInAllowed: true,
+                tokensUsed: 0,
+                source: 'STATE_MACHINE_UI',
+                trace: { type: 'greeting', configSource: 'UI' }
+            };
+        }
+        
+        // FALLBACK: Style-based greeting with company name
         const companyName = this.company.companyName || this.company.name || 'our company';
         
         const greetings = {
@@ -411,14 +430,15 @@ class ResponseRenderer {
         
         const variants = greetings[this.style] || greetings.balanced;
         
+        logger.info('[RESPONSE RENDERER] Using style-based greeting (no UI config)', { style: this.style });
         return {
             say: this.pickVariant(variants),
             action: 'GREETING',
             expecting: null,
             bargeInAllowed: true,
             tokensUsed: 0,
-            source: 'STATE_MACHINE',
-            trace: { type: 'greeting', style: this.style }
+            source: 'STATE_MACHINE_DEFAULT',
+            trace: { type: 'greeting', style: this.style, configSource: 'DEFAULT' }
         };
     }
 }

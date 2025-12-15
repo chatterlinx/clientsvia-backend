@@ -658,6 +658,12 @@ async function processTurn({
         // Update state machine with newly extracted slots
         stateMachine.updateSlots(currentSlots);
         
+        // ═══════════════════════════════════════════════════════════════════
+        // GREETING DETECTION - Handle simple greetings without LLM (0 tokens)
+        // ═══════════════════════════════════════════════════════════════════
+        const greetingPattern = /^(hi|hello|hey|good\s*(morning|afternoon|evening)|howdy|greetings|yo)[\s\.\!\?]*$/i;
+        const isSimpleGreeting = greetingPattern.test(userText.trim());
+        
         // Check if we're in booking mode OR caller mentioned booking intent
         const bookingIntent = /\b(appointment|schedule|book|service|repair|fix|broken|not working|need help|maintenance|install|replace)\b/i;
         const hasBookingIntent = bookingIntent.test(userText);
@@ -667,6 +673,7 @@ async function processTurn({
         const needsLLM = stateMachine.needsLLMInterpretation(userText, extractedThisTurn);
         
         log('CHECKPOINT 9a: State machine analysis', {
+            isSimpleGreeting,
             isInBookingMode,
             hasBookingIntent,
             needsLLM,
@@ -678,9 +685,41 @@ async function processTurn({
         let aiLatencyMs = 0;
         
         // ═══════════════════════════════════════════════════════════════════
-        // FAST PATH: State machine handles it (0 tokens)
+        // GREETING FAST PATH: Simple greetings (0 tokens)
         // ═══════════════════════════════════════════════════════════════════
-        if (isInBookingMode && !needsLLM) {
+        if (isSimpleGreeting && !isInBookingMode) {
+            log('CHECKPOINT 9b: 🎯 GREETING FAST PATH (0 tokens)');
+            const aiStartTime = Date.now();
+            
+            // Use ResponseRenderer for greeting
+            const greetingResponse = renderer.renderGreeting();
+            
+            aiLatencyMs = Date.now() - aiStartTime;
+            
+            aiResult = {
+                reply: greetingResponse.say,
+                conversationMode: 'greeting',
+                intent: 'greeting',
+                nextGoal: 'AWAIT_NEED',
+                filledSlots: currentSlots,
+                signals: { wantsBooking: false },
+                latencyMs: aiLatencyMs,
+                tokensUsed: 0,  // 🎯 0 tokens!
+                fromStateMachine: true,
+                debug: {
+                    source: 'STATE_MACHINE_GREETING',
+                    response: greetingResponse
+                }
+            };
+            
+            log('CHECKPOINT 9b: ✅ Greeting response (0 tokens)', {
+                replyPreview: greetingResponse.say.substring(0, 50)
+            });
+        }
+        // ═══════════════════════════════════════════════════════════════════
+        // BOOKING FAST PATH: State machine handles it (0 tokens)
+        // ═══════════════════════════════════════════════════════════════════
+        else if (isInBookingMode && !needsLLM) {
             log('CHECKPOINT 9b: 🚀 FAST PATH - State machine handling (0 tokens)');
             const aiStartTime = Date.now();
             

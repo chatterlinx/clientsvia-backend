@@ -1579,13 +1579,36 @@ class FrontDeskBehaviorManager {
     // ════════════════════════════════════════════════════════════════════
     renderFallbacksTab() {
         const fb = this.config.fallbackResponses || {};
+        const companyName = this.companyName || 'our company';
         const defaults = {
+            greeting: `Thanks for calling ${companyName}! How can I help you today?`,
             didNotUnderstandTier1: "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?",
             didNotUnderstandTier2: "I'm still having trouble hearing you clearly. Could you repeat that a bit slower for me?",
             didNotUnderstandTier3: "It sounds like this connection isn't great. Do you want me to have someone from the office call or text you back to help you?"
         };
         
         return `
+            <!-- GREETING RESPONSE (0 tokens - No LLM needed!) -->
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="margin: 0 0 8px 0; color: #58a6ff;">👋 Greeting Response</h3>
+                <p style="color: #8b949e; margin-bottom: 16px; font-size: 0.875rem;">
+                    When callers say "hi", "hello", "good morning", etc. - this is what AI says back.
+                    <strong style="color: #3fb950;">Uses 0 tokens!</strong>
+                </p>
+                
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;">
+                    <label style="display: block; margin-bottom: 8px; color: #8b949e; font-size: 12px;">
+                        GREETING (shown when caller says "hi", "good morning", etc.)
+                    </label>
+                    <input type="text" id="fdb-fb-greeting" value="${fb.greeting || defaults.greeting}" 
+                        placeholder="${defaults.greeting}"
+                        style="width: 100%; padding: 12px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                    <p style="color: #8b949e; font-size: 11px; margin: 8px 0 0 0;">
+                        Tip: Include your company name! This is 100% deterministic - no LLM variability.
+                    </p>
+                </div>
+            </div>
+        
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
                 <h3 style="margin: 0 0 8px 0; color: #f0883e;">🔄 Tiered Fallback Protocol</h3>
                 <p style="color: #8b949e; margin-bottom: 16px; font-size: 0.875rem;">
@@ -1987,6 +2010,8 @@ class FrontDeskBehaviorManager {
         // Tiered Fallback Protocol (honesty-first recovery)
         if (document.getElementById('fdb-fb-tier1')) {
             this.config.fallbackResponses = {
+                // Greeting response (0 tokens - handled by state machine)
+                greeting: get('fdb-fb-greeting') || `Thanks for calling! How can I help you today?`,
                 // New tiered fallbacks
                 didNotUnderstandTier1: get('fdb-fb-tier1') || "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?",
                 didNotUnderstandTier2: get('fdb-fb-tier2') || "I'm still having trouble hearing you clearly. Could you repeat that a bit slower for me?",
@@ -1995,7 +2020,7 @@ class FrontDeskBehaviorManager {
                 didNotUnderstand: get('fdb-fb-tier1') || "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?",
                 escalation: get('fdb-fb-tier3') || "It sounds like this connection isn't great. Do you want me to have someone from the office call or text you back to help you?"
             };
-            console.log('[FRONT DESK BEHAVIOR] 🔄 Tiered fallbacks saved:', this.config.fallbackResponses);
+            console.log('[FRONT DESK BEHAVIOR] 👋 Greeting + 🔄 Tiered fallbacks saved:', this.config.fallbackResponses);
         }
         
         // Mode switching
