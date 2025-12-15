@@ -16,9 +16,12 @@ class AITestConsole {
     constructor(companyId) {
         this.companyId = companyId;
         this.conversationHistory = [];
-        this.testSessionId = `test-${Date.now()}`;
+        // Generate truly unique session ID with random component
+        this.testSessionId = `fresh-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         this.knownSlots = {};
         this.debugLog = []; // Running log of all turns
+        
+        console.log('[AI TEST CONSOLE] 🆕 Initialized with fresh session:', this.testSessionId);
         
         // Voice features
         this.isListening = false;
@@ -728,14 +731,20 @@ class AITestConsole {
     }
 
     /**
-     * Reset the conversation
+     * Reset the conversation - COMPLETELY FRESH START
      */
     resetConversation() {
+        // Generate truly unique session ID with random component
+        const uniqueId = `fresh-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        console.log('[AI TEST CONSOLE] 🔄 RESET: Old session:', this.testSessionId);
+        console.log('[AI TEST CONSOLE] 🔄 RESET: New session:', uniqueId);
+        
         this.conversationHistory = [];
         this.knownSlots = {};
         this.lastDebug = null;
         this.debugLog = [];
-        this.testSessionId = `test-${Date.now()}`;
+        this.testSessionId = uniqueId;
         
         const container = document.getElementById('test-chat-messages');
         container.innerHTML = `
