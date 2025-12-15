@@ -910,8 +910,9 @@ User: "What time do you open?"
                 reply = fallbacks.generic || "How can I help you?";
             }
         } else {
-            // Discovery mode - acknowledge and ask what they need
-            reply = fallbacks.discovery || "I hear you. How can I help you today?";
+            // Non-booking mode - use greeting fallback (not discovery)
+            // Discovery prompts should only come from the LLM based on context
+            reply = fallbacks.greeting || "Thanks for calling! How can I help you today?";
         }
         
         // Final safety - if still null, use absolute minimum

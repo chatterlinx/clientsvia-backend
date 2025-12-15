@@ -1840,15 +1840,16 @@ const companySchema = new mongoose.Schema({
             fallbackResponses: {
                 // Initial & Discovery
                 greeting: { type: String, default: "Thanks for calling! How can I help you today?", trim: true },
-                discovery: { type: String, default: "Got it, what's going on — is it not cooling, not heating, making noise, or something else?", trim: true },
+                // 🚨 GENERIC - Not industry-specific! LLM will generate contextual response.
+                discovery: { type: String, default: "I hear you. Tell me a bit more about what's going on.", trim: true },
                 // Booking Slots
                 askName: { type: String, default: "May I have your name please?", trim: true },
                 askPhone: { type: String, default: "And what's the best phone number to reach you?", trim: true },
                 askAddress: { type: String, default: "What's the service address?", trim: true },
-                askTime: { type: String, default: "When works best for you — morning or afternoon? Or I can send someone as soon as possible.", trim: true },
+                askTime: { type: String, default: "When works best for you?", trim: true },
                 // Confirmation
-                confirmBooking: { type: String, default: "Let me confirm — I have you scheduled. Does that sound right?", trim: true },
-                bookingComplete: { type: String, default: "You're all set! A technician will be out and you'll receive a confirmation text shortly. Is there anything else?", trim: true },
+                confirmBooking: { type: String, default: "Let me confirm your details. Does that sound right?", trim: true },
+                bookingComplete: { type: String, default: "You're all set! You'll receive a confirmation shortly. Is there anything else?", trim: true },
                 // Error Recovery
                 didNotHear: { type: String, default: "I'm sorry, I didn't quite catch that. Could you please repeat?", trim: true },
                 connectionIssue: { type: String, default: "I'm sorry, I think our connection isn't great. Could you please repeat that?", trim: true },

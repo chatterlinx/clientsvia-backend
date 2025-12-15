@@ -204,15 +204,16 @@ const DEFAULT_FRONT_DESK_CONFIG = {
     fallbackResponses: {
         // Initial & Discovery
         greeting: 'Thanks for calling! How can I help you today?',
-        discovery: 'Got it, what\'s going on — is it not cooling, not heating, making noise, or something else?',
+        // 🚨 GENERIC - Not industry-specific! LLM generates contextual responses.
+        discovery: 'I hear you. Tell me a bit more about what\'s going on.',
         // Booking Slots
         askName: 'May I have your name please?',
         askPhone: 'And what\'s the best phone number to reach you?',
         askAddress: 'What\'s the service address?',
-        askTime: 'When works best for you — morning or afternoon? Or I can send someone as soon as possible.',
+        askTime: 'When works best for you?',
         // Confirmation
-        confirmBooking: 'Let me confirm — I have you scheduled. Does that sound right?',
-        bookingComplete: 'You\'re all set! A technician will be out and you\'ll receive a confirmation text shortly. Is there anything else?',
+        confirmBooking: 'Let me confirm your details. Does that sound right?',
+        bookingComplete: 'You\'re all set! You\'ll receive a confirmation shortly. Is there anything else?',
         // Error Recovery
         didNotHear: 'I\'m sorry, I didn\'t quite catch that. Could you please repeat?',
         connectionIssue: 'I\'m sorry, I think our connection isn\'t great. Could you please repeat that?',
