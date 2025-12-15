@@ -243,15 +243,29 @@ const SlotExtractors = {
         
         const lower = text.toLowerCase().trim();
         
+        // ═══════════════════════════════════════════════════════════════════
+        // FALSE POSITIVE CHECK - Don't extract time from greetings!
+        // "good afternoon" is a GREETING, not a time preference
+        // ═══════════════════════════════════════════════════════════════════
+        const greetingPatterns = [
+            /^(hi|hello|hey|howdy|yo)\s+(good\s+)?(morning|afternoon|evening)/i,
+            /^good\s+(morning|afternoon|evening)/i,
+            /good\s+(morning|afternoon|evening)[\s\.\!\?]*$/i  // ends with greeting
+        ];
+        
+        if (greetingPatterns.some(p => p.test(lower))) {
+            return null; // Don't extract time from greetings
+        }
+        
         // ASAP / Urgency patterns
         if (/as soon as possible|asap|right away|immediately|today|urgent|earliest|first available|next available/.test(lower)) {
             return 'ASAP';
         }
         
-        // Time of day patterns
-        if (/\bmorning\b/.test(lower)) return 'morning';
-        if (/\bafternoon\b/.test(lower)) return 'afternoon';
-        if (/\bevening\b/.test(lower)) return 'evening';
+        // Time of day patterns - only if NOT part of greeting
+        if (/\bmorning\b/.test(lower) && !/good\s+morning/i.test(lower)) return 'morning';
+        if (/\bafternoon\b/.test(lower) && !/good\s+afternoon/i.test(lower)) return 'afternoon';
+        if (/\bevening\b/.test(lower) && !/good\s+evening/i.test(lower)) return 'evening';
         
         // Specific time patterns (e.g., "3pm", "3:00", "at 3")
         const specificTime = lower.match(/\b(\d{1,2})\s*(?::|\.)?(\d{2})?\s*(am|pm|a\.m\.|p\.m\.)?/);
@@ -660,9 +674,16 @@ async function processTurn({
         
         // ═══════════════════════════════════════════════════════════════════
         // GREETING DETECTION - Handle simple greetings without LLM (0 tokens)
+        // Matches: "hi", "hello", "good morning", "hi good afternoon", etc.
         // ═══════════════════════════════════════════════════════════════════
-        const greetingPattern = /^(hi|hello|hey|good\s*(morning|afternoon|evening)|howdy|greetings|yo)[\s\.\!\?]*$/i;
-        const isSimpleGreeting = greetingPattern.test(userText.trim());
+        const greetingPatterns = [
+            /^(hi|hello|hey|yo|howdy|greetings)[\s\.\!\?]*$/i,                    // Simple: "hi", "hello"
+            /^good\s+(morning|afternoon|evening)[\s\.\!\?]*$/i,                   // Time greetings: "good morning"
+            /^(hi|hello|hey)\s+good\s+(morning|afternoon|evening)[\s\.\!\?]*$/i,  // Compound: "hi good afternoon"
+            /^(hi|hello|hey)\s+there[\s\.\!\?]*$/i,                               // "hi there", "hello there"
+            /^(hi|hello|hey)[\s,]+how are you[\s\.\!\?]*$/i                       // "hi, how are you"
+        ];
+        const isSimpleGreeting = greetingPatterns.some(p => p.test(userText.trim()));
         
         // Check if we're in booking mode OR caller mentioned booking intent
         const bookingIntent = /\b(appointment|schedule|book|service|repair|fix|broken|not working|need help|maintenance|install|replace)\b/i;
