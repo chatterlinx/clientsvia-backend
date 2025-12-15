@@ -525,15 +525,31 @@ class HybridReceptionistLLM {
                     // Get EXACT question from database config - LLM NEVER generates this
                     const exactQuestion = slot.question;
                     
-                    // Combine: "I can help with that! " + "May I have your name please?"
-                    finalReply = `${ack} ${exactQuestion}`;
+                    // ═══════════════════════════════════════════════════════════
+                    // DEDUP CHECK: Don't append question if LLM already included it
+                    // The LLM sometimes ignores the "system adds the question" rule
+                    // ═══════════════════════════════════════════════════════════
+                    const ackEndsWithQuestion = ack.trim().endsWith('?');
+                    const ackContainsExactQuestion = exactQuestion && ack.toLowerCase().includes(exactQuestion.toLowerCase().substring(0, 20));
                     
-                    logger.info('[HYBRID LLM] 🎯 LLMQNA: Using EXACT configured question', {
-                        slotId: collectingSlot,
-                        acknowledgment: ack,
-                        exactQuestion: exactQuestion,
-                        finalReply: finalReply.substring(0, 80)
-                    });
+                    if (ackEndsWithQuestion || ackContainsExactQuestion) {
+                        // LLM already included a question - use just the ack
+                        finalReply = ack;
+                        logger.info('[HYBRID LLM] 🔄 LLM included question in ack - not appending duplicate', {
+                            slotId: collectingSlot,
+                            ack: ack.substring(0, 60),
+                            exactQuestion: exactQuestion.substring(0, 30)
+                        });
+                    } else {
+                        // Clean ack - append the exact question
+                        finalReply = `${ack} ${exactQuestion}`;
+                        logger.info('[HYBRID LLM] 🎯 LLMQNA: Appending EXACT configured question', {
+                            slotId: collectingSlot,
+                            acknowledgment: ack,
+                            exactQuestion: exactQuestion,
+                            finalReply: finalReply.substring(0, 80)
+                        });
+                    }
                 } else {
                     // Slot not found in config - use LLM reply as fallback
                     finalReply = parsed.reply || parsed.freeformReply || 'How can I help you?';
