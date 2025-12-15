@@ -437,6 +437,39 @@ class FrontDeskBehaviorManager {
                             <span style="font-size: 0.7rem; color: #8b949e; margin-top: 8px;">Best for: Legal, Luxury, Consulting</span>
                         </label>
                     </div>
+                    
+                    <!-- Style Acknowledgments - Customizable phrases -->
+                    <div style="margin-top: 20px; padding: 16px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
+                        <h5 style="margin: 0 0 12px 0; color: #c9d1d9; font-size: 0.9rem;">
+                            💬 Style Acknowledgments
+                            <span style="font-weight: normal; color: #8b949e; font-size: 0.75rem; margin-left: 8px;">
+                                What AI says when acknowledging a request
+                            </span>
+                        </h5>
+                        <div style="display: grid; gap: 12px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 4px; color: #8b949e; font-size: 0.8rem;">⭐ Confident Style:</label>
+                                <input type="text" id="fdb-ack-confident" 
+                                    value="${this.config.styleAcknowledgments?.confident || "Let's get this taken care of."}" 
+                                    placeholder="Let's get this taken care of."
+                                    style="width: 100%; padding: 8px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 4px; color: #8b949e; font-size: 0.8rem;">🤝 Balanced Style:</label>
+                                <input type="text" id="fdb-ack-balanced" 
+                                    value="${this.config.styleAcknowledgments?.balanced || "I can help with that!"}" 
+                                    placeholder="I can help with that!"
+                                    style="width: 100%; padding: 8px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 4px; color: #8b949e; font-size: 0.8rem;">🎩 Polite Style:</label>
+                                <input type="text" id="fdb-ack-polite" 
+                                    value="${this.config.styleAcknowledgments?.polite || "I'd be happy to help."}" 
+                                    placeholder="I'd be happy to help."
+                                    style="width: 100%; padding: 8px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -1839,6 +1872,16 @@ class FrontDeskBehaviorManager {
         if (styleRadio) {
             this.config.conversationStyle = styleRadio.value;
             console.log('[FRONT DESK BEHAVIOR] 🎯 Conversation style:', this.config.conversationStyle);
+        }
+        
+        // Collect style acknowledgments
+        if (document.getElementById('fdb-ack-confident')) {
+            this.config.styleAcknowledgments = {
+                confident: get('fdb-ack-confident') || "Let's get this taken care of.",
+                balanced: get('fdb-ack-balanced') || "I can help with that!",
+                polite: get('fdb-ack-polite') || "I'd be happy to help."
+            };
+            console.log('[FRONT DESK BEHAVIOR] 💬 Style acknowledgments:', this.config.styleAcknowledgments);
         }
 
         // Collect dynamic booking slots

@@ -1351,7 +1351,10 @@ router.post('/voice', async (req, res) => {
       
       // 🚫 NEVER HANG UP - Blame connection, not caller
       logger.debug(`[GATHER FALLBACK] No speech detected - prompting again`);
-      twiml.say("I'm sorry, I think our connection isn't great. I didn't catch that. Could you please repeat?");
+      // 🚨 UI-CONTROLLED: Use recovery message from database
+      const choppyMsg = company.aiAgentSettings?.llm0Controls?.recoveryMessages?.choppyConnection 
+        || "I'm sorry, the connection seems a bit choppy. Could you repeat that?";
+      twiml.say(choppyMsg);
       // Redirect back to continue listening
       twiml.redirect(`https://${req.get('host')}/api/twilio/${company._id}/voice`);
       
@@ -1389,7 +1392,10 @@ router.post('/voice', async (req, res) => {
       gather.say(escapeTwiML(fallbackGreeting));
       
       // 🚫 NEVER HANG UP - Blame connection, not caller
-      twiml.say("I'm sorry, the connection seems a bit choppy. Could you repeat that?");
+      // 🚨 UI-CONTROLLED: Use recovery message from database
+      const errorRecovery = company.aiAgentSettings?.llm0Controls?.recoveryMessages?.choppyConnection 
+        || "I'm sorry, the connection seems a bit choppy. Could you repeat that?";
+      twiml.say(errorRecovery);
       twiml.redirect(`https://${req.get('host')}/api/twilio/${company._id}/voice`);
     }
 
@@ -1543,6 +1549,16 @@ router.post('/handle-speech', async (req, res) => {
       bookingRepeatPhrase: "Sorry, I didn't catch that. Could you repeat that for me?",
       logToBlackBox: true,
       ...(company.aiAgentSettings?.llm0Controls?.lowConfidenceHandling || {})
+    };
+    
+    // 🚨 UI-CONTROLLED: Get recovery messages from database
+    const recoveryMessages = {
+      choppyConnection: "I'm sorry, the connection seems a bit choppy. Could you repeat that?",
+      connectionCutOut: "Sorry, the connection cut out for a second. What can I help you with?",
+      silenceRecovery: "I'm here — go ahead, I'm listening. How can I help you today?",
+      generalError: "I'm sorry, I missed that. Could you say that again?",
+      technicalTransfer: "I'm having some technical difficulties. Let me connect you to our team.",
+      ...(company.aiAgentSettings?.llm0Controls?.recoveryMessages || {})
     };
     
     // Convert 0-1 confidence to 0-100 for comparison
@@ -2368,7 +2384,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
   let sttProcessResult = null;
   try {
     // Get template ID for this company
-    const company = await Company.findById(companyID).select('aiAgentSettings.templateReferences').lean();
+    const company = await Company.findById(companyID).select('aiAgentSettings.templateReferences aiAgentSettings.llm0Controls.recoveryMessages').lean();
     const templateId = company?.aiAgentSettings?.templateReferences?.[0]?.templateId;
     
     if (templateId && speechResult) {
@@ -2810,7 +2826,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             }
             
             // Simple recovery response - CONTEXT-AWARE, blame connection not caller
-            let recoveryText = "I'm sorry, the connection cut out for a second. What can I help you with?";
+            // 🚨 UI-CONTROLLED: Use recovery message from database
+            const recoveryMsgs = company.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
+            let recoveryText = recoveryMsgs.connectionCutOut || "I'm sorry, the connection cut out for a second. What can I help you with?";
             let recoveryAction = 'DISCOVERY';
             
             // Check if we're in booking mode - don't reset!
@@ -2837,7 +2855,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 recoveryText = `Sorry about that, the line was choppy. ${timeQ}`;
                 recoveryAction = 'BOOKING';
               } else {
-                recoveryText = "I'm sorry, I missed that. Could you say that again?";
+                recoveryText = recoveryMsgs.generalError || "I'm sorry, I missed that. Could you say that again?";
                 recoveryAction = 'BOOKING';
               }
               logger.info('[HYBRID] Booking-aware fallback used', { currentStep, recoveryText });
@@ -2908,7 +2926,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       });
       
       // CONTEXT-AWARE recovery - blame connection, respect booking state!
-      let errorRecoveryText = "I'm sorry, the connection isn't great. What can I help you with?";
+      // 🚨 UI-CONTROLLED: Use recovery message from database
+      const errorRecoveryMsgs = company?.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
+      let errorRecoveryText = errorRecoveryMsgs.choppyConnection || "I'm sorry, the connection isn't great. What can I help you with?";
       let errorRecoveryAction = 'DISCOVERY';
       
       // 🚨 Use UI-configured questions for error recovery
@@ -2930,7 +2950,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           errorRecoveryText = `I missed that. ${phoneQ}`;
           errorRecoveryAction = 'BOOKING';
         } else {
-          errorRecoveryText = "Sorry, the connection cut out. Could you repeat that?";
+          errorRecoveryText = errorRecoveryMsgs.generalError || "Sorry, the connection cut out. Could you repeat that?";
           errorRecoveryAction = 'BOOKING';
         }
       }
@@ -3245,7 +3265,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // ════════════════════════════════════════════════════════════════════════
       if (!responseText || responseText.trim().length < 10) {
         logger.warn('[TWILIO] ⚠️ Empty or too-short response detected - using safety fallback');
-        responseText = "I'm here — go ahead, I'm listening. How can I help you today?";
+        // 🚨 UI-CONTROLLED: Use recovery message from database
+        responseText = company?.aiAgentSettings?.llm0Controls?.recoveryMessages?.silenceRecovery 
+          || "I'm here — go ahead, I'm listening. How can I help you today?";
         
         if (BlackBoxLogger) {
           BlackBoxLogger.logEvent({
@@ -3443,7 +3465,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }
       
       // Prompt caller instead of hanging up
-      twiml.say("I'm sorry, the connection seems choppy. Are you still there?");
+      // 🚨 UI-CONTROLLED: Use recovery message from database
+      const choppyPrompt = company?.aiAgentSettings?.llm0Controls?.recoveryMessages?.choppyConnection 
+        || "I'm sorry, the connection seems choppy. Are you still there?";
+      twiml.say(choppyPrompt);
       twiml.redirect(`/api/twilio/v2-agent-respond/${companyID}`);
     }
     

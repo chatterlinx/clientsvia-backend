@@ -328,6 +328,9 @@ class LLM0ControlsManager {
             <!-- LOW CONFIDENCE HANDLING - STT Quality Guard -->
             ${this.renderLowConfidencePanel(c.lowConfidenceHandling || {})}
 
+            <!-- CONNECTION RECOVERY MESSAGES -->
+            ${this.renderRecoveryMessagesPanel(c.recoveryMessages || {})}
+
             <!-- SMART CONFIRMATION -->
             ${this.renderSmartConfirmationPanel(c.smartConfirmation || {})}
 
@@ -792,6 +795,88 @@ class LLM0ControlsManager {
 
     // REMOVED: renderFrustrationPanel - Now in Front Desk Behavior > Frustration tab
     // REMOVED: renderResponseTimingPanel - Now in STT Settings > Call Experience
+
+    renderRecoveryMessagesPanel(rm) {
+        // Provide defaults if recoveryMessages doesn't exist yet
+        rm = rm || {
+            choppyConnection: "I'm sorry, the connection seems a bit choppy. Could you repeat that?",
+            connectionCutOut: "Sorry, the connection cut out for a second. What can I help you with?",
+            silenceRecovery: "I'm here — go ahead, I'm listening. How can I help you today?",
+            generalError: "I'm sorry, I missed that. Could you say that again?",
+            technicalTransfer: "I'm having some technical difficulties. Let me connect you to our team."
+        };
+
+        return `
+            <div class="llm0-panel">
+                <div class="llm0-panel-header" style="background: linear-gradient(135deg, #f97316, #ea580c);">
+                    <span class="llm0-icon">📡</span>
+                    <h3 class="llm0-title">Connection Recovery Messages</h3>
+                </div>
+                <div class="llm0-panel-body">
+                    <p class="llm0-description">
+                        Messages AI uses when there are connection issues. Customize these to match your brand voice.
+                    </p>
+
+                    <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">
+                                📶 Choppy Connection
+                            </label>
+                            <input type="text" class="llm0-input" value="${rm.choppyConnection || ''}"
+                                   data-section="recoveryMessages" data-field="choppyConnection"
+                                   placeholder="I'm sorry, the connection seems choppy..."
+                                   style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+                            <span style="font-size: 11px; color: #6b7280;">When audio quality is poor</span>
+                        </div>
+
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">
+                                🔌 Connection Cut Out
+                            </label>
+                            <input type="text" class="llm0-input" value="${rm.connectionCutOut || ''}"
+                                   data-section="recoveryMessages" data-field="connectionCutOut"
+                                   placeholder="Sorry, the connection cut out..."
+                                   style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+                            <span style="font-size: 11px; color: #6b7280;">When connection drops briefly</span>
+                        </div>
+
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">
+                                🔇 Silence Recovery
+                            </label>
+                            <input type="text" class="llm0-input" value="${rm.silenceRecovery || ''}"
+                                   data-section="recoveryMessages" data-field="silenceRecovery"
+                                   placeholder="I'm here — go ahead, I'm listening..."
+                                   style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+                            <span style="font-size: 11px; color: #6b7280;">When caller returns after silence</span>
+                        </div>
+
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">
+                                ⚠️ General Error
+                            </label>
+                            <input type="text" class="llm0-input" value="${rm.generalError || ''}"
+                                   data-section="recoveryMessages" data-field="generalError"
+                                   placeholder="I'm sorry, I missed that..."
+                                   style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+                            <span style="font-size: 11px; color: #6b7280;">Generic recovery message</span>
+                        </div>
+
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">
+                                🔧 Technical Transfer
+                            </label>
+                            <input type="text" class="llm0-input" value="${rm.technicalTransfer || ''}"
+                                   data-section="recoveryMessages" data-field="technicalTransfer"
+                                   placeholder="I'm having technical difficulties..."
+                                   style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+                            <span style="font-size: 11px; color: #6b7280;">When transferring due to tech issues</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
 
     renderSmartConfirmationPanel(sc) {
         // Provide defaults if smartConfirmation doesn't exist yet

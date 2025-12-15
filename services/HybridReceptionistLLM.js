@@ -82,6 +82,12 @@ function loadFrontDeskConfig(company) {
             agentName: config.personality?.agentName || null
         },
         
+        // 🎯 Conversation Style - confident/balanced/polite
+        conversationStyle: config.conversationStyle || 'balanced',
+        
+        // 💬 Style Acknowledgments - UI-configurable phrases
+        styleAcknowledgments: config.styleAcknowledgments || null,
+        
         // 🚨 BOOKING SLOTS - NO DEFAULTS - Must be in database
         bookingSlots: config.bookingSlots || [],
         
@@ -461,16 +467,17 @@ class HybridReceptionistLLM {
                     // Get acknowledgment from LLM
                     let ack = (parsed.acknowledgment || parsed.ack || '').trim();
                     
-                    // If LLM didn't provide an acknowledgment, use style-based default
+                    // If LLM didn't provide an acknowledgment, use UI-configured style acknowledgment
                     if (!ack) {
                         const style = behaviorConfig.conversationStyle || 'balanced';
-                        const defaultAcks = {
+                        // 🚨 UI-CONTROLLED: Use styleAcknowledgments from database, fallback to sensible defaults
+                        const styleAcks = behaviorConfig.styleAcknowledgments || {
                             confident: "Let's get this taken care of.",
                             balanced: "I can help with that!",
                             polite: "I'd be happy to help."
                         };
-                        ack = defaultAcks[style] || defaultAcks.balanced;
-                        logger.info('[HYBRID LLM] 📝 Using default acknowledgment for style:', style);
+                        ack = styleAcks[style] || styleAcks.balanced || "I can help with that!";
+                        logger.info('[HYBRID LLM] 📝 Using UI-configured acknowledgment for style:', { style, ack });
                     }
                     
                     // Get EXACT question from database config - LLM NEVER generates this

@@ -190,6 +190,8 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
                 enabled: config.enabled,
                 // 🎯 Conversation Style - confident/balanced/polite
                 conversationStyle: config.conversationStyle || 'balanced',
+                // 💬 Style Acknowledgments - custom phrases per style
+                styleAcknowledgments: config.styleAcknowledgments || null,
                 personality: config.personality,
                 // 🚨 Dynamic booking slots (new system)
                 bookingSlots: config.bookingSlots || null,
@@ -265,6 +267,12 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
         if (updates.conversationStyle) {
             updateObj['aiAgentSettings.frontDeskBehavior.conversationStyle'] = updates.conversationStyle;
             logger.info('[FRONT DESK BEHAVIOR] 🎯 Saving conversationStyle:', updates.conversationStyle);
+        }
+        
+        // 💬 STYLE ACKNOWLEDGMENTS - Custom phrases for each conversation style
+        if (updates.styleAcknowledgments) {
+            updateObj['aiAgentSettings.frontDeskBehavior.styleAcknowledgments'] = updates.styleAcknowledgments;
+            logger.info('[FRONT DESK BEHAVIOR] 💬 Saving styleAcknowledgments:', updates.styleAcknowledgments);
         }
         
         if (updates.escalation) {

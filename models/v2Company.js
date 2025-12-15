@@ -1258,6 +1258,40 @@ const companySchema = new mongoose.Schema({
                 // Only accept Deepgram result if confidence is above this (0-100%)
                 deepgramAcceptThreshold: { type: Number, default: 80, min: 50, max: 100 }
             },
+            // CONNECTION RECOVERY MESSAGES - When connection is choppy/lost
+            // 🚨 UI-CONTROLLED - Replaces hardcoded error messages in v2twilio.js
+            recoveryMessages: {
+                // When connection seems choppy
+                choppyConnection: {
+                    type: String,
+                    default: "I'm sorry, the connection seems a bit choppy. Could you repeat that?",
+                    trim: true
+                },
+                // When connection cuts out briefly
+                connectionCutOut: {
+                    type: String,
+                    default: "Sorry, the connection cut out for a second. What can I help you with?",
+                    trim: true
+                },
+                // When caller returns after silence
+                silenceRecovery: {
+                    type: String,
+                    default: "I'm here — go ahead, I'm listening. How can I help you today?",
+                    trim: true
+                },
+                // General error recovery
+                generalError: {
+                    type: String,
+                    default: "I'm sorry, I missed that. Could you say that again?",
+                    trim: true
+                },
+                // When transferring due to technical issues
+                technicalTransfer: {
+                    type: String,
+                    default: "I'm having some technical difficulties. Let me connect you to our team.",
+                    trim: true
+                }
+            },
             // FRUSTRATION DETECTION - Escalate immediately on emotional keywords
             // Prevents loops when caller is clearly frustrated
             frustrationDetection: {
@@ -1593,6 +1627,16 @@ const companySchema = new mongoose.Schema({
                 type: String, 
                 enum: ['confident', 'balanced', 'polite'], 
                 default: 'balanced' 
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // STYLE ACKNOWLEDGMENTS - Custom phrases for each conversation style
+            // 🚨 UI-CONTROLLED - These replace hardcoded acknowledgments
+            // ═══════════════════════════════════════════════════════════════
+            styleAcknowledgments: {
+                confident: { type: String, trim: true, default: "Let's get this taken care of." },
+                balanced: { type: String, trim: true, default: "I can help with that!" },
+                polite: { type: String, trim: true, default: "I'd be happy to help." }
             },
             
             // ═══════════════════════════════════════════════════════════════
