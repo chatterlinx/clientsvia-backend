@@ -66,12 +66,24 @@ const SlotExtractors = {
         if (!text || typeof text !== 'string') return null;
         
         // ═══════════════════════════════════════════════════════════════════
-        // FALSE POSITIVES - Filter out common greetings and phrases
+        // FALSE POSITIVES - Comprehensive list of words that are NOT names
         // ═══════════════════════════════════════════════════════════════════
         const falsePositiveWords = [
-            'the', 'that', 'this', 'what', 'just', 'yeah', 'yes', 'sure', 
+            // Greetings
             'hi', 'hello', 'hey', 'good', 'morning', 'afternoon', 'evening', 'night',
-            'thanks', 'thank', 'you', 'okay', 'ok', 'alright', 'well', 'please'
+            // Confirmations
+            'yeah', 'yes', 'sure', 'okay', 'ok', 'alright', 'right', 'yep', 'yup',
+            // Common words
+            'the', 'that', 'this', 'what', 'just', 'well', 'please', 'thanks', 'thank', 'you',
+            // Common verbs (critical for "I'm having/doing/calling" etc)
+            'having', 'doing', 'calling', 'looking', 'trying', 'getting', 'going', 'coming',
+            'waiting', 'hoping', 'thinking', 'wondering', 'needing', 'wanting', 'asking',
+            'dealing', 'experiencing', 'seeing', 'feeling', 'hearing', 'running', 'working',
+            // Adjectives/states
+            'great', 'fine', 'good', 'bad', 'hot', 'cold', 'here', 'there', 'back', 'home',
+            'interested', 'concerned', 'worried', 'happy', 'sorry', 'glad',
+            // Filler words
+            'like', 'so', 'very', 'really', 'actually', 'basically', 'literally', 'probably'
         ];
         
         // Full phrases that look like names but aren't
@@ -79,7 +91,9 @@ const SlotExtractors = {
             'good morning', 'good afternoon', 'good evening', 'good night',
             'thank you', 'hi there', 'hello there', 'hey there',
             'this is', 'that is', 'what is', 'yes please', 'okay thanks',
-            'yeah sure', 'sure thing', 'all right', 'well hello'
+            'yeah sure', 'sure thing', 'all right', 'well hello',
+            'having just', 'doing great', 'doing good', 'doing fine',
+            'having some', 'having issues', 'having problems', 'having trouble'
         ];
         
         // Normalize and check if input is just a greeting/phrase
@@ -90,18 +104,33 @@ const SlotExtractors = {
             }
         }
         
+        // ═══════════════════════════════════════════════════════════════════
+        // SMART EXTRACTION - Only use aggressive patterns on short messages
+        // Long messages are unlikely to be name introductions
+        // ═══════════════════════════════════════════════════════════════════
+        const wordCount = text.split(/\s+/).length;
+        const isShortMessage = wordCount <= 5; // "I'm John Smith" or "My name is Mark"
+        
         // Common patterns - use [a-zA-Z] to handle any case from STT
         const patterns = [
-            /my name is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i,
-            /this is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i,
-            /i'?m\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i,
-            /it'?s\s+([a-zA-Z]+)\s+(?:calling|here)/i,
-            /(?:name\s*(?:is)?\s*)([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i,  // "name Mark" or "name is Mark"
-            /(?:^|\s)([a-zA-Z]+\s+[a-zA-Z]+)(?:\s*$|\s+(?:here|calling))/i  // "John Smith" at start/end
+            // High confidence patterns - always use
+            { regex: /my name is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i, requireShort: false },
+            { regex: /name is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i, requireShort: false },
+            { regex: /it'?s\s+([a-zA-Z]+)\s+(?:calling|here)/i, requireShort: false },
+            
+            // Medium confidence - only on shorter messages
+            { regex: /this is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i, requireShort: true },
+            { regex: /i'?m\s+([a-zA-Z]+)$/i, requireShort: true },  // "I'm John" only at end
+            
+            // Low confidence patterns - require very short messages
+            { regex: /(?:^|\s)([a-zA-Z]+\s+[a-zA-Z]+)(?:\s*$)/i, requireShort: true }  // "John Smith" at end
         ];
         
-        for (const pattern of patterns) {
-            const match = text.match(pattern);
+        for (const { regex, requireShort } of patterns) {
+            // Skip patterns that require short messages if this is a long message
+            if (requireShort && !isShortMessage) continue;
+            
+            const match = text.match(regex);
             if (match && match[1]) {
                 const rawName = match[1].trim();
                 const rawNameLower = rawName.toLowerCase();
@@ -116,9 +145,10 @@ const SlotExtractors = {
                     continue;
                 }
                 
-                // Filter out if BOTH words are false positives (e.g., "Good Morning")
+                // Filter out if EITHER word is a false positive (stricter check)
                 const words = rawNameLower.split(/\s+/);
-                if (words.length === 2 && falsePositiveWords.includes(words[0]) && falsePositiveWords.includes(words[1])) {
+                const anyWordIsFalsePositive = words.some(w => falsePositiveWords.includes(w));
+                if (anyWordIsFalsePositive) {
                     continue;
                 }
                 
@@ -393,16 +423,33 @@ async function processTurn({
         const rawSlots = { ...(session.collectedSlots || {}) };
         const currentSlots = {};
         
-        // Validate name - reject greetings, single letters, numbers, etc.
+        // Validate name - reject greetings, verbs, common phrases
         if (rawSlots.name) {
             const nameLower = rawSlots.name.toLowerCase().trim();
+            
+            // Direct invalid names
             const invalidNames = [
                 'good morning', 'good afternoon', 'good evening', 'good night',
                 'hi', 'hello', 'hey', 'hi there', 'hello there', 'good',
                 'morning', 'afternoon', 'evening', 'yes', 'no', 'yeah', 'yep',
-                'thanks', 'thank you', 'okay', 'ok', 'sure', 'please'
+                'thanks', 'thank you', 'okay', 'ok', 'sure', 'please',
+                'having just', 'doing great', 'doing good', 'doing fine',
+                'having some', 'having issues', 'having problems'
             ];
-            if (invalidNames.includes(nameLower) || nameLower.length < 2) {
+            
+            // Words that should NEVER be in a name
+            const invalidWords = [
+                'having', 'doing', 'calling', 'looking', 'trying', 'getting', 'going',
+                'coming', 'waiting', 'hoping', 'thinking', 'wondering', 'needing',
+                'wanting', 'asking', 'dealing', 'experiencing', 'just', 'some',
+                'issues', 'problems', 'trouble', 'great', 'fine', 'good', 'bad'
+            ];
+            
+            // Check if name contains any invalid word
+            const nameWords = nameLower.split(/\s+/);
+            const hasInvalidWord = nameWords.some(w => invalidWords.includes(w));
+            
+            if (invalidNames.includes(nameLower) || nameLower.length < 2 || hasInvalidWord) {
                 log('🚨 INVALID NAME DETECTED - clearing:', rawSlots.name);
                 // Don't copy invalid name
             } else {
