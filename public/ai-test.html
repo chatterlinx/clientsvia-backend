@@ -748,11 +748,33 @@
         // ═══════════════════════════════════════════════════════════════════
         // TEXT-TO-SPEECH - Speak AI responses
         // ═══════════════════════════════════════════════════════════════════
+        let ttsVoices = [];
+        let ttsReady = false;
+        
+        // Load voices (they load async on some browsers)
+        function loadVoices() {
+            if ('speechSynthesis' in window) {
+                ttsVoices = window.speechSynthesis.getVoices();
+                console.log('[TTS] Loaded', ttsVoices.length, 'voices');
+                if (ttsVoices.length > 0) {
+                    ttsReady = true;
+                }
+            }
+        }
+        
+        // Voices load async in Chrome
+        if ('speechSynthesis' in window) {
+            loadVoices();
+            window.speechSynthesis.onvoiceschanged = loadVoices;
+        }
+        
         function speakText(text) {
             if (!('speechSynthesis' in window)) {
-                console.log('Text-to-speech not supported');
+                console.log('[TTS] Not supported');
                 return;
             }
+            
+            console.log('[TTS] Speaking:', text.substring(0, 50) + '...');
             
             // Cancel any ongoing speech
             window.speechSynthesis.cancel();
@@ -762,18 +784,29 @@
             utterance.pitch = 1.0;
             utterance.volume = 1.0;
             
-            // Try to get a female voice
-            const voices = window.speechSynthesis.getVoices();
-            const femaleVoice = voices.find(v => 
-                v.name.includes('Samantha') || 
-                v.name.includes('Victoria') || 
-                v.name.includes('Karen') ||
-                v.name.includes('female') ||
-                v.name.includes('Female')
-            );
-            if (femaleVoice) {
-                utterance.voice = femaleVoice;
+            // Get voices (reload if empty)
+            if (ttsVoices.length === 0) {
+                ttsVoices = window.speechSynthesis.getVoices();
             }
+            
+            // Try to get a good voice (prefer female/natural sounding)
+            const preferredVoice = ttsVoices.find(v => 
+                v.name.includes('Samantha') || 
+                v.name.includes('Google US English') ||
+                v.name.includes('Microsoft Zira') ||
+                v.name.includes('Karen') ||
+                (v.lang === 'en-US' && v.localService)
+            ) || ttsVoices.find(v => v.lang.startsWith('en'));
+            
+            if (preferredVoice) {
+                utterance.voice = preferredVoice;
+                console.log('[TTS] Using voice:', preferredVoice.name);
+            }
+            
+            // Event handlers for debugging
+            utterance.onstart = () => console.log('[TTS] Started speaking');
+            utterance.onend = () => console.log('[TTS] Finished speaking');
+            utterance.onerror = (e) => console.error('[TTS] Error:', e.error);
             
             window.speechSynthesis.speak(utterance);
         }
@@ -784,6 +817,11 @@
             btn.textContent = speakEnabled ? '🔊' : '🔇';
             btn.title = speakEnabled ? 'Voice On' : 'Voice Off';
             showToast(speakEnabled ? 'Voice enabled' : 'Voice disabled');
+            
+            // Test TTS when enabling
+            if (speakEnabled) {
+                speakText('Voice enabled');
+            }
         }
         
         function refreshPage() {
