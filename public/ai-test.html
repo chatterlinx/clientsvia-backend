@@ -437,12 +437,39 @@
         <p style="color: var(--text-secondary);">Loading AI Test Console...</p>
     </div>
     
+    <!-- Login Screen -->
+    <div id="login-screen" class="error-screen hidden">
+        <div class="error-icon">🔐</div>
+        <h2 class="error-title" style="color: var(--accent-blue);">Login Required</h2>
+        <p class="error-message">Enter your admin credentials to access the AI Test Console.</p>
+        <form id="login-form" style="width: 100%; max-width: 300px;">
+            <input 
+                type="email" 
+                id="login-email" 
+                placeholder="Email"
+                autocomplete="email"
+                style="width: 100%; padding: 12px 16px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-size: 1rem; margin-bottom: 12px;"
+            >
+            <input 
+                type="password" 
+                id="login-password" 
+                placeholder="Password"
+                autocomplete="current-password"
+                style="width: 100%; padding: 12px 16px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-size: 1rem; margin-bottom: 16px;"
+            >
+            <button type="submit" class="header-btn primary" style="width: 100%; padding: 14px; font-size: 1rem;">
+                Login
+            </button>
+            <p id="login-error" style="color: var(--accent-red); font-size: 0.85rem; margin-top: 12px; display: none;"></p>
+        </form>
+    </div>
+    
     <!-- Error Screen -->
     <div id="error-screen" class="error-screen hidden">
         <div class="error-icon">⚠️</div>
         <h2 class="error-title">Unable to Load</h2>
         <p class="error-message" id="error-message">Company not found or you need to log in.</p>
-        <button class="header-btn primary" onclick="window.location.href='/login.html'">Go to Login</button>
+        <button class="header-btn primary" onclick="showLogin()">Login</button>
     </div>
     
     <!-- Main App -->
@@ -462,6 +489,9 @@
                 </button>
                 <button class="header-btn" onclick="clearChat()" title="Clear Chat">
                     🗑️ <span class="text">Clear</span>
+                </button>
+                <button class="header-btn" onclick="logout()" title="Logout" style="color: var(--accent-orange);">
+                    🚪
                 </button>
             </div>
         </header>
@@ -546,23 +576,36 @@
                 return;
             }
             
-            // Load company data - try multiple methods
+            // Setup login form handler
+            document.getElementById('login-form').addEventListener('submit', handleLogin);
+            
+            // Check if we have a valid token
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            
+            if (!token) {
+                showLogin();
+                return;
+            }
+            
+            // Verify token is valid by trying to load company
             try {
-                const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+                const response = await fetch(`/api/company/${companyId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 
-                // Try to get company info (may fail without auth, that's OK)
-                let company = null;
-                try {
-                    const response = await fetch(`/api/company/${companyId}`, {
-                        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-                    });
-                    if (response.ok) {
-                        company = await response.json();
-                    }
-                } catch (e) {
-                    console.log('Could not load company details, continuing anyway');
+                if (response.status === 401) {
+                    // Token expired or invalid
+                    localStorage.removeItem('adminToken');
+                    localStorage.removeItem('token');
+                    showLogin();
+                    return;
                 }
                 
+                if (!response.ok) {
+                    throw new Error('Company not found');
+                }
+                
+                const company = await response.json();
                 companyName = company?.companyName || company?.name || 'Test Company';
                 
                 // Update UI
@@ -605,6 +648,66 @@
         });
         
         // ═══════════════════════════════════════════════════════════════════
+        // LOGIN FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════
+        function showLogin() {
+            document.getElementById('loading-screen').classList.add('hidden');
+            document.getElementById('error-screen').classList.add('hidden');
+            document.getElementById('main-app').style.display = 'none';
+            document.getElementById('login-screen').classList.remove('hidden');
+            document.getElementById('login-email').focus();
+        }
+        
+        async function handleLogin(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+            const errorEl = document.getElementById('login-error');
+            
+            if (!email || !password) {
+                errorEl.textContent = 'Please enter email and password';
+                errorEl.style.display = 'block';
+                return;
+            }
+            
+            errorEl.style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.token) {
+                    // Save token
+                    localStorage.setItem('adminToken', data.token);
+                    localStorage.setItem('token', data.token);
+                    
+                    // Reload page to initialize with new token
+                    window.location.reload();
+                } else {
+                    errorEl.textContent = data.message || 'Login failed. Check your credentials.';
+                    errorEl.style.display = 'block';
+                }
+            } catch (error) {
+                errorEl.textContent = 'Connection error. Please try again.';
+                errorEl.style.display = 'block';
+            }
+        }
+        
+        function logout() {
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('token');
+            localStorage.removeItem('ai-test-session');
+            showLogin();
+            showToast('Logged out');
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
         // SEND MESSAGE
         // ═══════════════════════════════════════════════════════════════════
         async function sendMessage() {
@@ -627,14 +730,14 @@
             setStatus('Thinking...', 'warning');
             
             try {
+                const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
                 const startTime = Date.now();
                 
-                // Don't send expired tokens - they cause 401 errors
-                // The chat API has optional auth, so no token is fine
                 const response = await fetch('/api/chat/message', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                     },
                     body: JSON.stringify({
                         companyId,
