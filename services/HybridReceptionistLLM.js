@@ -409,6 +409,14 @@ class HybridReceptionistLLM {
             // - This ensures proper logging with brain identifier
             // - Reduced max_tokens (we only need ~100 for a short reply)
             // ════════════════════════════════════════════════════════════════
+            logger.info('[HYBRID LLM] 🚀 CHECKPOINT: About to call LLM-0', {
+                callId,
+                companyId,
+                messageCount: messages.length,
+                systemPromptLength: systemPrompt?.length || 0,
+                userInputLength: userInput?.length || 0
+            });
+            
             const response = await callLLM0({
                 callId,
                 companyId,
@@ -426,6 +434,14 @@ class HybridReceptionistLLM {
             
             const latencyMs = Date.now() - startTime;
             const content = response.choices[0]?.message?.content;
+            
+            logger.info('[HYBRID LLM] ✅ CHECKPOINT: LLM-0 returned', {
+                callId,
+                latencyMs,
+                hasContent: !!content,
+                contentPreview: content?.substring(0, 100),
+                tokensUsed: response.usage?.total_tokens || 0
+            });
             
             // ════════════════════════════════════════════════════════════════
             // LEAN PROMPT: LLM decides WHAT, Engine decides WORDS
@@ -579,23 +595,32 @@ class HybridReceptionistLLM {
             return result;
             
         } catch (error) {
-            logger.error('[HYBRID LLM] ❌ Error in processConversation:', {
-                message: error.message,
-                stack: error.stack?.substring(0, 500),
+            // 🚨 CRITICAL DEBUG: Log everything about the error
+            logger.error('[HYBRID LLM] ❌ CRITICAL ERROR in processConversation:', {
+                errorName: error.name,
+                errorMessage: error.message,
+                errorCode: error.code,
+                stack: error.stack?.substring(0, 800),
                 callId,
                 companyId,
-                userInput: userInput?.substring(0, 50)
+                userInput: userInput?.substring(0, 50),
+                currentMode,
+                hasCompany: !!company,
+                hasBehaviorConfig: !!behaviorConfig,
+                latencyAtError: Date.now() - startTime
             });
             
-            // Return fallback with error info for debugging
+            // Return fallback with detailed error info for debugging
             const fallback = this.emergencyFallback(currentMode, knownSlots, behaviorConfig);
             fallback.debug = {
                 error: true,
                 errorMessage: error.message,
+                errorName: error.name,
+                errorCode: error.code || 'NO_CODE',
                 errorType: error.name,
                 promptSummary: { error: 'LLM call failed' },
-                llmDecision: { error: error.message },
-                engineAction: { error: 'Used emergency fallback' },
+                llmDecision: { error: error.message, stack: error.stack?.substring(0, 300) },
+                engineAction: { error: 'Used emergency fallback due to: ' + error.message },
                 performance: { latencyMs: Date.now() - startTime, tokensUsed: 0 }
             };
             return fallback;
