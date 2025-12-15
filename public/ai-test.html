@@ -340,6 +340,13 @@
             to { transform: rotate(360deg); }
         }
         
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateX(-50%) translateY(20px); }
+            15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+        }
+        
         /* Error Screen */
         .error-screen {
             position: fixed;
@@ -447,6 +454,9 @@
                 <span class="company-name" id="company-name">Loading...</span>
             </div>
             <div class="header-actions">
+                <button class="header-btn primary" onclick="copyFullReport()" title="Copy Report">
+                    📋 <span class="text">Copy</span>
+                </button>
                 <button class="header-btn" onclick="toggleDebug()" title="Toggle Debug">
                     📊 <span class="text">Debug</span>
                 </button>
@@ -554,8 +564,21 @@
                 document.getElementById('company-name').textContent = companyName;
                 document.title = `AI Test - ${companyName}`;
                 
-                // Initialize session
-                sessionId = `mobile-test-${Date.now()}`;
+                // Initialize session - try to restore from localStorage
+                const savedSession = loadSavedSession();
+                if (savedSession && savedSession.companyId === companyId) {
+                    sessionId = savedSession.sessionId;
+                    debugLog = savedSession.debugLog || [];
+                    totalTokens = savedSession.totalTokens || 0;
+                    document.getElementById('token-count').textContent = `Tokens: ${totalTokens}`;
+                    
+                    // Restore chat messages
+                    if (debugLog.length > 0) {
+                        restoreChat();
+                    }
+                } else {
+                    sessionId = `mobile-test-${Date.now()}`;
+                }
                 
                 // Show main app
                 document.getElementById('loading-screen').classList.add('hidden');
@@ -650,6 +673,7 @@
                             debug: data.debug
                         });
                         updateDebugPanel();
+                        saveSession(); // Persist to localStorage
                     }
                     
                     setStatus('Ready', 'success');
@@ -741,6 +765,13 @@
             sessionId = `mobile-test-${Date.now()}`;
             document.getElementById('token-count').textContent = 'Tokens: 0';
             updateDebugPanel();
+            
+            // Clear localStorage
+            try {
+                localStorage.removeItem('ai-test-session');
+            } catch (e) {}
+            
+            showToast('Chat cleared');
         }
         
         // ═══════════════════════════════════════════════════════════════════
@@ -788,6 +819,193 @@
             }
             
             content.textContent = text;
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // COPY FULL REPORT - For sharing with developer
+        // ═══════════════════════════════════════════════════════════════════
+        function copyFullReport() {
+            if (debugLog.length === 0) {
+                showToast('No conversation to copy yet!');
+                return;
+            }
+            
+            const separator = '══════════════════════════════════════════════════';
+            const thinSep = '──────────────────────────────────────────────────';
+            
+            let report = `${separator}
+AI TEST CONSOLE - FULL DEBUG LOG
+${separator}
+Company: ${companyName}
+Session: ${sessionId}
+Date: ${new Date().toLocaleString()}
+Total Turns: ${debugLog.length}
+Total Tokens: ${totalTokens}
+${separator}
+
+💰 CONVERSATION COST:
+   Total Tokens: ${totalTokens}
+   Est. Cost: $${(totalTokens * 0.0003 / 1000).toFixed(6)} (~$${(totalTokens * 0.0003).toFixed(3)} per 1000 calls)
+${separator}
+
+`;
+            
+            // Add each turn
+            debugLog.forEach((entry, i) => {
+                const debug = entry.debug || {};
+                
+                report += `${thinSep}
+TURN ${entry.turn}
+${thinSep}
+Source: LLM
+Latency: ${entry.latency}ms | Tokens: ${entry.tokens} | Mode: ${debug.conversationMode || 'undefined'}
+History Sent: ${debug.historySent || 0} messages
+
+USER: ${entry.user}
+
+AI: ${entry.ai}
+
+`;
+                
+                // Show slots collected
+                if (debug.slotDiagnostics) {
+                    const slots = debug.slotDiagnostics.slotsAfterMerge || {};
+                    const filled = Object.entries(slots).filter(([k, v]) => v);
+                    if (filled.length) {
+                        report += `📦 SLOTS COLLECTED:\n`;
+                        filled.forEach(([k, v]) => {
+                            report += `   ${k}: ${v}\n`;
+                        });
+                        report += '\n';
+                    }
+                }
+                
+                // Show error if any
+                if (debug.llmBrain?.error) {
+                    report += `🚨 ERROR DETECTED:
+  Error: ${debug.llmBrain.errorMessage || 'Unknown'}
+  Type: ${debug.llmBrain.errorName || 'N/A'}
+  Code: ${debug.llmBrain.errorCode || 'N/A'}
+  Engine Action: ${debug.llmBrain.engineAction?.error || 'N/A'}
+
+`;
+                }
+                
+                // Show booking config
+                if (debug.bookingConfig) {
+                    const bc = debug.bookingConfig;
+                    report += `📋 BOOKING CONFIG (What AI sees):
+  Source: ${bc.source || 'N/A'} ${bc.isConfigured ? '✅' : '⚠️'}
+  Slots: ${bc.slots?.map(s => `[${s.id}] "${s.question?.substring(0, 30)}..."`).join(', ') || 'none'}
+
+`;
+                }
+            });
+            
+            report += `${separator}
+END OF DEBUG LOG
+${separator}
+`;
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(report).then(() => {
+                showToast('✅ Report copied! Paste it to share.');
+            }).catch(err => {
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = report;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showToast('✅ Report copied!');
+            });
+        }
+        
+        function showToast(message) {
+            // Create toast element
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 100px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: var(--accent-green);
+                color: white;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-size: 0.9rem;
+                z-index: 1000;
+                animation: fadeInOut 2s ease;
+            `;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => toast.remove(), 2000);
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // LOCAL STORAGE - Persist conversations
+        // ═══════════════════════════════════════════════════════════════════
+        function saveSession() {
+            try {
+                localStorage.setItem('ai-test-session', JSON.stringify({
+                    companyId,
+                    sessionId,
+                    debugLog,
+                    totalTokens,
+                    savedAt: Date.now()
+                }));
+            } catch (e) {
+                console.log('Could not save session:', e);
+            }
+        }
+        
+        function loadSavedSession() {
+            try {
+                const saved = localStorage.getItem('ai-test-session');
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    // Only restore if less than 24 hours old
+                    if (Date.now() - data.savedAt < 24 * 60 * 60 * 1000) {
+                        return data;
+                    }
+                }
+            } catch (e) {
+                console.log('Could not load session:', e);
+            }
+            return null;
+        }
+        
+        function restoreChat() {
+            const container = document.getElementById('chat-messages');
+            container.innerHTML = ''; // Clear welcome message
+            
+            debugLog.forEach(entry => {
+                // Add user message
+                const userEl = document.createElement('div');
+                userEl.className = 'message user';
+                userEl.textContent = entry.user;
+                container.appendChild(userEl);
+                
+                // Add AI message
+                const aiEl = document.createElement('div');
+                aiEl.className = 'message ai';
+                aiEl.textContent = entry.ai;
+                
+                const meta = document.createElement('div');
+                meta.className = 'message-meta';
+                meta.textContent = `${entry.latency}ms • ${entry.tokens} tokens`;
+                aiEl.appendChild(meta);
+                
+                container.appendChild(aiEl);
+            });
+            
+            // Scroll to bottom
+            container.scrollTop = container.scrollHeight;
+            
+            // Update debug panel
+            updateDebugPanel();
         }
         
         // ═══════════════════════════════════════════════════════════════════
