@@ -675,13 +675,31 @@
             
             try {
                 // Use simple-login endpoint (bypasses complex security for mobile/testing)
-                const response = await fetch('/api/auth/simple-login', {
+                // Use absolute URL to avoid mobile browser issues
+                const baseUrl = window.location.origin;
+                console.log('[Login] Attempting login to:', baseUrl + '/api/auth/simple-login');
+                
+                const response = await fetch(baseUrl + '/api/auth/simple-login', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password }),
+                    credentials: 'same-origin'
                 });
                 
-                const data = await response.json();
+                console.log('[Login] Response status:', response.status);
+                
+                let data;
+                try {
+                    data = await response.json();
+                } catch (jsonErr) {
+                    console.error('[Login] Failed to parse response:', jsonErr);
+                    const text = await response.text();
+                    console.error('[Login] Raw response:', text);
+                    throw new Error('Invalid server response');
+                }
                 
                 if (data.success && data.token) {
                     // Save token
@@ -704,7 +722,12 @@
                 }
             } catch (error) {
                 console.error('Login fetch error:', error);
-                errorEl.textContent = 'Connection error: ' + error.message;
+                // Show detailed error for debugging
+                let errorMsg = error.message;
+                if (error.message.includes('pattern')) {
+                    errorMsg = 'Browser blocked request. Try: 1) Refresh page, 2) Clear cache, 3) Use Chrome';
+                }
+                errorEl.textContent = errorMsg;
                 errorEl.style.display = 'block';
             }
         }
