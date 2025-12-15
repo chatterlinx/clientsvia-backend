@@ -674,7 +674,8 @@
             errorEl.style.display = 'none';
             
             try {
-                const response = await fetch('/api/auth/login', {
+                // Use simple-login endpoint (bypasses complex security for mobile/testing)
+                const response = await fetch('/api/auth/simple-login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, password })

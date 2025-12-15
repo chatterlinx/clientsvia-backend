@@ -168,6 +168,62 @@ router.post('/login', async (req, res) => {
 });
 
 /**
+ * POST /api/auth/simple-login - Simple login for mobile/test console
+ * Bypasses complex security (GeoIP, hardware ID) for development use
+ */
+router.post('/simple-login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        
+        if (!email || !password) {
+            return res.status(400).json({ message: 'Email and password required' });
+        }
+        
+        // Find user
+        const user = await User.findOne({ email: email.toLowerCase() });
+        if (!user) {
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
+        
+        // Check password
+        const isValid = await bcrypt.compare(password, user.password);
+        if (!isValid) {
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
+        
+        // Check active
+        if (user.status !== 'active') {
+            return res.status(401).json({ message: 'Account inactive' });
+        }
+        
+        // Generate simple JWT (no session manager)
+        const token = jwt.sign({
+            userId: user._id,
+            email: user.email,
+            role: user.role,
+            simple: true // Mark as simple auth
+        }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        
+        logger.auth('Simple login successful', { email, userId: user._id });
+        
+        res.json({
+            success: true,
+            token,
+            user: {
+                id: user._id,
+                email: user.email,
+                name: user.name,
+                role: user.role
+            }
+        });
+        
+    } catch (err) {
+        logger.error('Simple login error:', err.message);
+        res.status(500).json({ message: 'Login failed', error: err.message });
+    }
+});
+
+/**
  * GET /api/auth/me - Get current user profile
  */
 router.get('/me', authenticateJWT, async (req, res) => {
