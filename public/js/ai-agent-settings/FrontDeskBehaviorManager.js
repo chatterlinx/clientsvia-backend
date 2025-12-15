@@ -372,6 +372,21 @@ class FrontDeskBehaviorManager {
                     </p>
                 </div>
                 
+                <!-- Greeting Response - What AI says to "hi", "good morning", etc. -->
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                        👋 Greeting Response
+                        <span style="background: #238636; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px;">0 TOKENS</span>
+                    </label>
+                    <input type="text" id="fdb-greeting" 
+                        value="${this.config.fallbackResponses?.greeting || 'Thanks for calling! How can I help you today?'}" 
+                        placeholder="Thanks for calling [Company Name]! How can I help you today?"
+                        style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                    <p style="color: #8b949e; font-size: 0.75rem; margin-top: 4px;">
+                        When callers say "hi", "hello", "good morning" - this is what AI says back. <strong style="color: #3fb950;">No LLM needed!</strong>
+                    </p>
+                </div>
+                
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Tone</label>
@@ -1588,27 +1603,6 @@ class FrontDeskBehaviorManager {
         };
         
         return `
-            <!-- GREETING RESPONSE (0 tokens - No LLM needed!) -->
-            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-                <h3 style="margin: 0 0 8px 0; color: #58a6ff;">👋 Greeting Response</h3>
-                <p style="color: #8b949e; margin-bottom: 16px; font-size: 0.875rem;">
-                    When callers say "hi", "hello", "good morning", etc. - this is what AI says back.
-                    <strong style="color: #3fb950;">Uses 0 tokens!</strong>
-                </p>
-                
-                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;">
-                    <label style="display: block; margin-bottom: 8px; color: #8b949e; font-size: 12px;">
-                        GREETING (shown when caller says "hi", "good morning", etc.)
-                    </label>
-                    <input type="text" id="fdb-fb-greeting" value="${fb.greeting || defaults.greeting}" 
-                        placeholder="${defaults.greeting}"
-                        style="width: 100%; padding: 12px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
-                    <p style="color: #8b949e; font-size: 11px; margin: 8px 0 0 0;">
-                        Tip: Include your company name! This is 100% deterministic - no LLM variability.
-                    </p>
-                </div>
-            </div>
-        
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
                 <h3 style="margin: 0 0 8px 0; color: #f0883e;">🔄 Tiered Fallback Protocol</h3>
                 <p style="color: #8b949e; margin-bottom: 16px; font-size: 0.875rem;">
@@ -2007,20 +2001,24 @@ class FrontDeskBehaviorManager {
             };
         }
         
+        // Greeting response (from Personality tab - 0 tokens)
+        if (document.getElementById('fdb-greeting')) {
+            this.config.fallbackResponses = this.config.fallbackResponses || {};
+            this.config.fallbackResponses.greeting = get('fdb-greeting') || 'Thanks for calling! How can I help you today?';
+            console.log('[FRONT DESK BEHAVIOR] 👋 Greeting saved:', this.config.fallbackResponses.greeting);
+        }
+        
         // Tiered Fallback Protocol (honesty-first recovery)
         if (document.getElementById('fdb-fb-tier1')) {
-            this.config.fallbackResponses = {
-                // Greeting response (0 tokens - handled by state machine)
-                greeting: get('fdb-fb-greeting') || `Thanks for calling! How can I help you today?`,
-                // New tiered fallbacks
-                didNotUnderstandTier1: get('fdb-fb-tier1') || "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?",
-                didNotUnderstandTier2: get('fdb-fb-tier2') || "I'm still having trouble hearing you clearly. Could you repeat that a bit slower for me?",
-                didNotUnderstandTier3: get('fdb-fb-tier3') || "It sounds like this connection isn't great. Do you want me to have someone from the office call or text you back to help you?",
-                // Keep backward compat aliases
-                didNotUnderstand: get('fdb-fb-tier1') || "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?",
-                escalation: get('fdb-fb-tier3') || "It sounds like this connection isn't great. Do you want me to have someone from the office call or text you back to help you?"
-            };
-            console.log('[FRONT DESK BEHAVIOR] 👋 Greeting + 🔄 Tiered fallbacks saved:', this.config.fallbackResponses);
+            this.config.fallbackResponses = this.config.fallbackResponses || {};
+            // New tiered fallbacks
+            this.config.fallbackResponses.didNotUnderstandTier1 = get('fdb-fb-tier1') || "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?";
+            this.config.fallbackResponses.didNotUnderstandTier2 = get('fdb-fb-tier2') || "I'm still having trouble hearing you clearly. Could you repeat that a bit slower for me?";
+            this.config.fallbackResponses.didNotUnderstandTier3 = get('fdb-fb-tier3') || "It sounds like this connection isn't great. Do you want me to have someone from the office call or text you back to help you?";
+            // Keep backward compat aliases
+            this.config.fallbackResponses.didNotUnderstand = get('fdb-fb-tier1') || "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?";
+            this.config.fallbackResponses.escalation = get('fdb-fb-tier3') || "It sounds like this connection isn't great. Do you want me to have someone from the office call or text you back to help you?";
+            console.log('[FRONT DESK BEHAVIOR] 🔄 Tiered fallbacks saved');
         }
         
         // Mode switching
