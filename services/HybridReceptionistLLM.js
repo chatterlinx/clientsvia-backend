@@ -144,19 +144,26 @@ function loadFrontDeskConfig(company) {
         },
         
         // Fallback responses - from database ONLY
+        // 🚨 TIERED FALLBACK - Honesty-first (never fake understanding)
         fallbackResponses: {
             greeting: config.fallbackResponses?.greeting || null,
-            discovery: config.fallbackResponses?.discovery || null,
+            // Tiered "didn't understand" fallbacks (HONESTY-FIRST)
+            didNotUnderstandTier1: config.fallbackResponses?.didNotUnderstandTier1 || null,
+            didNotUnderstandTier2: config.fallbackResponses?.didNotUnderstandTier2 || null,
+            didNotUnderstandTier3: config.fallbackResponses?.didNotUnderstandTier3 || null,
+            // Booking slot prompts
             askName: config.fallbackResponses?.askName || null,
             askPhone: config.fallbackResponses?.askPhone || null,
             askAddress: config.fallbackResponses?.askAddress || null,
             askTime: config.fallbackResponses?.askTime || null,
             confirmBooking: config.fallbackResponses?.confirmBooking || null,
             bookingComplete: config.fallbackResponses?.bookingComplete || null,
+            transfering: config.fallbackResponses?.transfering || null,
+            // Deprecated (keep for backward compatibility)
+            discovery: config.fallbackResponses?.discovery || null,
             didNotHear: config.fallbackResponses?.didNotHear || null,
             connectionIssue: config.fallbackResponses?.connectionIssue || null,
             clarification: config.fallbackResponses?.clarification || null,
-            transfering: config.fallbackResponses?.transfering || null,
             generic: config.fallbackResponses?.generic || null
         },
         
@@ -871,9 +878,13 @@ User: "What time do you open?"
     
     /**
      * Emergency fallback when LLM fails
-     * 🚨 Uses UI-configured responses ONLY - no hardcoded defaults
+     * 🚨 HONESTY RULES:
+     * - NEVER pretend to understand when you don't
+     * - NEVER say "Got it" if you didn't get it
+     * - Blame the connection, not the caller
+     * - Use tiered fallback based on miss count
      */
-    static emergencyFallback(mode, knownSlots, behaviorConfig = {}) {
+    static emergencyFallback(mode, knownSlots, behaviorConfig = {}, missCount = 1) {
         const fallbacks = behaviorConfig.fallbackResponses || {};
         
         // Check if config is complete
@@ -881,49 +892,38 @@ User: "What time do you open?"
         
         let reply;
         
-        if (!isConfigured) {
-            // 🚨 NOT CONFIGURED - Tell the caller to hold (config error)
-            reply = "One moment please, let me check on something.";
-            logger.error('[HYBRID LLM] 🚨 EMERGENCY FALLBACK - Company not configured! No bookingSlots in database.');
-        } else if (mode === 'booking') {
-            // Use UI-configured slot questions
-            const bookingSlots = this.getBookingSlots(behaviorConfig);
-            const nameSlot = bookingSlots.find(s => s.id === 'name');
-            
-            if (!knownSlots.name) {
-                const nameQ = this.getSlotPrompt('name', behaviorConfig);
-                reply = nameQ ? `I can help with that. ${nameQ}` : fallbacks.askName;
-            } else if (!knownSlots.phone) {
-                const firstName = (nameSlot?.useFirstNameOnly !== false && knownSlots.name) 
-                    ? knownSlots.name.split(' ')[0] 
-                    : knownSlots.name;
-                const phoneQ = this.getSlotPrompt('phone', behaviorConfig);
-                // Use name if available, otherwise just ask for phone
-                reply = phoneQ 
-                    ? (firstName ? `Thanks, ${firstName}. ${phoneQ}` : phoneQ) 
-                    : fallbacks.askPhone;
-            } else if (!knownSlots.address) {
-                reply = this.getSlotPrompt('address', behaviorConfig) || fallbacks.askAddress;
-            } else if (!knownSlots.time) {
-                reply = this.getSlotPrompt('time', behaviorConfig) || fallbacks.askTime;
-            } else {
-                reply = fallbacks.generic || "How can I help you?";
-            }
-        } else {
-            // Non-booking mode - use greeting fallback (not discovery)
-            // Discovery prompts should only come from the LLM based on context
-            reply = fallbacks.greeting || "Thanks for calling! How can I help you today?";
-        }
+        // ═══════════════════════════════════════════════════════════════════
+        // 🚨 TIERED FALLBACK - HONESTY-FIRST APPROACH
+        // When the LLM fails or doesn't understand, be HONEST about it
+        // ═══════════════════════════════════════════════════════════════════
         
-        // Final safety - if still null, use absolute minimum
-        if (!reply) {
-            reply = "I'm here to help. What can I do for you?";
-            logger.error('[HYBRID LLM] 🚨 CRITICAL: No fallback response configured in database!');
+        if (!isConfigured) {
+            // Config error - this is a system problem, not caller's fault
+            reply = fallbacks.didNotUnderstandTier1 
+                || "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?";
+            logger.error('[HYBRID LLM] 🚨 EMERGENCY FALLBACK - Company not configured! No bookingSlots in database.');
+        } else if (missCount >= 3) {
+            // Tier 3 - Third miss: offer callback bailout
+            reply = fallbacks.didNotUnderstandTier3 
+                || "It sounds like this connection isn't great. Do you want me to have someone from the office call or text you back to help you?";
+            logger.warn('[HYBRID LLM] 🚨 TIER 3 FALLBACK - Offering callback bailout');
+        } else if (missCount >= 2) {
+            // Tier 2 - Second miss: ask to slow down
+            reply = fallbacks.didNotUnderstandTier2 
+                || "I'm still having trouble hearing you clearly. Could you repeat that a bit slower for me?";
+            logger.warn('[HYBRID LLM] 🚨 TIER 2 FALLBACK - Second miss');
+        } else {
+            // Tier 1 - First miss: apologize, blame connection
+            reply = fallbacks.didNotUnderstandTier1 
+                || "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?";
+            logger.warn('[HYBRID LLM] 🚨 TIER 1 FALLBACK - First miss');
         }
         
         logger.warn('[HYBRID LLM] 🚨 Emergency fallback used - LLM was not called', {
             mode,
             isConfigured,
+            missCount,
+            tier: missCount >= 3 ? 3 : (missCount >= 2 ? 2 : 1),
             hasSlots: Object.keys(knownSlots || {}).filter(k => knownSlots[k]).length
         });
         
@@ -933,10 +933,11 @@ User: "What time do you open?"
             intent: 'unknown',
             nextGoal: null,
             filledSlots: knownSlots,
-            signals: { frustrated: false, wantsHuman: false },
+            signals: { frustrated: false, wantsHuman: missCount >= 3 },
             latencyMs: 0,
             tokensUsed: 0,
             isEmergencyFallback: true,
+            fallbackTier: missCount >= 3 ? 3 : (missCount >= 2 ? 2 : 1),
             configError: !isConfigured
         };
     }

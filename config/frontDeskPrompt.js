@@ -199,28 +199,47 @@ const DEFAULT_FRONT_DESK_CONFIG = {
 
     // ════════════════════════════════════════════════════════════════════════
     // FALLBACK RESPONSES - What AI says when LLM fails
-    // These ensure the call NEVER goes silent
+    // 🚨 HONESTY RULES: Never pretend to understand when you don't!
     // ════════════════════════════════════════════════════════════════════════
     fallbackResponses: {
-        // Initial & Discovery
+        // Initial greeting (when call starts)
         greeting: 'Thanks for calling! How can I help you today?',
-        // 🚨 GENERIC - Not industry-specific! LLM generates contextual responses.
-        discovery: 'I hear you. Tell me a bit more about what\'s going on.',
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // 🚨 TIERED FALLBACK - When AI didn't understand
+        // - NEVER pretend to understand when you don't
+        // - NEVER say "Got it" if you didn't get it  
+        // - Blame the connection, not the caller
+        // ═══════════════════════════════════════════════════════════════════
+        
+        // Tier 1 - First miss (soft, apologetic)
+        didNotUnderstandTier1: 'I\'m sorry, the connection was a little rough and I didn\'t catch that. Can you please say that one more time?',
+        
+        // Tier 2 - Second miss (still patient, ask to slow down)
+        didNotUnderstandTier2: 'I\'m still having trouble hearing you clearly. Could you repeat that a bit slower for me?',
+        
+        // Tier 3 - Final fail / bailout (offer callback)
+        didNotUnderstandTier3: 'It sounds like this connection isn\'t great. Do you want me to have someone from the office call or text you back to help you?',
+        
         // Booking Slots
         askName: 'May I have your name please?',
         askPhone: 'And what\'s the best phone number to reach you?',
         askAddress: 'What\'s the service address?',
         askTime: 'When works best for you?',
+        
         // Confirmation
         confirmBooking: 'Let me confirm your details. Does that sound right?',
         bookingComplete: 'You\'re all set! You\'ll receive a confirmation shortly. Is there anything else?',
-        // Error Recovery
-        didNotHear: 'I\'m sorry, I didn\'t quite catch that. Could you please repeat?',
-        connectionIssue: 'I\'m sorry, I think our connection isn\'t great. Could you please repeat that?',
-        clarification: 'I want to make sure I understand correctly. Could you tell me a bit more?',
-        // Transfer & Catch-All
+        
+        // Transfer
         transfering: 'Let me connect you with someone who can help you right away. Please hold.',
-        generic: 'I\'m here to help. What can I do for you?'
+        
+        // DEPRECATED - Keep for backward compatibility
+        didNotHear: 'I\'m sorry, the connection was a little rough and I didn\'t catch that. Can you please say that one more time?',
+        connectionIssue: 'I\'m sorry, the connection was a little rough and I didn\'t catch that. Can you please say that one more time?',
+        clarification: 'I\'m sorry, I didn\'t quite catch that. Could you please repeat?',
+        discovery: 'I\'m sorry, I didn\'t quite catch that. Could you please repeat?',
+        generic: 'I\'m sorry, I didn\'t quite catch that. Could you please repeat?'
     },
 
     // ════════════════════════════════════════════════════════════════════════

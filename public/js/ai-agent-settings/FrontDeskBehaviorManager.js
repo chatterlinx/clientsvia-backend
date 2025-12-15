@@ -1572,76 +1572,103 @@ class FrontDeskBehaviorManager {
     }
     
     // ════════════════════════════════════════════════════════════════════
-    // SIMPLIFIED: Recovery Protocol
+    // TIERED FALLBACK: Honesty-First Recovery Protocol
+    // - NEVER pretend to understand when you don't
+    // - NEVER say "Got it" if you didn't get it
+    // - Blame the connection, not the caller
     // ════════════════════════════════════════════════════════════════════
     renderFallbacksTab() {
         const fb = this.config.fallbackResponses || {};
         const defaults = {
-            didNotUnderstand: "I'm sorry, could you repeat that?",
-            escalation: "Let me get someone who can help you better. One moment please."
+            didNotUnderstandTier1: "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?",
+            didNotUnderstandTier2: "I'm still having trouble hearing you clearly. Could you repeat that a bit slower for me?",
+            didNotUnderstandTier3: "It sounds like this connection isn't great. Do you want me to have someone from the office call or text you back to help you?"
         };
         
         return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
-                <h3 style="margin: 0 0 8px 0; color: #f0883e;">🔄 Recovery Protocol</h3>
-                <p style="color: #8b949e; margin-bottom: 24px; font-size: 0.875rem;">
-                    Simple fallbacks when AI doesn't understand. These ensure the call <strong>never goes silent</strong>.
+                <h3 style="margin: 0 0 8px 0; color: #f0883e;">🔄 Tiered Fallback Protocol</h3>
+                <p style="color: #8b949e; margin-bottom: 16px; font-size: 0.875rem;">
+                    When AI doesn't understand, be <strong>HONEST</strong> about it. Never fake understanding.
                 </p>
                 
-                <!-- Protocol Diagram -->
+                <!-- HONESTY RULES BOX -->
+                <div style="background: #1c1917; border: 2px solid #dc2626; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                    <div style="font-size: 13px; color: #fca5a5; font-weight: 600; margin-bottom: 8px;">🚨 HONESTY RULES (AI follows these)</div>
+                    <ul style="color: #d6d3d1; font-size: 12px; margin: 0; padding-left: 20px; line-height: 1.8;">
+                        <li>NEVER say "Got it" or "Okay" if you didn't actually understand</li>
+                        <li>NEVER guess the problem or list possible issues</li>
+                        <li>Blame the <strong>connection</strong>, not the caller</li>
+                        <li>When using fallback, ONLY ask to repeat or offer callback</li>
+                    </ul>
+                </div>
+                
+                <!-- Protocol Flow Diagram -->
                 <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
                     <div style="font-size: 12px; color: #8b949e; font-family: monospace; line-height: 1.8;">
-                        <div style="color: #58a6ff; margin-bottom: 8px;">📞 CALL HANDLING PROTOCOL:</div>
+                        <div style="color: #58a6ff; margin-bottom: 8px;">📞 CALL HANDLING FLOW:</div>
                         <div style="margin-left: 16px;">
-                            <div>1️⃣ Normal → AI responds normally ✅</div>
-                            <div style="margin-top: 4px;">2️⃣ Unclear → <span style="color: #3fb950;">"Step 1 Fallback"</span> (ask to repeat)</div>
-                            <div style="margin-top: 4px;">3️⃣ Still unclear → Try 3-Tier AI again</div>
-                            <div style="margin-top: 4px;">4️⃣ Can't resolve → <span style="color: #f0883e;">"Escalation"</span> (transfer/callback)</div>
-                        </div>
-                        <div style="color: #8b949e; margin-top: 12px; font-size: 11px;">
-                            💡 Most issues resolve at Step 2. Escalation is rare (~1% of calls).
+                            <div>✅ Understood → AI responds normally</div>
+                            <div style="margin-top: 4px; color: #3fb950;">❓ 1st miss → <strong>Tier 1</strong>: Apologize + ask to repeat</div>
+                            <div style="margin-top: 4px; color: #fbbf24;">❓ 2nd miss → <strong>Tier 2</strong>: Still patient + ask slower</div>
+                            <div style="margin-top: 4px; color: #f87171;">❓ 3rd miss → <strong>Tier 3</strong>: Offer callback bailout</div>
                         </div>
                     </div>
                 </div>
                 
                 <div style="display: flex; flex-direction: column; gap: 20px;">
                     
-                    <!-- Step 1: Simple Fallback -->
+                    <!-- Tier 1: First Miss -->
                     <div style="background: #0d2818; border: 1px solid #238636; border-radius: 8px; padding: 16px;">
                         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-                            <span style="background: #238636; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">STEP 1</span>
-                            <span style="color: #3fb950; font-weight: 600;">Didn't Understand</span>
-                            <span style="color: #8b949e; font-size: 12px;">(FREE - just asks to repeat)</span>
+                            <span style="background: #238636; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">TIER 1</span>
+                            <span style="color: #3fb950; font-weight: 600;">First Miss</span>
+                            <span style="color: #8b949e; font-size: 12px;">(soft, apologetic)</span>
                         </div>
-                        <input type="text" id="fdb-fb-didNotUnderstand" value="${fb.didNotUnderstand || defaults.didNotUnderstand}" 
-                            placeholder="I'm sorry, could you repeat that?"
+                        <input type="text" id="fdb-fb-tier1" value="${fb.didNotUnderstandTier1 || defaults.didNotUnderstandTier1}" 
+                            placeholder="${defaults.didNotUnderstandTier1}"
                             style="width: 100%; padding: 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
                         <p style="color: #8b949e; font-size: 11px; margin: 8px 0 0 0;">
-                            Used when AI can't understand what caller said. Simple, polite, gives them another chance.
+                            Blame the connection, apologize gently, ask for one more try. Most callers repeat clearly.
                         </p>
                     </div>
                     
-                    <!-- Step 4: Escalation -->
-                    <div style="background: #3d1f00; border: 1px solid #f0883e; border-radius: 8px; padding: 16px;">
+                    <!-- Tier 2: Second Miss -->
+                    <div style="background: #422006; border: 1px solid #f59e0b; border-radius: 8px; padding: 16px;">
                         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-                            <span style="background: #f0883e; color: black; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">STEP 4</span>
-                            <span style="color: #f0883e; font-weight: 600;">Escalation</span>
-                            <span style="color: #8b949e; font-size: 12px;">(when all else fails)</span>
+                            <span style="background: #f59e0b; color: black; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">TIER 2</span>
+                            <span style="color: #fbbf24; font-weight: 600;">Second Miss</span>
+                            <span style="color: #8b949e; font-size: 12px;">(still patient, ask to slow down)</span>
                         </div>
-                        <input type="text" id="fdb-fb-escalation" value="${fb.escalation || defaults.escalation}" 
-                            placeholder="Let me get someone who can help you better. One moment please."
+                        <input type="text" id="fdb-fb-tier2" value="${fb.didNotUnderstandTier2 || defaults.didNotUnderstandTier2}" 
+                            placeholder="${defaults.didNotUnderstandTier2}"
                             style="width: 100%; padding: 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
                         <p style="color: #8b949e; font-size: 11px; margin: 8px 0 0 0;">
-                            Last resort - transfers to human or takes callback number. Rare but ensures no caller is abandoned.
+                            Still being patient. Ask them to slow down - this helps with accents and background noise.
+                        </p>
+                    </div>
+                    
+                    <!-- Tier 3: Bailout -->
+                    <div style="background: #450a0a; border: 1px solid #ef4444; border-radius: 8px; padding: 16px;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                            <span style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">TIER 3</span>
+                            <span style="color: #f87171; font-weight: 600;">Bailout</span>
+                            <span style="color: #8b949e; font-size: 12px;">(offer callback - last resort)</span>
+                        </div>
+                        <input type="text" id="fdb-fb-tier3" value="${fb.didNotUnderstandTier3 || defaults.didNotUnderstandTier3}" 
+                            placeholder="${defaults.didNotUnderstandTier3}"
+                            style="width: 100%; padding: 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                        <p style="color: #8b949e; font-size: 11px; margin: 8px 0 0 0;">
+                            When all else fails, offer a human callback. Never abandon the caller. This is RARE (~1% of calls).
                         </p>
                     </div>
                     
                 </div>
                 
-                <!-- Future Notice -->
-                <div style="background: #161b22; border: 1px dashed #30363d; border-radius: 8px; padding: 12px; margin-top: 20px;">
+                <!-- Stats/Tips -->
+                <div style="background: #0d1117; border: 1px dashed #30363d; border-radius: 8px; padding: 12px; margin-top: 20px;">
                     <p style="color: #8b949e; font-size: 12px; margin: 0;">
-                        🚀 <strong>Coming soon:</strong> Advanced escalation options (transfer to specific number, take callback, SMS follow-up)
+                        💡 <strong>Pro tip:</strong> 95% of issues resolve at Tier 1. If you're hitting Tier 3 often, check your STT settings or vocabulary hints.
                     </p>
                 </div>
             </div>
@@ -1957,12 +1984,18 @@ class FrontDeskBehaviorManager {
             };
         }
         
-        // Simplified Recovery Protocol (just 2 fields)
-        if (document.getElementById('fdb-fb-didNotUnderstand')) {
+        // Tiered Fallback Protocol (honesty-first recovery)
+        if (document.getElementById('fdb-fb-tier1')) {
             this.config.fallbackResponses = {
-                didNotUnderstand: get('fdb-fb-didNotUnderstand') || "I'm sorry, could you repeat that?",
-                escalation: get('fdb-fb-escalation') || "Let me get someone who can help you better. One moment please."
+                // New tiered fallbacks
+                didNotUnderstandTier1: get('fdb-fb-tier1') || "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?",
+                didNotUnderstandTier2: get('fdb-fb-tier2') || "I'm still having trouble hearing you clearly. Could you repeat that a bit slower for me?",
+                didNotUnderstandTier3: get('fdb-fb-tier3') || "It sounds like this connection isn't great. Do you want me to have someone from the office call or text you back to help you?",
+                // Keep backward compat aliases
+                didNotUnderstand: get('fdb-fb-tier1') || "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?",
+                escalation: get('fdb-fb-tier3') || "It sounds like this connection isn't great. Do you want me to have someone from the office call or text you back to help you?"
             };
+            console.log('[FRONT DESK BEHAVIOR] 🔄 Tiered fallbacks saved:', this.config.fallbackResponses);
         }
         
         // Mode switching

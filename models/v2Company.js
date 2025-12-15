@@ -1838,25 +1838,60 @@ const companySchema = new mongoose.Schema({
             // These ensure the call NEVER goes silent
             // ═══════════════════════════════════════════════════════════════
             fallbackResponses: {
-                // Initial & Discovery
+                // Initial greeting (when call starts)
                 greeting: { type: String, default: "Thanks for calling! How can I help you today?", trim: true },
-                // 🚨 GENERIC - Not industry-specific! LLM will generate contextual response.
-                discovery: { type: String, default: "I hear you. Tell me a bit more about what's going on.", trim: true },
-                // Booking Slots
+                
+                // ═══════════════════════════════════════════════════════════════
+                // 🚨 TIERED FALLBACK - When AI didn't understand (HONESTY RULES)
+                // - NEVER pretend to understand when you don't
+                // - NEVER say "Got it" if you didn't get it
+                // - Blame the connection, not the caller
+                // ═══════════════════════════════════════════════════════════════
+                
+                // Tier 1 - First miss (soft, apologetic)
+                didNotUnderstandTier1: { 
+                    type: String, 
+                    default: "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?", 
+                    trim: true 
+                },
+                
+                // Tier 2 - Second miss (still patient, ask to slow down)
+                didNotUnderstandTier2: { 
+                    type: String, 
+                    default: "I'm still having trouble hearing you clearly. Could you repeat that a bit slower for me?", 
+                    trim: true 
+                },
+                
+                // Tier 3 - Final fail / bailout (offer callback)
+                didNotUnderstandTier3: { 
+                    type: String, 
+                    default: "It sounds like this connection isn't great. Do you want me to have someone from the office call or text you back to help you?", 
+                    trim: true 
+                },
+                
+                // ═══════════════════════════════════════════════════════════════
+                // Booking Slots (when collecting specific info)
+                // ═══════════════════════════════════════════════════════════════
                 askName: { type: String, default: "May I have your name please?", trim: true },
                 askPhone: { type: String, default: "And what's the best phone number to reach you?", trim: true },
                 askAddress: { type: String, default: "What's the service address?", trim: true },
                 askTime: { type: String, default: "When works best for you?", trim: true },
+                
                 // Confirmation
                 confirmBooking: { type: String, default: "Let me confirm your details. Does that sound right?", trim: true },
                 bookingComplete: { type: String, default: "You're all set! You'll receive a confirmation shortly. Is there anything else?", trim: true },
-                // Error Recovery
-                didNotHear: { type: String, default: "I'm sorry, I didn't quite catch that. Could you please repeat?", trim: true },
-                connectionIssue: { type: String, default: "I'm sorry, I think our connection isn't great. Could you please repeat that?", trim: true },
-                clarification: { type: String, default: "I want to make sure I understand correctly. Could you tell me a bit more?", trim: true },
-                // Transfer & Catch-All
+                
+                // Transfer
                 transfering: { type: String, default: "Let me connect you with someone who can help you right away. Please hold.", trim: true },
-                generic: { type: String, default: "I'm here to help. What can I do for you?", trim: true }
+                
+                // ═══════════════════════════════════════════════════════════════
+                // DEPRECATED - Keep for backward compatibility, replaced by tiered
+                // ═══════════════════════════════════════════════════════════════
+                didNotHear: { type: String, default: "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?", trim: true },
+                connectionIssue: { type: String, default: "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?", trim: true },
+                clarification: { type: String, default: "I'm sorry, I didn't quite catch that. Could you please repeat?", trim: true },
+                discovery: { type: String, default: "I'm sorry, I didn't quite catch that. Could you please repeat?", trim: true },
+                generic: { type: String, default: "I'm sorry, I didn't quite catch that. Could you please repeat?", trim: true }
             },
             
             // ═══════════════════════════════════════════════════════════════
