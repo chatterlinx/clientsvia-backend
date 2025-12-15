@@ -211,6 +211,7 @@ class HybridReceptionistLLM {
         const startTime = Date.now();
         const callId = callContext.callId || 'unknown';
         const companyId = company.id || company._id || callContext.companyId;
+        const customerContext = callContext.customerContext || { isReturning: false, totalCalls: 0 };
         
         // Note: callLLM0 is imported from llmRegistry - it handles OpenAI config internally
         if (!callLLM0) {
