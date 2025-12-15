@@ -44,8 +44,9 @@ const logger = require('../utils/logger');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VERSION BANNER - Proves this code is deployed
+// CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = '2025-12-15-V2-STATE-MACHINE';
+const ENGINE_VERSION = 'V3-GREETING-FIX-1850';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ Single entry point for ALL channels',

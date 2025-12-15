@@ -772,9 +772,14 @@ class AITestConsole {
         // Rough estimate: ~$0.30 per 1M tokens average
         const estimatedCost = (totalTokens / 1000000) * 0.30;
         
+        // Get engine version from last debug entry
+        const lastEngineVersion = this.debugLog.length > 0 ? 
+            (this.debugLog[this.debugLog.length - 1].debug?.engineVersion || 'UNKNOWN') : 'NO_TURNS';
+        
         let text = `${separator}
 AI TEST CONSOLE - FULL DEBUG LOG
 ${separator}
+🔧 ENGINE VERSION: ${lastEngineVersion}
 Session: ${this.testSessionId}
 Total Turns: ${this.debugLog.length}
 Slots Collected: ${Object.entries(this.knownSlots).filter(([k,v]) => v).map(([k,v]) => `${k}=${v}`).join(', ') || 'None'}
@@ -1033,8 +1038,18 @@ ${separator}`;
         const estimatedCost = (totalTokens / 1000000) * 0.30;
         const costPer1000 = estimatedCost * 1000;
         
+        // Get engine version from last debug entry
+        const engineVersion = this.debugLog.length > 0 ? 
+            (this.debugLog[this.debugLog.length - 1].debug?.engineVersion || '⚠️ UNKNOWN') : '(no turns yet)';
+        
         content.innerHTML = `
             <div style="display: flex; flex-direction: column; gap: 12px;">
+                
+                <!-- 🔧 ENGINE VERSION - Verify deployment -->
+                <div style="background: #0d2818; border: 1px solid #238636; border-radius: 6px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: #3fb950; font-size: 11px;">🔧 ENGINE:</span>
+                    <span style="color: #58a6ff; font-weight: bold; font-size: 12px; font-family: monospace;">${engineVersion}</span>
+                </div>
                 
                 <!-- 💰 COST TRACKER - Shows total tokens and estimated cost -->
                 <div style="background: linear-gradient(135deg, #1a1f35 0%, #0d1117 100%); border: 1px solid #58a6ff; border-radius: 8px; padding: 12px;">
