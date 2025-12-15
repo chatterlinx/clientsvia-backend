@@ -20,7 +20,7 @@ class V2SingleSessionManager {
         
         // Security settings
         this.sessionTimeout = 15 * 60; // 15 minutes
-        this.maxLoginAttempts = 3;
+        this.maxLoginAttempts = 10; // Increased for development/testing
         this.forceReauthInterval = 4 * 60 * 60 * 1000; // 4 hours
         this.suspiciousActivityThreshold = 5;
         
@@ -222,6 +222,20 @@ class V2SingleSessionManager {
         this.loginAttempts.set(key, attempts);
 
         return { allowed: true };
+    }
+    
+    /**
+     * Clear rate limit for an IP (for admin/testing purposes)
+     */
+    clearRateLimit(ipAddress = null) {
+        if (ipAddress) {
+            this.loginAttempts.delete(`login:${ipAddress}`);
+            logger.security(`Rate limit cleared for IP: ${ipAddress}`);
+        } else {
+            // Clear all rate limits
+            this.loginAttempts.clear();
+            logger.security('All rate limits cleared');
+        }
     }
 
     /**
