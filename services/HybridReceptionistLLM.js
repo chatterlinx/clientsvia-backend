@@ -219,6 +219,15 @@ class HybridReceptionistLLM {
         }
         
         try {
+            logger.info('[HYBRID LLM] 🔍 TRACE START', {
+                callId,
+                companyId,
+                userInputPreview: userInput?.substring(0, 50),
+                currentMode,
+                hasCompany: !!company,
+                hasBehaviorConfig: !!behaviorConfig
+            });
+            
             // ════════════════════════════════════════════════════════════════
             // ❓ QUICK ANSWERS - Check for instant responses FIRST
             // ════════════════════════════════════════════════════════════════
@@ -226,6 +235,7 @@ class HybridReceptionistLLM {
             // we can give an instant answer without needing the full LLM
             const QuickAnswersMatcher = require('./QuickAnswersMatcher');
             
+            logger.info('[HYBRID LLM] 🔍 TRACE: Checking Quick Answers', { callId });
             if (QuickAnswersMatcher.looksLikeQuestion(userInput)) {
                 const quickMatch = await QuickAnswersMatcher.findBestMatch(companyId, userInput);
                 
@@ -280,9 +290,12 @@ class HybridReceptionistLLM {
                 }
             }
             
+            logger.info('[HYBRID LLM] 🔍 TRACE: Quick Answers check passed (no match)', { callId });
+            
             // ════════════════════════════════════════════════════════════════
             // 🗺️ SERVICE AREA CHECK - Answer area questions FIRST
             // ════════════════════════════════════════════════════════════════
+            logger.info('[HYBRID LLM] 🔍 TRACE: Checking Service Area', { callId });
             let serviceAreaInfo = null;
             if (ServiceAreaHandler.isServiceAreaQuestion(userInput)) {
                 serviceAreaInfo = ServiceAreaHandler.buildComprehensiveResponse(
@@ -308,6 +321,8 @@ class HybridReceptionistLLM {
                 });
             }
             
+            logger.info('[HYBRID LLM] 🔍 TRACE: Service Area check done', { callId, hasServiceAreaInfo: !!serviceAreaInfo });
+            
             // ════════════════════════════════════════════════════════════════
             // 🔍 GET TRIAGE CONTEXT - This is what makes us SMART
             // ════════════════════════════════════════════════════════════════
@@ -316,6 +331,7 @@ class HybridReceptionistLLM {
             // - What explanations to give
             // - Urgency level
             // - Whether this is repair vs maintenance
+            logger.info('[HYBRID LLM] 🔍 TRACE: Checking Triage', { callId });
             let triageContext = null;
             
             // ════════════════════════════════════════════════════════════════════
@@ -365,6 +381,8 @@ class HybridReceptionistLLM {
             } catch (err) {
                 logger.debug('[HYBRID LLM] Failed to load speaking corrections (non-fatal)', { error: err.message });
             }
+            
+            logger.info('[HYBRID LLM] 🔍 TRACE: Triage done, building prompt', { callId, hasTriageContext: !!triageContext });
             
             // ════════════════════════════════════════════════════════════════
             // BUILD THE SYSTEM PROMPT (now with triage + customer context)
