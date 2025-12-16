@@ -88,6 +88,128 @@ const conversationSessionSchema = new Schema({
     runningSummary: [{ type: String }],
     collectedSlots: { type: Schema.Types.Mixed, default: {} },
     
+    // ════════════════════════════════════════════════════════════════════════════
+    // 🆕 DISCOVERY - What we learned about why they called (Enterprise Flow)
+    // ════════════════════════════════════════════════════════════════════════════
+    // Captured in DISCOVERY stage, persists throughout call
+    // Used by LLM fallback to give intelligent, contextual responses
+    // ════════════════════════════════════════════════════════════════════════════
+    discovery: {
+        // What's the caller's problem/need?
+        issue: { type: String, default: null, trim: true },          // "thermostat acting up"
+        
+        // Any relevant context they provided?
+        context: { type: String, default: null, trim: true },        // "tech was here yesterday"
+        
+        // What type of call is this?
+        callType: { 
+            type: String, 
+            enum: ['service_issue', 'question', 'booking', 'billing', 'complaint', 'followup', 'unknown'],
+            default: 'unknown'
+        },
+        
+        // Urgency level
+        urgency: { 
+            type: String, 
+            enum: ['normal', 'repeat_issue', 'urgent', 'emergency'],
+            default: 'normal'
+        },
+        
+        // Caller's emotional state
+        mood: { 
+            type: String, 
+            enum: ['neutral', 'frustrated', 'angry', 'anxious', 'friendly', 'confused'],
+            default: 'neutral'
+        },
+        
+        // When was discovery completed?
+        completedAt: { type: Date, default: null },
+        
+        // Turn number when issue was captured
+        issueCapturedAtTurn: { type: Number, default: null }
+    },
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // 🆕 TRIAGE STATE - Diagnostic flow tracking (Enterprise Flow)
+    // ════════════════════════════════════════════════════════════════════════════
+    // Tracks which triage card matched and what diagnostic questions were asked
+    // ════════════════════════════════════════════════════════════════════════════
+    triageState: {
+        // Which triage card matched?
+        matchedCardId: { type: String, default: null },
+        matchedCardName: { type: String, default: null },
+        
+        // Diagnostic questions asked and answers received
+        questionsAsked: [{ 
+            question: { type: String },
+            turnNumber: { type: Number },
+            askedAt: { type: Date, default: Date.now }
+        }],
+        
+        answersReceived: [{
+            question: { type: String },
+            answer: { type: String },
+            turnNumber: { type: Number },
+            receivedAt: { type: Date, default: Date.now }
+        }],
+        
+        // Triage outcome
+        outcome: { 
+            type: String, 
+            enum: ['needs_technician', 'self_resolve', 'escalate', 'more_info_needed', 'pending'],
+            default: 'pending'
+        },
+        
+        // Diagnosis summary (for confirmation)
+        diagnosisSummary: { type: String, default: null, trim: true },
+        
+        // When was triage completed?
+        completedAt: { type: Date, default: null }
+    },
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // 🆕 CONVERSATION MEMORY - Full context for LLM fallback (Enterprise Flow)
+    // ════════════════════════════════════════════════════════════════════════════
+    // This is what the LLM sees when handling off-rails situations
+    // Enables intelligent, contextual responses that reference the actual conversation
+    // ════════════════════════════════════════════════════════════════════════════
+    conversationMemory: {
+        // Topics we've discussed (for "we already talked about X")
+        discussedTopics: [{
+            topic: { type: String, trim: true },
+            turnNumber: { type: Number },
+            resolved: { type: Boolean, default: false },
+            timestamp: { type: Date, default: Date.now }
+        }],
+        
+        // Key facts to remember (for intelligent responses)
+        keyFacts: [{ type: String, trim: true }],
+        
+        // Off-rails recovery attempts (for escalation tracking)
+        recoveryAttempts: [{
+            trigger: { type: String },          // What triggered off-rails
+            response: { type: String },         // What we said
+            turnNumber: { type: Number },
+            timestamp: { type: Date, default: Date.now }
+        }],
+        
+        // Current stage in the flow
+        currentStage: { 
+            type: String, 
+            enum: ['greeting', 'discovery', 'triage', 'booking', 'confirmation', 'complete', 'escalated'],
+            default: 'greeting'
+        },
+        
+        // Current step within the stage (e.g., 'ASK_NAME' within 'booking')
+        currentStep: { type: String, default: null },
+        
+        // How many times we've gone off-rails this call
+        offRailsCount: { type: Number, default: 0 },
+        
+        // Last time we went off-rails
+        lastOffRailsAt: { type: Date, default: null }
+    },
+    
     // ════════════════════════════════════════════════════════════════════════
     // STATE MACHINE FIELDS - For deterministic booking flow
     // ════════════════════════════════════════════════════════════════════════

@@ -1925,6 +1925,256 @@ const companySchema = new mongoose.Schema({
                 minTurnsForSlots: { type: Number, default: 1, min: 0, max: 5 }
             },
             
+            // ═══════════════════════════════════════════════════════════════════════
+            // 🆕 CONVERSATION STAGES - Enterprise Flow Control (UI Controlled)
+            // ═══════════════════════════════════════════════════════════════════════
+            // This controls the deterministic conversation flow:
+            // DISCOVERY → TRIAGE → BOOKING → CONFIRMATION
+            // LLM is ONLY used for off-rails recovery, not flow control
+            // ═══════════════════════════════════════════════════════════════════════
+            conversationStages: {
+                // Master toggle for stage-based flow
+                enabled: { type: Boolean, default: true },
+                
+                // ═══════════════════════════════════════════════════════════════
+                // STAGE 1: GREETING RESPONSES (0 tokens - no LLM)
+                // ═══════════════════════════════════════════════════════════════
+                greetingResponses: {
+                    morning: { type: String, default: "Good morning! How can I help you today?", trim: true },
+                    afternoon: { type: String, default: "Good afternoon! How can I help you today?", trim: true },
+                    evening: { type: String, default: "Good evening! How can I help you today?", trim: true },
+                    generic: { type: String, default: "Hi there! How can I help you today?", trim: true }
+                },
+                
+                // ═══════════════════════════════════════════════════════════════
+                // STAGE 2: DISCOVERY PROMPTS (0 tokens - no LLM)
+                // Used when we need to understand what caller needs
+                // ═══════════════════════════════════════════════════════════════
+                discoveryPrompts: {
+                    afterGreeting: { type: String, default: "How can I help you today?", trim: true },
+                    needMoreInfo: { type: String, default: "Can you tell me a little more about what's going on?", trim: true },
+                    clarifyIssue: { type: String, default: "Just to make sure I understand, what seems to be the problem?", trim: true },
+                    clarifyService: { type: String, default: "What type of service are you looking for today?", trim: true }
+                },
+                
+                // ═══════════════════════════════════════════════════════════════
+                // STAGE 3: TRIAGE SETTINGS
+                // Uses triage cards for diagnostic questions
+                // ═══════════════════════════════════════════════════════════════
+                triageSettings: {
+                    enabled: { type: Boolean, default: true },
+                    // Auto-triage when service issue detected
+                    autoTriageOnIssue: { type: Boolean, default: true },
+                    // Max diagnostic questions before moving to booking
+                    maxDiagnosticQuestions: { type: Number, default: 3, min: 1, max: 5 },
+                    // Acknowledge issue before triage
+                    acknowledgeIssueFirst: { type: Boolean, default: true },
+                    issueAcknowledgment: { type: String, default: "I'm sorry to hear that. Let me help you get this resolved.", trim: true }
+                },
+                
+                // ═══════════════════════════════════════════════════════════════
+                // STAGE 4: BOOKING (uses bookingSlots above)
+                // Fixed questions from bookingSlots config
+                // ═══════════════════════════════════════════════════════════════
+                bookingSettings: {
+                    // Transition message from discovery/triage to booking
+                    transitionToBooking: { type: String, default: "Let's get you scheduled.", trim: true },
+                    // Skip slots for returning customers with known info
+                    skipKnownSlots: { type: Boolean, default: true }
+                },
+                
+                // ═══════════════════════════════════════════════════════════════
+                // STAGE 5: CONFIRMATION
+                // ═══════════════════════════════════════════════════════════════
+                confirmationSettings: {
+                    // Include issue summary in confirmation
+                    includeIssueSummary: { type: Boolean, default: true },
+                    // Include context (e.g., "tech was here yesterday")
+                    includeContext: { type: Boolean, default: true },
+                    // Template with all placeholders
+                    template: { 
+                        type: String, 
+                        default: "Let me confirm: I have {name} at {phone}, service address {address}, for {issue}. {context} Appointment {time}. Is that correct?", 
+                        trim: true 
+                    }
+                }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════════════
+            // 🆕 OFF-RAILS RECOVERY - LLM Fallback Settings (UI Controlled)
+            // ═══════════════════════════════════════════════════════════════════════
+            // When caller goes off-script, LLM handles the human moment
+            // then MUST return to the current stage's fixed question
+            // ═══════════════════════════════════════════════════════════════════════
+            offRailsRecovery: {
+                enabled: { type: Boolean, default: true },
+                
+                // ═══════════════════════════════════════════════════════════════
+                // DETECTION TRIGGERS - What indicates caller went off-rails
+                // ═══════════════════════════════════════════════════════════════
+                triggers: {
+                    // Frustration expressions
+                    frustration: [{ type: String, trim: true }],
+                    // Questions about the problem
+                    problemQuestions: [{ type: String, trim: true }],
+                    // Requests to speak to human
+                    humanRequest: [{ type: String, trim: true }],
+                    // Confusion expressions
+                    confusion: [{ type: String, trim: true }]
+                },
+                
+                // Default triggers (seeded on company creation)
+                // These are the actual trigger phrases
+                defaultTriggers: {
+                    frustration: { 
+                        type: [String], 
+                        default: [
+                            "why can't you",
+                            "this is ridiculous",
+                            "I already told you",
+                            "you're not listening",
+                            "this is the third time",
+                            "I've been waiting"
+                        ]
+                    },
+                    problemQuestions: { 
+                        type: [String], 
+                        default: [
+                            "why is this happening",
+                            "what's causing",
+                            "how do I fix",
+                            "is this normal",
+                            "should I be worried"
+                        ]
+                    },
+                    humanRequest: { 
+                        type: [String], 
+                        default: [
+                            "talk to a person",
+                            "speak to someone",
+                            "real person",
+                            "human please",
+                            "manager",
+                            "supervisor"
+                        ]
+                    },
+                    confusion: { 
+                        type: [String], 
+                        default: [
+                            "I don't understand",
+                            "what do you mean",
+                            "that doesn't make sense",
+                            "I'm confused"
+                        ]
+                    }
+                },
+                
+                // ═══════════════════════════════════════════════════════════════
+                // RECOVERY RESPONSES - What AI says before returning to script
+                // ═══════════════════════════════════════════════════════════════
+                responses: {
+                    // When caller is frustrated
+                    frustrated: { 
+                        type: String, 
+                        default: "I completely understand your frustration, and I apologize for the trouble.", 
+                        trim: true 
+                    },
+                    // When this is a repeat issue
+                    repeatIssue: { 
+                        type: String, 
+                        default: "I'm sorry this issue is persisting. Let's make sure we get it resolved properly this time.", 
+                        trim: true 
+                    },
+                    // When caller asks about the problem
+                    problemQuestion: { 
+                        type: String, 
+                        default: "That's a great question. Based on what you've described, a technician will need to take a look to give you a proper answer.", 
+                        trim: true 
+                    },
+                    // When caller is confused
+                    confused: { 
+                        type: String, 
+                        default: "No problem, let me clarify.", 
+                        trim: true 
+                    },
+                    // When caller wants a human
+                    humanRequest: { 
+                        type: String, 
+                        default: "I understand. Let me get your information so we can have someone call you back, or I can connect you now.", 
+                        trim: true 
+                    },
+                    // Generic recovery
+                    generic: { 
+                        type: String, 
+                        default: "I understand.", 
+                        trim: true 
+                    }
+                },
+                
+                // ═══════════════════════════════════════════════════════════════
+                // BRIDGE BACK - How to return to the script after recovery
+                // ═══════════════════════════════════════════════════════════════
+                bridgeBack: {
+                    enabled: { type: Boolean, default: true },
+                    // Transition phrase before asking the fixed question again
+                    transitionPhrase: { type: String, default: "Now, to help you best,", trim: true },
+                    // Max recovery attempts before escalation
+                    maxRecoveryAttempts: { type: Number, default: 3, min: 1, max: 5 }
+                }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════════════
+            // 🆕 CONTEXT RECOGNITION - Detect important caller context (UI Controlled)
+            // ═══════════════════════════════════════════════════════════════════════
+            contextRecognition: {
+                enabled: { type: Boolean, default: true },
+                
+                // Patterns that indicate callback/repeat visit
+                repeatVisitPatterns: {
+                    type: [String],
+                    default: [
+                        "you were here",
+                        "you guys came",
+                        "technician was here",
+                        "someone came out",
+                        "we had this fixed",
+                        "this happened before",
+                        "same problem again",
+                        "still having issues",
+                        "it's happening again"
+                    ]
+                },
+                
+                // Response when repeat visit detected
+                repeatVisitAcknowledgment: { 
+                    type: String, 
+                    default: "I see we've been out before. I apologize that the issue is continuing.", 
+                    trim: true 
+                },
+                
+                // Patterns that indicate urgency
+                urgencyPatterns: {
+                    type: [String],
+                    default: [
+                        "emergency",
+                        "no heat",
+                        "no ac",
+                        "flooding",
+                        "gas smell",
+                        "smoke",
+                        "sparking",
+                        "water everywhere"
+                    ]
+                },
+                
+                // Response when urgency detected
+                urgencyAcknowledgment: { 
+                    type: String, 
+                    default: "I understand this is urgent. Let me get someone out to you as quickly as possible.", 
+                    trim: true 
+                }
+            },
+            
             // ═══════════════════════════════════════════════════════════════
             // METADATA
             // ═══════════════════════════════════════════════════════════════
