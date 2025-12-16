@@ -85,11 +85,35 @@ class RunningSummaryService {
         }
         
         // ─────────────────────────────────────────────────────────────────────
-        // BULLET 3: Current Problem/Issue
+        // BULLET 3: Current Problem/Issue (from DISCOVERY stage)
         // ─────────────────────────────────────────────────────────────────────
-        const problemIndicators = this.extractProblemFromTurn(currentTurn, previousSummary);
-        if (problemIndicators) {
-            bullets.push(`Issue: ${problemIndicators}`);
+        // 🆕 PRIORITY: Use session.discovery.issue if available (captured from conversation)
+        if (conversationState.discovery?.issue) {
+            let issueBullet = `Issue: ${conversationState.discovery.issue}`;
+            if (conversationState.discovery.urgency && conversationState.discovery.urgency !== 'normal') {
+                issueBullet += ` [${conversationState.discovery.urgency.toUpperCase()}]`;
+            }
+            bullets.push(issueBullet);
+        } else {
+            // Fallback: Extract from current turn
+            const problemIndicators = this.extractProblemFromTurn(currentTurn, previousSummary);
+            if (problemIndicators) {
+                bullets.push(`Issue: ${problemIndicators}`);
+            }
+        }
+        
+        // ─────────────────────────────────────────────────────────────────────
+        // BULLET 3b: Triage Result (if triage was performed)
+        // ─────────────────────────────────────────────────────────────────────
+        if (conversationState.triageState?.matchedCardName) {
+            let triageBullet = `Triage: ${conversationState.triageState.matchedCardName}`;
+            if (conversationState.triageState.outcome && conversationState.triageState.outcome !== 'pending') {
+                triageBullet += ` → ${conversationState.triageState.outcome}`;
+            }
+            if (conversationState.triageState.diagnosisSummary) {
+                triageBullet = `Diagnosis: ${conversationState.triageState.diagnosisSummary.substring(0, 40)}`;
+            }
+            bullets.push(triageBullet);
         }
         
         // ─────────────────────────────────────────────────────────────────────

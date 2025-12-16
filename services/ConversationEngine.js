@@ -495,7 +495,11 @@ async function processTurn({
                 conversationState: {
                     phase: session.phase || 'greeting',
                     knownSlots: session.collectedSlots || {},
-                    signals: session.signals || {}
+                    signals: session.signals || {},
+                    // 🆕 Include discovery and triage data for AI context
+                    discovery: session.discovery || {},
+                    triageState: session.triageState || {},
+                    currentStage: session.conversationMemory?.currentStage || 'greeting'
                 },
                 company
             });
