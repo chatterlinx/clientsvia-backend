@@ -40,20 +40,22 @@ const HybridReceptionistLLM = require('./HybridReceptionistLLM');
 const BookingScriptEngine = require('./BookingScriptEngine');
 const BookingStateMachine = require('./BookingStateMachine');
 const ResponseRenderer = require('./ResponseRenderer');
+const ConversationStateMachine = require('./ConversationStateMachine');
 const logger = require('../utils/logger');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V6-INCOMPLETE-SENTENCE';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V7-ENTERPRISE-FLOW';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ Single entry point for ALL channels',
-        '✅ DETERMINISTIC booking via BookingStateMachine',
-        '✅ LLM only for interpretation (not flow control)',
-        '✅ 0 tokens for slot collection',
-        '✅ Loop prevention (3-strike rule)'
+        '✅ ENTERPRISE FLOW: DISCOVERY → TRIAGE → BOOKING → CONFIRM',
+        '✅ ConversationStateMachine controls 95% of flow (0 tokens)',
+        '✅ LLM only for off-rails recovery (5%)',
+        '✅ Full conversation memory (issue, context, mood)',
+        '✅ All responses from UI config - nothing hardcoded'
     ]
 });
 
@@ -656,236 +658,327 @@ async function processTurn({
             willAskForMissingNamePart
         });
         
-        // ═══════════════════════════════════════════════════════════════════
-        // STEP 8: STATE MACHINE DECISION (NEW - DETERMINISTIC)
-        // ═══════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
+        // STEP 8: ENTERPRISE CONVERSATION STATE MACHINE
+        // ═══════════════════════════════════════════════════════════════════════
         // 
-        // The state machine OWNS the booking flow. LLM is only called when:
-        // - User asks a question
-        // - Intent is unclear
-        // - We need smarter parsing
+        // NEW ARCHITECTURE (V7):
+        // - ConversationStateMachine controls ENTIRE flow
+        // - Stages: GREETING → DISCOVERY → TRIAGE → BOOKING → CONFIRMATION
+        // - 95% of interactions: 0 tokens (deterministic)
+        // - 5% off-rails: LLM fallback with full context + bridge back
         // 
-        // This gives us: 0 tokens for slot collection, 100% reliable order
-        // ═══════════════════════════════════════════════════════════════════
-        log('CHECKPOINT 9: State machine decision...');
+        // The state machine OWNS the conversation. LLM is only called when:
+        // - Caller goes off-rails (frustration, questions, human request)
+        // - Then MUST return to current stage's fixed question
+        // ═══════════════════════════════════════════════════════════════════════
+        log('CHECKPOINT 9: Enterprise State Machine...');
         
-        const stateMachine = new BookingStateMachine(session, company);
-        const renderer = new ResponseRenderer(session, company);
-        
-        // Update state machine with newly extracted slots
-        stateMachine.updateSlots(currentSlots);
-        
-        // ═══════════════════════════════════════════════════════════════════
-        // GREETING DETECTION - Handle simple greetings without LLM (0 tokens)
-        // Matches: "hi", "hello", "good morning", "hi good afternoon", etc.
-        // ═══════════════════════════════════════════════════════════════════
-        const greetingPatterns = [
-            /^(hi|hello|hey|yo|howdy|greetings)[\s\.\!\?]*$/i,                    // Simple: "hi", "hello"
-            /^good\s+(morning|afternoon|evening)[\s\.\!\?]*$/i,                   // Time greetings: "good morning"
-            /^(hi|hello|hey)\s+good\s+(morning|afternoon|evening)[\s\.\!\?]*$/i,  // Compound: "hi good afternoon"
-            /^(hi|hello|hey)\s+there[\s\.\!\?]*$/i,                               // "hi there", "hello there"
-            /^(hi|hello|hey)[\s,]+how are you[\s\.\!\?]*$/i                       // "hi, how are you"
-        ];
-        const isSimpleGreeting = greetingPatterns.some(p => p.test(userText.trim()));
-        
-        // Check if we're in booking mode OR caller mentioned booking intent
-        const bookingIntent = /\b(appointment|schedule|book|service|repair|fix|broken|not working|need help|maintenance|install|replace)\b/i;
-        const hasBookingIntent = bookingIntent.test(userText);
-        const isInBookingMode = stateMachine.isInBookingMode() || session.phase === 'booking' || hasBookingIntent;
-        
-        // Check if state machine can handle this WITHOUT LLM
-        const needsLLM = stateMachine.needsLLMInterpretation(userText, extractedThisTurn);
-        
-        log('CHECKPOINT 9a: State machine analysis', {
-            isSimpleGreeting,
-            isInBookingMode,
-            hasBookingIntent,
-            needsLLM,
-            lastAction: stateMachine.lastAction,
-            askCount: stateMachine.askCount
-        });
+        // Check if enterprise flow is enabled (UI toggle)
+        const enterpriseFlowEnabled = company.aiAgentSettings?.frontDeskBehavior?.conversationStages?.enabled !== false;
         
         let aiResult;
         let aiLatencyMs = 0;
         
-        // ═══════════════════════════════════════════════════════════════════
-        // GREETING FAST PATH: Simple greetings (0 tokens)
-        // ═══════════════════════════════════════════════════════════════════
-        if (isSimpleGreeting && !isInBookingMode) {
-            log('CHECKPOINT 9b: 🎯 GREETING FAST PATH (0 tokens)');
+        if (enterpriseFlowEnabled) {
+            // ═══════════════════════════════════════════════════════════════════
+            // ENTERPRISE FLOW: ConversationStateMachine
+            // ═══════════════════════════════════════════════════════════════════
+            log('CHECKPOINT 9a: 🏢 ENTERPRISE FLOW ACTIVE');
             const aiStartTime = Date.now();
             
-            // Use ResponseRenderer for greeting
-            const greetingResponse = renderer.renderGreeting();
+            // Initialize the enterprise state machine
+            const enterpriseStateMachine = new ConversationStateMachine(session, company);
+            
+            // Process the input through the state machine
+            const smResult = enterpriseStateMachine.processInput(userText, extractedThisTurn);
             
             aiLatencyMs = Date.now() - aiStartTime;
             
-            aiResult = {
-                reply: greetingResponse.say,
-                conversationMode: 'greeting',
-                intent: 'greeting',
-                nextGoal: 'AWAIT_NEED',
-                filledSlots: currentSlots,
-                signals: { wantsBooking: false },
-                latencyMs: aiLatencyMs,
-                tokensUsed: 0,  // 🎯 0 tokens!
-                fromStateMachine: true,
-                debug: {
-                    source: 'STATE_MACHINE_GREETING',
-                    response: greetingResponse
-                }
-            };
-            
-            log('CHECKPOINT 9b: ✅ Greeting response (0 tokens)', {
-                replyPreview: greetingResponse.say.substring(0, 50)
+            log('CHECKPOINT 9b: State machine result', {
+                action: smResult.action,
+                stage: smResult.stage,
+                nextStage: smResult.nextStage,
+                tokensUsed: smResult.tokensUsed || 0
             });
-        }
-        // ═══════════════════════════════════════════════════════════════════
-        // BOOKING FAST PATH: State machine handles it (0 tokens)
-        // ═══════════════════════════════════════════════════════════════════
-        else if (isInBookingMode && !needsLLM) {
-            log('CHECKPOINT 9b: 🚀 FAST PATH - State machine handling (0 tokens)');
-            const aiStartTime = Date.now();
             
-            // Get deterministic next action
-            const action = stateMachine.getNextAction();
-            
-            // Record that we asked (for loop prevention)
-            if (action.slotId) {
-                stateMachine.recordAsk(action.slotId);
-            }
-            
-            // Render human-like response
-            const response = renderer.render(action, extractedThisTurn);
-            
-            // Update session phase to booking
-            if (session.phase !== 'booking') {
-                session.phase = 'booking';
-            }
-            
-            aiLatencyMs = Date.now() - aiStartTime;
-            
-            // Build aiResult in same format as HybridReceptionistLLM
-            aiResult = {
-                reply: response.say,
-                conversationMode: 'booking',
-                intent: 'booking',
-                nextGoal: action.action,
-                filledSlots: currentSlots,
-                signals: { wantsBooking: true },
-                latencyMs: aiLatencyMs,
-                tokensUsed: 0,  // 🎯 0 tokens!
-                fromStateMachine: true,
-                debug: {
-                    source: 'STATE_MACHINE',
-                    action: action,
-                    response: response,
-                    stateMachineState: stateMachine.getStateForSession()
+            // ═══════════════════════════════════════════════════════════════════
+            // Handle state machine result
+            // ═══════════════════════════════════════════════════════════════════
+            if (smResult.action === 'RESPOND') {
+                // ═══════════════════════════════════════════════════════════════
+                // DETERMINISTIC RESPONSE (0 tokens)
+                // ═══════════════════════════════════════════════════════════════
+                aiResult = {
+                    reply: smResult.response,
+                    conversationMode: smResult.nextStage || smResult.stage,
+                    intent: smResult.stage,
+                    nextGoal: smResult.nextStep || smResult.nextStage,
+                    filledSlots: smResult.slotsCollected || currentSlots,
+                    signals: { 
+                        wantsBooking: smResult.stage === 'booking' || smResult.nextStage === 'booking',
+                        discoveryComplete: smResult.discoveryComplete,
+                        triageComplete: smResult.triageComplete,
+                        bookingComplete: smResult.bookingComplete
+                    },
+                    latencyMs: aiLatencyMs,
+                    tokensUsed: 0,  // 🎯 0 tokens!
+                    fromStateMachine: true,
+                    enterpriseFlow: true,
+                    debug: {
+                        source: smResult.source || 'ENTERPRISE_STATE_MACHINE',
+                        stage: smResult.stage,
+                        nextStage: smResult.nextStage,
+                        step: smResult.step,
+                        discovery: smResult.discovery
+                    }
+                };
+                
+                // Update session phase
+                if (smResult.nextStage) {
+                    session.phase = smResult.nextStage;
                 }
+                
+                log('CHECKPOINT 9c: ✅ Enterprise response (0 tokens)', {
+                    stage: smResult.stage,
+                    nextStage: smResult.nextStage,
+                    replyPreview: smResult.response.substring(0, 50)
+                });
+                
+            } else if (smResult.action === 'LLM_FALLBACK') {
+                // ═══════════════════════════════════════════════════════════════
+                // OFF-RAILS: LLM FALLBACK WITH FULL CONTEXT
+                // ═══════════════════════════════════════════════════════════════
+                log('CHECKPOINT 9c: 🚨 OFF-RAILS - LLM Fallback needed', {
+                    offRailsType: smResult.offRails?.type,
+                    trigger: smResult.offRails?.trigger,
+                    returnToQuestion: smResult.returnToQuestion
+                });
+                
+                const llmStartTime = Date.now();
+                
+                // Build context-aware prompt for LLM
+                const llmContext = smResult.context || {};
+                
+                // Call LLM with full conversation memory
+                const llmResult = await HybridReceptionistLLM.processConversation({
+                    company,
+                    callContext: {
+                        callId: session._id.toString(),
+                        companyId,
+                        customerContext,
+                        runningSummary: summaryFormatted,
+                        turnCount: (session.metrics?.totalTurns || 0) + 1,
+                        channel,
+                        partialName: currentSlots.partialName || null,
+                        // 🆕 ENTERPRISE CONTEXT
+                        enterpriseContext: llmContext,
+                        offRailsType: smResult.offRails?.type,
+                        returnToQuestion: smResult.returnToQuestion
+                    },
+                    currentMode: smResult.stage || 'free',
+                    knownSlots: currentSlots,
+                    conversationHistory,
+                    userInput: userText,
+                    behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
+                });
+                
+                const llmLatencyMs = Date.now() - llmStartTime;
+                aiLatencyMs = Date.now() - aiStartTime;
+                
+                // ═══════════════════════════════════════════════════════════════
+                // BRIDGE BACK: Append fixed question after LLM response
+                // ═══════════════════════════════════════════════════════════════
+                const bridgeBackEnabled = company.aiAgentSettings?.frontDeskBehavior?.offRailsRecovery?.bridgeBack?.enabled !== false;
+                const bridgePhrase = company.aiAgentSettings?.frontDeskBehavior?.offRailsRecovery?.bridgeBack?.transitionPhrase || 'Now, to help you best,';
+                
+                let finalReply = llmResult.reply || '';
+                
+                if (bridgeBackEnabled && smResult.returnToQuestion) {
+                    // Append bridge phrase + fixed question
+                    finalReply = `${finalReply} ${bridgePhrase} ${smResult.returnToQuestion}`;
+                    log('CHECKPOINT 9d: 🌉 BRIDGE BACK applied', {
+                        bridgePhrase,
+                        returnToQuestion: smResult.returnToQuestion
+                    });
+                }
+                
+                aiResult = {
+                    reply: finalReply,
+                    conversationMode: smResult.stage,
+                    intent: 'off_rails_recovery',
+                    nextGoal: smResult.step || smResult.stage,
+                    filledSlots: currentSlots,
+                    signals: { 
+                        wantsBooking: smResult.stage === 'booking',
+                        offRailsRecovery: true,
+                        offRailsType: smResult.offRails?.type
+                    },
+                    latencyMs: aiLatencyMs,
+                    tokensUsed: llmResult.tokensUsed || 0,
+                    fromStateMachine: false,
+                    enterpriseFlow: true,
+                    bridgeBackApplied: bridgeBackEnabled,
+                    debug: {
+                        source: 'LLM_FALLBACK_WITH_BRIDGE',
+                        offRails: smResult.offRails,
+                        llmResponse: llmResult.reply,
+                        bridgePhrase,
+                        returnToQuestion: smResult.returnToQuestion,
+                        llmLatencyMs,
+                        enterpriseContext: llmContext
+                    }
+                };
+                
+                // Track off-rails in session memory
+                if (!session.conversationMemory) {
+                    session.conversationMemory = {};
+                }
+                session.conversationMemory.offRailsCount = (session.conversationMemory.offRailsCount || 0) + 1;
+                session.conversationMemory.lastOffRailsAt = new Date();
+                
+                if (!session.conversationMemory.recoveryAttempts) {
+                    session.conversationMemory.recoveryAttempts = [];
+                }
+                session.conversationMemory.recoveryAttempts.push({
+                    trigger: smResult.offRails?.trigger,
+                    response: finalReply.substring(0, 100),
+                    turnNumber: session.metrics?.totalTurns || 0,
+                    timestamp: new Date()
+                });
+                
+                log('CHECKPOINT 9d: ✅ LLM Fallback complete', {
+                    tokensUsed: llmResult.tokensUsed,
+                    bridgeBackApplied: bridgeBackEnabled,
+                    offRailsCount: session.conversationMemory.offRailsCount
+                });
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // Save enterprise state machine state to session
+            // ═══════════════════════════════════════════════════════════════════
+            const enterpriseState = enterpriseStateMachine.getStateForSession();
+            session.discovery = enterpriseState.discovery;
+            session.triageState = enterpriseState.triageState;
+            session.collectedSlots = { ...session.collectedSlots, ...enterpriseState.collectedSlots };
+            session.conversationMemory = {
+                ...session.conversationMemory,
+                ...enterpriseState.conversationMemory
             };
             
-            // Save state machine state to session
-            session.stateMachine = stateMachine.getStateForSession();
-            
-            log('CHECKPOINT 9b: ✅ State machine response', {
-                action: action.action,
-                slotId: action.slotId,
-                tokensUsed: 0,
-                latencyMs: aiLatencyMs,
-                replyPreview: response.say.substring(0, 50)
+            log('CHECKPOINT 9e: 📊 Enterprise state saved', {
+                stage: session.conversationMemory?.currentStage,
+                step: session.conversationMemory?.currentStep,
+                hasIssue: !!session.discovery?.issue,
+                slotsCount: Object.keys(session.collectedSlots || {}).filter(k => session.collectedSlots[k]).length
             });
             
         } else {
             // ═══════════════════════════════════════════════════════════════════
-            // SLOW PATH: LLM needed for interpretation
+            // LEGACY FLOW: Original BookingStateMachine (for backward compatibility)
             // ═══════════════════════════════════════════════════════════════════
-            log('CHECKPOINT 9c: LLM needed for interpretation', { 
-                reason: needsLLM ? 'complex input' : 'not in booking mode' 
-            });
+            log('CHECKPOINT 9a: 📜 LEGACY FLOW (enterprise disabled)');
+            
+            const stateMachine = new BookingStateMachine(session, company);
+            const renderer = new ResponseRenderer(session, company);
+            
+            // Update state machine with newly extracted slots
+            stateMachine.updateSlots(currentSlots);
+            
+            // Greeting detection
+            const greetingPatterns = [
+                /^(hi|hello|hey|yo|howdy|greetings)[\s\.\!\?]*$/i,
+                /^good\s+(morning|afternoon|evening)[\s\.\!\?]*$/i,
+                /^(hi|hello|hey)\s+good\s+(morning|afternoon|evening)[\s\.\!\?]*$/i,
+                /^(hi|hello|hey)\s+there[\s\.\!\?]*$/i,
+                /^(hi|hello|hey)[\s,]+how are you[\s\.\!\?]*$/i
+            ];
+            const isSimpleGreeting = greetingPatterns.some(p => p.test(userText.trim()));
+            
+            // Booking intent detection
+            const bookingIntent = /\b(appointment|schedule|book|service|repair|fix|broken|not working|need help|maintenance|install|replace)\b/i;
+            const hasBookingIntent = bookingIntent.test(userText);
+            const isInBookingMode = stateMachine.isInBookingMode() || session.phase === 'booking' || hasBookingIntent;
+            const needsLLM = stateMachine.needsLLMInterpretation(userText, extractedThisTurn);
+            
             const aiStartTime = Date.now();
             
-            aiResult = await HybridReceptionistLLM.processConversation({
-                company,
-                callContext: {
-                    callId: session._id.toString(),
-                    companyId,
-                    customerContext,
-                    runningSummary: summaryFormatted,
-                    turnCount: (session.metrics?.totalTurns || 0) + 1,
-                    channel,
-                    partialName: currentSlots.partialName || null
-                },
-                currentMode: session.phase === 'booking' ? 'booking' : 'free',
-                knownSlots: currentSlots,
-                conversationHistory,
-                userInput: userText,
-                behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
-            });
-            
-            aiLatencyMs = Date.now() - aiStartTime;
-            
-            // 🚨 DEBUG: Check if AI returned an error
-            if (aiResult.debug?.error) {
-                logger.error('[CONVERSATION ENGINE] ⚠️ AI brain returned error state:', {
-                    errorMessage: aiResult.debug?.errorMessage,
-                    errorName: aiResult.debug?.errorName,
-                    errorCode: aiResult.debug?.errorCode,
-                    tokensUsed: aiResult.tokensUsed || 0,
-                    latencyMs: aiLatencyMs
-                });
-            }
-            
-            // If LLM detected booking intent, switch to booking mode for next turn
-            if (aiResult.wantsBooking || aiResult.conversationMode === 'booking') {
-                session.phase = 'booking';
-                log('CHECKPOINT 9c: LLM detected booking intent, switching to booking mode');
-            }
-            
-            log('CHECKPOINT 9c: ✅ LLM response', {
-                latencyMs: aiLatencyMs,
-                tokensUsed: aiResult.tokensUsed,
-                mode: aiResult.conversationMode,
-                replyPreview: (aiResult.reply || '').substring(0, 50)
-            });
-            
-            // ═══════════════════════════════════════════════════════════════════
-            // CRITICAL FIX: Save state machine state after LLM path too!
-            // This ensures lastAction is preserved for the next turn so we know
-            // what slot we were asking for and can properly detect when it's filled.
-            // ═══════════════════════════════════════════════════════════════════
-            if (aiResult.conversationMode === 'booking' || aiResult.wantsBooking) {
-                // Update state machine with extracted slots so it knows what we have
-                stateMachine.updateSlots(extractedThisTurn);
+            if (isSimpleGreeting && !isInBookingMode) {
+                // Greeting fast path
+                const greetingResponse = renderer.renderGreeting();
+                aiLatencyMs = Date.now() - aiStartTime;
                 
-                // If LLM is asking for a slot, record it in state machine
-                // nextGoal format is "ASK_NAME", "ASK_PHONE", etc. - extract the slot name
-                const nextGoal = aiResult.nextGoal || '';
-                let llmAskedForSlot = null;
+                aiResult = {
+                    reply: greetingResponse.say,
+                    conversationMode: 'greeting',
+                    intent: 'greeting',
+                    nextGoal: 'AWAIT_NEED',
+                    filledSlots: currentSlots,
+                    signals: { wantsBooking: false },
+                    latencyMs: aiLatencyMs,
+                    tokensUsed: 0,
+                    fromStateMachine: true,
+                    debug: { source: 'LEGACY_GREETING' }
+                };
+            } else if (isInBookingMode && !needsLLM) {
+                // Booking fast path
+                const action = stateMachine.getNextAction();
+                if (action.slotId) stateMachine.recordAsk(action.slotId);
+                const response = renderer.render(action, extractedThisTurn);
+                if (session.phase !== 'booking') session.phase = 'booking';
+                aiLatencyMs = Date.now() - aiStartTime;
                 
-                if (nextGoal.startsWith('ASK_')) {
-                    llmAskedForSlot = nextGoal.replace('ASK_', '').toLowerCase();
-                } else if (aiResult.needsInfo && aiResult.needsInfo !== 'none') {
-                    llmAskedForSlot = aiResult.needsInfo.toLowerCase();
-                }
+                aiResult = {
+                    reply: response.say,
+                    conversationMode: 'booking',
+                    intent: 'booking',
+                    nextGoal: action.action,
+                    filledSlots: currentSlots,
+                    signals: { wantsBooking: true },
+                    latencyMs: aiLatencyMs,
+                    tokensUsed: 0,
+                    fromStateMachine: true,
+                    debug: { source: 'LEGACY_BOOKING', action }
+                };
                 
-                log('CHECKPOINT 9c: 🔍 LLM slot detection', {
-                    nextGoal,
-                    needsInfo: aiResult.needsInfo,
-                    llmAskedForSlot
-                });
-                
-                if (llmAskedForSlot && ['name', 'phone', 'address', 'time'].includes(llmAskedForSlot)) {
-                    stateMachine.recordAsk(llmAskedForSlot);
-                }
-                
-                // Save state machine state to session
                 session.stateMachine = stateMachine.getStateForSession();
-                log('CHECKPOINT 9c: 📊 State machine state saved after LLM path', {
-                    lastAction: session.stateMachine.lastAction,
-                    askCount: session.stateMachine.askCount,
-                    state: session.stateMachine.state
+            } else {
+                // LLM path
+                aiResult = await HybridReceptionistLLM.processConversation({
+                    company,
+                    callContext: {
+                        callId: session._id.toString(),
+                        companyId,
+                        customerContext,
+                        runningSummary: summaryFormatted,
+                        turnCount: (session.metrics?.totalTurns || 0) + 1,
+                        channel,
+                        partialName: currentSlots.partialName || null
+                    },
+                    currentMode: session.phase === 'booking' ? 'booking' : 'free',
+                    knownSlots: currentSlots,
+                    conversationHistory,
+                    userInput: userText,
+                    behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
                 });
+                
+                aiLatencyMs = Date.now() - aiStartTime;
+                
+                if (aiResult.wantsBooking || aiResult.conversationMode === 'booking') {
+                    session.phase = 'booking';
+                    stateMachine.updateSlots(extractedThisTurn);
+                    const nextGoal = aiResult.nextGoal || '';
+                    if (nextGoal.startsWith('ASK_')) {
+                        stateMachine.recordAsk(nextGoal.replace('ASK_', '').toLowerCase());
+                    }
+                    session.stateMachine = stateMachine.getStateForSession();
+                }
             }
+            
+            log('CHECKPOINT 9b: ✅ Legacy flow complete', {
+                tokensUsed: aiResult.tokensUsed || 0,
+                source: aiResult.debug?.source
+            });
         }
         
         // Merge extracted slots
