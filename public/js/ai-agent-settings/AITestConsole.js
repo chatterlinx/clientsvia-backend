@@ -500,11 +500,16 @@ class AITestConsole {
                 
                 // Map new API response format to expected format
                 const debug = data.debug || {};
+                // Slots can come from multiple places - prioritize slotDiagnostics for accuracy
+                const collectedSlots = debug.slotDiagnostics?.slotsAfterMerge || 
+                                       data.slotsCollected || 
+                                       data.metadata?.slots || 
+                                       {};
                 const metadata = {
                     latencyMs: debug.latencyMs,
                     tokensUsed: debug.tokensUsed,
                     mode: debug.phase || 'booking',
-                    slots: debug.slotsCollected || {},
+                    slots: collectedSlots,
                     needsInfo: null
                 };
                 
@@ -553,9 +558,13 @@ class AITestConsole {
                     { role: 'assistant', content: data.response }
                 );
                 
-                // 3. Update slots if any collected
-                if (debug.slotsCollected) {
-                    this.knownSlots = { ...this.knownSlots, ...debug.slotsCollected };
+                // 3. Update slots if any collected (from slotDiagnostics or top-level)
+                const slotsToMerge = debug.slotDiagnostics?.slotsAfterMerge || 
+                                     data.slotsCollected || 
+                                     {};
+                if (Object.keys(slotsToMerge).length > 0) {
+                    this.knownSlots = { ...this.knownSlots, ...slotsToMerge };
+                    console.log('[AI Test] 📦 Slots updated:', this.knownSlots);
                 }
                 
                 // 4. Add AI response bubble with source badge

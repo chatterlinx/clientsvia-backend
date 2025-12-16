@@ -834,7 +834,9 @@ RULES:
 6. ack = your natural response (greeting, acknowledgment, or full reply if slot is "none")
 7. Never re-ask for info already in HAVE
 8. Keep responses under 2 sentences
-${forbidden ? `9. Never say: ${forbidden}` : ''}
+9. NEVER make up, assume, or hallucinate data (times, dates, prices, etc.) - ONLY use what caller explicitly said
+10. If NEED list is not empty, keep collecting - do NOT confirm appointment until ALL required slots are filled
+${forbidden ? `11. Never say: ${forbidden}` : ''}
 ${lastAgentResponse ? `- You just said: "${lastAgentResponse.substring(0, 40)}..." - don't repeat` : ''}
 
 Examples:
