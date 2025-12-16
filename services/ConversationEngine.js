@@ -79,12 +79,19 @@ const SlotExtractors = {
             'hi', 'hello', 'hey', 'good', 'morning', 'afternoon', 'evening', 'night',
             // Confirmations
             'yeah', 'yes', 'sure', 'okay', 'ok', 'alright', 'right', 'yep', 'yup',
-            // Common words
+            // Common words & auxiliary verbs (CRITICAL - "is failing" should NOT be a name!)
             'the', 'that', 'this', 'what', 'just', 'well', 'please', 'thanks', 'thank', 'you',
+            'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am', 'has', 'have', 'had',
+            'do', 'does', 'did', 'will', 'would', 'could', 'should', 'can', 'may', 'might',
+            'it', 'its', 'my', 'your', 'our', 'their', 'his', 'her', 'a', 'an', 'and', 'or', 'but',
             // Common verbs (critical for "I'm having/doing/calling" etc)
             'having', 'doing', 'calling', 'looking', 'trying', 'getting', 'going', 'coming',
             'waiting', 'hoping', 'thinking', 'wondering', 'needing', 'wanting', 'asking',
             'dealing', 'experiencing', 'seeing', 'feeling', 'hearing', 'running', 'working',
+            // Problem-related words (CRITICAL - "thermostat failing" should NOT extract name!)
+            'failing', 'broken', 'leaking', 'stopped', 'making', 'noise', 'noisy', 'loud',
+            'not', 'wont', 'doesnt', 'isnt', 'cant', 'problem', 'problems', 'issue', 'issues',
+            'trouble', 'troubles', 'wrong', 'weird', 'strange', 'acting', 'up', 'down', 'out',
             // Adjectives/states
             'great', 'fine', 'good', 'bad', 'hot', 'cold', 'here', 'there', 'back', 'home',
             'interested', 'concerned', 'worried', 'happy', 'sorry', 'glad',
@@ -270,13 +277,37 @@ const SlotExtractors = {
         if (/\bafternoon\b/.test(lower) && !/good\s+afternoon/i.test(lower)) return 'afternoon';
         if (/\bevening\b/.test(lower) && !/good\s+evening/i.test(lower)) return 'evening';
         
+        // ═══════════════════════════════════════════════════════════════════
+        // PHONE NUMBER FILTER - Don't extract time from phone numbers!
+        // "239-565-2202" should NOT extract "23:00 PM"
+        // ═══════════════════════════════════════════════════════════════════
+        const hasPhonePattern = /\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\(\d{3}\)\s*\d{3}[-.\s]?\d{4}/.test(text);
+        if (hasPhonePattern) {
+            // Don't extract time from messages containing phone numbers
+            return null;
+        }
+        
         // Specific time patterns (e.g., "3pm", "3:00", "at 3")
-        const specificTime = lower.match(/\b(\d{1,2})\s*(?::|\.)?(\d{2})?\s*(am|pm|a\.m\.|p\.m\.)?/);
-        if (specificTime) {
-            const hour = parseInt(specificTime[1]);
-            const minutes = specificTime[2] || '00';
-            const period = specificTime[3] || (hour < 12 ? 'AM' : 'PM');
-            return `${hour}:${minutes} ${period.toUpperCase().replace('.', '')}`;
+        // MUST have am/pm OR be preceded by "at" or "around" to be a valid time
+        const specificTimeWithPeriod = lower.match(/\b(\d{1,2})\s*(?::|\.)?\s*(\d{2})?\s*(am|pm|a\.m\.|p\.m\.)/);
+        const specificTimeWithContext = lower.match(/(?:at|around|by)\s+(\d{1,2})(?:\s*(?::|\.)?\s*(\d{2}))?/);
+        
+        if (specificTimeWithPeriod) {
+            const hour = parseInt(specificTimeWithPeriod[1]);
+            if (hour >= 1 && hour <= 12) { // Valid 12-hour time
+                const minutes = specificTimeWithPeriod[2] || '00';
+                const period = specificTimeWithPeriod[3].toUpperCase().replace(/\./g, '');
+                return `${hour}:${minutes} ${period}`;
+            }
+        }
+        
+        if (specificTimeWithContext) {
+            const hour = parseInt(specificTimeWithContext[1]);
+            if (hour >= 1 && hour <= 12) { // Valid 12-hour time
+                const minutes = specificTimeWithContext[2] || '00';
+                const period = hour < 12 ? 'AM' : 'PM';
+                return `${hour}:${minutes} ${period}`;
+            }
         }
         
         // Relative day patterns
@@ -586,38 +617,53 @@ async function processTurn({
         const askMissingNamePart = nameSlotConfig?.askMissingNamePart === true;
         
         // Extract name
-        if (currentSlots.name) {
-            log('📝 Name already collected:', currentSlots.name);
-        } else if (userText) {
-            log('🔍 Attempting name extraction from:', userText.substring(0, 50));
-            const extractedName = SlotExtractors.extractName(userText);
-            log('🔍 Extraction result:', extractedName || '(none)');
-            if (extractedName) {
-                const isPartialName = !extractedName.includes(' ');
-                const alreadyAskedForMissingPart = session.askedForMissingNamePart === true;
-                
-                if (askMissingNamePart && isPartialName && !alreadyAskedForMissingPart) {
-                    // Store partial, let AI ask for full name
-                    currentSlots.partialName = extractedName;
-                    extractedThisTurn.partialName = extractedName;
-                    log('Partial name detected (will ask for full)', { partialName: extractedName });
-                } else {
-                    // Accept name as-is
-                    if (currentSlots.partialName && isPartialName) {
-                        currentSlots.name = `${currentSlots.partialName} ${extractedName}`;
-                        delete currentSlots.partialName;
-                    } else {
-                        currentSlots.name = extractedName;
-                    }
-                    extractedThisTurn.name = currentSlots.name;
-                    log('Name extracted', { name: currentSlots.name });
+        // ═══════════════════════════════════════════════════════════════════════
+        // NAME CORRECTION LOGIC: Allow explicit "my name is X" to override
+        // even if a name was already extracted (could have been wrong)
+        // ═══════════════════════════════════════════════════════════════════════
+        if (userText) {
+            const userTextLower = userText.toLowerCase();
+            const isExplicitNameStatement = /my name is|name is|i'm called|call me/i.test(userText);
+            
+            if (currentSlots.name && !isExplicitNameStatement) {
+                // Name already collected and user is NOT explicitly stating their name
+                log('📝 Name already collected:', currentSlots.name);
+            } else {
+                log('🔍 Attempting name extraction from:', userText.substring(0, 50));
+                if (currentSlots.name && isExplicitNameStatement) {
+                    log('🔄 User explicitly stating name - will override previous:', currentSlots.name);
                 }
-            } else if (currentSlots.partialName) {
-                // Accept partial as complete (only ask once)
-                currentSlots.name = currentSlots.partialName;
-                delete currentSlots.partialName;
-                extractedThisTurn.name = currentSlots.name;
-                log('Accepting partial name as complete', { name: currentSlots.name });
+                
+                const extractedName = SlotExtractors.extractName(userText);
+                log('🔍 Extraction result:', extractedName || '(none)');
+                
+                if (extractedName) {
+                    const isPartialName = !extractedName.includes(' ');
+                    const alreadyAskedForMissingPart = session.askedForMissingNamePart === true;
+                    
+                    if (askMissingNamePart && isPartialName && !alreadyAskedForMissingPart) {
+                        // Store partial, let AI ask for full name
+                        currentSlots.partialName = extractedName;
+                        extractedThisTurn.partialName = extractedName;
+                        log('Partial name detected (will ask for full)', { partialName: extractedName });
+                    } else {
+                        // Accept name as-is
+                        if (currentSlots.partialName && isPartialName) {
+                            currentSlots.name = `${currentSlots.partialName} ${extractedName}`;
+                            delete currentSlots.partialName;
+                        } else {
+                            currentSlots.name = extractedName;
+                        }
+                        extractedThisTurn.name = currentSlots.name;
+                        log('Name extracted', { name: currentSlots.name });
+                    }
+                } else if (currentSlots.partialName) {
+                    // Accept partial as complete (only ask once)
+                    currentSlots.name = currentSlots.partialName;
+                    delete currentSlots.partialName;
+                    extractedThisTurn.name = currentSlots.name;
+                    log('Accepting partial name as complete', { name: currentSlots.name });
+                }
             }
         }
         
