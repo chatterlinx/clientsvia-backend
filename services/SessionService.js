@@ -134,10 +134,17 @@ class SessionService {
         companyId,
         channel,
         identifiers = {},
-        customer = null
+        customer = null,
+        forceNewSession = false  // For Test Console - always create fresh session
     }) {
         // Voice calls always create new sessions
         if (channel === 'voice') {
+            return this.create({ companyId, channel, identifiers, customer });
+        }
+        
+        // Force new session (Test Console reset)
+        if (forceNewSession) {
+            logger.info('[SESSION SERVICE] 🆕 FORCE NEW SESSION requested');
             return this.create({ companyId, channel, identifiers, customer });
         }
         

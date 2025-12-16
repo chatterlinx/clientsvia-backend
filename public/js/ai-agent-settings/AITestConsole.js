@@ -20,6 +20,7 @@ class AITestConsole {
         this.testSessionId = `fresh-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         this.knownSlots = {};
         this.debugLog = []; // Running log of all turns
+        this.forceNewSession = true;  // Always force new session on init
         
         console.log('[AI TEST CONSOLE] 🆕 Initialized with fresh session:', this.testSessionId);
         
@@ -473,12 +474,19 @@ class AITestConsole {
                     message,
                     sessionId: this.testSessionId,
                     includeDebug: true,  // Get debug info for the console
+                    forceNewSession: this.forceNewSession || false,  // Force new session after reset
                     visitorInfo: {
                         userAgent: navigator.userAgent,
                         pageUrl: window.location.href
                     }
                 })
             });
+            
+            // Clear the force flag after first message
+            if (this.forceNewSession) {
+                console.log('[AI TEST CONSOLE] 🆕 forceNewSession sent, clearing flag');
+                this.forceNewSession = false;
+            }
             
             const data = await response.json();
             
@@ -745,6 +753,7 @@ class AITestConsole {
         this.lastDebug = null;
         this.debugLog = [];
         this.testSessionId = uniqueId;
+        this.forceNewSession = true;  // Force backend to create new session on next message
         
         const container = document.getElementById('test-chat-messages');
         container.innerHTML = `

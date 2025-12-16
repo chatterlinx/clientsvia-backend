@@ -88,7 +88,8 @@ router.post('/message', async (req, res) => {
             message,
             sessionId,
             visitorInfo = {},
-            includeDebug = false
+            includeDebug = false,
+            forceNewSession = false  // Test Console can force fresh session
         } = req.body;
         
         // ═══════════════════════════════════════════════════════════════════
@@ -130,7 +131,8 @@ router.post('/message', async (req, res) => {
                 email: visitorInfo.email,
                 name: visitorInfo.name
             },
-            includeDebug
+            includeDebug,
+            forceNewSession  // Test Console can force fresh session
         });
         
         // ═══════════════════════════════════════════════════════════════════

@@ -46,7 +46,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V3-GREETING-FIX-1850';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V4-FORCE-NEW-SESSION';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ Single entry point for ALL channels',
@@ -331,7 +331,8 @@ async function processTurn({
     callSid = null,
     visitorInfo = {},
     metadata = {},
-    includeDebug = false
+    includeDebug = false,
+    forceNewSession = false  // For Test Console - always create fresh session
 }) {
     const startTime = Date.now();
     const debugLog = [];
@@ -420,7 +421,8 @@ async function processTurn({
             companyId,
             channel,
             identifiers,
-            customer
+            customer,
+            forceNewSession  // Test Console can force fresh session
         });
         
         log('CHECKPOINT 4: ✅ Session ready', { 
