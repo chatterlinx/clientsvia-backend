@@ -910,32 +910,70 @@ class ConversationStateMachine {
     }
     
     _extractIssue(input) {
-        const problemPatterns = [
-            { pattern: /(?:my|the|our)\s+(\w+(?:\s+\w+)?)\s+(?:is|isn't|isnt|are|aren't|arent)\s+(\w+)/i, confidence: 0.85 },
-            { pattern: /(?:having|have)\s+(?:a\s+)?(?:problem|issue|trouble)\s+(?:with\s+)?(?:my|the|our)?\s*(\w+)/i, confidence: 0.9 },
-            { pattern: /(\w+(?:\s+\w+)?)\s+(?:not working|broken|acting up|making noise|leaking)/i, confidence: 0.85 },
-            { pattern: /(?:need|want)\s+(?:to\s+)?(?:fix|repair|replace|check)\s+(?:my|the|our)?\s*(\w+)/i, confidence: 0.8 }
+        const inputLower = input.toLowerCase();
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // TIER 1: Strong problem patterns (high confidence)
+        // ═══════════════════════════════════════════════════════════════════════
+        const strongPatterns = [
+            // "my thermostat is blank", "the AC isn't working"
+            { pattern: /(?:my|the|our)\s+(\w+(?:\s+\w+)?)\s+(?:is|isn't|isnt|are|aren't|arent)\s+(\w+)/i, confidence: 0.9 },
+            // "having issues with my thermostat", "have a problem with the AC"
+            { pattern: /(?:having|have)\s+(?:a\s+)?(?:problem|issue|trouble|issues)\s+(?:with\s+)?(?:my|the|our)?\s*(.+)/i, confidence: 0.9 },
+            // "thermostat not working", "AC broken"
+            { pattern: /(\w+(?:\s+\w+)?)\s+(?:not working|broken|acting up|making noise|leaking|stopped)/i, confidence: 0.9 },
+            // "need to fix my thermostat"
+            { pattern: /(?:need|want)\s+(?:to\s+)?(?:fix|repair|replace|check|look at)\s+(?:my|the|our)?\s*(.+)/i, confidence: 0.85 },
+            // "thermostat appears to be blank", "AC seems to be broken"
+            { pattern: /(\w+(?:\s+\w+)?)\s+(?:appears|seems|looks)\s+(?:to be\s+)?(\w+)/i, confidence: 0.9 },
+            // "something wrong with my thermostat"
+            { pattern: /(?:something|anything)\s+wrong\s+(?:with\s+)?(?:my|the|our)?\s*(.+)/i, confidence: 0.85 },
+            // "thermostat is blank", "display is blank"
+            { pattern: /(\w+)\s+is\s+(blank|dead|off|frozen|stuck|broken)/i, confidence: 0.9 },
+            // "no heat", "no cooling", "no power"
+            { pattern: /no\s+(heat|cooling|air|power|display)/i, confidence: 0.9 },
+            // "won't turn on", "doesn't work"
+            { pattern: /(?:won't|wont|doesn't|doesnt|can't|cant)\s+(turn on|work|start|cool|heat)/i, confidence: 0.85 }
         ];
         
-        for (const { pattern, confidence } of problemPatterns) {
+        for (const { pattern, confidence } of strongPatterns) {
             const match = input.match(pattern);
             if (match) {
-                const issue = match[0].replace(/^(my|the|our)\s+/i, '').trim();
+                // Clean up the captured issue
+                let issue = match[0].replace(/^(my|the|our)\s+/i, '').trim();
+                // Limit length
+                if (issue.length > 100) issue = issue.substring(0, 100);
                 return { issue, confidence };
             }
         }
         
-        // Check for service keywords (lower confidence)
+        // ═══════════════════════════════════════════════════════════════════════
+        // TIER 2: Service equipment mentioned (medium-high confidence)
+        // If they mention specific equipment, they're calling about an issue
+        // ═══════════════════════════════════════════════════════════════════════
         const serviceKeywords = [
-            'thermostat', 'ac', 'air conditioning', 'heat', 'heating', 'furnace',
-            'cooling', 'hvac', 'unit', 'system', 'compressor', 'duct', 'vent',
-            'plumbing', 'pipe', 'drain', 'faucet', 'toilet', 'water heater'
+            'thermostat', 'ac', 'a/c', 'air conditioning', 'air conditioner',
+            'heat', 'heating', 'heater', 'furnace', 'cooling', 'hvac', 
+            'unit', 'system', 'compressor', 'duct', 'vent', 'filter',
+            'plumbing', 'pipe', 'drain', 'faucet', 'toilet', 'water heater',
+            'leak', 'clog', 'frozen', 'blank', 'display'
         ];
         
-        const inputLower = input.toLowerCase();
         for (const keyword of serviceKeywords) {
             if (inputLower.includes(keyword)) {
-                return { issue: input.substring(0, 100), confidence: 0.6 };
+                // They mentioned equipment - this IS their issue
+                // Confidence 0.8 (above 0.7 threshold)
+                return { issue: input.substring(0, 100), confidence: 0.8 };
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // TIER 3: Problem words without specific equipment (lower confidence)
+        // ═══════════════════════════════════════════════════════════════════════
+        const problemWords = ['issue', 'problem', 'trouble', 'wrong', 'broken', 'not working'];
+        for (const word of problemWords) {
+            if (inputLower.includes(word)) {
+                return { issue: input.substring(0, 100), confidence: 0.75 };
             }
         }
         
