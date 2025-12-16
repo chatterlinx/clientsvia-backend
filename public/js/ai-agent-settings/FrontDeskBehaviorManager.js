@@ -372,19 +372,46 @@ class FrontDeskBehaviorManager {
                     </p>
                 </div>
                 
-                <!-- Greeting Response - What AI says to "hi", "good morning", etc. -->
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                        👋 Greeting Response
+                <!-- Greeting Responses - Time-of-Day Specific -->
+                <div style="margin-bottom: 20px; padding: 16px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
+                    <label style="display: block; margin-bottom: 12px; color: #c9d1d9; font-weight: 500;">
+                        👋 Greeting Responses
                         <span style="background: #238636; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px;">0 TOKENS</span>
                     </label>
-                    <input type="text" id="fdb-greeting" 
-                        value="${this.config.fallbackResponses?.greeting || 'Thanks for calling! How can I help you today?'}" 
-                        placeholder="Thanks for calling [Company Name]! How can I help you today?"
-                        style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
-                    <p style="color: #8b949e; font-size: 0.75rem; margin-top: 4px;">
-                        When callers say "hi", "hello", "good morning" - this is what AI says back. <strong style="color: #3fb950;">No LLM needed!</strong>
+                    <p style="color: #8b949e; font-size: 0.75rem; margin-bottom: 16px;">
+                        When callers say "hi", "hello", or time-based greetings - AI responds with the appropriate time-of-day greeting. <strong style="color: #3fb950;">No LLM needed!</strong>
                     </p>
+                    
+                    <div style="display: grid; gap: 12px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 4px; color: #8b949e; font-size: 0.8rem;">🌅 Morning (before 12pm):</label>
+                            <input type="text" id="fdb-greeting-morning" 
+                                value="${this.config.conversationStages?.greetingResponses?.morning || 'Good morning! How can I help you today?'}" 
+                                placeholder="Good morning! How can I help you today?"
+                                style="width: 100%; padding: 8px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 4px; color: #8b949e; font-size: 0.8rem;">☀️ Afternoon (12pm - 5pm):</label>
+                            <input type="text" id="fdb-greeting-afternoon" 
+                                value="${this.config.conversationStages?.greetingResponses?.afternoon || 'Good afternoon! How can I help you today?'}" 
+                                placeholder="Good afternoon! How can I help you today?"
+                                style="width: 100%; padding: 8px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 4px; color: #8b949e; font-size: 0.8rem;">🌙 Evening (after 5pm):</label>
+                            <input type="text" id="fdb-greeting-evening" 
+                                value="${this.config.conversationStages?.greetingResponses?.evening || 'Good evening! How can I help you today?'}" 
+                                placeholder="Good evening! How can I help you today?"
+                                style="width: 100%; padding: 8px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 4px; color: #8b949e; font-size: 0.8rem;">👋 Generic (for "hi", "hello"):</label>
+                            <input type="text" id="fdb-greeting-generic" 
+                                value="${this.config.conversationStages?.greetingResponses?.generic || 'Hi there! How can I help you today?'}" 
+                                placeholder="Hi there! How can I help you today?"
+                                style="width: 100%; padding: 8px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
+                        </div>
+                    </div>
                 </div>
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
@@ -1927,6 +1954,21 @@ class FrontDeskBehaviorManager {
             };
             console.log('[FRONT DESK BEHAVIOR] 💬 Style acknowledgments:', this.config.styleAcknowledgments);
         }
+        
+        // Collect time-of-day greeting responses (for ConversationStateMachine)
+        if (document.getElementById('fdb-greeting-morning')) {
+            // Ensure conversationStages exists
+            if (!this.config.conversationStages) {
+                this.config.conversationStages = { enabled: true };
+            }
+            this.config.conversationStages.greetingResponses = {
+                morning: get('fdb-greeting-morning') || "Good morning! How can I help you today?",
+                afternoon: get('fdb-greeting-afternoon') || "Good afternoon! How can I help you today?",
+                evening: get('fdb-greeting-evening') || "Good evening! How can I help you today?",
+                generic: get('fdb-greeting-generic') || "Hi there! How can I help you today?"
+            };
+            console.log('[FRONT DESK BEHAVIOR] 👋 Greeting responses saved:', this.config.conversationStages.greetingResponses);
+        }
 
         // Collect dynamic booking slots
         if (document.getElementById('booking-slots-container')) {
@@ -2001,11 +2043,13 @@ class FrontDeskBehaviorManager {
             };
         }
         
-        // Greeting response (from Personality tab - 0 tokens)
-        if (document.getElementById('fdb-greeting')) {
+        // Legacy greeting response - keep for backward compatibility
+        // New time-of-day greetings are saved above in conversationStages.greetingResponses
+        // This fallback is used if the new fields don't exist
+        if (document.getElementById('fdb-greeting-generic')) {
             this.config.fallbackResponses = this.config.fallbackResponses || {};
-            this.config.fallbackResponses.greeting = get('fdb-greeting') || 'Thanks for calling! How can I help you today?';
-            console.log('[FRONT DESK BEHAVIOR] 👋 Greeting saved:', this.config.fallbackResponses.greeting);
+            // Use the generic greeting as the fallback
+            this.config.fallbackResponses.greeting = get('fdb-greeting-generic') || 'Hi there! How can I help you today?';
         }
         
         // Tiered Fallback Protocol (honesty-first recovery)

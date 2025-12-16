@@ -90,6 +90,21 @@ class ConversationStateMachine {
         this.bookingSlots = this.frontDeskConfig.bookingSlots || [];
         
         // ═══════════════════════════════════════════════════════════════════════
+        // 🔍 BOOKING SLOTS DEBUG - Verify UI config is being used
+        // ═══════════════════════════════════════════════════════════════════════
+        logger.info('[STATE MACHINE] 📋 BOOKING SLOTS LOADED FROM UI:', {
+            companyId: company._id,
+            companyName: company.companyName,
+            slotsCount: this.bookingSlots.length,
+            source: this.bookingSlots.length > 0 ? 'frontDeskBehavior.bookingSlots (UI)' : 'EMPTY - NO UI CONFIG',
+            slots: this.bookingSlots.map(s => ({
+                id: s.id || s.slotId,
+                question: s.question?.substring(0, 40) + '...',
+                required: s.required
+            }))
+        });
+        
+        // ═══════════════════════════════════════════════════════════════════════
         // ENTERPRISE: Flow State
         // ═══════════════════════════════════════════════════════════════════════
         this.flow = {
@@ -453,13 +468,31 @@ class ConversationStateMachine {
     
     /**
      * GREETING STAGE - Fixed responses, 0 tokens
+     * 
+     * SMART GREETING LOGIC:
+     * - If caller says "good morning" and it IS morning → respond "Good morning!"
+     * - If caller says "good morning" but it's afternoon → respond "Good afternoon!" (politely correct)
+     * - If caller just says "hi/hello" → use current time of day
      */
     _handleGreeting(input, inputLower) {
         const isGreeting = this._isGreeting(inputLower);
         
         if (isGreeting) {
-            // Respond with time-appropriate greeting
-            const response = this._getGreetingResponse();
+            // Detect what time of day the caller mentioned (if any)
+            const callerTimeOfDay = this._detectCallerTimeOfDay(inputLower);
+            
+            // Get the ACTUAL time of day from server
+            const actualTimeOfDay = this._getActualTimeOfDay();
+            
+            // Build response using smart logic
+            const response = this._buildSmartGreetingResponse(callerTimeOfDay, actualTimeOfDay);
+            
+            logger.info('[STATE MACHINE] 🌅 Greeting processed', {
+                callerSaid: input,
+                callerTimeOfDay,
+                actualTimeOfDay,
+                response: response.substring(0, 50)
+            });
             
             // Move to DISCOVERY
             this._transitionTo(STAGES.DISCOVERY);
@@ -478,6 +511,50 @@ class ConversationStateMachine {
         // Move to discovery and process there
         this._transitionTo(STAGES.DISCOVERY);
         return this._handleDiscovery(input, inputLower, {});
+    }
+    
+    /**
+     * Detect what time of day the caller mentioned
+     * @returns {string|null} 'morning', 'afternoon', 'evening', or null if not mentioned
+     */
+    _detectCallerTimeOfDay(inputLower) {
+        if (/good\s+morning/.test(inputLower)) return 'morning';
+        if (/good\s+afternoon/.test(inputLower)) return 'afternoon';
+        if (/good\s+evening/.test(inputLower)) return 'evening';
+        return null; // Caller just said "hi", "hello", etc.
+    }
+    
+    /**
+     * Get the actual time of day based on server time
+     * @returns {string} 'morning', 'afternoon', or 'evening'
+     */
+    _getActualTimeOfDay() {
+        const hour = new Date().getHours();
+        if (hour < 12) return 'morning';
+        if (hour < 17) return 'afternoon';
+        return 'evening';
+    }
+    
+    /**
+     * Build smart greeting response
+     * - Uses actual time of day (politely corrects caller if wrong)
+     * - Falls back to UI-configured greetings
+     */
+    _buildSmartGreetingResponse(callerTimeOfDay, actualTimeOfDay) {
+        const greetings = this.stagesConfig.greetingResponses || {};
+        
+        // Always use the ACTUAL time of day for our response
+        // This politely corrects the caller if they're wrong
+        switch (actualTimeOfDay) {
+            case 'morning':
+                return greetings.morning || "Good morning! How can I help you today?";
+            case 'afternoon':
+                return greetings.afternoon || "Good afternoon! How can I help you today?";
+            case 'evening':
+                return greetings.evening || "Good evening! How can I help you today?";
+            default:
+                return greetings.generic || "Hi there! How can I help you today?";
+        }
     }
     
     /**
@@ -913,18 +990,8 @@ class ConversationStateMachine {
         return greetingPatterns.some(p => p.test(inputLower));
     }
     
-    _getGreetingResponse() {
-        const hour = new Date().getHours();
-        const greetings = this.stagesConfig.greetingResponses || {};
-        
-        if (hour < 12) {
-            return greetings.morning || "Good morning! How can I help you today?";
-        } else if (hour < 17) {
-            return greetings.afternoon || "Good afternoon! How can I help you today?";
-        } else {
-            return greetings.evening || "Good evening! How can I help you today?";
-        }
-    }
+    // _getGreetingResponse() - REPLACED by _buildSmartGreetingResponse() above
+    // The new method handles caller's time of day vs actual time of day
     
     _extractIssue(input) {
         const inputLower = input.toLowerCase();
@@ -1217,10 +1284,16 @@ class ConversationStateMachine {
         const slot = this.bookingSlots.find(s => (s.id || s.slotId) === slotId);
         
         if (slot?.question) {
+            // ✅ USING UI-CONFIGURED QUESTION
+            logger.info('[STATE MACHINE] 📋 BOOKING QUESTION FROM UI:', {
+                slotId,
+                question: slot.question,
+                source: 'UI_CONFIG ✅'
+            });
             return slot.question;
         }
         
-        // Fallback defaults
+        // ⚠️ FALLBACK - UI config missing for this slot
         const defaults = {
             name: "May I have your name please?",
             phone: "What's the best phone number to reach you?",
@@ -1228,7 +1301,17 @@ class ConversationStateMachine {
             time: "When works best for you?"
         };
         
-        return defaults[slotId] || `What is your ${slotId}?`;
+        const fallbackQuestion = defaults[slotId] || `What is your ${slotId}?`;
+        
+        logger.warn('[STATE MACHINE] ⚠️ BOOKING QUESTION FALLBACK:', {
+            slotId,
+            question: fallbackQuestion,
+            source: 'HARDCODED_DEFAULT ⚠️',
+            reason: 'No UI config found for this slot',
+            availableSlots: this.bookingSlots.map(s => s.id || s.slotId)
+        });
+        
+        return fallbackQuestion;
     }
     
     _getNextTriageQuestion() {
