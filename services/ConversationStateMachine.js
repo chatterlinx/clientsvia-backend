@@ -845,10 +845,28 @@ class ConversationStateMachine {
         // Build acknowledgment for what we just got
         let ack = '';
         const nameCollected = extracted.name || extracted.partialName;
-        if (nameCollected) ack = `Thanks, ${nameCollected}!`;
-        else if (extracted.phone) ack = 'Got it!';
-        else if (extracted.address) ack = 'Perfect!';
-        else if (extracted.time) ack = 'Great!';
+        if (nameCollected) {
+            ack = `Thanks, ${nameCollected}!`;
+        } else if (extracted.phone) {
+            ack = 'Got it!';
+        } else if (extracted.address) {
+            ack = 'Perfect!';
+        } else if (extracted.time) {
+            ack = 'Great!';
+        } else {
+            // ═══════════════════════════════════════════════════════════════════
+            // 🆕 CUSTOMER IS PROVIDING CONTEXT, NOT SLOT DATA
+            // They're explaining their situation - acknowledge it!
+            // ═══════════════════════════════════════════════════════════════════
+            const contextAck = this._acknowledgeCustomerContext(inputLower);
+            if (contextAck) {
+                ack = contextAck;
+                logger.info('[STATE MACHINE V2] 💬 Customer providing context during booking', {
+                    input: input.substring(0, 50),
+                    acknowledgment: ack
+                });
+            }
+        }
         
         const response = ack ? `${ack} ${question}` : question;
         
@@ -864,6 +882,69 @@ class ConversationStateMachine {
             slotsCollected: this.booking.collectedSlots,
             missingSlots: this.booking.missingSlots
         };
+    }
+    
+    /**
+     * 🆕 Acknowledge customer context when they're explaining instead of answering
+     * This prevents the robot-like behavior of ignoring what they say
+     */
+    _acknowledgeCustomerContext(inputLower) {
+        // Check for repeat visit mentions
+        if (inputLower.includes('yesterday') || inputLower.includes('last week') || 
+            inputLower.includes('you guys were') || inputLower.includes('you were here') ||
+            inputLower.includes('came out') || inputLower.includes('technician was')) {
+            return this.contextConfig.repeatVisitAcknowledgment || 
+                "I see we've been out recently. I apologize if the issue wasn't fully resolved.";
+        }
+        
+        // Check for concern/worry expressions
+        if (inputLower.includes('concern') || inputLower.includes('worried') || 
+            inputLower.includes('frustrated') || inputLower.includes('upset')) {
+            return this.contextConfig.concernAcknowledgment ||
+                "I understand your concern, and I want to make sure we take care of this for you.";
+        }
+        
+        // Check for additional issue details
+        if (inputLower.includes('same issue') || inputLower.includes('same problem') ||
+            inputLower.includes('still having') || inputLower.includes('happening again')) {
+            return this.contextConfig.recurringIssueAcknowledgment ||
+                "I'm sorry to hear you're still experiencing this issue. Let me get someone back out there.";
+        }
+        
+        // Check for work description
+        if (inputLower.includes('did some work') || inputLower.includes('fixed') ||
+            inputLower.includes('replaced') || inputLower.includes('installed')) {
+            return "I see. Thank you for that context.";
+        }
+        
+        // Generic context - they're explaining something
+        if (inputLower.length > 30 && !this._looksLikeSlotAnswer(inputLower)) {
+            return "I understand.";
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Check if input looks like a slot answer (name, phone, address, time)
+     */
+    _looksLikeSlotAnswer(inputLower) {
+        // Short inputs are likely slot answers
+        if (inputLower.length < 20) return true;
+        
+        // Contains phone-like patterns
+        if (/\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/.test(inputLower)) return true;
+        
+        // Contains time patterns
+        if (/\d{1,2}\s*(am|pm|morning|afternoon|evening)/i.test(inputLower)) return true;
+        
+        // Contains address patterns
+        if (/\d+\s+\w+\s+(street|st|avenue|ave|road|rd|drive|dr|lane|ln|way|court|ct)/i.test(inputLower)) return true;
+        
+        // Starts with "my name is" or similar
+        if (/^(my name is|i'm|this is|it's)\s+\w+/i.test(inputLower)) return true;
+        
+        return false;
     }
     
     /**
@@ -1246,9 +1327,15 @@ class ConversationStateMachine {
     }
     
     _checkRepeatVisit(inputLower) {
-        const patterns = this.contextConfig.repeatVisitPatterns || [
-            'you were here', 'you guys came', 'technician was here', 'same problem again'
+        // Default patterns plus common variations
+        const defaultPatterns = [
+            'you were here', 'you guys were', 'you guys came', 'you came out',
+            'technician was here', 'tech was here', 'same problem again',
+            'same issue', 'still having', 'happening again', 'came out yesterday',
+            'were here yesterday', 'were here last', 'came back', 'back again'
         ];
+        
+        const patterns = this.contextConfig.repeatVisitPatterns || defaultPatterns;
         
         for (const pattern of patterns) {
             if (inputLower.includes(pattern.toLowerCase())) {
