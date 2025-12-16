@@ -829,7 +829,7 @@ ${runningSummary ? `CONTEXT: ${runningSummary}\n` : ''}OUTPUT JSON:
 {"slot":"${slotIds.join('|')}|none","ack":"your response"}
 
 RULES:
-1. If caller just says "hi/hello" → slot:"none", greet them and ask how you can help
+1. GREETING: Mirror the caller's time of day EXACTLY. "good morning" → "Good morning!", "good afternoon" → "Good afternoon!", "good evening" → "Good evening!". If they just say "hi/hello" without a time, say "Hi!" or "Hello!"
 2. If sentence seems INCOMPLETE (ends with "a", "the", "to", "and", "but", "I need to", etc.) → slot:"none", ask them to continue: "I'm listening, go ahead" or "Tell me more"
 3. If caller mentions a clear problem/service need → start collecting info
 4. Collect slots IN ORDER: ${needed.join(' → ')} (start with ${firstMissingSlot})
@@ -843,8 +843,11 @@ ${forbidden ? `11. Never say: ${forbidden}` : ''}
 ${lastAgentResponse ? `- You just said: "${lastAgentResponse.substring(0, 40)}..." - don't repeat` : ''}
 
 Examples:
-User: "Hi good morning"
+User: "good morning"
 {"slot":"none","ack":"Good morning! How can I help you today?"}
+
+User: "Hi good afternoon"
+{"slot":"none","ack":"Good afternoon! How can I help you today?"}
 
 User: "yes I need to have a"
 {"slot":"none","ack":"Sure, what do you need?"}

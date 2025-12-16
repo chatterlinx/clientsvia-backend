@@ -537,15 +537,18 @@ class ConversationStateMachine {
     
     /**
      * Build smart greeting response
-     * - Uses actual time of day (politely corrects caller if wrong)
+     * - MIRRORS the caller's greeting (good morning → Good morning!)
+     * - If caller didn't mention time, use actual server time
      * - Falls back to UI-configured greetings
      */
     _buildSmartGreetingResponse(callerTimeOfDay, actualTimeOfDay) {
         const greetings = this.stagesConfig.greetingResponses || {};
         
-        // Always use the ACTUAL time of day for our response
-        // This politely corrects the caller if they're wrong
-        switch (actualTimeOfDay) {
+        // MIRROR the caller's greeting - if they say "good morning", we say "Good morning!"
+        // Only use server time if caller didn't mention a time of day
+        const timeToUse = callerTimeOfDay || actualTimeOfDay;
+        
+        switch (timeToUse) {
             case 'morning':
                 return greetings.morning || "Good morning! How can I help you today?";
             case 'afternoon':
