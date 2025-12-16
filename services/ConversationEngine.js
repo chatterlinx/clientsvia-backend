@@ -1067,6 +1067,34 @@ async function processTurn({
         log('CHECKPOINT 10: ✅ Session updated', { phase: newPhase });
         
         // ═══════════════════════════════════════════════════════════════════
+        // STEP 10b: Update Call Center Live Progress (Enterprise Flow)
+        // ═══════════════════════════════════════════════════════════════════
+        // This updates the CallSummary record with real-time progress
+        // so supervisors can monitor in-progress calls in Call Center UI
+        // ═══════════════════════════════════════════════════════════════════
+        if (channel === 'phone' && callSid) {
+            try {
+                const CallSummary = require('../models/CallSummary');
+                
+                await CallSummary.updateLiveProgress(callSid, {
+                    currentStage: session.conversationMemory?.currentStage || newPhase,
+                    currentStep: session.conversationMemory?.currentStep,
+                    discovery: session.discovery || {},
+                    slotsCollected: session.collectedSlots || {},
+                    offRailsCount: session.conversationMemory?.offRailsCount || 0,
+                    triageOutcome: session.triageState?.outcome,
+                    lastResponse: aiResponse.substring(0, 500),
+                    turnCount: (session.metrics?.totalTurns || 0) + 1
+                });
+                
+                log('CHECKPOINT 10b: 📡 Live progress updated in Call Center');
+            } catch (liveErr) {
+                // Non-blocking: Don't let live progress failures kill the call
+                log('Live progress update failed (non-fatal)', { error: liveErr.message });
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
         // STEP 11: Build response
         // ═══════════════════════════════════════════════════════════════════
         const response = {

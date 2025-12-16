@@ -400,6 +400,85 @@ const CallSummarySchema = new mongoose.Schema({
   },
   
   // ─────────────────────────────────────────────────────────────────────────
+  // 🆕 LIVE PROGRESS - Updated during call (Enterprise Flow)
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  /**
+   * Live snapshot of call progress - updated every turn during active call
+   * This allows Call Center UI to show real-time progress of in-progress calls
+   */
+  liveProgress: {
+    /**
+     * Current conversation stage
+     */
+    currentStage: {
+      type: String,
+      enum: ['greeting', 'discovery', 'triage', 'booking', 'confirmation', 'complete', 'escalated'],
+      default: 'greeting'
+    },
+    
+    /**
+     * Current booking step (if in booking stage)
+     */
+    currentStep: {
+      type: String,
+      maxLength: 50
+    },
+    
+    /**
+     * Last updated timestamp
+     */
+    lastUpdatedAt: {
+      type: Date
+    },
+    
+    /**
+     * Discovery data captured
+     */
+    discovery: {
+      issue: { type: String, maxLength: 500 },
+      context: { type: String, maxLength: 500 },
+      mood: { type: String, enum: ['neutral', 'frustrated', 'angry', 'anxious', 'confused'] },
+      callType: { type: String, maxLength: 50 },
+      urgency: { type: String, maxLength: 50 }
+    },
+    
+    /**
+     * Slots collected so far
+     */
+    slotsCollected: {
+      name: { type: String, maxLength: 100 },
+      phone: { type: String, maxLength: 20 },
+      address: { type: String, maxLength: 500 },
+      time: { type: String, maxLength: 100 }
+    },
+    
+    /**
+     * Off-rails recovery tracking
+     */
+    offRailsCount: {
+      type: Number,
+      default: 0
+    },
+    
+    /**
+     * Triage outcome (if triage was performed)
+     */
+    triageOutcome: {
+      type: String,
+      maxLength: 200
+    },
+    
+    /**
+     * Last AI response (for debugging/monitoring)
+     */
+    lastResponse: {
+      type: String,
+      maxLength: 500
+    }
+  },
+  
+  // ─────────────────────────────────────────────────────────────────────────
   // REFERENCES TO COLD STORAGE
   // ─────────────────────────────────────────────────────────────────────────
   
@@ -766,6 +845,89 @@ CallSummarySchema.statics.completeCall = async function(callId, outcomeData) {
       outcome,
       durationSeconds: call.durationSeconds,
       routingTier
+    });
+  }
+  
+  return call;
+};
+
+/**
+ * 🆕 Update live progress during an active call
+ * 
+ * Called every turn to update the real-time snapshot visible in Call Center
+ * This enables supervisors to monitor in-progress calls
+ * 
+ * @param {string} callId - Call ID or Twilio SID
+ * @param {Object} progress - Live progress data
+ * @returns {Promise<CallSummary>}
+ */
+CallSummarySchema.statics.updateLiveProgress = async function(callId, progress) {
+  const {
+    currentStage,
+    currentStep,
+    discovery,
+    slotsCollected,
+    offRailsCount,
+    triageOutcome,
+    lastResponse,
+    turnCount
+  } = progress;
+  
+  const now = new Date();
+  
+  // Build update object
+  const updateData = {
+    'liveProgress.lastUpdatedAt': now
+  };
+  
+  // Only set fields that are provided
+  if (currentStage) updateData['liveProgress.currentStage'] = currentStage;
+  if (currentStep) updateData['liveProgress.currentStep'] = currentStep;
+  if (typeof offRailsCount === 'number') updateData['liveProgress.offRailsCount'] = offRailsCount;
+  if (triageOutcome) updateData['liveProgress.triageOutcome'] = triageOutcome;
+  if (lastResponse) updateData['liveProgress.lastResponse'] = lastResponse.substring(0, 500);
+  if (typeof turnCount === 'number') updateData.turnCount = turnCount;
+  
+  // Discovery fields
+  if (discovery) {
+    if (discovery.issue) updateData['liveProgress.discovery.issue'] = discovery.issue;
+    if (discovery.context) updateData['liveProgress.discovery.context'] = discovery.context;
+    if (discovery.mood) updateData['liveProgress.discovery.mood'] = discovery.mood;
+    if (discovery.callType) updateData['liveProgress.discovery.callType'] = discovery.callType;
+    if (discovery.urgency) updateData['liveProgress.discovery.urgency'] = discovery.urgency;
+  }
+  
+  // Slots collected
+  if (slotsCollected) {
+    if (slotsCollected.name) updateData['liveProgress.slotsCollected.name'] = slotsCollected.name;
+    if (slotsCollected.phone) updateData['liveProgress.slotsCollected.phone'] = slotsCollected.phone;
+    if (slotsCollected.address) updateData['liveProgress.slotsCollected.address'] = slotsCollected.address;
+    if (slotsCollected.time) updateData['liveProgress.slotsCollected.time'] = slotsCollected.time;
+  }
+  
+  // Try to find by callId first, then by twilioSid
+  let call = await this.findOneAndUpdate(
+    { callId },
+    { $set: updateData },
+    { new: true }
+  );
+  
+  // If not found by callId, try twilioSid
+  if (!call) {
+    call = await this.findOneAndUpdate(
+      { twilioSid: callId },
+      { $set: updateData },
+      { new: true }
+    );
+  }
+  
+  if (call) {
+    logger.debug('[CALL_SUMMARY] Live progress updated', {
+      callId,
+      currentStage,
+      currentStep,
+      hasIssue: !!discovery?.issue,
+      slotsCount: Object.values(slotsCollected || {}).filter(Boolean).length
     });
   }
   
