@@ -2138,52 +2138,182 @@ const companySchema = new mongoose.Schema({
             // ═══════════════════════════════════════════════════════════════════════
             // 🆕 CONTEXT RECOGNITION - Detect important caller context (UI Controlled)
             // ═══════════════════════════════════════════════════════════════════════
+            // ALL responses are UI-configurable. No hardcoded trade-specific text.
+            // Defaults are GENERIC to work for any industry (HVAC, dental, legal, etc.)
+            // ═══════════════════════════════════════════════════════════════════════
             contextRecognition: {
                 enabled: { type: Boolean, default: true },
                 
-                // Patterns that indicate callback/repeat visit
+                // ─────────────────────────────────────────────────────────────────
+                // REPEAT VISIT DETECTION
+                // ─────────────────────────────────────────────────────────────────
                 repeatVisitPatterns: {
                     type: [String],
                     default: [
                         "you were here",
-                        "you guys came",
-                        "technician was here",
+                        "you guys were",
+                        "you came out",
                         "someone came out",
                         "we had this fixed",
                         "this happened before",
                         "same problem again",
                         "still having issues",
-                        "it's happening again"
+                        "it's happening again",
+                        "were here yesterday",
+                        "were here last",
+                        "came back",
+                        "back again"
                     ]
                 },
-                
-                // Response when repeat visit detected
                 repeatVisitAcknowledgment: { 
                     type: String, 
-                    default: "I see we've been out before. I apologize that the issue is continuing.", 
+                    default: "I see we've worked with you before. I apologize that you're still experiencing this issue.", 
                     trim: true 
                 },
                 
-                // Patterns that indicate urgency
+                // ─────────────────────────────────────────────────────────────────
+                // URGENCY DETECTION
+                // ─────────────────────────────────────────────────────────────────
                 urgencyPatterns: {
                     type: [String],
                     default: [
                         "emergency",
-                        "no heat",
-                        "no ac",
-                        "flooding",
-                        "gas smell",
-                        "smoke",
-                        "sparking",
-                        "water everywhere"
+                        "urgent",
+                        "asap",
+                        "right away",
+                        "immediately",
+                        "can't wait"
                     ]
                 },
-                
-                // Response when urgency detected
                 urgencyAcknowledgment: { 
                     type: String, 
-                    default: "I understand this is urgent. Let me get someone out to you as quickly as possible.", 
+                    default: "I understand this is urgent. Let me help you right away.", 
                     trim: true 
+                },
+                
+                // ─────────────────────────────────────────────────────────────────
+                // CONCERN/FRUSTRATION DETECTION
+                // ─────────────────────────────────────────────────────────────────
+                concernPatterns: {
+                    type: [String],
+                    default: [
+                        "concern",
+                        "concerned",
+                        "worried",
+                        "frustrated",
+                        "upset",
+                        "unhappy",
+                        "disappointed"
+                    ]
+                },
+                concernAcknowledgment: { 
+                    type: String, 
+                    default: "I understand your concern, and I want to make sure we take care of this for you.", 
+                    trim: true 
+                },
+                
+                // ─────────────────────────────────────────────────────────────────
+                // RECURRING ISSUE DETECTION
+                // ─────────────────────────────────────────────────────────────────
+                recurringIssuePatterns: {
+                    type: [String],
+                    default: [
+                        "same issue",
+                        "same problem",
+                        "still having",
+                        "happening again",
+                        "keeps happening",
+                        "not fixed"
+                    ]
+                },
+                recurringIssueAcknowledgment: { 
+                    type: String, 
+                    default: "I'm sorry to hear you're still experiencing this issue. Let me help get this resolved.", 
+                    trim: true 
+                },
+                
+                // ─────────────────────────────────────────────────────────────────
+                // PREVIOUS WORK CONTEXT
+                // ─────────────────────────────────────────────────────────────────
+                previousWorkPatterns: {
+                    type: [String],
+                    default: [
+                        "did some work",
+                        "fixed",
+                        "replaced",
+                        "installed",
+                        "repaired",
+                        "worked on"
+                    ]
+                },
+                previousWorkAcknowledgment: { 
+                    type: String, 
+                    default: "I see. Thank you for that context.", 
+                    trim: true 
+                },
+                
+                // ─────────────────────────────────────────────────────────────────
+                // GENERIC CONTEXT (when customer is explaining but not matching above)
+                // ─────────────────────────────────────────────────────────────────
+                genericContextAcknowledgment: { 
+                    type: String, 
+                    default: "I understand.", 
+                    trim: true 
+                }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════════════
+            // 🆕 OFF-RAILS RECOVERY - When caller goes off-script (UI Controlled)
+            // ═══════════════════════════════════════════════════════════════════════
+            // ALL responses are UI-configurable. No hardcoded trade-specific text.
+            // ═══════════════════════════════════════════════════════════════════════
+            offRailsRecovery: {
+                enabled: { type: Boolean, default: true },
+                
+                // Triggers that indicate caller is going off-rails
+                defaultTriggers: {
+                    frustration: {
+                        type: [String],
+                        default: ["this is ridiculous", "I'm so frustrated", "this is unacceptable", "I'm done"]
+                    },
+                    humanRequest: {
+                        type: [String],
+                        default: ["speak to a person", "talk to someone", "real person", "human", "manager", "supervisor"]
+                    },
+                    confusion: {
+                        type: [String],
+                        default: ["I don't understand", "what do you mean", "I'm confused", "that doesn't make sense"]
+                    }
+                },
+                
+                // Response templates for different escalation scenarios
+                responses: {
+                    stalled: { 
+                        type: String, 
+                        default: "I apologize, we seem to be having some difficulty. Let me connect you with someone who can help directly.", 
+                        trim: true 
+                    },
+                    longCall: { 
+                        type: String, 
+                        default: "I want to make sure we get this right. Let me have a team member call you back to complete this.", 
+                        trim: true 
+                    },
+                    frustrated: { 
+                        type: String, 
+                        default: "I completely understand your frustration. Let me get you to someone who can help right away.", 
+                        trim: true 
+                    },
+                    humanRequest: { 
+                        type: String, 
+                        default: "I understand. Let me connect you with a team member who can assist you directly.", 
+                        trim: true 
+                    }
+                },
+                
+                // Bridge back settings - how to return to the flow after LLM handles off-rails
+                bridgeBack: {
+                    enabled: { type: Boolean, default: true },
+                    transitionPhrase: { type: String, default: "Now, to help you best,", trim: true }
                 }
             },
             

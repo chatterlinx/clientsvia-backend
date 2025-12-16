@@ -442,23 +442,21 @@ class ConversationStateMachine {
     }
     
     _getEscalationResponse(reason) {
+        // ⚠️ Use ONLY UI config - no hardcoded fallbacks
+        // Responses come from: company.aiAgentSettings.frontDeskBehavior.offRailsRecovery.responses
         const responses = this.offRailsConfig.responses || {};
         
         switch (reason) {
             case 'max_turns_in_stage':
-                return responses.stalled || 
-                    "I apologize, we seem to be having some difficulty. Let me connect you with someone who can help directly.";
+                return responses.stalled || '';
             case 'max_total_turns':
-                return responses.longCall || 
-                    "I want to make sure we get this right. Let me have a team member call you back to complete this.";
+                return responses.longCall || '';
             case 'frustrated_caller':
-                return responses.frustrated || 
-                    "I completely understand your frustration. Let me get you to someone who can help right away.";
+                return responses.frustrated || '';
             case 'max_off_rails_exceeded':
-                return responses.humanRequest || 
-                    "I understand. Let me connect you with a team member who can assist you directly.";
+                return responses.humanRequest || '';
             default:
-                return "Let me connect you with someone who can help.";
+                return responses.humanRequest || '';
         }
     }
     
@@ -634,18 +632,16 @@ class ConversationStateMachine {
         // ═══════════════════════════════════════════════════════════════════
         
         if (this.discovery.issue) {
-            // Build acknowledgment
+            // Build acknowledgment - ALL from UI config, NO hardcoded fallbacks
             let acknowledgment = '';
             
-            if (repeatCheck.isRepeat) {
-                acknowledgment = this.contextConfig.repeatVisitAcknowledgment || 
-                    "I see we've been out before. I apologize that the issue is continuing.";
-            } else if (urgencyCheck.isUrgent) {
-                acknowledgment = this.contextConfig.urgencyAcknowledgment ||
-                    "I understand this is urgent. Let me get someone out to you as quickly as possible.";
-            } else if (this.stagesConfig.triageSettings?.acknowledgeIssueFirst) {
-                acknowledgment = this.stagesConfig.triageSettings?.issueAcknowledgment ||
-                    "I'm sorry to hear that. Let me help you get this resolved.";
+            if (repeatCheck.isRepeat && this.contextConfig.repeatVisitAcknowledgment) {
+                acknowledgment = this.contextConfig.repeatVisitAcknowledgment;
+            } else if (urgencyCheck.isUrgent && this.contextConfig.urgencyAcknowledgment) {
+                acknowledgment = this.contextConfig.urgencyAcknowledgment;
+            } else if (this.stagesConfig.triageSettings?.acknowledgeIssueFirst && 
+                       this.stagesConfig.triageSettings?.issueAcknowledgment) {
+                acknowledgment = this.stagesConfig.triageSettings.issueAcknowledgment;
             }
             
             // Mark discovery complete
@@ -682,8 +678,8 @@ class ConversationStateMachine {
             // No triage - go straight to booking
             this._transitionTo(STAGES.BOOKING, 'ASK_NAME');
             
-            const transitionMsg = this.stagesConfig.bookingSettings?.transitionToBooking ||
-                "Let's get you scheduled.";
+            // ⚠️ Use ONLY UI config - no hardcoded fallbacks
+            const transitionMsg = this.stagesConfig.bookingSettings?.transitionToBooking || '';
             const firstQuestion = this._getBookingQuestion('name');
             
             const response = acknowledgment
@@ -705,9 +701,9 @@ class ConversationStateMachine {
         
         // ═══════════════════════════════════════════════════════════════════
         // No issue captured yet - ask for more info
+        // ⚠️ Use ONLY UI config - no hardcoded fallbacks
         // ═══════════════════════════════════════════════════════════════════
-        const discoveryPrompt = this.stagesConfig.discoveryPrompts?.needMoreInfo ||
-            "Can you tell me a little more about what's going on?";
+        const discoveryPrompt = this.stagesConfig.discoveryPrompts?.needMoreInfo || '';
         
         return {
             action: 'RESPOND',
@@ -740,8 +736,8 @@ class ConversationStateMachine {
             this.triage.completedAt = new Date();
             this.triage.outcome = 'needs_technician';
             
-            const transitionMsg = this.stagesConfig.bookingSettings?.transitionToBooking ||
-                "Let's get you scheduled.";
+            // ⚠️ Use ONLY UI config - no hardcoded fallbacks
+            const transitionMsg = this.stagesConfig.bookingSettings?.transitionToBooking || '';
             const firstQuestion = this._getBookingQuestion('name');
             
             return {
@@ -775,8 +771,8 @@ class ConversationStateMachine {
         this._transitionTo(STAGES.BOOKING, 'ASK_NAME');
         this.triage.completedAt = new Date();
         
-        const transitionMsg = this.stagesConfig.bookingSettings?.transitionToBooking ||
-            "Let's get you scheduled.";
+        // ⚠️ Use ONLY UI config - no hardcoded fallbacks
+        const transitionMsg = this.stagesConfig.bookingSettings?.transitionToBooking || '';
         const firstQuestion = this._getBookingQuestion('name');
         
         return {
@@ -887,39 +883,61 @@ class ConversationStateMachine {
     /**
      * 🆕 Acknowledge customer context when they're explaining instead of answering
      * This prevents the robot-like behavior of ignoring what they say
+     * 
+     * ⚠️ ALL responses come from UI config (contextRecognition section)
+     * NO hardcoded trade-specific text - this is a multi-tenant platform
      */
     _acknowledgeCustomerContext(inputLower) {
-        // Check for repeat visit mentions
+        // ═══════════════════════════════════════════════════════════════════
+        // Check for REPEAT VISIT mentions (UI-configured patterns)
+        // ═══════════════════════════════════════════════════════════════════
+        const repeatPatterns = this.contextConfig.repeatVisitPatterns || [];
+        for (const pattern of repeatPatterns) {
+            if (inputLower.includes(pattern.toLowerCase())) {
+                return this.contextConfig.repeatVisitAcknowledgment;
+            }
+        }
+        // Also check common time references that indicate repeat visit
         if (inputLower.includes('yesterday') || inputLower.includes('last week') || 
-            inputLower.includes('you guys were') || inputLower.includes('you were here') ||
-            inputLower.includes('came out') || inputLower.includes('technician was')) {
-            return this.contextConfig.repeatVisitAcknowledgment || 
-                "I see we've been out recently. I apologize if the issue wasn't fully resolved.";
+            inputLower.includes('last month') || inputLower.includes('few days ago')) {
+            return this.contextConfig.repeatVisitAcknowledgment;
         }
         
-        // Check for concern/worry expressions
-        if (inputLower.includes('concern') || inputLower.includes('worried') || 
-            inputLower.includes('frustrated') || inputLower.includes('upset')) {
-            return this.contextConfig.concernAcknowledgment ||
-                "I understand your concern, and I want to make sure we take care of this for you.";
+        // ═══════════════════════════════════════════════════════════════════
+        // Check for CONCERN/FRUSTRATION (UI-configured patterns)
+        // ═══════════════════════════════════════════════════════════════════
+        const concernPatterns = this.contextConfig.concernPatterns || [];
+        for (const pattern of concernPatterns) {
+            if (inputLower.includes(pattern.toLowerCase())) {
+                return this.contextConfig.concernAcknowledgment;
+            }
         }
         
-        // Check for additional issue details
-        if (inputLower.includes('same issue') || inputLower.includes('same problem') ||
-            inputLower.includes('still having') || inputLower.includes('happening again')) {
-            return this.contextConfig.recurringIssueAcknowledgment ||
-                "I'm sorry to hear you're still experiencing this issue. Let me get someone back out there.";
+        // ═══════════════════════════════════════════════════════════════════
+        // Check for RECURRING ISSUE (UI-configured patterns)
+        // ═══════════════════════════════════════════════════════════════════
+        const recurringPatterns = this.contextConfig.recurringIssuePatterns || [];
+        for (const pattern of recurringPatterns) {
+            if (inputLower.includes(pattern.toLowerCase())) {
+                return this.contextConfig.recurringIssueAcknowledgment;
+            }
         }
         
-        // Check for work description
-        if (inputLower.includes('did some work') || inputLower.includes('fixed') ||
-            inputLower.includes('replaced') || inputLower.includes('installed')) {
-            return "I see. Thank you for that context.";
+        // ═══════════════════════════════════════════════════════════════════
+        // Check for PREVIOUS WORK context (UI-configured patterns)
+        // ═══════════════════════════════════════════════════════════════════
+        const previousWorkPatterns = this.contextConfig.previousWorkPatterns || [];
+        for (const pattern of previousWorkPatterns) {
+            if (inputLower.includes(pattern.toLowerCase())) {
+                return this.contextConfig.previousWorkAcknowledgment;
+            }
         }
         
-        // Generic context - they're explaining something
+        // ═══════════════════════════════════════════════════════════════════
+        // GENERIC context - they're explaining something (UI-configured)
+        // ═══════════════════════════════════════════════════════════════════
         if (inputLower.length > 30 && !this._looksLikeSlotAnswer(inputLower)) {
-            return "I understand.";
+            return this.contextConfig.genericContextAcknowledgment;
         }
         
         return null;
@@ -1327,15 +1345,9 @@ class ConversationStateMachine {
     }
     
     _checkRepeatVisit(inputLower) {
-        // Default patterns plus common variations
-        const defaultPatterns = [
-            'you were here', 'you guys were', 'you guys came', 'you came out',
-            'technician was here', 'tech was here', 'same problem again',
-            'same issue', 'still having', 'happening again', 'came out yesterday',
-            'were here yesterday', 'were here last', 'came back', 'back again'
-        ];
-        
-        const patterns = this.contextConfig.repeatVisitPatterns || defaultPatterns;
+        // ⚠️ Use ONLY UI-configured patterns - no hardcoded defaults
+        // Patterns come from: company.aiAgentSettings.frontDeskBehavior.contextRecognition.repeatVisitPatterns
+        const patterns = this.contextConfig.repeatVisitPatterns || [];
         
         for (const pattern of patterns) {
             if (inputLower.includes(pattern.toLowerCase())) {
