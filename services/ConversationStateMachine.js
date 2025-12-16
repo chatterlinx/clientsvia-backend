@@ -914,26 +914,29 @@ class ConversationStateMachine {
         
         // ═══════════════════════════════════════════════════════════════════════
         // TIER 1: Strong problem patterns (high confidence)
+        // These are UNIVERSAL patterns that work for ANY industry
         // ═══════════════════════════════════════════════════════════════════════
         const strongPatterns = [
-            // "my thermostat is blank", "the AC isn't working"
+            // "my X is Y", "the X isn't working"
             { pattern: /(?:my|the|our)\s+(\w+(?:\s+\w+)?)\s+(?:is|isn't|isnt|are|aren't|arent)\s+(\w+)/i, confidence: 0.9 },
-            // "having issues with my thermostat", "have a problem with the AC"
+            // "having issues with X", "have a problem with X"
             { pattern: /(?:having|have)\s+(?:a\s+)?(?:problem|issue|trouble|issues)\s+(?:with\s+)?(?:my|the|our)?\s*(.+)/i, confidence: 0.9 },
-            // "thermostat not working", "AC broken"
+            // "X not working", "X broken"
             { pattern: /(\w+(?:\s+\w+)?)\s+(?:not working|broken|acting up|making noise|leaking|stopped)/i, confidence: 0.9 },
-            // "need to fix my thermostat"
+            // "need to fix X"
             { pattern: /(?:need|want)\s+(?:to\s+)?(?:fix|repair|replace|check|look at)\s+(?:my|the|our)?\s*(.+)/i, confidence: 0.85 },
-            // "thermostat appears to be blank", "AC seems to be broken"
+            // "X appears to be Y", "X seems to be broken"
             { pattern: /(\w+(?:\s+\w+)?)\s+(?:appears|seems|looks)\s+(?:to be\s+)?(\w+)/i, confidence: 0.9 },
-            // "something wrong with my thermostat"
+            // "something wrong with X"
             { pattern: /(?:something|anything)\s+wrong\s+(?:with\s+)?(?:my|the|our)?\s*(.+)/i, confidence: 0.85 },
-            // "thermostat is blank", "display is blank"
-            { pattern: /(\w+)\s+is\s+(blank|dead|off|frozen|stuck|broken)/i, confidence: 0.9 },
-            // "no heat", "no cooling", "no power"
-            { pattern: /no\s+(heat|cooling|air|power|display)/i, confidence: 0.9 },
+            // "X is blank/dead/off"
+            { pattern: /(\w+)\s+is\s+(blank|dead|off|frozen|stuck|broken|hurting|painful)/i, confidence: 0.9 },
+            // "no heat", "no power", "no service"
+            { pattern: /no\s+(\w+)/i, confidence: 0.85 },
             // "won't turn on", "doesn't work"
-            { pattern: /(?:won't|wont|doesn't|doesnt|can't|cant)\s+(turn on|work|start|cool|heat)/i, confidence: 0.85 }
+            { pattern: /(?:won't|wont|doesn't|doesnt|can't|cant)\s+(turn on|work|start|stop|open|close)/i, confidence: 0.85 },
+            // "I need X", "looking for X"
+            { pattern: /(?:i\s+)?(?:need|looking for|want|require)\s+(?:a\s+)?(.+)/i, confidence: 0.8 }
         ];
         
         for (const { pattern, confidence } of strongPatterns) {
@@ -948,29 +951,27 @@ class ConversationStateMachine {
         }
         
         // ═══════════════════════════════════════════════════════════════════════
-        // TIER 2: Service equipment mentioned (medium-high confidence)
-        // If they mention specific equipment, they're calling about an issue
+        // TIER 2: Industry-specific keywords from company config
+        // These come from: triage cards, service types, and trade categories
         // ═══════════════════════════════════════════════════════════════════════
-        const serviceKeywords = [
-            'thermostat', 'ac', 'a/c', 'air conditioning', 'air conditioner',
-            'heat', 'heating', 'heater', 'furnace', 'cooling', 'hvac', 
-            'unit', 'system', 'compressor', 'duct', 'vent', 'filter',
-            'plumbing', 'pipe', 'drain', 'faucet', 'toilet', 'water heater',
-            'leak', 'clog', 'frozen', 'blank', 'display'
-        ];
+        const industryKeywords = this._getIndustryKeywords();
         
-        for (const keyword of serviceKeywords) {
-            if (inputLower.includes(keyword)) {
-                // They mentioned equipment - this IS their issue
-                // Confidence 0.8 (above 0.7 threshold)
+        for (const keyword of industryKeywords) {
+            if (inputLower.includes(keyword.toLowerCase())) {
+                // They mentioned industry-specific term - this IS their issue
                 return { issue: input.substring(0, 100), confidence: 0.8 };
             }
         }
         
         // ═══════════════════════════════════════════════════════════════════════
-        // TIER 3: Problem words without specific equipment (lower confidence)
+        // TIER 3: Universal problem words (lower confidence)
         // ═══════════════════════════════════════════════════════════════════════
-        const problemWords = ['issue', 'problem', 'trouble', 'wrong', 'broken', 'not working'];
+        const problemWords = [
+            'issue', 'problem', 'trouble', 'wrong', 'broken', 'not working',
+            'help', 'emergency', 'urgent', 'asap', 'appointment', 'schedule',
+            'service', 'repair', 'fix', 'check', 'inspect'
+        ];
+        
         for (const word of problemWords) {
             if (inputLower.includes(word)) {
                 return { issue: input.substring(0, 100), confidence: 0.75 };
@@ -978,6 +979,96 @@ class ConversationStateMachine {
         }
         
         return { issue: null, confidence: 0 };
+    }
+    
+    /**
+     * Get industry-specific keywords from company configuration
+     * Sources: triage cards, service types, trade categories
+     * This ensures we're NOT hardcoded to any specific industry
+     */
+    _getIndustryKeywords() {
+        const keywords = new Set();
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // SOURCE 1: Triage cards (most specific to this company)
+        // ═══════════════════════════════════════════════════════════════════════
+        const triageCards = this.company.aiAgentSettings?.triageCards || [];
+        for (const card of triageCards) {
+            // Add card keywords
+            if (card.keywords && Array.isArray(card.keywords)) {
+                card.keywords.forEach(k => keywords.add(k.toLowerCase()));
+            }
+            // Add trigger phrases
+            if (card.triggerPhrases && Array.isArray(card.triggerPhrases)) {
+                card.triggerPhrases.forEach(p => {
+                    // Extract key words from phrases
+                    p.toLowerCase().split(/\s+/).forEach(word => {
+                        if (word.length > 3) keywords.add(word);
+                    });
+                });
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // SOURCE 2: Service types from company config
+        // ═══════════════════════════════════════════════════════════════════════
+        const serviceTypes = this.company.aiAgentSettings?.serviceTypeClarification?.serviceTypes || [];
+        for (const st of serviceTypes) {
+            if (st.label) keywords.add(st.label.toLowerCase());
+            if (st.keywords && Array.isArray(st.keywords)) {
+                st.keywords.forEach(k => keywords.add(k.toLowerCase()));
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // SOURCE 3: Trade categories (high level)
+        // ═══════════════════════════════════════════════════════════════════════
+        const tradeCategories = this.company.tradeCategories || [];
+        for (const trade of tradeCategories) {
+            keywords.add(trade.toLowerCase());
+            // Add common variations
+            const tradeKeywords = this._getTradeKeywords(trade);
+            tradeKeywords.forEach(k => keywords.add(k));
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // SOURCE 4: Discovery keywords from UI config (if configured)
+        // ═══════════════════════════════════════════════════════════════════════
+        const discoveryKeywords = this.stagesConfig.discoverySettings?.industryKeywords || [];
+        discoveryKeywords.forEach(k => keywords.add(k.toLowerCase()));
+        
+        // If no keywords configured, return empty (Tier 1 patterns will still work)
+        if (keywords.size === 0) {
+            logger.warn('[STATE MACHINE V2] No industry keywords configured - using universal patterns only');
+        }
+        
+        return Array.from(keywords);
+    }
+    
+    /**
+     * Get common keywords for a trade category
+     * This is a fallback for companies that haven't configured detailed keywords
+     */
+    _getTradeKeywords(trade) {
+        const tradeLower = trade.toLowerCase();
+        
+        // Common keywords by trade (fallback only)
+        const tradeKeywordMap = {
+            'hvac': ['thermostat', 'ac', 'air conditioning', 'furnace', 'heat', 'cooling', 'duct', 'vent', 'compressor'],
+            'plumbing': ['pipe', 'drain', 'faucet', 'toilet', 'water heater', 'leak', 'clog', 'sewer'],
+            'electrical': ['outlet', 'switch', 'breaker', 'wiring', 'light', 'power', 'circuit'],
+            'dental': ['tooth', 'teeth', 'cleaning', 'cavity', 'filling', 'crown', 'extraction', 'pain'],
+            'medical': ['appointment', 'doctor', 'checkup', 'prescription', 'symptoms', 'pain'],
+            'legal': ['case', 'lawyer', 'attorney', 'consultation', 'lawsuit', 'contract'],
+            'automotive': ['car', 'vehicle', 'oil change', 'brake', 'tire', 'engine', 'transmission'],
+            'landscaping': ['lawn', 'tree', 'garden', 'mowing', 'trimming', 'irrigation'],
+            'cleaning': ['clean', 'maid', 'housekeeping', 'deep clean', 'carpet'],
+            'pest control': ['pest', 'bug', 'insect', 'rodent', 'termite', 'ant', 'roach'],
+            'roofing': ['roof', 'shingle', 'leak', 'gutter', 'flashing'],
+            'appliance': ['refrigerator', 'washer', 'dryer', 'dishwasher', 'oven', 'microwave']
+        };
+        
+        return tradeKeywordMap[tradeLower] || [];
     }
     
     _extractContext(input) {

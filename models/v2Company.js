@@ -1947,7 +1947,7 @@ const companySchema = new mongoose.Schema({
                 },
                 
                 // ═══════════════════════════════════════════════════════════════
-                // STAGE 2: DISCOVERY PROMPTS (0 tokens - no LLM)
+                // STAGE 2: DISCOVERY SETTINGS (0 tokens - no LLM)
                 // Used when we need to understand what caller needs
                 // ═══════════════════════════════════════════════════════════════
                 discoveryPrompts: {
@@ -1955,6 +1955,18 @@ const companySchema = new mongoose.Schema({
                     needMoreInfo: { type: String, default: "Can you tell me a little more about what's going on?", trim: true },
                     clarifyIssue: { type: String, default: "Just to make sure I understand, what seems to be the problem?", trim: true },
                     clarifyService: { type: String, default: "What type of service are you looking for today?", trim: true }
+                },
+                
+                // 🆕 DISCOVERY SETTINGS - Industry-specific configuration
+                discoverySettings: {
+                    // Industry keywords for issue detection (in addition to triage cards)
+                    // These help the AI recognize when caller mentions something service-related
+                    industryKeywords: {
+                        type: [String],
+                        default: []  // Empty = uses triage cards + trade categories
+                    },
+                    // Minimum confidence to accept an issue extraction
+                    minConfidence: { type: Number, default: 0.7, min: 0.5, max: 1.0 }
                 },
                 
                 // ═══════════════════════════════════════════════════════════════
