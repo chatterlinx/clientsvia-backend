@@ -1164,6 +1164,122 @@ async function processTurn({
                 responseSource = 'QUICK_ANSWER';
             }
             
+            // ═══════════════════════════════════════════════════════════════════
+            // 🎯 DYNAMIC STAGE-AWARE DEBUG DATA
+            // Shows what's collected and needed based on CURRENT STAGE
+            // ═══════════════════════════════════════════════════════════════════
+            const currentStage = session.conversationMemory?.currentStage || 
+                                 aiResult.debug?.stage || 
+                                 (aiResult.conversationMode === 'booking' ? 'booking' : 'discovery');
+            
+            // Build stage-specific collected/need data
+            const stageData = {
+                currentStage,
+                currentStep: session.conversationMemory?.currentStep || aiResult.debug?.step || null,
+                
+                // DISCOVERY STAGE DATA
+                discovery: {
+                    collected: {},
+                    need: ['issue', 'context', 'callType']
+                },
+                
+                // TRIAGE STAGE DATA  
+                triage: {
+                    collected: {},
+                    need: ['diagnosis']
+                },
+                
+                // BOOKING STAGE DATA
+                booking: {
+                    collected: {},
+                    need: []
+                }
+            };
+            
+            // Populate DISCOVERY collected
+            if (session.discovery?.issue) {
+                stageData.discovery.collected.issue = session.discovery.issue;
+                stageData.discovery.need = stageData.discovery.need.filter(n => n !== 'issue');
+            }
+            if (session.discovery?.context) {
+                stageData.discovery.collected.context = session.discovery.context;
+                stageData.discovery.need = stageData.discovery.need.filter(n => n !== 'context');
+            }
+            if (session.discovery?.callType && session.discovery.callType !== 'unknown') {
+                stageData.discovery.collected.callType = session.discovery.callType;
+                stageData.discovery.need = stageData.discovery.need.filter(n => n !== 'callType');
+            }
+            if (session.discovery?.mood && session.discovery.mood !== 'neutral') {
+                stageData.discovery.collected.mood = session.discovery.mood;
+            }
+            if (session.discovery?.urgency && session.discovery.urgency !== 'normal') {
+                stageData.discovery.collected.urgency = session.discovery.urgency;
+            }
+            
+            // Populate TRIAGE collected
+            if (session.triageState?.matchedCardName) {
+                stageData.triage.collected.matchedCard = session.triageState.matchedCardName;
+                stageData.triage.matchReason = session.triageState.matchReason || 'keyword match';
+            }
+            if (session.triageState?.questionsAsked?.length > 0) {
+                stageData.triage.collected.questionsAsked = session.triageState.questionsAsked.length;
+            }
+            if (session.triageState?.answersReceived?.length > 0) {
+                stageData.triage.collected.answersReceived = session.triageState.answersReceived.map(a => ({
+                    q: a.question?.substring(0, 30),
+                    a: a.answer?.substring(0, 30)
+                }));
+            }
+            if (session.triageState?.diagnosisSummary) {
+                stageData.triage.collected.diagnosis = session.triageState.diagnosisSummary;
+                stageData.triage.need = [];
+            }
+            if (session.triageState?.outcome && session.triageState.outcome !== 'pending') {
+                stageData.triage.collected.outcome = session.triageState.outcome;
+            }
+            
+            // Populate BOOKING collected from session + current slots
+            const allSlots = { ...session.collectedSlots, ...(aiResult.filledSlots || {}) };
+            const bookingSlotIds = bookingConfig.slots.map(s => s.slotId || s.id);
+            
+            for (const slotId of bookingSlotIds) {
+                if (allSlots[slotId]) {
+                    stageData.booking.collected[slotId] = allSlots[slotId];
+                } else {
+                    stageData.booking.need.push(slotId);
+                }
+            }
+            
+            // Determine what to show in COLLECTED/NEED based on current stage
+            let dynamicCollected = {};
+            let dynamicNeed = [];
+            
+            switch (currentStage) {
+                case 'greeting':
+                case 'discovery':
+                    dynamicCollected = stageData.discovery.collected;
+                    dynamicNeed = stageData.discovery.need;
+                    break;
+                case 'triage':
+                    dynamicCollected = { 
+                        ...stageData.discovery.collected,
+                        ...stageData.triage.collected 
+                    };
+                    dynamicNeed = stageData.triage.need;
+                    break;
+                case 'booking':
+                case 'confirmation':
+                    dynamicCollected = {
+                        ...stageData.discovery.collected,
+                        ...stageData.booking.collected
+                    };
+                    dynamicNeed = stageData.booking.need;
+                    break;
+                default:
+                    dynamicCollected = allSlots;
+                    dynamicNeed = bookingSlotIds.filter(s => !allSlots[s]);
+            }
+            
             response.debug = {
                 engineVersion: ENGINE_VERSION,
                 channel,
@@ -1172,6 +1288,21 @@ async function processTurn({
                 tokensUsed: aiResult.tokensUsed || 0,
                 responseSource,
                 confidence: aiResult.confidence,
+                
+                // 🎯 DYNAMIC STAGE DATA - What UI should display
+                stageInfo: {
+                    currentStage,
+                    currentStep: stageData.currentStep,
+                    collected: dynamicCollected,
+                    need: dynamicNeed,
+                    // Full stage breakdown for detailed view
+                    stages: {
+                        discovery: stageData.discovery,
+                        triage: stageData.triage,
+                        booking: stageData.booking
+                    }
+                },
+                
                 customerContext: {
                     isKnown: customerContext.isKnown,
                     isReturning: customerContext.isReturning,
@@ -1186,7 +1317,7 @@ async function processTurn({
                     wasSessionReused: (session.metrics?.totalTurns || 0) > 0,
                     slotsBeforeThisTurn: session.collectedSlots || {},
                     extractedThisTurn: extractedThisTurn,
-                    slotsAfterMerge: { ...session.collectedSlots, ...(aiResult.filledSlots || {}) },
+                    slotsAfterMerge: allSlots,
                     whatLLMSaw: currentSlots
                 },
                 bookingConfig: {
@@ -1196,7 +1327,9 @@ async function processTurn({
                         id: s.slotId,
                         type: s.type,
                         question: s.question,
-                        required: s.required
+                        required: s.required,
+                        confirmBack: s.confirmBack || false,
+                        confirmPrompt: s.confirmPrompt || null
                     }))
                 },
                 // 🤖 STATE MACHINE DEBUG - What the state machine decided

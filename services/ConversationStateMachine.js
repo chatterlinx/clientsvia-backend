@@ -1006,8 +1006,8 @@ class ConversationStateMachine {
         const strongPatterns = [
             // "my X is Y", "the X isn't working"
             { pattern: /(?:my|the|our)\s+(\w+(?:\s+\w+)?)\s+(?:is|isn't|isnt|are|aren't|arent)\s+(\w+)/i, confidence: 0.9 },
-            // "having issues with X", "have a problem with X"
-            { pattern: /(?:having|have)\s+(?:a\s+)?(?:problem|issue|trouble|issues)\s+(?:with\s+)?(?:my|the|our)?\s*(.+)/i, confidence: 0.9 },
+            // "having issues with X", "have a problem with X", "having difficulty with X"
+            { pattern: /(?:having|have)\s+(?:a\s+)?(?:problem|issue|trouble|issues|difficulty|difficulties|concern|concerns)\s+(?:with\s+)?(?:my|the|our)?\s*(.+)/i, confidence: 0.9 },
             // "X not working", "X broken"
             { pattern: /(\w+(?:\s+\w+)?)\s+(?:not working|broken|acting up|making noise|leaking|stopped)/i, confidence: 0.9 },
             // "need to fix X"
