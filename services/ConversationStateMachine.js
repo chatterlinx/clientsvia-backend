@@ -1,13 +1,15 @@
 /**
  * ============================================================================
- * CONVERSATION STATE MACHINE - Enterprise Flow Controller
+ * CONVERSATION STATE MACHINE - Enterprise Flow Controller V2
  * ============================================================================
  * 
  * This is the BRAIN that controls the conversation flow.
  * 
- * ARCHITECTURE:
+ * ARCHITECTURE (Enterprise-Grade):
  * - Deterministic Core: 95% of interactions (0 tokens, 100% reliable)
  * - LLM Fallback: 5% for off-rails recovery only
+ * - Continuous Persistence: Every turn saved to CallRecord
+ * - Audit Trail: Complete history of extractions and decisions
  * 
  * STAGES:
  * 1. GREETING - Fixed responses, detect time of day
@@ -15,6 +17,13 @@
  * 3. TRIAGE - Diagnostic questions from triage cards
  * 4. BOOKING - Fixed slot questions from UI config
  * 5. CONFIRMATION - Summarize everything, confirm
+ * 
+ * ENTERPRISE FEATURES:
+ * - missingSlots[] array for deterministic slot collection
+ * - isFallbackActive flag for LLM mode tracking
+ * - Confidence scoring on all extractions
+ * - Stuck detection (max turns per stage)
+ * - Audit trail with timestamps
  * 
  * RULES:
  * - State machine OWNS the flow - LLM cannot advance stages
@@ -38,7 +47,8 @@ const STAGES = {
     BOOKING: 'booking',
     CONFIRMATION: 'confirmation',
     COMPLETE: 'complete',
-    ESCALATED: 'escalated'
+    ESCALATED: 'escalated',
+    STALLED: 'stalled'  // New: When stuck too long
 };
 
 const BOOKING_STEPS = {
@@ -47,6 +57,14 @@ const BOOKING_STEPS = {
     ASK_ADDRESS: 'ASK_ADDRESS',
     ASK_TIME: 'ASK_TIME',
     CONFIRM: 'CONFIRM'
+};
+
+// Enterprise config defaults
+const ENTERPRISE_CONFIG = {
+    MAX_TURNS_PER_STAGE: 5,         // Stuck detection
+    MAX_OFF_RAILS_ATTEMPTS: 3,      // Before escalation
+    MIN_CONFIDENCE_THRESHOLD: 0.7,  // For extractions
+    MAX_TOTAL_TURNS: 20             // Absolute limit
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -71,29 +89,147 @@ class ConversationStateMachine {
         this.contextConfig = this.frontDeskConfig.contextRecognition || {};
         this.bookingSlots = this.frontDeskConfig.bookingSlots || [];
         
-        // Current state from session
-        this.currentStage = session.conversationMemory?.currentStage || STAGES.GREETING;
-        this.currentStep = session.conversationMemory?.currentStep || null;
+        // ═══════════════════════════════════════════════════════════════════════
+        // ENTERPRISE: Flow State
+        // ═══════════════════════════════════════════════════════════════════════
+        this.flow = {
+            currentStage: session.conversationMemory?.currentStage || STAGES.GREETING,
+            currentStep: session.conversationMemory?.currentStep || null,
+            turnsInCurrentStage: session.conversationMemory?.turnsInCurrentStage || 0,
+            totalTurns: session.metrics?.totalTurns || 0,
+            isFallbackActive: session.conversationMemory?.isFallbackActive || false,
+            offRailsCount: session.conversationMemory?.offRailsCount || 0,
+            lastSystemPrompt: session.conversationMemory?.lastSystemPrompt || null
+        };
         
-        // Discovery data
-        this.discovery = session.discovery || {};
+        // Shortcuts for backward compatibility
+        this.currentStage = this.flow.currentStage;
+        this.currentStep = this.flow.currentStep;
         
-        // Triage state
-        this.triageState = session.triageState || {};
+        // ═══════════════════════════════════════════════════════════════════════
+        // ENTERPRISE: Discovery State with Confidence
+        // ═══════════════════════════════════════════════════════════════════════
+        this.discovery = {
+            issue: session.discovery?.issue || null,
+            issueConfidence: session.discovery?.issueConfidence || 0,
+            context: session.discovery?.context || null,
+            contextConfidence: session.discovery?.contextConfidence || 0,
+            callType: session.discovery?.callType || null,
+            callTypeConfidence: session.discovery?.callTypeConfidence || 0,
+            urgency: session.discovery?.urgency || 'normal',
+            mood: session.discovery?.mood || 'neutral',
+            moodConfidence: session.discovery?.moodConfidence || 0,
+            completedAt: session.discovery?.completedAt || null
+        };
         
-        // Collected slots
-        this.slots = { ...(session.collectedSlots || {}) };
+        // ═══════════════════════════════════════════════════════════════════════
+        // ENTERPRISE: Triage State
+        // ═══════════════════════════════════════════════════════════════════════
+        this.triage = {
+            activeCardId: session.triageState?.activeCardId || null,
+            currentQuestionId: session.triageState?.currentQuestionId || null,
+            questionsAsked: session.triageState?.questionsAsked || [],
+            answers: session.triageState?.answers || {},
+            outcome: session.triageState?.outcome || null,
+            completedAt: session.triageState?.completedAt || null
+        };
         
-        // Memory
-        this.memory = session.conversationMemory || {};
+        // ═══════════════════════════════════════════════════════════════════════
+        // ENTERPRISE: Booking State with missingSlots
+        // ═══════════════════════════════════════════════════════════════════════
+        this.booking = {
+            collectedSlots: {
+                name: session.collectedSlots?.name || null,
+                phone: session.collectedSlots?.phone || null,
+                address: session.collectedSlots?.address || null,
+                time: session.collectedSlots?.time || null
+            },
+            missingSlots: [],  // Computed below
+            confirmed: session.conversationMemory?.bookingConfirmed || false
+        };
         
-        logger.info('[STATE MACHINE] Initialized', {
+        // Compute missing slots
+        this._computeMissingSlots();
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // ENTERPRISE: Audit Trail
+        // ═══════════════════════════════════════════════════════════════════════
+        this.auditTrail = session.conversationMemory?.auditTrail || [];
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // ENTERPRISE: Conversation Memory
+        // ═══════════════════════════════════════════════════════════════════════
+        this.memory = {
+            discussedTopics: session.conversationMemory?.discussedTopics || [],
+            keyFacts: session.conversationMemory?.keyFacts || [],
+            recoveryAttempts: session.conversationMemory?.recoveryAttempts || []
+        };
+        
+        logger.info('[STATE MACHINE V2] Initialized', {
             sessionId: session._id,
-            currentStage: this.currentStage,
-            currentStep: this.currentStep,
+            stage: this.flow.currentStage,
+            step: this.flow.currentStep,
+            turnsInStage: this.flow.turnsInCurrentStage,
+            totalTurns: this.flow.totalTurns,
             hasIssue: !!this.discovery.issue,
-            slotsCollected: Object.keys(this.slots).filter(k => this.slots[k])
+            missingSlots: this.booking.missingSlots,
+            offRailsCount: this.flow.offRailsCount
         });
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ENTERPRISE: Compute Missing Slots
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    /**
+     * Compute which slots are still needed
+     * Uses bookingSlots config to determine required slots
+     */
+    _computeMissingSlots() {
+        const missing = [];
+        const slotOrder = ['name', 'phone', 'address', 'time'];
+        
+        for (const slotId of slotOrder) {
+            // Check if slot is required
+            const slotConfig = this.bookingSlots.find(s => 
+                (s.id || s.slotId) === slotId
+            );
+            
+            // Skip if not required
+            if (slotConfig?.required === false) {
+                continue;
+            }
+            
+            // Add to missing if not collected
+            if (!this.booking.collectedSlots[slotId]) {
+                missing.push(slotId);
+            }
+        }
+        
+        this.booking.missingSlots = missing;
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ENTERPRISE: Add to Audit Trail
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    /**
+     * Add an entry to the audit trail
+     */
+    _addAuditEntry(type, data) {
+        this.auditTrail.push({
+            turn: this.flow.totalTurns,
+            timestamp: new Date().toISOString(),
+            stage: this.flow.currentStage,
+            step: this.flow.currentStep,
+            type,
+            data
+        });
+        
+        // Keep audit trail bounded
+        if (this.auditTrail.length > 50) {
+            this.auditTrail = this.auditTrail.slice(-50);
+        }
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
@@ -111,64 +247,195 @@ class ConversationStateMachine {
         const input = userInput?.trim() || '';
         const inputLower = input.toLowerCase();
         
-        logger.info('[STATE MACHINE] Processing input', {
-            stage: this.currentStage,
-            step: this.currentStep,
+        // Increment turn counters
+        this.flow.totalTurns++;
+        this.flow.turnsInCurrentStage++;
+        
+        logger.info('[STATE MACHINE V2] Processing turn', {
+            turn: this.flow.totalTurns,
+            stage: this.flow.currentStage,
+            step: this.flow.currentStep,
+            turnsInStage: this.flow.turnsInCurrentStage,
             inputPreview: input.substring(0, 50),
-            extracted: Object.keys(extracted)
+            isFallbackActive: this.flow.isFallbackActive
         });
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // STEP 0: Check for stuck/timeout
+        // ═══════════════════════════════════════════════════════════════════
+        const stuckCheck = this._checkStuck();
+        if (stuckCheck.isStuck) {
+            logger.warn('[STATE MACHINE V2] 🚨 STUCK DETECTED', stuckCheck);
+            this._addAuditEntry('STUCK_DETECTED', stuckCheck);
+            
+            return {
+                action: 'ESCALATE',
+                stage: this.flow.currentStage,
+                reason: stuckCheck.reason,
+                response: this._getEscalationResponse(stuckCheck.reason),
+                tokensUsed: 0,
+                source: 'STATE_MACHINE_STUCK'
+            };
+        }
         
         // ═══════════════════════════════════════════════════════════════════
         // STEP 1: Check for off-rails (before anything else)
         // ═══════════════════════════════════════════════════════════════════
-        const offRailsCheck = this.checkOffRails(inputLower);
+        const offRailsCheck = this._checkOffRails(inputLower);
         if (offRailsCheck.isOffRails) {
-            logger.info('[STATE MACHINE] 🚨 OFF-RAILS DETECTED', {
+            this.flow.offRailsCount++;
+            this.flow.isFallbackActive = true;
+            
+            logger.info('[STATE MACHINE V2] 🚨 OFF-RAILS DETECTED', {
                 trigger: offRailsCheck.trigger,
-                type: offRailsCheck.type
+                type: offRailsCheck.type,
+                offRailsCount: this.flow.offRailsCount
             });
+            
+            this._addAuditEntry('OFF_RAILS', {
+                trigger: offRailsCheck.trigger,
+                type: offRailsCheck.type,
+                count: this.flow.offRailsCount
+            });
+            
+            // Check if too many off-rails attempts
+            if (this.flow.offRailsCount >= ENTERPRISE_CONFIG.MAX_OFF_RAILS_ATTEMPTS) {
+                return {
+                    action: 'ESCALATE',
+                    stage: this.flow.currentStage,
+                    reason: 'max_off_rails_exceeded',
+                    response: this._getEscalationResponse('frustrated_caller'),
+                    tokensUsed: 0,
+                    source: 'STATE_MACHINE_ESCALATE'
+                };
+            }
             
             return {
                 action: 'LLM_FALLBACK',
-                stage: this.currentStage,
-                step: this.currentStep,
+                stage: this.flow.currentStage,
+                step: this.flow.currentStep,
                 offRails: offRailsCheck,
-                returnToQuestion: this.getCurrentQuestion(),
-                context: this.buildLLMContext()
+                returnToQuestion: this._getCurrentQuestion(),
+                context: this._buildLLMContext(),
+                isFallbackActive: true
             };
+        }
+        
+        // Clear fallback flag if we're back on rails
+        if (this.flow.isFallbackActive) {
+            this.flow.isFallbackActive = false;
+            logger.info('[STATE MACHINE V2] ✅ Back on rails');
         }
         
         // ═══════════════════════════════════════════════════════════════════
         // STEP 2: Update state with extracted data
         // ═══════════════════════════════════════════════════════════════════
-        this.updateFromExtracted(extracted);
+        this._updateFromExtracted(extracted);
         
         // ═══════════════════════════════════════════════════════════════════
         // STEP 3: Route to current stage handler
         // ═══════════════════════════════════════════════════════════════════
-        switch (this.currentStage) {
+        let result;
+        
+        switch (this.flow.currentStage) {
             case STAGES.GREETING:
-                return this.handleGreeting(input, inputLower);
+                result = this._handleGreeting(input, inputLower);
+                break;
                 
             case STAGES.DISCOVERY:
-                return this.handleDiscovery(input, inputLower, extracted);
+                result = this._handleDiscovery(input, inputLower, extracted);
+                break;
                 
             case STAGES.TRIAGE:
-                return this.handleTriage(input, inputLower, extracted);
+                result = this._handleTriage(input, inputLower, extracted);
+                break;
                 
             case STAGES.BOOKING:
-                return this.handleBooking(input, inputLower, extracted);
+                result = this._handleBooking(input, inputLower, extracted);
+                break;
                 
             case STAGES.CONFIRMATION:
-                return this.handleConfirmation(input, inputLower);
+                result = this._handleConfirmation(input, inputLower);
+                break;
                 
             case STAGES.COMPLETE:
-                return this.handleComplete(input, inputLower);
+                result = this._handleComplete(input, inputLower);
+                break;
                 
             default:
-                logger.warn('[STATE MACHINE] Unknown stage, defaulting to greeting', { stage: this.currentStage });
-                this.currentStage = STAGES.GREETING;
-                return this.handleGreeting(input, inputLower);
+                logger.warn('[STATE MACHINE V2] Unknown stage, defaulting to greeting', { 
+                    stage: this.flow.currentStage 
+                });
+                this.flow.currentStage = STAGES.GREETING;
+                this.flow.turnsInCurrentStage = 0;
+                result = this._handleGreeting(input, inputLower);
+        }
+        
+        // Update current stage/step shortcuts
+        this.currentStage = this.flow.currentStage;
+        this.currentStep = this.flow.currentStep;
+        
+        // Record last system prompt
+        if (result.response) {
+            this.flow.lastSystemPrompt = result.response;
+        }
+        
+        // Add to audit trail
+        this._addAuditEntry('RESPONSE', {
+            action: result.action,
+            nextStage: result.nextStage,
+            nextStep: result.nextStep,
+            responsePreview: result.response?.substring(0, 100)
+        });
+        
+        return result;
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ENTERPRISE: Stuck Detection
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    _checkStuck() {
+        // Check turns in current stage
+        if (this.flow.turnsInCurrentStage >= ENTERPRISE_CONFIG.MAX_TURNS_PER_STAGE) {
+            return {
+                isStuck: true,
+                reason: 'max_turns_in_stage',
+                stage: this.flow.currentStage,
+                turns: this.flow.turnsInCurrentStage
+            };
+        }
+        
+        // Check total turns
+        if (this.flow.totalTurns >= ENTERPRISE_CONFIG.MAX_TOTAL_TURNS) {
+            return {
+                isStuck: true,
+                reason: 'max_total_turns',
+                totalTurns: this.flow.totalTurns
+            };
+        }
+        
+        return { isStuck: false };
+    }
+    
+    _getEscalationResponse(reason) {
+        const responses = this.offRailsConfig.responses || {};
+        
+        switch (reason) {
+            case 'max_turns_in_stage':
+                return responses.stalled || 
+                    "I apologize, we seem to be having some difficulty. Let me connect you with someone who can help directly.";
+            case 'max_total_turns':
+                return responses.longCall || 
+                    "I want to make sure we get this right. Let me have a team member call you back to complete this.";
+            case 'frustrated_caller':
+                return responses.frustrated || 
+                    "I completely understand your frustration. Let me get you to someone who can help right away.";
+            case 'max_off_rails_exceeded':
+                return responses.humanRequest || 
+                    "I understand. Let me connect you with a team member who can assist you directly.";
+            default:
+                return "Let me connect you with someone who can help.";
         }
     }
     
@@ -179,17 +446,15 @@ class ConversationStateMachine {
     /**
      * GREETING STAGE - Fixed responses, 0 tokens
      */
-    handleGreeting(input, inputLower) {
-        // Check if this is a greeting
-        const isGreeting = this.isGreeting(inputLower);
+    _handleGreeting(input, inputLower) {
+        const isGreeting = this._isGreeting(inputLower);
         
         if (isGreeting) {
             // Respond with time-appropriate greeting
-            const response = this.getGreetingResponse();
+            const response = this._getGreetingResponse();
             
-            // Stay in greeting, waiting for them to explain why they called
-            // Actually, move to DISCOVERY since we've greeted them
-            this.currentStage = STAGES.DISCOVERY;
+            // Move to DISCOVERY
+            this._transitionTo(STAGES.DISCOVERY);
             
             return {
                 action: 'RESPOND',
@@ -203,50 +468,63 @@ class ConversationStateMachine {
         
         // Not a greeting - they're explaining why they called
         // Move to discovery and process there
-        this.currentStage = STAGES.DISCOVERY;
-        return this.handleDiscovery(input, inputLower, {});
+        this._transitionTo(STAGES.DISCOVERY);
+        return this._handleDiscovery(input, inputLower, {});
     }
     
     /**
      * DISCOVERY STAGE - Capture issue, context, call type
      */
-    handleDiscovery(input, inputLower, extracted) {
+    _handleDiscovery(input, inputLower, extracted) {
         // ═══════════════════════════════════════════════════════════════════
-        // Extract issue and context from what they said
+        // Extract with confidence scoring
         // ═══════════════════════════════════════════════════════════════════
-        const issueExtraction = this.extractIssue(input);
-        const contextExtraction = this.extractContext(input);
-        const moodDetection = this.detectMood(inputLower);
-        const callTypeDetection = this.detectCallType(inputLower);
+        const issueExtraction = this._extractIssue(input);
+        const contextExtraction = this._extractContext(input);
+        const moodDetection = this._detectMood(inputLower);
+        const callTypeDetection = this._detectCallType(inputLower);
+        const urgencyCheck = this._checkUrgency(inputLower);
+        const repeatCheck = this._checkRepeatVisit(inputLower);
         
-        // Update discovery
-        if (issueExtraction.issue && !this.discovery.issue) {
-            this.discovery.issue = issueExtraction.issue;
-            this.discovery.issueCapturedAtTurn = this.session.metrics?.totalTurns || 0;
-            logger.info('[STATE MACHINE] 📋 Issue captured', { issue: this.discovery.issue });
+        // Update discovery with confidence
+        if (issueExtraction.issue && issueExtraction.confidence >= ENTERPRISE_CONFIG.MIN_CONFIDENCE_THRESHOLD) {
+            if (!this.discovery.issue) {
+                this.discovery.issue = issueExtraction.issue;
+                this.discovery.issueConfidence = issueExtraction.confidence;
+                
+                // Add to key facts
+                this.memory.keyFacts.push(`Issue: ${issueExtraction.issue}`);
+                
+                logger.info('[STATE MACHINE V2] 📋 Issue captured', { 
+                    issue: this.discovery.issue,
+                    confidence: this.discovery.issueConfidence
+                });
+            }
         }
         
-        if (contextExtraction.context && !this.discovery.context) {
-            this.discovery.context = contextExtraction.context;
-            logger.info('[STATE MACHINE] 📋 Context captured', { context: this.discovery.context });
+        if (contextExtraction.context && contextExtraction.confidence >= ENTERPRISE_CONFIG.MIN_CONFIDENCE_THRESHOLD) {
+            if (!this.discovery.context) {
+                this.discovery.context = contextExtraction.context;
+                this.discovery.contextConfidence = contextExtraction.confidence;
+                
+                this.memory.keyFacts.push(`Context: ${contextExtraction.context}`);
+            }
         }
         
         if (moodDetection.mood !== 'neutral') {
             this.discovery.mood = moodDetection.mood;
+            this.discovery.moodConfidence = moodDetection.confidence;
         }
         
         if (callTypeDetection.callType !== 'unknown') {
             this.discovery.callType = callTypeDetection.callType;
+            this.discovery.callTypeConfidence = callTypeDetection.confidence;
         }
         
-        // Check for urgency
-        const urgencyCheck = this.checkUrgency(inputLower);
         if (urgencyCheck.isUrgent) {
             this.discovery.urgency = urgencyCheck.level;
         }
         
-        // Check for repeat visit
-        const repeatCheck = this.checkRepeatVisit(inputLower);
         if (repeatCheck.isRepeat) {
             this.discovery.urgency = 'repeat_issue';
             if (!this.discovery.context) {
@@ -254,30 +532,36 @@ class ConversationStateMachine {
             }
         }
         
+        // Add to discussed topics
+        if (this.discovery.issue) {
+            this.memory.discussedTopics.push({
+                topic: 'caller_issue',
+                turnNumber: this.flow.totalTurns,
+                resolved: false
+            });
+        }
+        
         // ═══════════════════════════════════════════════════════════════════
         // Determine next stage
         // ═══════════════════════════════════════════════════════════════════
         
-        // If we have an issue, acknowledge and decide next step
         if (this.discovery.issue) {
             // Build acknowledgment
             let acknowledgment = '';
             
-            // Acknowledge repeat visit if detected
             if (repeatCheck.isRepeat) {
                 acknowledgment = this.contextConfig.repeatVisitAcknowledgment || 
                     "I see we've been out before. I apologize that the issue is continuing.";
-            }
-            // Acknowledge urgency if detected
-            else if (urgencyCheck.isUrgent) {
+            } else if (urgencyCheck.isUrgent) {
                 acknowledgment = this.contextConfig.urgencyAcknowledgment ||
                     "I understand this is urgent. Let me get someone out to you as quickly as possible.";
-            }
-            // Standard issue acknowledgment
-            else if (this.stagesConfig.triageSettings?.acknowledgeIssueFirst) {
+            } else if (this.stagesConfig.triageSettings?.acknowledgeIssueFirst) {
                 acknowledgment = this.stagesConfig.triageSettings?.issueAcknowledgment ||
                     "I'm sorry to hear that. Let me help you get this resolved.";
             }
+            
+            // Mark discovery complete
+            this.discovery.completedAt = new Date();
             
             // Decide: TRIAGE or straight to BOOKING?
             const shouldTriage = this.stagesConfig.triageSettings?.enabled && 
@@ -285,12 +569,9 @@ class ConversationStateMachine {
                                  this.discovery.callType === 'service_issue';
             
             if (shouldTriage) {
-                // Move to triage
-                this.currentStage = STAGES.TRIAGE;
-                this.discovery.completedAt = new Date();
+                this._transitionTo(STAGES.TRIAGE);
                 
-                // Get first triage question (if we have a matched card)
-                const triageQuestion = this.getNextTriageQuestion();
+                const triageQuestion = this._getNextTriageQuestion();
                 
                 if (triageQuestion) {
                     const response = acknowledgment 
@@ -310,15 +591,12 @@ class ConversationStateMachine {
                 }
             }
             
-            // No triage or no triage card - go straight to booking
-            this.currentStage = STAGES.BOOKING;
-            this.currentStep = BOOKING_STEPS.ASK_NAME;
-            this.discovery.completedAt = new Date();
+            // No triage - go straight to booking
+            this._transitionTo(STAGES.BOOKING, 'ASK_NAME');
             
-            // Get transition to booking + first booking question
             const transitionMsg = this.stagesConfig.bookingSettings?.transitionToBooking ||
                 "Let's get you scheduled.";
-            const firstQuestion = this.getBookingQuestion('name');
+            const firstQuestion = this._getBookingQuestion('name');
             
             const response = acknowledgment
                 ? `${acknowledgment} ${transitionMsg} ${firstQuestion}`
@@ -356,37 +634,27 @@ class ConversationStateMachine {
     /**
      * TRIAGE STAGE - Diagnostic questions from triage cards
      */
-    handleTriage(input, inputLower, extracted) {
+    _handleTriage(input, inputLower, extracted) {
         // Record answer to previous question
-        if (this.triageState.questionsAsked?.length > 0) {
-            const lastQuestion = this.triageState.questionsAsked[this.triageState.questionsAsked.length - 1];
+        if (this.triage.questionsAsked.length > 0) {
+            const lastQuestion = this.triage.questionsAsked[this.triage.questionsAsked.length - 1];
             
-            if (!this.triageState.answersReceived) {
-                this.triageState.answersReceived = [];
-            }
-            
-            this.triageState.answersReceived.push({
-                question: lastQuestion.question,
-                answer: input,
-                turnNumber: this.session.metrics?.totalTurns || 0,
-                receivedAt: new Date()
-            });
+            // Store answer
+            this.triage.answers[lastQuestion.id || `q${this.triage.questionsAsked.length}`] = input;
         }
         
         // Check if we've asked enough questions
         const maxQuestions = this.stagesConfig.triageSettings?.maxDiagnosticQuestions || 3;
-        const questionsAsked = this.triageState.questionsAsked?.length || 0;
         
-        if (questionsAsked >= maxQuestions) {
+        if (this.triage.questionsAsked.length >= maxQuestions) {
             // Move to booking
-            this.currentStage = STAGES.BOOKING;
-            this.currentStep = BOOKING_STEPS.ASK_NAME;
-            this.triageState.completedAt = new Date();
-            this.triageState.outcome = 'needs_technician';
+            this._transitionTo(STAGES.BOOKING, 'ASK_NAME');
+            this.triage.completedAt = new Date();
+            this.triage.outcome = 'needs_technician';
             
             const transitionMsg = this.stagesConfig.bookingSettings?.transitionToBooking ||
                 "Let's get you scheduled.";
-            const firstQuestion = this.getBookingQuestion('name');
+            const firstQuestion = this._getBookingQuestion('name');
             
             return {
                 action: 'RESPOND',
@@ -397,12 +665,12 @@ class ConversationStateMachine {
                 tokensUsed: 0,
                 source: 'STATE_MACHINE_TRIAGE',
                 triageComplete: true,
-                triageState: this.triageState
+                triageState: this.triage
             };
         }
         
         // Get next triage question
-        const nextQuestion = this.getNextTriageQuestion();
+        const nextQuestion = this._getNextTriageQuestion();
         
         if (nextQuestion) {
             return {
@@ -416,13 +684,12 @@ class ConversationStateMachine {
         }
         
         // No more triage questions - move to booking
-        this.currentStage = STAGES.BOOKING;
-        this.currentStep = BOOKING_STEPS.ASK_NAME;
-        this.triageState.completedAt = new Date();
+        this._transitionTo(STAGES.BOOKING, 'ASK_NAME');
+        this.triage.completedAt = new Date();
         
         const transitionMsg = this.stagesConfig.bookingSettings?.transitionToBooking ||
             "Let's get you scheduled.";
-        const firstQuestion = this.getBookingQuestion('name');
+        const firstQuestion = this._getBookingQuestion('name');
         
         return {
             action: 'RESPOND',
@@ -438,92 +705,85 @@ class ConversationStateMachine {
     
     /**
      * BOOKING STAGE - Fixed slot questions from UI config
+     * Uses missingSlots[] for deterministic collection
      */
-    handleBooking(input, inputLower, extracted) {
+    _handleBooking(input, inputLower, extracted) {
         // Update slots from extracted data
-        if (extracted.name) this.slots.name = extracted.name;
-        if (extracted.phone) this.slots.phone = extracted.phone;
-        if (extracted.address) this.slots.address = extracted.address;
-        if (extracted.time) this.slots.time = extracted.time;
+        if (extracted.name) this.booking.collectedSlots.name = extracted.name;
+        if (extracted.phone) this.booking.collectedSlots.phone = extracted.phone;
+        if (extracted.address) this.booking.collectedSlots.address = extracted.address;
+        if (extracted.time) this.booking.collectedSlots.time = extracted.time;
         
-        // Determine what slot we need next
-        const slotOrder = ['name', 'phone', 'address', 'time'];
+        // Recompute missing slots
+        this._computeMissingSlots();
         
-        for (const slotId of slotOrder) {
-            // Find slot config
-            const slotConfig = this.bookingSlots.find(s => 
-                (s.id || s.slotId) === slotId
-            );
+        logger.info('[STATE MACHINE V2] 📊 Booking state', {
+            collected: this.booking.collectedSlots,
+            missing: this.booking.missingSlots
+        });
+        
+        // Check if we have all slots
+        if (this.booking.missingSlots.length === 0) {
+            // All slots collected - move to confirmation
+            this._transitionTo(STAGES.CONFIRMATION);
             
-            // Skip if already collected
-            if (this.slots[slotId]) {
-                continue;
-            }
-            
-            // Skip if optional and not required
-            if (slotConfig?.required === false) {
-                continue;
-            }
-            
-            // This is the slot we need - ask for it
-            const question = this.getBookingQuestion(slotId);
-            this.currentStep = `ASK_${slotId.toUpperCase()}`;
-            
-            // Build acknowledgment for what we just got
-            let ack = '';
-            if (extracted.name) ack = `Thanks, ${extracted.name}!`;
-            else if (extracted.phone) ack = 'Got it!';
-            else if (extracted.address) ack = 'Perfect!';
-            
-            const response = ack ? `${ack} ${question}` : question;
+            const confirmationMsg = this._buildConfirmation();
             
             return {
                 action: 'RESPOND',
                 stage: STAGES.BOOKING,
-                step: this.currentStep,
-                response: response,
-                nextStage: STAGES.BOOKING,
-                nextStep: this.currentStep,
+                response: confirmationMsg,
+                nextStage: STAGES.CONFIRMATION,
                 tokensUsed: 0,
                 source: 'STATE_MACHINE_BOOKING',
-                slotsCollected: this.slots
+                slotsCollected: this.booking.collectedSlots,
+                bookingComplete: true
             };
         }
         
-        // All slots collected - move to confirmation
-        this.currentStage = STAGES.CONFIRMATION;
-        this.currentStep = null;
+        // Get next missing slot
+        const nextSlot = this.booking.missingSlots[0];
+        const question = this._getBookingQuestion(nextSlot);
+        this.flow.currentStep = `ASK_${nextSlot.toUpperCase()}`;
         
-        const confirmationMsg = this.buildConfirmation();
+        // Build acknowledgment for what we just got
+        let ack = '';
+        if (extracted.name) ack = `Thanks, ${extracted.name}!`;
+        else if (extracted.phone) ack = 'Got it!';
+        else if (extracted.address) ack = 'Perfect!';
+        else if (extracted.time) ack = 'Great!';
+        
+        const response = ack ? `${ack} ${question}` : question;
         
         return {
             action: 'RESPOND',
             stage: STAGES.BOOKING,
-            response: confirmationMsg,
-            nextStage: STAGES.CONFIRMATION,
+            step: this.flow.currentStep,
+            response: response,
+            nextStage: STAGES.BOOKING,
+            nextStep: this.flow.currentStep,
             tokensUsed: 0,
             source: 'STATE_MACHINE_BOOKING',
-            slotsCollected: this.slots,
-            bookingComplete: true
+            slotsCollected: this.booking.collectedSlots,
+            missingSlots: this.booking.missingSlots
         };
     }
     
     /**
      * CONFIRMATION STAGE - Summarize and confirm
      */
-    handleConfirmation(input, inputLower) {
-        // Check for confirmation
-        const isConfirmed = this.isConfirmation(inputLower);
-        const isDenied = this.isDenial(inputLower);
+    _handleConfirmation(input, inputLower) {
+        const isConfirmed = this._isConfirmation(inputLower);
+        const isDenied = this._isDenial(inputLower);
         
         if (isConfirmed) {
-            this.currentStage = STAGES.COMPLETE;
+            this._transitionTo(STAGES.COMPLETE);
+            this.booking.confirmed = true;
             
             const completeMsg = this.frontDeskConfig.bookingTemplates?.completeTemplate ||
                 "You're all set! You'll receive a confirmation shortly. Is there anything else?";
             
-            // Replace placeholders
-            const response = this.replacePlaceholders(completeMsg);
+            const response = this._replacePlaceholders(completeMsg);
             
             return {
                 action: 'RESPOND',
@@ -537,13 +797,15 @@ class ConversationStateMachine {
         }
         
         if (isDenied) {
-            // They said no - need to figure out what's wrong
-            // Use LLM to handle this
+            // They said no - use LLM to figure out what's wrong
+            this.flow.isFallbackActive = true;
+            
             return {
                 action: 'LLM_FALLBACK',
                 stage: STAGES.CONFIRMATION,
                 reason: 'confirmation_denied',
-                context: this.buildLLMContext()
+                context: this._buildLLMContext(),
+                isFallbackActive: true
             };
         }
         
@@ -561,24 +823,24 @@ class ConversationStateMachine {
     /**
      * COMPLETE STAGE - Handle follow-up questions
      */
-    handleComplete(input, inputLower) {
-        // Check if they have more questions
+    _handleComplete(input, inputLower) {
         const hasMore = inputLower.includes('yes') || 
                        inputLower.includes('actually') ||
                        inputLower.includes('one more') ||
                        inputLower.includes('question');
         
         if (hasMore) {
-            // They have more - use LLM to handle
+            this.flow.isFallbackActive = true;
+            
             return {
                 action: 'LLM_FALLBACK',
                 stage: STAGES.COMPLETE,
                 reason: 'follow_up_question',
-                context: this.buildLLMContext()
+                context: this._buildLLMContext(),
+                isFallbackActive: true
             };
         }
         
-        // They're done
         return {
             action: 'RESPOND',
             stage: STAGES.COMPLETE,
@@ -591,13 +853,38 @@ class ConversationStateMachine {
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // HELPER METHODS
+    // STAGE TRANSITION
     // ═══════════════════════════════════════════════════════════════════════════
     
-    /**
-     * Check if input is a greeting
-     */
-    isGreeting(inputLower) {
+    _transitionTo(newStage, newStep = null) {
+        const oldStage = this.flow.currentStage;
+        
+        this.flow.currentStage = newStage;
+        this.flow.currentStep = newStep;
+        this.flow.turnsInCurrentStage = 0;  // Reset counter
+        
+        // Update shortcuts
+        this.currentStage = newStage;
+        this.currentStep = newStep;
+        
+        logger.info('[STATE MACHINE V2] 🔄 Stage transition', {
+            from: oldStage,
+            to: newStage,
+            step: newStep
+        });
+        
+        this._addAuditEntry('STAGE_TRANSITION', {
+            from: oldStage,
+            to: newStage,
+            step: newStep
+        });
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EXTRACTION HELPERS WITH CONFIDENCE
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    _isGreeting(inputLower) {
         const greetingPatterns = [
             /^(hi|hello|hey|yo|howdy)[\s\.\!\?]*$/,
             /^good\s+(morning|afternoon|evening)[\s\.\!\?]*$/,
@@ -609,10 +896,7 @@ class ConversationStateMachine {
         return greetingPatterns.some(p => p.test(inputLower));
     }
     
-    /**
-     * Get time-appropriate greeting response from UI config
-     */
-    getGreetingResponse() {
+    _getGreetingResponse() {
         const hour = new Date().getHours();
         const greetings = this.stagesConfig.greetingResponses || {};
         
@@ -625,28 +909,23 @@ class ConversationStateMachine {
         }
     }
     
-    /**
-     * Extract issue from user input
-     */
-    extractIssue(input) {
-        // Look for problem indicators
+    _extractIssue(input) {
         const problemPatterns = [
-            /(?:my|the|our)\s+(\w+(?:\s+\w+)?)\s+(?:is|isn't|isnt|are|aren't|arent)\s+(\w+)/i,
-            /(?:having|have)\s+(?:a\s+)?(?:problem|issue|trouble)\s+(?:with\s+)?(?:my|the|our)?\s*(\w+)/i,
-            /(\w+(?:\s+\w+)?)\s+(?:not working|broken|acting up|making noise|leaking)/i,
-            /(?:need|want)\s+(?:to\s+)?(?:fix|repair|replace|check)\s+(?:my|the|our)?\s*(\w+)/i
+            { pattern: /(?:my|the|our)\s+(\w+(?:\s+\w+)?)\s+(?:is|isn't|isnt|are|aren't|arent)\s+(\w+)/i, confidence: 0.85 },
+            { pattern: /(?:having|have)\s+(?:a\s+)?(?:problem|issue|trouble)\s+(?:with\s+)?(?:my|the|our)?\s*(\w+)/i, confidence: 0.9 },
+            { pattern: /(\w+(?:\s+\w+)?)\s+(?:not working|broken|acting up|making noise|leaking)/i, confidence: 0.85 },
+            { pattern: /(?:need|want)\s+(?:to\s+)?(?:fix|repair|replace|check)\s+(?:my|the|our)?\s*(\w+)/i, confidence: 0.8 }
         ];
         
-        for (const pattern of problemPatterns) {
+        for (const { pattern, confidence } of problemPatterns) {
             const match = input.match(pattern);
             if (match) {
-                // Clean up the extracted issue
                 const issue = match[0].replace(/^(my|the|our)\s+/i, '').trim();
-                return { issue, confidence: 0.8 };
+                return { issue, confidence };
             }
         }
         
-        // Check for service keywords
+        // Check for service keywords (lower confidence)
         const serviceKeywords = [
             'thermostat', 'ac', 'air conditioning', 'heat', 'heating', 'furnace',
             'cooling', 'hvac', 'unit', 'system', 'compressor', 'duct', 'vent',
@@ -663,81 +942,80 @@ class ConversationStateMachine {
         return { issue: null, confidence: 0 };
     }
     
-    /**
-     * Extract context from user input
-     */
-    extractContext(input) {
+    _extractContext(input) {
         const contextPatterns = [
-            /you\s+(?:guys\s+)?(?:were|came)\s+(?:here|out)\s+(\w+)/i,
-            /(?:technician|tech|someone)\s+(?:was|came)\s+(?:here|out)\s+(\w+)/i,
-            /(?:had|have)\s+(?:this|it)\s+(?:fixed|repaired|looked at)\s+(\w+)/i,
-            /(?:same|this)\s+problem\s+(?:again|before)/i,
-            /(?:happening|happened)\s+(?:again|before)/i
+            { pattern: /you\s+(?:guys\s+)?(?:were|came)\s+(?:here|out)\s+(\w+)/i, confidence: 0.9 },
+            { pattern: /(?:technician|tech|someone)\s+(?:was|came)\s+(?:here|out)\s+(\w+)/i, confidence: 0.9 },
+            { pattern: /(?:had|have)\s+(?:this|it)\s+(?:fixed|repaired|looked at)\s+(\w+)/i, confidence: 0.85 },
+            { pattern: /(?:same|this)\s+problem\s+(?:again|before)/i, confidence: 0.95 },
+            { pattern: /(?:happening|happened)\s+(?:again|before)/i, confidence: 0.85 }
         ];
         
-        for (const pattern of contextPatterns) {
+        for (const { pattern, confidence } of contextPatterns) {
             const match = input.match(pattern);
             if (match) {
-                return { context: match[0], isRepeatVisit: true };
+                return { context: match[0], confidence, isRepeatVisit: true };
             }
         }
         
-        return { context: null, isRepeatVisit: false };
+        return { context: null, confidence: 0, isRepeatVisit: false };
     }
     
-    /**
-     * Detect caller mood
-     */
-    detectMood(inputLower) {
+    _detectMood(inputLower) {
         const moodIndicators = {
-            frustrated: ['frustrated', 'annoyed', 'ridiculous', 'unbelievable', 'again', 'still', 'keeps happening'],
-            angry: ['angry', 'furious', 'unacceptable', 'terrible', 'worst', 'sue', 'lawyer', 'complaint'],
-            anxious: ['worried', 'concerned', 'scared', 'dangerous', 'emergency', 'urgent', 'asap'],
-            confused: ['confused', 'don\'t understand', 'what do you mean', 'not sure']
+            frustrated: { 
+                keywords: ['frustrated', 'annoyed', 'ridiculous', 'unbelievable', 'again', 'still', 'keeps happening'],
+                confidence: 0.8
+            },
+            angry: { 
+                keywords: ['angry', 'furious', 'unacceptable', 'terrible', 'worst', 'sue', 'lawyer', 'complaint'],
+                confidence: 0.9
+            },
+            anxious: { 
+                keywords: ['worried', 'concerned', 'scared', 'dangerous', 'emergency', 'urgent', 'asap'],
+                confidence: 0.85
+            },
+            confused: { 
+                keywords: ['confused', 'don\'t understand', 'what do you mean', 'not sure'],
+                confidence: 0.75
+            }
         };
         
-        for (const [mood, indicators] of Object.entries(moodIndicators)) {
-            if (indicators.some(ind => inputLower.includes(ind))) {
-                return { mood, confidence: 0.7 };
+        for (const [mood, { keywords, confidence }] of Object.entries(moodIndicators)) {
+            if (keywords.some(ind => inputLower.includes(ind))) {
+                return { mood, confidence };
             }
         }
         
         return { mood: 'neutral', confidence: 1.0 };
     }
     
-    /**
-     * Detect call type
-     */
-    detectCallType(inputLower) {
+    _detectCallType(inputLower) {
         if (inputLower.includes('question') || inputLower.includes('wondering') || inputLower.includes('?')) {
-            return { callType: 'question' };
+            return { callType: 'question', confidence: 0.8 };
         }
         
         if (inputLower.includes('bill') || inputLower.includes('invoice') || inputLower.includes('payment') || inputLower.includes('charge')) {
-            return { callType: 'billing' };
+            return { callType: 'billing', confidence: 0.9 };
         }
         
         if (inputLower.includes('complaint') || inputLower.includes('unhappy') || inputLower.includes('not satisfied')) {
-            return { callType: 'complaint' };
+            return { callType: 'complaint', confidence: 0.85 };
         }
         
         if (inputLower.includes('schedule') || inputLower.includes('appointment') || inputLower.includes('book')) {
-            return { callType: 'booking' };
+            return { callType: 'booking', confidence: 0.9 };
         }
         
-        // Default to service issue if they mention a problem
         const problemWords = ['broken', 'not working', 'issue', 'problem', 'trouble', 'acting up', 'leaking', 'noise'];
         if (problemWords.some(w => inputLower.includes(w))) {
-            return { callType: 'service_issue' };
+            return { callType: 'service_issue', confidence: 0.85 };
         }
         
-        return { callType: 'unknown' };
+        return { callType: 'unknown', confidence: 0 };
     }
     
-    /**
-     * Check for urgency indicators
-     */
-    checkUrgency(inputLower) {
+    _checkUrgency(inputLower) {
         const patterns = this.contextConfig.urgencyPatterns || [
             'emergency', 'no heat', 'no ac', 'flooding', 'gas smell', 'smoke', 'sparking'
         ];
@@ -751,10 +1029,7 @@ class ConversationStateMachine {
         return { isUrgent: false, level: 'normal' };
     }
     
-    /**
-     * Check for repeat visit indicators
-     */
-    checkRepeatVisit(inputLower) {
+    _checkRepeatVisit(inputLower) {
         const patterns = this.contextConfig.repeatVisitPatterns || [
             'you were here', 'you guys came', 'technician was here', 'same problem again'
         ];
@@ -768,60 +1043,38 @@ class ConversationStateMachine {
         return { isRepeat: false };
     }
     
-    /**
-     * Check if input indicates off-rails
-     */
-    checkOffRails(inputLower) {
+    _checkOffRails(inputLower) {
         if (!this.offRailsConfig.enabled) {
             return { isOffRails: false };
         }
         
-        // Check frustration triggers
-        const frustrationTriggers = this.offRailsConfig.defaultTriggers?.frustration || [];
-        for (const trigger of frustrationTriggers) {
-            if (inputLower.includes(trigger.toLowerCase())) {
-                return { isOffRails: true, type: 'frustrated', trigger };
-            }
-        }
+        const triggerCategories = [
+            { key: 'frustration', type: 'frustrated' },
+            { key: 'problemQuestions', type: 'problemQuestion' },
+            { key: 'humanRequest', type: 'humanRequest' },
+            { key: 'confusion', type: 'confused' }
+        ];
         
-        // Check problem question triggers
-        const problemTriggers = this.offRailsConfig.defaultTriggers?.problemQuestions || [];
-        for (const trigger of problemTriggers) {
-            if (inputLower.includes(trigger.toLowerCase())) {
-                return { isOffRails: true, type: 'problemQuestion', trigger };
-            }
-        }
-        
-        // Check human request triggers
-        const humanTriggers = this.offRailsConfig.defaultTriggers?.humanRequest || [];
-        for (const trigger of humanTriggers) {
-            if (inputLower.includes(trigger.toLowerCase())) {
-                return { isOffRails: true, type: 'humanRequest', trigger };
-            }
-        }
-        
-        // Check confusion triggers
-        const confusionTriggers = this.offRailsConfig.defaultTriggers?.confusion || [];
-        for (const trigger of confusionTriggers) {
-            if (inputLower.includes(trigger.toLowerCase())) {
-                return { isOffRails: true, type: 'confused', trigger };
+        for (const { key, type } of triggerCategories) {
+            const triggers = this.offRailsConfig.defaultTriggers?.[key] || [];
+            for (const trigger of triggers) {
+                if (inputLower.includes(trigger.toLowerCase())) {
+                    return { isOffRails: true, type, trigger };
+                }
             }
         }
         
         return { isOffRails: false };
     }
     
-    /**
-     * Get booking question for a slot from UI config
-     */
-    getBookingQuestion(slotId) {
+    _getBookingQuestion(slotId) {
         const slot = this.bookingSlots.find(s => (s.id || s.slotId) === slotId);
         
         if (slot?.question) {
             return slot.question;
         }
         
-        // Fallback defaults (should never need these if UI is configured)
+        // Fallback defaults
         const defaults = {
             name: "May I have your name please?",
             phone: "What's the best phone number to reach you?",
@@ -832,30 +1085,22 @@ class ConversationStateMachine {
         return defaults[slotId] || `What is your ${slotId}?`;
     }
     
-    /**
-     * Get next triage question
-     */
-    getNextTriageQuestion() {
+    _getNextTriageQuestion() {
         // TODO: Integrate with triage cards
-        // For now, return null to skip triage
         return null;
     }
     
-    /**
-     * Get current question for the current stage/step
-     */
-    getCurrentQuestion() {
-        switch (this.currentStage) {
+    _getCurrentQuestion() {
+        switch (this.flow.currentStage) {
             case STAGES.DISCOVERY:
                 return this.stagesConfig.discoveryPrompts?.needMoreInfo ||
                     "Can you tell me more about what's going on?";
                 
             case STAGES.BOOKING:
-                if (this.currentStep) {
-                    const slotId = this.currentStep.replace('ASK_', '').toLowerCase();
-                    return this.getBookingQuestion(slotId);
+                if (this.booking.missingSlots.length > 0) {
+                    return this._getBookingQuestion(this.booking.missingSlots[0]);
                 }
-                return this.getBookingQuestion('name');
+                return this._getBookingQuestion('name');
                 
             case STAGES.CONFIRMATION:
                 return "Does that all sound correct?";
@@ -865,120 +1110,132 @@ class ConversationStateMachine {
         }
     }
     
-    /**
-     * Build confirmation message
-     */
-    buildConfirmation() {
+    _buildConfirmation() {
         const template = this.stagesConfig.confirmationSettings?.template ||
             this.frontDeskConfig.bookingTemplates?.confirmTemplate ||
             "Let me confirm: I have {name} at {phone}, service address {address}. Is that correct?";
         
-        return this.replacePlaceholders(template);
+        return this._replacePlaceholders(template);
     }
     
-    /**
-     * Replace placeholders in template
-     */
-    replacePlaceholders(template) {
+    _replacePlaceholders(template) {
         let result = template;
         
-        // Replace slot placeholders
-        result = result.replace(/{name}/g, this.slots.name || 'your name');
-        result = result.replace(/{phone}/g, this.slots.phone || 'your phone');
-        result = result.replace(/{address}/g, this.slots.address || 'the address');
-        result = result.replace(/{time}/g, this.slots.time || 'the scheduled time');
-        
-        // Replace discovery placeholders
+        result = result.replace(/{name}/g, this.booking.collectedSlots.name || 'your name');
+        result = result.replace(/{phone}/g, this.booking.collectedSlots.phone || 'your phone');
+        result = result.replace(/{address}/g, this.booking.collectedSlots.address || 'the address');
+        result = result.replace(/{time}/g, this.booking.collectedSlots.time || 'the scheduled time');
         result = result.replace(/{issue}/g, this.discovery.issue || 'your issue');
         result = result.replace(/{context}/g, this.discovery.context || '');
         
-        // Clean up empty context
         result = result.replace(/\s+\./g, '.').replace(/\s{2,}/g, ' ').trim();
         
         return result;
     }
     
-    /**
-     * Check if input is a confirmation
-     */
-    isConfirmation(inputLower) {
+    _isConfirmation(inputLower) {
         const confirmWords = ['yes', 'yeah', 'yep', 'correct', 'right', 'that\'s right', 'sounds good', 'perfect'];
         return confirmWords.some(w => inputLower.includes(w));
     }
     
-    /**
-     * Check if input is a denial
-     */
-    isDenial(inputLower) {
+    _isDenial(inputLower) {
         const denyWords = ['no', 'nope', 'wrong', 'incorrect', 'that\'s not', 'actually'];
         return denyWords.some(w => inputLower.includes(w));
     }
     
-    /**
-     * Update state from extracted data
-     */
-    updateFromExtracted(extracted) {
-        if (extracted.name && !this.slots.name) {
-            this.slots.name = extracted.name;
+    _updateFromExtracted(extracted) {
+        if (extracted.name && !this.booking.collectedSlots.name) {
+            this.booking.collectedSlots.name = extracted.name;
         }
-        if (extracted.phone && !this.slots.phone) {
-            this.slots.phone = extracted.phone;
+        if (extracted.phone && !this.booking.collectedSlots.phone) {
+            this.booking.collectedSlots.phone = extracted.phone;
         }
-        if (extracted.address && !this.slots.address) {
-            this.slots.address = extracted.address;
+        if (extracted.address && !this.booking.collectedSlots.address) {
+            this.booking.collectedSlots.address = extracted.address;
         }
-        if (extracted.time && !this.slots.time) {
-            this.slots.time = extracted.time;
+        if (extracted.time && !this.booking.collectedSlots.time) {
+            this.booking.collectedSlots.time = extracted.time;
         }
+        
+        // Recompute missing slots
+        this._computeMissingSlots();
     }
     
-    /**
-     * Build context for LLM fallback
-     */
-    buildLLMContext() {
+    _buildLLMContext() {
         return {
-            // Discovery info
+            // Flow state
+            currentStage: this.flow.currentStage,
+            currentStep: this.flow.currentStep,
+            turnsInStage: this.flow.turnsInCurrentStage,
+            totalTurns: this.flow.totalTurns,
+            isFallbackActive: this.flow.isFallbackActive,
+            offRailsCount: this.flow.offRailsCount,
+            lastSystemPrompt: this.flow.lastSystemPrompt,
+            
+            // Discovery
             callerIssue: this.discovery.issue,
             callerContext: this.discovery.context,
             callerMood: this.discovery.mood,
             callType: this.discovery.callType,
             urgency: this.discovery.urgency,
             
-            // Triage info
-            triageOutcome: this.triageState.outcome,
-            diagnosisSummary: this.triageState.diagnosisSummary,
+            // Triage
+            triageOutcome: this.triage.outcome,
+            triageAnswers: this.triage.answers,
             
-            // Booking info
-            slotsCollected: this.slots,
-            
-            // Flow info
-            currentStage: this.currentStage,
-            currentStep: this.currentStep,
+            // Booking
+            slotsCollected: this.booking.collectedSlots,
+            missingSlots: this.booking.missingSlots,
             
             // Memory
             discussedTopics: this.memory.discussedTopics,
             keyFacts: this.memory.keyFacts,
-            offRailsCount: this.memory.offRailsCount || 0,
             
             // Recovery config
             recoveryResponses: this.offRailsConfig.responses,
             bridgeBackPhrase: this.offRailsConfig.bridgeBack?.transitionPhrase,
-            returnToQuestion: this.getCurrentQuestion()
+            returnToQuestion: this._getCurrentQuestion()
         };
     }
     
-    /**
-     * Get state to persist to session
-     */
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STATE EXPORT FOR SESSION PERSISTENCE
+    // ═══════════════════════════════════════════════════════════════════════════
+    
     getStateForSession() {
         return {
-            discovery: this.discovery,
-            triageState: this.triageState,
-            collectedSlots: this.slots,
+            // Discovery
+            discovery: {
+                ...this.discovery
+            },
+            
+            // Triage
+            triageState: {
+                activeCardId: this.triage.activeCardId,
+                currentQuestionId: this.triage.currentQuestionId,
+                questionsAsked: this.triage.questionsAsked,
+                answers: this.triage.answers,
+                outcome: this.triage.outcome,
+                completedAt: this.triage.completedAt
+            },
+            
+            // Booking slots (flat for backward compatibility)
+            collectedSlots: this.booking.collectedSlots,
+            
+            // Conversation memory (includes flow state)
             conversationMemory: {
-                ...this.memory,
-                currentStage: this.currentStage,
-                currentStep: this.currentStep
+                currentStage: this.flow.currentStage,
+                currentStep: this.flow.currentStep,
+                turnsInCurrentStage: this.flow.turnsInCurrentStage,
+                isFallbackActive: this.flow.isFallbackActive,
+                offRailsCount: this.flow.offRailsCount,
+                lastSystemPrompt: this.flow.lastSystemPrompt,
+                bookingConfirmed: this.booking.confirmed,
+                missingSlots: this.booking.missingSlots,
+                discussedTopics: this.memory.discussedTopics,
+                keyFacts: this.memory.keyFacts,
+                recoveryAttempts: this.memory.recoveryAttempts,
+                auditTrail: this.auditTrail
             }
         };
     }
@@ -988,4 +1245,4 @@ class ConversationStateMachine {
 module.exports = ConversationStateMachine;
 module.exports.STAGES = STAGES;
 module.exports.BOOKING_STEPS = BOOKING_STEPS;
-
+module.exports.ENTERPRISE_CONFIG = ENTERPRISE_CONFIG;

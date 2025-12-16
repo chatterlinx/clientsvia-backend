@@ -97,9 +97,11 @@ const conversationSessionSchema = new Schema({
     discovery: {
         // What's the caller's problem/need?
         issue: { type: String, default: null, trim: true },          // "thermostat acting up"
+        issueConfidence: { type: Number, default: 0, min: 0, max: 1 }, // 🆕 Confidence score
         
         // Any relevant context they provided?
         context: { type: String, default: null, trim: true },        // "tech was here yesterday"
+        contextConfidence: { type: Number, default: 0, min: 0, max: 1 }, // 🆕 Confidence score
         
         // What type of call is this?
         callType: { 
@@ -107,6 +109,7 @@ const conversationSessionSchema = new Schema({
             enum: ['service_issue', 'question', 'booking', 'billing', 'complaint', 'followup', 'unknown'],
             default: 'unknown'
         },
+        callTypeConfidence: { type: Number, default: 0, min: 0, max: 1 }, // 🆕 Confidence score
         
         // Urgency level
         urgency: { 
@@ -121,6 +124,7 @@ const conversationSessionSchema = new Schema({
             enum: ['neutral', 'frustrated', 'angry', 'anxious', 'friendly', 'confused'],
             default: 'neutral'
         },
+        moodConfidence: { type: Number, default: 0, min: 0, max: 1 }, // 🆕 Confidence score
         
         // When was discovery completed?
         completedAt: { type: Date, default: null },
@@ -196,18 +200,43 @@ const conversationSessionSchema = new Schema({
         // Current stage in the flow
         currentStage: { 
             type: String, 
-            enum: ['greeting', 'discovery', 'triage', 'booking', 'confirmation', 'complete', 'escalated'],
+            enum: ['greeting', 'discovery', 'triage', 'booking', 'confirmation', 'complete', 'escalated', 'stalled'],
             default: 'greeting'
         },
         
         // Current step within the stage (e.g., 'ASK_NAME' within 'booking')
         currentStep: { type: String, default: null },
         
+        // 🆕 ENTERPRISE: Turns spent in current stage (for stuck detection)
+        turnsInCurrentStage: { type: Number, default: 0 },
+        
+        // 🆕 ENTERPRISE: Is LLM fallback currently active?
+        isFallbackActive: { type: Boolean, default: false },
+        
         // How many times we've gone off-rails this call
         offRailsCount: { type: Number, default: 0 },
         
         // Last time we went off-rails
-        lastOffRailsAt: { type: Date, default: null }
+        lastOffRailsAt: { type: Date, default: null },
+        
+        // 🆕 ENTERPRISE: Last system prompt (for context)
+        lastSystemPrompt: { type: String, default: null, trim: true },
+        
+        // 🆕 ENTERPRISE: Booking confirmed flag
+        bookingConfirmed: { type: Boolean, default: false },
+        
+        // 🆕 ENTERPRISE: Missing slots array (for deterministic collection)
+        missingSlots: [{ type: String }],
+        
+        // 🆕 ENTERPRISE: Audit trail (complete history of decisions)
+        auditTrail: [{
+            turn: { type: Number },
+            timestamp: { type: String },
+            stage: { type: String },
+            step: { type: String },
+            type: { type: String },  // RESPONSE, STAGE_TRANSITION, OFF_RAILS, STUCK_DETECTED
+            data: { type: Schema.Types.Mixed }
+        }]
     },
     
     // ════════════════════════════════════════════════════════════════════════
