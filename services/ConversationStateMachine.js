@@ -137,13 +137,21 @@ class ConversationStateMachine {
         // ═══════════════════════════════════════════════════════════════════════
         // ENTERPRISE: Booking State with missingSlots
         // ═══════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
+        // ENTERPRISE: Booking State with missingSlots
+        // Note: partialName counts as name (first name only is acceptable)
+        // ═══════════════════════════════════════════════════════════════════════
+        const collectedName = session.collectedSlots?.name || session.collectedSlots?.partialName || null;
+        
         this.booking = {
             collectedSlots: {
-                name: session.collectedSlots?.name || null,
+                name: collectedName,
                 phone: session.collectedSlots?.phone || null,
                 address: session.collectedSlots?.address || null,
                 time: session.collectedSlots?.time || null
             },
+            // Also track partialName separately for display
+            partialName: session.collectedSlots?.partialName || null,
             missingSlots: [],  // Computed below
             confirmed: session.conversationMemory?.bookingConfirmed || false
         };
@@ -709,7 +717,14 @@ class ConversationStateMachine {
      */
     _handleBooking(input, inputLower, extracted) {
         // Update slots from extracted data
-        if (extracted.name) this.booking.collectedSlots.name = extracted.name;
+        // Update slots from extracted data (handle both name and partialName)
+        if (extracted.name) {
+            this.booking.collectedSlots.name = extracted.name;
+        } else if (extracted.partialName && !this.booking.collectedSlots.name) {
+            // Accept partial name (first name only) as the name
+            this.booking.collectedSlots.name = extracted.partialName;
+            this.booking.partialName = extracted.partialName;
+        }
         if (extracted.phone) this.booking.collectedSlots.phone = extracted.phone;
         if (extracted.address) this.booking.collectedSlots.address = extracted.address;
         if (extracted.time) this.booking.collectedSlots.time = extracted.time;
@@ -719,7 +734,8 @@ class ConversationStateMachine {
         
         logger.info('[STATE MACHINE V2] 📊 Booking state', {
             collected: this.booking.collectedSlots,
-            missing: this.booking.missingSlots
+            missing: this.booking.missingSlots,
+            partialName: this.booking.partialName
         });
         
         // Check if we have all slots
@@ -748,7 +764,8 @@ class ConversationStateMachine {
         
         // Build acknowledgment for what we just got
         let ack = '';
-        if (extracted.name) ack = `Thanks, ${extracted.name}!`;
+        const nameCollected = extracted.name || extracted.partialName;
+        if (nameCollected) ack = `Thanks, ${nameCollected}!`;
         else if (extracted.phone) ack = 'Got it!';
         else if (extracted.address) ack = 'Perfect!';
         else if (extracted.time) ack = 'Great!';
@@ -1273,21 +1290,39 @@ class ConversationStateMachine {
     }
     
     _updateFromExtracted(extracted) {
-        if (extracted.name && !this.booking.collectedSlots.name) {
-            this.booking.collectedSlots.name = extracted.name;
+        // Handle name - accept either full name or partialName (first name only)
+        if (!this.booking.collectedSlots.name) {
+            if (extracted.name) {
+                this.booking.collectedSlots.name = extracted.name;
+                logger.info('[STATE MACHINE V2] 📝 Name collected', { name: extracted.name });
+            } else if (extracted.partialName) {
+                // Accept partial name (first name only) as the name
+                this.booking.collectedSlots.name = extracted.partialName;
+                this.booking.partialName = extracted.partialName;
+                logger.info('[STATE MACHINE V2] 📝 Partial name accepted as name', { partialName: extracted.partialName });
+            }
         }
+        
         if (extracted.phone && !this.booking.collectedSlots.phone) {
             this.booking.collectedSlots.phone = extracted.phone;
+            logger.info('[STATE MACHINE V2] 📝 Phone collected', { phone: extracted.phone });
         }
         if (extracted.address && !this.booking.collectedSlots.address) {
             this.booking.collectedSlots.address = extracted.address;
+            logger.info('[STATE MACHINE V2] 📝 Address collected', { address: extracted.address });
         }
         if (extracted.time && !this.booking.collectedSlots.time) {
             this.booking.collectedSlots.time = extracted.time;
+            logger.info('[STATE MACHINE V2] 📝 Time collected', { time: extracted.time });
         }
         
-        // Recompute missing slots
+        // Recompute missing slots after updates
         this._computeMissingSlots();
+        
+        logger.info('[STATE MACHINE V2] 📊 After extraction update', {
+            collectedSlots: this.booking.collectedSlots,
+            missingSlots: this.booking.missingSlots
+        });
     }
     
     _buildLLMContext() {
