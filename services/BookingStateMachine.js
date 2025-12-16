@@ -264,14 +264,21 @@ class BookingStateMachine {
         
         // ══════════════════════════════════════════════════════════════════
         // RULE 5: First turn - need LLM to understand intent
+        // SKIP if session is already in booking phase (booking already started)
         // ══════════════════════════════════════════════════════════════════
-        if (this.state === 'INIT' && !this.lastAction) {
+        if (this.state === 'INIT' && !this.lastAction && this.session.phase !== 'booking') {
             // Check if this is clearly booking intent
             const bookingIntent = /\b(appointment|schedule|book|service|repair|fix|broken|not working|need help)\b/i;
             if (!bookingIntent.test(input)) {
                 logger.info('[STATE MACHINE] First turn, unclear intent, LLM needed');
                 return true;
             }
+        }
+        
+        // If session is in booking phase, state machine can handle slot collection
+        if (this.session.phase === 'booking') {
+            logger.info('[STATE MACHINE] Session in booking phase, state machine handles it');
+            return false;
         }
         
         // Default: State machine can handle it
