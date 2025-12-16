@@ -46,7 +46,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V5-HYBRID-HANDOFF';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V6-INCOMPLETE-SENTENCE';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ Single entry point for ALL channels',

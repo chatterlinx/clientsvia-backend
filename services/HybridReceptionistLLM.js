@@ -827,18 +827,22 @@ ${runningSummary ? `CONTEXT: ${runningSummary}\n` : ''}OUTPUT JSON:
 
 RULES:
 1. If caller just says "hi/hello" → slot:"none", greet them and ask how you can help
-2. If caller mentions a problem/service need → start collecting info
-3. Collect slots IN ORDER: ${needed.join(' → ')} (start with ${firstMissingSlot})
-4. slot = which info to collect next (system adds the exact question)
-5. ack = your natural response (greeting, acknowledgment, or full reply if slot is "none")
-6. Never re-ask for info already in HAVE
-7. Keep responses under 2 sentences
-${forbidden ? `8. Never say: ${forbidden}` : ''}
+2. If sentence seems INCOMPLETE (ends with "a", "the", "to", "and", "but", "I need to", etc.) → slot:"none", ask them to continue: "I'm listening, go ahead" or "Tell me more"
+3. If caller mentions a clear problem/service need → start collecting info
+4. Collect slots IN ORDER: ${needed.join(' → ')} (start with ${firstMissingSlot})
+5. slot = which info to collect next (system adds the exact question)
+6. ack = your natural response (greeting, acknowledgment, or full reply if slot is "none")
+7. Never re-ask for info already in HAVE
+8. Keep responses under 2 sentences
+${forbidden ? `9. Never say: ${forbidden}` : ''}
 ${lastAgentResponse ? `- You just said: "${lastAgentResponse.substring(0, 40)}..." - don't repeat` : ''}
 
 Examples:
 User: "Hi good morning"
 {"slot":"none","ack":"Good morning! How can I help you today?"}
+
+User: "yes I need to have a"
+{"slot":"none","ack":"Sure, what do you need?"}
 
 User: "My AC is broken"
 {"slot":"${firstMissingSlot}","ack":"That sounds uncomfortable! Let me get you scheduled."}
