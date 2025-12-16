@@ -847,10 +847,61 @@ async function processTurn({
                 mode: aiResult.conversationMode,
                 replyPreview: (aiResult.reply || '').substring(0, 50)
             });
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // CRITICAL FIX: Save state machine state after LLM path too!
+            // This ensures lastAction is preserved for the next turn so we know
+            // what slot we were asking for and can properly detect when it's filled.
+            // ═══════════════════════════════════════════════════════════════════
+            if (aiResult.conversationMode === 'booking' || aiResult.wantsBooking) {
+                // Update state machine with extracted slots so it knows what we have
+                stateMachine.updateSlots(extractedThisTurn);
+                
+                // If LLM is asking for a slot, record it in state machine
+                // nextGoal format is "ASK_NAME", "ASK_PHONE", etc. - extract the slot name
+                const nextGoal = aiResult.nextGoal || '';
+                let llmAskedForSlot = null;
+                
+                if (nextGoal.startsWith('ASK_')) {
+                    llmAskedForSlot = nextGoal.replace('ASK_', '').toLowerCase();
+                } else if (aiResult.needsInfo && aiResult.needsInfo !== 'none') {
+                    llmAskedForSlot = aiResult.needsInfo.toLowerCase();
+                }
+                
+                log('CHECKPOINT 9c: 🔍 LLM slot detection', {
+                    nextGoal,
+                    needsInfo: aiResult.needsInfo,
+                    llmAskedForSlot
+                });
+                
+                if (llmAskedForSlot && ['name', 'phone', 'address', 'time'].includes(llmAskedForSlot)) {
+                    stateMachine.recordAsk(llmAskedForSlot);
+                }
+                
+                // Save state machine state to session
+                session.stateMachine = stateMachine.getStateForSession();
+                log('CHECKPOINT 9c: 📊 State machine state saved after LLM path', {
+                    lastAction: session.stateMachine.lastAction,
+                    askCount: session.stateMachine.askCount,
+                    state: session.stateMachine.state
+                });
+            }
         }
         
         // Merge extracted slots
         aiResult.filledSlots = { ...(aiResult.filledSlots || {}), ...extractedThisTurn };
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // CRITICAL: Update session.collectedSlots IMMEDIATELY after extraction
+        // This ensures slots persist even if later save operations fail
+        // ═══════════════════════════════════════════════════════════════════════
+        if (Object.keys(extractedThisTurn).length > 0) {
+            session.collectedSlots = { ...session.collectedSlots, ...extractedThisTurn };
+            log('CHECKPOINT 9d: 📊 Slots immediately saved to session', {
+                extractedThisTurn,
+                allSlots: session.collectedSlots
+            });
+        }
         
         log('CHECKPOINT 9: ✅ Response generated', { 
             source: aiResult.fromStateMachine ? 'STATE_MACHINE' : 'LLM',
