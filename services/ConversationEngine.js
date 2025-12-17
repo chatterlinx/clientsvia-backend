@@ -866,10 +866,29 @@ async function processTurn({
         const aiStartTime = Date.now();
         
         // ═══════════════════════════════════════════════════════════════════════
+        // V22 KILL SWITCHES - Read from company config (UI-controlled)
+        // ═══════════════════════════════════════════════════════════════════════
+        const discoveryConsent = company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent || {};
+        const killSwitches = {
+            // If true: Booking REQUIRES explicit consent (default: true)
+            bookingRequiresConsent: discoveryConsent.bookingRequiresExplicitConsent !== false,
+            // If true: LLM ALWAYS speaks during discovery (default: true)
+            forceLLMDiscovery: discoveryConsent.forceLLMDiscovery !== false,
+            // If true: Scenarios are context only, never verbatim (default: true)
+            disableScenarioAutoResponses: discoveryConsent.disableScenarioAutoResponses !== false
+        };
+        
+        log('CHECKPOINT 9a: 🔒 Kill switches loaded', killSwitches);
+        
+        // ═══════════════════════════════════════════════════════════════════════
         // MODE-BASED ROUTING (THE CORE OF OPTION 1)
         // ═══════════════════════════════════════════════════════════════════════
         
-        if (session.mode === 'BOOKING' && session.booking?.consentGiven) {
+        // KILL SWITCH ENFORCEMENT: If bookingRequiresConsent is ON, 
+        // booking mode is ONLY allowed if consent was explicitly given
+        const canEnterBooking = !killSwitches.bookingRequiresConsent || session.booking?.consentGiven;
+        
+        if (session.mode === 'BOOKING' && canEnterBooking) {
             // ═══════════════════════════════════════════════════════════════════
             // BOOKING MODE - Deterministic clipboard (consent already given)
             // ═══════════════════════════════════════════════════════════════════
@@ -970,6 +989,10 @@ async function processTurn({
             // 
             // THE GOLDEN RULE: "Nothing should bypass the LLM during discovery."
             // 
+            // KILL SWITCH ENFORCEMENT:
+            // - forceLLMDiscovery = true → LLM ALWAYS speaks (no state machine)
+            // - disableScenarioAutoResponses = true → Scenarios are context only
+            // 
             // FLOW:
             // 1. Retrieve relevant scenarios (TOOLS, not scripts)
             // 2. Detect caller emotion (lightweight heuristic)
@@ -979,7 +1002,16 @@ async function processTurn({
             // 
             // The LLM is the PRIMARY BRAIN. Scenarios are just knowledge tools.
             // ═══════════════════════════════════════════════════════════════════
-            log('CHECKPOINT 9b: 🧠 V22 LLM-LED DISCOVERY MODE');
+            
+            // ENFORCE: forceLLMDiscovery kill switch
+            if (!killSwitches.forceLLMDiscovery) {
+                log('⚠️ WARNING: forceLLMDiscovery is OFF - legacy mode may bypass LLM');
+            }
+            
+            log('CHECKPOINT 9b: 🧠 V22 LLM-LED DISCOVERY MODE', {
+                forceLLMDiscovery: killSwitches.forceLLMDiscovery,
+                disableScenarioAutoResponses: killSwitches.disableScenarioAutoResponses
+            });
             
             // Step 1: Retrieve relevant scenarios as knowledge tools
             const templateRefs = company.aiAgentSettings?.templateReferences || [];
@@ -1020,7 +1052,9 @@ async function processTurn({
                 mode: 'LLM_LED_DISCOVERY',
                 
                 // Scenario knowledge (tools, not scripts)
+                // KILL SWITCH: disableScenarioAutoResponses controls how scenarios are used
                 scenarioKnowledge: scenarioRetrieval.scenarios,
+                scenarioUsageMode: killSwitches.disableScenarioAutoResponses ? 'context_only' : 'may_verbatim',
                 
                 // Caller emotion
                 callerEmotion: emotion.emotion,
@@ -1035,7 +1069,10 @@ async function processTurn({
                 customSystemPrompt: discoveryPrompt,
                 
                 // Collected slots (for context, NOT for asking)
-                collectedSlots: currentSlots
+                collectedSlots: currentSlots,
+                
+                // V22 Kill Switches (passed to LLM for prompt enforcement)
+                killSwitches
             };
             
             log('CHECKPOINT 9e: 🎯 LLM context built for discovery', {
