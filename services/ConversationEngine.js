@@ -867,11 +867,34 @@ async function processTurn({
             }
         }
         
-        const willAskForMissingNamePart = currentSlots.partialName && !currentSlots.name;
+        // ═══════════════════════════════════════════════════════════════════════
+        // PARTIAL NAME PROMOTION - In BOOKING mode, accept partialName as name
+        // ═══════════════════════════════════════════════════════════════════════
+        // When in booking mode (or about to enter), we accept a partial name
+        // because we need to move forward. We can always confirm it later.
+        // This prevents the "asked for name, got Mark, asked again" bug.
+        // ═══════════════════════════════════════════════════════════════════════
+        const isInBookingMode = session.mode === 'BOOKING' || session.booking?.consentGiven;
+        
+        if (currentSlots.partialName && !currentSlots.name) {
+            if (isInBookingMode) {
+                // In booking mode: promote partial to full name immediately
+                currentSlots.name = currentSlots.partialName;
+                extractedThisTurn.name = currentSlots.partialName;
+                log('📝 PARTIAL NAME PROMOTED: In booking mode, accepting partial as full name', {
+                    partialName: currentSlots.partialName,
+                    promotedTo: currentSlots.name
+                });
+            }
+            // In discovery mode: keep as partial, will ask for full name later
+        }
+        
+        const willAskForMissingNamePart = currentSlots.partialName && !currentSlots.name && !isInBookingMode;
         log('CHECKPOINT 8: ✅ Slots extracted', { 
             currentSlots: JSON.stringify(currentSlots),
             extractedThisTurn: JSON.stringify(extractedThisTurn),
-            willAskForMissingNamePart
+            willAskForMissingNamePart,
+            isInBookingMode
         });
         
         // ═══════════════════════════════════════════════════════════════════════
@@ -1147,6 +1170,18 @@ async function processTurn({
                 const bookingConfigSafe = BookingScriptEngine.getBookingSlotsFromCompany(company);
                 const bookingSlotsSafe = bookingConfigSafe.slots || [];
                 
+                // Build acknowledgment for what was just collected this turn
+                let acknowledgment = '';
+                if (extractedThisTurn.name) {
+                    acknowledgment = `Got it, ${extractedThisTurn.name}. `;
+                } else if (extractedThisTurn.phone) {
+                    acknowledgment = `Thank you. `;
+                } else if (extractedThisTurn.address) {
+                    acknowledgment = `Perfect. `;
+                } else if (extractedThisTurn.time) {
+                    acknowledgment = `Great. `;
+                }
+                
                 // Find next required slot not yet collected
                 const nextMissingSlotSafe = bookingSlotsSafe.find(slot => {
                     const slotId = slot.slotId || slot.id || slot.type;
@@ -1160,10 +1195,15 @@ async function processTurn({
                     const slotId = nextMissingSlotSafe.slotId || nextMissingSlotSafe.id || nextMissingSlotSafe.type;
                     const exactQuestion = nextMissingSlotSafe.question;
                     
-                    log('📋 BOOKING SAFETY NET: Asking next slot', { slotId, question: exactQuestion });
+                    log('📋 BOOKING SAFETY NET: Asking next slot', { 
+                        slotId, 
+                        question: exactQuestion,
+                        acknowledgment,
+                        extractedThisTurn
+                    });
                     
                     aiResult = {
-                        reply: exactQuestion,
+                        reply: `${acknowledgment}${exactQuestion}`,
                         conversationMode: 'booking',
                         intent: 'booking',
                         nextGoal: `COLLECT_${slotId.toUpperCase()}`,
@@ -1180,7 +1220,9 @@ async function processTurn({
                             source: 'BOOKING_SAFETY_NET',
                             stage: 'booking',
                             step: slotId,
-                            smAction: smResult?.action
+                            smAction: smResult?.action,
+                            acknowledgment,
+                            extractedThisTurn
                         }
                     };
                 } else {
