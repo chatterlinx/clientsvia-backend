@@ -834,6 +834,11 @@ async function processTurn({
             session.booking = { consentGiven: false };
         }
         
+        // Declare aiResult early so booking snap can set it
+        let aiResult = null;
+        let aiLatencyMs = 0;
+        const aiStartTime = Date.now();
+        
         // ═══════════════════════════════════════════════════════════════════════
         // CONSENT DETECTION - Check if caller explicitly wants to book
         // ═══════════════════════════════════════════════════════════════════════
@@ -847,23 +852,82 @@ async function processTurn({
             session.booking.consentTimestamp = new Date();
             session.mode = 'BOOKING';
             
+            // Store discovery summary before switching to booking
+            session.discoverySummary = session.discovery?.issue || 
+                                       session.conversationMemory?.summary || 
+                                       'Caller wants to schedule service';
+            
             log('🎯 CONSENT DETECTED - Transitioning to BOOKING mode', {
                 matchedPhrase: consentCheck.matchedPhrase,
                 reason: consentCheck.reason,
-                turn: session.booking.consentTurn
+                turn: session.booking.consentTurn,
+                discoverySummary: session.discoverySummary
             });
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // BOOKING SNAP: Return first booking question IMMEDIATELY
+            // ═══════════════════════════════════════════════════════════════════
+            // This is the "clipboard snap" - we don't let LLM freestyle anymore.
+            // We use the EXACT question from the booking panel.
+            // ═══════════════════════════════════════════════════════════════════
+            const bookingConfigSnap = BookingScriptEngine.getBookingSlotsFromCompany(company);
+            const bookingSlotsSnap = bookingConfigSnap.slots || [];
+            
+            // Find first required slot that's not collected
+            const firstMissingSlot = bookingSlotsSnap.find(slot => {
+                const slotId = slot.slotId || slot.id || slot.type;
+                const isCollected = currentSlots[slotId] || currentSlots[slot.type];
+                return slot.required && !isCollected;
+            });
+            
+            if (firstMissingSlot) {
+                const slotId = firstMissingSlot.slotId || firstMissingSlot.id || firstMissingSlot.type;
+                session.booking.currentSlotId = slotId;
+                session.booking.currentSlotQuestion = firstMissingSlot.question;
+                
+                // Build acknowledgment + exact question
+                const ack = "Perfect! Let me get your information.";
+                const exactQuestion = firstMissingSlot.question;
+                
+                aiLatencyMs = Date.now() - aiStartTime;
+                
+                log('📋 BOOKING SNAP: Asking first slot immediately', {
+                    slotId,
+                    question: exactQuestion
+                });
+                
+                aiResult = {
+                    reply: `${ack} ${exactQuestion}`,
+                    conversationMode: 'booking',
+                    intent: 'booking',
+                    nextGoal: `COLLECT_${slotId.toUpperCase()}`,
+                    filledSlots: currentSlots,
+                    signals: { 
+                        wantsBooking: true,
+                        consentGiven: true,
+                        bookingJustStarted: true
+                    },
+                    latencyMs: aiLatencyMs,
+                    tokensUsed: 0,  // 🎯 0 tokens - deterministic!
+                    fromStateMachine: true,
+                    mode: 'BOOKING',
+                    debug: {
+                        source: 'BOOKING_SNAP',
+                        stage: 'booking',
+                        step: slotId,
+                        firstSlotQuestion: exactQuestion
+                    }
+                };
+            }
         }
         
         log('CHECKPOINT 9a: Mode state', {
             mode: session.mode,
             consentGiven: session.booking?.consentGiven,
             consentPhrase: session.booking?.consentPhrase,
-            consentCheck
+            consentCheck,
+            bookingSnapTriggered: !!aiResult
         });
-        
-        let aiResult;
-        let aiLatencyMs = 0;
-        const aiStartTime = Date.now();
         
         // ═══════════════════════════════════════════════════════════════════════
         // V22 KILL SWITCHES - Read from company config (UI-controlled)
@@ -881,14 +945,20 @@ async function processTurn({
         log('CHECKPOINT 9a: 🔒 Kill switches loaded', killSwitches);
         
         // ═══════════════════════════════════════════════════════════════════════
-        // MODE-BASED ROUTING (THE CORE OF OPTION 1)
+        // BOOKING SNAP CHECK - If we already have a response from consent snap, skip AI
         // ═══════════════════════════════════════════════════════════════════════
-        
         // KILL SWITCH ENFORCEMENT: If bookingRequiresConsent is ON, 
         // booking mode is ONLY allowed if consent was explicitly given
         const canEnterBooking = !killSwitches.bookingRequiresConsent || session.booking?.consentGiven;
         
-        if (session.mode === 'BOOKING' && canEnterBooking) {
+        if (aiResult && aiResult.debug?.source === 'BOOKING_SNAP') {
+            log('⚡ BOOKING SNAP: Skipping AI routing - using snap response');
+            // aiResult is already set, skip to save/return
+        }
+        // ═══════════════════════════════════════════════════════════════════════
+        // MODE-BASED ROUTING (THE CORE OF OPTION 1)
+        // ═══════════════════════════════════════════════════════════════════════
+        else if (session.mode === 'BOOKING' && canEnterBooking) {
             // ═══════════════════════════════════════════════════════════════════
             // BOOKING MODE - Deterministic clipboard (consent already given)
             // ═══════════════════════════════════════════════════════════════════
@@ -928,6 +998,16 @@ async function processTurn({
                 // LLM handles it, then returns to booking slot
                 log('CHECKPOINT 9c: 🔄 Booking interruption - LLM handles, then resume');
                 
+                // Get the next slot question for bridging back
+                const bookingConfigInt = BookingScriptEngine.getBookingSlotsFromCompany(company);
+                const bookingSlotsInt = bookingConfigInt.slots || [];
+                const nextMissingSlotInt = bookingSlotsInt.find(slot => {
+                    const slotId = slot.slotId || slot.id || slot.type;
+                    const isCollected = currentSlots[slotId] || currentSlots[slot.type];
+                    return slot.required && !isCollected;
+                });
+                const nextSlotQuestion = nextMissingSlotInt?.question || smResult.returnToQuestion;
+                
                 const llmResult = await HybridReceptionistLLM.processConversation({
                     company,
                     callContext: {
@@ -938,9 +1018,19 @@ async function processTurn({
                         turnCount: (session.metrics?.totalTurns || 0) + 1,
                         channel,
                         partialName: currentSlots.partialName || null,
-                        enterpriseContext: smResult.context || {},
+                        // V22 INTERRUPT CONTEXT - Pass discovery summary + key facts
+                        enterpriseContext: {
+                            ...smResult.context,
+                            mode: 'BOOKING_INTERRUPTION',
+                            discoverySummary: session.discoverySummary || session.discovery?.issue || 'Scheduling service',
+                            keyFacts: session.keyFacts || [],
+                            collectedSlots: currentSlots,
+                            nextSlotQuestion: nextSlotQuestion,
+                            // Tell LLM to bridge back after answering
+                            bridgeBackRequired: true
+                        },
                         offRailsType: smResult.offRails?.type,
-                        returnToQuestion: smResult.returnToQuestion,
+                        returnToQuestion: nextSlotQuestion,
                         mode: 'BOOKING_INTERRUPTION'
                     },
                     currentMode: 'booking',
@@ -1173,6 +1263,31 @@ async function processTurn({
         // Save state to session (both modes)
         // ═══════════════════════════════════════════════════════════════════
         session.collectedSlots = { ...session.collectedSlots, ...currentSlots };
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // KEY FACTS STORAGE - For interrupt handling context
+        // ═══════════════════════════════════════════════════════════════════
+        // Store key facts from the conversation so interrupts don't lose context
+        session.keyFacts = session.keyFacts || [];
+        
+        // Add new facts from this turn
+        if (session.discovery?.issue && !session.keyFacts.includes(`Issue: ${session.discovery.issue}`)) {
+            session.keyFacts.push(`Issue: ${session.discovery.issue}`);
+        }
+        if (currentSlots.name && !session.keyFacts.includes(`Name: ${currentSlots.name}`)) {
+            session.keyFacts.push(`Name: ${currentSlots.name}`);
+        }
+        if (currentSlots.phone && !session.keyFacts.includes(`Phone: ${currentSlots.phone}`)) {
+            session.keyFacts.push(`Phone: ${currentSlots.phone}`);
+        }
+        if (currentSlots.address && !session.keyFacts.includes(`Address: ${currentSlots.address}`)) {
+            session.keyFacts.push(`Address: ${currentSlots.address}`);
+        }
+        
+        // Keep only last 10 facts to prevent bloat
+        if (session.keyFacts.length > 10) {
+            session.keyFacts = session.keyFacts.slice(-10);
+        }
         
         // Update legacy phase for backward compatibility
         if (session.mode === 'BOOKING') {

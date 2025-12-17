@@ -396,8 +396,50 @@ class HybridReceptionistLLM {
             const isV22Discovery = enterpriseContext.mode === 'LLM_LED_DISCOVERY';
             
             let systemPrompt;
+            const isBookingInterruption = enterpriseContext.mode === 'BOOKING_INTERRUPTION';
             
-            if (isV22Discovery && enterpriseContext.customSystemPrompt) {
+            if (isBookingInterruption) {
+                // ════════════════════════════════════════════════════════════════
+                // V22 BOOKING INTERRUPTION: Answer question + bridge back to slot
+                // ════════════════════════════════════════════════════════════════
+                logger.info('[HYBRID LLM] 🔄 BOOKING INTERRUPTION MODE', {
+                    callId,
+                    discoverySummary: enterpriseContext.discoverySummary,
+                    keyFactsCount: enterpriseContext.keyFacts?.length || 0,
+                    nextSlotQuestion: enterpriseContext.nextSlotQuestion
+                });
+                
+                const companyName = company.name || company.companyName || 'our company';
+                const trade = company.trade || 'service';
+                const keyFactsList = (enterpriseContext.keyFacts || []).join('\n- ');
+                const collectedSlotsList = Object.entries(enterpriseContext.collectedSlots || {})
+                    .filter(([k, v]) => v)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join(', ');
+                
+                systemPrompt = `You are ${companyName}'s receptionist (${trade}).
+
+CONTEXT (what we've discussed so far):
+${enterpriseContext.discoverySummary || 'Scheduling service'}
+${keyFactsList ? `\nKey facts:\n- ${keyFactsList}` : ''}
+${collectedSlotsList ? `\nAlready collected: ${collectedSlotsList}` : ''}
+
+The caller asked a question or made a comment DURING booking.
+Your job: Answer briefly (1-2 sentences max), then bridge back to the booking question.
+
+NEXT BOOKING QUESTION: "${enterpriseContext.nextSlotQuestion}"
+
+OUTPUT JSON (STRICT):
+{"say":"brief answer to their question","bridgeBack":"${enterpriseContext.nextSlotQuestion}"}
+
+RULES:
+1. Keep "say" SHORT - 1-2 sentences max
+2. "bridgeBack" must be EXACTLY: "${enterpriseContext.nextSlotQuestion}"
+3. Be helpful but don't get derailed
+4. If they ask about pricing/hours, give brief answer then bridge back
+5. If they're frustrated, acknowledge briefly then bridge back`;
+
+            } else if (isV22Discovery && enterpriseContext.customSystemPrompt) {
                 // ════════════════════════════════════════════════════════════════
                 // V22 DISCOVERY MODE: Use the custom prompt WITH scenario knowledge
                 // ════════════════════════════════════════════════════════════════
@@ -522,6 +564,40 @@ class HybridReceptionistLLM {
             } catch (parseErr) {
                 logger.warn('[HYBRID LLM] JSON parse failed, using raw content as ack');
                 parsed = { slot: 'none', ack: content.replace(/[{}"\n]/g, '').trim() };
+            }
+            
+            // ════════════════════════════════════════════════════════════════
+            // V22 BOOKING INTERRUPTION: Handle {say, bridgeBack} format
+            // ════════════════════════════════════════════════════════════════
+            if (isBookingInterruption && (parsed.say || parsed.bridgeBack)) {
+                const say = (parsed.say || '').trim();
+                const bridgeBack = (parsed.bridgeBack || enterpriseContext.nextSlotQuestion || '').trim();
+                
+                const finalReply = bridgeBack ? `${say} ${bridgeBack}` : say;
+                
+                logger.info('[HYBRID LLM] 🔄 BOOKING INTERRUPTION response assembled', {
+                    callId,
+                    say: say.substring(0, 50),
+                    bridgeBack: bridgeBack.substring(0, 50),
+                    finalReply: finalReply.substring(0, 80)
+                });
+                
+                return {
+                    reply: finalReply,
+                    conversationMode: 'booking',
+                    intent: 'booking_interruption',
+                    nextGoal: 'RESUME_BOOKING',
+                    filledSlots: {},
+                    signals: { bookingInterruption: true, bridgedBack: true },
+                    latencyMs,
+                    tokensUsed: response.usage?.total_tokens || 0,
+                    source: 'booking_interruption',
+                    debug: {
+                        say,
+                        bridgeBack,
+                        originalQuestion: enterpriseContext.nextSlotQuestion
+                    }
+                };
             }
             
             // ════════════════════════════════════════════════════════════════
