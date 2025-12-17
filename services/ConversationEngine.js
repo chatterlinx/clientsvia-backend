@@ -1146,6 +1146,70 @@ async function processTurn({
             slotsCount: Object.keys(session.collectedSlots || {}).filter(k => session.collectedSlots[k]).length
         });
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V22 BLACK BOX LOG - MANDATORY VERIFICATION DATA
+        // ═══════════════════════════════════════════════════════════════════════
+        // This structured log is REQUIRED for acceptance testing.
+        // It proves the system is behaving correctly per V22 architecture.
+        // ═══════════════════════════════════════════════════════════════════════
+        const v22BlackBoxLog = {
+            // Identity
+            companyId: companyId?.toString(),
+            sessionId: session._id?.toString(),
+            turn: (session.metrics?.totalTurns || 0) + 1,
+            timestamp: new Date().toISOString(),
+            
+            // V22 Mode Control (THE CRITICAL DATA)
+            mode: session.mode,
+            previousMode: session._previousMode || 'DISCOVERY',
+            modeTransition: session._previousMode !== session.mode ? `${session._previousMode || 'DISCOVERY'} → ${session.mode}` : 'none',
+            
+            // Consent Gate (MUST BE EXPLICIT)
+            consentDetected: consentCheck?.hasConsent || false,
+            consentPhrase: consentCheck?.matchedPhrase || null,
+            consentGiven: session.booking?.consentGiven || false,
+            bookingStarted: session.mode === 'BOOKING',
+            
+            // LLM Control (PROVES LLM SPOKE FIRST)
+            llmSpoke: !aiResult?.fromStateMachine,
+            llmTokensUsed: aiResult?.tokensUsed || 0,
+            responseSource: aiResult?.debug?.source || (aiResult?.fromStateMachine ? 'STATE_MACHINE' : 'LLM'),
+            
+            // Scenario Tool Usage (NOT SCRIPTS)
+            scenariosRetrieved: session.conversationMemory?.scenariosConsulted || [],
+            scenarioCount: session.conversationMemory?.scenariosConsulted?.length || 0,
+            
+            // Discovery State
+            discoveryIssue: session.discovery?.issue || null,
+            callerEmotion: aiResult?.debug?.emotion || 'neutral',
+            
+            // Latency (MUST BE MEASURED)
+            latencyMs: aiLatencyMs,
+            totalTurnLatencyMs: Date.now() - startTime,
+            
+            // Safety Flags (V22 Kill Switches)
+            killSwitches: {
+                bookingRequiresConsent: company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.bookingRequiresExplicitConsent !== false,
+                forceLLMDiscovery: company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.forceLLMDiscovery !== false,
+                disableScenarioAutoResponses: company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.disableScenarioAutoResponses !== false
+            },
+            
+            // Response Preview (for human verification)
+            userInput: userText?.substring(0, 100),
+            aiResponsePreview: aiResult?.reply?.substring(0, 100)
+        };
+        
+        // Store previous mode for next turn's transition detection
+        session._previousMode = session.mode;
+        
+        // Log to console (structured for parsing)
+        logger.info('[V22 BLACK BOX] Turn complete', v22BlackBoxLog);
+        
+        // Also add to response debug for UI visibility
+        if (aiResult) {
+            aiResult.v22BlackBox = v22BlackBoxLog;
+        }
+        
         // Merge extracted slots
         aiResult.filledSlots = { ...(aiResult.filledSlots || {}), ...extractedThisTurn };
         

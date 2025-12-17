@@ -1868,9 +1868,23 @@ const companySchema = new mongoose.Schema({
             // Controls the hard gate between DISCOVERY and BOOKING modes
             // ═══════════════════════════════════════════════════════════════
             discoveryConsent: {
+                // ═══════════════════════════════════════════════════════════════
+                // V22 KILL SWITCHES - Safety toggles for production
+                // ═══════════════════════════════════════════════════════════════
+                
                 // Master toggle: If ON, booking REQUIRES explicit consent
                 // If OFF (legacy mode), issue detection can trigger booking
                 bookingRequiresExplicitConsent: { type: Boolean, default: true },
+                
+                // KILL SWITCH #1: Force LLM to speak first in discovery
+                // If ON: LLM ALWAYS speaks during discovery (no scripted responses)
+                // If OFF: State machine may respond (legacy behavior)
+                forceLLMDiscovery: { type: Boolean, default: true },
+                
+                // KILL SWITCH #2: Disable scenario auto-responses
+                // If ON: Scenarios are context/tools only, LLM rephrases
+                // If OFF: Scenarios may be played back verbatim (legacy)
+                disableScenarioAutoResponses: { type: Boolean, default: true },
                 
                 // The question AI asks to get consent (trade-specific)
                 // HVAC: "Would you like me to schedule a service appointment?"
