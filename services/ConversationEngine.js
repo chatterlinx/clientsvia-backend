@@ -96,7 +96,12 @@ const ConsentDetector = {
         
         // Get UI-configured consent phrases
         const consentPhrases = detectionTriggers.wantsBooking || [];
-        const consentYesWords = discoveryConsent.consentYesWords || ['yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok'];
+        // Extended yes words - includes "absolutely", "definitely", "sounds good", etc.
+        const consentYesWords = discoveryConsent.consentYesWords || [
+            'yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok', 'alright',
+            'absolutely', 'definitely', 'certainly', 'of course', 'sounds good',
+            'that would be great', 'let\'s do it', 'go ahead', 'perfect'
+        ];
         const requiresYesAfterPrompt = discoveryConsent.consentRequiresYesAfterPrompt !== false;
         
         // Check for explicit booking phrases from UI config
@@ -249,7 +254,13 @@ const SlotExtractors = {
             'conditioning', 'air', 'ac', 'hvac', 'heating', 'cooling', 'plumbing', 'electrical',
             'unit', 'system', 'systems', 'equipment', 'furnace', 'thermostat', 'duct', 'ducts',
             'appointment', 'schedule', 'scheduling', 'book', 'booking', 'call', 'help',
-            'need', 'needs', 'want', 'wants', 'get', 'fix', 'check', 'look', 'today', 'tomorrow'
+            'need', 'needs', 'want', 'wants', 'get', 'fix', 'check', 'look', 'today', 'tomorrow',
+            // TIME/URGENCY words - CRITICAL: "soon", "possible", "asap" are NOT names!
+            'soon', 'possible', 'asap', 'now', 'immediately', 'urgent', 'urgently',
+            'available', 'earliest', 'soonest', 'first', 'next', 'whenever',
+            'somebody', 'someone', 'anybody', 'anyone', 'technician', 'tech',
+            // CONSENT words that might slip through
+            'absolutely', 'definitely', 'certainly', 'perfect', 'great', 'sounds'
         ];
         
         // Full phrases that look like names but aren't
@@ -263,7 +274,15 @@ const SlotExtractors = {
             // Service-related phrases that look like names
             'conditioning service', 'air conditioning', 'ac service', 'ac repair',
             'hvac service', 'heating service', 'cooling service', 'plumbing service',
-            'electrical service', 'maintenance service', 'repair service'
+            'electrical service', 'maintenance service', 'repair service',
+            // TIME/URGENCY phrases - CRITICAL: "as soon as possible" is NOT a name!
+            'as soon as possible', 'as possible', 'soon as possible',
+            'right away', 'right now', 'immediately', 'today', 'tomorrow',
+            'this morning', 'this afternoon', 'this evening',
+            'asap', 'urgent', 'urgently', 'emergency',
+            'morning or afternoon', 'afternoon or morning',
+            'whenever possible', 'when possible', 'at your earliest',
+            'first available', 'next available', 'soonest available'
         ];
         
         // Normalize and check if input is just a greeting/phrase
@@ -1117,6 +1136,81 @@ async function processTurn({
                         returnToQuestion: smResult.returnToQuestion
                     }
                 };
+            } else {
+                // ═══════════════════════════════════════════════════════════════════
+                // BOOKING MODE SAFETY NET - State machine didn't return a response
+                // This happens when state machine is confused. We stay in booking
+                // and ask the next required slot question directly.
+                // ═══════════════════════════════════════════════════════════════════
+                log('⚠️ BOOKING MODE SAFETY NET: State machine returned no action, computing next slot');
+                
+                const bookingConfigSafe = BookingScriptEngine.getBookingSlotsFromCompany(company);
+                const bookingSlotsSafe = bookingConfigSafe.slots || [];
+                
+                // Find next required slot not yet collected
+                const nextMissingSlotSafe = bookingSlotsSafe.find(slot => {
+                    const slotId = slot.slotId || slot.id || slot.type;
+                    const isCollected = currentSlots[slotId] || currentSlots[slot.type];
+                    return slot.required && !isCollected;
+                });
+                
+                aiLatencyMs = Date.now() - aiStartTime;
+                
+                if (nextMissingSlotSafe) {
+                    const slotId = nextMissingSlotSafe.slotId || nextMissingSlotSafe.id || nextMissingSlotSafe.type;
+                    const exactQuestion = nextMissingSlotSafe.question;
+                    
+                    log('📋 BOOKING SAFETY NET: Asking next slot', { slotId, question: exactQuestion });
+                    
+                    aiResult = {
+                        reply: exactQuestion,
+                        conversationMode: 'booking',
+                        intent: 'booking',
+                        nextGoal: `COLLECT_${slotId.toUpperCase()}`,
+                        filledSlots: currentSlots,
+                        signals: { 
+                            wantsBooking: true,
+                            consentGiven: true
+                        },
+                        latencyMs: aiLatencyMs,
+                        tokensUsed: 0,
+                        fromStateMachine: true,
+                        mode: 'BOOKING',
+                        debug: {
+                            source: 'BOOKING_SAFETY_NET',
+                            stage: 'booking',
+                            step: slotId,
+                            smAction: smResult?.action
+                        }
+                    };
+                } else {
+                    // All required slots collected - booking complete!
+                    log('✅ BOOKING COMPLETE: All required slots collected');
+                    
+                    session.mode = 'COMPLETE';
+                    
+                    aiResult = {
+                        reply: "Great! I have all your information. We'll get a technician out to you as soon as possible. Is there anything else I can help you with?",
+                        conversationMode: 'complete',
+                        intent: 'booking_complete',
+                        nextGoal: 'CONFIRM_BOOKING',
+                        filledSlots: currentSlots,
+                        signals: { 
+                            wantsBooking: true,
+                            consentGiven: true,
+                            bookingComplete: true
+                        },
+                        latencyMs: aiLatencyMs,
+                        tokensUsed: 0,
+                        fromStateMachine: true,
+                        mode: 'COMPLETE',
+                        debug: {
+                            source: 'BOOKING_COMPLETE',
+                            stage: 'complete',
+                            collectedSlots: Object.keys(currentSlots).filter(k => currentSlots[k])
+                        }
+                    };
+                }
             }
             
         } else {
