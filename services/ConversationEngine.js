@@ -99,7 +99,7 @@ const ConsentDetector = {
         const consentYesWords = discoveryConsent.consentYesWords || ['yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok'];
         const requiresYesAfterPrompt = discoveryConsent.consentRequiresYesAfterPrompt !== false;
         
-        // Check for explicit booking phrases
+        // Check for explicit booking phrases from UI config
         for (const phrase of consentPhrases) {
             if (phrase && textLower.includes(phrase.toLowerCase())) {
                 return { 
@@ -110,19 +110,66 @@ const ConsentDetector = {
             }
         }
         
-        // Check for "yes" responses (only if we asked the consent question)
-        if (session?.conversationMemory?.lastSystemPrompt?.includes('schedule')) {
-            // We asked about scheduling, check for yes
+        // ═══════════════════════════════════════════════════════════════════
+        // SMART YES DETECTION - Check if caller is saying "yes" to booking
+        // ═══════════════════════════════════════════════════════════════════
+        // This catches: "yes", "yes please", "yes can you please", "yeah", etc.
+        // We check if the AI just asked about scheduling in the last turn
+        // ═══════════════════════════════════════════════════════════════════
+        
+        // Check if last AI response asked about scheduling
+        const lastTurns = session?.turns || [];
+        const lastAssistantTurn = [...lastTurns].reverse().find(t => t.role === 'assistant');
+        const lastAssistantText = (lastAssistantTurn?.content || '').toLowerCase();
+        const askedAboutScheduling = lastAssistantText.includes('schedule') || 
+                                     lastAssistantText.includes('appointment') ||
+                                     lastAssistantText.includes('technician') ||
+                                     lastAssistantText.includes('come out') ||
+                                     session.conversationMemory?.askedConsentQuestion;
+        
+        if (askedAboutScheduling) {
+            // Check for yes words anywhere in the response
             for (const yesWord of consentYesWords) {
-                if (textLower === yesWord || textLower.startsWith(yesWord + ' ') || textLower.endsWith(' ' + yesWord)) {
-                    if (!requiresYesAfterPrompt || session.conversationMemory?.askedConsentQuestion) {
+                // More flexible matching: "yes", "yes please", "yes can you", etc.
+                if (textLower.includes(yesWord)) {
+                    // Make sure it's not a negative context like "yes but no" or "not yes"
+                    const negatives = ['no', 'not', "don't", "can't", 'never'];
+                    const hasNegative = negatives.some(neg => textLower.includes(neg));
+                    
+                    if (!hasNegative) {
                         return { 
                             hasConsent: true, 
                             matchedPhrase: yesWord, 
-                            reason: 'yes_after_consent_question' 
+                            reason: 'yes_after_scheduling_offer' 
                         };
                     }
                 }
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // URGENCY IMPLIES BOOKING - "need someone today", "ASAP", etc.
+        // ═══════════════════════════════════════════════════════════════════
+        const urgencyBookingPhrases = [
+            'need someone today',
+            'need somebody today',
+            'as soon as possible',
+            'asap',
+            'come out today',
+            'today if possible',
+            'right away',
+            'immediately',
+            'send someone',
+            'send somebody'
+        ];
+        
+        for (const urgencyPhrase of urgencyBookingPhrases) {
+            if (textLower.includes(urgencyPhrase)) {
+                return { 
+                    hasConsent: true, 
+                    matchedPhrase: urgencyPhrase, 
+                    reason: 'urgency_implies_booking' 
+                };
             }
         }
         
