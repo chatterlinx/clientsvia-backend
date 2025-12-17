@@ -209,6 +209,10 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
                 modeSwitching: config.modeSwitching || null,
                 serviceAreaResponses: config.serviceAreaResponses || null,
                 inquiryResponses: config.inquiryResponses || null,
+                // V22: Discovery & Consent Gate
+                discoveryConsent: config.discoveryConsent || null,
+                // V22: Vocabulary Guardrails
+                vocabularyGuardrails: config.vocabularyGuardrails || null,
                 lastUpdated: saved.lastUpdated || null
             }
         });
@@ -347,6 +351,26 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
             Object.entries(updates.inquiryResponses).forEach(([key, value]) => {
                 updateObj[`aiAgentSettings.frontDeskBehavior.inquiryResponses.${key}`] = value;
             });
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // V22: Discovery & Consent Gate Settings
+        // ════════════════════════════════════════════════════════════════════════════
+        if (updates.discoveryConsent) {
+            Object.entries(updates.discoveryConsent).forEach(([key, value]) => {
+                updateObj[`aiAgentSettings.frontDeskBehavior.discoveryConsent.${key}`] = value;
+            });
+            logger.info('[FRONT DESK BEHAVIOR] 🧠 V22 Saving discoveryConsent:', updates.discoveryConsent);
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // V22: Vocabulary Guardrails Settings
+        // ════════════════════════════════════════════════════════════════════════════
+        if (updates.vocabularyGuardrails) {
+            Object.entries(updates.vocabularyGuardrails).forEach(([key, value]) => {
+                updateObj[`aiAgentSettings.frontDeskBehavior.vocabularyGuardrails.${key}`] = value;
+            });
+            logger.info('[FRONT DESK BEHAVIOR] 📝 V22 Saving vocabularyGuardrails:', updates.vocabularyGuardrails);
         }
         
         updateObj['aiAgentSettings.frontDeskBehavior.lastUpdated'] = new Date();

@@ -236,6 +236,34 @@ class FrontDeskBehaviorManager {
                 autoRescueOnFrustration: true,
                 // Auto-switch to triage when describing problem
                 autoTriageOnProblem: true
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
+            // V22: Discovery & Consent Gate (LLM-led architecture)
+            // ════════════════════════════════════════════════════════════════════
+            discoveryConsent: {
+                // Kill switches (all ON by default for V22)
+                bookingRequiresExplicitConsent: true,  // Booking ONLY after consent
+                forceLLMDiscovery: true,               // LLM always speaks in discovery
+                disableScenarioAutoResponses: true,    // Scenarios are context only
+                // Consent question
+                consentQuestionTemplate: "Would you like me to schedule an appointment for you?",
+                // Yes words (after consent question)
+                consentYesWords: ["yes", "yeah", "yep", "please", "sure", "okay", "ok", "correct", "sounds good"],
+                // What must be captured before asking consent
+                minDiscoveryFieldsBeforeConsent: ["issueSummary"]
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
+            // V22: Vocabulary Guardrails (multi-tenant safety)
+            // ════════════════════════════════════════════════════════════════════
+            vocabularyGuardrails: {
+                // Words AI CAN use (leave empty for any)
+                allowedServiceNouns: [],
+                // Words AI must NEVER use
+                forbiddenWords: [],
+                // Replacements for forbidden words
+                replacementMap: {}
             }
         };
     }
@@ -315,6 +343,8 @@ class FrontDeskBehaviorManager {
                 <!-- Tab Navigation -->
                 <div id="fdb-tabs" style="display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap;">
                     ${this.renderTab('personality', '🎭 Personality', true)}
+                    ${this.renderTab('discovery', '🧠 Discovery & Consent')}
+                    ${this.renderTab('vocabulary', '📝 Vocabulary')}
                     ${this.renderTab('booking', '📅 Booking Prompts')}
                     ${this.renderTab('emotions', '💭 Emotions')}
                     ${this.renderTab('frustration', '😤 Frustration')}
@@ -1719,6 +1749,235 @@ class FrontDeskBehaviorManager {
         `;
     }
     
+    // ════════════════════════════════════════════════════════════════════════════
+    // V22 TAB: Discovery & Consent Gate
+    // ════════════════════════════════════════════════════════════════════════════
+    // Controls WHEN booking is allowed and HOW consent is detected.
+    // This is the heart of the V22 LLM-led discovery architecture.
+    // ════════════════════════════════════════════════════════════════════════════
+    renderDiscoveryConsentTab() {
+        const dc = this.config.discoveryConsent || {};
+        const dt = this.config.detectionTriggers || {};
+        
+        // Get current values with defaults
+        const bookingRequiresConsent = dc.bookingRequiresExplicitConsent !== false;
+        const forceLLMDiscovery = dc.forceLLMDiscovery !== false;
+        const disableScenarioAuto = dc.disableScenarioAutoResponses !== false;
+        const consentQuestion = dc.consentQuestionTemplate || "Would you like me to schedule an appointment for you?";
+        const consentYesWords = (dc.consentYesWords || ['yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok']).join(', ');
+        const wantsBookingPhrases = (dt.wantsBooking || []).join('\n');
+        const minFields = dc.minDiscoveryFieldsBeforeConsent || ['issueSummary'];
+        
+        return `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
+                <h3 style="margin: 0 0 8px 0; color: #3fb950;">🧠 Discovery & Consent Gate</h3>
+                <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">
+                    <strong>V22 Architecture:</strong> LLM speaks first during discovery. Booking ONLY starts after explicit caller consent.
+                </p>
+                
+                <!-- Kill Switches Section -->
+                <div style="background: #0d1117; border: 2px solid #f85149; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                    <h4 style="margin: 0 0 12px 0; color: #f85149;">🔒 Kill Switches (Safety Controls)</h4>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 16px;">
+                        These toggles control the core V22 behavior. All should be ON for best results.
+                    </p>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 12px; background: #161b22; border: 1px solid #30363d; border-radius: 6px;">
+                            <input type="checkbox" id="fdb-dc-bookingRequiresConsent" ${bookingRequiresConsent ? 'checked' : ''} 
+                                style="accent-color: #3fb950; width: 20px; height: 20px;">
+                            <div>
+                                <span style="color: #c9d1d9; font-weight: 600;">📋 Booking Requires Explicit Consent</span>
+                                <p style="color: #8b949e; font-size: 0.75rem; margin: 4px 0 0 0;">
+                                    Booking mode ONLY activates when caller explicitly agrees to schedule. (Recommended: ON)
+                                </p>
+                            </div>
+                        </label>
+                        
+                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 12px; background: #161b22; border: 1px solid #30363d; border-radius: 6px;">
+                            <input type="checkbox" id="fdb-dc-forceLLMDiscovery" ${forceLLMDiscovery ? 'checked' : ''} 
+                                style="accent-color: #3fb950; width: 20px; height: 20px;">
+                            <div>
+                                <span style="color: #c9d1d9; font-weight: 600;">🧠 Force LLM Discovery (No Scripted Responses)</span>
+                                <p style="color: #8b949e; font-size: 0.75rem; margin: 4px 0 0 0;">
+                                    LLM ALWAYS speaks during discovery - no state machine shortcuts. (Recommended: ON)
+                                </p>
+                            </div>
+                        </label>
+                        
+                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 12px; background: #161b22; border: 1px solid #30363d; border-radius: 6px;">
+                            <input type="checkbox" id="fdb-dc-disableScenarioAuto" ${disableScenarioAuto ? 'checked' : ''} 
+                                style="accent-color: #3fb950; width: 20px; height: 20px;">
+                            <div>
+                                <span style="color: #c9d1d9; font-weight: 600;">📚 Scenarios as Context Only (No Verbatim)</span>
+                                <p style="color: #8b949e; font-size: 0.75rem; margin: 4px 0 0 0;">
+                                    Scenarios inform the LLM but are never read word-for-word. (Recommended: ON)
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Consent Detection Section -->
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                    <h4 style="margin: 0 0 12px 0; color: #58a6ff;">🎯 Consent Detection</h4>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 16px;">
+                        These phrases trigger booking mode. Caller must say one of these to start scheduling.
+                    </p>
+                    
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            📝 Consent Phrases (one per line)
+                        </label>
+                        <textarea id="fdb-dc-wantsBooking" rows="6" 
+                            placeholder="schedule an appointment\nbook a service\nsend someone out\nwhen can you come\nset up a time"
+                            style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 0.85rem; resize: vertical;">${wantsBookingPhrases}</textarea>
+                        <p style="color: #8b949e; font-size: 0.7rem; margin-top: 4px;">
+                            Examples: "schedule", "book", "send someone", "appointment", "when can you come"
+                        </p>
+                    </div>
+                    
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            ✅ "Yes" Words (comma-separated)
+                        </label>
+                        <input type="text" id="fdb-dc-yesWords" value="${consentYesWords}"
+                            placeholder="yes, yeah, yep, please, sure, okay, ok, correct"
+                            style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.85rem;">
+                        <p style="color: #8b949e; font-size: 0.7rem; margin-top: 4px;">
+                            Words that count as "yes" after AI asks the consent question
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Consent Question Section -->
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                    <h4 style="margin: 0 0 12px 0; color: #a371f7;">💬 Consent Question</h4>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 16px;">
+                        The question AI asks when it believes caller might want to book. Customize per trade.
+                    </p>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            🎤 Consent Question Template
+                        </label>
+                        <input type="text" id="fdb-dc-consentQuestion" value="${consentQuestion}"
+                            placeholder="Would you like me to schedule an appointment for you?"
+                            style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.9rem;">
+                        <p style="color: #8b949e; font-size: 0.7rem; margin-top: 4px;">
+                            <strong>HVAC:</strong> "Would you like me to schedule a service appointment?"<br>
+                            <strong>Dental:</strong> "Would you like me to schedule an appointment for you?"<br>
+                            <strong>Legal:</strong> "Would you like me to set up a consultation?"
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Minimum Discovery Fields -->
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;">
+                    <h4 style="margin: 0 0 12px 0; color: #f0883e;">📋 Required Before Consent</h4>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 16px;">
+                        What must be captured BEFORE AI can ask the consent question. Prevents premature booking.
+                    </p>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="fdb-dc-minField-issueSummary" ${minFields.includes('issueSummary') ? 'checked' : ''} 
+                                style="accent-color: #f0883e; width: 16px; height: 16px;">
+                            <span style="color: #c9d1d9;">Issue Summary (what's the problem)</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="fdb-dc-minField-serviceType" ${minFields.includes('serviceType') ? 'checked' : ''} 
+                                style="accent-color: #f0883e; width: 16px; height: 16px;">
+                            <span style="color: #c9d1d9;">Service Type (what kind of service)</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="fdb-dc-minField-urgency" ${minFields.includes('urgency') ? 'checked' : ''} 
+                                style="accent-color: #f0883e; width: 16px; height: 16px;">
+                            <span style="color: #c9d1d9;">Urgency Level (how urgent)</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="fdb-dc-minField-existingCustomer" ${minFields.includes('existingCustomer') ? 'checked' : ''} 
+                                style="accent-color: #f0883e; width: 16px; height: 16px;">
+                            <span style="color: #c9d1d9;">Existing Customer (have we served them before)</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // V22 TAB: Vocabulary Guardrails
+    // ════════════════════════════════════════════════════════════════════════════
+    // Prevents cross-trade contamination (HVAC words in dental, etc.)
+    // ════════════════════════════════════════════════════════════════════════════
+    renderVocabularyTab() {
+        const vg = this.config.vocabularyGuardrails || {};
+        
+        const allowedNouns = (vg.allowedServiceNouns || []).join(', ');
+        const forbiddenWords = (vg.forbiddenWords || []).join(', ');
+        const replacementMap = vg.replacementMap || {};
+        const replacementPairs = Object.entries(replacementMap).map(([k, v]) => `${k} → ${v}`).join('\\n');
+        
+        return `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
+                <h3 style="margin: 0 0 8px 0; color: #f0883e;">📝 Vocabulary Guardrails</h3>
+                <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">
+                    <strong>Multi-Tenant Safety:</strong> Prevent cross-trade word contamination. A dental office should never say "technician".
+                </p>
+                
+                <!-- Allowed Service Nouns -->
+                <div style="background: #0d1117; border: 1px solid #238636; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 12px 0; color: #3fb950;">✅ Allowed Service Nouns</h4>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 12px;">
+                        Words the AI CAN use when referring to service/staff. Leave empty to allow any.
+                    </p>
+                    
+                    <input type="text" id="fdb-vg-allowedNouns" value="${allowedNouns}"
+                        placeholder="e.g., technician, appointment, service call (for HVAC) or dentist, hygienist, appointment (for dental)"
+                        style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.85rem;">
+                    <p style="color: #8b949e; font-size: 0.7rem; margin-top: 8px;">
+                        <strong>HVAC:</strong> technician, service call, unit, system, repair<br>
+                        <strong>Dental:</strong> dentist, hygienist, appointment, cleaning, checkup<br>
+                        <strong>Legal:</strong> attorney, consultation, case, meeting
+                    </p>
+                </div>
+                
+                <!-- Forbidden Words -->
+                <div style="background: #0d1117; border: 1px solid #f85149; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 12px 0; color: #f85149;">🚫 Forbidden Words</h4>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 12px;">
+                        Words the AI must NEVER use. These will be blocked or replaced.
+                    </p>
+                    
+                    <input type="text" id="fdb-vg-forbiddenWords" value="${forbiddenWords}"
+                        placeholder="e.g., technician, dispatch (for dental) or hygienist, dentist (for HVAC)"
+                        style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.85rem;">
+                    <p style="color: #8b949e; font-size: 0.7rem; margin-top: 8px;">
+                        <strong>Dental forbids:</strong> technician, dispatch, unit, repair<br>
+                        <strong>HVAC forbids:</strong> hygienist, dentist, cleaning<br>
+                        <strong>Legal forbids:</strong> technician, repair, cleaning
+                    </p>
+                </div>
+                
+                <!-- Replacement Map -->
+                <div style="background: #0d1117; border: 1px solid #a371f7; border-radius: 8px; padding: 16px;">
+                    <h4 style="margin: 0 0 12px 0; color: #a371f7;">🔄 Word Replacements</h4>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 12px;">
+                        If a forbidden word must be used, replace it with an approved alternative.
+                    </p>
+                    
+                    <textarea id="fdb-vg-replacements" rows="4" 
+                        placeholder="technician → team member\ndispatch → send\nunit → system"
+                        style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 0.85rem; resize: vertical;">${replacementPairs}</textarea>
+                    <p style="color: #8b949e; font-size: 0.7rem; margin-top: 8px;">
+                        Format: <code style="background: #30363d; padding: 2px 6px; border-radius: 3px;">forbidden word → replacement</code> (one per line)
+                    </p>
+                </div>
+            </div>
+        `;
+    }
+
     // ════════════════════════════════════════════════════════════════════
     // NEW TAB: Mode Switching
     // ════════════════════════════════════════════════════════════════════
@@ -1872,6 +2131,8 @@ class FrontDeskBehaviorManager {
         const content = container.querySelector('#fdb-tab-content');
         switch (tabId) {
             case 'personality': content.innerHTML = this.renderPersonalityTab(); break;
+            case 'discovery': content.innerHTML = this.renderDiscoveryConsentTab(); break;
+            case 'vocabulary': content.innerHTML = this.renderVocabularyTab(); break;
             case 'booking': content.innerHTML = this.renderBookingPromptsTab(); break;
             case 'emotions': content.innerHTML = this.renderEmotionsTab(); break;
             case 'frustration': content.innerHTML = this.renderFrustrationTab(); break;
@@ -2073,6 +2334,74 @@ class FrontDeskBehaviorManager {
                 autoRescueOnFrustration: getChecked('fdb-ms-autoRescue'),
                 autoTriageOnProblem: getChecked('fdb-ms-autoTriage')
             };
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // V22: Discovery & Consent Gate Settings
+        // ════════════════════════════════════════════════════════════════════════════
+        if (document.getElementById('fdb-dc-bookingRequiresConsent')) {
+            // Collect minimum discovery fields
+            const minFields = [];
+            if (getChecked('fdb-dc-minField-issueSummary')) minFields.push('issueSummary');
+            if (getChecked('fdb-dc-minField-serviceType')) minFields.push('serviceType');
+            if (getChecked('fdb-dc-minField-urgency')) minFields.push('urgency');
+            if (getChecked('fdb-dc-minField-existingCustomer')) minFields.push('existingCustomer');
+            
+            // Parse yes words from comma-separated input
+            const yesWordsRaw = get('fdb-dc-yesWords') || '';
+            const yesWords = yesWordsRaw.split(',').map(w => w.trim().toLowerCase()).filter(w => w);
+            
+            this.config.discoveryConsent = {
+                // Kill switches
+                bookingRequiresExplicitConsent: getChecked('fdb-dc-bookingRequiresConsent'),
+                forceLLMDiscovery: getChecked('fdb-dc-forceLLMDiscovery'),
+                disableScenarioAutoResponses: getChecked('fdb-dc-disableScenarioAuto'),
+                // Consent question
+                consentQuestionTemplate: get('fdb-dc-consentQuestion') || "Would you like me to schedule an appointment for you?",
+                // Yes words
+                consentYesWords: yesWords.length > 0 ? yesWords : ['yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok'],
+                // Minimum fields before consent
+                minDiscoveryFieldsBeforeConsent: minFields.length > 0 ? minFields : ['issueSummary']
+            };
+            console.log('[FRONT DESK BEHAVIOR] 🧠 V22 Discovery consent saved:', this.config.discoveryConsent);
+            
+            // Also update detectionTriggers.wantsBooking from the textarea
+            const wantsBookingRaw = get('fdb-dc-wantsBooking') || '';
+            const wantsBookingPhrases = wantsBookingRaw.split('\n').map(p => p.trim().toLowerCase()).filter(p => p);
+            
+            if (!this.config.detectionTriggers) this.config.detectionTriggers = {};
+            this.config.detectionTriggers.wantsBooking = wantsBookingPhrases;
+            console.log('[FRONT DESK BEHAVIOR] 🎯 Consent phrases saved:', wantsBookingPhrases);
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // V22: Vocabulary Guardrails Settings
+        // ════════════════════════════════════════════════════════════════════════════
+        if (document.getElementById('fdb-vg-allowedNouns')) {
+            // Parse allowed nouns
+            const allowedNounsRaw = get('fdb-vg-allowedNouns') || '';
+            const allowedNouns = allowedNounsRaw.split(',').map(w => w.trim().toLowerCase()).filter(w => w);
+            
+            // Parse forbidden words
+            const forbiddenWordsRaw = get('fdb-vg-forbiddenWords') || '';
+            const forbiddenWords = forbiddenWordsRaw.split(',').map(w => w.trim().toLowerCase()).filter(w => w);
+            
+            // Parse replacement map
+            const replacementsRaw = get('fdb-vg-replacements') || '';
+            const replacementMap = {};
+            replacementsRaw.split('\n').forEach(line => {
+                const parts = line.split('→').map(p => p.trim());
+                if (parts.length === 2 && parts[0] && parts[1]) {
+                    replacementMap[parts[0].toLowerCase()] = parts[1];
+                }
+            });
+            
+            this.config.vocabularyGuardrails = {
+                allowedServiceNouns: allowedNouns,
+                forbiddenWords: forbiddenWords,
+                replacementMap: replacementMap
+            };
+            console.log('[FRONT DESK BEHAVIOR] 📝 V22 Vocabulary guardrails saved:', this.config.vocabularyGuardrails);
         }
     }
 
