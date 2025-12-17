@@ -386,30 +386,76 @@ class HybridReceptionistLLM {
             logger.info('[HYBRID LLM] 🔍 TRACE: Triage done, building prompt', { callId, hasTriageContext: !!triageContext });
             
             // ════════════════════════════════════════════════════════════════
-            // BUILD THE SYSTEM PROMPT (now with triage + customer context)
+            // V22: CHECK FOR ENTERPRISE CONTEXT (LLM-LED DISCOVERY)
             // ════════════════════════════════════════════════════════════════
-            // Get last agent response to prevent repetition
-            const lastAgentTurn = conversationHistory
-                .filter(t => t.role === 'assistant')
-                .slice(-1)[0];
-            const lastAgentResponse = lastAgentTurn?.content?.substring(0, 100) || null;
+            // If we're in V22 LLM-led discovery mode, use the custom system prompt
+            // which includes scenario knowledge. This is the key to making the AI
+            // actually USE the scenarios instead of just asking "tell me more".
+            // ════════════════════════════════════════════════════════════════
+            const enterpriseContext = callContext.enterpriseContext || {};
+            const isV22Discovery = enterpriseContext.mode === 'LLM_LED_DISCOVERY';
             
-            const systemPrompt = this.buildSystemPrompt({
-                company,
-                currentMode,
-                knownSlots,
-                behaviorConfig,
-                triageContext,  // Pass triage context for smarter responses
-                serviceAreaInfo,  // Include service area detection
-                detectedServices,  // Include detected service needs
-                customerContext: callContext.customerContext || { isReturning: false, totalCalls: 0 },
-                runningSummary: callContext.runningSummary || null,  // Running conversation summary
-                lastAgentResponse,  // Prevent repetition
-                turnCount: callContext.turnCount || 1,
-                speakingCorrections,  // What words NOT to use
-                callerId: callContext.callerId || callContext.callerPhone || null,  // For caller ID confirmation
-                partialName: callContext.partialName || knownSlots.partialName || null  // For asking for missing name part
-            });
+            let systemPrompt;
+            
+            if (isV22Discovery && enterpriseContext.customSystemPrompt) {
+                // ════════════════════════════════════════════════════════════════
+                // V22 DISCOVERY MODE: Use the custom prompt WITH scenario knowledge
+                // ════════════════════════════════════════════════════════════════
+                logger.info('[HYBRID LLM] 🧠 V22 DISCOVERY MODE - Using custom prompt with scenarios', {
+                    callId,
+                    scenarioCount: enterpriseContext.scenarioKnowledge?.length || 0,
+                    callerEmotion: enterpriseContext.callerEmotion,
+                    hasDiscoveryIssue: !!enterpriseContext.discovery?.issue
+                });
+                
+                // Use the custom discovery prompt that includes scenario knowledge
+                systemPrompt = enterpriseContext.customSystemPrompt;
+                
+                // Append scenario knowledge if available (in case buildDiscoveryPrompt didn't include it)
+                if (enterpriseContext.scenarioKnowledge?.length > 0 && !systemPrompt.includes('RELEVANT KNOWLEDGE')) {
+                    const scenarioSection = enterpriseContext.scenarioKnowledge.map((s, i) => 
+                        `${i + 1}. ${s.title}: ${s.knowledge}`
+                    ).join('\n');
+                    
+                    systemPrompt += `\n\nRELEVANT KNOWLEDGE (use naturally, do not read verbatim):\n${scenarioSection}`;
+                }
+                
+                // Add V22 discovery rules
+                systemPrompt += `\n\nV22 DISCOVERY RULES:
+1. You are in DISCOVERY mode - understand the caller's situation first
+2. Use the scenario knowledge above to provide helpful information
+3. Do NOT ask for name/phone/address until caller explicitly wants to book
+4. If caller describes a problem, acknowledge it and offer relevant guidance
+5. Only ask "Would you like me to schedule an appointment?" after understanding their issue
+6. Output JSON: {"slot":"none","ack":"your natural response using scenario knowledge"}`;
+
+            } else {
+                // ════════════════════════════════════════════════════════════════
+                // STANDARD MODE: Build the regular system prompt
+                // ════════════════════════════════════════════════════════════════
+                // Get last agent response to prevent repetition
+                const lastAgentTurn = conversationHistory
+                    .filter(t => t.role === 'assistant')
+                    .slice(-1)[0];
+                const lastAgentResponse = lastAgentTurn?.content?.substring(0, 100) || null;
+                
+                systemPrompt = this.buildSystemPrompt({
+                    company,
+                    currentMode,
+                    knownSlots,
+                    behaviorConfig,
+                    triageContext,  // Pass triage context for smarter responses
+                    serviceAreaInfo,  // Include service area detection
+                    detectedServices,  // Include detected service needs
+                    customerContext: callContext.customerContext || { isReturning: false, totalCalls: 0 },
+                    runningSummary: callContext.runningSummary || null,  // Running conversation summary
+                    lastAgentResponse,  // Prevent repetition
+                    turnCount: callContext.turnCount || 1,
+                    speakingCorrections,  // What words NOT to use
+                    callerId: callContext.callerId || callContext.callerPhone || null,  // For caller ID confirmation
+                    partialName: callContext.partialName || knownSlots.partialName || null  // For asking for missing name part
+                });
+            }
             
             // ════════════════════════════════════════════════════════════════
             // BUILD MESSAGES WITH FULL HISTORY
@@ -494,6 +540,24 @@ class HybridReceptionistLLM {
             } else {
                 // Clean up slot name (handle "|name" or "name|phone" formats)
                 collectingSlot = collectingSlot.replace(/^\|/, '').split('|')[0].trim().toLowerCase();
+            }
+            
+            // ════════════════════════════════════════════════════════════════
+            // V22 CONSENT GATE: Block slot collection in discovery mode
+            // ════════════════════════════════════════════════════════════════
+            // If we're in V22 discovery mode, the LLM should NOT be collecting
+            // booking slots. If it tries to, we block it and use just the ack.
+            // This prevents the AI from jumping to "What's your name?" before
+            // the caller has explicitly agreed to book.
+            // ════════════════════════════════════════════════════════════════
+            if (isV22Discovery && collectingSlot) {
+                logger.warn('[HYBRID LLM] ⚠️ V22 CONSENT GATE: Blocking slot collection in discovery mode', {
+                    callId,
+                    attemptedSlot: collectingSlot,
+                    ack: parsed.ack?.substring(0, 50)
+                });
+                // Force slot to null - use just the acknowledgment
+                collectingSlot = null;
             }
             
             if (collectingSlot && bookingSlots.length > 0) {
