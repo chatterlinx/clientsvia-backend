@@ -868,22 +868,35 @@ async function processTurn({
         }
         
         // ═══════════════════════════════════════════════════════════════════════
-        // PARTIAL NAME PROMOTION - In BOOKING mode, accept partialName as name
+        // PARTIAL NAME HANDLING - Check booking config for askFullName setting
         // ═══════════════════════════════════════════════════════════════════════
-        // When in booking mode (or about to enter), we accept a partial name
-        // because we need to move forward. We can always confirm it later.
-        // This prevents the "asked for name, got Mark, asked again" bug.
+        // If askFullName is enabled in booking config, we DON'T auto-promote
+        // partial names. Instead, the booking safety net will ask for last name.
         // ═══════════════════════════════════════════════════════════════════════
         const isInBookingMode = session.mode === 'BOOKING' || session.booking?.consentGiven;
         
+        // Check if askFullName is enabled in booking config
+        const bookingConfigCheck = BookingScriptEngine.getBookingSlotsFromCompany(company);
+        const nameSlotCheck = (bookingConfigCheck.slots || []).find(s => 
+            (s.slotId || s.id || s.type) === 'name'
+        );
+        const askFullNameEnabled = nameSlotCheck?.nameOptions?.askFullName !== false;
+        
         if (currentSlots.partialName && !currentSlots.name) {
-            if (isInBookingMode) {
-                // In booking mode: promote partial to full name immediately
+            if (isInBookingMode && !askFullNameEnabled) {
+                // In booking mode with askFullName OFF: promote partial to full name
                 currentSlots.name = currentSlots.partialName;
                 extractedThisTurn.name = currentSlots.partialName;
-                log('📝 PARTIAL NAME PROMOTED: In booking mode, accepting partial as full name', {
+                log('📝 PARTIAL NAME PROMOTED: askFullName is OFF, accepting partial', {
                     partialName: currentSlots.partialName,
                     promotedTo: currentSlots.name
+                });
+            } else if (isInBookingMode && askFullNameEnabled) {
+                // In booking mode with askFullName ON: keep as partial, will ask for last name
+                // Mark it as extracted so the safety net knows to handle it
+                extractedThisTurn.name = currentSlots.partialName;
+                log('📝 PARTIAL NAME: askFullName is ON, will ask for last name', {
+                    partialName: currentSlots.partialName
                 });
             }
             // In discovery mode: keep as partial, will ask for full name later
@@ -1161,52 +1174,141 @@ async function processTurn({
                 };
             } else {
                 // ═══════════════════════════════════════════════════════════════════
-                // BOOKING MODE SAFETY NET - State machine didn't return a response
-                // This happens when state machine is confused. We stay in booking
-                // and ask the next required slot question directly.
+                // BOOKING MODE SAFETY NET - Deterministic slot collection
                 // ═══════════════════════════════════════════════════════════════════
-                log('⚠️ BOOKING MODE SAFETY NET: State machine returned no action, computing next slot');
+                // This handles:
+                // 1. ConfirmBack - Use the configured template from UI
+                // 2. Partial name - Ask for missing last name if askFullName enabled
+                // 3. Never re-ask same slot - If we have data, move forward
+                // ═══════════════════════════════════════════════════════════════════
+                log('⚠️ BOOKING MODE SAFETY NET: Computing next action');
                 
                 const bookingConfigSafe = BookingScriptEngine.getBookingSlotsFromCompany(company);
                 const bookingSlotsSafe = bookingConfigSafe.slots || [];
                 
-                // Build acknowledgment for what was just collected this turn
-                let acknowledgment = '';
-                if (extractedThisTurn.name) {
-                    acknowledgment = `Got it, ${extractedThisTurn.name}. `;
-                } else if (extractedThisTurn.phone) {
-                    acknowledgment = `Thank you. `;
-                } else if (extractedThisTurn.address) {
-                    acknowledgment = `Perfect. `;
-                } else if (extractedThisTurn.time) {
-                    acknowledgment = `Great. `;
-                }
+                // Initialize booking meta state for tracking confirmations
+                session.booking.meta = session.booking.meta || {};
+                session.booking.meta.name = session.booking.meta.name || {
+                    first: null,
+                    last: null,
+                    needsLastName: false,
+                    confirmAsked: false,
+                    confirmed: false,
+                    askedMissingPartOnce: false
+                };
                 
-                // Find next required slot not yet collected
-                const nextMissingSlotSafe = bookingSlotsSafe.find(slot => {
-                    const slotId = slot.slotId || slot.id || slot.type;
-                    const isCollected = currentSlots[slotId] || currentSlots[slot.type];
-                    return slot.required && !isCollected;
-                });
+                // Get name slot config for special handling
+                const nameSlotConfig = bookingSlotsSafe.find(s => 
+                    (s.slotId || s.id || s.type) === 'name'
+                );
+                const nameOptions = nameSlotConfig?.nameOptions || {};
+                const askFullName = nameOptions.askFullName !== false;
+                const askOnceForMissingPart = nameOptions.askOnceForMissingPart !== false;
+                const confirmBackEnabled = nameSlotConfig?.confirmBack === true || nameSlotConfig?.confirmBack === 'true';
+                const confirmBackTemplate = nameSlotConfig?.confirmPrompt || 'Got it, {value}. Did I get that right?';
                 
                 aiLatencyMs = Date.now() - aiStartTime;
+                let finalReply = '';
+                let nextSlotId = null;
                 
-                if (nextMissingSlotSafe) {
-                    const slotId = nextMissingSlotSafe.slotId || nextMissingSlotSafe.id || nextMissingSlotSafe.type;
-                    const exactQuestion = nextMissingSlotSafe.question;
+                // ═══════════════════════════════════════════════════════════════════
+                // SPECIAL HANDLING: Name slot with partial name
+                // ═══════════════════════════════════════════════════════════════════
+                if (extractedThisTurn.name || currentSlots.partialName) {
+                    const nameMeta = session.booking.meta.name;
+                    const extractedName = extractedThisTurn.name || currentSlots.partialName || currentSlots.name;
+                    const hasSpace = extractedName && extractedName.includes(' ');
                     
-                    log('📋 BOOKING SAFETY NET: Asking next slot', { 
-                        slotId, 
-                        question: exactQuestion,
-                        acknowledgment,
-                        extractedThisTurn
+                    log('📝 NAME SLOT HANDLING', {
+                        extractedName,
+                        hasSpace,
+                        askFullName,
+                        confirmBackEnabled,
+                        nameMeta
                     });
                     
+                    if (!hasSpace && askFullName && !nameMeta.askedMissingPartOnce) {
+                        // Got first name only, need last name
+                        nameMeta.first = extractedName;
+                        nameMeta.needsLastName = true;
+                        nameMeta.askedMissingPartOnce = true;
+                        
+                        // Use confirmBack template + ask for last name
+                        const confirmText = confirmBackTemplate.replace('{value}', extractedName);
+                        finalReply = `${confirmText} And what's your last name?`;
+                        nextSlotId = 'name'; // Still collecting name
+                        
+                        log('📝 NAME: Asking for last name', { first: extractedName, reply: finalReply });
+                    } else if (!hasSpace && nameMeta.askedMissingPartOnce && nameMeta.first) {
+                        // They gave last name after we asked
+                        nameMeta.last = extractedName;
+                        currentSlots.name = `${nameMeta.first} ${nameMeta.last}`;
+                        nameMeta.needsLastName = false;
+                        
+                        // Confirm full name and move to next slot
+                        const fullName = currentSlots.name;
+                        finalReply = `Perfect, ${fullName}. `;
+                        nextSlotId = null; // Will find next slot below
+                        
+                        log('📝 NAME: Got last name, full name is', { fullName });
+                    } else {
+                        // Got full name (has space) or askFullName is off
+                        if (hasSpace) {
+                            const parts = extractedName.split(' ');
+                            nameMeta.first = parts[0];
+                            nameMeta.last = parts.slice(1).join(' ');
+                        } else {
+                            nameMeta.first = extractedName;
+                        }
+                        currentSlots.name = extractedName;
+                        nameMeta.needsLastName = false;
+                        
+                        // Confirm and move to next slot
+                        const displayName = nameMeta.first || extractedName;
+                        finalReply = `Got it, ${displayName}. `;
+                        nextSlotId = null; // Will find next slot below
+                        
+                        log('📝 NAME: Accepted as complete', { name: currentSlots.name });
+                    }
+                }
+                // Handle other slots extracted this turn
+                else if (extractedThisTurn.phone) {
+                    finalReply = 'Thank you. ';
+                } else if (extractedThisTurn.address) {
+                    finalReply = 'Perfect. ';
+                } else if (extractedThisTurn.time) {
+                    finalReply = 'Great. ';
+                }
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // Find next required slot (if we're not still on name)
+                // ═══════════════════════════════════════════════════════════════════
+                if (nextSlotId === null) {
+                    const nextMissingSlotSafe = bookingSlotsSafe.find(slot => {
+                        const slotId = slot.slotId || slot.id || slot.type;
+                        const isCollected = currentSlots[slotId] || currentSlots[slot.type];
+                        return slot.required && !isCollected;
+                    });
+                    
+                    if (nextMissingSlotSafe) {
+                        nextSlotId = nextMissingSlotSafe.slotId || nextMissingSlotSafe.id || nextMissingSlotSafe.type;
+                        const exactQuestion = nextMissingSlotSafe.question;
+                        finalReply += exactQuestion;
+                        
+                        log('📋 BOOKING SAFETY NET: Asking next slot', { 
+                            slotId: nextSlotId, 
+                            question: exactQuestion,
+                            finalReply
+                        });
+                    }
+                }
+                
+                if (nextSlotId) {
                     aiResult = {
-                        reply: `${acknowledgment}${exactQuestion}`,
+                        reply: finalReply,
                         conversationMode: 'booking',
                         intent: 'booking',
-                        nextGoal: `COLLECT_${slotId.toUpperCase()}`,
+                        nextGoal: `COLLECT_${nextSlotId.toUpperCase()}`,
                         filledSlots: currentSlots,
                         signals: { 
                             wantsBooking: true,
@@ -1219,9 +1321,9 @@ async function processTurn({
                         debug: {
                             source: 'BOOKING_SAFETY_NET',
                             stage: 'booking',
-                            step: slotId,
+                            step: nextSlotId,
                             smAction: smResult?.action,
-                            acknowledgment,
+                            nameMeta: session.booking.meta.name,
                             extractedThisTurn
                         }
                     };
