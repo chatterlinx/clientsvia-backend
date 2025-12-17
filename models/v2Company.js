@@ -1818,6 +1818,26 @@ const companySchema = new mongoose.Schema({
             forbiddenPhrases: [{ type: String, trim: true }],
             
             // ═══════════════════════════════════════════════════════════════
+            // 🆕 VOCABULARY GUARDRAILS - Trade-safe language (Enterprise)
+            // ═══════════════════════════════════════════════════════════════
+            // Prevents cross-tenant contamination (no "technician" at dentist)
+            // ═══════════════════════════════════════════════════════════════
+            vocabularyGuardrails: {
+                // Words that should NEVER appear in AI responses for this company
+                // Example for Dental: ["technician", "dispatch", "unit", "repair"]
+                forbiddenWords: [{ type: String, trim: true, lowercase: true }],
+                
+                // Automatic word replacement (before response is spoken)
+                // Example: { "technician": "team member", "dispatch": "schedule" }
+                replacementMap: { type: Map, of: String, default: new Map() },
+                
+                // Allowed nouns for this trade (used for response validation)
+                // Example for HVAC: ["technician", "service call", "system", "unit"]
+                // Example for Dental: ["appointment", "dentist", "hygienist", "cleaning"]
+                allowedServiceNouns: [{ type: String, trim: true, lowercase: true }]
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
             // DETECTION TRIGGERS - What AI detects in caller speech
             // ═══════════════════════════════════════════════════════════════
             detectionTriggers: {
@@ -1829,8 +1849,63 @@ const companySchema = new mongoose.Schema({
                 refusedSlot: [{ type: String, trim: true, lowercase: true }],
                 // Caller describing problem (not answering booking question)
                 describingProblem: [{ type: String, trim: true, lowercase: true }],
-                // Booking intent detection
+                // ═══════════════════════════════════════════════════════════════
+                // 🚨 CONSENT GATE - These are the ONLY phrases that unlock booking
+                // ═══════════════════════════════════════════════════════════════
+                // NOT issue signals (broken/fix/need help) - those stay in DISCOVERY
+                // ONLY explicit scheduling requests trigger booking mode
+                // ═══════════════════════════════════════════════════════════════
+                // Example HVAC: ["send a technician", "schedule service", "dispatch someone"]
+                // Example Dental: ["schedule an appointment", "book a cleaning", "see the dentist"]
+                // Example Legal: ["set up a consultation", "talk to an attorney"]
+                // ═══════════════════════════════════════════════════════════════
                 wantsBooking: [{ type: String, trim: true, lowercase: true }]
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // 🆕 DISCOVERY CONSENT SETTINGS - When booking is allowed
+            // ═══════════════════════════════════════════════════════════════
+            // Controls the hard gate between DISCOVERY and BOOKING modes
+            // ═══════════════════════════════════════════════════════════════
+            discoveryConsent: {
+                // Master toggle: If ON, booking REQUIRES explicit consent
+                // If OFF (legacy mode), issue detection can trigger booking
+                bookingRequiresExplicitConsent: { type: Boolean, default: true },
+                
+                // The question AI asks to get consent (trade-specific)
+                // HVAC: "Would you like me to schedule a service appointment?"
+                // Dental: "Would you like me to schedule an appointment for you?"
+                // Legal: "Would you like me to set up a consultation?"
+                consentQuestionTemplate: { 
+                    type: String, 
+                    default: "Would you like me to schedule an appointment for you?", 
+                    trim: true 
+                },
+                
+                // Simple yes/confirmation words (used after consent question)
+                consentYesWords: {
+                    type: [String],
+                    default: ["yes", "yeah", "yep", "please", "sure", "okay", "ok", "correct", "that would be great", "sounds good"]
+                },
+                
+                // If ON: "yes" only counts if it follows the consent question
+                // Reduces false positives from "yes" in other contexts
+                consentRequiresYesAfterPrompt: { type: Boolean, default: true },
+                
+                // What must be captured BEFORE asking consent question
+                // Prevents "book now" before understanding caller's need
+                minDiscoveryFieldsBeforeConsent: {
+                    type: [String],
+                    enum: ['issueSummary', 'serviceType', 'urgency', 'existingCustomer'],
+                    default: ['issueSummary']
+                },
+                
+                // When to ask the consent question
+                consentQuestionTiming: {
+                    type: String,
+                    enum: ['after_issue_understood', 'after_one_followup', 'when_caller_asks'],
+                    default: 'after_issue_understood'
+                }
             },
             
             // ═══════════════════════════════════════════════════════════════

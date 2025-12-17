@@ -41,23 +41,123 @@ const BookingScriptEngine = require('./BookingScriptEngine');
 const BookingStateMachine = require('./BookingStateMachine');
 const ResponseRenderer = require('./ResponseRenderer');
 const ConversationStateMachine = require('./ConversationStateMachine');
+const LLMDiscoveryEngine = require('./LLMDiscoveryEngine');
 const logger = require('../utils/logger');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V7-ENTERPRISE-FLOW';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V22-LLM-LED-DISCOVERY';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
-        '✅ Single entry point for ALL channels',
-        '✅ ENTERPRISE FLOW: DISCOVERY → TRIAGE → BOOKING → CONFIRM',
-        '✅ ConversationStateMachine controls 95% of flow (0 tokens)',
-        '✅ LLM only for off-rails recovery (5%)',
-        '✅ Full conversation memory (issue, context, mood)',
-        '✅ All responses from UI config - nothing hardcoded'
+        '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
+        '✅ LLM is PRIMARY BRAIN (not fallback)',
+        '✅ Scenarios are TOOLS (not scripts)',
+        '✅ Booking is DETERMINISTIC (consent-gated)',
+        '✅ No triage gates, no pre-routing',
+        '✅ session.mode = DISCOVERY | SUPPORT | BOOKING | COMPLETE',
+        '✅ Consent detection via UI-configured phrases',
+        '✅ Latency target: < 1.2s per turn'
     ]
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🆕 CONSENT DETECTOR - Checks if caller explicitly wants to book
+// ═══════════════════════════════════════════════════════════════════════════
+// Uses ONLY UI-configured phrases from detectionTriggers.wantsBooking[]
+// Does NOT use hardcoded regex (broken/fix/need help are DISCOVERY, not consent)
+// ═══════════════════════════════════════════════════════════════════════════
+const ConsentDetector = {
+    /**
+     * Check if user input contains explicit booking consent
+     * @param {string} text - User input
+     * @param {Object} company - Company config with detectionTriggers
+     * @param {Object} session - Session with consent state
+     * @returns {Object} { hasConsent, matchedPhrase, reason }
+     */
+    checkForConsent(text, company, session) {
+        if (!text || typeof text !== 'string') {
+            return { hasConsent: false, matchedPhrase: null, reason: 'no_input' };
+        }
+        
+        const textLower = text.toLowerCase().trim();
+        const frontDesk = company.aiAgentSettings?.frontDeskBehavior || {};
+        const discoveryConsent = frontDesk.discoveryConsent || {};
+        const detectionTriggers = frontDesk.detectionTriggers || {};
+        
+        // Check if consent is required (default: true for Option 1)
+        const requiresExplicitConsent = discoveryConsent.bookingRequiresExplicitConsent !== false;
+        
+        if (!requiresExplicitConsent) {
+            // Legacy mode: consent not required (not recommended)
+            return { hasConsent: true, matchedPhrase: 'legacy_mode', reason: 'consent_not_required' };
+        }
+        
+        // Get UI-configured consent phrases
+        const consentPhrases = detectionTriggers.wantsBooking || [];
+        const consentYesWords = discoveryConsent.consentYesWords || ['yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok'];
+        const requiresYesAfterPrompt = discoveryConsent.consentRequiresYesAfterPrompt !== false;
+        
+        // Check for explicit booking phrases
+        for (const phrase of consentPhrases) {
+            if (phrase && textLower.includes(phrase.toLowerCase())) {
+                return { 
+                    hasConsent: true, 
+                    matchedPhrase: phrase, 
+                    reason: 'explicit_consent_phrase' 
+                };
+            }
+        }
+        
+        // Check for "yes" responses (only if we asked the consent question)
+        if (session?.conversationMemory?.lastSystemPrompt?.includes('schedule')) {
+            // We asked about scheduling, check for yes
+            for (const yesWord of consentYesWords) {
+                if (textLower === yesWord || textLower.startsWith(yesWord + ' ') || textLower.endsWith(' ' + yesWord)) {
+                    if (!requiresYesAfterPrompt || session.conversationMemory?.askedConsentQuestion) {
+                        return { 
+                            hasConsent: true, 
+                            matchedPhrase: yesWord, 
+                            reason: 'yes_after_consent_question' 
+                        };
+                    }
+                }
+            }
+        }
+        
+        return { hasConsent: false, matchedPhrase: null, reason: 'no_consent_detected' };
+    },
+    
+    /**
+     * Check if minimum discovery fields are met before asking consent
+     * @param {Object} session - Session with discovery data
+     * @param {Object} company - Company config
+     * @returns {boolean}
+     */
+    canAskConsentQuestion(session, company) {
+        const discoveryConsent = company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent || {};
+        const minFields = discoveryConsent.minDiscoveryFieldsBeforeConsent || ['issueSummary'];
+        
+        for (const field of minFields) {
+            switch (field) {
+                case 'issueSummary':
+                    if (!session.discovery?.issue) return false;
+                    break;
+                case 'serviceType':
+                    if (!session.discovery?.callType || session.discovery.callType === 'unknown') return false;
+                    break;
+                case 'urgency':
+                    if (!session.discovery?.urgency) return false;
+                    break;
+                case 'existingCustomer':
+                    if (!session.customerId) return false;
+                    break;
+            }
+        }
+        return true;
+    }
+};
 
 /**
  * Programmatic slot extraction helpers
@@ -709,108 +809,106 @@ async function processTurn({
         });
         
         // ═══════════════════════════════════════════════════════════════════════
-        // STEP 8: ENTERPRISE CONVERSATION STATE MACHINE
+        // STEP 8: OPTION 1 - LLM SPEAKS UNTIL CONSENT
         // ═══════════════════════════════════════════════════════════════════════
         // 
-        // NEW ARCHITECTURE (V7):
-        // - ConversationStateMachine controls ENTIRE flow
-        // - Stages: GREETING → DISCOVERY → TRIAGE → BOOKING → CONFIRMATION
-        // - 95% of interactions: 0 tokens (deterministic)
-        // - 5% off-rails: LLM fallback with full context + bridge back
+        // ARCHITECTURE (V8 - OPTION 1):
+        // - session.mode = DISCOVERY | SUPPORT | BOOKING | COMPLETE | ERROR
+        // - DISCOVERY/SUPPORT: LLM ALWAYS SPEAKS (state machine provides guidance)
+        // - BOOKING: Only after explicit consent (deterministic prompts)
+        // - Consent detected via UI-configured phrases (detectionTriggers.wantsBooking[])
         // 
-        // The state machine OWNS the conversation. LLM is only called when:
-        // - Caller goes off-rails (frustration, questions, human request)
-        // - Then MUST return to current stage's fixed question
+        // THE CORE PRINCIPLE:
+        // "The LLM is the receptionist. The booking system is the clipboard.
+        //  The clipboard stays hidden until the caller asks for it."
         // ═══════════════════════════════════════════════════════════════════════
-        log('CHECKPOINT 9: Enterprise State Machine...');
+        log('CHECKPOINT 9: Option 1 Mode Control...');
         
-        // Check if enterprise flow is enabled (UI toggle)
-        const enterpriseFlowEnabled = company.aiAgentSettings?.frontDeskBehavior?.conversationStages?.enabled !== false;
+        // Initialize session.mode if not set
+        if (!session.mode) {
+            session.mode = 'DISCOVERY';
+        }
+        
+        // Initialize session.booking if not set
+        if (!session.booking) {
+            session.booking = { consentGiven: false };
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // CONSENT DETECTION - Check if caller explicitly wants to book
+        // ═══════════════════════════════════════════════════════════════════════
+        const consentCheck = ConsentDetector.checkForConsent(userText, company, session);
+        
+        if (consentCheck.hasConsent && !session.booking.consentGiven) {
+            // 🎯 CONSENT GIVEN - Transition to BOOKING mode
+            session.booking.consentGiven = true;
+            session.booking.consentPhrase = consentCheck.matchedPhrase;
+            session.booking.consentTurn = (session.metrics?.totalTurns || 0) + 1;
+            session.booking.consentTimestamp = new Date();
+            session.mode = 'BOOKING';
+            
+            log('🎯 CONSENT DETECTED - Transitioning to BOOKING mode', {
+                matchedPhrase: consentCheck.matchedPhrase,
+                reason: consentCheck.reason,
+                turn: session.booking.consentTurn
+            });
+        }
+        
+        log('CHECKPOINT 9a: Mode state', {
+            mode: session.mode,
+            consentGiven: session.booking?.consentGiven,
+            consentPhrase: session.booking?.consentPhrase,
+            consentCheck
+        });
         
         let aiResult;
         let aiLatencyMs = 0;
+        const aiStartTime = Date.now();
         
-        if (enterpriseFlowEnabled) {
+        // ═══════════════════════════════════════════════════════════════════════
+        // MODE-BASED ROUTING (THE CORE OF OPTION 1)
+        // ═══════════════════════════════════════════════════════════════════════
+        
+        if (session.mode === 'BOOKING' && session.booking?.consentGiven) {
             // ═══════════════════════════════════════════════════════════════════
-            // ENTERPRISE FLOW: ConversationStateMachine
+            // BOOKING MODE - Deterministic clipboard (consent already given)
             // ═══════════════════════════════════════════════════════════════════
-            log('CHECKPOINT 9a: 🏢 ENTERPRISE FLOW ACTIVE');
-            const aiStartTime = Date.now();
+            log('CHECKPOINT 9b: 📋 BOOKING MODE (clipboard)');
             
-            // Initialize the enterprise state machine
+            // Initialize the state machine for booking slot collection
             const enterpriseStateMachine = new ConversationStateMachine(session, company);
-            
-            // Process the input through the state machine
             const smResult = enterpriseStateMachine.processInput(userText, extractedThisTurn);
             
             aiLatencyMs = Date.now() - aiStartTime;
             
-            log('CHECKPOINT 9b: State machine result', {
-                action: smResult.action,
-                stage: smResult.stage,
-                nextStage: smResult.nextStage,
-                tokensUsed: smResult.tokensUsed || 0
-            });
-            
-            // ═══════════════════════════════════════════════════════════════════
-            // Handle state machine result
-            // ═══════════════════════════════════════════════════════════════════
+            // In BOOKING mode, state machine responses ARE spoken (deterministic)
             if (smResult.action === 'RESPOND') {
-                // ═══════════════════════════════════════════════════════════════
-                // DETERMINISTIC RESPONSE (0 tokens)
-                // ═══════════════════════════════════════════════════════════════
                 aiResult = {
                     reply: smResult.response,
-                    conversationMode: smResult.nextStage || smResult.stage,
-                    intent: smResult.stage,
-                    nextGoal: smResult.nextStep || smResult.nextStage,
+                    conversationMode: 'booking',
+                    intent: 'booking',
+                    nextGoal: smResult.nextStep || 'COLLECT_SLOTS',
                     filledSlots: smResult.slotsCollected || currentSlots,
                     signals: { 
-                        wantsBooking: smResult.stage === 'booking' || smResult.nextStage === 'booking',
-                        discoveryComplete: smResult.discoveryComplete,
-                        triageComplete: smResult.triageComplete,
+                        wantsBooking: true,
+                        consentGiven: true,
                         bookingComplete: smResult.bookingComplete
                     },
                     latencyMs: aiLatencyMs,
-                    tokensUsed: 0,  // 🎯 0 tokens!
+                    tokensUsed: 0,  // 🎯 0 tokens in booking mode!
                     fromStateMachine: true,
-                    enterpriseFlow: true,
+                    mode: 'BOOKING',
                     debug: {
-                        source: smResult.source || 'ENTERPRISE_STATE_MACHINE',
-                        stage: smResult.stage,
-                        nextStage: smResult.nextStage,
-                        step: smResult.step,
-                        discovery: smResult.discovery
+                        source: 'BOOKING_CLIPBOARD',
+                        stage: 'booking',
+                        step: smResult.step
                     }
                 };
-                
-                // Update session phase
-                if (smResult.nextStage) {
-                    session.phase = smResult.nextStage;
-                }
-                
-                log('CHECKPOINT 9c: ✅ Enterprise response (0 tokens)', {
-                    stage: smResult.stage,
-                    nextStage: smResult.nextStage,
-                    replyPreview: smResult.response.substring(0, 50)
-                });
-                
             } else if (smResult.action === 'LLM_FALLBACK') {
-                // ═══════════════════════════════════════════════════════════════
-                // OFF-RAILS: LLM FALLBACK WITH FULL CONTEXT
-                // ═══════════════════════════════════════════════════════════════
-                log('CHECKPOINT 9c: 🚨 OFF-RAILS - LLM Fallback needed', {
-                    offRailsType: smResult.offRails?.type,
-                    trigger: smResult.offRails?.trigger,
-                    returnToQuestion: smResult.returnToQuestion
-                });
+                // Caller went off-rails during booking (asked a question, etc.)
+                // LLM handles it, then returns to booking slot
+                log('CHECKPOINT 9c: 🔄 Booking interruption - LLM handles, then resume');
                 
-                const llmStartTime = Date.now();
-                
-                // Build context-aware prompt for LLM
-                const llmContext = smResult.context || {};
-                
-                // Call LLM with full conversation memory
                 const llmResult = await HybridReceptionistLLM.processConversation({
                     company,
                     callContext: {
@@ -821,107 +919,232 @@ async function processTurn({
                         turnCount: (session.metrics?.totalTurns || 0) + 1,
                         channel,
                         partialName: currentSlots.partialName || null,
-                        // 🆕 ENTERPRISE CONTEXT
-                        enterpriseContext: llmContext,
+                        enterpriseContext: smResult.context || {},
                         offRailsType: smResult.offRails?.type,
-                        returnToQuestion: smResult.returnToQuestion
+                        returnToQuestion: smResult.returnToQuestion,
+                        mode: 'BOOKING_INTERRUPTION'
                     },
-                    currentMode: smResult.stage || 'free',
+                    currentMode: 'booking',
                     knownSlots: currentSlots,
                     conversationHistory,
                     userInput: userText,
                     behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
                 });
                 
-                const llmLatencyMs = Date.now() - llmStartTime;
-                aiLatencyMs = Date.now() - aiStartTime;
-                
-                // ═══════════════════════════════════════════════════════════════
-                // BRIDGE BACK: Append fixed question after LLM response
-                // ═══════════════════════════════════════════════════════════════
-                const bridgeBackEnabled = company.aiAgentSettings?.frontDeskBehavior?.offRailsRecovery?.bridgeBack?.enabled !== false;
-                const bridgePhrase = company.aiAgentSettings?.frontDeskBehavior?.offRailsRecovery?.bridgeBack?.transitionPhrase || 'Now, to help you best,';
-                
+                // Bridge back to booking slot after LLM response
+                const bridgePhrase = company.aiAgentSettings?.frontDeskBehavior?.offRailsRecovery?.bridgeBack?.transitionPhrase || 'Now,';
                 let finalReply = llmResult.reply || '';
                 
-                if (bridgeBackEnabled && smResult.returnToQuestion) {
-                    // Append bridge phrase + fixed question
+                if (smResult.returnToQuestion) {
                     finalReply = `${finalReply} ${bridgePhrase} ${smResult.returnToQuestion}`;
-                    log('CHECKPOINT 9d: 🌉 BRIDGE BACK applied', {
-                        bridgePhrase,
-                        returnToQuestion: smResult.returnToQuestion
-                    });
                 }
+                
+                aiLatencyMs = Date.now() - aiStartTime;
                 
                 aiResult = {
                     reply: finalReply,
-                    conversationMode: smResult.stage,
-                    intent: 'off_rails_recovery',
-                    nextGoal: smResult.step || smResult.stage,
+                    conversationMode: 'booking',
+                    intent: 'booking_interruption',
+                    nextGoal: smResult.step || 'RESUME_BOOKING',
                     filledSlots: currentSlots,
                     signals: { 
-                        wantsBooking: smResult.stage === 'booking',
-                        offRailsRecovery: true,
-                        offRailsType: smResult.offRails?.type
+                        wantsBooking: true,
+                        consentGiven: true,
+                        bookingInterruption: true
                     },
                     latencyMs: aiLatencyMs,
                     tokensUsed: llmResult.tokensUsed || 0,
                     fromStateMachine: false,
-                    enterpriseFlow: true,
-                    bridgeBackApplied: bridgeBackEnabled,
+                    mode: 'BOOKING',
                     debug: {
-                        source: 'LLM_FALLBACK_WITH_BRIDGE',
-                        offRails: smResult.offRails,
-                        llmResponse: llmResult.reply,
-                        bridgePhrase,
-                        returnToQuestion: smResult.returnToQuestion,
-                        llmLatencyMs,
-                        enterpriseContext: llmContext
+                        source: 'BOOKING_INTERRUPTION_LLM',
+                        returnToQuestion: smResult.returnToQuestion
                     }
                 };
-                
-                // Track off-rails in session memory
-                if (!session.conversationMemory) {
-                    session.conversationMemory = {};
-                }
-                session.conversationMemory.offRailsCount = (session.conversationMemory.offRailsCount || 0) + 1;
-                session.conversationMemory.lastOffRailsAt = new Date();
-                
-                if (!session.conversationMemory.recoveryAttempts) {
-                    session.conversationMemory.recoveryAttempts = [];
-                }
-                session.conversationMemory.recoveryAttempts.push({
-                    trigger: smResult.offRails?.trigger,
-                    response: finalReply.substring(0, 100),
-                    turnNumber: session.metrics?.totalTurns || 0,
-                    timestamp: new Date()
-                });
-                
-                log('CHECKPOINT 9d: ✅ LLM Fallback complete', {
-                    tokensUsed: llmResult.tokensUsed,
-                    bridgeBackApplied: bridgeBackEnabled,
-                    offRailsCount: session.conversationMemory.offRailsCount
-                });
             }
             
+        } else {
             // ═══════════════════════════════════════════════════════════════════
-            // Save enterprise state machine state to session
+            // V22: LLM-LED DISCOVERY MODE
             // ═══════════════════════════════════════════════════════════════════
-            const enterpriseState = enterpriseStateMachine.getStateForSession();
-            session.discovery = enterpriseState.discovery;
-            session.triageState = enterpriseState.triageState;
-            session.collectedSlots = { ...session.collectedSlots, ...enterpriseState.collectedSlots };
-            session.conversationMemory = {
-                ...session.conversationMemory,
-                ...enterpriseState.conversationMemory
+            // 
+            // THE GOLDEN RULE: "Nothing should bypass the LLM during discovery."
+            // 
+            // FLOW:
+            // 1. Retrieve relevant scenarios (TOOLS, not scripts)
+            // 2. Detect caller emotion (lightweight heuristic)
+            // 3. Build LLM prompt with scenario knowledge
+            // 4. LLM responds naturally using the knowledge
+            // 5. Check for consent (if detected, next turn = BOOKING)
+            // 
+            // The LLM is the PRIMARY BRAIN. Scenarios are just knowledge tools.
+            // ═══════════════════════════════════════════════════════════════════
+            log('CHECKPOINT 9b: 🧠 V22 LLM-LED DISCOVERY MODE');
+            
+            // Step 1: Retrieve relevant scenarios as knowledge tools
+            const templateRefs = company.aiAgentSettings?.templateReferences || [];
+            const activeTemplate = templateRefs.find(ref => ref.enabled !== false);
+            
+            const scenarioRetrieval = await LLMDiscoveryEngine.retrieveRelevantScenarios({
+                companyId,
+                trade: company.trade || 'HVAC',
+                utterance: userText,
+                template: activeTemplate
+            });
+            
+            log('CHECKPOINT 9c: 📚 Scenarios retrieved as tools', {
+                count: scenarioRetrieval.scenarios?.length || 0,
+                retrievalTimeMs: scenarioRetrieval.retrievalTimeMs,
+                topScenario: scenarioRetrieval.scenarios?.[0]?.title
+            });
+            
+            // Step 2: Detect caller emotion (lightweight, no LLM)
+            const emotion = LLMDiscoveryEngine.detectEmotion(userText);
+            
+            log('CHECKPOINT 9d: 😊 Emotion detected', {
+                emotion: emotion.emotion,
+                confidence: emotion.confidence
+            });
+            
+            // Step 3: Build discovery prompt with scenario knowledge
+            const discoveryPrompt = LLMDiscoveryEngine.buildDiscoveryPrompt({
+                company,
+                scenarios: scenarioRetrieval.scenarios,
+                emotion,
+                session
+            });
+            
+            // Step 4: Build context for LLM
+            const llmContext = {
+                // V22: LLM-led mode
+                mode: 'LLM_LED_DISCOVERY',
+                
+                // Scenario knowledge (tools, not scripts)
+                scenarioKnowledge: scenarioRetrieval.scenarios,
+                
+                // Caller emotion
+                callerEmotion: emotion.emotion,
+                
+                // What has been discovered so far
+                discovery: session.discovery || {},
+                
+                // Company variables for natural speech
+                companyVars: LLMDiscoveryEngine.getCompanyVariables(company),
+                
+                // Custom system prompt for discovery
+                customSystemPrompt: discoveryPrompt,
+                
+                // Collected slots (for context, NOT for asking)
+                collectedSlots: currentSlots
             };
             
-            log('CHECKPOINT 9e: 📊 Enterprise state saved', {
-                stage: session.conversationMemory?.currentStage,
-                step: session.conversationMemory?.currentStep,
-                hasIssue: !!session.discovery?.issue,
-                slotsCount: Object.keys(session.collectedSlots || {}).filter(k => session.collectedSlots[k]).length
+            log('CHECKPOINT 9e: 🎯 LLM context built for discovery', {
+                scenarioCount: llmContext.scenarioKnowledge?.length || 0,
+                emotion: llmContext.callerEmotion,
+                hasDiscoveryIssue: !!llmContext.discovery?.issue
             });
+            
+            // Step 5: Call LLM - it is the PRIMARY BRAIN
+            const llmResult = await HybridReceptionistLLM.processConversation({
+                company,
+                callContext: {
+                    callId: session._id.toString(),
+                    companyId,
+                    customerContext,
+                    runningSummary: summaryFormatted,
+                    turnCount: (session.metrics?.totalTurns || 0) + 1,
+                    channel,
+                    partialName: currentSlots.partialName || null,
+                    enterpriseContext: llmContext,
+                    mode: 'LLM_LED_DISCOVERY'
+                },
+                currentMode: 'discovery',
+                knownSlots: currentSlots,
+                conversationHistory,
+                userInput: userText,
+                behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
+            });
+            
+            aiLatencyMs = Date.now() - aiStartTime;
+            
+            log('CHECKPOINT 9f: 🗣️ LLM response generated', {
+                latencyMs: aiLatencyMs,
+                tokensUsed: llmResult.tokensUsed || 0,
+                replyPreview: llmResult.reply?.substring(0, 50)
+            });
+            
+            // Step 6: Update discovery state from LLM extraction
+            if (llmResult.extractedIssue && !session.discovery?.issue) {
+                session.discovery = session.discovery || {};
+                session.discovery.issue = llmResult.extractedIssue;
+                session.discovery.issueCapturedAtTurn = (session.metrics?.totalTurns || 0) + 1;
+            }
+            
+            // Step 7: Track if LLM asked the consent question
+            const askedConsent = llmResult.reply?.toLowerCase().includes('schedule') && 
+                                 llmResult.reply?.toLowerCase().includes('?');
+            if (askedConsent) {
+                session.conversationMemory = session.conversationMemory || {};
+                session.conversationMemory.askedConsentQuestion = true;
+            }
+            
+            // Step 8: Store scenarios consulted for debugging
+            if (scenarioRetrieval.scenarios?.length > 0) {
+                session.conversationMemory = session.conversationMemory || {};
+                session.conversationMemory.scenariosConsulted = scenarioRetrieval.scenarios.map(s => s.scenarioId);
+            }
+            
+            aiResult = {
+                reply: llmResult.reply,
+                conversationMode: 'discovery',
+                intent: llmResult.intent || 'discovery',
+                nextGoal: llmResult.nextGoal || 'UNDERSTAND_CALLER',
+                filledSlots: currentSlots,
+                signals: { 
+                    wantsBooking: false,  // NOT booking until consent
+                    consentGiven: false,
+                    discoveryComplete: !!session.discovery?.issue
+                },
+                latencyMs: aiLatencyMs,
+                tokensUsed: llmResult.tokensUsed || 0,
+                fromStateMachine: false,
+                mode: session.mode,
+                debug: {
+                    source: 'OPTION1_LLM_SPEAKS',
+                    stage: llmContext.stage,
+                    canAskConsent: llmContext.canAskConsent,
+                    discoveryIssue: llmContext.discovery?.issue
+                }
+            };
+            
+            log('CHECKPOINT 9d: ✅ LLM response complete (DISCOVERY/SUPPORT)', {
+                tokensUsed: llmResult.tokensUsed,
+                mode: session.mode,
+                hasIssue: !!session.discovery?.issue
+            });
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // Save state to session (both modes)
+        // ═══════════════════════════════════════════════════════════════════
+        session.collectedSlots = { ...session.collectedSlots, ...currentSlots };
+        
+        // Update legacy phase for backward compatibility
+        if (session.mode === 'BOOKING') {
+            session.phase = 'booking';
+        } else if (session.mode === 'COMPLETE') {
+            session.phase = 'complete';
+        } else {
+            session.phase = 'discovery';
+        }
+        
+        log('CHECKPOINT 9e: 📊 Session state saved', {
+            mode: session.mode,
+            phase: session.phase,
+            consentGiven: session.booking?.consentGiven,
+            hasIssue: !!session.discovery?.issue,
+            slotsCount: Object.keys(session.collectedSlots || {}).filter(k => session.collectedSlots[k]).length
+        });
             
         } else {
             // ═══════════════════════════════════════════════════════════════════

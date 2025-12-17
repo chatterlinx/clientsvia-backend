@@ -248,6 +248,36 @@ const conversationSessionSchema = new Schema({
         state: { type: String, default: 'INIT' }          // INIT, COLLECTING, CONFIRMING, COMPLETE
     },
     
+    // ════════════════════════════════════════════════════════════════════════
+    // 🆕 ENTERPRISE MODE CONTROL - AUTHORITATIVE SOURCE OF TRUTH
+    // ════════════════════════════════════════════════════════════════════════
+    // This is the ONLY variable that controls who speaks:
+    // - DISCOVERY/SUPPORT: LLM ALWAYS speaks
+    // - BOOKING: Deterministic prompts speak (clipboard mode)
+    // - COMPLETE: Session is done
+    // - ERROR: Something went wrong
+    // ════════════════════════════════════════════════════════════════════════
+    mode: {
+        type: String,
+        enum: ['DISCOVERY', 'SUPPORT', 'BOOKING', 'COMPLETE', 'ERROR'],
+        default: 'DISCOVERY',
+        index: true
+    },
+    
+    // ════════════════════════════════════════════════════════════════════════
+    // 🆕 BOOKING CONSENT GATE - HARD LOCK
+    // ════════════════════════════════════════════════════════════════════════
+    // Booking prompts CANNOT execute unless consentGiven === true
+    // Only UI-configured consent phrases can flip this to true
+    // Issue detection does NOT trigger booking - only explicit consent
+    // ════════════════════════════════════════════════════════════════════════
+    booking: {
+        consentGiven: { type: Boolean, default: false },
+        consentPhrase: { type: String, default: null, trim: true }, // What phrase triggered consent
+        consentTurn: { type: Number, default: null },               // Which turn consent was given
+        consentTimestamp: { type: Date, default: null }
+    },
+    
     status: {
         type: String,
         enum: ['active', 'ended', 'transferred', 'abandoned', 'error'],
@@ -255,6 +285,7 @@ const conversationSessionSchema = new Schema({
         index: true
     },
     
+    // 🚨 LEGACY - Keep for backward compatibility, but mode is authoritative
     phase: {
         type: String,
         enum: ['greeting', 'discovery', 'decision', 'booking', 'complete', 'transfer'],

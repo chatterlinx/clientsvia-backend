@@ -1,0 +1,462 @@
+/**
+ * ============================================================================
+ * LLM DISCOVERY ENGINE - V22 LLM-LED ARCHITECTURE
+ * ============================================================================
+ * 
+ * CORE PHILOSOPHY:
+ * - LLM is the PRIMARY BRAIN (not fallback)
+ * - Scenarios are TOOLS (not scripts)
+ * - Booking is DETERMINISTIC (only after consent)
+ * - No triage gates, no pre-routing, no forced categories
+ * 
+ * THE GOLDEN RULE:
+ * "Nothing should bypass the LLM during discovery."
+ * 
+ * FLOW:
+ * 1. Caller speaks
+ * 2. LLM decides what to do (ask question, reassure, retrieve scenarios)
+ * 3. LLM responds naturally using scenario knowledge
+ * 4. Consent detected → deterministic booking
+ * 
+ * LATENCY TARGET: < 1.2s per turn
+ * 
+ * ============================================================================
+ */
+
+const logger = require('../utils/logger');
+const ScenarioPoolService = require('./ScenarioPoolService');
+const HybridScenarioSelector = require('./HybridScenarioSelector');
+
+// Version banner
+const ENGINE_VERSION = 'V22-LLM-LED-DISCOVERY';
+logger.info(`[LLM DISCOVERY ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
+    philosophy: [
+        '✅ LLM is PRIMARY BRAIN (not fallback)',
+        '✅ Scenarios are TOOLS (not scripts)',
+        '✅ Booking is DETERMINISTIC (consent-gated)',
+        '✅ No triage gates, no pre-routing',
+        '✅ No hardcoded responses in discovery'
+    ]
+});
+
+class LLMDiscoveryEngine {
+    
+    /**
+     * ========================================================================
+     * TOOL: retrieveRelevantScenarios
+     * ========================================================================
+     * 
+     * PURPOSE: Provide the LLM with relevant, safe knowledge from scenarios.
+     * This is a READ-ONLY tool - it does NOT auto-respond or trigger booking.
+     * 
+     * The LLM uses this knowledge to inform its response, but speaks naturally.
+     * 
+     * @param {Object} params
+     * @param {string} params.companyId - Company ID
+     * @param {string} params.trade - Trade type (HVAC, DENTAL, etc.)
+     * @param {string} params.utterance - Caller's speech
+     * @param {Object} params.template - Active template with NLP config
+     * @returns {Promise<Object>} { scenarios: Array<ScenarioSummary>, retrievalTimeMs }
+     */
+    static async retrieveRelevantScenarios({ companyId, trade, utterance, template }) {
+        const startTime = Date.now();
+        
+        try {
+            logger.info('[LLM DISCOVERY] 🔍 Retrieving relevant scenarios...', {
+                companyId,
+                trade,
+                utterancePreview: utterance?.substring(0, 50)
+            });
+            
+            // Step 1: Get scenario pool for this company
+            const { scenarios: allScenarios } = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
+            
+            if (!allScenarios || allScenarios.length === 0) {
+                logger.warn('[LLM DISCOVERY] ⚠️ No scenarios available for company', { companyId });
+                return {
+                    scenarios: [],
+                    retrievalTimeMs: Date.now() - startTime,
+                    message: 'NO_SCENARIOS_AVAILABLE'
+                };
+            }
+            
+            // Step 2: Filter to enabled scenarios only
+            const enabledScenarios = allScenarios.filter(s => s.isEnabledForCompany !== false);
+            
+            // Step 3: Build selector with template NLP config
+            const fillerWords = template?.fillerWords || template?.nlpConfig?.fillerWords || [];
+            const urgencyKeywords = template?.urgencyKeywords || [];
+            const synonymMap = template?.synonymMap || template?.nlpConfig?.synonyms || {};
+            
+            const selector = new HybridScenarioSelector(fillerWords, urgencyKeywords, synonymMap);
+            
+            // Step 4: Find relevant scenarios (semantic + keyword matching)
+            const matchResult = selector.findBestMatch(utterance, enabledScenarios, {
+                returnTopN: 3,  // Max 3 scenarios for LLM context
+                minConfidence: 0.35,  // Lower threshold - LLM will decide relevance
+                includeTrace: false  // Skip trace for speed
+            });
+            
+            // Step 5: Build scenario summaries (compressed for LLM)
+            const scenarioSummaries = [];
+            
+            if (matchResult.match) {
+                scenarioSummaries.push(this._buildScenarioSummary(matchResult.match, matchResult.confidence));
+            }
+            
+            if (matchResult.alternates) {
+                for (const alt of matchResult.alternates.slice(0, 2)) {
+                    scenarioSummaries.push(this._buildScenarioSummary(alt.scenario, alt.confidence));
+                }
+            }
+            
+            const retrievalTimeMs = Date.now() - startTime;
+            
+            logger.info('[LLM DISCOVERY] ✅ Scenarios retrieved', {
+                count: scenarioSummaries.length,
+                retrievalTimeMs,
+                topScenario: scenarioSummaries[0]?.title
+            });
+            
+            return {
+                scenarios: scenarioSummaries,
+                retrievalTimeMs,
+                totalAvailable: enabledScenarios.length
+            };
+            
+        } catch (error) {
+            logger.error('[LLM DISCOVERY] ❌ Scenario retrieval failed', {
+                error: error.message,
+                companyId
+            });
+            
+            return {
+                scenarios: [],
+                retrievalTimeMs: Date.now() - startTime,
+                error: error.message
+            };
+        }
+    }
+    
+    /**
+     * Build a compressed scenario summary for LLM context
+     * This keeps token usage low while providing useful knowledge
+     */
+    static _buildScenarioSummary(scenario, confidence) {
+        // Extract the best reply to use as knowledge
+        let knowledge = '';
+        
+        if (scenario.fullReplies?.length > 0) {
+            const reply = scenario.fullReplies[0];
+            knowledge = typeof reply === 'string' ? reply : reply.text || '';
+        } else if (scenario.quickReplies?.length > 0) {
+            const reply = scenario.quickReplies[0];
+            knowledge = typeof reply === 'string' ? reply : reply.text || '';
+        }
+        
+        // Truncate if too long (save tokens)
+        if (knowledge.length > 300) {
+            knowledge = knowledge.substring(0, 297) + '...';
+        }
+        
+        return {
+            scenarioId: scenario.scenarioId || scenario.id,
+            title: scenario.name || scenario.title || 'Unknown',
+            category: scenario.categoryName || scenario.categories?.[0] || 'General',
+            knowledge: knowledge,
+            urgency: this._detectUrgency(scenario),
+            bookingRecommended: this._shouldRecommendBooking(scenario),
+            confidence: Math.round(confidence * 100)
+        };
+    }
+    
+    /**
+     * Detect urgency level from scenario
+     */
+    static _detectUrgency(scenario) {
+        const name = (scenario.name || '').toLowerCase();
+        const triggers = (scenario.triggers || []).join(' ').toLowerCase();
+        
+        const emergencyWords = ['emergency', 'urgent', 'leak', 'flood', 'no heat', 'no cool', 'gas', 'fire', 'smoke'];
+        
+        for (const word of emergencyWords) {
+            if (name.includes(word) || triggers.includes(word)) {
+                return 'urgent';
+            }
+        }
+        
+        return 'normal';
+    }
+    
+    /**
+     * Determine if booking should be recommended for this scenario
+     */
+    static _shouldRecommendBooking(scenario) {
+        // Check follow-up mode
+        if (scenario.followUpMode === 'ASK_IF_BOOK' || scenario.followUpMode === 'TRANSFER') {
+            return true;
+        }
+        
+        // Check scenario type
+        if (scenario.scenarioType === 'ACTION_FLOW') {
+            return true;
+        }
+        
+        // Check category hints
+        const category = (scenario.categoryName || '').toLowerCase();
+        const bookingCategories = ['service', 'repair', 'install', 'maintenance', 'emergency'];
+        
+        return bookingCategories.some(cat => category.includes(cat));
+    }
+    
+    /**
+     * ========================================================================
+     * TOOL: getCompanyVariables
+     * ========================================================================
+     * 
+     * PURPOSE: Provide company-specific variables for natural speech.
+     * Used for brand grounding - no logic, just data.
+     * 
+     * @param {Object} company - Company document
+     * @returns {Object} Company variables for LLM
+     */
+    static getCompanyVariables(company) {
+        return {
+            companyName: company.companyName || company.businessName || 'the company',
+            trade: company.trade || 'HVAC',
+            serviceAreas: company.serviceAreas?.join(', ') || 'your area',
+            businessHours: company.businessHours || 'business hours',
+            phone: company.phone || null
+        };
+    }
+    
+    /**
+     * ========================================================================
+     * CONSENT DETECTION (Simple, Reliable)
+     * ========================================================================
+     * 
+     * Detects if caller has given explicit consent to book.
+     * Uses UI-configured phrases from detectionTriggers.wantsBooking[]
+     * 
+     * @param {string} utterance - Caller's speech
+     * @param {Object} company - Company with frontDeskBehavior config
+     * @param {Object} session - Session state
+     * @returns {Object} { hasConsent, matchedPhrase, reason }
+     */
+    static detectConsent(utterance, company, session) {
+        if (!utterance || typeof utterance !== 'string') {
+            return { hasConsent: false, matchedPhrase: null, reason: 'no_input' };
+        }
+        
+        const textLower = utterance.toLowerCase().trim();
+        const frontDesk = company.aiAgentSettings?.frontDeskBehavior || {};
+        const discoveryConsent = frontDesk.discoveryConsent || {};
+        const detectionTriggers = frontDesk.detectionTriggers || {};
+        
+        // Get UI-configured consent phrases
+        const consentPhrases = detectionTriggers.wantsBooking || [];
+        const consentYesWords = discoveryConsent.consentYesWords || 
+            ['yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok', 'correct', 'sounds good'];
+        
+        // Default consent phrases if none configured
+        const defaultConsentPhrases = [
+            'schedule', 'book', 'appointment', 'send someone', 'send a tech',
+            'come out', 'dispatch', 'service call', 'when can you come',
+            'how soon', 'set up a time', 'need someone out'
+        ];
+        
+        const allConsentPhrases = consentPhrases.length > 0 ? consentPhrases : defaultConsentPhrases;
+        
+        // Check for explicit booking phrases
+        for (const phrase of allConsentPhrases) {
+            if (phrase && textLower.includes(phrase.toLowerCase())) {
+                return {
+                    hasConsent: true,
+                    matchedPhrase: phrase,
+                    reason: 'explicit_consent_phrase'
+                };
+            }
+        }
+        
+        // Check for "yes" after consent question was asked
+        if (session?.conversationMemory?.askedConsentQuestion) {
+            for (const yesWord of consentYesWords) {
+                if (textLower === yesWord || 
+                    textLower.startsWith(yesWord + ' ') || 
+                    textLower.endsWith(' ' + yesWord) ||
+                    textLower === yesWord + '.') {
+                    return {
+                        hasConsent: true,
+                        matchedPhrase: yesWord,
+                        reason: 'yes_after_consent_question'
+                    };
+                }
+            }
+        }
+        
+        return { hasConsent: false, matchedPhrase: null, reason: 'no_consent_detected' };
+    }
+    
+    /**
+     * ========================================================================
+     * EMOTION DETECTION (Lightweight Heuristic)
+     * ========================================================================
+     * 
+     * Detects caller emotion using keyword matching (no LLM needed).
+     * Passed to LLM as context for empathetic responses.
+     * 
+     * @param {string} utterance - Caller's speech
+     * @returns {Object} { emotion, confidence }
+     */
+    static detectEmotion(utterance) {
+        if (!utterance) return { emotion: 'neutral', confidence: 0.5 };
+        
+        const textLower = utterance.toLowerCase();
+        
+        // Frustration indicators
+        const frustrationWords = [
+            'frustrated', 'frustrating', 'annoying', 'annoyed', 'ridiculous',
+            'unbelievable', 'terrible', 'horrible', 'worst', 'hate',
+            'sick of', 'tired of', 'fed up', 'had enough', 'can\'t believe'
+        ];
+        
+        // Urgency indicators
+        const urgencyWords = [
+            'emergency', 'urgent', 'asap', 'right now', 'immediately',
+            'can\'t wait', 'need help now', 'serious', 'dangerous'
+        ];
+        
+        // Calm/friendly indicators
+        const calmWords = [
+            'thanks', 'thank you', 'appreciate', 'great', 'wonderful',
+            'perfect', 'awesome', 'helpful'
+        ];
+        
+        // Check frustration
+        for (const word of frustrationWords) {
+            if (textLower.includes(word)) {
+                return { emotion: 'frustrated', confidence: 0.8 };
+            }
+        }
+        
+        // Check urgency
+        for (const word of urgencyWords) {
+            if (textLower.includes(word)) {
+                return { emotion: 'urgent', confidence: 0.85 };
+            }
+        }
+        
+        // Check calm/friendly
+        for (const word of calmWords) {
+            if (textLower.includes(word)) {
+                return { emotion: 'calm', confidence: 0.7 };
+            }
+        }
+        
+        return { emotion: 'neutral', confidence: 0.5 };
+    }
+    
+    /**
+     * ========================================================================
+     * BUILD LLM DISCOVERY PROMPT
+     * ========================================================================
+     * 
+     * Builds the system prompt for LLM in discovery mode.
+     * This prompt makes the LLM the primary brain.
+     * 
+     * @param {Object} params
+     * @param {Object} params.company - Company document
+     * @param {Array} params.scenarios - Retrieved scenario summaries
+     * @param {Object} params.emotion - Detected emotion
+     * @param {Object} params.session - Session state
+     * @returns {string} System prompt for LLM
+     */
+    static buildDiscoveryPrompt({ company, scenarios, emotion, session }) {
+        const companyVars = this.getCompanyVariables(company);
+        const trade = companyVars.trade || 'HVAC';
+        const tradeLabel = trade === 'HVAC' ? 'HVAC company' :
+                          trade === 'DENTAL' ? 'dental office' :
+                          trade === 'LEGAL' ? 'law firm' :
+                          'service company';
+        
+        // Build scenario knowledge section
+        let knowledgeSection = '';
+        if (scenarios && scenarios.length > 0) {
+            knowledgeSection = `
+RELEVANT KNOWLEDGE (use naturally, do not read verbatim):
+${scenarios.map((s, i) => `${i + 1}. ${s.title}: ${s.knowledge}`).join('\n')}
+`;
+        }
+        
+        // Build emotion context
+        let emotionContext = '';
+        if (emotion?.emotion === 'frustrated') {
+            emotionContext = '\nNOTE: Caller sounds frustrated. Acknowledge their frustration empathetically before helping.';
+        } else if (emotion?.emotion === 'urgent') {
+            emotionContext = '\nNOTE: This sounds urgent. Prioritize getting help to them quickly.';
+        }
+        
+        // Build discovery state context
+        let discoveryContext = '';
+        if (session?.discovery?.issue) {
+            discoveryContext = `\nCALLER'S ISSUE: ${session.discovery.issue}`;
+        }
+        
+        return `You are a professional front desk agent for ${companyVars.companyName}, a ${tradeLabel}.
+
+Your job is to calmly understand the caller's situation and help them.
+
+RULES:
+1. You may reassure frustrated callers and ask clarifying questions.
+2. You may explain next steps simply.
+3. You are NOT allowed to invent technical ${trade} advice.
+4. If relevant knowledge exists below, use it naturally but do not read it verbatim.
+5. Only offer to schedule a technician when appropriate.
+6. Only initiate scheduling AFTER the caller clearly agrees.
+7. Never mention internal systems, scenarios, templates, or AI.
+8. Always sound human, confident, and helpful.
+9. Keep responses concise (2-3 sentences max unless explaining something).
+${knowledgeSection}${emotionContext}${discoveryContext}
+
+RESPONSE FORMAT:
+Respond naturally as a human receptionist would. Do not use bullet points or numbered lists unless explaining steps.`;
+    }
+    
+    /**
+     * ========================================================================
+     * BUILD LLM BOOKING PROMPT
+     * ========================================================================
+     * 
+     * Builds the system prompt for LLM in booking mode.
+     * In booking mode, LLM is a NARRATOR only - it speaks the prompts.
+     * 
+     * @param {Object} params
+     * @param {Object} params.company - Company document
+     * @param {string} params.currentSlot - Current slot being collected
+     * @param {Object} params.collectedSlots - Already collected slots
+     * @returns {string} System prompt for LLM
+     */
+    static buildBookingPrompt({ company, currentSlot, collectedSlots }) {
+        const companyVars = this.getCompanyVariables(company);
+        
+        return `You are collecting booking information for ${companyVars.companyName}.
+
+CURRENT TASK: Collect ${currentSlot}
+
+ALREADY COLLECTED:
+${Object.entries(collectedSlots || {})
+    .filter(([_, v]) => v)
+    .map(([k, v]) => `- ${k}: ${v}`)
+    .join('\n') || '- None yet'}
+
+RULES:
+1. Ask for ONE piece of information at a time.
+2. If caller provides the info, acknowledge briefly and move on.
+3. If caller asks a question, answer briefly then return to collecting info.
+4. Do not invent or assume information.
+5. Be warm but efficient.`;
+    }
+}
+
+module.exports = LLMDiscoveryEngine;
+
