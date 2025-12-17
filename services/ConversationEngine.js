@@ -1138,121 +1138,13 @@ async function processTurn({
             session.phase = 'discovery';
         }
         
-        log('CHECKPOINT 9e: 📊 Session state saved', {
+        log('CHECKPOINT 9g: 📊 Session state saved', {
             mode: session.mode,
             phase: session.phase,
             consentGiven: session.booking?.consentGiven,
             hasIssue: !!session.discovery?.issue,
             slotsCount: Object.keys(session.collectedSlots || {}).filter(k => session.collectedSlots[k]).length
         });
-            
-        } else {
-            // ═══════════════════════════════════════════════════════════════════
-            // LEGACY FLOW: Original BookingStateMachine (for backward compatibility)
-            // ═══════════════════════════════════════════════════════════════════
-            log('CHECKPOINT 9a: 📜 LEGACY FLOW (enterprise disabled)');
-            
-            const stateMachine = new BookingStateMachine(session, company);
-            const renderer = new ResponseRenderer(session, company);
-            
-            // Update state machine with newly extracted slots
-            stateMachine.updateSlots(currentSlots);
-            
-            // Greeting detection
-            const greetingPatterns = [
-                /^(hi|hello|hey|yo|howdy|greetings)[\s\.\!\?]*$/i,
-                /^good\s+(morning|afternoon|evening)[\s\.\!\?]*$/i,
-                /^(hi|hello|hey)\s+good\s+(morning|afternoon|evening)[\s\.\!\?]*$/i,
-                /^(hi|hello|hey)\s+there[\s\.\!\?]*$/i,
-                /^(hi|hello|hey)[\s,]+how are you[\s\.\!\?]*$/i
-            ];
-            const isSimpleGreeting = greetingPatterns.some(p => p.test(userText.trim()));
-            
-            // Booking intent detection
-            const bookingIntent = /\b(appointment|schedule|book|service|repair|fix|broken|not working|need help|maintenance|install|replace)\b/i;
-            const hasBookingIntent = bookingIntent.test(userText);
-            const isInBookingMode = stateMachine.isInBookingMode() || session.phase === 'booking' || hasBookingIntent;
-            const needsLLM = stateMachine.needsLLMInterpretation(userText, extractedThisTurn);
-            
-            const aiStartTime = Date.now();
-            
-            if (isSimpleGreeting && !isInBookingMode) {
-                // Greeting fast path
-                const greetingResponse = renderer.renderGreeting();
-                aiLatencyMs = Date.now() - aiStartTime;
-                
-                aiResult = {
-                    reply: greetingResponse.say,
-                    conversationMode: 'greeting',
-                    intent: 'greeting',
-                    nextGoal: 'AWAIT_NEED',
-                    filledSlots: currentSlots,
-                    signals: { wantsBooking: false },
-                    latencyMs: aiLatencyMs,
-                    tokensUsed: 0,
-                    fromStateMachine: true,
-                    debug: { source: 'LEGACY_GREETING' }
-                };
-            } else if (isInBookingMode && !needsLLM) {
-                // Booking fast path
-                const action = stateMachine.getNextAction();
-                if (action.slotId) stateMachine.recordAsk(action.slotId);
-                const response = renderer.render(action, extractedThisTurn);
-                if (session.phase !== 'booking') session.phase = 'booking';
-                aiLatencyMs = Date.now() - aiStartTime;
-                
-                aiResult = {
-                    reply: response.say,
-                    conversationMode: 'booking',
-                    intent: 'booking',
-                    nextGoal: action.action,
-                    filledSlots: currentSlots,
-                    signals: { wantsBooking: true },
-                    latencyMs: aiLatencyMs,
-                    tokensUsed: 0,
-                    fromStateMachine: true,
-                    debug: { source: 'LEGACY_BOOKING', action }
-                };
-                
-                session.stateMachine = stateMachine.getStateForSession();
-            } else {
-                // LLM path
-                aiResult = await HybridReceptionistLLM.processConversation({
-                    company,
-                    callContext: {
-                        callId: session._id.toString(),
-                        companyId,
-                        customerContext,
-                        runningSummary: summaryFormatted,
-                        turnCount: (session.metrics?.totalTurns || 0) + 1,
-                        channel,
-                        partialName: currentSlots.partialName || null
-                    },
-                    currentMode: session.phase === 'booking' ? 'booking' : 'free',
-                    knownSlots: currentSlots,
-                    conversationHistory,
-                    userInput: userText,
-                    behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
-                });
-                
-                aiLatencyMs = Date.now() - aiStartTime;
-                
-                if (aiResult.wantsBooking || aiResult.conversationMode === 'booking') {
-                    session.phase = 'booking';
-                    stateMachine.updateSlots(extractedThisTurn);
-                    const nextGoal = aiResult.nextGoal || '';
-                    if (nextGoal.startsWith('ASK_')) {
-                        stateMachine.recordAsk(nextGoal.replace('ASK_', '').toLowerCase());
-                    }
-                    session.stateMachine = stateMachine.getStateForSession();
-                }
-            }
-            
-            log('CHECKPOINT 9b: ✅ Legacy flow complete', {
-                tokensUsed: aiResult.tokensUsed || 0,
-                source: aiResult.debug?.source
-            });
-        }
         
         // Merge extracted slots
         aiResult.filledSlots = { ...(aiResult.filledSlots || {}), ...extractedThisTurn };
