@@ -1150,7 +1150,15 @@ async function processTurn({
                     source: 'OPTION1_LLM_SPEAKS',
                     stage: llmContext.stage,
                     canAskConsent: llmContext.canAskConsent,
-                    discoveryIssue: llmContext.discovery?.issue
+                    discoveryIssue: llmContext.discovery?.issue,
+                    // V22 Debug Info
+                    scenariosRetrieved: scenarioRetrieval.scenarios?.map(s => s.title) || [],
+                    scenarioCount: scenarioRetrieval.scenarios?.length || 0,
+                    killSwitches: {
+                        bookingRequiresExplicitConsent: killSwitches.bookingRequiresExplicitConsent,
+                        forceLLMDiscovery: killSwitches.forceLLMDiscovery,
+                        disableScenarioAutoResponses: killSwitches.disableScenarioAutoResponses
+                    }
                 }
             };
             
@@ -1508,6 +1516,19 @@ async function processTurn({
                 tokensUsed: aiResult.tokensUsed || 0,
                 responseSource,
                 confidence: aiResult.confidence,
+                
+                // ════════════════════════════════════════════════════════════════
+                // V22 MODE INFO - Critical for debugging discovery/booking flow
+                // ════════════════════════════════════════════════════════════════
+                v22: {
+                    mode: session.mode || 'DISCOVERY',
+                    consentGiven: session.booking?.consentGiven || false,
+                    consentPhrase: session.booking?.consentPhrase || null,
+                    scenariosRetrieved: session.conversationMemory?.scenariosConsulted || [],
+                    scenarioCount: session.conversationMemory?.scenariosConsulted?.length || 0,
+                    discoveryIssue: session.discovery?.issue || null,
+                    killSwitches: aiResult.debug?.killSwitches || null
+                },
                 
                 // 🎯 DYNAMIC STAGE DATA - What UI should display
                 stageInfo: {
