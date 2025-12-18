@@ -1817,6 +1817,17 @@ async function processTurn({
                     assumedSingleTokenAs: null  // "first" | "last"
                 };
                 
+                // 🔍 DEBUG: Log nameMeta state at start of turn
+                log('📝 NAME META STATE AT TURN START', {
+                    'nameMeta.first': session.booking.meta.name.first,
+                    'nameMeta.last': session.booking.meta.name.last,
+                    'nameMeta.lastConfirmed': session.booking.meta.name.lastConfirmed,
+                    'nameMeta.askedMissingPartOnce': session.booking.meta.name.askedMissingPartOnce,
+                    'nameMeta.assumedSingleTokenAs': session.booking.meta.name.assumedSingleTokenAs,
+                    'currentSlots.partialName': currentSlots.partialName,
+                    'currentSlots.name': currentSlots.name
+                });
+                
                 // Track active slot for deterministic flow
                 session.booking.activeSlot = session.booking.activeSlot || 'name';
                 
@@ -1976,6 +1987,16 @@ async function processTurn({
                         const commonFirstNames = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
                         const commonFirstNamesSet = new Set(commonFirstNames.map(n => n.toLowerCase()));
                         const isCommonFirstName = commonFirstNamesSet.has(extractedName.toLowerCase());
+                        
+                        // 🔍 DEBUG: Log commonFirstNames check
+                        log('📝 NAME DETECTION DEBUG', {
+                            extractedName,
+                            extractedNameLower: extractedName.toLowerCase(),
+                            commonFirstNamesCount: commonFirstNames.length,
+                            commonFirstNamesSample: commonFirstNames.slice(0, 10),
+                            isCommonFirstName,
+                            hasMarkInList: commonFirstNamesSet.has('mark')
+                        });
                         
                         if (isCommonFirstName) {
                             // "Mark", "John", "Sarah" etc. are clearly first names
