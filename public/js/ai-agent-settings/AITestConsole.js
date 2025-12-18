@@ -508,7 +508,8 @@ class AITestConsole {
                 const metadata = {
                     latencyMs: debug.latencyMs,
                     tokensUsed: debug.tokensUsed,
-                    mode: debug.phase || 'booking',
+                    // V22: Use mode from v22BlackBox, fallback to phase for backward compat
+                    mode: debug.v22BlackBox?.mode || debug.mode || debug.phase || 'DISCOVERY',
                     slots: collectedSlots,
                     needsInfo: null
                 };
@@ -534,7 +535,8 @@ class AITestConsole {
                     source,
                     latencyMs: debug.latencyMs,
                     tokens: debug.tokensUsed,
-                    mode: debug.phase,
+                    // V22: Use mode from v22BlackBox, fallback to phase for backward compat
+                    mode: debug.v22BlackBox?.mode || debug.mode || debug.phase || 'DISCOVERY',
                     customerContext: debug.customerContext,
                     runningSummary: debug.runningSummary,
                     slotsCollected: debug.slotsCollected,
