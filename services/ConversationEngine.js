@@ -33,6 +33,7 @@
  */
 
 const Company = require('../models/v2Company');
+const BookingRequest = require('../models/BookingRequest');
 const CustomerService = require('./CustomerService');
 const SessionService = require('./SessionService');
 const RunningSummaryService = require('./RunningSummaryService');
@@ -118,6 +119,189 @@ function searchCheatSheets(cheatSheetConfig, query) {
     }
     
     return bestMatch;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🆕 FINALIZE BOOKING - Creates booking record and returns final script
+// ═══════════════════════════════════════════════════════════════════════════
+// Called when ALL required slots are collected and confirmed.
+// Creates a BookingRequest record and returns the appropriate final script.
+// 
+// CORE PRINCIPLE: The AI must never imply a follow-up action
+// the company did not explicitly enable.
+// DEFAULT: "Confirmed on Call" - no callback assumed.
+// ═══════════════════════════════════════════════════════════════════════════
+async function finalizeBooking(session, company, slots, metadata = {}) {
+    const log = (msg, data = {}) => {
+        logger.info(`[FINALIZE BOOKING] ${msg}`, data);
+    };
+    
+    log('🎯 Starting booking finalization', {
+        sessionId: session._id?.toString(),
+        companyId: company._id?.toString(),
+        slots: Object.keys(slots || {}).filter(k => slots[k])
+    });
+    
+    try {
+        // Get booking outcome config
+        const frontDesk = company.aiAgentSettings?.frontDeskBehavior || {};
+        const bookingOutcome = frontDesk.bookingOutcome || {};
+        const outcomeMode = bookingOutcome.mode || 'confirmed_on_call';
+        
+        // Determine if ASAP variant should be used
+        const timePreference = slots.time?.preference || slots.time || '';
+        const isAsap = typeof timePreference === 'string' && 
+                       /\b(asap|urgent|emergency|today|soonest|earliest)\b/i.test(timePreference);
+        const useAsapVariant = bookingOutcome.useAsapVariant !== false && isAsap;
+        
+        log('📋 Outcome config', {
+            outcomeMode,
+            isAsap,
+            useAsapVariant
+        });
+        
+        // Build slots structure for BookingRequest
+        const bookingSlots = {
+            name: {
+                first: slots.name?.first || null,
+                last: slots.name?.last || null,
+                full: slots.name?.full || slots.name || null
+            },
+            phone: slots.phone || null,
+            address: {
+                full: slots.address?.full || slots.address || null,
+                street: slots.address?.street || null,
+                city: slots.address?.city || null,
+                unit: slots.address?.unit || null
+            },
+            time: {
+                preference: timePreference || null,
+                window: slots.time?.window || null,
+                isAsap: isAsap
+            },
+            custom: {}
+        };
+        
+        // Add any custom slots
+        const standardSlots = ['name', 'phone', 'address', 'time', 'partialName'];
+        for (const [key, value] of Object.entries(slots)) {
+            if (!standardSlots.includes(key) && value) {
+                bookingSlots.custom.set ? bookingSlots.custom.set(key, value) : (bookingSlots.custom[key] = value);
+            }
+        }
+        
+        // Generate case ID
+        const caseId = BookingRequest.generateCaseId();
+        
+        // Map outcome mode to status
+        const statusMap = {
+            'confirmed_on_call': 'FAKE_CONFIRMED',
+            'pending_dispatch': 'PENDING_DISPATCH',
+            'callback_required': 'CALLBACK_QUEUED',
+            'transfer_to_scheduler': 'TRANSFERRED',
+            'after_hours_hold': 'AFTER_HOURS'
+        };
+        
+        // Create BookingRequest record
+        const bookingRequest = new BookingRequest({
+            companyId: company._id,
+            sessionId: session._id,
+            customerId: session.customerId || null,
+            ruleId: metadata.ruleId || null,
+            trade: company.trade || null,
+            serviceType: metadata.serviceType || null,
+            status: statusMap[outcomeMode] || 'FAKE_CONFIRMED',
+            outcomeMode: outcomeMode,
+            slots: bookingSlots,
+            issue: session.discovery?.issue || null,
+            issueSummary: session.discoverySummary || null,
+            urgency: isAsap ? 'urgent' : 'normal',
+            caseId: caseId,
+            channel: metadata.channel || 'phone',
+            callSid: metadata.callSid || null,
+            callerPhone: metadata.callerPhone || null,
+            createdAt: new Date(),
+            completedAt: new Date()
+        });
+        
+        await bookingRequest.save();
+        
+        log('✅ BookingRequest created', {
+            bookingRequestId: bookingRequest._id.toString(),
+            caseId: caseId,
+            status: bookingRequest.status,
+            outcomeMode: outcomeMode
+        });
+        
+        // Get the final script
+        let finalScript;
+        
+        // Check for custom override first
+        if (bookingOutcome.customFinalScript) {
+            finalScript = bookingOutcome.customFinalScript;
+        }
+        // Check for ASAP variant
+        else if (useAsapVariant && bookingOutcome.asapVariantScript) {
+            finalScript = bookingOutcome.asapVariantScript;
+        }
+        // Use mode-specific script
+        else {
+            const finalScripts = bookingOutcome.finalScripts || {};
+            finalScript = finalScripts[outcomeMode] || getDefaultFinalScript(outcomeMode);
+        }
+        
+        // Populate placeholders in final script
+        const populatedScript = bookingRequest.populateFinalScript(finalScript);
+        
+        // Store final script used for audit
+        bookingRequest.finalScriptUsed = populatedScript;
+        await bookingRequest.save();
+        
+        log('📝 Final script generated', {
+            outcomeMode,
+            useAsapVariant,
+            scriptPreview: populatedScript.substring(0, 100)
+        });
+        
+        return {
+            success: true,
+            bookingRequestId: bookingRequest._id.toString(),
+            caseId: caseId,
+            status: bookingRequest.status,
+            outcomeMode: outcomeMode,
+            finalScript: populatedScript,
+            isAsap: isAsap,
+            // For transfer mode, include transfer flag
+            requiresTransfer: outcomeMode === 'transfer_to_scheduler'
+        };
+        
+    } catch (error) {
+        log('❌ Booking finalization failed', {
+            error: error.message,
+            stack: error.stack
+        });
+        
+        // Return a safe fallback
+        return {
+            success: false,
+            error: error.message,
+            finalScript: "Thank you for your information. We'll be in touch shortly.",
+            outcomeMode: 'confirmed_on_call',
+            requiresTransfer: false
+        };
+    }
+}
+
+// Default final scripts (used if not configured in company settings)
+function getDefaultFinalScript(mode) {
+    const defaults = {
+        'confirmed_on_call': "Perfect, {name}. You're all set. Your appointment is scheduled for {timePreference}. If anything changes, you can call us back anytime. Is there anything else I can help you with today?",
+        'pending_dispatch': "Thanks, {name}. I've logged everything and sent it to dispatch. They'll review and confirm the time shortly. Anything else I can help with?",
+        'callback_required': "Thanks, {name}. A team member will reach out shortly to finalize your appointment. Is there anything else?",
+        'transfer_to_scheduler': "I'm going to transfer you now to our scheduler to get this confirmed.",
+        'after_hours_hold': "We're currently closed, but I've captured your request. We'll follow up first thing when we open. If this is urgent, I can transfer you now."
+    };
+    return defaults[mode] || defaults['confirmed_on_call'];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1499,14 +1683,14 @@ async function processTurn({
                     } else if (!nameMeta.lastConfirmed && confirmBackEnabled) {
                         // Single token, need to confirm back first
                         nameMeta.lastConfirmed = true;
-                        
-                        // ═══════════════════════════════════════════════════════════════════
+            
+            // ═══════════════════════════════════════════════════════════════════
                         // SMART NAME DETECTION: Use UI-configurable common first names list
                         // to determine if single token is first or last name
                         // 
                         // UI Location: Front Desk → Booking Prompts → Names tab
                         // Admins can add regional/cultural names specific to their clientele
-                        // ═══════════════════════════════════════════════════════════════════
+            // ═══════════════════════════════════════════════════════════════════
                         const commonFirstNames = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
                         const commonFirstNamesSet = new Set(commonFirstNames.map(n => n.toLowerCase()));
                         const isCommonFirstName = commonFirstNamesSet.has(extractedName.toLowerCase());
@@ -1536,7 +1720,7 @@ async function processTurn({
                         // Ask for the part we don't have
                         if (nameMeta.assumedSingleTokenAs === 'last') {
                             finalReply = "And what's your first name?";
-                        } else {
+        } else {
                             finalReply = "And what's your last name?";
                         }
                         nextSlotId = 'name'; // Still on name
@@ -1588,10 +1772,10 @@ async function processTurn({
                 } else if (extractedThisTurn.time) {
                     finalReply = 'Great. ';
                 }
-                // ═══════════════════════════════════════════════════════════════════
+            // ═══════════════════════════════════════════════════════════════════
                 // PARTIAL ANSWER NUDGE - User started but didn't complete
                 // "my service address is" without actual address → gentle nudge
-                // ═══════════════════════════════════════════════════════════════════
+            // ═══════════════════════════════════════════════════════════════════
                 else {
                     const userTextLower = userText.toLowerCase().trim();
                     const isPartialAddress = /^(my\s+)?(service\s+)?address\s+(is|would be|at)/i.test(userTextLower) && 
@@ -1663,31 +1847,64 @@ async function processTurn({
                         }
                     };
                 } else {
-                    // All required slots collected - booking complete!
-                    log('✅ BOOKING COMPLETE: All required slots collected');
+                    // ═══════════════════════════════════════════════════════════════
+                    // ALL REQUIRED SLOTS COLLECTED - FINALIZE BOOKING
+                    // ═══════════════════════════════════════════════════════════════
+                    // Use the configurable Booking Outcome system:
+                    // - Creates BookingRequest record
+                    // - Returns UI-configured final script
+                    // - No hardcoded "technician will reach out" unless enabled
+                    // ═══════════════════════════════════════════════════════════════
+                    log('✅ BOOKING COMPLETE: All required slots collected - finalizing');
+                    
+                    // Finalize booking with configurable outcome
+                    const finalizationResult = await finalizeBooking(session, company, currentSlots, {
+                        channel,
+                        callSid: metadata?.callSid || null,
+                        callerPhone: callerPhone || null,
+                        serviceType: session.discovery?.serviceType || null
+                    });
+                    
+                    log('📋 BOOKING FINALIZED', {
+                        success: finalizationResult.success,
+                        bookingRequestId: finalizationResult.bookingRequestId,
+                        caseId: finalizationResult.caseId,
+                        outcomeMode: finalizationResult.outcomeMode,
+                        isAsap: finalizationResult.isAsap,
+                        requiresTransfer: finalizationResult.requiresTransfer
+                    });
                     
                     session.mode = 'COMPLETE';
+                    session.booking.completedAt = new Date();
+                    session.booking.bookingRequestId = finalizationResult.bookingRequestId;
                     session.markModified('booking');
                 
                 aiResult = {
-                        reply: "Great! I have all your information. We'll get a technician out to you as soon as possible. Is there anything else I can help you with?",
+                        reply: finalizationResult.finalScript,
                         conversationMode: 'complete',
                         intent: 'booking_complete',
-                        nextGoal: 'CONFIRM_BOOKING',
+                        nextGoal: finalizationResult.requiresTransfer ? 'TRANSFER' : 'END_CALL',
                     filledSlots: currentSlots,
                         signals: { 
                             wantsBooking: true,
                             consentGiven: true,
-                            bookingComplete: true
+                            bookingComplete: true,
+                            requiresTransfer: finalizationResult.requiresTransfer
                         },
-                    latencyMs: aiLatencyMs,
+                        latencyMs: Date.now() - aiStartTime,
                     tokensUsed: 0,
                     fromStateMachine: true,
                         mode: 'COMPLETE',
                         debug: {
-                            source: 'BOOKING_COMPLETE',
+                            source: 'BOOKING_COMPLETE_FINALIZED',
                             stage: 'complete',
-                            collectedSlots: Object.keys(currentSlots).filter(k => currentSlots[k])
+                            collectedSlots: Object.keys(currentSlots).filter(k => currentSlots[k]),
+                            // V23 Booking Outcome tracking
+                            bookingRequestId: finalizationResult.bookingRequestId,
+                            caseId: finalizationResult.caseId,
+                            outcomeMode: finalizationResult.outcomeMode,
+                            isAsap: finalizationResult.isAsap,
+                            status: finalizationResult.status
                         }
                     };
                 }
@@ -2009,6 +2226,15 @@ async function processTurn({
             cheatSheetUsed: aiResult?.debug?.cheatSheetUsed || false,
             cheatSheetReason: aiResult?.debug?.cheatSheetReason || null,  // 'discovery_fallback' | 'booking_interrupt'
             cheatSheetCategory: aiResult?.debug?.cheatSheetCategory || null,
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // V23 BOOKING OUTCOME TRACKING
+            // ═══════════════════════════════════════════════════════════════════
+            bookingComplete: session.mode === 'COMPLETE',
+            bookingRequestId: aiResult?.debug?.bookingRequestId || session.booking?.bookingRequestId || null,
+            caseId: aiResult?.debug?.caseId || null,
+            outcomeMode: aiResult?.debug?.outcomeMode || null,  // 'confirmed_on_call' | 'pending_dispatch' | etc.
+            bookingStatus: aiResult?.debug?.status || null,     // 'FAKE_CONFIRMED' | 'PENDING_DISPATCH' | etc.
             
             // Discovery State
             discoveryIssue: session.discovery?.issue || null,

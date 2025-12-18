@@ -2134,6 +2134,70 @@ const companySchema = new mongoose.Schema({
                 },
                 
                 // ═══════════════════════════════════════════════════════════════
+                // 🆕 BOOKING OUTCOME - What happens when all slots are collected
+                // ═══════════════════════════════════════════════════════════════
+                // CORE PRINCIPLE: The AI must never imply a follow-up action
+                // the company did not explicitly enable.
+                // DEFAULT: "Confirmed on Call" - no callback assumed.
+                // ═══════════════════════════════════════════════════════════════
+                bookingOutcome: {
+                    // Outcome mode determines what the AI says at booking completion
+                    mode: { 
+                        type: String, 
+                        enum: [
+                            'confirmed_on_call',      // DEFAULT - no callback, appointment confirmed
+                            'pending_dispatch',       // Sent to dispatch for review
+                            'callback_required',      // Explicit opt-in for callbacks
+                            'transfer_to_scheduler',  // Immediate transfer to human
+                            'after_hours_hold'        // Special after-hours handling
+                        ],
+                        default: 'confirmed_on_call'
+                    },
+                    
+                    // Final script templates per mode (with placeholders)
+                    finalScripts: {
+                        confirmed_on_call: {
+                            type: String,
+                            default: "Perfect, {name}. You're all set. Your appointment is scheduled for {timePreference}. If anything changes, you can call us back anytime. Is there anything else I can help you with today?",
+                            trim: true
+                        },
+                        pending_dispatch: {
+                            type: String,
+                            default: "Thanks, {name}. I've logged everything and sent it to dispatch. They'll review and confirm the time shortly. Anything else I can help with?",
+                            trim: true
+                        },
+                        callback_required: {
+                            type: String,
+                            default: "Thanks, {name}. A team member will reach out shortly to finalize your appointment. Is there anything else?",
+                            trim: true
+                        },
+                        transfer_to_scheduler: {
+                            type: String,
+                            default: "I'm going to transfer you now to our scheduler to get this confirmed.",
+                            trim: true
+                        },
+                        after_hours_hold: {
+                            type: String,
+                            default: "We're currently closed, but I've captured your request. We'll follow up first thing when we open. If this is urgent, I can transfer you now.",
+                            trim: true
+                        }
+                    },
+                    
+                    // Custom override script (takes precedence over mode defaults)
+                    customFinalScript: { type: String, default: null, trim: true },
+                    
+                    // ASAP variant script (used when timePreference = ASAP)
+                    asapVariantScript: { 
+                        type: String, 
+                        default: "Perfect, {name}. I've marked this as urgent. Someone will be in touch shortly to confirm the earliest available time. Anything else?",
+                        trim: true
+                    },
+                    
+                    // Use ASAP variant when timePreference is ASAP
+                    useAsapVariant: { type: Boolean, default: true }
+                },
+                
+                // ═══════════════════════════════════════════════════════════════
                 // STAGE 5: CONFIRMATION
                 // ═══════════════════════════════════════════════════════════════
                 confirmationSettings: {

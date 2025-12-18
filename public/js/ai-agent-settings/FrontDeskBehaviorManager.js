@@ -633,6 +633,21 @@ class FrontDeskBehaviorManager {
                     <span style="color: #8b949e; font-size: 0.75rem;">${(this.config.commonFirstNames || []).length} names</span>
                 </div>
             </div>
+            
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <!-- BOOKING OUTCOME - What AI says when all slots are collected -->
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 16px;">
+                <div style="margin-bottom: 16px;">
+                    <h3 style="margin: 0; color: #58a6ff;">🎯 Booking Outcome</h3>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin: 4px 0 0 0;">
+                        What the AI says when all booking information is collected. 
+                        <strong style="color: #f0883e;">Default: "Confirmed on Call" - no callbacks unless you enable them.</strong>
+                    </p>
+                </div>
+                
+                ${this.renderBookingOutcomeSection()}
+            </div>
         `;
     }
     
@@ -769,6 +784,206 @@ class FrontDeskBehaviorManager {
         if (countEl) {
             countEl.textContent = `${(this.config.commonFirstNames || []).length} names`;
         }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BOOKING OUTCOME SECTION
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Controls what AI says when all slots are collected.
+    // DEFAULT: "Confirmed on Call" - no callbacks unless explicitly enabled.
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    renderBookingOutcomeSection() {
+        const outcome = this.config.bookingOutcome || {};
+        const mode = outcome.mode || 'confirmed_on_call';
+        const finalScripts = outcome.finalScripts || {};
+        
+        const modes = [
+            { 
+                value: 'confirmed_on_call', 
+                label: '✅ Confirmed on Call', 
+                desc: 'Appointment confirmed immediately. No callback needed.',
+                default: "Perfect, {name}. You're all set. Your appointment is scheduled for {timePreference}. If anything changes, you can call us back anytime. Is there anything else I can help you with today?",
+                recommended: true
+            },
+            { 
+                value: 'pending_dispatch', 
+                label: '📋 Pending Dispatch', 
+                desc: 'Info sent to dispatch for review and confirmation.',
+                default: "Thanks, {name}. I've logged everything and sent it to dispatch. They'll review and confirm the time shortly. Anything else I can help with?"
+            },
+            { 
+                value: 'callback_required', 
+                label: '📞 Callback Required', 
+                desc: 'Team member will call back to finalize. Use sparingly.',
+                default: "Thanks, {name}. A team member will reach out shortly to finalize your appointment. Is there anything else?"
+            },
+            { 
+                value: 'transfer_to_scheduler', 
+                label: '🔄 Transfer to Scheduler', 
+                desc: 'Immediately transfer to human scheduler.',
+                default: "I'm going to transfer you now to our scheduler to get this confirmed."
+            },
+            { 
+                value: 'after_hours_hold', 
+                label: '🌙 After-Hours Hold', 
+                desc: 'Special handling for after-hours calls.',
+                default: "We're currently closed, but I've captured your request. We'll follow up first thing when we open. If this is urgent, I can transfer you now."
+            }
+        ];
+        
+        return \`
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                <!-- Mode Selection -->
+                <div>
+                    <label style="display: block; margin-bottom: 8px; color: #c9d1d9; font-weight: 500;">Outcome Mode</label>
+                    <select id="fdb-booking-outcome-mode" onchange="window.frontDeskManager.updateBookingOutcomeMode(this.value)"
+                        style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                        \${modes.map(m => \`
+                            <option value="\${m.value}" \${mode === m.value ? 'selected' : ''}>
+                                \${m.label}\${m.recommended ? ' (Recommended)' : ''}
+                            </option>
+                        \`).join('')}
+                    </select>
+                    <p id="fdb-outcome-mode-desc" style="color: #8b949e; font-size: 0.75rem; margin: 6px 0 0 0;">
+                        \${modes.find(m => m.value === mode)?.desc || ''}
+                    </p>
+                </div>
+                
+                <!-- Final Script for Selected Mode -->
+                <div>
+                    <label style="display: block; margin-bottom: 8px; color: #c9d1d9; font-weight: 500;">
+                        Final Script 
+                        <span style="color: #8b949e; font-weight: normal; font-size: 0.8rem;">(what AI says when booking completes)</span>
+                    </label>
+                    <textarea id="fdb-booking-outcome-script" rows="3" 
+                        onchange="window.frontDeskManager.updateBookingOutcomeScript(this.value)"
+                        style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical; font-family: inherit;"
+                    >\${finalScripts[mode] || modes.find(m => m.value === mode)?.default || ''}</textarea>
+                    <p style="color: #6e7681; font-size: 0.7rem; margin: 6px 0 0 0;">
+                        Placeholders: {name}, {phone}, {address}, {timePreference}, {trade}, {serviceType}, {caseId}, {issue}
+                    </p>
+                </div>
+                
+                <!-- ASAP Variant -->
+                <div style="border-top: 1px solid #30363d; padding-top: 16px; margin-top: 8px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 12px;">
+                        <input type="checkbox" id="fdb-use-asap-variant" 
+                            \${outcome.useAsapVariant !== false ? 'checked' : ''}
+                            onchange="window.frontDeskManager.updateBookingOutcomeAsap(this.checked)"
+                            style="accent-color: #58a6ff;">
+                        <span style="color: #c9d1d9;">Use special script for ASAP/urgent requests</span>
+                    </label>
+                    <textarea id="fdb-asap-variant-script" rows="2" 
+                        onchange="window.frontDeskManager.updateBookingOutcomeAsapScript(this.value)"
+                        style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical; font-family: inherit; \${outcome.useAsapVariant === false ? 'opacity: 0.5;' : ''}"
+                        \${outcome.useAsapVariant === false ? 'disabled' : ''}
+                    >\${outcome.asapVariantScript || "Perfect, {name}. I've marked this as urgent. Someone will be in touch shortly to confirm the earliest available time. Anything else?"}</textarea>
+                </div>
+                
+                <!-- Custom Override (Advanced) -->
+                <details style="border-top: 1px solid #30363d; padding-top: 16px; margin-top: 8px;">
+                    <summary style="color: #8b949e; cursor: pointer; font-size: 0.85rem;">⚙️ Advanced: Custom Override Script</summary>
+                    <div style="margin-top: 12px;">
+                        <p style="color: #6e7681; font-size: 0.75rem; margin-bottom: 8px;">
+                            If set, this script overrides ALL mode-specific scripts. Leave empty to use mode defaults.
+                        </p>
+                        <textarea id="fdb-custom-final-script" rows="2" 
+                            onchange="window.frontDeskManager.updateBookingOutcomeCustom(this.value)"
+                            placeholder="Leave empty to use mode-specific scripts above"
+                            style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical; font-family: inherit;"
+                        >\${outcome.customFinalScript || ''}</textarea>
+                    </div>
+                </details>
+            </div>
+        \`;
+    }
+    
+    updateBookingOutcomeMode(mode) {
+        if (!this.config.bookingOutcome) {
+            this.config.bookingOutcome = {};
+        }
+        this.config.bookingOutcome.mode = mode;
+        this.isDirty = true;
+        
+        // Update description
+        const descEl = document.getElementById('fdb-outcome-mode-desc');
+        const modes = {
+            'confirmed_on_call': 'Appointment confirmed immediately. No callback needed.',
+            'pending_dispatch': 'Info sent to dispatch for review and confirmation.',
+            'callback_required': 'Team member will call back to finalize. Use sparingly.',
+            'transfer_to_scheduler': 'Immediately transfer to human scheduler.',
+            'after_hours_hold': 'Special handling for after-hours calls.'
+        };
+        if (descEl) {
+            descEl.textContent = modes[mode] || '';
+        }
+        
+        // Update script textarea with mode's default if not already customized
+        const scriptEl = document.getElementById('fdb-booking-outcome-script');
+        const finalScripts = this.config.bookingOutcome.finalScripts || {};
+        if (scriptEl && !finalScripts[mode]) {
+            const defaults = {
+                'confirmed_on_call': "Perfect, {name}. You're all set. Your appointment is scheduled for {timePreference}. If anything changes, you can call us back anytime. Is there anything else I can help you with today?",
+                'pending_dispatch': "Thanks, {name}. I've logged everything and sent it to dispatch. They'll review and confirm the time shortly. Anything else I can help with?",
+                'callback_required': "Thanks, {name}. A team member will reach out shortly to finalize your appointment. Is there anything else?",
+                'transfer_to_scheduler': "I'm going to transfer you now to our scheduler to get this confirmed.",
+                'after_hours_hold': "We're currently closed, but I've captured your request. We'll follow up first thing when we open. If this is urgent, I can transfer you now."
+            };
+            scriptEl.value = defaults[mode] || '';
+        } else if (scriptEl && finalScripts[mode]) {
+            scriptEl.value = finalScripts[mode];
+        }
+        
+        console.log('[FRONT DESK] Booking outcome mode changed:', mode);
+    }
+    
+    updateBookingOutcomeScript(script) {
+        if (!this.config.bookingOutcome) {
+            this.config.bookingOutcome = {};
+        }
+        if (!this.config.bookingOutcome.finalScripts) {
+            this.config.bookingOutcome.finalScripts = {};
+        }
+        const mode = this.config.bookingOutcome.mode || 'confirmed_on_call';
+        this.config.bookingOutcome.finalScripts[mode] = script;
+        this.isDirty = true;
+        console.log('[FRONT DESK] Booking outcome script updated for mode:', mode);
+    }
+    
+    updateBookingOutcomeAsap(enabled) {
+        if (!this.config.bookingOutcome) {
+            this.config.bookingOutcome = {};
+        }
+        this.config.bookingOutcome.useAsapVariant = enabled;
+        this.isDirty = true;
+        
+        // Enable/disable the ASAP script textarea
+        const scriptEl = document.getElementById('fdb-asap-variant-script');
+        if (scriptEl) {
+            scriptEl.disabled = !enabled;
+            scriptEl.style.opacity = enabled ? '1' : '0.5';
+        }
+        
+        console.log('[FRONT DESK] ASAP variant enabled:', enabled);
+    }
+    
+    updateBookingOutcomeAsapScript(script) {
+        if (!this.config.bookingOutcome) {
+            this.config.bookingOutcome = {};
+        }
+        this.config.bookingOutcome.asapVariantScript = script;
+        this.isDirty = true;
+        console.log('[FRONT DESK] ASAP variant script updated');
+    }
+    
+    updateBookingOutcomeCustom(script) {
+        if (!this.config.bookingOutcome) {
+            this.config.bookingOutcome = {};
+        }
+        this.config.bookingOutcome.customFinalScript = script || null;
+        this.isDirty = true;
+        console.log('[FRONT DESK] Custom final script updated:', script ? 'set' : 'cleared');
     }
     
     renderBookingSlot(slot, index, totalSlots) {
@@ -2425,6 +2640,18 @@ class FrontDeskBehaviorManager {
                 completeTemplate: get('fdb-completeTemplate')
             };
         }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // BOOKING OUTCOME - What AI says when all slots collected
+        // ═══════════════════════════════════════════════════════════════════
+        // bookingOutcome is already updated via onChange handlers, but ensure it's in config
+        if (!this.config.bookingOutcome) {
+            this.config.bookingOutcome = {
+                mode: 'confirmed_on_call',
+                useAsapVariant: true
+            };
+        }
+        console.log('[FRONT DESK BEHAVIOR] 🎯 Booking outcome:', this.config.bookingOutcome);
 
         // Simplified emotion toggles - AI generates its own words
         if (!this.config.emotionResponses) this.config.emotionResponses = {};

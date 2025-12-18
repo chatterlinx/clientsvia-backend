@@ -222,6 +222,14 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
                 vocabularyGuardrails: config.vocabularyGuardrails || null,
                 // 👤 Common First Names - UI-configurable name recognition
                 commonFirstNames: config.commonFirstNames || [],
+                // 🎯 Booking Outcome - What AI says when all slots collected
+                bookingOutcome: config.bookingOutcome || {
+                    mode: 'confirmed_on_call',
+                    useAsapVariant: true,
+                    finalScripts: {},
+                    asapVariantScript: null,
+                    customFinalScript: null
+                },
                 lastUpdated: saved.lastUpdated || null
             }
         });
@@ -397,6 +405,39 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
                 count: (updates.commonFirstNames || []).length,
                 sample: (updates.commonFirstNames || []).slice(0, 10),
                 fullList: updates.commonFirstNames
+            });
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🎯 Booking Outcome - What AI says when all slots collected
+        // ════════════════════════════════════════════════════════════════════════════
+        // DEFAULT: "Confirmed on Call" - no callbacks unless explicitly enabled
+        // Modes: confirmed_on_call, pending_dispatch, callback_required, 
+        //        transfer_to_scheduler, after_hours_hold
+        // ════════════════════════════════════════════════════════════════════════════
+        if (updates.bookingOutcome) {
+            if (updates.bookingOutcome.mode !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.bookingOutcome.mode'] = updates.bookingOutcome.mode;
+            }
+            if (updates.bookingOutcome.useAsapVariant !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.bookingOutcome.useAsapVariant'] = updates.bookingOutcome.useAsapVariant;
+            }
+            if (updates.bookingOutcome.asapVariantScript !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.bookingOutcome.asapVariantScript'] = updates.bookingOutcome.asapVariantScript;
+            }
+            if (updates.bookingOutcome.customFinalScript !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.bookingOutcome.customFinalScript'] = updates.bookingOutcome.customFinalScript;
+            }
+            if (updates.bookingOutcome.finalScripts) {
+                Object.entries(updates.bookingOutcome.finalScripts).forEach(([mode, script]) => {
+                    updateObj[`aiAgentSettings.frontDeskBehavior.bookingOutcome.finalScripts.${mode}`] = script;
+                });
+            }
+            logger.info('[FRONT DESK BEHAVIOR] 🎯 Saving bookingOutcome:', {
+                companyId,
+                mode: updates.bookingOutcome.mode,
+                useAsapVariant: updates.bookingOutcome.useAsapVariant,
+                hasCustomScript: !!updates.bookingOutcome.customFinalScript
             });
         }
         
