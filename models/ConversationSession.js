@@ -265,17 +265,68 @@ const conversationSessionSchema = new Schema({
     },
     
     // ════════════════════════════════════════════════════════════════════════
-    // 🆕 BOOKING CONSENT GATE - HARD LOCK
+    // 🆕 BOOKING STATE - CANONICAL CONTRACT V1 (LOCKED)
     // ════════════════════════════════════════════════════════════════════════
-    // Booking prompts CANNOT execute unless consentGiven === true
-    // Only UI-configured consent phrases can flip this to true
-    // Issue detection does NOT trigger booking - only explicit consent
+    // See docs/CANONICAL_CONTRACT_V1.md for the authoritative schema
+    // DO NOT add aliases or alternative field names
     // ════════════════════════════════════════════════════════════════════════
     booking: {
+        // Consent Gate
         consentGiven: { type: Boolean, default: false },
-        consentPhrase: { type: String, default: null, trim: true }, // What phrase triggered consent
-        consentTurn: { type: Number, default: null },               // Which turn consent was given
-        consentTimestamp: { type: Date, default: null }
+        consentPhrase: { type: String, default: null, trim: true },
+        consentTurn: { type: Number, default: null },
+        consentTimestamp: { type: Date, default: null },
+        
+        // Active Slot Tracking
+        activeSlot: { type: String, default: null }, // 'name' | 'phone' | 'address' | 'time'
+        
+        // Canonical Slot Structure (LOCKED - see CANONICAL_CONTRACT_V1.md)
+        slots: {
+            name: {
+                first: { type: String, default: null, trim: true },
+                last: { type: String, default: null, trim: true },
+                full: { type: String, default: null, trim: true }
+            },
+            phone: { type: String, default: null, trim: true },
+            address: {
+                full: { type: String, default: null, trim: true },
+                street: { type: String, default: null, trim: true },
+                city: { type: String, default: null, trim: true },
+                unit: { type: String, default: null, trim: true }
+            },
+            time: {
+                preference: { type: String, default: null, trim: true }, // "ASAP" | "morning" | "afternoon"
+                window: { type: String, default: null, trim: true }      // "8-10" | specific datetime
+            }
+        },
+        
+        // Slot Meta (state machine tracking)
+        meta: {
+            name: {
+                lastConfirmed: { type: Boolean, default: false },
+                askedMissingPartOnce: { type: Boolean, default: false },
+                assumedSingleTokenAs: { type: String, default: null }, // "first" | "last"
+                source: { type: String, default: null }                // "user" | "assumed" | "confirmed"
+            },
+            phone: {
+                usedCallerId: { type: Boolean, default: false },
+                confirmed: { type: Boolean, default: false }
+            },
+            address: {
+                confirmed: { type: Boolean, default: false }
+            },
+            time: {
+                isAsap: { type: Boolean, default: false },
+                confirmed: { type: Boolean, default: false }
+            }
+        }
+    },
+    
+    // Last Agent Intent (for context-aware consent detection)
+    lastAgentIntent: { 
+        type: String, 
+        enum: ['DISCOVERY', 'OFFER_SCHEDULE', 'BOOKING_SLOT_QUESTION', 'INTERRUPT_ANSWER'],
+        default: 'DISCOVERY'
     },
     
     status: {
