@@ -54,6 +54,13 @@ class FrontDeskBehaviorManager {
             this.config = result.data;
             console.log('[FRONT DESK BEHAVIOR] Config loaded:', this.config);
             
+            // 👤 DEBUG: Log commonFirstNames from API
+            console.log('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: commonFirstNames from API:', {
+                count: (this.config.commonFirstNames || []).length,
+                names: this.config.commonFirstNames || [],
+                hasCommonFirstNames: !!this.config.commonFirstNames
+            });
+            
             // 🔍 DEBUG: Log exactly what bookingSlots came from API
             if (this.config.bookingSlots) {
                 const nameSlot = this.config.bookingSlots.find(s => s.id === 'name');
@@ -618,6 +625,11 @@ class FrontDeskBehaviorManager {
                     <input type="text" id="fdb-new-first-name" placeholder="Enter names (comma-separated for bulk: John, Jane, Mike)" 
                         style="flex: 1; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;"
                         onkeypress="if(event.key === 'Enter') window.frontDeskManager.addCommonFirstName()">
+                    <button onclick="window.frontDeskManager.copyAllFirstNames()" 
+                        style="padding: 8px 12px; background: #21262d; color: #8b949e; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; font-size: 0.75rem; white-space: nowrap;"
+                        title="Copy all names to clipboard (comma-separated)">
+                        📋 Copy All
+                    </button>
                     <span style="color: #8b949e; font-size: 0.75rem;">${(this.config.commonFirstNames || []).length} names</span>
                 </div>
             </div>
@@ -640,12 +652,19 @@ class FrontDeskBehaviorManager {
     }
     
     addCommonFirstName() {
+        console.log('[FRONT DESK] 👤 CHECKPOINT: addCommonFirstName called');
         const input = document.getElementById('fdb-new-first-name');
         const rawInput = input?.value?.trim();
-        if (!rawInput) return;
+        if (!rawInput) {
+            console.log('[FRONT DESK] 👤 CHECKPOINT: No input value');
+            return;
+        }
+        
+        console.log('[FRONT DESK] 👤 CHECKPOINT: Raw input:', rawInput);
         
         if (!this.config.commonFirstNames) {
             this.config.commonFirstNames = [];
+            console.log('[FRONT DESK] 👤 CHECKPOINT: Initialized empty commonFirstNames array');
         }
         
         // Support bulk insertion: split by comma, semicolon, or newline
@@ -679,16 +698,24 @@ class FrontDeskBehaviorManager {
         this.updateCommonFirstNamesDisplay();
         this.isDirty = true;
         
-        // Show feedback for bulk insert
+        // Show feedback
+        console.log('[FRONT DESK] 👤 CHECKPOINT: Names processed', { 
+            added, 
+            skipped, 
+            totalNow: this.config.commonFirstNames.length,
+            fullList: this.config.commonFirstNames
+        });
+        
         if (namesToAdd.length > 1) {
             const msg = `Added ${added.length} name(s)` + (skipped.length > 0 ? `, skipped ${skipped.length} duplicate(s)` : '');
             console.log('[FRONT DESK] Bulk name insert:', { added, skipped });
-            // Brief visual feedback
-            const container = document.getElementById('common-first-names-container');
-            if (container) {
-                container.style.borderColor = '#238636';
-                setTimeout(() => { container.style.borderColor = '#30363d'; }, 1000);
-            }
+        }
+        
+        // Brief visual feedback
+        const container = document.getElementById('common-first-names-container');
+        if (container) {
+            container.style.borderColor = '#238636';
+            setTimeout(() => { container.style.borderColor = '#30363d'; }, 1000);
         }
     }
     
@@ -697,6 +724,39 @@ class FrontDeskBehaviorManager {
         this.config.commonFirstNames.splice(index, 1);
         this.updateCommonFirstNamesDisplay();
         this.isDirty = true;
+    }
+    
+    copyAllFirstNames() {
+        const names = this.config.commonFirstNames || [];
+        if (names.length === 0) {
+            alert('No names to copy.');
+            return;
+        }
+        
+        // Copy as comma-separated list (easy to paste into AI or compare)
+        const text = names.join(', ');
+        
+        navigator.clipboard.writeText(text).then(() => {
+            console.log('[FRONT DESK] 👤 Copied all names to clipboard:', names.length);
+            
+            // Visual feedback on button
+            const btn = document.querySelector('button[onclick*="copyAllFirstNames"]');
+            if (btn) {
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '✅ Copied!';
+                btn.style.background = '#238636';
+                btn.style.color = 'white';
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.style.background = '#21262d';
+                    btn.style.color = '#8b949e';
+                }, 2000);
+            }
+        }).catch(err => {
+            console.error('[FRONT DESK] Copy failed:', err);
+            // Fallback: show in alert for manual copy
+            prompt('Copy these names:', text);
+        });
     }
     
     updateCommonFirstNamesDisplay() {

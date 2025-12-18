@@ -163,6 +163,13 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
         const config = deepMerge(UI_DEFAULTS, saved);
         
         // 🔍 DEBUG: Log what we're returning
+        logger.info('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: Loading commonFirstNames', {
+            companyId,
+            count: (config.commonFirstNames || []).length,
+            sample: (config.commonFirstNames || []).slice(0, 10),
+            hasCommonFirstNames: !!config.commonFirstNames
+        });
+        
         if (config.bookingSlots) {
             logger.info('[FRONT DESK BEHAVIOR] GET - Returning bookingSlots:', {
                 companyId,
@@ -213,6 +220,8 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
                 discoveryConsent: config.discoveryConsent || null,
                 // V22: Vocabulary Guardrails
                 vocabularyGuardrails: config.vocabularyGuardrails || null,
+                // 👤 Common First Names - UI-configurable name recognition
+                commonFirstNames: config.commonFirstNames || [],
                 lastUpdated: saved.lastUpdated || null
             }
         });
@@ -380,11 +389,14 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
         // When caller says "Mark", system checks this list to know it's a first name
         // Then asks "And what's your last name?" instead of "first name"
         // ════════════════════════════════════════════════════════════════════════════
-        if (updates.commonFirstNames) {
-            updateObj['aiAgentSettings.frontDeskBehavior.commonFirstNames'] = updates.commonFirstNames;
-            logger.info('[FRONT DESK BEHAVIOR] 👤 Saving commonFirstNames:', {
-                count: updates.commonFirstNames.length,
-                sample: updates.commonFirstNames.slice(0, 10)
+        if (updates.commonFirstNames !== undefined) {
+            // Accept both arrays and empty arrays (allow clearing the list)
+            updateObj['aiAgentSettings.frontDeskBehavior.commonFirstNames'] = updates.commonFirstNames || [];
+            logger.info('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: Saving commonFirstNames', {
+                companyId,
+                count: (updates.commonFirstNames || []).length,
+                sample: (updates.commonFirstNames || []).slice(0, 10),
+                fullList: updates.commonFirstNames
             });
         }
         
