@@ -2306,8 +2306,115 @@ class FrontDeskBehaviorManager {
                         </label>
                     </div>
                 </div>
+                
+                ${this.renderFastPathSection()}
             </div>
         `;
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // 🚀 FAST-PATH BOOKING SECTION
+    // ════════════════════════════════════════════════════════════════════════════
+    // When caller clearly wants service NOW, skip troubleshooting and offer booking.
+    // Does NOT auto-switch to BOOKING - still requires explicit consent.
+    // ════════════════════════════════════════════════════════════════════════════
+    renderFastPathSection() {
+        const fp = this.config.fastPathBooking || {};
+        const enabled = fp.enabled !== false;
+        const keywords = (fp.triggerKeywords || [
+            "send someone", "need you out here", "need someone out", "come out",
+            "schedule", "book", "appointment", "fix it", "sick of it",
+            "just want it fixed", "need service", "asap", "emergency"
+        ]).join(', ');
+        const offerScript = fp.offerScript || "Got it — I completely understand. We can get someone out to you. Would you like me to schedule a technician now?";
+        const oneQuestionScript = fp.oneQuestionScript || "";
+        const maxQuestions = fp.maxDiscoveryQuestions || 2;
+        
+        return `
+            <!-- Fast-Path Booking -->
+            <div style="background: #0d1117; border: 1px solid #58a6ff; border-radius: 8px; padding: 16px; margin-top: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h4 style="margin: 0; color: #58a6ff;">🚀 Fast-Path Booking (Respect Caller Urgency)</h4>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="fdb-fp-enabled" ${enabled ? 'checked' : ''} 
+                            onchange="window.frontDeskManager.toggleFastPathFields(this.checked)"
+                            style="accent-color: #58a6ff; width: 18px; height: 18px;">
+                        <span style="color: #c9d1d9; font-weight: 600;">${enabled ? 'Enabled' : 'Disabled'}</span>
+                    </label>
+                </div>
+                
+                <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 16px;">
+                    When caller says "I need you out here" or "just fix it", skip troubleshooting and offer scheduling immediately.
+                    <br><strong>Note:</strong> This does NOT auto-book. Caller must still say "yes" to enter booking mode.
+                </p>
+                
+                <div id="fdb-fp-fields" style="display: ${enabled ? 'block' : 'none'};">
+                    <!-- Trigger Keywords -->
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            Trigger Keywords <span style="color: #8b949e; font-weight: normal;">(comma-separated)</span>
+                        </label>
+                        <textarea id="fdb-fp-keywords" rows="3"
+                            placeholder="send someone, need you out here, fix it, sick of it, asap..."
+                            style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.85rem; resize: vertical;">${keywords}</textarea>
+                        <p style="color: #6e7681; font-size: 0.7rem; margin-top: 4px;">
+                            If caller uses any of these phrases, fast-path activates.
+                        </p>
+                    </div>
+                    
+                    <!-- Offer Script -->
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            Offer Script <span style="color: #f85149;">*</span>
+                        </label>
+                        <textarea id="fdb-fp-offerScript" rows="2"
+                            placeholder="Got it — I completely understand. We can get someone out to you. Would you like me to schedule a technician now?"
+                            style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.85rem; resize: vertical;">${offerScript}</textarea>
+                        <p style="color: #6e7681; font-size: 0.7rem; margin-top: 4px;">
+                            What AI says when fast-path triggers. Must include a scheduling offer + question.
+                        </p>
+                    </div>
+                    
+                    <!-- Optional Pre-Question -->
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            Pre-Offer Question <span style="color: #8b949e; font-weight: normal;">(optional)</span>
+                        </label>
+                        <input type="text" id="fdb-fp-oneQuestion" value="${oneQuestionScript}"
+                            placeholder="e.g., Just to help the tech prepare, is the unit completely off or running but not cooling?"
+                            style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.85rem;">
+                        <p style="color: #6e7681; font-size: 0.7rem; margin-top: 4px;">
+                            One quick question before offering (helps tech prepare). Leave empty to skip straight to offer.
+                        </p>
+                    </div>
+                    
+                    <!-- Max Questions -->
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            Max Discovery Questions Before Offer
+                        </label>
+                        <select id="fdb-fp-maxQuestions" 
+                            style="padding: 8px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                            <option value="1" ${maxQuestions === 1 ? 'selected' : ''}>1 question</option>
+                            <option value="2" ${maxQuestions === 2 ? 'selected' : ''}>2 questions (default)</option>
+                            <option value="3" ${maxQuestions === 3 ? 'selected' : ''}>3 questions</option>
+                            <option value="5" ${maxQuestions === 5 ? 'selected' : ''}>5 questions</option>
+                        </select>
+                        <p style="color: #6e7681; font-size: 0.7rem; margin-top: 4px;">
+                            If urgency detected, offer scheduling after this many questions max.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    toggleFastPathFields(enabled) {
+        const fields = document.getElementById('fdb-fp-fields');
+        if (fields) {
+            fields.style.display = enabled ? 'block' : 'none';
+        }
+        this.isDirty = true;
     }
     
     // ════════════════════════════════════════════════════════════════════════════
@@ -2788,6 +2895,24 @@ class FrontDeskBehaviorManager {
             if (!this.config.detectionTriggers) this.config.detectionTriggers = {};
             this.config.detectionTriggers.wantsBooking = wantsBookingPhrases;
             console.log('[FRONT DESK BEHAVIOR] 🎯 Consent phrases saved:', wantsBookingPhrases);
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🚀 Fast-Path Booking Settings
+        // ════════════════════════════════════════════════════════════════════════════
+        if (document.getElementById('fdb-fp-enabled')) {
+            // Parse trigger keywords from comma-separated textarea
+            const keywordsRaw = get('fdb-fp-keywords') || '';
+            const keywords = keywordsRaw.split(',').map(k => k.trim().toLowerCase()).filter(k => k);
+            
+            this.config.fastPathBooking = {
+                enabled: getChecked('fdb-fp-enabled'),
+                triggerKeywords: keywords,
+                offerScript: get('fdb-fp-offerScript') || "Got it — I completely understand. We can get someone out to you. Would you like me to schedule a technician now?",
+                oneQuestionScript: get('fdb-fp-oneQuestion') || "",
+                maxDiscoveryQuestions: parseInt(get('fdb-fp-maxQuestions')) || 2
+            };
+            console.log('[FRONT DESK BEHAVIOR] 🚀 Fast-Path Booking saved:', this.config.fastPathBooking);
         }
         
         // ════════════════════════════════════════════════════════════════════════════

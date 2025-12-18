@@ -49,7 +49,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V24-COMPLETION-LOCK';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V25-FAST-PATH-BOOKING';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -65,7 +65,11 @@ logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
         '✅ V24: COMPLETE mode lock - no re-asking slots after booking',
         '✅ V24: askFullName defaults FALSE (prompt as law)',
         '✅ V24: displayName uses first name, never lastName alone',
-        '✅ V24: Slot state debug snapshot each turn'
+        '✅ V24: Slot state debug snapshot each turn',
+        '✅ V25: FAST-PATH BOOKING - respects caller urgency',
+        '✅ V25: "I need you out here" → immediate offer (no troubleshooting)',
+        '✅ V25: UI-configurable trigger keywords + offer script',
+        '✅ V25: Still requires explicit consent to enter BOOKING'
     ]
 });
 
@@ -2083,6 +2087,99 @@ async function processTurn({
                 confidence: emotion.confidence
             });
             
+            // ═══════════════════════════════════════════════════════════════════
+            // 🚀 FAST-PATH BOOKING DETECTION (V24)
+            // ═══════════════════════════════════════════════════════════════════
+            // When caller clearly wants service NOW ("I need you out here"),
+            // skip troubleshooting and offer scheduling immediately.
+            // Does NOT switch to BOOKING - just changes what DISCOVERY says.
+            // Booking only starts after explicit consent ("yes please").
+            // ═══════════════════════════════════════════════════════════════════
+            const fastPathConfig = company.aiAgentSettings?.frontDeskBehavior?.fastPathBooking || {};
+            const fastPathEnabled = fastPathConfig.enabled !== false;
+            const fastPathKeywords = fastPathConfig.triggerKeywords || [
+                "send someone", "need you out here", "need someone out", "come out",
+                "schedule", "book", "fix it", "sick of it", "just want it fixed",
+                "need service", "asap", "emergency", "just send someone"
+            ];
+            
+            // Check if user text contains any fast-path trigger keywords
+            const userTextLowerFP = userText.toLowerCase();
+            const fastPathTriggered = fastPathEnabled && fastPathKeywords.some(keyword => 
+                userTextLowerFP.includes(keyword.toLowerCase())
+            );
+            
+            // Track discovery question count for max-questions gate
+            const discoveryQuestionCount = session.discovery?.questionCount || 0;
+            const maxDiscoveryQuestions = fastPathConfig.maxDiscoveryQuestions || 2;
+            const exceededMaxQuestions = discoveryQuestionCount >= maxDiscoveryQuestions;
+            
+            log('CHECKPOINT 9d.1: 🚀 Fast-Path Check', {
+                fastPathEnabled,
+                fastPathTriggered,
+                matchedKeyword: fastPathTriggered ? fastPathKeywords.find(k => userTextLowerFP.includes(k.toLowerCase())) : null,
+                discoveryQuestionCount,
+                maxDiscoveryQuestions,
+                exceededMaxQuestions
+            });
+            
+            // If fast-path triggered, respond with offer script instead of LLM
+            if (fastPathTriggered || (fastPathEnabled && exceededMaxQuestions && emotion.emotion === 'frustrated')) {
+                const offerScript = fastPathConfig.offerScript || 
+                    "Got it — I completely understand. We can get someone out to you. Would you like me to schedule a technician now?";
+                const oneQuestionScript = fastPathConfig.oneQuestionScript || "";
+                
+                // Determine response: one-question first, or straight to offer
+                let fastPathResponse;
+                const askedOneQuestion = session.discovery?.fastPathOneQuestionAsked;
+                
+                if (oneQuestionScript && !askedOneQuestion) {
+                    // Ask the optional pre-question first
+                    fastPathResponse = oneQuestionScript;
+                    session.discovery = session.discovery || {};
+                    session.discovery.fastPathOneQuestionAsked = true;
+                    log('🚀 FAST-PATH: Asking pre-question before offer');
+                } else {
+                    // Go straight to offer
+                    fastPathResponse = offerScript;
+                    session.lastAgentIntent = 'OFFER_SCHEDULE';
+                    log('🚀 FAST-PATH: Offering scheduling immediately');
+                }
+                
+                aiLatencyMs = Date.now() - aiStartTime;
+                
+                aiResult = {
+                    reply: fastPathResponse,
+                    conversationMode: 'discovery',
+                    intent: 'fast_path_offer',
+                    nextGoal: 'AWAIT_CONSENT',
+                    filledSlots: currentSlots,
+                    signals: { 
+                        wantsBooking: false,  // Not yet - waiting for consent
+                        fastPathTriggered: true,
+                        offeredScheduling: true
+                    },
+                    latencyMs: aiLatencyMs,
+                    tokensUsed: 0,  // No LLM used!
+                    fromStateMachine: true,
+                    mode: 'DISCOVERY',
+                    debug: {
+                        source: 'FAST_PATH_BOOKING',
+                        stage: 'discovery',
+                        fastPathReason: fastPathTriggered ? 'keyword_match' : 'max_questions_exceeded',
+                        matchedKeyword: fastPathKeywords.find(k => userTextLowerFP.includes(k.toLowerCase())),
+                        lastAgentIntent: session.lastAgentIntent
+                    }
+                };
+                
+                // Skip LLM call - we have our response
+                log('🚀 FAST-PATH ACTIVATED: Skipping LLM, using offer script', {
+                    response: fastPathResponse.substring(0, 50)
+                });
+            }
+            
+            // Only proceed with LLM if fast-path didn't trigger
+            if (!aiResult) {
             // Step 3: Build discovery prompt with scenario knowledge + cheat sheet fallback
             const discoveryPrompt = LLMDiscoveryEngine.buildDiscoveryPrompt({
                 company,
@@ -2225,6 +2322,11 @@ async function processTurn({
                 mode: session.mode,
                 hasIssue: !!session.discovery?.issue
             });
+            
+            // Increment discovery question count for fast-path gate
+            session.discovery = session.discovery || {};
+            session.discovery.questionCount = (session.discovery.questionCount || 0) + 1;
+            }  // End of if (!aiResult) - fast-path bypass
         }
         
         // ═══════════════════════════════════════════════════════════════════

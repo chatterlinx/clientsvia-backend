@@ -1972,6 +1972,67 @@ const companySchema = new mongoose.Schema({
             },
             
             // ═══════════════════════════════════════════════════════════════
+            // 🚀 DISCOVERY FAST-PATH - Respect caller urgency
+            // ═══════════════════════════════════════════════════════════════
+            // When caller clearly wants service NOW ("I need you out here"),
+            // skip troubleshooting and offer scheduling immediately.
+            // Does NOT auto-switch to BOOKING - still requires explicit consent.
+            // ═══════════════════════════════════════════════════════════════
+            fastPathBooking: {
+                // Master toggle: Enable fast-path for urgent callers
+                enabled: { type: Boolean, default: true },
+                
+                // Keywords that trigger fast-path (caller wants service now)
+                triggerKeywords: {
+                    type: [String],
+                    default: [
+                        "send someone",
+                        "need you out here",
+                        "need someone out",
+                        "come out",
+                        "get someone out",
+                        "schedule",
+                        "book",
+                        "appointment",
+                        "technician",
+                        "fix it",
+                        "just fix it",
+                        "sick of it",
+                        "sick of this",
+                        "just want it fixed",
+                        "need service",
+                        "need help now",
+                        "come today",
+                        "come out today",
+                        "as soon as possible",
+                        "asap",
+                        "emergency",
+                        "urgent",
+                        "don't care what it is",
+                        "just send someone"
+                    ]
+                },
+                
+                // The offer script (empathetic + offers scheduling)
+                offerScript: {
+                    type: String,
+                    default: "Got it — I completely understand. We can get someone out to you. Would you like me to schedule a technician now?",
+                    trim: true
+                },
+                
+                // Optional: One question before offering (for tech preparation)
+                // Leave empty to skip straight to offer
+                oneQuestionScript: {
+                    type: String,
+                    default: "",
+                    trim: true
+                },
+                
+                // Max discovery questions before forcing offer (if urgency detected)
+                maxDiscoveryQuestions: { type: Number, default: 2, min: 1, max: 5 }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
             // FALLBACK RESPONSES - What AI says when LLM fails
             // These ensure the call NEVER goes silent
             // ═══════════════════════════════════════════════════════════════

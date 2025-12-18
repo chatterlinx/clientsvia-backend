@@ -242,6 +242,8 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
                 discoveryConsent: config.discoveryConsent || null,
                 // V22: Vocabulary Guardrails
                 vocabularyGuardrails: config.vocabularyGuardrails || null,
+                // 🚀 V25: Fast-Path Booking - Respect caller urgency
+                fastPathBooking: config.fastPathBooking || null,
                 // 👤 Common First Names - UI-configurable name recognition
                 commonFirstNames: config.commonFirstNames || [],
                 // 🎯 Booking Outcome - What AI says when all slots collected
@@ -469,6 +471,36 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
                 mode: updates.bookingOutcome.mode,
                 useAsapVariant: updates.bookingOutcome.useAsapVariant,
                 hasCustomScript: !!updates.bookingOutcome.customFinalScript
+            });
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🚀 V25: Fast-Path Booking - Respect caller urgency
+        // ════════════════════════════════════════════════════════════════════════════
+        // When caller says "I need you out here", skip troubleshooting and offer scheduling.
+        // Does NOT auto-book - still requires explicit consent.
+        // ════════════════════════════════════════════════════════════════════════════
+        if (updates.fastPathBooking) {
+            if (updates.fastPathBooking.enabled !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.fastPathBooking.enabled'] = updates.fastPathBooking.enabled;
+            }
+            if (updates.fastPathBooking.triggerKeywords !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.fastPathBooking.triggerKeywords'] = updates.fastPathBooking.triggerKeywords;
+            }
+            if (updates.fastPathBooking.offerScript !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.fastPathBooking.offerScript'] = updates.fastPathBooking.offerScript;
+            }
+            if (updates.fastPathBooking.oneQuestionScript !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.fastPathBooking.oneQuestionScript'] = updates.fastPathBooking.oneQuestionScript;
+            }
+            if (updates.fastPathBooking.maxDiscoveryQuestions !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.fastPathBooking.maxDiscoveryQuestions'] = updates.fastPathBooking.maxDiscoveryQuestions;
+            }
+            logger.info('[FRONT DESK BEHAVIOR] 🚀 Saving fastPathBooking:', {
+                companyId,
+                enabled: updates.fastPathBooking.enabled,
+                keywordCount: updates.fastPathBooking.triggerKeywords?.length,
+                maxQuestions: updates.fastPathBooking.maxDiscoveryQuestions
             });
         }
         
