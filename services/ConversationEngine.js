@@ -433,8 +433,28 @@ const SlotExtractors = {
             return null; // Don't extract time from greetings
         }
         
-        // ASAP / Urgency patterns
-        if (/as soon as possible|asap|right away|immediately|today|urgent|earliest|first available|next available/.test(lower)) {
+        // ASAP / Urgency patterns - STRICT DETECTION
+        // "today" alone is too aggressive - "issues today" is NOT a time request
+        // Only trigger ASAP for explicit urgency phrases
+        const asapPatterns = [
+            /as soon as possible/,
+            /\basap\b/,
+            /right away/,
+            /right now/,
+            /immediately/,
+            /\burgent\b/,
+            /\burgently\b/,
+            /earliest\s+(?:appointment|available|time|slot)/,
+            /first\s+available/,
+            /next\s+available/,
+            /soonest\s+(?:appointment|available|time|slot)/,
+            /need\s+(?:someone|service|help)\s+today/,
+            /come\s+(?:out\s+)?today/,
+            /(?:schedule|book).*today/,
+            /today\s+(?:if\s+possible|please|would\s+be)/
+        ];
+        
+        if (asapPatterns.some(p => p.test(lower))) {
             return 'ASAP';
         }
         
@@ -797,42 +817,42 @@ async function processTurn({
             
             if (currentSlots.name && !isExplicitNameStatement) {
                 // Name already collected and user is NOT explicitly stating their name
-                log('📝 Name already collected:', currentSlots.name);
+            log('📝 Name already collected:', currentSlots.name);
             } else {
-                log('🔍 Attempting name extraction from:', userText.substring(0, 50));
+            log('🔍 Attempting name extraction from:', userText.substring(0, 50));
                 if (currentSlots.name && isExplicitNameStatement) {
                     log('🔄 User explicitly stating name - will override previous:', currentSlots.name);
                 }
                 
-                const extractedName = SlotExtractors.extractName(userText);
-                log('🔍 Extraction result:', extractedName || '(none)');
+            const extractedName = SlotExtractors.extractName(userText);
+            log('🔍 Extraction result:', extractedName || '(none)');
                 
-                if (extractedName) {
-                    const isPartialName = !extractedName.includes(' ');
-                    const alreadyAskedForMissingPart = session.askedForMissingNamePart === true;
-                    
-                    if (askMissingNamePart && isPartialName && !alreadyAskedForMissingPart) {
-                        // Store partial, let AI ask for full name
-                        currentSlots.partialName = extractedName;
-                        extractedThisTurn.partialName = extractedName;
-                        log('Partial name detected (will ask for full)', { partialName: extractedName });
+            if (extractedName) {
+                const isPartialName = !extractedName.includes(' ');
+                const alreadyAskedForMissingPart = session.askedForMissingNamePart === true;
+                
+                if (askMissingNamePart && isPartialName && !alreadyAskedForMissingPart) {
+                    // Store partial, let AI ask for full name
+                    currentSlots.partialName = extractedName;
+                    extractedThisTurn.partialName = extractedName;
+                    log('Partial name detected (will ask for full)', { partialName: extractedName });
+                } else {
+                    // Accept name as-is
+                    if (currentSlots.partialName && isPartialName) {
+                        currentSlots.name = `${currentSlots.partialName} ${extractedName}`;
+                        delete currentSlots.partialName;
                     } else {
-                        // Accept name as-is
-                        if (currentSlots.partialName && isPartialName) {
-                            currentSlots.name = `${currentSlots.partialName} ${extractedName}`;
-                            delete currentSlots.partialName;
-                        } else {
-                            currentSlots.name = extractedName;
-                        }
-                        extractedThisTurn.name = currentSlots.name;
-                        log('Name extracted', { name: currentSlots.name });
+                        currentSlots.name = extractedName;
                     }
-                } else if (currentSlots.partialName) {
-                    // Accept partial as complete (only ask once)
-                    currentSlots.name = currentSlots.partialName;
-                    delete currentSlots.partialName;
                     extractedThisTurn.name = currentSlots.name;
-                    log('Accepting partial name as complete', { name: currentSlots.name });
+                    log('Name extracted', { name: currentSlots.name });
+                }
+            } else if (currentSlots.partialName) {
+                // Accept partial as complete (only ask once)
+                currentSlots.name = currentSlots.partialName;
+                delete currentSlots.partialName;
+                extractedThisTurn.name = currentSlots.name;
+                log('Accepting partial name as complete', { name: currentSlots.name });
                 }
             }
         }
@@ -926,14 +946,21 @@ async function processTurn({
         // ═══════════════════════════════════════════════════════════════════════
         log('CHECKPOINT 9: Option 1 Mode Control...');
         
-        // Initialize session.mode if not set
-        if (!session.mode) {
-            session.mode = 'DISCOVERY';
-        }
-        
         // Initialize session.booking if not set
         if (!session.booking) {
             session.booking = { consentGiven: false };
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // MODE RESTORATION - If consent was given in a previous turn, restore BOOKING mode
+        // This is critical because mode might not persist across API calls
+        // ═══════════════════════════════════════════════════════════════════════
+        if (session.booking.consentGiven) {
+            session.mode = 'BOOKING';
+            log('📋 MODE RESTORED: Consent was given previously, restoring BOOKING mode');
+        } else if (!session.mode) {
+            session.mode = 'DISCOVERY';
+            log('🔍 MODE INITIALIZED: Starting in DISCOVERY mode');
         }
         
         // Declare aiResult early so booking snap can set it
@@ -990,9 +1017,9 @@ async function processTurn({
                 // Build acknowledgment + exact question
                 const ack = "Perfect! Let me get your information.";
                 const exactQuestion = firstMissingSlot.question;
-                
-                aiLatencyMs = Date.now() - aiStartTime;
-                
+            
+            aiLatencyMs = Date.now() - aiStartTime;
+            
                 log('📋 BOOKING SNAP: Asking first slot immediately', {
                     slotId,
                     question: exactQuestion
@@ -1064,38 +1091,24 @@ async function processTurn({
             // ═══════════════════════════════════════════════════════════════════
             // BOOKING MODE - Deterministic clipboard (consent already given)
             // ═══════════════════════════════════════════════════════════════════
-            log('CHECKPOINT 9b: 📋 BOOKING MODE (clipboard)');
+            // In V22, we DO NOT use the state machine for booking responses.
+            // The state machine was generating bad responses like "I'm sorry to hear that"
+            // which is discovery language, not booking language.
+            // 
+            // Instead, we use the BOOKING SAFETY NET directly which:
+            // 1. Reads the booking slot config from UI
+            // 2. Uses the exact questions and confirmBack templates
+            // 3. Handles name slot with askFullName logic
+            // 4. Never re-asks the same slot
+            // ═══════════════════════════════════════════════════════════════════
+            log('CHECKPOINT 9b: 📋 BOOKING MODE (deterministic - no state machine)');
             
-            // Initialize the state machine for booking slot collection
-            const enterpriseStateMachine = new ConversationStateMachine(session, company);
-            const smResult = enterpriseStateMachine.processInput(userText, extractedThisTurn);
+            // Check if this looks like an interrupt question
+            const looksLikeQuestion = userText.includes('?') || 
+                                      /^(what|why|how|do you|can you|is it|when|where)/i.test(userText.trim());
             
-            aiLatencyMs = Date.now() - aiStartTime;
-            
-            // In BOOKING mode, state machine responses ARE spoken (deterministic)
-            if (smResult.action === 'RESPOND') {
-                aiResult = {
-                    reply: smResult.response,
-                    conversationMode: 'booking',
-                    intent: 'booking',
-                    nextGoal: smResult.nextStep || 'COLLECT_SLOTS',
-                    filledSlots: smResult.slotsCollected || currentSlots,
-                    signals: { 
-                        wantsBooking: true,
-                        consentGiven: true,
-                        bookingComplete: smResult.bookingComplete
-                    },
-                    latencyMs: aiLatencyMs,
-                    tokensUsed: 0,  // 🎯 0 tokens in booking mode!
-                    fromStateMachine: true,
-                    mode: 'BOOKING',
-                    debug: {
-                        source: 'BOOKING_CLIPBOARD',
-                        stage: 'booking',
-                        step: smResult.step
-                    }
-                };
-            } else if (smResult.action === 'LLM_FALLBACK') {
+            if (looksLikeQuestion && !extractedThisTurn.name && !extractedThisTurn.phone && 
+                !extractedThisTurn.address && !extractedThisTurn.time) {
                 // Caller went off-rails during booking (asked a question, etc.)
                 // LLM handles it, then returns to booking slot
                 log('CHECKPOINT 9c: 🔄 Booking interruption - LLM handles, then resume');
@@ -1108,7 +1121,7 @@ async function processTurn({
                     const isCollected = currentSlots[slotId] || currentSlots[slot.type];
                     return slot.required && !isCollected;
                 });
-                const nextSlotQuestion = nextMissingSlotInt?.question || smResult.returnToQuestion;
+                const nextSlotQuestion = nextMissingSlotInt?.question || 'What else can I help you with?';
                 
                 const llmResult = await HybridReceptionistLLM.processConversation({
                     company,
@@ -1122,7 +1135,6 @@ async function processTurn({
                         partialName: currentSlots.partialName || null,
                         // V22 INTERRUPT CONTEXT - Pass discovery summary + key facts
                         enterpriseContext: {
-                            ...smResult.context,
                             mode: 'BOOKING_INTERRUPTION',
                             discoverySummary: session.discoverySummary || session.discovery?.issue || 'Scheduling service',
                             keyFacts: session.keyFacts || [],
@@ -1131,7 +1143,6 @@ async function processTurn({
                             // Tell LLM to bridge back after answering
                             bridgeBackRequired: true
                         },
-                        offRailsType: smResult.offRails?.type,
                         returnToQuestion: nextSlotQuestion,
                         mode: 'BOOKING_INTERRUPTION'
                     },
@@ -1146,8 +1157,8 @@ async function processTurn({
                 const bridgePhrase = company.aiAgentSettings?.frontDeskBehavior?.offRailsRecovery?.bridgeBack?.transitionPhrase || 'Now,';
                 let finalReply = llmResult.reply || '';
                 
-                if (smResult.returnToQuestion) {
-                    finalReply = `${finalReply} ${bridgePhrase} ${smResult.returnToQuestion}`;
+                if (nextSlotQuestion) {
+                    finalReply = `${finalReply} ${bridgePhrase} ${nextSlotQuestion}`;
                 }
                 
                 aiLatencyMs = Date.now() - aiStartTime;
@@ -1156,7 +1167,7 @@ async function processTurn({
                     reply: finalReply,
                     conversationMode: 'booking',
                     intent: 'booking_interruption',
-                    nextGoal: smResult.step || 'RESUME_BOOKING',
+                    nextGoal: 'RESUME_BOOKING',
                     filledSlots: currentSlots,
                     signals: { 
                         wantsBooking: true,
@@ -1169,7 +1180,7 @@ async function processTurn({
                     mode: 'BOOKING',
                     debug: {
                         source: 'BOOKING_INTERRUPTION_LLM',
-                        returnToQuestion: smResult.returnToQuestion
+                        returnToQuestion: nextSlotQuestion
                     }
                 };
             } else {
@@ -1210,10 +1221,10 @@ async function processTurn({
                 aiLatencyMs = Date.now() - aiStartTime;
                 let finalReply = '';
                 let nextSlotId = null;
-                
-                // ═══════════════════════════════════════════════════════════════════
+            
+            // ═══════════════════════════════════════════════════════════════════
                 // SPECIAL HANDLING: Name slot with partial name
-                // ═══════════════════════════════════════════════════════════════════
+            // ═══════════════════════════════════════════════════════════════════
                 if (extractedThisTurn.name || currentSlots.partialName) {
                     const nameMeta = session.booking.meta.name;
                     const extractedName = extractedThisTurn.name || currentSlots.partialName || currentSlots.name;
@@ -1251,7 +1262,7 @@ async function processTurn({
                         nextSlotId = null; // Will find next slot below
                         
                         log('📝 NAME: Got last name, full name is', { fullName });
-                    } else {
+        } else {
                         // Got full name (has space) or askFullName is off
                         if (hasSpace) {
                             const parts = extractedName.split(' ');
@@ -1304,25 +1315,27 @@ async function processTurn({
                 }
                 
                 if (nextSlotId) {
-                    aiResult = {
+                    // Save session state before responding (persist mode + booking meta)
+                    session.markModified('booking');
+                
+                aiResult = {
                         reply: finalReply,
                         conversationMode: 'booking',
                         intent: 'booking',
                         nextGoal: `COLLECT_${nextSlotId.toUpperCase()}`,
-                        filledSlots: currentSlots,
+                    filledSlots: currentSlots,
                         signals: { 
                             wantsBooking: true,
                             consentGiven: true
                         },
-                        latencyMs: aiLatencyMs,
-                        tokensUsed: 0,
-                        fromStateMachine: true,
+                    latencyMs: aiLatencyMs,
+                    tokensUsed: 0,
+                    fromStateMachine: true,
                         mode: 'BOOKING',
                         debug: {
                             source: 'BOOKING_SAFETY_NET',
                             stage: 'booking',
                             step: nextSlotId,
-                            smAction: smResult?.action,
                             nameMeta: session.booking.meta.name,
                             extractedThisTurn
                         }
@@ -1332,21 +1345,22 @@ async function processTurn({
                     log('✅ BOOKING COMPLETE: All required slots collected');
                     
                     session.mode = 'COMPLETE';
-                    
-                    aiResult = {
+                    session.markModified('booking');
+                
+                aiResult = {
                         reply: "Great! I have all your information. We'll get a technician out to you as soon as possible. Is there anything else I can help you with?",
                         conversationMode: 'complete',
                         intent: 'booking_complete',
                         nextGoal: 'CONFIRM_BOOKING',
-                        filledSlots: currentSlots,
+                    filledSlots: currentSlots,
                         signals: { 
                             wantsBooking: true,
                             consentGiven: true,
                             bookingComplete: true
                         },
-                        latencyMs: aiLatencyMs,
-                        tokensUsed: 0,
-                        fromStateMachine: true,
+                    latencyMs: aiLatencyMs,
+                    tokensUsed: 0,
+                    fromStateMachine: true,
                         mode: 'COMPLETE',
                         debug: {
                             source: 'BOOKING_COMPLETE',
@@ -1356,8 +1370,7 @@ async function processTurn({
                     };
                 }
             }
-            
-        } else {
+            } else {
             // ═══════════════════════════════════════════════════════════════════
             // V22: LLM-LED DISCOVERY MODE
             // ═══════════════════════════════════════════════════════════════════
@@ -1458,27 +1471,27 @@ async function processTurn({
             
             // Step 5: Call LLM - it is the PRIMARY BRAIN
             const llmResult = await HybridReceptionistLLM.processConversation({
-                company,
-                callContext: {
-                    callId: session._id.toString(),
-                    companyId,
-                    customerContext,
-                    runningSummary: summaryFormatted,
-                    turnCount: (session.metrics?.totalTurns || 0) + 1,
-                    channel,
+                    company,
+                    callContext: {
+                        callId: session._id.toString(),
+                        companyId,
+                        customerContext,
+                        runningSummary: summaryFormatted,
+                        turnCount: (session.metrics?.totalTurns || 0) + 1,
+                        channel,
                     partialName: currentSlots.partialName || null,
                     enterpriseContext: llmContext,
                     mode: 'LLM_LED_DISCOVERY'
-                },
+                    },
                 currentMode: 'discovery',
-                knownSlots: currentSlots,
-                conversationHistory,
-                userInput: userText,
-                behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
-            });
-            
-            aiLatencyMs = Date.now() - aiStartTime;
-            
+                    knownSlots: currentSlots,
+                    conversationHistory,
+                    userInput: userText,
+                    behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
+                });
+                
+                aiLatencyMs = Date.now() - aiStartTime;
+                
             log('CHECKPOINT 9f: 🗣️ LLM response generated', {
                 latencyMs: aiLatencyMs,
                 tokensUsed: llmResult.tokensUsed || 0,
