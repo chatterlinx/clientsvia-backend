@@ -1855,13 +1855,135 @@ async function processTurn({
                         log('📝 NAME: Accepted as complete', { name: currentSlots.name });
                     }
                 }
-                // Handle other slots extracted this turn
-                else if (extractedThisTurn.phone) {
-                    finalReply = 'Thank you. ';
-                } else if (extractedThisTurn.address) {
-                    finalReply = 'Perfect. ';
-                } else if (extractedThisTurn.time) {
-                    finalReply = 'Great. ';
+                // ═══════════════════════════════════════════════════════════════════
+                // HANDLE OTHER SLOTS (PHONE, ADDRESS, TIME) WITH CONFIRMBACK SUPPORT
+                // ═══════════════════════════════════════════════════════════════════════
+                // Initialize meta tracking for all slots (not just name)
+                session.booking.meta.phone = session.booking.meta.phone || { pendingConfirm: false, confirmed: false };
+                session.booking.meta.address = session.booking.meta.address || { pendingConfirm: false, confirmed: false };
+                session.booking.meta.time = session.booking.meta.time || { pendingConfirm: false, confirmed: false };
+                
+                // Check if user is responding to a confirmBack question
+                const userSaysYes = /^(yes|yeah|yep|correct|that's right|right|yup|uh huh|mhm|affirmative)/i.test(userText.trim());
+                const userSaysNoGeneric = /^(no|nope|nah|that's wrong|wrong|incorrect|not right)/i.test(userText.trim());
+                
+                // PHONE SLOT HANDLING
+                if (session.booking.meta.phone.pendingConfirm && !session.booking.meta.phone.confirmed) {
+                    if (userSaysYes) {
+                        // User confirmed phone
+                        session.booking.meta.phone.confirmed = true;
+                        session.booking.meta.phone.pendingConfirm = false;
+                        session.booking.activeSlot = 'address';
+                        log('📞 PHONE: User confirmed, moving to address');
+                        // Don't set finalReply here - let it find next slot
+                    } else if (userSaysNoGeneric) {
+                        // User denied - clear phone and re-ask
+                        currentSlots.phone = null;
+                        session.booking.meta.phone.pendingConfirm = false;
+                        const phoneSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'phone');
+                        finalReply = "I apologize. " + (phoneSlotConfig?.question || "What's the best phone number to reach you?");
+                        nextSlotId = 'phone';
+                        log('📞 PHONE: User denied confirmation, re-asking');
+                    } else if (extractedThisTurn.phone) {
+                        // User provided a new phone number instead of confirming
+                        currentSlots.phone = extractedThisTurn.phone;
+                        session.booking.meta.phone.pendingConfirm = false;
+                        log('📞 PHONE: User provided new number instead of confirming');
+                    }
+                }
+                else if (extractedThisTurn.phone && !session.booking.meta.phone.confirmed) {
+                    const phoneSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'phone');
+                    const phoneConfirmBack = phoneSlotConfig?.confirmBack === true || phoneSlotConfig?.confirmBack === 'true';
+                    const phoneConfirmPrompt = phoneSlotConfig?.confirmPrompt || "Just to confirm, that's {value}, correct?";
+                    
+                    if (phoneConfirmBack) {
+                        // Confirm back the phone number
+                        session.booking.meta.phone.pendingConfirm = true;
+                        const confirmText = phoneConfirmPrompt.replace('{value}', extractedThisTurn.phone);
+                        finalReply = confirmText;
+                        nextSlotId = 'phone'; // Stay on phone until confirmed
+                        log('📞 PHONE: Confirming back', { phone: extractedThisTurn.phone });
+                    } else {
+                        // No confirmBack - accept and move on
+                        session.booking.meta.phone.confirmed = true;
+                        session.booking.activeSlot = 'address';
+                        finalReply = 'Got it. ';
+                        log('📞 PHONE: Accepted (no confirmBack)', { phone: extractedThisTurn.phone });
+                    }
+                }
+                // ADDRESS SLOT HANDLING  
+                else if (session.booking.meta.address.pendingConfirm && !session.booking.meta.address.confirmed) {
+                    if (userSaysYes) {
+                        session.booking.meta.address.confirmed = true;
+                        session.booking.meta.address.pendingConfirm = false;
+                        session.booking.activeSlot = 'time';
+                        log('🏠 ADDRESS: User confirmed, moving to time');
+                    } else if (userSaysNoGeneric) {
+                        currentSlots.address = null;
+                        session.booking.meta.address.pendingConfirm = false;
+                        const addressSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'address');
+                        finalReply = "I apologize. " + (addressSlotConfig?.question || "What's the service address?");
+                        nextSlotId = 'address';
+                        log('🏠 ADDRESS: User denied confirmation, re-asking');
+                    } else if (extractedThisTurn.address) {
+                        currentSlots.address = extractedThisTurn.address;
+                        session.booking.meta.address.pendingConfirm = false;
+                        log('🏠 ADDRESS: User provided new address instead of confirming');
+                    }
+                }
+                else if (extractedThisTurn.address && !session.booking.meta.address.confirmed) {
+                    const addressSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'address');
+                    const addressConfirmBack = addressSlotConfig?.confirmBack === true || addressSlotConfig?.confirmBack === 'true';
+                    const addressConfirmPrompt = addressSlotConfig?.confirmPrompt || "Just to confirm, that's {value}, correct?";
+                    
+                    if (addressConfirmBack) {
+                        session.booking.meta.address.pendingConfirm = true;
+                        const confirmText = addressConfirmPrompt.replace('{value}', extractedThisTurn.address);
+                        finalReply = confirmText;
+                        nextSlotId = 'address';
+                        log('🏠 ADDRESS: Confirming back', { address: extractedThisTurn.address });
+                    } else {
+                        session.booking.meta.address.confirmed = true;
+                        session.booking.activeSlot = 'time';
+                        finalReply = 'Perfect. ';
+                        log('🏠 ADDRESS: Accepted (no confirmBack)', { address: extractedThisTurn.address });
+                    }
+                }
+                // TIME SLOT HANDLING
+                else if (session.booking.meta.time.pendingConfirm && !session.booking.meta.time.confirmed) {
+                    if (userSaysYes) {
+                        session.booking.meta.time.confirmed = true;
+                        session.booking.meta.time.pendingConfirm = false;
+                        log('⏰ TIME: User confirmed');
+                    } else if (userSaysNoGeneric) {
+                        currentSlots.time = null;
+                        session.booking.meta.time.pendingConfirm = false;
+                        const timeSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'time');
+                        finalReply = "No problem. " + (timeSlotConfig?.question || "When works best for you?");
+                        nextSlotId = 'time';
+                        log('⏰ TIME: User denied confirmation, re-asking');
+                    } else if (extractedThisTurn.time) {
+                        currentSlots.time = extractedThisTurn.time;
+                        session.booking.meta.time.pendingConfirm = false;
+                        log('⏰ TIME: User provided new time instead of confirming');
+                    }
+                }
+                else if (extractedThisTurn.time && !session.booking.meta.time.confirmed) {
+                    const timeSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'time');
+                    const timeConfirmBack = timeSlotConfig?.confirmBack === true || timeSlotConfig?.confirmBack === 'true';
+                    const timeConfirmPrompt = timeSlotConfig?.confirmPrompt || "Just to confirm, {value} works for you?";
+                    
+                    if (timeConfirmBack) {
+                        session.booking.meta.time.pendingConfirm = true;
+                        const confirmText = timeConfirmPrompt.replace('{value}', extractedThisTurn.time);
+                        finalReply = confirmText;
+                        nextSlotId = 'time';
+                        log('⏰ TIME: Confirming back', { time: extractedThisTurn.time });
+                    } else {
+                        session.booking.meta.time.confirmed = true;
+                        finalReply = 'Great. ';
+                        log('⏰ TIME: Accepted (no confirmBack)', { time: extractedThisTurn.time });
+                    }
                 }
             // ═══════════════════════════════════════════════════════════════════
                 // PARTIAL ANSWER NUDGE - User started but didn't complete
@@ -1889,25 +2011,47 @@ async function processTurn({
                 }
                 
                 // ═══════════════════════════════════════════════════════════════════
-                // Find next required slot (if we're not still on name)
+                // Find next required slot (if we're not still on current slot)
+                // IMPORTANT: A slot is only "complete" if:
+                // 1. It's collected AND
+                // 2. It's NOT pending confirmation (if confirmBack is enabled)
                 // ═══════════════════════════════════════════════════════════════════
                 if (nextSlotId === null) {
                     const nextMissingSlotSafe = bookingSlotsSafe.find(slot => {
                         const slotId = slot.slotId || slot.id || slot.type;
                         const isCollected = currentSlots[slotId] || currentSlots[slot.type];
-                        return slot.required && !isCollected;
+                        
+                        // Check if this slot is pending confirmation
+                        const slotMeta = session.booking.meta[slotId] || {};
+                        const isPendingConfirm = slotMeta.pendingConfirm === true;
+                        
+                        // Slot is incomplete if: not collected OR pending confirmation
+                        const isIncomplete = !isCollected || isPendingConfirm;
+                        
+                        return slot.required && isIncomplete;
                     });
                     
                     if (nextMissingSlotSafe) {
                         nextSlotId = nextMissingSlotSafe.slotId || nextMissingSlotSafe.id || nextMissingSlotSafe.type;
                         const exactQuestion = nextMissingSlotSafe.question;
-                        finalReply += exactQuestion;
                         
-                        log('📋 BOOKING SAFETY NET: Asking next slot', { 
-                            slotId: nextSlotId, 
-                            question: exactQuestion,
-                            finalReply
-                        });
+                        // Check if we're waiting for confirmation (don't re-ask the question)
+                        const slotMeta = session.booking.meta[nextSlotId] || {};
+                        if (!slotMeta.pendingConfirm) {
+                            // Not pending confirm, ask the question
+                            finalReply += exactQuestion;
+                            log('📋 BOOKING SAFETY NET: Asking next slot', { 
+                                slotId: nextSlotId, 
+                                question: exactQuestion,
+                                finalReply
+                            });
+                        } else {
+                            // Pending confirm - don't add question, just use the confirm text already set
+                            log('📋 BOOKING SAFETY NET: Slot pending confirmation', { 
+                                slotId: nextSlotId,
+                                finalReply
+                            });
+                        }
                     }
                 }
                 
