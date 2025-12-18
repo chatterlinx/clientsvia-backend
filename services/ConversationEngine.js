@@ -1898,9 +1898,13 @@ async function processTurn({
                     nameMeta.askedMissingPartOnce = true;
                     
                     // Ask for the part we don't have
-                    if (nameMeta.assumedSingleTokenAs === 'last' || !nameMeta.first) {
+                    // SIMPLE LOGIC: If we assumed it's a first name, ask for last name (and vice versa)
+                    // Default to asking for last name if assumedSingleTokenAs is not set (most common case)
+                    if (nameMeta.assumedSingleTokenAs === 'last') {
+                        // We have last name, need first
                         finalReply = "And what's your first name?";
                     } else {
+                        // We have first name (or assumed first by default), need last
                         finalReply = "And what's your last name?";
                     }
                     nextSlotId = 'name'; // Still on name
@@ -1908,7 +1912,8 @@ async function processTurn({
                     log('📝 NAME: User confirmed partial, asking for missing part (V27)', {
                         assumedAs: nameMeta.assumedSingleTokenAs,
                         first: nameMeta.first,
-                        last: nameMeta.last
+                        last: nameMeta.last,
+                        askingFor: nameMeta.assumedSingleTokenAs === 'last' ? 'first' : 'last'
                     });
                 }
                 // Handle "YES" to name confirmBack when askFullName is OFF - accept and move on
