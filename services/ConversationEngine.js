@@ -1856,133 +1856,350 @@ async function processTurn({
                     }
                 }
                 // ═══════════════════════════════════════════════════════════════════
-                // HANDLE OTHER SLOTS (PHONE, ADDRESS, TIME) WITH CONFIRMBACK SUPPORT
+                // COMPREHENSIVE SLOT HANDLING WITH ALL UI-CONFIGURED FEATURES
                 // ═══════════════════════════════════════════════════════════════════════
-                // Initialize meta tracking for all slots (not just name)
-                session.booking.meta.phone = session.booking.meta.phone || { pendingConfirm: false, confirmed: false };
-                session.booking.meta.address = session.booking.meta.address || { pendingConfirm: false, confirmed: false };
-                session.booking.meta.time = session.booking.meta.time || { pendingConfirm: false, confirmed: false };
+                // This implements ALL booking slot features from the UI:
+                // - confirmBack + confirmPrompt (all slots)
+                // - skipIfKnown (all slots)
+                // - offerCallerId + callerIdPrompt (phone)
+                // - acceptTextMe (phone)
+                // - breakDownIfUnclear (phone + address)
+                // - addressConfirmLevel (address)
+                // - acceptPartialAddress (address)
+                // - offerAsap + offerMorningAfternoon + asapPhrase (time)
+                // - spellOutEmail + offerToSendText (email)
+                // - selectOptions + allowOther (select)
+                // - yesAction + noAction (yesno)
+                // - minValue + maxValue + unit (number)
+                // ═══════════════════════════════════════════════════════════════════════
+                
+                // Initialize meta tracking for all slots
+                session.booking.meta.phone = session.booking.meta.phone || { 
+                    pendingConfirm: false, 
+                    confirmed: false,
+                    offeredCallerId: false,
+                    breakdownStep: null // null, 'area_code', 'rest'
+                };
+                session.booking.meta.address = session.booking.meta.address || { 
+                    pendingConfirm: false, 
+                    confirmed: false,
+                    breakdownStep: null // null, 'street', 'city', 'zip'
+                };
+                session.booking.meta.time = session.booking.meta.time || { 
+                    pendingConfirm: false, 
+                    confirmed: false,
+                    offeredAsap: false
+                };
+                session.booking.meta.email = session.booking.meta.email || { 
+                    pendingConfirm: false, 
+                    confirmed: false,
+                    spelledOut: false
+                };
                 
                 // Check if user is responding to a confirmBack question
-                const userSaysYes = /^(yes|yeah|yep|correct|that's right|right|yup|uh huh|mhm|affirmative)/i.test(userText.trim());
+                const userSaysYes = /^(yes|yeah|yep|correct|that's right|right|yup|uh huh|mhm|affirmative|sure|ok|okay)/i.test(userText.trim());
                 const userSaysNoGeneric = /^(no|nope|nah|that's wrong|wrong|incorrect|not right)/i.test(userText.trim());
+                const userSaysTextMe = /\b(text\s*me|send\s*(me\s+)?a?\s*text|text\s*(is\s+)?(fine|good|ok|okay))\b/i.test(userText.trim());
                 
-                // PHONE SLOT HANDLING
-                if (session.booking.meta.phone.pendingConfirm && !session.booking.meta.phone.confirmed) {
+                // Get caller ID from metadata if available
+                const callerId = metadata?.callerPhone || callerPhone || null;
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // PHONE SLOT HANDLING (with offerCallerId, acceptTextMe, breakDownIfUnclear)
+                // ═══════════════════════════════════════════════════════════════════
+                const phoneSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'phone');
+                const phoneMeta = session.booking.meta.phone;
+                
+                // Check if we should skip phone (skipIfKnown + returning customer)
+                const shouldSkipPhone = phoneSlotConfig?.skipIfKnown && customerContext?.isReturning && customerContext?.phone;
+                if (shouldSkipPhone && !currentSlots.phone) {
+                    currentSlots.phone = customerContext.phone;
+                    phoneMeta.confirmed = true;
+                    log('📞 PHONE: Skipped (skipIfKnown + returning customer)', { phone: currentSlots.phone });
+                }
+                
+                if (phoneMeta.pendingConfirm && !phoneMeta.confirmed) {
                     if (userSaysYes) {
-                        // User confirmed phone
-                        session.booking.meta.phone.confirmed = true;
-                        session.booking.meta.phone.pendingConfirm = false;
+                        phoneMeta.confirmed = true;
+                        phoneMeta.pendingConfirm = false;
                         session.booking.activeSlot = 'address';
                         log('📞 PHONE: User confirmed, moving to address');
-                        // Don't set finalReply here - let it find next slot
                     } else if (userSaysNoGeneric) {
-                        // User denied - clear phone and re-ask
                         currentSlots.phone = null;
-                        session.booking.meta.phone.pendingConfirm = false;
-                        const phoneSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'phone');
+                        phoneMeta.pendingConfirm = false;
                         finalReply = "I apologize. " + (phoneSlotConfig?.question || "What's the best phone number to reach you?");
                         nextSlotId = 'phone';
                         log('📞 PHONE: User denied confirmation, re-asking');
                     } else if (extractedThisTurn.phone) {
-                        // User provided a new phone number instead of confirming
                         currentSlots.phone = extractedThisTurn.phone;
-                        session.booking.meta.phone.pendingConfirm = false;
+                        phoneMeta.pendingConfirm = false;
                         log('📞 PHONE: User provided new number instead of confirming');
                     }
                 }
-                else if (extractedThisTurn.phone && !session.booking.meta.phone.confirmed) {
-                    const phoneSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'phone');
+                // Handle breakDownIfUnclear step-by-step collection
+                else if (phoneMeta.breakdownStep === 'area_code' && extractedThisTurn.phone) {
+                    // User provided area code, now ask for rest
+                    phoneMeta.areaCode = extractedThisTurn.phone;
+                    phoneMeta.breakdownStep = 'rest';
+                    finalReply = "Got it. And the rest of the number?";
+                    nextSlotId = 'phone';
+                    log('📞 PHONE: Got area code, asking for rest');
+                }
+                else if (phoneMeta.breakdownStep === 'rest' && extractedThisTurn.phone) {
+                    // User provided rest of number, combine
+                    const fullPhone = `${phoneMeta.areaCode}${extractedThisTurn.phone}`;
+                    currentSlots.phone = fullPhone;
+                    phoneMeta.breakdownStep = null;
+                    phoneMeta.confirmed = true;
+                    session.booking.activeSlot = 'address';
+                    finalReply = `Perfect, I have ${fullPhone}. `;
+                    log('📞 PHONE: Combined breakdown', { phone: fullPhone });
+                }
+                // Check for "text me" response (acceptTextMe feature)
+                else if (userSaysTextMe && phoneSlotConfig?.acceptTextMe && callerId) {
+                    currentSlots.phone = callerId;
+                    phoneMeta.confirmed = true;
+                    session.booking.activeSlot = 'address';
+                    finalReply = "Perfect, I'll use the number you're calling from for texts. ";
+                    log('📞 PHONE: Accepted "text me" with caller ID', { phone: callerId });
+                }
+                // Offer caller ID if configured and available
+                else if (!currentSlots.phone && !phoneMeta.offeredCallerId && phoneSlotConfig?.offerCallerId && callerId && session.booking.activeSlot === 'phone') {
+                    phoneMeta.offeredCallerId = true;
+                    const callerIdPrompt = phoneSlotConfig?.callerIdPrompt || 
+                        "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?";
+                    finalReply = callerIdPrompt.replace('{callerId}', callerId);
+                    nextSlotId = 'phone';
+                    log('📞 PHONE: Offering caller ID', { callerId });
+                }
+                // Handle response to caller ID offer
+                else if (phoneMeta.offeredCallerId && !currentSlots.phone && userSaysYes && callerId) {
+                    currentSlots.phone = callerId;
+                    phoneMeta.confirmed = true;
+                    session.booking.activeSlot = 'address';
+                    finalReply = "Perfect. ";
+                    log('📞 PHONE: User accepted caller ID', { phone: callerId });
+                }
+                else if (phoneMeta.offeredCallerId && !currentSlots.phone && userSaysNoGeneric) {
+                    finalReply = "No problem. " + (phoneSlotConfig?.question || "What's the best phone number to reach you?");
+                    nextSlotId = 'phone';
+                    log('📞 PHONE: User declined caller ID, asking for number');
+                }
+                else if (extractedThisTurn.phone && !phoneMeta.confirmed) {
                     const phoneConfirmBack = phoneSlotConfig?.confirmBack === true || phoneSlotConfig?.confirmBack === 'true';
                     const phoneConfirmPrompt = phoneSlotConfig?.confirmPrompt || "Just to confirm, that's {value}, correct?";
                     
                     if (phoneConfirmBack) {
-                        // Confirm back the phone number
-                        session.booking.meta.phone.pendingConfirm = true;
+                        phoneMeta.pendingConfirm = true;
                         const confirmText = phoneConfirmPrompt.replace('{value}', extractedThisTurn.phone);
                         finalReply = confirmText;
-                        nextSlotId = 'phone'; // Stay on phone until confirmed
+                        nextSlotId = 'phone';
                         log('📞 PHONE: Confirming back', { phone: extractedThisTurn.phone });
                     } else {
-                        // No confirmBack - accept and move on
-                        session.booking.meta.phone.confirmed = true;
+                        phoneMeta.confirmed = true;
                         session.booking.activeSlot = 'address';
                         finalReply = 'Got it. ';
                         log('📞 PHONE: Accepted (no confirmBack)', { phone: extractedThisTurn.phone });
                     }
                 }
-                // ADDRESS SLOT HANDLING  
-                else if (session.booking.meta.address.pendingConfirm && !session.booking.meta.address.confirmed) {
+                // Handle unclear phone - trigger breakdown if configured
+                else if (session.booking.activeSlot === 'phone' && !currentSlots.phone && !phoneMeta.breakdownStep && 
+                         phoneSlotConfig?.breakDownIfUnclear && userText.length > 0 && !extractedThisTurn.phone) {
+                    phoneMeta.breakdownStep = 'area_code';
+                    finalReply = "I didn't quite catch that. Let's go step by step - what's the area code?";
+                    nextSlotId = 'phone';
+                    log('📞 PHONE: Triggering breakdown due to unclear input');
+                }
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // ADDRESS SLOT HANDLING (with addressConfirmLevel, acceptPartialAddress, breakDownIfUnclear)
+                // ═══════════════════════════════════════════════════════════════════
+                const addressSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'address');
+                const addressMeta = session.booking.meta.address;
+                
+                // Check if we should skip address (skipIfKnown + returning customer)
+                const shouldSkipAddress = addressSlotConfig?.skipIfKnown && customerContext?.isReturning && customerContext?.address;
+                if (shouldSkipAddress && !currentSlots.address) {
+                    currentSlots.address = customerContext.address;
+                    addressMeta.confirmed = true;
+                    log('🏠 ADDRESS: Skipped (skipIfKnown + returning customer)', { address: currentSlots.address });
+                }
+                
+                if (addressMeta.pendingConfirm && !addressMeta.confirmed) {
                     if (userSaysYes) {
-                        session.booking.meta.address.confirmed = true;
-                        session.booking.meta.address.pendingConfirm = false;
+                        addressMeta.confirmed = true;
+                        addressMeta.pendingConfirm = false;
                         session.booking.activeSlot = 'time';
                         log('🏠 ADDRESS: User confirmed, moving to time');
                     } else if (userSaysNoGeneric) {
                         currentSlots.address = null;
-                        session.booking.meta.address.pendingConfirm = false;
-                        const addressSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'address');
+                        addressMeta.pendingConfirm = false;
                         finalReply = "I apologize. " + (addressSlotConfig?.question || "What's the service address?");
                         nextSlotId = 'address';
                         log('🏠 ADDRESS: User denied confirmation, re-asking');
                     } else if (extractedThisTurn.address) {
                         currentSlots.address = extractedThisTurn.address;
-                        session.booking.meta.address.pendingConfirm = false;
+                        addressMeta.pendingConfirm = false;
                         log('🏠 ADDRESS: User provided new address instead of confirming');
                     }
                 }
-                else if (extractedThisTurn.address && !session.booking.meta.address.confirmed) {
-                    const addressSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'address');
+                // Handle breakDownIfUnclear step-by-step collection
+                else if (addressMeta.breakdownStep === 'street' && userText.length > 3) {
+                    addressMeta.street = userText.trim();
+                    addressMeta.breakdownStep = 'city';
+                    finalReply = "Got it. And what city?";
+                    nextSlotId = 'address';
+                    log('🏠 ADDRESS: Got street, asking for city');
+                }
+                else if (addressMeta.breakdownStep === 'city' && userText.length > 1) {
+                    addressMeta.city = userText.trim();
+                    // Check addressConfirmLevel to see if we need zip
+                    if (addressSlotConfig?.addressConfirmLevel === 'full') {
+                        addressMeta.breakdownStep = 'zip';
+                        finalReply = "And the zip code?";
+                        nextSlotId = 'address';
+                        log('🏠 ADDRESS: Got city, asking for zip');
+                    } else {
+                        // Combine and finish
+                        currentSlots.address = `${addressMeta.street}, ${addressMeta.city}`;
+                        addressMeta.breakdownStep = null;
+                        addressMeta.confirmed = true;
+                        session.booking.activeSlot = 'time';
+                        finalReply = `Perfect, I have ${currentSlots.address}. `;
+                        log('🏠 ADDRESS: Combined breakdown (street_city)', { address: currentSlots.address });
+                    }
+                }
+                else if (addressMeta.breakdownStep === 'zip' && userText.length >= 3) {
+                    addressMeta.zip = userText.trim();
+                    currentSlots.address = `${addressMeta.street}, ${addressMeta.city} ${addressMeta.zip}`;
+                    addressMeta.breakdownStep = null;
+                    addressMeta.confirmed = true;
+                    session.booking.activeSlot = 'time';
+                    finalReply = `Perfect, I have ${currentSlots.address}. `;
+                    log('🏠 ADDRESS: Combined breakdown (full)', { address: currentSlots.address });
+                }
+                else if (extractedThisTurn.address && !addressMeta.confirmed) {
                     const addressConfirmBack = addressSlotConfig?.confirmBack === true || addressSlotConfig?.confirmBack === 'true';
                     const addressConfirmPrompt = addressSlotConfig?.confirmPrompt || "Just to confirm, that's {value}, correct?";
                     
-                    if (addressConfirmBack) {
-                        session.booking.meta.address.pendingConfirm = true;
+                    // Check if address is partial and acceptPartialAddress is off
+                    const isPartialAddress = !extractedThisTurn.address.includes(',') && extractedThisTurn.address.split(' ').length < 3;
+                    if (isPartialAddress && !addressSlotConfig?.acceptPartialAddress) {
+                        finalReply = "I got part of that. Can you give me the full address including city?";
+                        nextSlotId = 'address';
+                        log('🏠 ADDRESS: Partial address not accepted, asking for full');
+                    } else if (addressConfirmBack) {
+                        addressMeta.pendingConfirm = true;
                         const confirmText = addressConfirmPrompt.replace('{value}', extractedThisTurn.address);
                         finalReply = confirmText;
                         nextSlotId = 'address';
                         log('🏠 ADDRESS: Confirming back', { address: extractedThisTurn.address });
                     } else {
-                        session.booking.meta.address.confirmed = true;
+                        addressMeta.confirmed = true;
                         session.booking.activeSlot = 'time';
                         finalReply = 'Perfect. ';
                         log('🏠 ADDRESS: Accepted (no confirmBack)', { address: extractedThisTurn.address });
                     }
                 }
-                // TIME SLOT HANDLING
-                else if (session.booking.meta.time.pendingConfirm && !session.booking.meta.time.confirmed) {
+                // Handle unclear address - trigger breakdown if configured
+                else if (session.booking.activeSlot === 'address' && !currentSlots.address && !addressMeta.breakdownStep &&
+                         addressSlotConfig?.breakDownIfUnclear && userText.length > 0 && !extractedThisTurn.address) {
+                    addressMeta.breakdownStep = 'street';
+                    finalReply = "I didn't quite catch that. Let's go step by step - what's the street address?";
+                    nextSlotId = 'address';
+                    log('🏠 ADDRESS: Triggering breakdown due to unclear input');
+                }
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // TIME SLOT HANDLING (with offerAsap, offerMorningAfternoon, asapPhrase)
+                // ═══════════════════════════════════════════════════════════════════
+                const timeSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'time');
+                const timeMeta = session.booking.meta.time;
+                
+                if (timeMeta.pendingConfirm && !timeMeta.confirmed) {
                     if (userSaysYes) {
-                        session.booking.meta.time.confirmed = true;
-                        session.booking.meta.time.pendingConfirm = false;
+                        timeMeta.confirmed = true;
+                        timeMeta.pendingConfirm = false;
                         log('⏰ TIME: User confirmed');
                     } else if (userSaysNoGeneric) {
                         currentSlots.time = null;
-                        session.booking.meta.time.pendingConfirm = false;
-                        const timeSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'time');
+                        timeMeta.pendingConfirm = false;
                         finalReply = "No problem. " + (timeSlotConfig?.question || "When works best for you?");
                         nextSlotId = 'time';
                         log('⏰ TIME: User denied confirmation, re-asking');
                     } else if (extractedThisTurn.time) {
                         currentSlots.time = extractedThisTurn.time;
-                        session.booking.meta.time.pendingConfirm = false;
+                        timeMeta.pendingConfirm = false;
                         log('⏰ TIME: User provided new time instead of confirming');
                     }
                 }
-                else if (extractedThisTurn.time && !session.booking.meta.time.confirmed) {
-                    const timeSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'time');
+                // Handle ASAP / morning / afternoon responses
+                else if (session.booking.activeSlot === 'time' && !currentSlots.time) {
+                    const userTextLower = userText.toLowerCase().trim();
+                    const wantsAsap = /\b(asap|as soon as possible|soonest|earliest|first available|today|urgent|emergency|right away|immediately)\b/i.test(userTextLower);
+                    const wantsMorning = /\b(morning|am|before noon)\b/i.test(userTextLower);
+                    const wantsAfternoon = /\b(afternoon|pm|after noon|evening)\b/i.test(userTextLower);
+                    
+                    if (wantsAsap && timeSlotConfig?.offerAsap !== false) {
+                        const asapPhrase = timeSlotConfig?.asapPhrase || 'first available';
+                        currentSlots.time = asapPhrase;
+                        timeMeta.confirmed = true;
+                        finalReply = `Perfect, I'll put you down for ${asapPhrase}. `;
+                        log('⏰ TIME: Accepted ASAP', { time: asapPhrase });
+                    } else if ((wantsMorning || wantsAfternoon) && timeSlotConfig?.offerMorningAfternoon) {
+                        currentSlots.time = wantsMorning ? 'morning' : 'afternoon';
+                        timeMeta.confirmed = true;
+                        finalReply = `Perfect, ${currentSlots.time} works. `;
+                        log('⏰ TIME: Accepted morning/afternoon', { time: currentSlots.time });
+                    }
+                }
+                else if (extractedThisTurn.time && !timeMeta.confirmed) {
                     const timeConfirmBack = timeSlotConfig?.confirmBack === true || timeSlotConfig?.confirmBack === 'true';
                     const timeConfirmPrompt = timeSlotConfig?.confirmPrompt || "Just to confirm, {value} works for you?";
                     
                     if (timeConfirmBack) {
-                        session.booking.meta.time.pendingConfirm = true;
+                        timeMeta.pendingConfirm = true;
                         const confirmText = timeConfirmPrompt.replace('{value}', extractedThisTurn.time);
                         finalReply = confirmText;
                         nextSlotId = 'time';
                         log('⏰ TIME: Confirming back', { time: extractedThisTurn.time });
                     } else {
-                        session.booking.meta.time.confirmed = true;
+                        timeMeta.confirmed = true;
                         finalReply = 'Great. ';
                         log('⏰ TIME: Accepted (no confirmBack)', { time: extractedThisTurn.time });
+                    }
+                }
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // EMAIL SLOT HANDLING (with spellOutEmail, offerToSendText)
+                // ═══════════════════════════════════════════════════════════════════
+                const emailSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'email');
+                const emailMeta = session.booking.meta.email;
+                
+                if (emailMeta && extractedThisTurn.email && !emailMeta.confirmed) {
+                    const spellOutEmail = emailSlotConfig?.spellOutEmail !== false;
+                    const offerToSendText = emailSlotConfig?.offerToSendText;
+                    
+                    if (spellOutEmail && !emailMeta.spelledOut) {
+                        // Spell out the email for confirmation
+                        const spelled = extractedThisTurn.email
+                            .replace(/@/g, ' at ')
+                            .replace(/\./g, ' dot ')
+                            .replace(/_/g, ' underscore ')
+                            .replace(/-/g, ' dash ');
+                        emailMeta.spelledOut = true;
+                        emailMeta.pendingConfirm = true;
+                        finalReply = `Just to confirm, that's ${spelled}, correct?`;
+                        nextSlotId = 'email';
+                        log('📧 EMAIL: Spelling out for confirmation', { email: extractedThisTurn.email });
+                    } else if (offerToSendText && callerId) {
+                        finalReply = `Got it. Would you like me to text a confirmation to ${callerId}?`;
+                        nextSlotId = 'email';
+                        log('📧 EMAIL: Offering to send text confirmation');
+                    } else {
+                        emailMeta.confirmed = true;
+                        finalReply = 'Got it. ';
+                        log('📧 EMAIL: Accepted', { email: extractedThisTurn.email });
                     }
                 }
             // ═══════════════════════════════════════════════════════════════════
