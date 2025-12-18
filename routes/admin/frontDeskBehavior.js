@@ -240,8 +240,10 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
                 inquiryResponses: config.inquiryResponses || null,
                 // V22: Discovery & Consent Gate
                 discoveryConsent: config.discoveryConsent || null,
-                // V22: Vocabulary Guardrails
+                // V22: Vocabulary Guardrails (AI output)
                 vocabularyGuardrails: config.vocabularyGuardrails || null,
+                // 🔤 V26: Caller Vocabulary (Industry slang translation - caller input)
+                callerVocabulary: config.callerVocabulary || null,
                 // 🚀 V25: Fast-Path Booking - Respect caller urgency
                 fastPathBooking: config.fastPathBooking || null,
                 // 👤 Common First Names - UI-configurable name recognition
@@ -421,6 +423,23 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
                 updateObj[`aiAgentSettings.frontDeskBehavior.vocabularyGuardrails.${key}`] = value;
             });
             logger.info('[FRONT DESK BEHAVIOR] 📝 V22 Saving vocabularyGuardrails:', updates.vocabularyGuardrails);
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🔤 V26: Caller Vocabulary - Industry Slang Translation
+        // ════════════════════════════════════════════════════════════════════════════
+        // When caller says "not pulling", AI understands "not cooling" (HVAC)
+        // This is for INPUT (what caller says), not OUTPUT (what AI says)
+        // ════════════════════════════════════════════════════════════════════════════
+        if (updates.callerVocabulary) {
+            Object.entries(updates.callerVocabulary).forEach(([key, value]) => {
+                updateObj[`aiAgentSettings.frontDeskBehavior.callerVocabulary.${key}`] = value;
+            });
+            logger.info('[FRONT DESK BEHAVIOR] 🔤 V26 Saving callerVocabulary:', {
+                companyId,
+                enabled: updates.callerVocabulary.enabled,
+                synonymCount: updates.callerVocabulary.synonymMap ? Object.keys(updates.callerVocabulary.synonymMap).length : 0
+            });
         }
         
         // ════════════════════════════════════════════════════════════════════════════

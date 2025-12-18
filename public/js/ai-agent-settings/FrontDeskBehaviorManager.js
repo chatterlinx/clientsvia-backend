@@ -2428,6 +2428,14 @@ class FrontDeskBehaviorManager {
         this.isDirty = true;
     }
     
+    toggleCallerVocabularyFields(enabled) {
+        const fields = document.getElementById('fdb-cv-fields');
+        if (fields) {
+            fields.style.display = enabled ? 'block' : 'none';
+        }
+        this.isDirty = true;
+    }
+    
     // ════════════════════════════════════════════════════════════════════════════
     // V22 TAB: Vocabulary Guardrails
     // ════════════════════════════════════════════════════════════════════════════
@@ -2435,17 +2443,69 @@ class FrontDeskBehaviorManager {
     // ════════════════════════════════════════════════════════════════════════════
     renderVocabularyTab() {
         const vg = this.config.vocabularyGuardrails || {};
+        const cv = this.config.callerVocabulary || {};
         
         const allowedNouns = (vg.allowedServiceNouns || []).join(', ');
         const forbiddenWords = (vg.forbiddenWords || []).join(', ');
         const replacementMap = vg.replacementMap || {};
         const replacementPairs = Object.entries(replacementMap).map(([k, v]) => `${k} → ${v}`).join('\\n');
         
+        // Caller vocabulary synonym map
+        const synonymMap = cv.synonymMap || {};
+        const synonymPairs = Object.entries(synonymMap).map(([k, v]) => `${k} → ${v}`).join('\\n');
+        const cvEnabled = cv.enabled !== false;
+        
         return `
+            <!-- ═══════════════════════════════════════════════════════════════════ -->
+            <!-- CALLER VOCABULARY - Industry slang/synonym mapping (INPUT) -->
+            <!-- ═══════════════════════════════════════════════════════════════════ -->
+            <div style="background: #161b22; border: 1px solid #58a6ff; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="margin: 0 0 8px 0; color: #58a6ff;">🗣️ Caller Vocabulary (Industry Slang)</h3>
+                <p style="color: #8b949e; margin-bottom: 16px; font-size: 0.875rem;">
+                    <strong>Understand caller slang:</strong> When caller says "not pulling", AI understands they mean "not cooling".
+                    <br><span style="color: #6e7681;">This is for what the <strong>caller</strong> says (input), not what the AI says (output).</span>
+                </p>
+                
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 16px;">
+                    <input type="checkbox" id="fdb-cv-enabled" ${cvEnabled ? 'checked' : ''} 
+                        onchange="window.frontDeskManager.toggleCallerVocabularyFields(this.checked)"
+                        style="accent-color: #58a6ff; width: 18px; height: 18px;">
+                    <span style="color: #c9d1d9; font-weight: 600;">Enable Caller Vocabulary Translation</span>
+                </label>
+                
+                <div id="fdb-cv-fields" style="display: ${cvEnabled ? 'block' : 'none'};">
+                    <div style="background: #0d1117; border: 1px solid #58a6ff; border-radius: 8px; padding: 16px;">
+                        <h4 style="margin: 0 0 12px 0; color: #58a6ff;">🔄 Synonym Map (Caller Word → Standard Meaning)</h4>
+                        <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 12px;">
+                            Map industry slang to standard terms so AI understands what caller means.
+                        </p>
+                        
+                        <textarea id="fdb-cv-synonyms" rows="8" 
+                            placeholder="pulling → cooling
+not pulling → not cooling
+blowing hot → not cooling
+froze up → frozen coils
+went out → stopped working
+won't kick on → won't start"
+                            style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 0.85rem; resize: vertical;">${synonymPairs}</textarea>
+                        <p style="color: #8b949e; font-size: 0.7rem; margin-top: 8px;">
+                            Format: <code style="background: #30363d; padding: 2px 6px; border-radius: 3px;">caller slang → standard meaning</code> (one per line)<br><br>
+                            <strong>HVAC Examples:</strong> pulling → cooling, froze up → frozen coils, went out → stopped working<br>
+                            <strong>Plumbing Examples:</strong> stopped up → clogged, backed up → clogged, dripping → leaking<br>
+                            <strong>Dental Examples:</strong> chompers → teeth, pearly whites → teeth
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ═══════════════════════════════════════════════════════════════════ -->
+            <!-- AI VOCABULARY GUARDRAILS (OUTPUT) -->
+            <!-- ═══════════════════════════════════════════════════════════════════ -->
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
-                <h3 style="margin: 0 0 8px 0; color: #f0883e;">📝 Vocabulary Guardrails</h3>
+                <h3 style="margin: 0 0 8px 0; color: #f0883e;">📝 AI Vocabulary Guardrails</h3>
                 <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">
-                    <strong>Multi-Tenant Safety:</strong> Prevent cross-trade word contamination. A dental office should never say "technician".
+                    <strong>Multi-Tenant Safety:</strong> Control what words the <strong>AI</strong> can say. A dental office should never say "technician".
+                    <br><span style="color: #6e7681;">This is for what the <strong>AI</strong> says (output), not what the caller says (input).</span>
                 </p>
                 
                 <!-- Allowed Service Nouns -->
@@ -2499,7 +2559,7 @@ class FrontDeskBehaviorManager {
             </div>
         `;
     }
-
+    
     // ════════════════════════════════════════════════════════════════════
     // NEW TAB: Mode Switching
     // ════════════════════════════════════════════════════════════════════
@@ -2954,6 +3014,30 @@ class FrontDeskBehaviorManager {
                 replacementMap: replacementMap
             };
             console.log('[FRONT DESK BEHAVIOR] 📝 V22 Vocabulary guardrails saved:', this.config.vocabularyGuardrails);
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // V26: Caller Vocabulary Settings (Industry Slang Translation)
+        // ════════════════════════════════════════════════════════════════════════════
+        if (document.getElementById('fdb-cv-enabled')) {
+            const enabled = getChecked('fdb-cv-enabled');
+            
+            // Parse synonym map (slang → meaning)
+            const synonymsRaw = get('fdb-cv-synonyms') || '';
+            const synonymMap = {};
+            synonymsRaw.split('\n').forEach(line => {
+                const parts = line.split('→').map(p => p.trim());
+                if (parts.length === 2 && parts[0] && parts[1]) {
+                    synonymMap[parts[0].toLowerCase()] = parts[1];
+                }
+            });
+            
+            this.config.callerVocabulary = {
+                enabled: enabled,
+                synonymMap: synonymMap,
+                logTranslations: true  // Always log for debugging
+            };
+            console.log('[FRONT DESK BEHAVIOR] 🔤 V26 Caller vocabulary saved:', this.config.callerVocabulary);
         }
     }
 

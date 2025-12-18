@@ -34,6 +34,7 @@
 
 const Company = require('../models/v2Company');
 const BookingRequest = require('../models/BookingRequest');
+const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const CustomerService = require('./CustomerService');
 const SessionService = require('./SessionService');
 const RunningSummaryService = require('./RunningSummaryService');
@@ -49,7 +50,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V25-FAST-PATH-BOOKING';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V26-CALLER-VOCABULARY';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -69,7 +70,11 @@ logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
         '✅ V25: FAST-PATH BOOKING - respects caller urgency',
         '✅ V25: "I need you out here" → immediate offer (no troubleshooting)',
         '✅ V25: UI-configurable trigger keywords + offer script',
-        '✅ V25: Still requires explicit consent to enter BOOKING'
+        '✅ V25: Still requires explicit consent to enter BOOKING',
+        '✅ V26: CALLER VOCABULARY - Translates industry slang',
+        '✅ V26: "not pulling" → "not cooling" (HVAC)',
+        '✅ V26: Uses template nlpConfig.synonyms + company callerVocabulary',
+        '✅ V26: LLM receives translated text for better understanding'
     ]
 });
 
@@ -127,6 +132,92 @@ function searchCheatSheets(cheatSheetConfig, query) {
     }
     
     return bestMatch;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🆕 V26: CALLER VOCABULARY TRANSLATION
+// ═══════════════════════════════════════════════════════════════════════════
+// Translates industry slang in caller input to standard terms.
+// Example: "not pulling" → "not cooling" (HVAC)
+// 
+// Uses TWO sources (merged):
+// 1. Template-level nlpConfig.synonyms (from AiCore template)
+// 2. Company-level callerVocabulary.synonymMap (Front Desk UI)
+// 
+// This helps the LLM understand what the caller means.
+// ═══════════════════════════════════════════════════════════════════════════
+async function translateCallerVocabulary(userText, company, template) {
+    if (!userText || typeof userText !== 'string') return { translated: userText, replacements: [] };
+    
+    const replacements = [];
+    let translated = userText;
+    
+    // Build merged synonym map (template + company)
+    const synonymMap = new Map();
+    
+    // Source 1: Template-level synonyms (nlpConfig.synonyms)
+    // Format: { "technical_term": ["variant1", "variant2"] }
+    if (template?.nlpConfig?.synonyms) {
+        const templateSynonyms = template.nlpConfig.synonyms instanceof Map 
+            ? template.nlpConfig.synonyms 
+            : new Map(Object.entries(template.nlpConfig.synonyms || {}));
+        
+        for (const [technical, variants] of templateSynonyms.entries()) {
+            if (Array.isArray(variants)) {
+                for (const variant of variants) {
+                    synonymMap.set(variant.toLowerCase(), technical);
+                }
+            }
+        }
+    }
+    
+    // Source 2: Company-level callerVocabulary.synonymMap (Front Desk UI)
+    // Format: { "slang": "standard_meaning" }
+    const callerVocab = company?.aiAgentSettings?.frontDeskBehavior?.callerVocabulary;
+    if (callerVocab?.enabled !== false && callerVocab?.synonymMap) {
+        const companyMap = callerVocab.synonymMap instanceof Map 
+            ? callerVocab.synonymMap 
+            : new Map(Object.entries(callerVocab.synonymMap || {}));
+        
+        for (const [slang, meaning] of companyMap.entries()) {
+            // Company overrides template
+            synonymMap.set(slang.toLowerCase(), meaning);
+        }
+    }
+    
+    // Apply translations (longest match first to handle phrases)
+    const sortedEntries = [...synonymMap.entries()].sort((a, b) => b[0].length - a[0].length);
+    
+    for (const [slang, meaning] of sortedEntries) {
+        // Use word boundary matching for safety
+        const regex = new RegExp(`\\b${escapeRegex(slang)}\\b`, 'gi');
+        
+        if (regex.test(translated)) {
+            const before = translated;
+            translated = translated.replace(regex, meaning);
+            
+            if (before !== translated) {
+                replacements.push({ from: slang, to: meaning });
+            }
+        }
+    }
+    
+    // Log if translations occurred
+    if (replacements.length > 0) {
+        logger.info('[CALLER VOCAB] 🔤 Translated caller slang', {
+            original: userText,
+            translated,
+            replacements,
+            companyId: company?._id?.toString()
+        });
+    }
+    
+    return { translated, replacements, original: userText };
+}
+
+// Helper: Escape regex special characters
+function escapeRegex(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -877,6 +968,55 @@ async function processTurn({
             log('CHECKPOINT 2.5: ⚠️ Cheat sheet load failed (non-fatal)', { 
                 error: cheatSheetErr.message 
             });
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // STEP 1.6: V26 - Load Template + Translate Caller Vocabulary
+        // ═══════════════════════════════════════════════════════════════════
+        // Load the active template to get NLP config (synonyms, fillers)
+        // Translate caller slang to standard terms BEFORE processing
+        // Example: "not pulling" → "not cooling" (HVAC)
+        // ═══════════════════════════════════════════════════════════════════
+        let activeTemplate = null;
+        let vocabularyTranslation = { translated: userText, replacements: [], original: userText };
+        
+        try {
+            const templateRefs = company.aiAgentSettings?.templateReferences || [];
+            const activeRef = templateRefs.find(ref => ref.enabled !== false);
+            
+            if (activeRef?.templateId) {
+                activeTemplate = await GlobalInstantResponseTemplate.findById(activeRef.templateId)
+                    .select('_id name nlpConfig categories')
+                    .lean();
+                
+                if (activeTemplate) {
+                    log('CHECKPOINT 2.6: ✅ Template loaded', { 
+                        templateId: activeRef.templateId,
+                        templateName: activeTemplate.name,
+                        hasSynonyms: !!(activeTemplate.nlpConfig?.synonyms),
+                        synonymCount: activeTemplate.nlpConfig?.synonyms ? Object.keys(activeTemplate.nlpConfig.synonyms).length : 0
+                    });
+                    
+                    // Translate caller vocabulary
+                    vocabularyTranslation = await translateCallerVocabulary(userText, company, activeTemplate);
+                    
+                    if (vocabularyTranslation.replacements.length > 0) {
+                        log('CHECKPOINT 2.6: 🔤 VOCABULARY TRANSLATED', {
+                            original: userText,
+                            translated: vocabularyTranslation.translated,
+                            replacements: vocabularyTranslation.replacements
+                        });
+                        // Use translated text for all downstream processing
+                        userText = vocabularyTranslation.translated;
+                    }
+                } else {
+                    log('CHECKPOINT 2.6: ⚠️ Template not found (non-fatal)', { templateId: activeRef.templateId });
+                }
+            } else {
+                log('CHECKPOINT 2.6: ⚠️ No active template reference (non-fatal)');
+            }
+        } catch (templateErr) {
+            log('CHECKPOINT 2.6: ⚠️ Template load failed (non-fatal)', { error: templateErr.message });
         }
         
         // ═══════════════════════════════════════════════════════════════════
@@ -1903,10 +2043,10 @@ async function processTurn({
                 
                 // Get caller ID from metadata if available
                 const callerId = metadata?.callerPhone || callerPhone || null;
-                
-                // ═══════════════════════════════════════════════════════════════════
+            
+            // ═══════════════════════════════════════════════════════════════════
                 // PHONE SLOT HANDLING (with offerCallerId, acceptTextMe, breakDownIfUnclear)
-                // ═══════════════════════════════════════════════════════════════════
+            // ═══════════════════════════════════════════════════════════════════
                 const phoneSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'phone');
                 const phoneMeta = session.booking.meta.phone;
                 
@@ -1995,7 +2135,7 @@ async function processTurn({
                         finalReply = confirmText;
                         nextSlotId = 'phone';
                         log('📞 PHONE: Confirming back', { phone: extractedThisTurn.phone });
-                    } else {
+        } else {
                         phoneMeta.confirmed = true;
                         session.booking.activeSlot = 'address';
                         finalReply = 'Got it. ';
@@ -2011,9 +2151,9 @@ async function processTurn({
                     log('📞 PHONE: Triggering breakdown due to unclear input');
                 }
                 
-                // ═══════════════════════════════════════════════════════════════════
+            // ═══════════════════════════════════════════════════════════════════
                 // ADDRESS SLOT HANDLING (with addressConfirmLevel, acceptPartialAddress, breakDownIfUnclear)
-                // ═══════════════════════════════════════════════════════════════════
+            // ═══════════════════════════════════════════════════════════════════
                 const addressSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'address');
                 const addressMeta = session.booking.meta.address;
                 
@@ -2536,7 +2676,7 @@ async function processTurn({
                     session.discovery = session.discovery || {};
                     session.discovery.fastPathOneQuestionAsked = true;
                     log('🚀 FAST-PATH: Asking pre-question before offer');
-                } else {
+            } else {
                     // Go straight to offer
                     fastPathResponse = offerScript;
                     session.lastAgentIntent = 'OFFER_SCHEDULE';
@@ -2825,6 +2965,13 @@ async function processTurn({
             // Discovery State
             discoveryIssue: session.discovery?.issue || null,
             callerEmotion: aiResult?.debug?.emotion || 'neutral',
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // V26 CALLER VOCABULARY TRANSLATION
+            // ═══════════════════════════════════════════════════════════════════
+            vocabularyTranslated: vocabularyTranslation.replacements?.length > 0,
+            vocabularyOriginal: vocabularyTranslation.original !== vocabularyTranslation.translated ? vocabularyTranslation.original : null,
+            vocabularyReplacements: vocabularyTranslation.replacements?.length > 0 ? vocabularyTranslation.replacements : null,
             
             // Latency (MUST BE MEASURED)
             latencyMs: aiLatencyMs,

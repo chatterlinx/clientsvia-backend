@@ -1887,6 +1887,48 @@ const companySchema = new mongoose.Schema({
             },
             
             // ═══════════════════════════════════════════════════════════════
+            // 🆕 CALLER VOCABULARY - Industry slang/synonym mapping
+            // ═══════════════════════════════════════════════════════════════
+            // When caller uses industry slang, AI understands what they mean.
+            // Example: Caller says "not pulling" → AI understands "not cooling"
+            // 
+            // This is for INPUT (what caller says), not OUTPUT (what AI says).
+            // Multi-tenant safe: Each company/trade has their own vocabulary.
+            // ═══════════════════════════════════════════════════════════════
+            callerVocabulary: {
+                // Synonym map: caller word → standard meaning
+                // Example HVAC: { "pulling": "cooling", "blowing hot": "not cooling", "froze up": "frozen" }
+                // Example Dental: { "chompers": "teeth", "pearly whites": "teeth" }
+                // Example Plumbing: { "stopped up": "clogged", "backed up": "clogged" }
+                synonymMap: { 
+                    type: Map, 
+                    of: String, 
+                    default: new Map([
+                        // HVAC common slang (defaults for new companies)
+                        ["pulling", "cooling"],
+                        ["not pulling", "not cooling"],
+                        ["blowing hot", "not cooling"],
+                        ["blowing warm", "not cooling"],
+                        ["froze up", "frozen coils"],
+                        ["iced up", "frozen coils"],
+                        ["making noise", "unusual noise"],
+                        ["acting up", "malfunctioning"],
+                        ["went out", "stopped working"],
+                        ["died", "stopped working"],
+                        ["quit", "stopped working"],
+                        ["won't kick on", "won't start"],
+                        ["won't come on", "won't start"]
+                    ])
+                },
+                
+                // Enable/disable vocabulary translation
+                enabled: { type: Boolean, default: true },
+                
+                // Log when translations happen (for debugging)
+                logTranslations: { type: Boolean, default: true }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
             // DETECTION TRIGGERS - What AI detects in caller speech
             // ═══════════════════════════════════════════════════════════════
             detectionTriggers: {
