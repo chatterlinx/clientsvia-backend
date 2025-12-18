@@ -2458,17 +2458,41 @@ async function processTurn({
             // ═══════════════════════════════════════════════════════════════════
             const fastPathConfig = company.aiAgentSettings?.frontDeskBehavior?.fastPathBooking || {};
             const fastPathEnabled = fastPathConfig.enabled !== false;
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // COMPREHENSIVE URGENCY KEYWORDS (loaded from UI, with fallbacks)
+            // These detect when caller is DONE troubleshooting and wants service
+            // ═══════════════════════════════════════════════════════════════════
             const fastPathKeywords = fastPathConfig.triggerKeywords || [
-                "send someone", "need you out here", "need someone out", "come out",
-                "schedule", "book", "fix it", "sick of it", "just want it fixed",
-                "need service", "asap", "emergency", "just send someone"
+                // Direct booking requests
+                "send someone", "send somebody", "get someone out", "get somebody out",
+                "need you out here", "need someone out", "need somebody out",
+                "come out", "come out here", "come today", "come out today",
+                "schedule", "book", "appointment", "technician",
+                // Frustration / done troubleshooting
+                "fix it", "just fix it", "just want it fixed", "sick of it", "sick of this",
+                "don't want to troubleshoot", "done troubleshooting", "stop asking",
+                "don't care what it is", "I don't care", "just send", "just book",
+                // Urgency
+                "need service", "need help now", "as soon as possible", "asap",
+                "emergency", "urgent", "right away", "immediately", "today",
+                // Refusal to continue discovery
+                "I'm done", "enough questions", "stop with the questions",
+                "just get someone", "just get somebody"
             ];
             
             // Check if user text contains any fast-path trigger keywords
-            const userTextLowerFP = userText.toLowerCase();
-            const fastPathTriggered = fastPathEnabled && fastPathKeywords.some(keyword => 
-                userTextLowerFP.includes(keyword.toLowerCase())
-            );
+            // Use flexible matching: normalize "somebody/someone", "out/over"
+            const userTextLowerFP = userText.toLowerCase()
+                .replace(/somebody/g, 'someone')  // Normalize somebody → someone
+                .replace(/over here/g, 'out here'); // Normalize "over here" → "out here"
+            
+            const fastPathTriggered = fastPathEnabled && fastPathKeywords.some(keyword => {
+                const normalizedKeyword = keyword.toLowerCase()
+                    .replace(/somebody/g, 'someone')
+                    .replace(/over here/g, 'out here');
+                return userTextLowerFP.includes(normalizedKeyword);
+            });
             
             // Track discovery question count for max-questions gate
             const discoveryQuestionCount = session.discovery?.questionCount || 0;

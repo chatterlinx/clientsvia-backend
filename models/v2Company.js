@@ -1983,33 +1983,30 @@ const companySchema = new mongoose.Schema({
                 enabled: { type: Boolean, default: true },
                 
                 // Keywords that trigger fast-path (caller wants service now)
+                // These are DEFAULTS - clients can customize in UI
+                // Matching is flexible: "somebody" matches "someone", etc.
                 triggerKeywords: {
                     type: [String],
                     default: [
-                        "send someone",
-                        "need you out here",
-                        "need someone out",
-                        "come out",
-                        "get someone out",
-                        "schedule",
-                        "book",
-                        "appointment",
-                        "technician",
-                        "fix it",
-                        "just fix it",
-                        "sick of it",
-                        "sick of this",
-                        "just want it fixed",
-                        "need service",
-                        "need help now",
-                        "come today",
-                        "come out today",
-                        "as soon as possible",
-                        "asap",
-                        "emergency",
-                        "urgent",
-                        "don't care what it is",
-                        "just send someone"
+                        // Direct booking requests (with variations)
+                        "send someone", "send somebody", 
+                        "get someone out", "get somebody out",
+                        "need you out here", "need someone out", "need somebody out",
+                        "come out", "come out here", "come today", "come out today",
+                        "schedule", "book", "appointment", "technician",
+                        // Frustration / done troubleshooting
+                        "fix it", "just fix it", "just want it fixed",
+                        "sick of it", "sick of this",
+                        "don't want to troubleshoot", "done troubleshooting",
+                        "stop asking", "enough questions",
+                        "don't care what it is", "I don't care",
+                        "just send", "just book",
+                        // Urgency
+                        "need service", "need help now",
+                        "as soon as possible", "asap",
+                        "emergency", "urgent", "right away", "immediately",
+                        // Refusal to continue discovery
+                        "I'm done", "just get someone", "just get somebody"
                     ]
                 },
                 
