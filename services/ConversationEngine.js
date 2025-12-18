@@ -2808,7 +2808,17 @@ async function processTurn({
                 } : null,
                 // 🧠 LLM BRAIN DEBUG - What the LLM decided (if used)
                 llmBrain: !aiResult.fromStateMachine ? (aiResult.debug || null) : null,
-                debugLog
+                debugLog,
+                // ════════════════════════════════════════════════════════════════
+                // V22 BLACK BOX - AUTHORITATIVE MODE TRACKING (UI reads this)
+                // ════════════════════════════════════════════════════════════════
+                v22BlackBox: aiResult.v22BlackBox || {
+                    mode: session.mode || 'DISCOVERY',
+                    consentGiven: session.booking?.consentGiven || false,
+                    consentPhrase: session.booking?.consentPhrase || null,
+                    bookingStarted: session.mode === 'BOOKING',
+                    responseSource: aiResult?.debug?.source || (aiResult?.fromStateMachine ? 'STATE_MACHINE' : 'LLM')
+                }
             };
         }
         
