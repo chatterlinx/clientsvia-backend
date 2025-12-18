@@ -2322,9 +2322,20 @@ class FrontDeskBehaviorManager {
         const fp = this.config.fastPathBooking || {};
         const enabled = fp.enabled !== false;
         const keywords = (fp.triggerKeywords || [
-            "send someone", "need you out here", "need someone out", "come out",
-            "schedule", "book", "appointment", "fix it", "sick of it",
-            "just want it fixed", "need service", "asap", "emergency"
+            // Direct booking requests (with need/want variations)
+            "send someone", "send somebody", 
+            "get someone out", "get somebody out",
+            "need you out", "need someone out", "need somebody out",
+            "want someone out", "want somebody out", "want you out",
+            "come out", "come out here", "come today",
+            "schedule", "book", "appointment", "technician",
+            // Frustration / done troubleshooting
+            "fix it", "just fix it", "just want it fixed",
+            "sick of it", "sick of this", "I don't care",
+            // Urgency
+            "need service", "need help now", "asap", "emergency", "urgent",
+            // Refusal to continue discovery
+            "I'm done", "just get someone", "just get somebody"
         ]).join(', ');
         const offerScript = fp.offerScript || "Got it — I completely understand. We can get someone out to you. Would you like me to schedule a technician now?";
         const oneQuestionScript = fp.oneQuestionScript || "";
