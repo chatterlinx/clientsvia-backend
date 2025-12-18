@@ -2205,15 +2205,25 @@ async function processTurn({
             // ═══════════════════════════════════════════════════════════════════
                 // PARTIAL ANSWER NUDGE - User started but didn't complete
                 // "my service address is" without actual address → gentle nudge
+                // CRITICAL: Only trigger if NO actual data was extracted this turn
+                // "my name is Mark" should NOT trigger nudge - Mark was extracted!
             // ═══════════════════════════════════════════════════════════════════
-                else {
+                else if (!extractedThisTurn.name && !extractedThisTurn.phone && 
+                         !extractedThisTurn.address && !extractedThisTurn.time) {
                     const userTextLower = userText.toLowerCase().trim();
-                    const isPartialAddress = /^(my\s+)?(service\s+)?address\s+(is|would be|at)/i.test(userTextLower) && 
-                                            userTextLower.length < 30;
-                    const isPartialPhone = /^(my\s+)?(phone|number|cell)\s+(is|number)/i.test(userTextLower) && 
-                                          userTextLower.length < 25;
-                    const isPartialName = /^(my\s+)?name\s+(is|would be)/i.test(userTextLower) && 
-                                         userTextLower.length < 20;
+                    
+                    // Partial address: "my address is" but no actual address content
+                    // Must end with "is" or have very little after it
+                    const addressMatch = userTextLower.match(/^(my\s+)?(service\s+)?address\s+(is|would be|at)\s*(.*)$/i);
+                    const isPartialAddress = addressMatch && (!addressMatch[4] || addressMatch[4].length < 5);
+                    
+                    // Partial phone: "my phone is" or "my number is" but no digits
+                    const phoneMatch = userTextLower.match(/^(my\s+)?(phone|number|cell)\s+(is|number)\s*(.*)$/i);
+                    const isPartialPhone = phoneMatch && (!phoneMatch[4] || !/\d{3,}/.test(phoneMatch[4]));
+                    
+                    // Partial name: "my name is" but nothing after OR very short (< 2 chars)
+                    const nameMatch = userTextLower.match(/^(my\s+)?name\s+(is|would be)\s*(.*)$/i);
+                    const isPartialName = nameMatch && (!nameMatch[3] || nameMatch[3].trim().length < 2);
                     
                     if (isPartialAddress) {
                         finalReply = "No problem — go ahead with the street address, and include unit number if you have one. ";
@@ -2464,9 +2474,11 @@ async function processTurn({
             // These detect when caller is DONE troubleshooting and wants service
             // ═══════════════════════════════════════════════════════════════════
             const fastPathKeywords = fastPathConfig.triggerKeywords || [
-                // Direct booking requests
-                "send someone", "send somebody", "get someone out", "get somebody out",
-                "need you out here", "need someone out", "need somebody out",
+                // Direct booking requests (with need/want variations)
+                "send someone", "send somebody", 
+                "get someone out", "get somebody out",
+                "need you out", "need someone out", "need somebody out",
+                "want someone out", "want somebody out", "want you out",
                 "come out", "come out here", "come today", "come out today",
                 "schedule", "book", "appointment", "technician",
                 // Frustration / done troubleshooting

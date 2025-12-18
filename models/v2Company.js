@@ -1988,10 +1988,11 @@ const companySchema = new mongoose.Schema({
                 triggerKeywords: {
                     type: [String],
                     default: [
-                        // Direct booking requests (with variations)
+                        // Direct booking requests (with need/want variations)
                         "send someone", "send somebody", 
                         "get someone out", "get somebody out",
-                        "need you out here", "need someone out", "need somebody out",
+                        "need you out", "need someone out", "need somebody out",
+                        "want someone out", "want somebody out", "want you out",
                         "come out", "come out here", "come today", "come out today",
                         "schedule", "book", "appointment", "technician",
                         // Frustration / done troubleshooting
