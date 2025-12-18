@@ -76,32 +76,64 @@ class AITestConsole {
         
         if (!SpeechRecognition) {
             console.warn('[AI Test] Speech recognition not supported in this browser');
+            // Show warning in UI
+            const micBtn = document.getElementById('mic-button');
+            if (micBtn) {
+                micBtn.style.background = '#6e7681';
+                micBtn.innerHTML = '🎤 Not Supported';
+                micBtn.disabled = true;
+            }
             return;
         }
         
         this.recognition = new SpeechRecognition();
-        this.recognition.continuous = false;
+        this.recognition.continuous = true;  // Keep listening until stopped
         this.recognition.interimResults = true;
         this.recognition.lang = 'en-US';
+        this.recognition.maxAlternatives = 1;
+        
+        this.recognition.onstart = () => {
+            console.log('[AI Test] 🎤 Speech recognition started - listening...');
+            this.isListening = true;
+            this.updateMicButton();
+        };
         
         this.recognition.onresult = (event) => {
-            const transcript = Array.from(event.results)
-                .map(result => result[0].transcript)
-                .join('');
+            let interimTranscript = '';
+            let finalTranscript = '';
+            
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const transcript = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    finalTranscript += transcript;
+                } else {
+                    interimTranscript += transcript;
+                }
+            }
             
             // Update the input field with what's being said
             const input = document.getElementById('test-user-input');
-            if (input) input.value = transcript;
+            if (input) {
+                input.value = finalTranscript || interimTranscript;
+                input.style.borderColor = interimTranscript ? '#f0883e' : '#30363d';
+            }
             
-            // If final result, send the message
-            if (event.results[0].isFinal) {
-                this.sendMessage(transcript);
+            // If we have a final result, send it
+            if (finalTranscript) {
+                console.log('[AI Test] 🎤 Final transcript:', finalTranscript);
+                this.recognition.stop();
+                this.sendMessage(finalTranscript);
             }
         };
         
         this.recognition.onend = () => {
+            console.log('[AI Test] 🎤 Speech recognition ended');
             this.isListening = false;
             this.updateMicButton();
+            
+            // Reset input border
+            const input = document.getElementById('test-user-input');
+            if (input) input.style.borderColor = '#30363d';
         };
         
         this.recognition.onerror = (event) => {
@@ -109,10 +141,31 @@ class AITestConsole {
             this.isListening = false;
             this.updateMicButton();
             
-            if (event.error === 'not-allowed') {
-                this.addChatBubble('⚠️ Microphone access denied. Please allow microphone in your browser settings.', 'ai', null, true);
+            // Handle specific errors with user-friendly messages
+            switch (event.error) {
+                case 'not-allowed':
+                case 'permission-denied':
+                    this.addChatBubble('⚠️ Microphone access denied. Please click the lock icon in your browser address bar and allow microphone access.', 'ai', null, true);
+                    break;
+                case 'no-speech':
+                    // Don't show error - just silently stop (user didn't speak)
+                    console.log('[AI Test] No speech detected - click Speak and talk immediately');
+                    break;
+                case 'audio-capture':
+                    this.addChatBubble('⚠️ No microphone found. Please connect a microphone and try again.', 'ai', null, true);
+                    break;
+                case 'network':
+                    this.addChatBubble('⚠️ Network error. Speech recognition requires internet connection.', 'ai', null, true);
+                    break;
+                case 'aborted':
+                    // User stopped - no error needed
+                    break;
+                default:
+                    console.warn('[AI Test] Speech error:', event.error);
             }
         };
+        
+        console.log('[AI Test] ✅ Speech recognition initialized');
     }
     
     /**
@@ -120,16 +173,31 @@ class AITestConsole {
      */
     toggleMic() {
         if (!this.recognition) {
-            this.addChatBubble('⚠️ Speech recognition not supported in this browser. Try Chrome.', 'ai', null, true);
+            this.addChatBubble('⚠️ Speech recognition not supported in this browser. Try Chrome or Edge.', 'ai', null, true);
             return;
         }
         
         if (this.isListening) {
+            console.log('[AI Test] 🎤 Stopping speech recognition...');
             this.recognition.stop();
             this.isListening = false;
         } else {
-            this.recognition.start();
-            this.isListening = true;
+            console.log('[AI Test] 🎤 Starting speech recognition...');
+            try {
+                this.recognition.start();
+                // Note: isListening will be set to true in onstart handler
+            } catch (error) {
+                console.error('[AI Test] Failed to start speech recognition:', error);
+                if (error.message.includes('already started')) {
+                    // Already running, stop and restart
+                    this.recognition.stop();
+                    setTimeout(() => {
+                        this.recognition.start();
+                    }, 100);
+                } else {
+                    this.addChatBubble('⚠️ Could not start microphone. Please refresh the page and try again.', 'ai', null, true);
+                }
+            }
         }
         
         this.updateMicButton();
@@ -144,12 +212,14 @@ class AITestConsole {
         
         if (this.isListening) {
             btn.style.background = '#f85149';
-            btn.style.animation = 'pulse 1s infinite';
-            btn.innerHTML = '🎙️ Listening...';
+            btn.style.boxShadow = '0 0 10px rgba(248, 81, 73, 0.5)';
+            btn.innerHTML = '🔴 Listening... (click to stop)';
+            btn.title = 'Click to stop listening';
         } else {
             btn.style.background = '#238636';
-            btn.style.animation = 'none';
+            btn.style.boxShadow = 'none';
             btn.innerHTML = '🎤 Speak';
+            btn.title = 'Click and start talking immediately';
         }
     }
     
