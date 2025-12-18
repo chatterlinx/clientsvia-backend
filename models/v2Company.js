@@ -1732,6 +1732,55 @@ const companySchema = new mongoose.Schema({
             },
             
             // ═══════════════════════════════════════════════════════════════
+            // 🆕 COMMON FIRST NAMES - UI-Configurable Name Recognition
+            // ═══════════════════════════════════════════════════════════════
+            // Used to detect if a single name token is a first name or last name
+            // When caller says "Mark", system checks this list to know it's a first name
+            // Then asks "And what's your last name?" instead of "first name"
+            // 
+            // UI: Front Desk → Booking Prompts → Names tab
+            // Admins can add regional/cultural names specific to their clientele
+            // ═══════════════════════════════════════════════════════════════
+            commonFirstNames: {
+                type: [String],
+                default: [
+                    // Common US First Names (Male)
+                    'james', 'robert', 'john', 'michael', 'david', 'william', 'richard', 'joseph', 'thomas', 'charles',
+                    'christopher', 'daniel', 'matthew', 'anthony', 'mark', 'donald', 'steven', 'paul', 'andrew', 'joshua',
+                    'kenneth', 'kevin', 'brian', 'george', 'timothy', 'ronald', 'edward', 'jason', 'jeffrey', 'ryan',
+                    'jacob', 'gary', 'nicholas', 'eric', 'jonathan', 'stephen', 'larry', 'justin', 'scott', 'brandon',
+                    'benjamin', 'samuel', 'raymond', 'gregory', 'frank', 'alexander', 'patrick', 'jack', 'dennis', 'jerry',
+                    'tyler', 'aaron', 'jose', 'adam', 'nathan', 'henry', 'douglas', 'zachary', 'peter', 'kyle',
+                    'noah', 'ethan', 'jeremy', 'walter', 'christian', 'keith', 'roger', 'terry', 'austin', 'sean',
+                    'gerald', 'carl', 'harold', 'dylan', 'arthur', 'lawrence', 'jordan', 'jesse', 'bryan', 'billy',
+                    'bruce', 'gabriel', 'joe', 'logan', 'albert', 'willie', 'alan', 'eugene', 'russell', 'vincent',
+                    'philip', 'bobby', 'johnny', 'bradley', 'roy', 'ralph', 'eugene', 'randy', 'wayne', 'elijah',
+                    'liam', 'mason', 'lucas', 'oliver', 'aiden', 'jackson', 'sebastian', 'mateo', 'owen', 'theodore',
+                    
+                    // Common US First Names (Female)
+                    'mary', 'patricia', 'jennifer', 'linda', 'elizabeth', 'barbara', 'susan', 'jessica', 'sarah', 'karen',
+                    'lisa', 'nancy', 'betty', 'margaret', 'sandra', 'ashley', 'kimberly', 'emily', 'donna', 'michelle',
+                    'dorothy', 'carol', 'amanda', 'melissa', 'deborah', 'stephanie', 'rebecca', 'sharon', 'laura', 'cynthia',
+                    'kathleen', 'amy', 'angela', 'shirley', 'anna', 'brenda', 'pamela', 'emma', 'nicole', 'helen',
+                    'samantha', 'katherine', 'christine', 'debra', 'rachel', 'carolyn', 'janet', 'catherine', 'maria', 'heather',
+                    'diane', 'ruth', 'julie', 'olivia', 'joyce', 'virginia', 'victoria', 'kelly', 'lauren', 'christina',
+                    'joan', 'evelyn', 'judith', 'megan', 'andrea', 'cheryl', 'hannah', 'jacqueline', 'martha', 'gloria',
+                    'teresa', 'ann', 'sara', 'madison', 'frances', 'kathryn', 'janice', 'jean', 'abigail', 'alice',
+                    'judy', 'sophia', 'grace', 'denise', 'amber', 'doris', 'marilyn', 'danielle', 'beverly', 'isabella',
+                    'theresa', 'diana', 'natalie', 'brittany', 'charlotte', 'marie', 'kayla', 'alexis', 'lori', 'ava',
+                    'mia', 'harper', 'evelyn', 'abigail', 'ella', 'scarlett', 'aria', 'chloe', 'camila', 'penelope',
+                    
+                    // Common Hispanic First Names
+                    'jose', 'juan', 'carlos', 'luis', 'miguel', 'antonio', 'francisco', 'pedro', 'manuel', 'jorge',
+                    'maria', 'carmen', 'rosa', 'ana', 'lucia', 'elena', 'sofia', 'valentina', 'camila', 'isabella',
+                    
+                    // Common African American First Names
+                    'deshawn', 'tyrone', 'jamal', 'malik', 'darius', 'terrell', 'andre', 'marcus', 'jerome', 'lamar',
+                    'keisha', 'latoya', 'tamika', 'ebony', 'jasmine', 'aaliyah', 'imani', 'destiny', 'diamond', 'precious'
+                ]
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
             // BOOKING TEMPLATES - Confirmation and completion messages
             // ═══════════════════════════════════════════════════════════════
             bookingTemplates: {

@@ -594,7 +594,94 @@ class FrontDeskBehaviorManager {
                     </div>
                 </div>
             </div>
+            
+            <!-- Common First Names Section -->
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                    <div>
+                        <h3 style="margin: 0; color: #58a6ff;">👤 Common First Names</h3>
+                        <p style="color: #8b949e; font-size: 0.8rem; margin: 4px 0 0 0;">
+                            When a caller gives a single name like "Mark", the AI checks this list to determine if it's a first name or last name.
+                            <br>If found here → asks for <strong>last name</strong>. If not found → assumes last name, asks for <strong>first name</strong>.
+                        </p>
+                    </div>
+                    <button onclick="window.frontDeskManager.addCommonFirstName()" style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; white-space: nowrap;">
+                        + Add Name
+                    </button>
+                </div>
+                
+                <div id="common-first-names-container" style="display: flex; flex-wrap: wrap; gap: 8px; max-height: 200px; overflow-y: auto; padding: 12px; background: #0d1117; border-radius: 6px; border: 1px solid #30363d;">
+                    ${this.renderCommonFirstNameTags()}
+                </div>
+                
+                <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
+                    <input type="text" id="fdb-new-first-name" placeholder="Enter name to add..." 
+                        style="flex: 1; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;"
+                        onkeypress="if(event.key === 'Enter') window.frontDeskManager.addCommonFirstName()">
+                    <span style="color: #8b949e; font-size: 0.75rem;">${(this.config.commonFirstNames || []).length} names</span>
+                </div>
+            </div>
         `;
+    }
+    
+    renderCommonFirstNameTags() {
+        const names = this.config.commonFirstNames || [];
+        if (names.length === 0) {
+            return '<p style="color: #8b949e; margin: 0; font-style: italic;">No names configured. Add common first names to help AI recognize "Mark" vs "Subach".</p>';
+        }
+        return names.map((name, idx) => `
+            <span class="first-name-tag" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: #21262d; border: 1px solid #30363d; border-radius: 16px; font-size: 0.8rem; color: #c9d1d9;">
+                ${name}
+                <button onclick="window.frontDeskManager.removeCommonFirstName(${idx})" 
+                    style="background: none; border: none; color: #f85149; cursor: pointer; padding: 0; font-size: 14px; line-height: 1;"
+                    title="Remove ${name}">×</button>
+            </span>
+        `).join('');
+    }
+    
+    addCommonFirstName() {
+        const input = document.getElementById('fdb-new-first-name');
+        const name = input?.value?.trim();
+        if (!name) return;
+        
+        if (!this.config.commonFirstNames) {
+            this.config.commonFirstNames = [];
+        }
+        
+        // Check for duplicate (case-insensitive)
+        const lowerName = name.toLowerCase();
+        if (this.config.commonFirstNames.some(n => n.toLowerCase() === lowerName)) {
+            alert('This name is already in the list.');
+            return;
+        }
+        
+        // Add and sort alphabetically
+        this.config.commonFirstNames.push(name);
+        this.config.commonFirstNames.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+        
+        // Clear input and re-render
+        input.value = '';
+        this.updateCommonFirstNamesDisplay();
+        this.markDirty();
+    }
+    
+    removeCommonFirstName(index) {
+        if (!this.config.commonFirstNames) return;
+        this.config.commonFirstNames.splice(index, 1);
+        this.updateCommonFirstNamesDisplay();
+        this.markDirty();
+    }
+    
+    updateCommonFirstNamesDisplay() {
+        const container = document.getElementById('common-first-names-container');
+        if (container) {
+            container.innerHTML = this.renderCommonFirstNameTags();
+        }
+        // Update count
+        const countEl = document.querySelector('#fdb-new-first-name')?.parentElement?.querySelector('span');
+        if (countEl) {
+            countEl.textContent = `${(this.config.commonFirstNames || []).length} names`;
+        }
     }
     
     renderBookingSlot(slot, index, totalSlots) {

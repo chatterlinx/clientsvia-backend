@@ -436,6 +436,16 @@ const SlotExtractors = {
         // ASAP / Urgency patterns - STRICT DETECTION
         // "today" alone is too aggressive - "issues today" is NOT a time request
         // Only trigger ASAP for explicit urgency phrases
+        // 
+        // CRITICAL: "what is as soon as possible" is a QUESTION, not a time preference!
+        // Don't extract time from questions about time terminology
+        const isQuestionAboutTime = /^(what|when|how|does|is|can)\s+(is|does|do|exactly|does that mean)\s/i.test(lower) ||
+                                    /^what\s+(is|does)\s/i.test(lower);
+        
+        if (isQuestionAboutTime) {
+            return null; // Don't extract time from questions ABOUT time
+        }
+        
         const asapPatterns = [
             /as soon as possible/,
             /\basap\b/,
@@ -1308,7 +1318,10 @@ async function processTurn({
                 else if (hasFullName || hasBothParts) {
                     // Name is complete, move to next slot
                     if (hasBothParts && !currentSlots.name) {
-                        currentSlots.name = `${nameMeta.first} ${nameMeta.last}`;
+                        // Build full name safely (no undefined)
+                        const firstName = nameMeta.first || '';
+                        const lastName = nameMeta.last || '';
+                        currentSlots.name = `${firstName} ${lastName}`.trim();
                     }
                     session.booking.activeSlot = 'phone';
                     log('📝 NAME COMPLETE, moving to phone', { name: currentSlots.name });
@@ -1334,9 +1347,29 @@ async function processTurn({
                     } else if (!nameMeta.lastConfirmed && confirmBackEnabled) {
                         // Single token, need to confirm back first
                         nameMeta.lastConfirmed = true;
-                        // Assume single token is last name (common in trades: "Subach")
-                        nameMeta.assumedSingleTokenAs = 'last';
-                        nameMeta.last = extractedName;
+                        
+                        // ═══════════════════════════════════════════════════════════════════
+                        // SMART NAME DETECTION: Use UI-configurable common first names list
+                        // to determine if single token is first or last name
+                        // 
+                        // UI Location: Front Desk → Booking Prompts → Names tab
+                        // Admins can add regional/cultural names specific to their clientele
+                        // ═══════════════════════════════════════════════════════════════════
+                        const commonFirstNames = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+                        const commonFirstNamesSet = new Set(commonFirstNames.map(n => n.toLowerCase()));
+                        const isCommonFirstName = commonFirstNamesSet.has(extractedName.toLowerCase());
+                        
+                        if (isCommonFirstName) {
+                            // "Mark", "John", "Sarah" etc. are clearly first names
+                            nameMeta.assumedSingleTokenAs = 'first';
+                            nameMeta.first = extractedName;
+                            log('📝 NAME: Detected as FIRST name (UI-configured name list)', { name: extractedName });
+                        } else {
+                            // "Subach", "Patel", "Rodriguez" are likely last names
+                            nameMeta.assumedSingleTokenAs = 'last';
+                            nameMeta.last = extractedName;
+                            log('📝 NAME: Assumed as LAST name (not in common first names list)', { name: extractedName });
+                        }
                         currentSlots.partialName = extractedName;
                         
                         const confirmText = confirmBackTemplate.replace('{value}', extractedName);
@@ -1359,18 +1392,28 @@ async function processTurn({
                         log('📝 NAME: Asking for missing part');
                     } else if (nameMeta.askedMissingPartOnce) {
                         // User provided the missing part
-                        if (nameMeta.assumedSingleTokenAs === 'last') {
-                            nameMeta.first = extractedName;
-                        } else {
+                        if (nameMeta.assumedSingleTokenAs === 'first') {
+                            // We had first name (e.g., "Mark"), now got last name
                             nameMeta.last = extractedName;
+                        } else {
+                            // We had last name (e.g., "Subach"), now got first name
+                            nameMeta.first = extractedName;
                         }
-                        currentSlots.name = `${nameMeta.first} ${nameMeta.last}`;
+                        
+                        // Build full name safely (no undefined)
+                        const firstName = nameMeta.first || '';
+                        const lastName = nameMeta.last || '';
+                        currentSlots.name = `${firstName} ${lastName}`.trim();
                         session.booking.activeSlot = 'phone';
                         
                         finalReply = `Perfect, ${currentSlots.name}. `;
                         nextSlotId = null; // Will find phone below
                         
-                        log('📝 NAME: Got missing part, full name is', { name: currentSlots.name });
+                        log('📝 NAME: Got missing part, full name is', { 
+                            name: currentSlots.name,
+                            first: nameMeta.first,
+                            last: nameMeta.last
+                        });
                     } else {
                         // askFullName is off, accept single name as complete
                         nameMeta.first = extractedName;
@@ -1392,6 +1435,30 @@ async function processTurn({
                     finalReply = 'Perfect. ';
                 } else if (extractedThisTurn.time) {
                     finalReply = 'Great. ';
+                }
+                // ═══════════════════════════════════════════════════════════════════
+                // PARTIAL ANSWER NUDGE - User started but didn't complete
+                // "my service address is" without actual address → gentle nudge
+                // ═══════════════════════════════════════════════════════════════════
+                else {
+                    const userTextLower = userText.toLowerCase().trim();
+                    const isPartialAddress = /^(my\s+)?(service\s+)?address\s+(is|would be|at)/i.test(userTextLower) && 
+                                            userTextLower.length < 30;
+                    const isPartialPhone = /^(my\s+)?(phone|number|cell)\s+(is|number)/i.test(userTextLower) && 
+                                          userTextLower.length < 25;
+                    const isPartialName = /^(my\s+)?name\s+(is|would be)/i.test(userTextLower) && 
+                                         userTextLower.length < 20;
+                    
+                    if (isPartialAddress) {
+                        finalReply = "No problem — go ahead with the street address, and include unit number if you have one. ";
+                        log('📝 NUDGE: Partial address detected, giving gentle nudge');
+                    } else if (isPartialPhone) {
+                        finalReply = "Sure — go ahead with the area code first. ";
+                        log('📝 NUDGE: Partial phone detected, giving gentle nudge');
+                    } else if (isPartialName) {
+                        finalReply = "Sure — go ahead. ";
+                        log('📝 NUDGE: Partial name detected, giving gentle nudge');
+                    }
                 }
                 
                 // ═══════════════════════════════════════════════════════════════════

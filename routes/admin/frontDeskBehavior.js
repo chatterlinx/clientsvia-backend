@@ -373,6 +373,21 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
             logger.info('[FRONT DESK BEHAVIOR] 📝 V22 Saving vocabularyGuardrails:', updates.vocabularyGuardrails);
         }
         
+        // ════════════════════════════════════════════════════════════════════════════
+        // 👤 Common First Names - UI-Configurable Name Recognition
+        // ════════════════════════════════════════════════════════════════════════════
+        // Used to detect if a single name token is a first name or last name
+        // When caller says "Mark", system checks this list to know it's a first name
+        // Then asks "And what's your last name?" instead of "first name"
+        // ════════════════════════════════════════════════════════════════════════════
+        if (updates.commonFirstNames) {
+            updateObj['aiAgentSettings.frontDeskBehavior.commonFirstNames'] = updates.commonFirstNames;
+            logger.info('[FRONT DESK BEHAVIOR] 👤 Saving commonFirstNames:', {
+                count: updates.commonFirstNames.length,
+                sample: updates.commonFirstNames.slice(0, 10)
+            });
+        }
+        
         updateObj['aiAgentSettings.frontDeskBehavior.lastUpdated'] = new Date();
         updateObj['aiAgentSettings.frontDeskBehavior.updatedBy'] = req.user?.email || 'admin';
         
