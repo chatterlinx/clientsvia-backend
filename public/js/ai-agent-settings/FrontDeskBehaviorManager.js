@@ -1163,9 +1163,9 @@ class FrontDeskBehaviorManager {
             return `
                 <div style="display: flex; align-items: center; gap: 16px; padding: 10px 12px; background: #1a2233; border-radius: 4px; border: 1px solid #58a6ff40; flex-wrap: wrap;">
                     <span style="font-size: 11px; color: #58a6ff; font-weight: 600;">👤 Name Options:</span>
-                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Ask for first AND last name">
-                        <input type="checkbox" class="slot-askFullName" data-index="${index}" ${slot.askFullName !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
-                        <span style="font-size: 12px; color: #c9d1d9;">Ask full name</span>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Require BOTH first AND last name. If OFF, single name is accepted.">
+                        <input type="checkbox" class="slot-askFullName" data-index="${index}" ${slot.askFullName === true ? 'checked' : ''} style="accent-color: #58a6ff;">
+                        <span style="font-size: 12px; color: #c9d1d9;">Require full name (first + last)</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="When referring to caller later, use first name only">
                         <input type="checkbox" class="slot-useFirstNameOnly" data-index="${index}" ${slot.useFirstNameOnly !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
@@ -1407,7 +1407,7 @@ class FrontDeskBehaviorManager {
                 type: 'name',  // Use the new 'name' type
                 confirmBack: false, 
                 confirmPrompt: "Got it, {value}. Did I get that right?", 
-                askFullName: true, 
+                askFullName: false,  // 🎯 Default FALSE - "prompt as law" - only ask last name if explicitly required
                 useFirstNameOnly: true, 
                 askMissingNamePart: false 
             },
@@ -1551,9 +1551,9 @@ class FrontDeskBehaviorManager {
             // TYPE-SPECIFIC OPTIONS
             // ═══════════════════════════════════════════════════════════════
             
-            // NAME options
+            // NAME options - Default askFullName to FALSE (prompt as law)
             if (el.querySelector('.slot-askFullName')) {
-                slotData.askFullName = getCheckedDefault('.slot-askFullName', true);
+                slotData.askFullName = getCheckedDefault('.slot-askFullName', false);
             }
             if (el.querySelector('.slot-useFirstNameOnly')) {
                 slotData.useFirstNameOnly = getCheckedDefault('.slot-useFirstNameOnly', true);

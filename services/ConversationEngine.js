@@ -49,7 +49,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V23-CHEATSHEET-INTEGRATION';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V24-COMPLETION-LOCK';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -61,7 +61,11 @@ logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
         '✅ Consent detection via UI-configured phrases',
         '✅ Latency target: < 1.2s per turn',
         '✅ V23: CHEAT SHEETS integrated as fallback knowledge',
-        '✅ V23: Booking interrupts use cheat sheets then resume slot'
+        '✅ V23: Booking interrupts use cheat sheets then resume slot',
+        '✅ V24: COMPLETE mode lock - no re-asking slots after booking',
+        '✅ V24: askFullName defaults FALSE (prompt as law)',
+        '✅ V24: displayName uses first name, never lastName alone',
+        '✅ V24: Slot state debug snapshot each turn'
     ]
 });
 
@@ -1180,7 +1184,10 @@ async function processTurn({
         const nameSlotCheck = (bookingConfigCheck.slots || []).find(s => 
             (s.slotId || s.id || s.type) === 'name'
         );
-        const askFullNameEnabled = nameSlotCheck?.nameOptions?.askFullName !== false;
+        // 🎯 PROMPT AS LAW: Default askFullName to FALSE
+        // Only ask for last name if UI explicitly requires it
+        const askFullNameEnabled = nameSlotCheck?.nameOptions?.askFullName === true || 
+                                   nameSlotCheck?.nameOptions?.requireFullName === true;
         
         if (currentSlots.partialName && !currentSlots.name) {
             if (isInBookingMode && !askFullNameEnabled) {
@@ -1232,16 +1239,31 @@ async function processTurn({
         }
         
         // ═══════════════════════════════════════════════════════════════════════
-        // MODE RESTORATION - If consent was given in a previous turn, restore BOOKING mode
-        // This is critical because mode might not persist across API calls
+        // MODE RESTORATION - Restore mode from session state
+        // Priority: COMPLETE > BOOKING (if consent given) > DISCOVERY
         // ═══════════════════════════════════════════════════════════════════════
-        if (session.booking.consentGiven) {
+        if (session.booking.completedAt || session.mode === 'COMPLETE') {
+            // 🔒 COMPLETE MODE LOCK: Booking already finalized
+            // Never re-ask slots after completion
+            session.mode = 'COMPLETE';
+            log('✅ MODE RESTORED: Booking already COMPLETE - will not re-ask slots');
+        } else if (session.booking.consentGiven) {
             session.mode = 'BOOKING';
             log('📋 MODE RESTORED: Consent was given previously, restoring BOOKING mode');
         } else if (!session.mode) {
             session.mode = 'DISCOVERY';
             log('🔍 MODE INITIALIZED: Starting in DISCOVERY mode');
         }
+        
+        // 📊 DEBUG SNAPSHOT: Log slot state at start of turn
+        log('📊 SLOT STATE SNAPSHOT (start of turn)', {
+            mode: session.mode,
+            activeSlot: session.booking?.activeSlot,
+            slotsNormalized: currentSlots,
+            nameMeta: session.booking?.meta?.name,
+            consentGiven: session.booking?.consentGiven,
+            completedAt: session.booking?.completedAt
+        });
         
         // Declare aiResult early so booking snap can set it
         let aiResult = null;
@@ -1363,6 +1385,64 @@ async function processTurn({
         if (aiResult && aiResult.debug?.source === 'BOOKING_SNAP') {
             log('⚡ BOOKING SNAP: Skipping AI routing - using snap response');
             // aiResult is already set, skip to save/return
+        }
+        // ═══════════════════════════════════════════════════════════════════════
+        // COMPLETE MODE - Booking already finalized, handle post-completion Q&A
+        // ═══════════════════════════════════════════════════════════════════════
+        else if (session.mode === 'COMPLETE') {
+            log('✅ COMPLETE MODE: Booking already finalized, handling post-completion');
+            
+            // Check if user wants to start a NEW booking
+            const wantsNewBooking = /\b(another|new|different|schedule|book)\s*(appointment|service|call)?\b/i.test(userText);
+            
+            if (wantsNewBooking) {
+                // Reset for new booking
+                log('🔄 COMPLETE MODE: User wants NEW booking, resetting');
+                session.mode = 'DISCOVERY';
+                session.booking = { consentGiven: false };
+                // Fall through to discovery mode
+            } else {
+                // Answer post-completion questions using LLM + scenarios/cheat sheets
+                // But NEVER re-ask booking slots
+                const llmResult = await HybridReceptionistLLM.processConversation({
+                    company,
+                    callContext: {
+                        callId: session._id.toString(),
+                        companyId,
+                        customerContext,
+                        runningSummary: summaryFormatted,
+                        turnCount: (session.metrics?.totalTurns || 0) + 1,
+                        channel,
+                        enterpriseContext: {
+                            mode: 'POST_BOOKING_QA',
+                            bookingComplete: true,
+                            collectedSlots: currentSlots
+                        }
+                    },
+                    currentMode: 'complete',
+                    knownSlots: currentSlots,
+                    conversationHistory,
+                    userInput: userText,
+                    behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
+                });
+                
+                aiResult = {
+                    reply: llmResult.reply || "Is there anything else I can help you with today?",
+                    conversationMode: 'complete',
+                    intent: 'post_booking_qa',
+                    nextGoal: 'END_CALL',
+                    filledSlots: currentSlots,
+                    signals: { bookingComplete: true },
+                    latencyMs: Date.now() - aiStartTime,
+                    tokensUsed: llmResult.tokensUsed || 0,
+                    fromStateMachine: false,
+                    mode: 'COMPLETE',
+                    debug: {
+                        source: 'POST_BOOKING_QA',
+                        stage: 'complete'
+                    }
+                };
+            }
         }
         // ═══════════════════════════════════════════════════════════════════════
         // MODE-BASED ROUTING (THE CORE OF OPTION 1)
@@ -1593,7 +1673,10 @@ async function processTurn({
                     (s.slotId || s.id || s.type) === 'name'
                 );
                 const nameOptions = nameSlotConfig?.nameOptions || {};
-                const askFullName = nameOptions.askFullName !== false;
+                // 🎯 PROMPT AS LAW: Default askFullName to FALSE
+                // Only ask for last name if UI explicitly requires it
+                // UI prompt "May I have your name?" does NOT require full name
+                const askFullName = nameOptions.askFullName === true || nameOptions.requireFullName === true;
                 const askOnceForMissingPart = nameOptions.askOnceForMissingPart !== false;
                 const confirmBackEnabled = nameSlotConfig?.confirmBack === true || nameSlotConfig?.confirmBack === 'true';
                 const confirmBackTemplate = nameSlotConfig?.confirmPrompt || 'Got it, {value}. Did I get that right?';
@@ -1742,11 +1825,15 @@ async function processTurn({
                         currentSlots.name = `${firstName} ${lastName}`.trim();
                         session.booking.activeSlot = 'phone';
                         
-                        finalReply = `Perfect, ${currentSlots.name}. `;
+                        // 🎯 DISPLAY NAME: Always use first name for personalization
+                        // Never say "Perfect, Walter" when we have "Mark Walter"
+                        const displayName = nameMeta.first || currentSlots.name.split(' ')[0] || currentSlots.name;
+                        finalReply = `Perfect, ${displayName}. `;
                         nextSlotId = null; // Will find phone below
                         
                         log('📝 NAME: Got missing part, full name is', { 
                             name: currentSlots.name,
+                            displayName,
                             first: nameMeta.first,
                             last: nameMeta.last
                         });
