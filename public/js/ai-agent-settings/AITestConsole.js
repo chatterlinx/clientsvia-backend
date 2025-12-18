@@ -227,7 +227,16 @@ class AITestConsole {
      * Speak the AI response using ElevenLabs TTS
      */
     async speakResponse(text) {
-        if (!this.voiceEnabled) return;
+        console.log('[AI Test] 🔊 speakResponse called:', { 
+            voiceEnabled: this.voiceEnabled, 
+            hasVoice: this.voiceInfo?.hasVoice,
+            textLength: text?.length 
+        });
+        
+        if (!this.voiceEnabled) {
+            console.log('[AI Test] 🔇 Voice is disabled, skipping TTS');
+            return;
+        }
         
         // Stop any current audio
         if (this.currentAudio) {
@@ -261,14 +270,30 @@ class AITestConsole {
                 const audioUrl = URL.createObjectURL(audioBlob);
                 
                 this.currentAudio = new Audio(audioUrl);
-                this.currentAudio.play();
+                this.currentAudio.volume = 1.0;
+                
+                // Handle autoplay policy
+                const playPromise = this.currentAudio.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        console.log('[AI Test] 🔊 Playing ElevenLabs audio:', this.voiceInfo.voiceName);
+                    }).catch(error => {
+                        console.error('[AI Test] Audio autoplay blocked:', error);
+                        // Show user-friendly message
+                        this.addChatBubble('🔇 Click anywhere on the page first to enable audio playback, then try again.', 'ai', null, true);
+                    });
+                }
                 
                 // Clean up URL after playback
                 this.currentAudio.onended = () => {
                     URL.revokeObjectURL(audioUrl);
+                    console.log('[AI Test] 🔊 Audio playback finished');
                 };
                 
-                console.log('[AI Test] 🔊 Playing ElevenLabs audio:', this.voiceInfo.voiceName);
+                this.currentAudio.onerror = (e) => {
+                    console.error('[AI Test] Audio playback error:', e);
+                    this.speakBrowserFallback(text);
+                };
             } else {
                 console.error('[AI Test] TTS failed:', data.error);
                 this.speakBrowserFallback(text);
