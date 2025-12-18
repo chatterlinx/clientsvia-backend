@@ -1983,10 +1983,18 @@ async function processTurn({
                         // 
                         // UI Location: Front Desk → Booking Prompts → Names tab
                         // Admins can add regional/cultural names specific to their clientele
+                        //
+                        // FALLBACK: If list is empty, DEFAULT TO FIRST NAME (most common case)
+                        // People typically say "my name is John" not "my name is Smith"
             // ═══════════════════════════════════════════════════════════════════
                         const commonFirstNames = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
                         const commonFirstNamesSet = new Set(commonFirstNames.map(n => n.toLowerCase()));
-                        const isCommonFirstName = commonFirstNamesSet.has(extractedName.toLowerCase());
+                        
+                        // If list is empty, default to assuming it's a first name
+                        // If list has entries, check if the name is in it
+                        const listIsEmpty = commonFirstNames.length === 0;
+                        const isInList = commonFirstNamesSet.has(extractedName.toLowerCase());
+                        const isCommonFirstName = listIsEmpty || isInList;
                         
                         // 🔍 DEBUG: Log commonFirstNames check
                         log('📝 NAME DETECTION DEBUG', {
@@ -1994,16 +2002,24 @@ async function processTurn({
                             extractedNameLower: extractedName.toLowerCase(),
                             commonFirstNamesCount: commonFirstNames.length,
                             commonFirstNamesSample: commonFirstNames.slice(0, 10),
+                            listIsEmpty,
+                            isInList,
                             isCommonFirstName,
-                            hasMarkInList: commonFirstNamesSet.has('mark')
+                            hasMarkInList: commonFirstNamesSet.has('mark'),
+                            decision: isCommonFirstName ? 'FIRST_NAME' : 'LAST_NAME'
                         });
                         
                         if (isCommonFirstName) {
                             // "Mark", "John", "Sarah" etc. are clearly first names
+                            // OR list is empty so we default to first name
                             nameMeta.assumedSingleTokenAs = 'first';
                             nameMeta.first = extractedName;
-                            log('📝 NAME: Detected as FIRST name (UI-configured name list)', { name: extractedName });
+                            log('📝 NAME: Detected as FIRST name', { 
+                                name: extractedName,
+                                reason: listIsEmpty ? 'list_empty_default' : 'in_common_names_list'
+                            });
                         } else {
+                            // Name is NOT in the common first names list
                             // "Subach", "Patel", "Rodriguez" are likely last names
                             nameMeta.assumedSingleTokenAs = 'last';
                             nameMeta.last = extractedName;
