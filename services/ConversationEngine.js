@@ -1335,7 +1335,10 @@ async function processTurn({
         );
         // 🎯 PROMPT AS LAW: Default askFullName to FALSE
         // Only ask for last name if UI explicitly requires it
-        const askFullNameEnabled = nameSlotCheck?.nameOptions?.askFullName === true || 
+        // CHECK BOTH: Direct property (UI saves here) AND nested nameOptions (legacy)
+        const askFullNameEnabled = nameSlotCheck?.askFullName === true || 
+                                   nameSlotCheck?.requireFullName === true ||
+                                   nameSlotCheck?.nameOptions?.askFullName === true || 
                                    nameSlotCheck?.nameOptions?.requireFullName === true;
         
         if (currentSlots.partialName && !currentSlots.name) {
@@ -1821,14 +1824,27 @@ async function processTurn({
                 const nameSlotConfig = bookingSlotsSafe.find(s => 
                     (s.slotId || s.id || s.type) === 'name'
                 );
-                const nameOptions = nameSlotConfig?.nameOptions || {};
                 // 🎯 PROMPT AS LAW: Default askFullName to FALSE
                 // Only ask for last name if UI explicitly requires it
-                // UI prompt "May I have your name?" does NOT require full name
-                const askFullName = nameOptions.askFullName === true || nameOptions.requireFullName === true;
+                // CHECK BOTH: Direct property (UI saves here) AND nested nameOptions (legacy)
+                const askFullName = nameSlotConfig?.askFullName === true || 
+                                    nameSlotConfig?.requireFullName === true ||
+                                    nameSlotConfig?.nameOptions?.askFullName === true || 
+                                    nameSlotConfig?.nameOptions?.requireFullName === true;
+                const nameOptions = nameSlotConfig?.nameOptions || {};
                 const askOnceForMissingPart = nameOptions.askOnceForMissingPart !== false;
                 const confirmBackEnabled = nameSlotConfig?.confirmBack === true || nameSlotConfig?.confirmBack === 'true';
                 const confirmBackTemplate = nameSlotConfig?.confirmPrompt || 'Got it, {value}. Did I get that right?';
+                
+                // 🔍 DEBUG: Log askFullName evaluation
+                log('📝 NAME CONFIG DEBUG (V27)', {
+                    askFullName,
+                    'nameSlotConfig.askFullName': nameSlotConfig?.askFullName,
+                    'nameSlotConfig.requireFullName': nameSlotConfig?.requireFullName,
+                    'nameSlotConfig.nameOptions?.askFullName': nameSlotConfig?.nameOptions?.askFullName,
+                    confirmBackEnabled,
+                    activeSlot: session.booking.activeSlot
+                });
                 
                 aiLatencyMs = Date.now() - aiStartTime;
                 let finalReply = '';
