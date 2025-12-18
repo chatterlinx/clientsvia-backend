@@ -1103,9 +1103,40 @@ async function processTurn({
             // ═══════════════════════════════════════════════════════════════════
             log('CHECKPOINT 9b: 📋 BOOKING MODE (deterministic - no state machine)');
             
-            // Check if this looks like an interrupt question
-            const looksLikeQuestion = userText.includes('?') || 
-                                      /^(what|why|how|do you|can you|is it|when|where)/i.test(userText.trim());
+            // ═══════════════════════════════════════════════════════════════════
+            // STRICT INTERRUPT DETECTION (from brainstorming doc)
+            // ═══════════════════════════════════════════════════════════════════
+            // Must be a REAL question, not just containing "is" or "can"
+            // "My name is John" should NOT trigger interrupt
+            // "What's the soonest?" SHOULD trigger interrupt
+            // ═══════════════════════════════════════════════════════════════════
+            const userTextTrimmed = userText.trim();
+            const userTextLower = userTextTrimmed.toLowerCase();
+            
+            // Rule 1: Contains question mark = definitely a question
+            const hasQuestionMark = userTextTrimmed.endsWith('?');
+            
+            // Rule 2: Starts with question words (but NOT "is" alone - too broad)
+            const startsWithQuestionWord = /^(what|when|where|why|how|can you|could you|do you|does|are you|will you)\b/i.test(userTextTrimmed);
+            
+            // Rule 3: Contains booking-interrupt keywords (pricing, availability, etc.)
+            const hasInterruptKeywords = /\b(soonest|earliest|available|price|cost|how much|warranty|hours|open|close)\b/i.test(userTextLower);
+            
+            // Rule 4: EXCLUDE if it looks like a slot answer
+            const looksLikeSlotAnswer = /^(my name|name is|i'm|it's|call me|yes|yeah|no|nope)/i.test(userTextTrimmed) ||
+                                        /^\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/.test(userTextTrimmed) || // phone
+                                        /^\d+\s+\w+/.test(userTextTrimmed); // address
+            
+            const looksLikeQuestion = (hasQuestionMark || startsWithQuestionWord || hasInterruptKeywords) && !looksLikeSlotAnswer;
+            
+            log('📝 INTERRUPT CHECK', {
+                userText: userTextTrimmed.substring(0, 50),
+                hasQuestionMark,
+                startsWithQuestionWord,
+                hasInterruptKeywords,
+                looksLikeSlotAnswer,
+                looksLikeQuestion
+            });
             
             if (looksLikeQuestion && !extractedThisTurn.name && !extractedThisTurn.phone && 
                 !extractedThisTurn.address && !extractedThisTurn.time) {
@@ -1249,8 +1280,32 @@ async function processTurn({
                     currentSlotsPartialName: currentSlots.partialName
                 });
                 
+                // ═══════════════════════════════════════════════════════════════════
+                // CONFIRMATION DENIAL HANDLING (from brainstorming doc)
+                // If user says "no" to confirmBack, reset and ask name cleanly
+                // ═══════════════════════════════════════════════════════════════════
+                const userSaysNo = /^(no|nope|nah|that's wrong|wrong|incorrect|not right)/i.test(userText.trim());
+                
+                if (userSaysNo && nameMeta.lastConfirmed && !nameMeta.askedMissingPartOnce) {
+                    // User denied the confirmBack - reset name state
+                    log('📝 NAME: User denied confirmation, resetting');
+                    nameMeta.first = null;
+                    nameMeta.last = null;
+                    nameMeta.lastConfirmed = false;
+                    nameMeta.askedMissingPartOnce = false;
+                    nameMeta.assumedSingleTokenAs = null;
+                    currentSlots.partialName = null;
+                    currentSlots.name = null;
+                    
+                    // Ask for name again cleanly
+                    const nameSlotConfig = bookingSlotsSafe.find(s => 
+                        (s.slotId || s.id || s.type) === 'name'
+                    );
+                    finalReply = "I apologize for the confusion. " + (nameSlotConfig?.question || "May I have your name please?");
+                    nextSlotId = 'name';
+                }
                 // Check if name slot is already complete
-                if (hasFullName || hasBothParts) {
+                else if (hasFullName || hasBothParts) {
                     // Name is complete, move to next slot
                     if (hasBothParts && !currentSlots.name) {
                         currentSlots.name = `${nameMeta.first} ${nameMeta.last}`;
