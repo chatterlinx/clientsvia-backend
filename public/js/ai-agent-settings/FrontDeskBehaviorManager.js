@@ -847,21 +847,21 @@ class FrontDeskBehaviorManager {
             }
         ];
         
-        return \`
+        return `
             <div style="display: flex; flex-direction: column; gap: 16px;">
                 <!-- Mode Selection -->
                 <div>
                     <label style="display: block; margin-bottom: 8px; color: #c9d1d9; font-weight: 500;">Outcome Mode</label>
                     <select id="fdb-booking-outcome-mode" onchange="window.frontDeskManager.updateBookingOutcomeMode(this.value)"
                         style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
-                        \${modes.map(m => \`
-                            <option value="\${m.value}" \${mode === m.value ? 'selected' : ''}>
-                                \${m.label}\${m.recommended ? ' (Recommended)' : ''}
+                        ${modes.map(m => `
+                            <option value="${m.value}" ${mode === m.value ? 'selected' : ''}>
+                                ${m.label}${m.recommended ? ' (Recommended)' : ''}
                             </option>
-                        \`).join('')}
+                        `).join('')}
                     </select>
                     <p id="fdb-outcome-mode-desc" style="color: #8b949e; font-size: 0.75rem; margin: 6px 0 0 0;">
-                        \${modes.find(m => m.value === mode)?.desc || ''}
+                        ${modes.find(m => m.value === mode)?.desc || ''}
                     </p>
                 </div>
                 
@@ -874,7 +874,7 @@ class FrontDeskBehaviorManager {
                     <textarea id="fdb-booking-outcome-script" rows="3" 
                         onchange="window.frontDeskManager.updateBookingOutcomeScript(this.value)"
                         style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical; font-family: inherit;"
-                    >\${finalScripts[mode] || modes.find(m => m.value === mode)?.default || ''}</textarea>
+                    >${finalScripts[mode] || modes.find(m => m.value === mode)?.default || ''}</textarea>
                     <p style="color: #6e7681; font-size: 0.7rem; margin: 6px 0 0 0;">
                         Placeholders: {name}, {phone}, {address}, {timePreference}, {trade}, {serviceType}, {caseId}, {issue}
                     </p>
@@ -884,16 +884,16 @@ class FrontDeskBehaviorManager {
                 <div style="border-top: 1px solid #30363d; padding-top: 16px; margin-top: 8px;">
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 12px;">
                         <input type="checkbox" id="fdb-use-asap-variant" 
-                            \${outcome.useAsapVariant !== false ? 'checked' : ''}
+                            ${outcome.useAsapVariant !== false ? 'checked' : ''}
                             onchange="window.frontDeskManager.updateBookingOutcomeAsap(this.checked)"
                             style="accent-color: #58a6ff;">
                         <span style="color: #c9d1d9;">Use special script for ASAP/urgent requests</span>
                     </label>
                     <textarea id="fdb-asap-variant-script" rows="2" 
                         onchange="window.frontDeskManager.updateBookingOutcomeAsapScript(this.value)"
-                        style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical; font-family: inherit; \${outcome.useAsapVariant === false ? 'opacity: 0.5;' : ''}"
-                        \${outcome.useAsapVariant === false ? 'disabled' : ''}
-                    >\${outcome.asapVariantScript || "Perfect, {name}. I've marked this as urgent. Someone will be in touch shortly to confirm the earliest available time. Anything else?"}</textarea>
+                        style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical; font-family: inherit; ${outcome.useAsapVariant === false ? 'opacity: 0.5;' : ''}"
+                        ${outcome.useAsapVariant === false ? 'disabled' : ''}
+                    >${outcome.asapVariantScript || "Perfect, {name}. I've marked this as urgent. Someone will be in touch shortly to confirm the earliest available time. Anything else?"}</textarea>
                 </div>
                 
                 <!-- Custom Override (Advanced) -->
@@ -907,11 +907,11 @@ class FrontDeskBehaviorManager {
                             onchange="window.frontDeskManager.updateBookingOutcomeCustom(this.value)"
                             placeholder="Leave empty to use mode-specific scripts above"
                             style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical; font-family: inherit;"
-                        >\${outcome.customFinalScript || ''}</textarea>
+                        >${outcome.customFinalScript || ''}</textarea>
                     </div>
                 </details>
             </div>
-        \`;
+        `;
     }
     
     updateBookingOutcomeMode(mode) {
