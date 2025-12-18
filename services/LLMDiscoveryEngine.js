@@ -364,14 +364,20 @@ class LLMDiscoveryEngine {
      * Builds the system prompt for LLM in discovery mode.
      * This prompt makes the LLM the primary brain.
      * 
+     * Knowledge sources (in order of precedence):
+     * 1. 3-Tier Scenarios (primary)
+     * 2. Cheat Sheets (fallback)
+     * 3. Generic LLM (last resort)
+     * 
      * @param {Object} params
      * @param {Object} params.company - Company document
      * @param {Array} params.scenarios - Retrieved scenario summaries
      * @param {Object} params.emotion - Detected emotion
      * @param {Object} params.session - Session state
+     * @param {Object} params.cheatSheetKnowledge - Cheat sheet fallback (optional)
      * @returns {string} System prompt for LLM
      */
-    static buildDiscoveryPrompt({ company, scenarios, emotion, session }) {
+    static buildDiscoveryPrompt({ company, scenarios, emotion, session, cheatSheetKnowledge }) {
         const companyVars = this.getCompanyVariables(company);
         const trade = companyVars.trade || 'HVAC';
         const tradeLabel = trade === 'HVAC' ? 'HVAC company' :
@@ -379,12 +385,27 @@ class LLMDiscoveryEngine {
                           trade === 'LEGAL' ? 'law firm' :
                           'service company';
         
-        // Build scenario knowledge section
+        // Build scenario knowledge section (PRIMARY source)
         let knowledgeSection = '';
         if (scenarios && scenarios.length > 0) {
             knowledgeSection = `
-RELEVANT KNOWLEDGE (use naturally, do not read verbatim):
+RELEVANT KNOWLEDGE FROM SCENARIOS (use naturally, do not read verbatim):
 ${scenarios.map((s, i) => `${i + 1}. ${s.title}: ${s.knowledge}`).join('\n')}
+`;
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // V23: CHEAT SHEET FALLBACK KNOWLEDGE
+        // ═══════════════════════════════════════════════════════════════════
+        // Only used if no strong scenario match was found
+        // Cheat sheets provide policy/FAQ knowledge as fallback
+        // ═══════════════════════════════════════════════════════════════════
+        let cheatSheetSection = '';
+        if (cheatSheetKnowledge && !scenarios?.length) {
+            cheatSheetSection = `
+ADDITIONAL KNOWLEDGE FROM COMPANY POLICY (use naturally):
+Topic: ${cheatSheetKnowledge.question || cheatSheetKnowledge.title}
+Answer: ${cheatSheetKnowledge.answer}
 `;
         }
         
@@ -416,7 +437,7 @@ RULES:
 7. Never mention internal systems, scenarios, templates, or AI.
 8. Always sound human, confident, and helpful.
 9. Keep responses concise (2-3 sentences max unless explaining something).
-${knowledgeSection}${emotionContext}${discoveryContext}
+${knowledgeSection}${cheatSheetSection}${emotionContext}${discoveryContext}
 
 RESPONSE FORMAT:
 Respond naturally as a human receptionist would. Do not use bullet points or numbered lists unless explaining steps.`;

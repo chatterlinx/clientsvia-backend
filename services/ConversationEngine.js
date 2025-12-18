@@ -48,7 +48,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V22-LLM-LED-DISCOVERY';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V23-CHEATSHEET-INTEGRATION';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -58,9 +58,67 @@ logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
         '✅ No triage gates, no pre-routing',
         '✅ session.mode = DISCOVERY | SUPPORT | BOOKING | COMPLETE',
         '✅ Consent detection via UI-configured phrases',
-        '✅ Latency target: < 1.2s per turn'
+        '✅ Latency target: < 1.2s per turn',
+        '✅ V23: CHEAT SHEETS integrated as fallback knowledge',
+        '✅ V23: Booking interrupts use cheat sheets then resume slot'
     ]
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🆕 CHEAT SHEET SEARCH - Find relevant content from cheat sheets
+// ═══════════════════════════════════════════════════════════════════════════
+// Used for:
+// - DISCOVERY: Fallback after 3-tier scenarios
+// - BOOKING: Interrupt question answers ONLY
+// ═══════════════════════════════════════════════════════════════════════════
+function searchCheatSheets(cheatSheetConfig, query) {
+    if (!cheatSheetConfig || !query) return null;
+    
+    const queryLower = query.toLowerCase().trim();
+    const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
+    
+    let bestMatch = null;
+    let bestScore = 0;
+    
+    // Search through all categories in cheat sheet config
+    // Expected structure: { category: { items: [{ question, answer }] } }
+    // or: { categories: [{ name, items: [...] }] }
+    const categories = cheatSheetConfig.categories || 
+                       Object.entries(cheatSheetConfig).map(([name, data]) => ({ name, ...data }));
+    
+    for (const category of categories) {
+        const items = category.items || category.scenarios || category.entries || [];
+        
+        for (const item of items) {
+            // Match against question/trigger text
+            const searchText = (item.question || item.trigger || item.title || '').toLowerCase();
+            const answerText = item.answer || item.response || item.content || '';
+            
+            // Simple keyword matching score
+            let score = 0;
+            for (const word of queryWords) {
+                if (searchText.includes(word)) score += 2;
+                if (answerText.toLowerCase().includes(word)) score += 1;
+            }
+            
+            // Boost for exact phrase match
+            if (searchText.includes(queryLower)) score += 5;
+            
+            if (score > bestScore && score >= 3) {  // Minimum threshold
+                bestScore = score;
+                bestMatch = {
+                    category: category.name || category.category,
+                    question: item.question || item.trigger || item.title,
+                    answer: answerText,
+                    score: score,
+                    title: item.title || item.question
+                };
+            }
+        }
+    }
+    
+    return bestMatch;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🆕 CONSENT DETECTOR - Checks if caller explicitly wants to book
@@ -600,6 +658,34 @@ async function processTurn({
             throw new Error(`Company not found: ${companyId}`);
         }
         log('CHECKPOINT 2: ✅ Company loaded', { name: company.companyName });
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // STEP 1.5: Load Cheat Sheets (PHASE 1 - Runtime Integration)
+        // ═══════════════════════════════════════════════════════════════════
+        // Cheat sheets are loaded alongside company config for:
+        // - DISCOVERY: Fallback knowledge after 3-tier scenarios
+        // - BOOKING: Interrupt question answers ONLY (then resume slot)
+        // ═══════════════════════════════════════════════════════════════════
+        let cheatSheetConfig = null;
+        try {
+            const { CheatSheetRuntimeService } = require('./cheatsheet');
+            const cheatSheetResult = await CheatSheetRuntimeService.getLiveConfig(companyId);
+            if (cheatSheetResult && cheatSheetResult.config) {
+                cheatSheetConfig = cheatSheetResult.config;
+                log('CHECKPOINT 2.5: ✅ Cheat sheets loaded', { 
+                    versionId: cheatSheetResult.versionId,
+                    hasConfig: !!cheatSheetConfig,
+                    categories: Object.keys(cheatSheetConfig || {}).length
+                });
+            } else {
+                log('CHECKPOINT 2.5: ⚠️ No cheat sheets available (non-fatal)', { companyId });
+            }
+        } catch (cheatSheetErr) {
+            // Non-fatal - system works without cheat sheets
+            log('CHECKPOINT 2.5: ⚠️ Cheat sheet load failed (non-fatal)', { 
+                error: cheatSheetErr.message 
+            });
+        }
         
         // ═══════════════════════════════════════════════════════════════════
         // STEP 2: Find or create customer
@@ -1152,9 +1238,9 @@ async function processTurn({
                 !extractedThisTurn.address && !extractedThisTurn.time) {
                 // Caller went off-rails during booking (asked a question, etc.)
                 // LLM handles it, then returns to booking slot
-                log('CHECKPOINT 9c: 🔄 Booking interruption - LLM handles, then resume');
+                log('CHECKPOINT 9c: 🔄 Booking interruption - checking cheat sheets first');
                 
-                // Get the next slot question for bridging back
+                // Get the next slot question for bridging back (MUST RESUME THIS EXACT PROMPT)
                 const bookingConfigInt = BookingScriptEngine.getBookingSlotsFromCompany(company);
                 const bookingSlotsInt = bookingConfigInt.slots || [];
                 const nextMissingSlotInt = bookingSlotsInt.find(slot => {
@@ -1163,6 +1249,69 @@ async function processTurn({
                     return slot.required && !isCollected;
                 });
                 const nextSlotQuestion = nextMissingSlotInt?.question || 'What else can I help you with?';
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // PHASE 1: CHEAT SHEET FOR BOOKING INTERRUPTS
+                // ═══════════════════════════════════════════════════════════════════
+                // Pattern: Answer from cheat sheet → Resume EXACT slot prompt
+                // Cheat sheets MUST NOT:
+                // - Change slot order
+                // - Introduce new questions
+                // - Skip required slots
+                // ═══════════════════════════════════════════════════════════════════
+                let bookingInterruptCheatSheet = null;
+                let bookingCheatSheetUsed = false;
+                
+                if (cheatSheetConfig) {
+                    bookingInterruptCheatSheet = searchCheatSheets(cheatSheetConfig, userText);
+                    if (bookingInterruptCheatSheet) {
+                        bookingCheatSheetUsed = true;
+                        log('CHECKPOINT 9c.1: 📋 Cheat sheet found for booking interrupt', {
+                            question: bookingInterruptCheatSheet.question,
+                            category: bookingInterruptCheatSheet.category,
+                            willResumeSlot: nextSlotQuestion.substring(0, 50)
+                        });
+                        
+                        // FAST PATH: Use cheat sheet answer directly + resume slot
+                        // This is faster than LLM and more predictable
+                        const cheatSheetAnswer = bookingInterruptCheatSheet.answer;
+                        const finalReply = `${cheatSheetAnswer}\n\n${nextSlotQuestion}`;
+                        
+                        aiResult = {
+                            reply: finalReply,
+                            conversationMode: 'booking',
+                            intent: 'booking_interrupt_cheatsheet',
+                            nextGoal: `COLLECT_${(nextMissingSlotInt?.slotId || nextMissingSlotInt?.id || 'INFO').toUpperCase()}`,
+                            filledSlots: currentSlots,
+                            signals: { 
+                                wantsBooking: true,
+                                consentGiven: true
+                            },
+                            latencyMs: Date.now() - aiStartTime,
+                            tokensUsed: 0,  // No LLM used!
+                            fromStateMachine: true,
+                            mode: 'BOOKING',
+                            debug: {
+                                source: 'BOOKING_INTERRUPT_CHEATSHEET',
+                                cheatSheetUsed: true,
+                                cheatSheetReason: 'booking_interrupt',
+                                cheatSheetCategory: bookingInterruptCheatSheet.category,
+                                resumedSlot: nextMissingSlotInt?.slotId || nextMissingSlotInt?.id,
+                                resumedPrompt: nextSlotQuestion
+                            }
+                        };
+                        
+                        log('CHECKPOINT 9c.2: ✅ Cheat sheet interrupt handled, resuming slot', {
+                            cheatSheetUsed: true,
+                            resumedSlot: nextMissingSlotInt?.slotId,
+                            replyPreview: finalReply.substring(0, 100)
+                        });
+                    }
+                }
+                
+                // If no cheat sheet match, fall back to LLM
+                if (!bookingCheatSheetUsed) {
+                    log('CHECKPOINT 9c.3: 📝 No cheat sheet match, using LLM for interrupt');
                 
                 const llmResult = await HybridReceptionistLLM.processConversation({
                     company,
@@ -1221,9 +1370,12 @@ async function processTurn({
                     mode: 'BOOKING',
                     debug: {
                         source: 'BOOKING_INTERRUPTION_LLM',
-                        returnToQuestion: nextSlotQuestion
+                        returnToQuestion: nextSlotQuestion,
+                        cheatSheetUsed: false,
+                        cheatSheetReason: null
                     }
                 };
+                }  // End of if (!bookingCheatSheetUsed)
             } else {
                 // ═══════════════════════════════════════════════════════════════════
                 // BOOKING MODE SAFETY NET - Deterministic slot collection
@@ -1588,6 +1740,37 @@ async function processTurn({
                 topScenario: scenarioRetrieval.scenarios?.[0]?.title
             });
             
+            // ═══════════════════════════════════════════════════════════════════
+            // Step 1.5: CHEAT SHEET FALLBACK (PHASE 1)
+            // ═══════════════════════════════════════════════════════════════════
+            // Order of precedence for DISCOVERY knowledge:
+            // 1. 3-Tier Scenarios (primary)
+            // 2. Cheat Sheets (fallback)
+            // 3. Generic LLM (last resort)
+            // ═══════════════════════════════════════════════════════════════════
+            let cheatSheetKnowledge = null;
+            let cheatSheetUsed = false;
+            let cheatSheetReason = null;
+            
+            // Only use cheat sheets as fallback if no strong scenario match
+            const hasStrongScenarioMatch = scenarioRetrieval.scenarios?.length > 0 && 
+                                           scenarioRetrieval.scenarios[0]?.confidence > 0.6;
+            
+            if (!hasStrongScenarioMatch && cheatSheetConfig) {
+                // Search cheat sheets for relevant content
+                const cheatSheetMatch = searchCheatSheets(cheatSheetConfig, userText);
+                if (cheatSheetMatch) {
+                    cheatSheetKnowledge = cheatSheetMatch;
+                    cheatSheetUsed = true;
+                    cheatSheetReason = 'discovery_fallback';
+                    log('CHECKPOINT 9c.1: 📋 Cheat sheet fallback activated', {
+                        category: cheatSheetMatch.category,
+                        matchedItem: cheatSheetMatch.title || cheatSheetMatch.question,
+                        reason: cheatSheetReason
+                    });
+                }
+            }
+            
             // Step 2: Detect caller emotion (lightweight, no LLM)
             const emotion = LLMDiscoveryEngine.detectEmotion(userText);
             
@@ -1596,12 +1779,14 @@ async function processTurn({
                 confidence: emotion.confidence
             });
             
-            // Step 3: Build discovery prompt with scenario knowledge
+            // Step 3: Build discovery prompt with scenario knowledge + cheat sheet fallback
             const discoveryPrompt = LLMDiscoveryEngine.buildDiscoveryPrompt({
                 company,
                 scenarios: scenarioRetrieval.scenarios,
                 emotion,
-                session
+                session,
+                // V23: Pass cheat sheet as fallback knowledge
+                cheatSheetKnowledge: cheatSheetKnowledge
             });
             
             // Step 4: Build context for LLM
@@ -1613,6 +1798,13 @@ async function processTurn({
                 // KILL SWITCH: disableScenarioAutoResponses controls how scenarios are used
                 scenarioKnowledge: scenarioRetrieval.scenarios,
                 scenarioUsageMode: killSwitches.disableScenarioAutoResponses ? 'context_only' : 'may_verbatim',
+                
+                // ═══════════════════════════════════════════════════════════════
+                // CHEAT SHEET KNOWLEDGE (PHASE 1 - Discovery Fallback)
+                // ═══════════════════════════════════════════════════════════════
+                cheatSheetKnowledge: cheatSheetKnowledge,
+                cheatSheetUsed: cheatSheetUsed,
+                cheatSheetReason: cheatSheetReason,
                 
                 // Caller emotion
                 callerEmotion: emotion.emotion,
@@ -1712,6 +1904,10 @@ async function processTurn({
                     // V22 Debug Info
                     scenariosRetrieved: scenarioRetrieval.scenarios?.map(s => s.title) || [],
                     scenarioCount: scenarioRetrieval.scenarios?.length || 0,
+                    // V23 Cheat Sheet Debug Info
+                    cheatSheetUsed: cheatSheetUsed || false,
+                    cheatSheetReason: cheatSheetReason || null,
+                    cheatSheetCategory: cheatSheetKnowledge?.category || null,
                     killSwitches: {
                         bookingRequiresExplicitConsent: killSwitches.bookingRequiresExplicitConsent,
                         forceLLMDiscovery: killSwitches.forceLLMDiscovery,
@@ -1806,6 +2002,13 @@ async function processTurn({
             // Scenario Tool Usage (NOT SCRIPTS)
             scenariosRetrieved: session.conversationMemory?.scenariosConsulted || [],
             scenarioCount: session.conversationMemory?.scenariosConsulted?.length || 0,
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // V23 CHEAT SHEET TRACKING (PHASE 1)
+            // ═══════════════════════════════════════════════════════════════════
+            cheatSheetUsed: aiResult?.debug?.cheatSheetUsed || false,
+            cheatSheetReason: aiResult?.debug?.cheatSheetReason || null,  // 'discovery_fallback' | 'booking_interrupt'
+            cheatSheetCategory: aiResult?.debug?.cheatSheetCategory || null,
             
             // Discovery State
             discoveryIssue: session.discovery?.issue || null,
