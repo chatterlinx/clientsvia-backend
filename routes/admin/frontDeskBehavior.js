@@ -143,6 +143,18 @@ const UI_DEFAULTS = {
         thermostatUpgrade: "Great choice! A new thermostat can save you money and make your home more comfortable. We install all major brands.",
         generalService: "We'd be happy to help! Let me get you scheduled with one of our technicians.",
         pricingInfo: "I'd be happy to get you a quote. Our pricing depends on the specific work needed - let me get your information and have someone reach out with details."
+    },
+    // 👤 Common First Names - UI-configurable name recognition
+    // Empty by default - companies add their own common names
+    commonFirstNames: [],
+    // 🎯 Booking Outcome - What AI says when all slots collected
+    // Default: "Confirmed on Call" - no callbacks unless explicitly enabled
+    bookingOutcome: {
+        mode: 'confirmed_on_call',
+        useAsapVariant: true,
+        finalScripts: {},
+        asapVariantScript: null,
+        customFinalScript: null
     }
 };
 
@@ -160,10 +172,20 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
         
         // Merge saved config with defaults
         const saved = company.aiAgentSettings?.frontDeskBehavior || {};
+        
+        // 👤 DEBUG: Log RAW saved data before merge
+        logger.info('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: RAW SAVED commonFirstNames:', {
+            companyId,
+            rawCount: (saved.commonFirstNames || []).length,
+            rawSample: (saved.commonFirstNames || []).slice(0, 10),
+            hasRawCommonFirstNames: !!saved.commonFirstNames,
+            savedKeys: Object.keys(saved)
+        });
+        
         const config = deepMerge(UI_DEFAULTS, saved);
         
-        // 🔍 DEBUG: Log what we're returning
-        logger.info('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: Loading commonFirstNames', {
+        // 🔍 DEBUG: Log what we're returning AFTER merge
+        logger.info('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: AFTER MERGE commonFirstNames:', {
             companyId,
             count: (config.commonFirstNames || []).length,
             sample: (config.commonFirstNames || []).slice(0, 10),
@@ -251,6 +273,15 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
         logger.info('[FRONT DESK BEHAVIOR] Updating config', {
             companyId,
             fieldsUpdated: Object.keys(updates)
+        });
+        
+        // 👤 DEBUG: Log commonFirstNames received from frontend
+        logger.info('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: commonFirstNames RECEIVED:', {
+            companyId,
+            hasCommonFirstNames: updates.commonFirstNames !== undefined,
+            count: (updates.commonFirstNames || []).length,
+            sample: (updates.commonFirstNames || []).slice(0, 5),
+            rawValue: updates.commonFirstNames
         });
         
         // Build the update object
@@ -466,6 +497,15 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
                 askMissingNamePartType: typeof nameSlot?.askMissingNamePart
             });
         }
+        
+        // 👤 DEBUG: Log commonFirstNames that was saved
+        const savedCommonFirstNames = result.aiAgentSettings?.frontDeskBehavior?.commonFirstNames;
+        logger.info('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: commonFirstNames SAVED TO MONGODB:', {
+            companyId,
+            count: (savedCommonFirstNames || []).length,
+            sample: (savedCommonFirstNames || []).slice(0, 10),
+            hasCommonFirstNames: !!savedCommonFirstNames
+        });
         
         // Clear Redis cache
         try {

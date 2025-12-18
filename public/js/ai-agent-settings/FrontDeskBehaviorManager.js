@@ -291,6 +291,21 @@ class FrontDeskBehaviorManager {
                     '🔴 askMissingNamePart value': nameSlot?.askMissingNamePart === true ? '✅ TRUE' : '❌ FALSE/UNDEFINED'
                 });
             }
+            
+            // 👤 DEBUG: Log commonFirstNames being saved
+            console.log('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: commonFirstNames BEING SAVED:', {
+                count: (this.config.commonFirstNames || []).length,
+                names: this.config.commonFirstNames || [],
+                hasCommonFirstNames: !!this.config.commonFirstNames,
+                fullConfig: JSON.stringify(this.config.commonFirstNames)
+            });
+            
+            // 🎯 DEBUG: Log bookingOutcome being saved
+            console.log('[FRONT DESK BEHAVIOR] 🎯 CHECKPOINT: bookingOutcome BEING SAVED:', {
+                mode: this.config.bookingOutcome?.mode,
+                hasBookingOutcome: !!this.config.bookingOutcome
+            });
+            
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
             
             const response = await fetch(`/api/admin/front-desk-behavior/${this.companyId}`, {
