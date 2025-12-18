@@ -50,7 +50,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V26-CALLER-VOCABULARY';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V27-SLOT-REFUSAL-HANDLING';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -74,7 +74,12 @@ logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
         '✅ V26: CALLER VOCABULARY - Translates industry slang',
         '✅ V26: "not pulling" → "not cooling" (HVAC)',
         '✅ V26: Uses template nlpConfig.synonyms + company callerVocabulary',
-        '✅ V26: LLM receives translated text for better understanding'
+        '✅ V26: LLM receives translated text for better understanding',
+        '✅ V27: NAME CONFIRM YES HANDLING - Fixed askFullName flow',
+        '✅ V27: When user says "yes" to confirm Mark → asks for last name',
+        '✅ V27: SLOT REFUSAL HANDLING - "I forgot", "I don\'t know"',
+        '✅ V27: Alternative prompts, max retries, LLM intervention',
+        '✅ V27: UI-configurable slotRefusalHandling settings'
     ]
 });
 
@@ -1854,12 +1859,46 @@ async function processTurn({
                 });
                 
                 // ═══════════════════════════════════════════════════════════════════
-                // CONFIRMATION DENIAL HANDLING (from brainstorming doc)
-                // If user says "no" to confirmBack, reset and ask name cleanly
+                // NAME CONFIRMATION HANDLING (V27)
+                // Handle "yes" and "no" responses to name confirmBack
                 // ═══════════════════════════════════════════════════════════════════
+                const userSaysYesForName = /^(yes|yeah|yep|correct|that's right|right|yup|uh huh|mhm|affirmative|sure|ok|okay)/i.test(userText.trim());
                 const userSaysNo = /^(no|nope|nah|that's wrong|wrong|incorrect|not right)/i.test(userText.trim());
                 
-                if (userSaysNo && nameMeta.lastConfirmed && !nameMeta.askedMissingPartOnce) {
+                // Handle "YES" to name confirmBack - need to check if we should ask for last name
+                if (userSaysYesForName && nameMeta.lastConfirmed && !nameMeta.askedMissingPartOnce && askFullName && session.booking.activeSlot === 'name') {
+                    // User confirmed partial name, now ask for missing part
+                    nameMeta.askedMissingPartOnce = true;
+                    
+                    // Ask for the part we don't have
+                    if (nameMeta.assumedSingleTokenAs === 'last' || !nameMeta.first) {
+                        finalReply = "And what's your first name?";
+                    } else {
+                        finalReply = "And what's your last name?";
+                    }
+                    nextSlotId = 'name'; // Still on name
+                    
+                    log('📝 NAME: User confirmed partial, asking for missing part (V27)', {
+                        assumedAs: nameMeta.assumedSingleTokenAs,
+                        first: nameMeta.first,
+                        last: nameMeta.last
+                    });
+                }
+                // Handle "YES" to name confirmBack when askFullName is OFF - accept and move on
+                else if (userSaysYesForName && nameMeta.lastConfirmed && !askFullName && session.booking.activeSlot === 'name') {
+                    // Accept partial name as complete
+                    const partialName = currentSlots.partialName || nameMeta.first || nameMeta.last;
+                    currentSlots.name = partialName;
+                    session.booking.activeSlot = 'phone';
+                    
+                    const displayName = nameMeta.first || partialName;
+                    finalReply = `Got it, ${displayName}. `;
+                    nextSlotId = null; // Will find phone below
+                    
+                    log('📝 NAME: User confirmed, askFullName OFF, moving to phone (V27)', { name: currentSlots.name });
+                }
+                // Handle "NO" to name confirmBack - reset and re-ask
+                else if (userSaysNo && nameMeta.lastConfirmed && !nameMeta.askedMissingPartOnce) {
                     // User denied the confirmBack - reset name state
                     log('📝 NAME: User denied confirmation, resetting');
                     nameMeta.first = null;
@@ -2342,7 +2381,140 @@ async function processTurn({
                         log('📧 EMAIL: Accepted', { email: extractedThisTurn.email });
                     }
                 }
-            // ═══════════════════════════════════════════════════════════════════
+                // ═══════════════════════════════════════════════════════════════════
+                // V27: SLOT REFUSAL HANDLING - "I forgot", "I don't know", "skip"
+                // ═══════════════════════════════════════════════════════════════════
+                // When customer can't provide a required slot, handle gracefully:
+                // 1. If slot is REQUIRED: Offer alternatives or LLM intervention
+                // 2. If slot is OPTIONAL: Skip and move on
+                // 
+                // UI-configurable via frontDeskBehavior.slotRefusalHandling
+                // ═══════════════════════════════════════════════════════════════════
+                const slotRefusalPhrases = /\b(i forgot|forgot|i don't know|don't know|not sure|can't remember|skip|pass|next|move on|i'm not sure|no idea|don't have it|don't have that)\b/i;
+                const userRefusedSlot = slotRefusalPhrases.test(userText.toLowerCase());
+                
+                if (userRefusedSlot && !extractedThisTurn.name && !extractedThisTurn.phone && 
+                    !extractedThisTurn.address && !extractedThisTurn.time && !extractedThisTurn.email) {
+                    
+                    const activeSlotId = session.booking.activeSlot;
+                    const activeSlotConfig = bookingSlotsSafe.find(s => 
+                        (s.slotId || s.id || s.type) === activeSlotId
+                    );
+                    const isRequired = activeSlotConfig?.required !== false;
+                    
+                    // Get refusal handling config from UI (with defaults)
+                    const refusalConfig = company.aiAgentSettings?.frontDeskBehavior?.slotRefusalHandling || {};
+                    const maxRetries = refusalConfig.maxRetries || 2;
+                    const useAlternativePrompt = refusalConfig.useAlternativePrompt !== false;
+                    const allowSkipRequired = refusalConfig.allowSkipRequired || false;
+                    const llmIntervention = refusalConfig.llmIntervention !== false;
+                    
+                    // Track refusal attempts
+                    session.booking.meta[activeSlotId] = session.booking.meta[activeSlotId] || {};
+                    const slotMeta = session.booking.meta[activeSlotId];
+                    slotMeta.refusalCount = (slotMeta.refusalCount || 0) + 1;
+                    
+                    log('🚫 SLOT REFUSAL DETECTED (V27)', {
+                        activeSlot: activeSlotId,
+                        isRequired,
+                        refusalCount: slotMeta.refusalCount,
+                        maxRetries,
+                        userText: userText.substring(0, 50)
+                    });
+                    
+                    if (!isRequired) {
+                        // Optional slot - skip it
+                        slotMeta.skipped = true;
+                        slotMeta.confirmed = true;
+                        
+                        // Find next slot
+                        const nextSlotAfterSkip = bookingSlotsSafe.find(s => {
+                            const sId = s.slotId || s.id || s.type;
+                            const slotOrder = ['name', 'phone', 'address', 'time', 'email'];
+                            return slotOrder.indexOf(sId) > slotOrder.indexOf(activeSlotId) && 
+                                   s.required && !currentSlots[sId];
+                        });
+                        
+                        if (nextSlotAfterSkip) {
+                            session.booking.activeSlot = nextSlotAfterSkip.slotId || nextSlotAfterSkip.id || nextSlotAfterSkip.type;
+                            finalReply = "No problem, we can skip that. " + (nextSlotAfterSkip.question || '');
+                        } else {
+                            finalReply = "No problem, we can skip that. ";
+                        }
+                        nextSlotId = session.booking.activeSlot;
+                        log('🚫 SLOT REFUSAL: Skipped optional slot', { slot: activeSlotId });
+                    }
+                    else if (slotMeta.refusalCount <= maxRetries && useAlternativePrompt) {
+                        // Required slot - try alternative prompt
+                        const alternativePrompts = {
+                            address: [
+                                "That's okay! Is there a cross street or landmark you can give me so we can find you?",
+                                "No worries. Can you give me the city and street name? We can look it up.",
+                                "I understand. Can you check your phone for the address? I'll wait."
+                            ],
+                            phone: [
+                                "No problem! Is there another number we could reach you at?",
+                                "That's okay. Can I use the number you're calling from?",
+                                "Would you like to give us an email instead for confirmation?"
+                            ],
+                            name: [
+                                "That's alright! What should we call you?",
+                                "No problem - even a first name works for us."
+                            ],
+                            time: [
+                                "No worries! Would morning or afternoon work better for you?",
+                                "That's fine - should we just put you down for the first available?"
+                            ]
+                        };
+                        
+                        const altPrompts = alternativePrompts[activeSlotId] || [];
+                        const promptIndex = Math.min(slotMeta.refusalCount - 1, altPrompts.length - 1);
+                        
+                        if (altPrompts[promptIndex]) {
+                            finalReply = altPrompts[promptIndex];
+                            nextSlotId = activeSlotId;
+                            log('🚫 SLOT REFUSAL: Using alternative prompt', { 
+                                slot: activeSlotId, 
+                                attempt: slotMeta.refusalCount 
+                            });
+                        } else if (llmIntervention) {
+                            // No more alternative prompts, let LLM handle
+                            slotMeta.llmIntervention = true;
+                            log('🚫 SLOT REFUSAL: LLM intervention needed', { slot: activeSlotId });
+                            // Don't set finalReply - let it fall through to LLM
+                        }
+                    }
+                    else if (allowSkipRequired) {
+                        // Max retries exceeded but admin allows skipping required
+                        slotMeta.skipped = true;
+                        slotMeta.confirmed = true;
+                        currentSlots[activeSlotId] = '[NOT PROVIDED]';
+                        
+                        const nextSlotAfterSkip = bookingSlotsSafe.find(s => {
+                            const sId = s.slotId || s.id || s.type;
+                            const slotOrder = ['name', 'phone', 'address', 'time', 'email'];
+                            return slotOrder.indexOf(sId) > slotOrder.indexOf(activeSlotId) && 
+                                   s.required && !currentSlots[sId];
+                        });
+                        
+                        if (nextSlotAfterSkip) {
+                            session.booking.activeSlot = nextSlotAfterSkip.slotId || nextSlotAfterSkip.id || nextSlotAfterSkip.type;
+                            finalReply = "I understand. We'll work with what we have. " + (nextSlotAfterSkip.question || '');
+                        } else {
+                            finalReply = "I understand. We'll work with what we have. ";
+                        }
+                        nextSlotId = session.booking.activeSlot;
+                        log('🚫 SLOT REFUSAL: Skipped required slot (admin allowed)', { slot: activeSlotId });
+                    }
+                    else if (llmIntervention) {
+                        // Let LLM handle the situation
+                        slotMeta.llmIntervention = true;
+                        log('🚫 SLOT REFUSAL: LLM intervention triggered', { slot: activeSlotId });
+                        // Don't set finalReply - let it fall through to LLM below
+                    }
+                }
+                
+                // ═══════════════════════════════════════════════════════════════════
                 // PARTIAL ANSWER NUDGE - User started but didn't complete
                 // "my service address is" without actual address → gentle nudge
                 // CRITICAL: Only trigger if NO actual data was extracted this turn

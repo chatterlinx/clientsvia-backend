@@ -2299,6 +2299,47 @@ const companySchema = new mongoose.Schema({
                 },
                 
                 // ═══════════════════════════════════════════════════════════════
+                // V27: SLOT REFUSAL HANDLING - "I forgot", "I don't know"
+                // ═══════════════════════════════════════════════════════════════
+                // When customer can't/won't provide a required slot, handle gracefully
+                // ═══════════════════════════════════════════════════════════════
+                slotRefusalHandling: {
+                    // Max retry attempts before escalating
+                    maxRetries: { type: Number, default: 2, min: 1, max: 5 },
+                    
+                    // Use alternative prompts before giving up
+                    useAlternativePrompt: { type: Boolean, default: true },
+                    
+                    // Allow skipping required slots (creates booking with [NOT PROVIDED])
+                    allowSkipRequired: { type: Boolean, default: false },
+                    
+                    // Let LLM intervene to handle the situation
+                    llmIntervention: { type: Boolean, default: true },
+                    
+                    // Custom alternative prompts per slot (optional)
+                    alternativePrompts: {
+                        address: [{ type: String, trim: true }],
+                        phone: [{ type: String, trim: true }],
+                        name: [{ type: String, trim: true }],
+                        time: [{ type: String, trim: true }]
+                    },
+                    
+                    // What to say when giving up on a required slot
+                    giveUpScript: {
+                        type: String,
+                        default: "I understand. Let me transfer you to someone who can help.",
+                        trim: true
+                    },
+                    
+                    // Action when slot cannot be collected
+                    onGiveUp: {
+                        type: String,
+                        enum: ['transfer', 'take_message', 'continue_anyway', 'end_call'],
+                        default: 'transfer'
+                    }
+                },
+                
+                // ═══════════════════════════════════════════════════════════════
                 // STAGE 5: CONFIRMATION
                 // ═══════════════════════════════════════════════════════════════
                 confirmationSettings: {
