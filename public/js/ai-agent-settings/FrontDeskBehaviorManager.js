@@ -615,7 +615,7 @@ class FrontDeskBehaviorManager {
                 </div>
                 
                 <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
-                    <input type="text" id="fdb-new-first-name" placeholder="Enter name to add..." 
+                    <input type="text" id="fdb-new-first-name" placeholder="Enter names (comma-separated for bulk: John, Jane, Mike)" 
                         style="flex: 1; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;"
                         onkeypress="if(event.key === 'Enter') window.frontDeskManager.addCommonFirstName()">
                     <span style="color: #8b949e; font-size: 0.75rem;">${(this.config.commonFirstNames || []).length} names</span>
@@ -641,35 +641,62 @@ class FrontDeskBehaviorManager {
     
     addCommonFirstName() {
         const input = document.getElementById('fdb-new-first-name');
-        const name = input?.value?.trim();
-        if (!name) return;
+        const rawInput = input?.value?.trim();
+        if (!rawInput) return;
         
         if (!this.config.commonFirstNames) {
             this.config.commonFirstNames = [];
         }
         
-        // Check for duplicate (case-insensitive)
-        const lowerName = name.toLowerCase();
-        if (this.config.commonFirstNames.some(n => n.toLowerCase() === lowerName)) {
-            alert('This name is already in the list.');
-            return;
+        // Support bulk insertion: split by comma, semicolon, or newline
+        const namesToAdd = rawInput
+            .split(/[,;\n]+/)
+            .map(n => n.trim())
+            .filter(n => n.length > 0);
+        
+        if (namesToAdd.length === 0) return;
+        
+        const existingLower = new Set(this.config.commonFirstNames.map(n => n.toLowerCase()));
+        const added = [];
+        const skipped = [];
+        
+        for (const name of namesToAdd) {
+            const lowerName = name.toLowerCase();
+            if (existingLower.has(lowerName)) {
+                skipped.push(name);
+            } else {
+                this.config.commonFirstNames.push(name);
+                existingLower.add(lowerName);
+                added.push(name);
+            }
         }
         
-        // Add and sort alphabetically
-        this.config.commonFirstNames.push(name);
+        // Sort alphabetically
         this.config.commonFirstNames.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
         
         // Clear input and re-render
         input.value = '';
         this.updateCommonFirstNamesDisplay();
-        this.markDirty();
+        this.isDirty = true;
+        
+        // Show feedback for bulk insert
+        if (namesToAdd.length > 1) {
+            const msg = `Added ${added.length} name(s)` + (skipped.length > 0 ? `, skipped ${skipped.length} duplicate(s)` : '');
+            console.log('[FRONT DESK] Bulk name insert:', { added, skipped });
+            // Brief visual feedback
+            const container = document.getElementById('common-first-names-container');
+            if (container) {
+                container.style.borderColor = '#238636';
+                setTimeout(() => { container.style.borderColor = '#30363d'; }, 1000);
+            }
+        }
     }
     
     removeCommonFirstName(index) {
         if (!this.config.commonFirstNames) return;
         this.config.commonFirstNames.splice(index, 1);
         this.updateCommonFirstNamesDisplay();
-        this.markDirty();
+        this.isDirty = true;
     }
     
     updateCommonFirstNamesDisplay() {
