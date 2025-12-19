@@ -54,6 +54,9 @@ class FrontDeskBehaviorManager {
             this.config = result.data;
             console.log('[FRONT DESK BEHAVIOR] Config loaded:', this.config);
             
+            // 🔤 V36: Load inherited synonyms from active AiCore template
+            await this.loadInheritedSynonyms(token);
+            
             // 👤 DEBUG: Log commonFirstNames from API
             console.log('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: commonFirstNames from API:', {
                 count: (this.config.commonFirstNames || []).length,
@@ -83,6 +86,83 @@ class FrontDeskBehaviorManager {
             this.config = this.getDefaultConfig();
             console.log('[FRONT DESK BEHAVIOR] Using default config as fallback');
             return this.config;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V36: Load inherited synonyms from active AiCore template
+    // ═══════════════════════════════════════════════════════════════════════════
+    async loadInheritedSynonyms(token) {
+        try {
+            // First, get the company's template references
+            const companyResponse = await fetch(`/api/company/${this.companyId}`, {
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!companyResponse.ok) {
+                console.warn('[FRONT DESK BEHAVIOR] 🔤 Could not fetch company for template refs');
+                return;
+            }
+            
+            const companyData = await companyResponse.json();
+            const company = companyData.company || companyData;
+            const templateRefs = company.aiAgentSettings?.templateReferences || [];
+            const activeRef = templateRefs.find(ref => ref.enabled !== false);
+            
+            if (!activeRef?.templateId) {
+                console.log('[FRONT DESK BEHAVIOR] 🔤 No active template - no inherited synonyms');
+                this.config.inheritedSynonyms = {};
+                return;
+            }
+            
+            // Fetch the template to get nlpConfig.synonyms
+            const templateResponse = await fetch(`/api/admin/aicore-templates/${activeRef.templateId}`, {
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!templateResponse.ok) {
+                console.warn('[FRONT DESK BEHAVIOR] 🔤 Could not fetch template:', activeRef.templateId);
+                return;
+            }
+            
+            const templateData = await templateResponse.json();
+            const template = templateData.template || templateData;
+            
+            // Convert nlpConfig.synonyms to flat map for display
+            // Template format: { "technical_term": ["variant1", "variant2"] }
+            // Display format: { "variant1": "technical_term", "variant2": "technical_term" }
+            const inheritedSynonyms = {};
+            
+            if (template?.nlpConfig?.synonyms) {
+                const synonyms = template.nlpConfig.synonyms;
+                for (const [technical, variants] of Object.entries(synonyms)) {
+                    if (Array.isArray(variants)) {
+                        for (const variant of variants) {
+                            inheritedSynonyms[variant.toLowerCase()] = technical;
+                        }
+                    }
+                }
+            }
+            
+            this.config.inheritedSynonyms = inheritedSynonyms;
+            this.config.activeTemplateName = template?.name || 'Unknown Template';
+            
+            console.log('[FRONT DESK BEHAVIOR] 🔤 Inherited synonyms loaded:', {
+                templateId: activeRef.templateId,
+                templateName: template?.name,
+                synonymCount: Object.keys(inheritedSynonyms).length,
+                synonyms: inheritedSynonyms
+            });
+            
+        } catch (error) {
+            console.error('[FRONT DESK BEHAVIOR] 🔤 Error loading inherited synonyms:', error);
+            this.config.inheritedSynonyms = {};
         }
     }
 
@@ -3138,13 +3218,14 @@ Sean → Shawn, Shaun`;
         // Get inherited synonyms from AiCore template (via nlpConfig.synonyms)
         const templateSynonyms = this.config.inheritedSynonyms || this.config.templateSynonyms || {};
         const entries = Object.entries(templateSynonyms);
+        const templateName = this.config.activeTemplateName || 'No Template';
         
         // Always show 2-column table structure with scrollable body
         const emptyRows = entries.length === 0 ? `
             <div style="padding: 30px 20px; text-align: center; grid-column: 1 / -1;">
                 <div style="font-size: 1.5rem; margin-bottom: 8px; opacity: 0.4;">📚</div>
                 <p style="color: #6e7681; margin: 0; font-size: 0.8rem;">No inherited synonyms from template</p>
-                <p style="color: #484f58; margin: 4px 0 0 0; font-size: 0.7rem;">Select an AiCore template to inherit industry synonyms</p>
+                <p style="color: #484f58; margin: 4px 0 0 0; font-size: 0.7rem;">Select an AiCore template with synonyms configured</p>
             </div>
         ` : '';
         
@@ -3165,9 +3246,10 @@ Sean → Shawn, Shaun`;
             <div style="max-height: 200px; overflow-y: auto;">
                 ${entries.length === 0 ? emptyRows : rows}
             </div>
-            <!-- Footer with count -->
-            <div style="padding: 6px 16px; background: #21262d; border-top: 1px solid #30363d; text-align: center;">
-                <span style="color: #6e7681; font-size: 0.7rem;">${entries.length} inherited synonym${entries.length !== 1 ? 's' : ''} from template</span>
+            <!-- Footer with count and template name -->
+            <div style="padding: 6px 16px; background: #21262d; border-top: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #6e7681; font-size: 0.7rem;">${entries.length} inherited synonym${entries.length !== 1 ? 's' : ''}</span>
+                <span style="color: #3fb950; font-size: 0.7rem;">📦 ${this.escapeHtml(templateName)}</span>
             </div>
         `;
     }
