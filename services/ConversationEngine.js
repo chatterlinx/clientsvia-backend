@@ -4460,12 +4460,26 @@ async function processTurn({
         return response;
         
     } catch (error) {
-        logger.error('[CONVERSATION ENGINE] ❌ Error in processTurn', {
+        // ═══════════════════════════════════════════════════════════════════
+        // CRITICAL ERROR LOGGING - This is our main diagnostic point
+        // ═══════════════════════════════════════════════════════════════════
+        const errorDetails = {
             error: error.message,
-            stack: error.stack,
+            errorType: error.name,
+            stack: error.stack?.split('\n').slice(0, 5).join('\n'), // First 5 lines of stack
             companyId,
-            channel
-        });
+            channel,
+            userTextPreview: userText?.substring(0, 50),
+            latencyMs: Date.now() - startTime,
+            lastCheckpoint: debugLog[debugLog.length - 1]?.msg || 'unknown'
+        };
+        
+        logger.error('[CONVERSATION ENGINE] ❌ CRITICAL ERROR in processTurn', errorDetails);
+        
+        // Also log to console for immediate visibility
+        console.error('[CONVERSATION ENGINE] ❌ CRITICAL ERROR:', error.message);
+        console.error('[CONVERSATION ENGINE] Stack:', error.stack?.split('\n').slice(0, 5).join('\n'));
+        console.error('[CONVERSATION ENGINE] Last checkpoint:', errorDetails.lastCheckpoint);
         
         return {
             success: false,
@@ -4474,11 +4488,18 @@ async function processTurn({
             reply: "I'm sorry, I'm having trouble right now. Could you repeat that?",
             sessionId: providedSessionId,
             phase: 'error',
+            mode: 'ERROR',
             slotsCollected: {},
             wantsBooking: false,
             conversationMode: 'free',
             latencyMs: Date.now() - startTime,
-            debug: includeDebug ? { debugLog, error: error.message } : undefined
+            debug: {
+                debugLog,
+                error: error.message,
+                errorType: error.name,
+                lastCheckpoint: errorDetails.lastCheckpoint,
+                stackPreview: error.stack?.split('\n').slice(0, 3).join(' | ')
+            }
         };
     }
 }

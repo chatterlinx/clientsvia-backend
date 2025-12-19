@@ -2752,6 +2752,36 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               )
             ]);
             
+            // ═══════════════════════════════════════════════════════════════════
+            // 🚨 CHECK FOR ENGINE ERROR - Log it for debugging!
+            // ═══════════════════════════════════════════════════════════════════
+            if (engineResult.success === false) {
+              logger.error('[V2 TWILIO] ❌ ConversationEngine returned error!', {
+                callSid,
+                error: engineResult.error,
+                errorType: engineResult.errorType,
+                lastCheckpoint: engineResult.debug?.lastCheckpoint,
+                stackPreview: engineResult.debug?.stackPreview
+              });
+              
+              // Log to BlackBox for debugging
+              if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                  callId: callSid,
+                  companyId: companyID,
+                  type: 'CONVERSATION_ENGINE_ERROR',
+                  turn: turnCount,
+                  data: {
+                    error: engineResult.error,
+                    errorType: engineResult.errorType,
+                    lastCheckpoint: engineResult.debug?.lastCheckpoint,
+                    stackPreview: engineResult.debug?.stackPreview,
+                    latencyMs: engineResult.latencyMs
+                  }
+                }).catch(() => {});
+              }
+            }
+            
             // Map ConversationEngine result to expected format
             result = {
               text: engineResult.reply,
@@ -2768,13 +2798,18 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 mode: engineResult.conversationMode,
                 filledSlots: engineResult.slotsCollected,
                 latencyMs: engineResult.latencyMs,
-                engine: 'ConversationEngine'
+                engine: 'ConversationEngine',
+                // V33: Include error info if present
+                engineError: engineResult.error || null,
+                engineErrorType: engineResult.errorType || null,
+                lastCheckpoint: engineResult.debug?.lastCheckpoint || null
               }
             };
             
             const hybridLatencyMs = Date.now() - hybridStartTime;
             
-            tracer.step('HYBRID_PATH_SUCCESS', `🚀 Hybrid completed in ${hybridLatencyMs}ms`);
+            tracer.step(engineResult.success === false ? 'HYBRID_PATH_ERROR' : 'HYBRID_PATH_SUCCESS', 
+              `🚀 Hybrid completed in ${hybridLatencyMs}ms${engineResult.success === false ? ' (WITH ERROR)' : ''}`);
             
             // 📼 BLACK BOX: Log hybrid success
             if (BlackBoxLogger) {
