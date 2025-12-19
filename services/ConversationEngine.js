@@ -1521,9 +1521,15 @@ async function processTurn({
             let matchedTrigger = null;
             let matchType = null;
             
-            // V32: Try to match against greetingRules first
+            // V35: Smart greeting matching - prioritize LONGER matches first
+            // This handles "hi good afternoon" → should match "good afternoon" not "hi"
             if (greetingRules.length > 0) {
-                for (const rule of greetingRules) {
+                // Sort rules by trigger length (longest first) to prioritize specific matches
+                const sortedRules = [...greetingRules].sort((a, b) => 
+                    (b.trigger?.length || 0) - (a.trigger?.length || 0)
+                );
+                
+                for (const rule of sortedRules) {
                     if (!rule.trigger || !rule.response) continue;
                     
                     const trigger = rule.trigger.toLowerCase().trim();
@@ -1534,7 +1540,7 @@ async function processTurn({
                         if (pattern && pattern.test(userTextLower)) {
                             greetingResponse = rule.response;
                             matchedTrigger = trigger;
-                            matchType = 'fuzzy';
+                            matchType = 'fuzzy-pattern';
                             break;
                         } else if (userTextLower.includes(trigger)) {
                             greetingResponse = rule.response;
@@ -1543,39 +1549,59 @@ async function processTurn({
                             break;
                         }
                     } else {
-                        // Exact matching
-                        if (userTextLower === trigger || userTextLower.startsWith(trigger + ' ')) {
+                        // EXACT matching - trigger must appear as whole phrase
+                        // "hi good afternoon" contains "good afternoon" as exact phrase
+                        // But "morning appointment" should NOT match "morning" (that's a time, not greeting)
+                        const exactPattern = new RegExp(`\\b${trigger.replace(/\s+/g, '\\s+')}\\b`, 'i');
+                        if (exactPattern.test(userTextLower)) {
                             greetingResponse = rule.response;
                             matchedTrigger = trigger;
-                            matchType = 'exact';
+                            matchType = 'exact-phrase';
                             break;
                         }
                     }
                 }
+                
+                log('GREETING RULES CHECK', {
+                    userText: userTextLower,
+                    rulesChecked: sortedRules.length,
+                    matched: matchedTrigger,
+                    matchType,
+                    response: greetingResponse?.substring(0, 50)
+                });
             }
             
             // Fallback to legacy format if no rule matched
             if (!greetingResponse) {
                 const hour = new Date().getHours();
-                if (/^(good\s*morning|morning|gm)\b/i.test(userTextLower)) {
+                // V35 FIX: Use \b word boundary instead of ^ to match "hi good afternoon" etc.
+                // Check for time-of-day keywords ANYWHERE in the greeting, not just at start
+                if (/\b(good\s*morning|morning)\b/i.test(userTextLower)) {
                     greetingResponse = legacyResponses.morning || "Good morning! How can I help you today?";
                     matchedTrigger = 'morning (legacy)';
-                } else if (/^(good\s*afternoon|afternoon)\b/i.test(userTextLower)) {
+                } else if (/\b(good\s*afternoon|afternoon)\b/i.test(userTextLower)) {
                     greetingResponse = legacyResponses.afternoon || "Good afternoon! How can I help you today?";
                     matchedTrigger = 'afternoon (legacy)';
-                } else if (/^(good\s*evening|evening)\b/i.test(userTextLower)) {
+                } else if (/\b(good\s*evening|evening)\b/i.test(userTextLower)) {
                     greetingResponse = legacyResponses.evening || "Good evening! How can I help you today?";
                     matchedTrigger = 'evening (legacy)';
                 } else {
-                    // Generic - use time-appropriate
-                    if (hour < 12) {
-                        greetingResponse = legacyResponses.morning || "Good morning! How can I help you today?";
-                    } else if (hour < 17) {
-                        greetingResponse = legacyResponses.afternoon || "Good afternoon! How can I help you today?";
+                    // Generic greeting (hi, hello, hey) - MIRROR the caller's greeting style
+                    // Don't use time-of-day, just say "Hello!" or similar
+                    if (/^(hi|hello|hey)\b/i.test(userTextLower)) {
+                        greetingResponse = legacyResponses.generic || "Hello! How can I help you today?";
+                        matchedTrigger = 'generic-hello (legacy)';
                     } else {
-                        greetingResponse = legacyResponses.evening || "Good evening! How can I help you today?";
+                        // Truly generic - use time-appropriate
+                        if (hour < 12) {
+                            greetingResponse = legacyResponses.morning || "Good morning! How can I help you today?";
+                        } else if (hour < 17) {
+                            greetingResponse = legacyResponses.afternoon || "Good afternoon! How can I help you today?";
+                        } else {
+                            greetingResponse = legacyResponses.evening || "Good evening! How can I help you today?";
+                        }
+                        matchedTrigger = 'time-based (legacy)';
                     }
-                    matchedTrigger = 'generic (legacy)';
                 }
                 matchType = 'legacy';
             }
