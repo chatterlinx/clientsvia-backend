@@ -787,147 +787,136 @@ const ConsentDetector = {
 const SlotExtractors = {
     /**
      * Extract name from user input
-     * Handles any case (STT may output lowercase)
+     * V32: Robust extraction from sentences + stop word filtering
+     * Handles: "hi my name is Mark do you have any issues" → "Mark"
+     * Blocks: "yes go ahead" → null (not a name)
      */
-    extractName(text) {
+    extractName(text, { expectingName = false } = {}) {
         if (!text || typeof text !== 'string') return null;
         
+        const raw = text.trim();
+        const lower = raw.toLowerCase();
+        
         // ═══════════════════════════════════════════════════════════════════
-        // FALSE POSITIVES - Comprehensive list of words that are NOT names
+        // V32: STOP WORDS - Words that are NEVER part of a name
+        // These block extraction entirely if the candidate is just stop words
         // ═══════════════════════════════════════════════════════════════════
-        const falsePositiveWords = [
-            // Greetings
+        const STOP_WORDS = new Set([
+            // Greetings & fillers
             'hi', 'hello', 'hey', 'good', 'morning', 'afternoon', 'evening', 'night',
-            // Confirmations
+            'uh', 'um', 'erm', 'hmm', 'ah', 'oh', 'well', 'so', 'like', 'just',
+            // Confirmations - CRITICAL: "go ahead", "yes", "sure" are NOT names!
             'yeah', 'yes', 'sure', 'okay', 'ok', 'alright', 'right', 'yep', 'yup',
-            // Common words & auxiliary verbs (CRITICAL - "is failing" should NOT be a name!)
-            'the', 'that', 'this', 'what', 'just', 'well', 'please', 'thanks', 'thank', 'you',
+            'go', 'ahead', 'absolutely', 'definitely', 'certainly', 'perfect', 'sounds',
+            // Common words & auxiliary verbs
+            'the', 'that', 'this', 'what', 'please', 'thanks', 'thank', 'you',
             'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am', 'has', 'have', 'had',
             'do', 'does', 'did', 'will', 'would', 'could', 'should', 'can', 'may', 'might',
             'it', 'its', 'my', 'your', 'our', 'their', 'his', 'her', 'a', 'an', 'and', 'or', 'but',
-            // Common verbs (critical for "I'm having/doing/calling" etc)
+            // Common verbs
             'having', 'doing', 'calling', 'looking', 'trying', 'getting', 'going', 'coming',
             'waiting', 'hoping', 'thinking', 'wondering', 'needing', 'wanting', 'asking',
             'dealing', 'experiencing', 'seeing', 'feeling', 'hearing', 'running', 'working',
-            // Problem-related words (CRITICAL - "thermostat failing" should NOT extract name!)
+            // Problem-related words
             'failing', 'broken', 'leaking', 'stopped', 'making', 'noise', 'noisy', 'loud',
             'not', 'wont', 'doesnt', 'isnt', 'cant', 'problem', 'problems', 'issue', 'issues',
             'trouble', 'troubles', 'wrong', 'weird', 'strange', 'acting', 'up', 'down', 'out',
             // Adjectives/states
-            'great', 'fine', 'good', 'bad', 'hot', 'cold', 'here', 'there', 'back', 'home',
+            'great', 'fine', 'bad', 'hot', 'cold', 'here', 'there', 'back', 'home',
             'interested', 'concerned', 'worried', 'happy', 'sorry', 'glad',
-            // Filler words
-            'like', 'so', 'very', 'really', 'actually', 'basically', 'literally', 'probably',
-            // SERVICE/TRADE WORDS - Critical for "air conditioning service", "AC repair", etc.
+            // SERVICE/TRADE WORDS
             'service', 'services', 'repair', 'repairs', 'maintenance', 'install', 'installation',
             'conditioning', 'air', 'ac', 'hvac', 'heating', 'cooling', 'plumbing', 'electrical',
             'unit', 'system', 'systems', 'equipment', 'furnace', 'thermostat', 'duct', 'ducts',
             'appointment', 'schedule', 'scheduling', 'book', 'booking', 'call', 'help',
             'need', 'needs', 'want', 'wants', 'get', 'fix', 'check', 'look', 'today', 'tomorrow',
-            // TIME/URGENCY words - CRITICAL: "soon", "possible", "asap" are NOT names!
+            // TIME/URGENCY words
             'soon', 'possible', 'asap', 'now', 'immediately', 'urgent', 'urgently',
             'available', 'earliest', 'soonest', 'first', 'next', 'whenever',
             'somebody', 'someone', 'anybody', 'anyone', 'technician', 'tech',
-            // CONSENT words that might slip through
-            'absolutely', 'definitely', 'certainly', 'perfect', 'great', 'sounds'
-        ];
+            // Question words
+            'any', 'some', 'with'
+        ]);
         
-        // Full phrases that look like names but aren't
-        const falsePositivePhrases = [
-            'good morning', 'good afternoon', 'good evening', 'good night',
-            'thank you', 'hi there', 'hello there', 'hey there',
-            'this is', 'that is', 'what is', 'yes please', 'okay thanks',
-            'yeah sure', 'sure thing', 'all right', 'well hello',
-            'having just', 'doing great', 'doing good', 'doing fine',
-            'having some', 'having issues', 'having problems', 'having trouble',
-            // Service-related phrases that look like names
-            'conditioning service', 'air conditioning', 'ac service', 'ac repair',
-            'hvac service', 'heating service', 'cooling service', 'plumbing service',
-            'electrical service', 'maintenance service', 'repair service',
-            // TIME/URGENCY phrases - CRITICAL: "as soon as possible" is NOT a name!
-            'as soon as possible', 'as possible', 'soon as possible',
-            'right away', 'right now', 'immediately', 'today', 'tomorrow',
-            'this morning', 'this afternoon', 'this evening',
-            'asap', 'urgent', 'urgently', 'emergency',
-            'morning or afternoon', 'afternoon or morning',
-            'whenever possible', 'when possible', 'at your earliest',
-            'first available', 'next available', 'soonest available'
-        ];
+        // ═══════════════════════════════════════════════════════════════════
+        // V32: NAME INTENT DETECTION
+        // Only extract if explicit name phrase OR we're expecting a name
+        // This prevents "go ahead" from becoming a name in discovery
+        // ═══════════════════════════════════════════════════════════════════
+        const hasNameIntent = /\b(my name is|name is|this is|i am|i'?m|im|it'?s|call me)\b/i.test(lower);
         
-        // Normalize and check if input is just a greeting/phrase
-        const normalizedInput = text.toLowerCase().trim();
-        for (const phrase of falsePositivePhrases) {
-            if (normalizedInput === phrase || normalizedInput.startsWith(phrase + ' ') || normalizedInput.endsWith(' ' + phrase)) {
-                return null; // Don't extract anything from greeting-only messages
-            }
+        // Gate: Only extract if expecting name OR explicit name intent
+        if (!expectingName && !hasNameIntent) {
+            return null;
         }
         
         // ═══════════════════════════════════════════════════════════════════
-        // SMART EXTRACTION - Only use aggressive patterns on short messages
-        // Long messages are unlikely to be name introductions
+        // V32: PATTERN MATCHING WITH CLAUSE BOUNDARY CUTOFF
+        // Extract candidate, then cut at clause boundaries (and, but, do, etc.)
         // ═══════════════════════════════════════════════════════════════════
-        const wordCount = text.split(/\s+/).length;
-        const isShortMessage = wordCount <= 5; // "I'm John Smith" or "My name is Mark"
-        
-        // Common patterns - use [a-zA-Z] to handle any case from STT
         const patterns = [
-            // High confidence patterns - always use
-            { regex: /my name is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i, requireShort: false },
-            { regex: /name is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i, requireShort: false },
-            { regex: /it'?s\s+([a-zA-Z]+)\s+(?:calling|here)/i, requireShort: false },
-            
-            // ═══════════════════════════════════════════════════════════════════
-            // V29 FIX: Handle "yes it's Mark" / "it's Mark" patterns
-            // User responding to "May I have your name?" with confirmation + name
-            // ═══════════════════════════════════════════════════════════════════
-            { regex: /^(?:yes|yeah|yep|sure|okay|ok)\s+it'?s\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)$/i, requireShort: false },
-            { regex: /^it'?s\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)$/i, requireShort: true },
-            { regex: /^(?:yes|yeah|yep|sure)\s*,?\s*([a-zA-Z]+)$/i, requireShort: true }, // "yes, Mark" or "yes Mark"
-            
-            // Medium confidence - only on shorter messages
-            { regex: /this is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i, requireShort: true },
-            { regex: /i'?m\s+([a-zA-Z]+)$/i, requireShort: true },  // "I'm John" only at end
-            { regex: /call me\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i, requireShort: false }, // "call me John"
-            
-            // Low confidence patterns - require very short messages
-            { regex: /(?:^|\s)([a-zA-Z]+\s+[a-zA-Z]+)(?:\s*$)/i, requireShort: true }  // "John Smith" at end
+            /\bmy name is\s+(.+)$/i,
+            /\bname is\s+(.+)$/i,
+            /\bthis is\s+(.+)$/i,
+            /\bi am\s+(.+)$/i,
+            /\bi'?m\s+(.+)$/i,
+            /\bit'?s\s+(.+)$/i,
+            /\bcall me\s+(.+)$/i
         ];
         
-        for (const { regex, requireShort } of patterns) {
-            // Skip patterns that require short messages if this is a long message
-            if (requireShort && !isShortMessage) continue;
-            
-            const match = text.match(regex);
-            if (match && match[1]) {
-                const rawName = match[1].trim();
-                const rawNameLower = rawName.toLowerCase();
-                
-                // Filter out single-word false positives
-                if (falsePositiveWords.includes(rawNameLower)) {
-                    continue;
-                }
-                
-                // Filter out two-word phrases that are false positives
-                if (falsePositivePhrases.includes(rawNameLower)) {
-                    continue;
-                }
-                
-                // Filter out if EITHER word is a false positive (stricter check)
-                const words = rawNameLower.split(/\s+/);
-                const anyWordIsFalsePositive = words.some(w => falsePositiveWords.includes(w));
-                if (anyWordIsFalsePositive) {
-                    continue;
-                }
-                
-                // Title case the name: "mark" -> "Mark", "mark smith" -> "Mark Smith"
-                const name = rawName.split(' ')
-                    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                    .join(' ');
-                return name;
+        let candidate = null;
+        for (const re of patterns) {
+            const m = raw.match(re);
+            if (m && m[1]) {
+                candidate = m[1];
+                break;
             }
         }
         
-        return null;
+        // If expecting name but no phrase matched, try whole utterance as candidate
+        if (!candidate && expectingName) {
+            candidate = raw;
+        }
+        
+        if (!candidate) return null;
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // V32: CUT AT CLAUSE BOUNDARIES
+        // "Mark do you have any issues" → "Mark"
+        // "John Smith and I need help" → "John Smith"
+        // ═══════════════════════════════════════════════════════════════════
+        candidate = candidate.split(/(?:\band\b|\bbut\b|\bso\b|\bdo\b|\bcan\b|\bwill\b|\bhave\b|\bi\b|,|\?|\.|!)/i)[0].trim();
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // V32: TOKENIZE AND FILTER
+        // Only keep tokens that look like name parts (not stop words)
+        // ═══════════════════════════════════════════════════════════════════
+        const cleanToken = (t) => t.replace(/[^a-zA-Z'\-]/g, '').trim();
+        const looksLikeNameToken = (t) => {
+            if (!t || t.length < 2) return false;
+            if (STOP_WORDS.has(t.toLowerCase())) return false;
+            return /^[A-Za-z][A-Za-z'\-]+$/.test(t);
+        };
+        
+        const tokens = candidate
+            .split(/\s+/)
+            .map(cleanToken)
+            .filter(Boolean)
+            .filter(looksLikeNameToken);
+        
+        if (tokens.length === 0) return null;
+        
+        // Take first two meaningful tokens (first name + optional last name)
+        const firstName = tokens[0];
+        const lastName = tokens.length >= 2 ? tokens[1] : null;
+        
+        // Title case
+        const titleCase = (s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+        const name = lastName 
+            ? `${titleCase(firstName)} ${titleCase(lastName)}`
+            : titleCase(firstName);
+        
+        return name;
     },
     
     /**
@@ -1584,8 +1573,10 @@ async function processTurn({
                     log('🔄 User explicitly stating name - will override previous:', currentSlots.name);
                 }
                 
-            let extractedName = SlotExtractors.extractName(userText);
-            log('🔍 Extraction result:', extractedName || '(none)');
+            // V32: Pass expectingName flag - true if we're in BOOKING mode and asking for name
+            const expectingName = session.mode === 'BOOKING' && session.booking?.activeSlot === 'name';
+            let extractedName = SlotExtractors.extractName(userText, { expectingName });
+            log('🔍 V32 Extraction result:', extractedName || '(none)', { expectingName });
             
             // ═══════════════════════════════════════════════════════════════════
             // V29 FIX: Context-aware name extraction
@@ -4303,4 +4294,5 @@ module.exports = {
     // Export slot extractors for testing
     SlotExtractors
 };
+
 
