@@ -2101,6 +2101,53 @@ async function processTurn({
                     session.booking.activeSlot = 'phone';
                     log('📝 NAME COMPLETE, moving to phone', { name: currentSlots.name });
                 }
+                // ═══════════════════════════════════════════════════════════════════
+                // V31 FIX: Handle missing name part (last name after first, or vice versa)
+                // When we've asked for last name and user says "Walter", accept it immediately
+                // ═══════════════════════════════════════════════════════════════════
+                else if (session.booking.activeSlot === 'name' && nameMeta.askedMissingPartOnce && !hasBothParts) {
+                    // We asked for the missing part - accept whatever they say as that part
+                    const userWord = userText.trim().split(/\s+/)[0]; // First word only
+                    const cleanWord = userWord.replace(/[^a-zA-Z]/g, ''); // Remove punctuation
+                    
+                    if (cleanWord.length >= 2) {
+                        // Title case
+                        const formattedName = cleanWord.charAt(0).toUpperCase() + cleanWord.slice(1).toLowerCase();
+                        
+                        if (nameMeta.assumedSingleTokenAs === 'first') {
+                            // We had first name (e.g., "Mark"), now got last name
+                            nameMeta.last = formattedName;
+                            log('📝 V31: Got LAST name after asking', { lastName: formattedName });
+                        } else {
+                            // We had last name (e.g., "Subach"), now got first name
+                            nameMeta.first = formattedName;
+                            log('📝 V31: Got FIRST name after asking', { firstName: formattedName });
+                        }
+                        
+                        // Build full name safely (no undefined)
+                        const firstName = nameMeta.first || '';
+                        const lastName = nameMeta.last || '';
+                        currentSlots.name = `${firstName} ${lastName}`.trim();
+                        session.booking.activeSlot = 'phone';
+                        
+                        // 🎯 DISPLAY NAME: Always use first name for personalization
+                        const displayName = nameMeta.first || currentSlots.name.split(' ')[0] || currentSlots.name;
+                        finalReply = `Perfect, ${displayName}. `;
+                        nextSlotId = null; // Will find phone below
+                        
+                        log('📝 V31: NAME COMPLETE after missing part', { 
+                            name: currentSlots.name,
+                            displayName,
+                            first: nameMeta.first,
+                            last: nameMeta.last
+                        });
+                    } else {
+                        // Too short - ask again with reprompt
+                        finalReply = "Sorry, I didn't catch that. What's your last name?";
+                        nextSlotId = 'name';
+                        log('📝 V31: Missing part too short, re-asking');
+                    }
+                }
                 // Check if we're in the middle of name collection
                 else if (session.booking.activeSlot === 'name' && hasPartialName) {
                     const extractedName = extractedThisTurn.name || currentSlots.partialName;
