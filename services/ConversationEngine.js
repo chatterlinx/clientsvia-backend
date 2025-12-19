@@ -319,6 +319,136 @@ function escapeRegex(string) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// V31: NAME SPELLING VARIANT HELPER
+// Checks if a name has common spelling variants (Mark/Marc, Brian/Bryan)
+// Returns { hasVariant, optionA, optionB, letterA, letterB } or null
+// ═══════════════════════════════════════════════════════════════════════════
+function findSpellingVariant(name, config, commonFirstNames = []) {
+    if (!name || !config?.enabled) return null;
+    
+    const nameLower = name.toLowerCase();
+    const mode = config.mode || '1_char_only';
+    const source = config.source || 'curated_list';
+    
+    // Get variant groups based on source
+    let variantGroups = {};
+    
+    if (source === 'curated_list') {
+        // Use manually curated variant groups from config
+        const rawGroups = config.variantGroups || {};
+        // Handle both Map and plain object
+        if (rawGroups instanceof Map) {
+            rawGroups.forEach((variants, key) => {
+                variantGroups[key.toLowerCase()] = variants.map(v => v.toLowerCase());
+            });
+        } else {
+            Object.entries(rawGroups).forEach(([key, variants]) => {
+                variantGroups[key.toLowerCase()] = Array.isArray(variants) 
+                    ? variants.map(v => v.toLowerCase())
+                    : [variants.toLowerCase()];
+            });
+        }
+    } else if (source === 'auto_scan_common_first_names') {
+        // Auto-scan common first names for 1-char variants
+        const names = commonFirstNames.map(n => n.toLowerCase());
+        for (let i = 0; i < names.length; i++) {
+            for (let j = i + 1; j < names.length; j++) {
+                if (levenshteinDistance(names[i], names[j]) === 1) {
+                    // Add both directions
+                    if (!variantGroups[names[i]]) variantGroups[names[i]] = [];
+                    if (!variantGroups[names[j]]) variantGroups[names[j]] = [];
+                    if (!variantGroups[names[i]].includes(names[j])) variantGroups[names[i]].push(names[j]);
+                    if (!variantGroups[names[j]].includes(names[i])) variantGroups[names[j]].push(names[i]);
+                }
+            }
+        }
+    }
+    
+    // Check if the name has variants
+    const variants = variantGroups[nameLower];
+    if (!variants || variants.length === 0) return null;
+    
+    // Find the first variant that matches the mode criteria
+    for (const variant of variants) {
+        const distance = levenshteinDistance(nameLower, variant);
+        
+        // Mode check
+        if (mode === '1_char_only' && distance !== 1) continue;
+        // 'any_variant' accepts all variants in the list
+        
+        // Find the differing letters
+        const { letterA, letterB } = findDifferingLetters(name, variant);
+        
+        return {
+            hasVariant: true,
+            optionA: name.charAt(0).toUpperCase() + name.slice(1).toLowerCase(),
+            optionB: variant.charAt(0).toUpperCase() + variant.slice(1).toLowerCase(),
+            letterA: letterA?.toUpperCase() || '',
+            letterB: letterB?.toUpperCase() || ''
+        };
+    }
+    
+    return null;
+}
+
+// Helper: Calculate Levenshtein distance between two strings
+function levenshteinDistance(a, b) {
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+    
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+    
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j] + 1
+                );
+            }
+        }
+    }
+    return matrix[b.length][a.length];
+}
+
+// Helper: Find the differing letters between two similar names
+function findDifferingLetters(name1, name2) {
+    const a = name1.toLowerCase();
+    const b = name2.toLowerCase();
+    
+    // Simple case: same length, one substitution
+    if (a.length === b.length) {
+        for (let i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) {
+                return { letterA: a[i], letterB: b[i] };
+            }
+        }
+    }
+    
+    // Different lengths: find insertion/deletion
+    const longer = a.length > b.length ? a : b;
+    const shorter = a.length > b.length ? b : a;
+    
+    for (let i = 0; i < longer.length; i++) {
+        if (shorter[i] !== longer[i]) {
+            if (a.length > b.length) {
+                return { letterA: longer[i], letterB: '' };
+            } else {
+                return { letterA: '', letterB: longer[i] };
+            }
+        }
+    }
+    
+    // Last character is different
+    return { letterA: longer[longer.length - 1], letterB: '' };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 🆕 FINALIZE BOOKING - Creates booking record and returns final script
 // ═══════════════════════════════════════════════════════════════════════════
 // Called when ALL required slots are collected and confirmed.
@@ -1955,7 +2085,10 @@ async function processTurn({
                     needsLastName: false,
                     lastConfirmed: false,      // Did user confirm the partial name?
                     askedMissingPartOnce: false,
-                    assumedSingleTokenAs: null  // "first" | "last"
+                    assumedSingleTokenAs: null,  // "first" | "last"
+                    // V31: Spelling variant tracking
+                    askedSpellingVariant: false,
+                    spellingVariantAnswer: null  // "optionA" | "optionB" | null
                 };
                 
                 // 🔍 DEBUG: Log nameMeta state at start of turn
@@ -2220,11 +2353,109 @@ async function processTurn({
                         }
                         currentSlots.partialName = extractedName;
                         
-                        const confirmText = confirmBackTemplate.replace('{value}', extractedName);
-                        finalReply = confirmText;
-                        nextSlotId = 'name'; // Still on name
+                        // ═══════════════════════════════════════════════════════════════════
+                        // V31: SPELLING VARIANT CHECK (Mark with K or Marc with C?)
+                        // Only ask if: enabled, not asked yet, max asks not exceeded
+                        // ═══════════════════════════════════════════════════════════════════
+                        const spellingConfig = company.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants || {};
+                        const spellingEnabled = spellingConfig.enabled === true;
+                        const maxSpellingAsks = spellingConfig.maxAsksPerCall || 1;
+                        const spellingAsksThisCall = nameMeta.spellingAsksCount || 0;
                         
-                        log('📝 NAME: Confirming partial name', { partial: extractedName });
+                        // Only check spelling for first names (most common case for variants)
+                        const shouldCheckSpelling = spellingEnabled && 
+                                                    !nameMeta.askedSpellingVariant && 
+                                                    spellingAsksThisCall < maxSpellingAsks &&
+                                                    nameMeta.assumedSingleTokenAs === 'first';
+                        
+                        if (shouldCheckSpelling) {
+                            const commonFirstNames = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+                            const variant = findSpellingVariant(extractedName, spellingConfig, commonFirstNames);
+                            
+                            if (variant && variant.hasVariant) {
+                                // Ask about spelling variant
+                                nameMeta.askedSpellingVariant = true;
+                                nameMeta.spellingAsksCount = spellingAsksThisCall + 1;
+                                nameMeta.pendingSpellingVariant = variant;
+                                
+                                const script = spellingConfig.script || 'Just to confirm — {optionA} with a {letterA} or {optionB} with a {letterB}?';
+                                finalReply = script
+                                    .replace('{optionA}', variant.optionA)
+                                    .replace('{optionB}', variant.optionB)
+                                    .replace('{letterA}', variant.letterA)
+                                    .replace('{letterB}', variant.letterB);
+                                nextSlotId = 'name'; // Still on name
+                                
+                                log('📝 V31 SPELLING VARIANT: Asking about variant', {
+                                    name: extractedName,
+                                    optionA: variant.optionA,
+                                    optionB: variant.optionB,
+                                    script: finalReply
+                                });
+                            } else {
+                                // No variant found, proceed with normal confirm
+                                const confirmText = confirmBackTemplate.replace('{value}', extractedName);
+                                finalReply = confirmText;
+                                nextSlotId = 'name';
+                                log('📝 NAME: No spelling variant found, confirming partial name', { partial: extractedName });
+                            }
+                        } else {
+                            // Spelling variants disabled or already asked, proceed with normal confirm
+                            const confirmText = confirmBackTemplate.replace('{value}', extractedName);
+                            finalReply = confirmText;
+                            nextSlotId = 'name';
+                            log('📝 NAME: Confirming partial name', { partial: extractedName, spellingEnabled, askedSpellingVariant: nameMeta.askedSpellingVariant });
+                        }
+                    // ═══════════════════════════════════════════════════════════════════
+                    // V31: Handle spelling variant response
+                    // User answered "K" or "C" or "Mark" or "Marc"
+                    // ═══════════════════════════════════════════════════════════════════
+                    } else if (nameMeta.askedSpellingVariant && nameMeta.pendingSpellingVariant && !nameMeta.spellingVariantAnswer) {
+                        const variant = nameMeta.pendingSpellingVariant;
+                        const userTextLower = userText.toLowerCase().trim();
+                        
+                        // Check what the user answered
+                        let chosenName = null;
+                        
+                        // Check for letter answers: "K", "C", "with a K", "the K"
+                        if (userTextLower.includes(variant.letterA.toLowerCase()) && 
+                            !userTextLower.includes(variant.letterB.toLowerCase())) {
+                            chosenName = variant.optionA;
+                        } else if (userTextLower.includes(variant.letterB.toLowerCase()) && 
+                                   !userTextLower.includes(variant.letterA.toLowerCase())) {
+                            chosenName = variant.optionB;
+                        }
+                        // Check for name answers: "Mark", "Marc"
+                        else if (userTextLower.includes(variant.optionA.toLowerCase())) {
+                            chosenName = variant.optionA;
+                        } else if (userTextLower.includes(variant.optionB.toLowerCase())) {
+                            chosenName = variant.optionB;
+                        }
+                        // Default to optionA if unclear
+                        else {
+                            chosenName = variant.optionA;
+                            log('📝 V31 SPELLING: Unclear answer, defaulting to optionA', { userText, optionA: variant.optionA });
+                        }
+                        
+                        // Update the name with the correct spelling
+                        nameMeta.spellingVariantAnswer = chosenName;
+                        nameMeta.first = chosenName;
+                        currentSlots.partialName = chosenName;
+                        
+                        log('📝 V31 SPELLING VARIANT: User chose', { chosenName, userText });
+                        
+                        // Now proceed to ask for last name or move on
+                        if (askFullName) {
+                            nameMeta.askedMissingPartOnce = true;
+                            finalReply = `Got it, ${chosenName}. And what's your last name?`;
+                            nextSlotId = 'name';
+                        } else {
+                            // Accept as complete
+                            currentSlots.name = chosenName;
+                            session.booking.activeSlot = 'phone';
+                            finalReply = `Got it, ${chosenName}. `;
+                            nextSlotId = null;
+                        }
                     } else if (nameMeta.lastConfirmed && !nameMeta.askedMissingPartOnce && askFullName) {
                         // User confirmed, now ask for missing part
                         nameMeta.askedMissingPartOnce = true;
