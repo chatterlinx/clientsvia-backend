@@ -386,6 +386,9 @@ function registerRoutes(routes) {
 
     // EMERGENCY ROUTE - DELETE AFTER USE
     app.use('/api', require('./routes/emergency-enable'));
+    
+    // PUBLIC HEALTH/VERSION ROUTES - Must be before auth-protected routes
+    app.use('/api', routes.healthRoutes); // SYSTEM: Health check + version endpoint (PUBLIC, no auth)
 
     // --- API Routes ---
     app.use('/api', routes.v2CompanyRoutes);
@@ -464,7 +467,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/intelligence', routes.adminIntelligenceRoutes); // ADMIN: 3-Tier Intelligence System (LLM, pattern learning, cost tracking, global patterns)
     app.use('/api/admin', routes.globalIntelligenceRoutes); // ADMIN: Global Production Intelligence API (platform-wide 3-tier defaults, inheritance system)
     app.use('/api/admin/suggestions', routes.enterpriseSuggestionsRoutes); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost projections)
-    app.use('/api', routes.healthRoutes); // SYSTEM: Health check endpoint for systems (Call Archives, Spam Filter)
+    // healthRoutes moved to top of routes (before auth-protected routes) for public access
     // llm0TraceRoutes REMOVED Dec 2025 - nuked
     app.use('/api/admin/frontline-script', routes.frontlineScriptBuilderRoutes); // Frontline Script Builder: LLM-powered script generation
     app.use('/api/chat', routes.chatRoutes); // 🌐 Website Chat API (unified AI brain for website visitors, also used by AI Test Console)
