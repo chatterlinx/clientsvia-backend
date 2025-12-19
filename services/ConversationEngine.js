@@ -107,10 +107,11 @@ const DEFAULT_PROMPT_VARIANTS = {
         "Got it — we can definitely help with that."
     ],
     // Offer scheduling variants
+    // V36 FIX: Removed "We can help with that" - it duplicates empathy variants
     offerScheduling: [
         "Would you like me to schedule a technician?",
         "I can get someone out to you. Would you like to schedule?",
-        "We can help with that. Want me to set up an appointment?",
+        "Want me to set up an appointment?",
         "Let me get you scheduled. Sound good?"
     ],
     // Slot prompt variants (fallbacks if not configured per-slot)
