@@ -203,6 +203,19 @@ function isNameSlotComplete(currentSlots, nameMeta, slotConfig) {
     const first = nameMeta?.first || '';
     const last = nameMeta?.last || '';
     
+    // V36 FIX: Check if we're still waiting for confirmation or spelling variant
+    // If so, the name is NOT complete yet - we need to finish the interaction
+    const confirmBackEnabled = slotConfig?.confirmBack === true || slotConfig?.confirmBack === 'true';
+    const waitingForConfirmation = nameMeta?.lastConfirmed === true && !nameMeta?.askedMissingPartOnce && 
+                                   !currentSlots?.name; // Confirmed but not yet accepted
+    const waitingForSpellingVariant = nameMeta?.askedSpellingVariant === true && !nameMeta?.spellingVariantAnswer;
+    
+    // If we're in the middle of a confirmation flow, name is NOT complete
+    if (waitingForSpellingVariant) {
+        logger.debug('[SLOT COMPLETE] Name NOT complete: waiting for spelling variant answer');
+        return false;
+    }
+    
     // V34 FIX: THE GOLDEN RULE - If we have ANY name value, it's complete
     // The askFullName setting controls WHETHER to ask for last name during collection,
     // NOT whether to re-ask a name we already have.
@@ -219,11 +232,20 @@ function isNameSlotComplete(currentSlots, nameMeta, slotConfig) {
         return true;
     }
     
-    // 3. V34 FIX: If we have a name value (even single word), it's complete!
-    // We should NEVER re-ask for a name we already have.
-    // The askFullName logic only applies during initial name collection.
-    if (nameValue) {
-        logger.debug('[SLOT COMPLETE] Name complete: has value (single or full)', { nameValue });
+    // 3. V36 FIX: Only consider single-word name complete if:
+    //    - confirmBack is disabled OR we've already confirmed
+    //    - AND we're not waiting for askFullName response
+    const askFullName = slotConfig?.askFullName === true || slotConfig?.requireFullName === true;
+    const needsLastName = askFullName && !last && first;
+    
+    if (nameValue && !needsLastName) {
+        // V36: Check if confirmBack flow is complete
+        if (confirmBackEnabled && !nameMeta?.lastConfirmed && !nameMeta?.askedMissingPartOnce) {
+            // We have a name but haven't confirmed it yet - NOT complete
+            logger.debug('[SLOT COMPLETE] Name NOT complete: confirmBack enabled but not confirmed yet', { nameValue });
+            return false;
+        }
+        logger.debug('[SLOT COMPLETE] Name complete: has value and no pending interactions', { nameValue });
         return true;
     }
     
