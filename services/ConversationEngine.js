@@ -50,7 +50,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V31-DISCOVERY-LIMIT-VARIANTS';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V34-VALUE-BEATS-META';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -84,7 +84,11 @@ logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
         '✅ V31: AUTO-OFFER after issue understood (no endless troubleshooting)',
         '✅ V31: PROMPT VARIANTS - Rotate phrasing to avoid repetition',
         '✅ V31: STATE SUMMARY to LLM - Prevents goldfish memory',
-        '✅ V31: ANTI-LOOP BREAKER - Escalate after repeated failures'
+        '✅ V31: ANTI-LOOP BREAKER - Escalate after repeated failures',
+        '✅ V34: VALUE BEATS META - If slot has value, it\'s complete',
+        '✅ V34: isSlotComplete() helper functions for consistent checks',
+        '✅ V34: ANTI-REPEAT GUARDRAIL - Never ask slot just extracted',
+        '✅ V34: buildStateSummaryForLLM() for context awareness'
     ]
 });
 
@@ -174,6 +178,154 @@ function getSlotPromptVariant(slotConfig, slotId, askedCount = 0) {
     }
     // Last resort: use configured question
     return slotConfig?.question || `What's your ${slotId}?`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// V34: SLOT COMPLETION GATES - "Value beats meta"
+// ═══════════════════════════════════════════════════════════════════════════
+// These functions determine if a slot is COMPLETE and should NOT be asked again.
+// The golden rule: If we have a value, the slot is complete.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Check if NAME slot is complete
+ * @param {Object} currentSlots - Current slot values
+ * @param {Object} nameMeta - session.booking.meta.name
+ * @param {Object} slotConfig - Name slot configuration
+ * @returns {boolean} True if name is complete
+ */
+function isNameSlotComplete(currentSlots, nameMeta, slotConfig) {
+    const nameValue = (currentSlots?.name || '').trim();
+    const partialName = (currentSlots?.partialName || '').trim();
+    const first = nameMeta?.first || '';
+    const last = nameMeta?.last || '';
+    
+    // 1. Full name in meta (first AND last)
+    if (first && last) {
+        logger.debug('[SLOT COMPLETE] Name complete: meta has first+last', { first, last });
+        return true;
+    }
+    
+    // 2. Full name in string (contains space = "Mark Walter")
+    if (nameValue && nameValue.includes(' ')) {
+        logger.debug('[SLOT COMPLETE] Name complete: string has space', { nameValue });
+        return true;
+    }
+    
+    // 3. Allow first-name only if configured (askFullName = false)
+    const allowFirstOnly = slotConfig?.askFullName === false || slotConfig?.askFullName === 'false';
+    if (allowFirstOnly && (nameValue || partialName || first)) {
+        logger.debug('[SLOT COMPLETE] Name complete: first-only allowed', { 
+            nameValue, partialName, first, allowFirstOnly 
+        });
+        return true;
+    }
+    
+    // Not complete
+    logger.debug('[SLOT COMPLETE] Name NOT complete', { 
+        nameValue, partialName, first, last, allowFirstOnly 
+    });
+    return false;
+}
+
+/**
+ * Check if a confirmBack slot (phone, address) is complete
+ * @param {string} value - Slot value
+ * @param {Object} slotMeta - session.booking.meta[slotId]
+ * @param {Object} slotConfig - Slot configuration
+ * @returns {boolean} True if slot is complete
+ */
+function isConfirmBackSlotComplete(value, slotMeta, slotConfig) {
+    const hasValue = !!(value && value.trim());
+    const isConfirmed = slotMeta?.confirmed === true;
+    const isPending = slotMeta?.pendingConfirm === true;
+    const needsConfirmBack = slotConfig?.confirmBack === true || slotConfig?.confirmBack === 'true';
+    
+    // If no value, not complete
+    if (!hasValue) {
+        logger.debug('[SLOT COMPLETE] ConfirmBack NOT complete: no value');
+        return false;
+    }
+    
+    // If doesn't need confirmBack, value is enough
+    if (!needsConfirmBack) {
+        logger.debug('[SLOT COMPLETE] ConfirmBack complete: no confirmBack required', { value });
+        return true;
+    }
+    
+    // V34 RULE: Value + (confirmed OR not pending) = complete
+    // If we have a value and we're NOT waiting for confirmation, it was confirmed previously
+    const isComplete = isConfirmed || !isPending;
+    
+    logger.debug('[SLOT COMPLETE] ConfirmBack check', { 
+        value: value?.substring(0, 20), 
+        isConfirmed, 
+        isPending, 
+        isComplete 
+    });
+    
+    return isComplete;
+}
+
+/**
+ * Master function: Check if ANY slot is complete
+ * @param {string} slotId - Slot identifier
+ * @param {Object} currentSlots - Current slot values
+ * @param {Object} session - Session object with booking.meta
+ * @param {Object} slotConfig - Slot configuration
+ * @returns {boolean} True if slot is complete
+ */
+function isSlotComplete(slotId, currentSlots, session, slotConfig) {
+    const slotMeta = session?.booking?.meta?.[slotId] || {};
+    const value = currentSlots?.[slotId] || currentSlots?.[slotConfig?.type] || '';
+    
+    // Special handling for name slot
+    if (slotId === 'name') {
+        const nameMeta = session?.booking?.meta?.name || {};
+        return isNameSlotComplete(currentSlots, nameMeta, slotConfig);
+    }
+    
+    // For confirmBack slots (phone, address, etc.)
+    return isConfirmBackSlotComplete(value, slotMeta, slotConfig);
+}
+
+/**
+ * Build state summary for LLM to prevent "goldfish memory"
+ * @param {Object} currentSlots - Current slot values
+ * @param {Array} bookingSlots - Slot configurations
+ * @param {Object} session - Session object
+ * @returns {string} State summary string
+ */
+function buildStateSummaryForLLM(currentSlots, bookingSlots, session) {
+    const collected = [];
+    const missing = [];
+    
+    for (const slot of bookingSlots) {
+        const slotId = slot.slotId || slot.id || slot.type;
+        const value = currentSlots[slotId];
+        const isComplete = isSlotComplete(slotId, currentSlots, session, slot);
+        
+        if (isComplete && value) {
+            const displayValue = slotId === 'phone' ? value : value.substring(0, 30);
+            collected.push(`${slotId}="${displayValue}" (complete)`);
+        } else if (slot.required) {
+            missing.push(slotId);
+        }
+    }
+    
+    const nextSlot = missing[0] || 'NONE';
+    const askedCounts = {};
+    for (const slotId of missing) {
+        askedCounts[slotId] = session?.booking?.meta?.[slotId]?.askedCount || 0;
+    }
+    
+    return `
+State Summary (DO NOT ASK COMPLETED SLOTS):
+  Collected: ${collected.join(', ') || 'none'}
+  Missing: ${missing.join(', ') || 'none'}
+  Next: ${nextSlot}
+  Asked: ${JSON.stringify(askedCounts)}
+`.trim();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3245,93 +3397,54 @@ async function processTurn({
                 }
                 
                 // ═══════════════════════════════════════════════════════════════════
-                // V33: STRICT STATE-DRIVEN SLOT SELECTION
+                // V34: STRICT STATE-DRIVEN SLOT SELECTION (VALUE BEATS META)
                 // ═══════════════════════════════════════════════════════════════════
-                // A slot is COMPLETE when:
-                // 1. It has a value (currentSlots[slotId] is truthy) AND
-                // 2. If confirmBack is enabled: meta.confirmed = true
-                // 3. If confirmBack is disabled: just having the value is enough
-                //
-                // A slot is INCOMPLETE when:
-                // 1. No value OR
-                // 2. Value exists but pending confirmation (meta.pendingConfirm = true)
-                //
-                // CRITICAL: Once a slot is confirmed, NEVER ask it again.
+                // Uses helper functions: isSlotComplete(), isNameSlotComplete(), etc.
+                // 
+                // THE GOLDEN RULE: If we have a value, the slot is complete.
+                // 
+                // ANTI-REPEAT GUARDRAIL: If user just provided a slot value this turn,
+                // that slot is NOT eligible to be asked again.
                 // ═══════════════════════════════════════════════════════════════════
                 if (nextSlotId === null) {
                     // Log current slot state for debugging
-                    log('🔍 V33: COMPUTING NEXT SLOT - Current state:', {
+                    log('🔍 V34: COMPUTING NEXT SLOT - Current state:', {
                         'currentSlots.name': currentSlots.name,
+                        'currentSlots.partialName': currentSlots.partialName,
                         'currentSlots.phone': currentSlots.phone,
                         'currentSlots.address': currentSlots.address,
                         'currentSlots.time': currentSlots.time,
-                        'phoneMeta.confirmed': session.booking.meta.phone?.confirmed,
-                        'phoneMeta.pendingConfirm': session.booking.meta.phone?.pendingConfirm,
-                        'addressMeta.confirmed': session.booking.meta.address?.confirmed,
-                        'timeMeta.confirmed': session.booking.meta.time?.confirmed,
+                        'extractedThisTurn': JSON.stringify(extractedThisTurn),
                         'activeSlot': session.booking.activeSlot
                     });
                     
+                    // Build state summary for LLM (prevents goldfish memory)
+                    const stateSummary = buildStateSummaryForLLM(currentSlots, bookingSlotsSafe, session);
+                    log('📋 V34: State Summary:', { stateSummary });
+                    
                     const nextMissingSlotSafe = bookingSlotsSafe.find(slot => {
                         const slotId = slot.slotId || slot.id || slot.type;
-                        const hasValue = !!(currentSlots[slotId] || currentSlots[slot.type]);
                         
-                        // Check slot meta for confirmation status
-                        const slotMeta = session.booking.meta[slotId] || {};
-                        const isPendingConfirm = slotMeta.pendingConfirm === true;
-                        const isConfirmed = slotMeta.confirmed === true;
-                        
-                        // Special handling for name slot (uses different confirmation logic)
-                        const isNameSlot = slotId === 'name';
-                        const nameMeta = session.booking.meta.name || {};
-                        
-                        // V33 FIX: Check if name is complete by looking at:
-                        // 1. nameMeta.first AND nameMeta.last are both set
-                        // 2. OR currentSlots.name contains a space (full name in one string)
-                        // 3. OR askFullName is false (single name accepted)
-                        const nameValue = currentSlots.name || currentSlots[slot.type];
-                        const nameHasSpace = nameValue && nameValue.includes(' ');
-                        const nameIsComplete = isNameSlot && hasValue && (
-                            (nameMeta.first && nameMeta.last) || // Has both parts in meta
-                            nameHasSpace || // Full name in single string (e.g., "Mark Walter")
-                            (!nameSlotConfig?.askFullName) // Single name accepted when askFullName is false
-                        );
-                        
-                        // Slot is COMPLETE if:
-                        // - Has value AND confirmed (for confirmBack slots)
-                        // - Has value AND not pending (for non-confirmBack slots)
-                        // - Name slot: has both parts OR single name accepted
-                        // V33 FIX: If slot has value and NOT pending, consider complete
-                        //          (user must have confirmed in previous turn)
-                        const slotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === slotId);
-                        const needsConfirmBack = slotConfig?.confirmBack === true || slotConfig?.confirmBack === 'true';
-                        
-                        let isComplete;
-                        if (isNameSlot) {
-                            isComplete = nameIsComplete;
-                        } else if (needsConfirmBack) {
-                            // ConfirmBack slot: complete when:
-                            // 1. Has value AND confirmed, OR
-                            // 2. Has value AND NOT pending (must have been confirmed previously)
-                            isComplete = hasValue && (isConfirmed || !isPendingConfirm);
-                        } else {
-                            // Non-confirmBack slot: complete when has value
-                            isComplete = hasValue && !isPendingConfirm;
+                        // V34: ANTI-REPEAT GUARDRAIL
+                        // If user just provided this slot value THIS TURN, don't ask again
+                        if (extractedThisTurn[slotId]) {
+                            log(`🚫 V34 ANTI-REPEAT: Slot ${slotId} was just extracted, skipping`, {
+                                value: extractedThisTurn[slotId]
+                            });
+                            return false; // Not eligible
                         }
                         
-                        const isIncomplete = !isComplete;
+                        // V34: Use helper function for completion check
+                        const isComplete = isSlotComplete(slotId, currentSlots, session, slot);
                         
-                        log(`🔍 V33: Slot ${slotId} check:`, {
-                            hasValue,
-                            isPendingConfirm,
-                            isConfirmed,
-                            needsConfirmBack,
+                        log(`🔍 V34: Slot ${slotId} check:`, {
+                            value: currentSlots[slotId]?.substring?.(0, 20) || currentSlots[slotId],
                             isComplete,
-                            isIncomplete,
-                            required: slot.required
+                            required: slot.required,
+                            eligible: slot.required && !isComplete
                         });
                         
-                        return slot.required && isIncomplete;
+                        return slot.required && !isComplete;
                     });
                     
                     // Log the result of slot selection
