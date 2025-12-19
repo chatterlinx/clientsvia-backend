@@ -175,9 +175,9 @@ class ServiceAreaHandler {
         }
         
         // Unknown area - be cautious but positive
-        // Default to asking dispatch if we're unsure
+        // V36: Don't hardcode booking prompts - just acknowledge and let booking engine ask
         return {
-            response: `I believe we service ${detected.city} - let me confirm that while I get your information. May I have your name?`,
+            response: `I believe we service ${detected.city} - let me confirm that while I get your information.`,
             detected,
             action: 'confirm_with_booking'
         };
@@ -249,9 +249,9 @@ class ServiceAreaHandler {
             
             if (areaResult.action === 'confirm_area') {
                 // Area confirmed + services mentioned
+                // V36: Don't hardcode booking prompts - booking engine will ask name
                 response = `Yes, we absolutely service ${areaResult.detected?.city || 'your area'}! `;
-                response += `It sounds like you need ${serviceList} — we can definitely help with that. `;
-                response += `May I have your name to get you scheduled?`;
+                response += `It sounds like you need ${serviceList} — we can definitely help with that.`;
             } else if (areaResult.action === 'ask_area') {
                 // Services mentioned but no area
                 response = `Great, we can help with ${serviceList}! `;

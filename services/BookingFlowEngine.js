@@ -37,11 +37,13 @@ const DEFAULT_FLOW_CONFIGS = {
         name: 'Booking',
         description: 'Schedule a new appointment',
         fields: [
-            { key: 'name', label: 'Name', required: true, order: 1, prompt: 'What is your name?' },
-            { key: 'phone', label: 'Phone', required: true, order: 2, prompt: 'What is the best phone number to reach you?' },
-            { key: 'address', label: 'Address', required: true, order: 3, prompt: 'What is the service address?' },
-            { key: 'serviceType', label: 'Service Type', required: false, order: 4, prompt: 'What type of service do you need?' },
-            { key: 'preferredTime', label: 'Preferred Time', required: false, order: 5, prompt: 'When would you like us to come out?' }
+            // V36 NOTE: These are FALLBACK prompts for this flow type
+            // Primary booking uses UI-configured prompts from Front Desk Behavior → Booking Prompts
+            { key: 'name', label: 'Name', required: true, order: 1, prompt: '/* USE UI CONFIG */' },
+            { key: 'phone', label: 'Phone', required: true, order: 2, prompt: '/* USE UI CONFIG */' },
+            { key: 'address', label: 'Address', required: true, order: 3, prompt: '/* USE UI CONFIG */' },
+            { key: 'serviceType', label: 'Service Type', required: false, order: 4, prompt: '/* USE UI CONFIG */' },
+            { key: 'preferredTime', label: 'Preferred Time', required: false, order: 5, prompt: '/* USE UI CONFIG */' }
         ],
         confirmationPrompt: 'Let me confirm: I have {name} at {phone}, service address {address}. Is that correct?',
         completionPrompt: 'Great! Your appointment has been scheduled. Is there anything else I can help you with?'
@@ -50,8 +52,9 @@ const DEFAULT_FLOW_CONFIGS = {
     CANCEL: {
         name: 'Cancel Appointment',
         description: 'Cancel an existing appointment',
+        // V36 TODO: These special flow prompts should also be UI-configurable
         fields: [
-            { key: 'name', label: 'Name', required: true, order: 1, prompt: 'Can I get your name please?' },
+            { key: 'name', label: 'Name', required: true, order: 1, prompt: '/* USE UI CONFIG - Cancel Flow */' },
             { key: 'phone', label: 'Phone', required: true, order: 2, prompt: 'And the phone number on the account?' },
             { key: 'appointmentId', label: 'Appointment', required: false, order: 3, prompt: 'Which appointment would you like to cancel?' },
             { key: 'cancelReason', label: 'Reason', required: false, order: 4, prompt: 'May I ask why you need to cancel?' }
@@ -63,8 +66,9 @@ const DEFAULT_FLOW_CONFIGS = {
     RESCHEDULE: {
         name: 'Reschedule Appointment',
         description: 'Reschedule an existing appointment',
+        // V36 TODO: These special flow prompts should also be UI-configurable
         fields: [
-            { key: 'name', label: 'Name', required: true, order: 1, prompt: 'Can I get your name please?' },
+            { key: 'name', label: 'Name', required: true, order: 1, prompt: '/* USE UI CONFIG - Reschedule Flow */' },
             { key: 'phone', label: 'Phone', required: true, order: 2, prompt: 'And the phone number on the account?' },
             { key: 'appointmentId', label: 'Appointment', required: false, order: 3, prompt: 'Which appointment would you like to reschedule?' },
             { key: 'newTime', label: 'New Time', required: true, order: 4, prompt: 'When would you like to reschedule to?' }
@@ -76,8 +80,9 @@ const DEFAULT_FLOW_CONFIGS = {
     MESSAGE: {
         name: 'Take Message',
         description: 'Take a message for callback',
+        // V36 TODO: Message flow prompts should also be UI-configurable
         fields: [
-            { key: 'name', label: 'Name', required: true, order: 1, prompt: 'Who should we call back?' },
+            { key: 'name', label: 'Name', required: true, order: 1, prompt: '/* USE UI CONFIG - Message Flow */' },
             { key: 'phone', label: 'Phone', required: true, order: 2, prompt: 'What is the best number to reach you?' },
             { key: 'message', label: 'Message', required: true, order: 3, prompt: 'What would you like me to tell them?' }
         ],
@@ -88,8 +93,9 @@ const DEFAULT_FLOW_CONFIGS = {
     EMERGENCY: {
         name: 'Emergency Dispatch',
         description: 'Handle emergency service request',
+        // V36 TODO: Emergency flow prompts should also be UI-configurable
         fields: [
-            { key: 'name', label: 'Name', required: true, order: 1, prompt: 'Can I get your name?' },
+            { key: 'name', label: 'Name', required: true, order: 1, prompt: '/* USE UI CONFIG - Emergency Flow */' },
             { key: 'phone', label: 'Phone', required: true, order: 2, prompt: 'What is your phone number?' },
             { key: 'address', label: 'Address', required: true, order: 3, prompt: 'What is the address of the emergency?' },
             { key: 'issueDescription', label: 'Issue', required: true, order: 4, prompt: 'Can you describe the emergency?' }
@@ -101,8 +107,9 @@ const DEFAULT_FLOW_CONFIGS = {
     TRANSFER: {
         name: 'Transfer to Human',
         description: 'Transfer call to a human agent',
+        // V36 TODO: Transfer flow prompts should also be UI-configurable
         fields: [
-            { key: 'name', label: 'Name', required: false, order: 1, prompt: 'Before I transfer you, may I have your name?' },
+            { key: 'name', label: 'Name', required: false, order: 1, prompt: '/* USE UI CONFIG - Transfer Flow */' },
             { key: 'phone', label: 'Phone', required: false, order: 2, prompt: 'And a callback number in case we get disconnected?' },
             { key: 'reason', label: 'Reason', required: false, order: 3, prompt: 'Can you briefly tell me what this is about so I can connect you with the right person?' }
         ],

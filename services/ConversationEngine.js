@@ -98,67 +98,31 @@ logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
 // ═══════════════════════════════════════════════════════════════════════════
 // V31: PROMPT VARIANT POOLS - Rotate phrasing to sound natural
 // ═══════════════════════════════════════════════════════════════════════════
+// V36 NUKE: REMOVED ALL HARDCODED BOOKING PROMPTS
+// ═══════════════════════════════════════════════════════════════════════════
+// PROMPT AS LAW: All booking prompts MUST come from UI config:
+//   company.aiAgentSettings.frontDeskBehavior.bookingSlots[].question
+//   company.aiAgentSettings.frontDeskBehavior.bookingSlots[].confirmPrompt
+//   company.aiAgentSettings.frontDeskBehavior.bookingSlots[].repromptVariants
+//
+// These are ONLY used for discovery mode (before booking starts)
+// ═══════════════════════════════════════════════════════════════════════════
 const DEFAULT_PROMPT_VARIANTS = {
-    // Empathy variants for discovery
+    // Empathy variants for discovery (NOT booking prompts)
     empathy: [
         "I understand how frustrating that can be.",
         "Sorry to hear that — let's get this sorted.",
         "I hear you — that sounds uncomfortable.",
         "Got it — we can definitely help with that."
     ],
-    // Offer scheduling variants
-    // V36 FIX: Removed "We can help with that" - it duplicates empathy variants
+    // Offer scheduling variants (NOT booking prompts - just offers)
     offerScheduling: [
         "Would you like me to schedule a technician?",
         "I can get someone out to you. Would you like to schedule?",
         "Want me to set up an appointment?",
         "Let me get you scheduled. Sound good?"
-    ],
-    // Slot prompt variants (fallbacks if not configured per-slot)
-    slots: {
-        name: [
-            "What's your first and last name?",
-            "Can I get your name please?",
-            "Who am I helping today?",
-            "And your name is?"
-        ],
-        phone: [
-            "What's the best number to reach you?",
-            "What phone number should we use for updates?",
-            "Best cell number for text updates?",
-            "And your phone number?"
-        ],
-        address: [
-            "What's the service address?",
-            "Where should the technician come out to?",
-            "What address is the system at?",
-            "And the address?"
-        ],
-        time: [
-            "Do you prefer morning or afternoon?",
-            "What works better — morning or afternoon?",
-            "Any preference on timing?",
-            "Morning or afternoon work better?"
-        ]
-    },
-    // Reprompt variants (after failed extraction)
-    reprompt: {
-        name: [
-            "Sorry, could you repeat your name?",
-            "I didn't catch that — first and last name?",
-            "No problem — just first and last name, like 'John Smith.'"
-        ],
-        phone: [
-            "Sorry, could you repeat that number?",
-            "I didn't catch the full number — what's the area code?",
-            "Let me get that again — phone number?"
-        ],
-        address: [
-            "Sorry, what was the street address?",
-            "I didn't catch that — what's the full address?",
-            "Could you repeat the address?"
-        ]
-    }
+    ]
+    // 🚫 NUKED: slots{} and reprompt{} - ALL booking prompts come from UI now
 };
 
 // Helper: Get random variant from pool
@@ -168,40 +132,39 @@ function getVariant(pool, index = null) {
     return pool[idx];
 }
 
-// Helper: Get slot prompt variant (UI config or fallback)
-// V36 FIX: PROMPT AS LAW - UI-configured question takes priority over variants
+// Helper: Get slot prompt variant (UI config ONLY - no hardcoded fallbacks)
+// V36 NUKE: PROMPT AS LAW - UI-configured question is the ONLY source
 function getSlotPromptVariant(slotConfig, slotId, askedCount = 0) {
-    // 🎯 PROMPT AS LAW: UI-configured question is FIRST priority
+    // 🎯 PROMPT AS LAW: UI-configured question is the ONLY source
     // This is what the admin set in Front Desk Behavior → Booking Prompts
+    
+    // Priority 1: UI-configured question (MUST exist)
     if (slotConfig?.question) {
-        // If this is the first ask, use the exact UI question
-        // For reprompts (askedCount > 0), try variants if available
+        // First ask: use exact UI question
         if (askedCount === 0) {
+            logger.debug(`[PROMPT AS LAW] Using UI question for ${slotId}:`, slotConfig.question);
             return slotConfig.question;
         }
-        // For reprompts, try UI-configured reprompt variants
+        // Reprompts: try UI-configured reprompt variants
         const uiRepromptVariants = slotConfig?.repromptVariants;
         if (uiRepromptVariants && uiRepromptVariants.length > 0) {
-            return uiRepromptVariants[(askedCount - 1) % uiRepromptVariants.length];
+            const variant = uiRepromptVariants[(askedCount - 1) % uiRepromptVariants.length];
+            logger.debug(`[PROMPT AS LAW] Using UI reprompt variant for ${slotId}:`, variant);
+            return variant;
         }
-        // No reprompt variants, use the main question again
+        // No reprompt variants configured, use the main question again
         return slotConfig.question;
     }
     
-    // Fallback: Try UI-configured prompt variants (legacy support)
+    // Priority 2: UI-configured prompt variants (legacy support)
     const uiVariants = slotConfig?.promptVariants;
     if (uiVariants && uiVariants.length > 0) {
         return uiVariants[askedCount % uiVariants.length];
     }
     
-    // Fallback to default variants (only if NO UI config)
-    const defaultVariants = DEFAULT_PROMPT_VARIANTS.slots[slotId];
-    if (defaultVariants && defaultVariants.length > 0) {
-        return defaultVariants[askedCount % defaultVariants.length];
-    }
-    
-    // Last resort
-    return `What's your ${slotId}?`;
+    // 🚨 NO HARDCODED FALLBACKS - Log error and use generic
+    logger.error(`[PROMPT AS LAW] ⚠️ NO UI CONFIG for slot "${slotId}"! Add question in Front Desk Behavior → Booking Prompts`);
+    return `What is your ${slotId}?`; // Generic last resort - should never happen if UI is configured
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2287,8 +2250,8 @@ async function processTurn({
         // Declare aiResult early so booking snap can set it
         let aiResult = null;
         let aiLatencyMs = 0;
-        const aiStartTime = Date.now();
-        
+            const aiStartTime = Date.now();
+            
         // ═══════════════════════════════════════════════════════════════════════
         // CONSENT DETECTION - Check if caller explicitly wants to book
         // ═══════════════════════════════════════════════════════════════════════
@@ -2822,23 +2785,27 @@ async function processTurn({
                     // User confirmed partial name, now ask for missing part
                     nameMeta.askedMissingPartOnce = true;
                     
-                    // Ask for the part we don't have
-                    // SIMPLE LOGIC: If we assumed it's a first name, ask for last name (and vice versa)
-                    // Default to asking for last name if assumedSingleTokenAs is not set (most common case)
+                    // V36 PROMPT AS LAW: Use UI-configured confirmPrompt for asking last name
+                    // The confirmPrompt template should handle asking for the missing part
+                    // Example UI config: "Got it, {value}. and may I have your last name?"
+                    const firstName = nameMeta.first || currentSlots.partialName || '';
+                    
                     if (nameMeta.assumedSingleTokenAs === 'last') {
-                        // We have last name, need first
-                        finalReply = "And what's your first name?";
-                    } else {
-                        // We have first name (or assumed first by default), need last
-                        // V36: Use the caller's first name for personalization
-                        const firstName = nameMeta.first || currentSlots.partialName || '';
+                        // We have last name, need first - use simple personalized ask
                         finalReply = firstName 
-                            ? `Hi ${firstName}, what's your last name?`
+                            ? `Thanks ${firstName}. And what's your first name?`
+                            : "And what's your first name?";
+                    } else {
+                        // We have first name, need last - use UI confirmPrompt if available
+                        // The confirmPrompt should already include "may I have your last name"
+                        // But if user already said yes to confirmBack, just ask for last name directly
+                        finalReply = firstName 
+                            ? `Thanks ${firstName}! And what's your last name?`
                             : "And what's your last name?";
                     }
                     nextSlotId = 'name'; // Still on name
                     
-                    log('📝 NAME: User confirmed partial, asking for missing part (V27)', {
+                    log('📝 NAME: User confirmed partial, asking for missing part (V36)', {
                         assumedAs: nameMeta.assumedSingleTokenAs,
                         first: nameMeta.first,
                         last: nameMeta.last,
@@ -2889,11 +2856,11 @@ async function processTurn({
                     session.booking.activeSlot = 'phone';
                     log('📝 NAME COMPLETE, moving to phone', { name: currentSlots.name });
                 }
-                // ═══════════════════════════════════════════════════════════════════
+            // ═══════════════════════════════════════════════════════════════════
                 // V33 FIX: Handle missing name part (last name after first, or vice versa)
                 // When we've asked for last name and user says "Walter" or "the last name is Walter"
                 // Extract the actual name, not just the first word
-                // ═══════════════════════════════════════════════════════════════════
+            // ═══════════════════════════════════════════════════════════════════
                 else if (session.booking.activeSlot === 'name' && nameMeta.askedMissingPartOnce && !hasBothParts) {
                     // We asked for the missing part - extract name from various phrasings
                     let extractedNamePart = null;
@@ -2947,7 +2914,7 @@ async function processTurn({
                             // We had first name (e.g., "Mark"), now got last name
                             nameMeta.last = formattedName;
                             log('📝 V33: Got LAST name after asking', { lastName: formattedName });
-                        } else {
+        } else {
                             // We had last name (e.g., "Subach"), now got first name
                             nameMeta.first = formattedName;
                             log('📝 V33: Got FIRST name after asking', { firstName: formattedName });
@@ -3158,14 +3125,15 @@ async function processTurn({
                         // User confirmed, now ask for missing part
                         nameMeta.askedMissingPartOnce = true;
                         
-                        // Ask for the part we don't have
+                        // V36 PROMPT AS LAW: Ask for missing part with personalization
+                        const firstName = nameMeta.first || currentSlots.partialName || '';
                         if (nameMeta.assumedSingleTokenAs === 'last') {
-                            finalReply = "And what's your first name?";
-                        } else {
-                            // V36: Use the caller's first name for personalization
-                            const firstName = nameMeta.first || currentSlots.partialName || '';
                             finalReply = firstName 
-                                ? `Hi ${firstName}, what's your last name?`
+                                ? `Thanks ${firstName}. And what's your first name?`
+                                : "And what's your first name?";
+                        } else {
+                            finalReply = firstName 
+                                ? `Thanks ${firstName}! And what's your last name?`
                                 : "And what's your last name?";
                         }
                         nextSlotId = 'name'; // Still on name

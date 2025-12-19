@@ -1395,25 +1395,17 @@ class ConversationStateMachine {
             return slot.question;
         }
         
-        // ⚠️ FALLBACK - UI config missing for this slot
-        const defaults = {
-            name: "May I have your name please?",
-            phone: "What's the best phone number to reach you?",
-            address: "What's the service address?",
-            time: "When works best for you?"
-        };
-        
-        const fallbackQuestion = defaults[slotId] || `What is your ${slotId}?`;
-        
-        logger.warn('[STATE MACHINE] ⚠️ BOOKING QUESTION FALLBACK:', {
+        // 🚨 V36 NUKE: NO HARDCODED FALLBACKS - Log error, UI must be configured
+        logger.error('[STATE MACHINE] 🚨 PROMPT AS LAW VIOLATION:', {
             slotId,
-            question: fallbackQuestion,
-            source: 'HARDCODED_DEFAULT ⚠️',
-            reason: 'No UI config found for this slot',
-            availableSlots: this.bookingSlots.map(s => s.id || s.slotId)
+            source: 'NO_UI_CONFIG ❌',
+            reason: 'Slot question not configured in Front Desk Behavior → Booking Prompts',
+            availableSlots: this.bookingSlots.map(s => s.id || s.slotId),
+            fix: 'Configure booking prompts in UI for this company'
         });
         
-        return fallbackQuestion;
+        // Generic fallback - should NEVER be used if UI is properly configured
+        return `What is your ${slotId}?`;
     }
     
     _getNextTriageQuestion() {

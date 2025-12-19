@@ -301,17 +301,14 @@ class BookingStateMachine {
     }
     
     // ════════════════════════════════════════════════════════════════════════
-    // FALLBACK QUESTIONS (if not configured in UI)
+    // V36 NUKE: NO HARDCODED FALLBACKS - UI must be configured
     // ════════════════════════════════════════════════════════════════════════
     
     getDefaultQuestion(slotId) {
-        const defaults = {
-            name: "May I have your name please?",
-            phone: "What's the best phone number to reach you?",
-            address: "What's the service address?",
-            time: "When works best for you - morning or afternoon?"
-        };
-        return defaults[slotId] || `What is your ${slotId}?`;
+        // 🚨 PROMPT AS LAW: This should NEVER be called if UI is configured
+        // All booking prompts must come from Front Desk Behavior → Booking Prompts
+        console.error(`[BOOKING STATE MACHINE] 🚨 PROMPT AS LAW VIOLATION: No UI config for slot "${slotId}"`);
+        return `What is your ${slotId}?`; // Generic - should never be used
     }
     
     // ════════════════════════════════════════════════════════════════════════
@@ -319,12 +316,13 @@ class BookingStateMachine {
     // ════════════════════════════════════════════════════════════════════════
     
     getClarifyPhrase(slotId) {
-        // Try UI-configured recovery message first
+        // Try UI-configured recovery message first (PROMPT AS LAW)
         if (this.recoveryMessages.choppyConnection) {
             return this.recoveryMessages.choppyConnection;
         }
         
-        // Slot-specific clarify phrases
+        // V36: Slot-specific clarify phrases - these are OK as they're recovery/error handling
+        // NOT the primary booking prompts (which must come from UI)
         const phrases = {
             name: "I didn't quite catch that. Could you tell me your name again?",
             phone: "Sorry, I missed part of that. Can you repeat the phone number for me?",
