@@ -137,12 +137,14 @@ class FrontDeskBehaviorManager {
             
             const synonymsData = await synonymsResponse.json();
             
-            // Convert template synonymMap format to display format
-            // Template format: { "air conditioner": ["ac", "a/c", "cooling"] }
-            // Display format: { "ac": "air conditioner", "a/c": "air conditioner", "cooling": "air conditioner" }
-            const inheritedSynonyms = {};
+            // Store RAW format for card display (same as Global AI Brain)
+            // Format: { "air conditioner": ["ac", "a/c", "cooling"], "furnace": ["heater", "heat"] }
             const templateSynonyms = synonymsData.synonyms || {};
+            this.config.inheritedSynonymsRaw = templateSynonyms;
             
+            // Also create flattened format for engine compatibility
+            // Format: { "ac": "air conditioner", "a/c": "air conditioner", "cooling": "air conditioner" }
+            const inheritedSynonyms = {};
             for (const [technical, colloquials] of Object.entries(templateSynonyms)) {
                 if (Array.isArray(colloquials)) {
                     for (const colloquial of colloquials) {
@@ -158,8 +160,8 @@ class FrontDeskBehaviorManager {
                 templateId: activeRef.templateId,
                 templateName: this.config.activeTemplateName,
                 technicalTerms: Object.keys(templateSynonyms).length,
-                totalMappings: Object.keys(inheritedSynonyms).length,
-                sample: Object.entries(inheritedSynonyms).slice(0, 5)
+                totalColloquials: Object.keys(inheritedSynonyms).length,
+                rawSample: Object.entries(templateSynonyms).slice(0, 2)
             });
             
         } catch (error) {
@@ -181,6 +183,7 @@ class FrontDeskBehaviorManager {
             if (!templateResponse.ok) {
                 console.warn('[FRONT DESK BEHAVIOR] 🔤 Fallback also failed');
                 this.config.inheritedSynonyms = {};
+                this.config.inheritedSynonymsRaw = {};
                 return;
             }
             
@@ -188,30 +191,29 @@ class FrontDeskBehaviorManager {
             const template = templateData.template || templateData;
             
             // Try multiple possible locations for synonyms
-            const inheritedSynonyms = {};
+            let rawSynonyms = {};
             
             // Location 1: template.synonymMap (Map or Object)
             if (template?.synonymMap) {
-                const synonymMap = template.synonymMap instanceof Map 
+                rawSynonyms = template.synonymMap instanceof Map 
                     ? Object.fromEntries(template.synonymMap)
                     : template.synonymMap;
-                    
-                for (const [technical, colloquials] of Object.entries(synonymMap)) {
-                    if (Array.isArray(colloquials)) {
-                        for (const colloquial of colloquials) {
-                            inheritedSynonyms[colloquial.toLowerCase()] = technical;
-                        }
-                    }
-                }
             }
             
             // Location 2: template.nlpConfig.synonyms (older format)
-            if (template?.nlpConfig?.synonyms && Object.keys(inheritedSynonyms).length === 0) {
-                for (const [technical, colloquials] of Object.entries(template.nlpConfig.synonyms)) {
-                    if (Array.isArray(colloquials)) {
-                        for (const colloquial of colloquials) {
-                            inheritedSynonyms[colloquial.toLowerCase()] = technical;
-                        }
+            if (template?.nlpConfig?.synonyms && Object.keys(rawSynonyms).length === 0) {
+                rawSynonyms = template.nlpConfig.synonyms;
+            }
+            
+            // Store RAW format for card display
+            this.config.inheritedSynonymsRaw = rawSynonyms;
+            
+            // Create flattened format for engine compatibility
+            const inheritedSynonyms = {};
+            for (const [technical, colloquials] of Object.entries(rawSynonyms)) {
+                if (Array.isArray(colloquials)) {
+                    for (const colloquial of colloquials) {
+                        inheritedSynonyms[colloquial.toLowerCase()] = technical;
                     }
                 }
             }
@@ -222,12 +224,14 @@ class FrontDeskBehaviorManager {
             console.log('[FRONT DESK BEHAVIOR] 🔤 Inherited synonyms loaded (fallback):', {
                 templateId,
                 templateName: template?.name,
-                synonymCount: Object.keys(inheritedSynonyms).length
+                technicalTerms: Object.keys(rawSynonyms).length,
+                totalColloquials: Object.keys(inheritedSynonyms).length
             });
             
         } catch (error) {
             console.error('[FRONT DESK BEHAVIOR] 🔤 Fallback error:', error);
             this.config.inheritedSynonyms = {};
+            this.config.inheritedSynonymsRaw = {};
         }
     }
 
@@ -3280,41 +3284,54 @@ Sean → Shawn, Shaun`;
     // ═══════════════════════════════════════════════════════════════════════════
     
     renderInheritedSynonyms() {
-        // Get inherited synonyms from AiCore template (via nlpConfig.synonyms)
-        const templateSynonyms = this.config.inheritedSynonyms || this.config.templateSynonyms || {};
+        // Get inherited synonyms from template - stored as { technical: [colloquials] }
+        const templateSynonyms = this.config.inheritedSynonymsRaw || {};
         const entries = Object.entries(templateSynonyms);
         const templateName = this.config.activeTemplateName || 'No Template';
         
-        // Always show 2-column table structure with scrollable body
-        const emptyRows = entries.length === 0 ? `
-            <div style="padding: 30px 20px; text-align: center; grid-column: 1 / -1;">
-                <div style="font-size: 1.5rem; margin-bottom: 8px; opacity: 0.4;">📚</div>
-                <p style="color: #6e7681; margin: 0; font-size: 0.8rem;">No inherited synonyms from template</p>
-                <p style="color: #484f58; margin: 4px 0 0 0; font-size: 0.7rem;">Select an AiCore template with synonyms configured</p>
-            </div>
-        ` : '';
+        // Empty state
+        if (entries.length === 0) {
+            return `
+                <div style="padding: 30px 20px; text-align: center;">
+                    <div style="font-size: 1.5rem; margin-bottom: 8px; opacity: 0.4;">📚</div>
+                    <p style="color: #6e7681; margin: 0; font-size: 0.8rem;">No inherited synonyms from template</p>
+                    <p style="color: #484f58; margin: 4px 0 0 0; font-size: 0.7rem;">Select an AiCore template with synonyms configured</p>
+                </div>
+            `;
+        }
         
-        const rows = entries.map(([slang, meaning]) => `
-            <div style="display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #30363d40;">
-                <div style="padding: 8px 16px; color: #8b949e; font-size: 0.85rem; font-family: monospace;">${this.escapeHtml(slang)}</div>
-                <div style="padding: 8px 16px; color: #3fb950; font-size: 0.85rem;">${this.escapeHtml(meaning)}</div>
-            </div>
-        `).join('');
+        // Render cards like Global AI Brain
+        const cards = entries.map(([technical, colloquials]) => {
+            const terms = Array.isArray(colloquials) ? colloquials : [];
+            const termBadges = terms.map(t => 
+                `<span style="display: inline-block; padding: 4px 10px; background: #238636; color: white; border-radius: 4px; font-size: 0.8rem; margin: 2px;">${this.escapeHtml(t)}</span>`
+            ).join('');
+            
+            return `
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+                    <div style="margin-bottom: 8px;">
+                        <span style="color: #8b949e; font-size: 0.75rem;">Technical Term:</span>
+                        <span style="color: #58a6ff; font-weight: 600; font-size: 0.95rem; margin-left: 8px;">${this.escapeHtml(technical)}</span>
+                    </div>
+                    <div>
+                        <span style="color: #8b949e; font-size: 0.75rem;">Colloquial Terms (${terms.length}):</span>
+                        <div style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;">
+                            ${termBadges || '<span style="color: #484f58; font-size: 0.8rem; font-style: italic;">None</span>'}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
         
         return `
-            <!-- Table Header (sticky) -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; background: #21262d; border-bottom: 1px solid #30363d; position: sticky; top: 0; z-index: 1;">
-                <div style="padding: 10px 16px; color: #8b949e; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Caller Says (Slang)</div>
-                <div style="padding: 10px 16px; color: #8b949e; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">AI Understands (Standard)</div>
-            </div>
-            <!-- Scrollable Body -->
-            <div style="max-height: 200px; overflow-y: auto;">
-                ${entries.length === 0 ? emptyRows : rows}
+            <!-- Scrollable Cards Container -->
+            <div style="max-height: 250px; overflow-y: auto; padding: 8px;">
+                ${cards}
             </div>
             <!-- Footer with count and template name -->
-            <div style="padding: 6px 16px; background: #21262d; border-top: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center;">
-                <span style="color: #6e7681; font-size: 0.7rem;">${entries.length} inherited synonym${entries.length !== 1 ? 's' : ''}</span>
-                <span style="color: #3fb950; font-size: 0.7rem;">📦 ${this.escapeHtml(templateName)}</span>
+            <div style="padding: 8px 16px; background: #21262d; border-top: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #6e7681; font-size: 0.75rem;">${entries.length} mapping${entries.length !== 1 ? 's' : ''} • ${entries.reduce((sum, [_, terms]) => sum + (Array.isArray(terms) ? terms.length : 0), 0)} total terms</span>
+                <span style="color: #3fb950; font-size: 0.75rem;">📦 ${this.escapeHtml(templateName)}</span>
             </div>
         `;
     }
