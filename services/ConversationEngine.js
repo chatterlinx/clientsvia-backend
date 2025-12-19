@@ -50,7 +50,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V27-SLOT-REFUSAL-HANDLING';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V31-DISCOVERY-LIMIT-VARIANTS';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -79,9 +79,102 @@ logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
         '✅ V27: When user says "yes" to confirm Mark → asks for last name',
         '✅ V27: SLOT REFUSAL HANDLING - "I forgot", "I don\'t know"',
         '✅ V27: Alternative prompts, max retries, LLM intervention',
-        '✅ V27: UI-configurable slotRefusalHandling settings'
+        '✅ V27: UI-configurable slotRefusalHandling settings',
+        '✅ V31: DISCOVERY TURN LIMIT - Max 1 discovery turn before offer',
+        '✅ V31: AUTO-OFFER after issue understood (no endless troubleshooting)',
+        '✅ V31: PROMPT VARIANTS - Rotate phrasing to avoid repetition',
+        '✅ V31: STATE SUMMARY to LLM - Prevents goldfish memory',
+        '✅ V31: ANTI-LOOP BREAKER - Escalate after repeated failures'
     ]
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// V31: PROMPT VARIANT POOLS - Rotate phrasing to sound natural
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_PROMPT_VARIANTS = {
+    // Empathy variants for discovery
+    empathy: [
+        "I understand how frustrating that can be.",
+        "Sorry to hear that — let's get this sorted.",
+        "I hear you — that sounds uncomfortable.",
+        "Got it — we can definitely help with that."
+    ],
+    // Offer scheduling variants
+    offerScheduling: [
+        "Would you like me to schedule a technician?",
+        "I can get someone out to you. Would you like to schedule?",
+        "We can help with that. Want me to set up an appointment?",
+        "Let me get you scheduled. Sound good?"
+    ],
+    // Slot prompt variants (fallbacks if not configured per-slot)
+    slots: {
+        name: [
+            "What's your first and last name?",
+            "Can I get your name please?",
+            "Who am I helping today?",
+            "And your name is?"
+        ],
+        phone: [
+            "What's the best number to reach you?",
+            "What phone number should we use for updates?",
+            "Best cell number for text updates?",
+            "And your phone number?"
+        ],
+        address: [
+            "What's the service address?",
+            "Where should the technician come out to?",
+            "What address is the system at?",
+            "And the address?"
+        ],
+        time: [
+            "Do you prefer morning or afternoon?",
+            "What works better — morning or afternoon?",
+            "Any preference on timing?",
+            "Morning or afternoon work better?"
+        ]
+    },
+    // Reprompt variants (after failed extraction)
+    reprompt: {
+        name: [
+            "Sorry, could you repeat your name?",
+            "I didn't catch that — first and last name?",
+            "No problem — just first and last name, like 'John Smith.'"
+        ],
+        phone: [
+            "Sorry, could you repeat that number?",
+            "I didn't catch the full number — what's the area code?",
+            "Let me get that again — phone number?"
+        ],
+        address: [
+            "Sorry, what was the street address?",
+            "I didn't catch that — what's the full address?",
+            "Could you repeat the address?"
+        ]
+    }
+};
+
+// Helper: Get random variant from pool
+function getVariant(pool, index = null) {
+    if (!pool || pool.length === 0) return null;
+    const idx = index !== null ? (index % pool.length) : Math.floor(Math.random() * pool.length);
+    return pool[idx];
+}
+
+// Helper: Get slot prompt variant (UI config or fallback)
+function getSlotPromptVariant(slotConfig, slotId, askedCount = 0) {
+    // First try UI-configured variants
+    const uiVariants = slotConfig?.promptVariants;
+    if (uiVariants && uiVariants.length > 0) {
+        return uiVariants[askedCount % uiVariants.length];
+    }
+    // Fallback to default variants
+    const defaultVariants = DEFAULT_PROMPT_VARIANTS.slots[slotId];
+    if (defaultVariants && defaultVariants.length > 0) {
+        return defaultVariants[askedCount % defaultVariants.length];
+    }
+    // Last resort: use configured question
+    return slotConfig?.question || `What's your ${slotId}?`;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🆕 CHEAT SHEET SEARCH - Find relevant content from cheat sheets
@@ -1503,11 +1596,22 @@ async function processTurn({
             if (firstMissingSlot) {
                 const slotId = firstMissingSlot.slotId || firstMissingSlot.id || firstMissingSlot.type;
                 session.booking.currentSlotId = slotId;
-                session.booking.currentSlotQuestion = firstMissingSlot.question;
+                
+                // ═══════════════════════════════════════════════════════════════
+                // V31: Use prompt variant for natural phrasing
+                // ═══════════════════════════════════════════════════════════════
+                // Track asked count for rotation
+                session.booking.meta = session.booking.meta || {};
+                session.booking.meta[slotId] = session.booking.meta[slotId] || {};
+                const askedCount = session.booking.meta[slotId].askedCount || 0;
+                
+                // Get variant (UI-configured or fallback)
+                const exactQuestion = getSlotPromptVariant(firstMissingSlot, slotId, askedCount);
+                session.booking.currentSlotQuestion = exactQuestion;
+                session.booking.meta[slotId].askedCount = askedCount + 1;
                 
                 // Build acknowledgment + exact question
                 const ack = "Perfect! Let me get your information.";
-                const exactQuestion = firstMissingSlot.question;
             
             aiLatencyMs = Date.now() - aiStartTime;
             
@@ -2667,7 +2771,24 @@ async function processTurn({
                     
                     if (nextMissingSlotSafe) {
                         nextSlotId = nextMissingSlotSafe.slotId || nextMissingSlotSafe.id || nextMissingSlotSafe.type;
-                        const exactQuestion = nextMissingSlotSafe.question;
+                        
+                        // ═══════════════════════════════════════════════════════════════
+                        // V31: Use prompt variant for natural phrasing
+                        // ═══════════════════════════════════════════════════════════════
+                        session.booking.meta[nextSlotId] = session.booking.meta[nextSlotId] || {};
+                        const askedCount = session.booking.meta[nextSlotId].askedCount || 0;
+                        
+                        // Use reprompt variant if asked multiple times
+                        let exactQuestion;
+                        if (askedCount >= 2 && DEFAULT_PROMPT_VARIANTS.reprompt[nextSlotId]) {
+                            // Use reprompt variant (more helpful phrasing)
+                            exactQuestion = getVariant(DEFAULT_PROMPT_VARIANTS.reprompt[nextSlotId], askedCount - 2);
+                            log('📋 V31: Using REPROMPT variant (asked too many times)', { slotId: nextSlotId, askedCount });
+                        } else {
+                            // Use regular variant
+                            exactQuestion = getSlotPromptVariant(nextMissingSlotSafe, nextSlotId, askedCount);
+                        }
+                        session.booking.meta[nextSlotId].askedCount = askedCount + 1;
                         
                         // Check if we're waiting for confirmation (don't re-ask the question)
                         const slotMeta = session.booking.meta[nextSlotId] || {};
@@ -2677,6 +2798,7 @@ async function processTurn({
                             log('📋 BOOKING SAFETY NET: Asking next slot', { 
                                 slotId: nextSlotId, 
                                 question: exactQuestion,
+                                askedCount: askedCount + 1,
                                 finalReply
                             });
                         } else {
@@ -2866,6 +2988,105 @@ async function processTurn({
             });
             
             // ═══════════════════════════════════════════════════════════════════
+            // V31: DISCOVERY TURN LIMIT + AUTO-OFFER
+            // ═══════════════════════════════════════════════════════════════════
+            // RULE: After caller describes issue, don't keep asking symptoms.
+            // Instead: 1 empathy line + offer scheduling immediately.
+            // This prevents the robotic "tell me more" loop.
+            // ═══════════════════════════════════════════════════════════════════
+            const discoveryConfig = company.aiAgentSettings?.frontDeskBehavior?.discovery || {};
+            const maxDiscoveryTurns = discoveryConfig.maxDiscoveryTurns ?? 1;  // Default: 1 turn
+            
+            // Track discovery turns
+            session.discovery = session.discovery || {};
+            session.discovery.turnCount = (session.discovery.turnCount || 0) + 1;
+            const discoveryTurnCount = session.discovery.turnCount;
+            
+            // Detect if caller described an issue (service request)
+            const issueKeywords = /not (cooling|heating|working)|broken|leaking|won't (turn on|start)|making noise|stopped|no (air|heat|cold)|issues?|problem/i;
+            const callerDescribedIssue = issueKeywords.test(userText);
+            
+            // If issue detected, capture it
+            if (callerDescribedIssue && !session.discovery.issue) {
+                // Extract a summary of the issue
+                const issueMatch = userText.match(issueKeywords);
+                session.discovery.issue = userText.substring(0, 100); // First 100 chars as summary
+                session.discovery.issueCapturedAtTurn = discoveryTurnCount;
+                log('📝 V31: Issue captured from caller', { issue: session.discovery.issue });
+            }
+            
+            // Check if we should auto-offer scheduling
+            const hasIssue = !!session.discovery.issue;
+            const exceededMaxTurns = discoveryTurnCount > maxDiscoveryTurns;
+            const shouldAutoOffer = hasIssue || exceededMaxTurns;
+            
+            log('CHECKPOINT 9d.0: 🔄 V31 Discovery Turn Check', {
+                discoveryTurnCount,
+                maxDiscoveryTurns,
+                hasIssue,
+                exceededMaxTurns,
+                shouldAutoOffer,
+                callerDescribedIssue
+            });
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // V31: AUTO-OFFER SCHEDULING (if issue understood)
+            // ═══════════════════════════════════════════════════════════════════
+            // Once we understand the issue, don't ask more diagnostic questions.
+            // Offer to schedule immediately. Caller can still ask questions.
+            // ═══════════════════════════════════════════════════════════════════
+            if (shouldAutoOffer && !session.discovery.offeredScheduling) {
+                // Get empathy variant
+                const empathyVariants = discoveryConfig.empathyVariants || DEFAULT_PROMPT_VARIANTS.empathy;
+                const empathyLine = getVariant(empathyVariants);
+                
+                // Get offer variant
+                const offerVariants = discoveryConfig.offerVariants || DEFAULT_PROMPT_VARIANTS.offerScheduling;
+                const offerLine = getVariant(offerVariants);
+                
+                // Build natural response: Empathy + Offer
+                const autoOfferResponse = `${empathyLine} ${offerLine}`;
+                
+                session.discovery.offeredScheduling = true;
+                session.lastAgentIntent = 'OFFER_SCHEDULE';
+                
+                log('🎯 V31 AUTO-OFFER: Offering scheduling after issue understood', {
+                    empathyLine,
+                    offerLine,
+                    discoveryTurnCount,
+                    issue: session.discovery.issue?.substring(0, 50)
+                });
+                
+                aiLatencyMs = Date.now() - aiStartTime;
+                
+                aiResult = {
+                    reply: autoOfferResponse,
+                    conversationMode: 'discovery',
+                    intent: 'auto_offer_scheduling',
+                    nextGoal: 'AWAIT_CONSENT',
+                    filledSlots: currentSlots,
+                    signals: { 
+                        wantsBooking: false,  // Not yet - waiting for consent
+                        autoOfferTriggered: true,
+                        offeredScheduling: true,
+                        issueUnderstood: hasIssue
+                    },
+                    latencyMs: aiLatencyMs,
+                    tokensUsed: 0,  // No LLM used!
+                    fromStateMachine: true,
+                    mode: 'DISCOVERY',
+                    debug: {
+                        source: 'V31_AUTO_OFFER',
+                        stage: 'discovery',
+                        discoveryTurnCount,
+                        maxDiscoveryTurns,
+                        issue: session.discovery.issue,
+                        lastAgentIntent: session.lastAgentIntent
+                    }
+                };
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════
             // 🚀 FAST-PATH BOOKING DETECTION (V24)
             // ═══════════════════════════════════════════════════════════════════
             // When caller clearly wants service NOW ("I need you out here"),
@@ -2995,9 +3216,28 @@ async function processTurn({
             });
             
             // Step 4: Build context for LLM
+            // ═══════════════════════════════════════════════════════════════════
+            // V31: STATE SUMMARY - Prevents goldfish memory / repetition
+            // ═══════════════════════════════════════════════════════════════════
+            const stateSummary = {
+                problem: session.discovery?.issue || 'Not yet captured',
+                collectedSlots: Object.keys(currentSlots).filter(k => currentSlots[k]).map(k => `${k}=${currentSlots[k]}`),
+                missingSlots: ['name', 'phone', 'address', 'time'].filter(s => !currentSlots[s]),
+                discoveryTurnCount: session.discovery?.turnCount || 0,
+                offeredScheduling: session.discovery?.offeredScheduling || false,
+                lastAgentIntent: session.lastAgentIntent || null
+            };
+            
+            log('CHECKPOINT 9d.2: 📊 V31 State Summary for LLM', stateSummary);
+            
             const llmContext = {
                 // V22: LLM-led mode
                 mode: 'LLM_LED_DISCOVERY',
+                
+                // ═══════════════════════════════════════════════════════════════
+                // V31: STATE SUMMARY - Prevents repetition
+                // ═══════════════════════════════════════════════════════════════
+                stateSummary,
                 
                 // Scenario knowledge (tools, not scripts)
                 // KILL SWITCH: disableScenarioAutoResponses controls how scenarios are used
