@@ -301,23 +301,46 @@ const conversationSessionSchema = new Schema({
         },
         
         // Slot Meta (state machine tracking)
+        // V33: Added pendingConfirm, askedCount, and other runtime tracking fields
         meta: {
             name: {
+                first: { type: String, default: null, trim: true },
+                last: { type: String, default: null, trim: true },
                 lastConfirmed: { type: Boolean, default: false },
                 askedMissingPartOnce: { type: Boolean, default: false },
                 assumedSingleTokenAs: { type: String, default: null }, // "first" | "last"
-                source: { type: String, default: null }                // "user" | "assumed" | "confirmed"
+                source: { type: String, default: null },               // "user" | "assumed" | "confirmed"
+                askedCount: { type: Number, default: 0 },
+                pendingConfirm: { type: Boolean, default: false },
+                confirmed: { type: Boolean, default: false }
             },
             phone: {
                 usedCallerId: { type: Boolean, default: false },
-                confirmed: { type: Boolean, default: false }
+                confirmed: { type: Boolean, default: false },
+                pendingConfirm: { type: Boolean, default: false },
+                offeredCallerId: { type: Boolean, default: false },
+                breakdownStep: { type: String, default: null },        // null | 'area_code' | 'rest'
+                areaCode: { type: String, default: null },
+                askedCount: { type: Number, default: 0 }
             },
             address: {
-                confirmed: { type: Boolean, default: false }
+                confirmed: { type: Boolean, default: false },
+                pendingConfirm: { type: Boolean, default: false },
+                breakdownStep: { type: String, default: null },        // null | 'street' | 'city' | 'zip'
+                askedCount: { type: Number, default: 0 }
             },
             time: {
                 isAsap: { type: Boolean, default: false },
-                confirmed: { type: Boolean, default: false }
+                confirmed: { type: Boolean, default: false },
+                pendingConfirm: { type: Boolean, default: false },
+                offeredAsap: { type: Boolean, default: false },
+                askedCount: { type: Number, default: 0 }
+            },
+            email: {
+                confirmed: { type: Boolean, default: false },
+                pendingConfirm: { type: Boolean, default: false },
+                spelledOut: { type: Boolean, default: false },
+                askedCount: { type: Number, default: 0 }
             }
         }
     },
