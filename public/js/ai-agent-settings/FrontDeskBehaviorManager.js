@@ -3130,6 +3130,144 @@ Sean → Shawn, Shaun`;
         this.isDirty = true;
     }
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V36: CALLER VOCABULARY - 2-Column Table with Inherited + Custom Synonyms
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    renderInheritedSynonyms() {
+        // Get inherited synonyms from AiCore template (via nlpConfig.synonyms)
+        const templateSynonyms = this.config.inheritedSynonyms || this.config.templateSynonyms || {};
+        const entries = Object.entries(templateSynonyms);
+        
+        if (entries.length === 0) {
+            return `
+                <div style="padding: 30px 20px; text-align: center;">
+                    <div style="font-size: 2rem; margin-bottom: 8px; opacity: 0.4;">📚</div>
+                    <p style="color: #6e7681; margin: 0; font-size: 0.85rem;">No inherited synonyms from template</p>
+                    <p style="color: #484f58; margin: 4px 0 0 0; font-size: 0.75rem;">Select an AiCore template to inherit industry synonyms</p>
+                </div>
+            `;
+        }
+        
+        return `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; background: #21262d; border-bottom: 1px solid #30363d;">
+                <div style="padding: 10px 16px; color: #8b949e; font-size: 0.7rem; font-weight: 600; text-transform: uppercase;">Caller Says</div>
+                <div style="padding: 10px 16px; color: #8b949e; font-size: 0.7rem; font-weight: 600; text-transform: uppercase;">AI Understands</div>
+            </div>
+            ${entries.map(([slang, meaning]) => `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #30363d40;">
+                    <div style="padding: 10px 16px; color: #8b949e; font-size: 0.85rem; font-family: monospace;">${this.escapeHtml(slang)}</div>
+                    <div style="padding: 10px 16px; color: #3fb950; font-size: 0.85rem;">${this.escapeHtml(meaning)}</div>
+                </div>
+            `).join('')}
+            <div style="padding: 8px 16px; background: #21262d; text-align: center;">
+                <span style="color: #6e7681; font-size: 0.7rem;">${entries.length} inherited synonym${entries.length !== 1 ? 's' : ''}</span>
+            </div>
+        `;
+    }
+    
+    renderSynonymRows() {
+        // Initialize synonyms array if not exists
+        if (!this.config.callerVocabularySynonyms) {
+            // Convert from old synonymMap format
+            const oldMap = this.config.callerVocabulary?.synonymMap || {};
+            this.config.callerVocabularySynonyms = Object.entries(oldMap).map(([slang, meaning]) => ({
+                slang: slang,
+                meaning: meaning
+            }));
+            console.log('[FRONT DESK] 🔤 Migrated synonymMap to callerVocabularySynonyms:', this.config.callerVocabularySynonyms.length);
+        }
+        
+        const synonyms = this.config.callerVocabularySynonyms || [];
+        
+        if (synonyms.length === 0) {
+            return `
+                <div style="padding: 40px 20px; text-align: center;">
+                    <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5;">🔧</div>
+                    <p style="color: #8b949e; margin: 0 0 8px 0; font-size: 0.9rem;">No company-specific synonyms</p>
+                    <p style="color: #6e7681; margin: 0; font-size: 0.8rem;">Click "Add Synonym" to add custom slang translations</p>
+                </div>
+            `;
+        }
+        
+        return synonyms.map((s, idx) => `
+            <div class="synonym-row" data-idx="${idx}" style="display: grid; grid-template-columns: 1fr 1fr 50px; border-bottom: 1px solid #30363d; transition: background 0.15s;">
+                <!-- Column 1: Caller Slang -->
+                <div style="padding: 12px 16px;">
+                    <input type="text" 
+                        class="synonym-slang" 
+                        value="${this.escapeHtml(s.slang || '')}" 
+                        placeholder="e.g., pulling, froze up, went out..."
+                        onchange="window.frontDeskManager.updateSynonymRow(${idx}, 'slang', this.value)"
+                        style="width: 100%; padding: 10px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.9rem;">
+                </div>
+                
+                <!-- Column 2: Standard Meaning -->
+                <div style="padding: 12px 16px;">
+                    <input type="text" 
+                        class="synonym-meaning" 
+                        value="${this.escapeHtml(s.meaning || '')}" 
+                        placeholder="e.g., cooling, frozen coils, stopped working..."
+                        onchange="window.frontDeskManager.updateSynonymRow(${idx}, 'meaning', this.value)"
+                        style="width: 100%; padding: 10px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.9rem;">
+                </div>
+                
+                <!-- Delete Button -->
+                <div style="padding: 12px 8px; display: flex; align-items: center; justify-content: center;">
+                    <button type="button" 
+                        onclick="window.frontDeskManager.removeSynonymRow(${idx})"
+                        style="width: 32px; height: 32px; background: transparent; border: 1px solid #f8514940; border-radius: 6px; color: #f85149; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; transition: all 0.15s;"
+                        onmouseover="this.style.background='#f8514920'; this.style.borderColor='#f85149'"
+                        onmouseout="this.style.background='transparent'; this.style.borderColor='#f8514940'"
+                        title="Remove this synonym">×</button>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    addSynonymRow() {
+        if (!this.config.callerVocabularySynonyms) {
+            this.config.callerVocabularySynonyms = [];
+        }
+        
+        this.config.callerVocabularySynonyms.push({
+            slang: '',
+            meaning: ''
+        });
+        
+        // Re-render the rows
+        const container = document.getElementById('fdb-cv-synonym-rows');
+        if (container) {
+            container.innerHTML = this.renderSynonymRows();
+        }
+        
+        this.isDirty = true;
+        console.log('[FRONT DESK] 🔤 Added new synonym row');
+    }
+    
+    updateSynonymRow(idx, field, value) {
+        if (!this.config.callerVocabularySynonyms || !this.config.callerVocabularySynonyms[idx]) return;
+        
+        this.config.callerVocabularySynonyms[idx][field] = value;
+        this.isDirty = true;
+        console.log(`[FRONT DESK] 🔤 Updated synonym ${idx}: ${field} = ${value}`);
+    }
+    
+    removeSynonymRow(idx) {
+        if (!this.config.callerVocabularySynonyms) return;
+        
+        const removed = this.config.callerVocabularySynonyms.splice(idx, 1);
+        console.log('[FRONT DESK] 🔤 Removed synonym:', removed[0]?.slang);
+        
+        // Re-render the rows
+        const container = document.getElementById('fdb-cv-synonym-rows');
+        if (container) {
+            container.innerHTML = this.renderSynonymRows();
+        }
+        
+        this.isDirty = true;
+    }
+    
     // ════════════════════════════════════════════════════════════════════════════
     // V22 TAB: Vocabulary Guardrails
     // ════════════════════════════════════════════════════════════════════════════
@@ -3151,42 +3289,85 @@ Sean → Shawn, Shaun`;
         
         return `
             <!-- ═══════════════════════════════════════════════════════════════════ -->
-            <!-- CALLER VOCABULARY - Industry slang/synonym mapping (INPUT) -->
+            <!-- CALLER VOCABULARY - Industry slang/synonym mapping (INPUT) V36 -->
             <!-- ═══════════════════════════════════════════════════════════════════ -->
             <div style="background: #161b22; border: 1px solid #58a6ff; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-                <h3 style="margin: 0 0 8px 0; color: #58a6ff;">🗣️ Caller Vocabulary (Industry Slang)</h3>
-                <p style="color: #8b949e; margin-bottom: 16px; font-size: 0.875rem;">
-                    <strong>Understand caller slang:</strong> When caller says "not pulling", AI understands they mean "not cooling".
-                    <br><span style="color: #6e7681;">This is for what the <strong>caller</strong> says (input), not what the AI says (output).</span>
-                </p>
-                
-                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 16px;">
-                    <input type="checkbox" id="fdb-cv-enabled" ${cvEnabled ? 'checked' : ''} 
-                        onchange="window.frontDeskManager.toggleCallerVocabularyFields(this.checked)"
-                        style="accent-color: #58a6ff; width: 18px; height: 18px;">
-                    <span style="color: #c9d1d9; font-weight: 600;">Enable Caller Vocabulary Translation</span>
-                </label>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                    <div>
+                        <h3 style="margin: 0 0 8px 0; color: #58a6ff;">🗣️ Caller Vocabulary (Industry Slang)</h3>
+                        <p style="color: #8b949e; font-size: 0.875rem; margin: 0;">
+                            <strong>Understand caller slang:</strong> When caller says "not pulling", AI understands they mean "not cooling".
+                            <br><span style="color: #6e7681;">This is for what the <strong>caller</strong> says (input), not what the AI says (output).</span>
+                        </p>
+                    </div>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
+                        <input type="checkbox" id="fdb-cv-enabled" ${cvEnabled ? 'checked' : ''} 
+                            onchange="window.frontDeskManager.toggleCallerVocabularyFields(this.checked)"
+                            style="accent-color: #58a6ff; width: 16px; height: 16px;">
+                        <span style="color: #c9d1d9; font-size: 0.85rem; font-weight: 500;">Enabled</span>
+                    </label>
+                </div>
                 
                 <div id="fdb-cv-fields" style="display: ${cvEnabled ? 'block' : 'none'};">
+                    
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <!-- SOURCE 1: INHERITED FROM AICORE TEMPLATE (Read-Only) -->
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <div style="background: #0d1117; border: 1px solid #238636; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="background: #238636; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">INHERITED</span>
+                                <h4 style="margin: 0; color: #3fb950; font-size: 0.95rem;">📚 Template Synonyms (from AiCore)</h4>
+                            </div>
+                            <span style="color: #6e7681; font-size: 0.75rem;">Read-only • From selected template</span>
+                        </div>
+                        <div id="fdb-cv-inherited-synonyms" style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; overflow: hidden;">
+                            ${this.renderInheritedSynonyms()}
+                        </div>
+                        <p style="color: #6e7681; font-size: 0.7rem; margin: 8px 0 0 0;">
+                            💡 These come from your selected AiCore template. To change them, edit the template in AiBrain.
+                        </p>
+                    </div>
+                    
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <!-- SOURCE 2: COMPANY-SPECIFIC SYNONYMS (Editable Table) -->
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
                     <div style="background: #0d1117; border: 1px solid #58a6ff; border-radius: 8px; padding: 16px;">
-                        <h4 style="margin: 0 0 12px 0; color: #58a6ff;">🔄 Synonym Map (Caller Word → Standard Meaning)</h4>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="background: #58a6ff; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">CUSTOM</span>
+                                <h4 style="margin: 0; color: #58a6ff; font-size: 0.95rem;">🔧 Company Synonyms (Overrides)</h4>
+                            </div>
+                            <button type="button" onclick="window.frontDeskManager.addSynonymRow()" 
+                                style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(35, 134, 54, 0.3);">
+                                <span style="font-size: 1.1rem;">+</span> Add Synonym
+                            </button>
+                        </div>
                         <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 12px;">
-                            Map industry slang to standard terms so AI understands what caller means.
+                            Add company-specific slang that's not in the template. These override template synonyms.
                         </p>
                         
-                        <textarea id="fdb-cv-synonyms" rows="8" 
-                            placeholder="pulling → cooling
-not pulling → not cooling
-blowing hot → not cooling
-froze up → frozen coils
-went out → stopped working
-won't kick on → won't start"
-                            style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 0.85rem; resize: vertical;">${synonymPairs}</textarea>
-                        <p style="color: #8b949e; font-size: 0.7rem; margin-top: 8px;">
-                            Format: <code style="background: #30363d; padding: 2px 6px; border-radius: 3px;">caller slang → standard meaning</code> (one per line)<br><br>
-                            <strong>HVAC Examples:</strong> pulling → cooling, froze up → frozen coils, went out → stopped working<br>
-                            <strong>Plumbing Examples:</strong> stopped up → clogged, backed up → clogged, dripping → leaking<br>
-                            <strong>Dental Examples:</strong> chompers → teeth, pearly whites → teeth
+                        <!-- Clean 2-Column Table -->
+                        <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; overflow: hidden;">
+                            <!-- Table Header -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 50px; background: #21262d; border-bottom: 1px solid #30363d;">
+                                <div style="padding: 12px 16px; color: #8b949e; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    Caller Says (Slang)
+                                </div>
+                                <div style="padding: 12px 16px; color: #8b949e; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    AI Understands (Standard)
+                                </div>
+                                <div></div>
+                            </div>
+                            
+                            <!-- Table Body -->
+                            <div id="fdb-cv-synonym-rows" style="display: flex; flex-direction: column;">
+                                ${this.renderSynonymRows()}
+                            </div>
+                        </div>
+                        
+                        <p style="color: #6e7681; font-size: 0.7rem; margin: 12px 0 0 0;">
+                            <strong>Examples:</strong> pulling → cooling, froze up → frozen coils, went out → stopped working
                         </p>
                     </div>
                 </div>
@@ -3738,18 +3919,17 @@ won't kick on → won't start"
         }
         
         // ════════════════════════════════════════════════════════════════════════════
-        // V26: Caller Vocabulary Settings (Industry Slang Translation)
+        // V36: Caller Vocabulary Settings (Industry Slang Translation) - 2-Column Table
         // ════════════════════════════════════════════════════════════════════════════
         if (document.getElementById('fdb-cv-enabled')) {
             const enabled = getChecked('fdb-cv-enabled');
             
-            // Parse synonym map (slang → meaning)
-            const synonymsRaw = get('fdb-cv-synonyms') || '';
+            // Convert array format to synonymMap for backend compatibility
+            const synonyms = this.config.callerVocabularySynonyms || [];
             const synonymMap = {};
-            synonymsRaw.split('\n').forEach(line => {
-                const parts = line.split('→').map(p => p.trim());
-                if (parts.length === 2 && parts[0] && parts[1]) {
-                    synonymMap[parts[0].toLowerCase()] = parts[1];
+            synonyms.forEach(s => {
+                if (s.slang && s.slang.trim() && s.meaning && s.meaning.trim()) {
+                    synonymMap[s.slang.toLowerCase().trim()] = s.meaning.trim();
                 }
             });
             
@@ -3758,7 +3938,11 @@ won't kick on → won't start"
                 synonymMap: synonymMap,
                 logTranslations: true  // Always log for debugging
             };
-            console.log('[FRONT DESK BEHAVIOR] 🔤 V26 Caller vocabulary saved:', this.config.callerVocabulary);
+            console.log('[FRONT DESK BEHAVIOR] 🔤 V36 Caller vocabulary saved:', {
+                enabled,
+                synonymCount: Object.keys(synonymMap).length,
+                synonymMap
+            });
         }
         
         // ════════════════════════════════════════════════════════════════════════════
