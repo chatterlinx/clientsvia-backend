@@ -169,19 +169,39 @@ function getVariant(pool, index = null) {
 }
 
 // Helper: Get slot prompt variant (UI config or fallback)
+// V36 FIX: PROMPT AS LAW - UI-configured question takes priority over variants
 function getSlotPromptVariant(slotConfig, slotId, askedCount = 0) {
-    // First try UI-configured variants
+    // 🎯 PROMPT AS LAW: UI-configured question is FIRST priority
+    // This is what the admin set in Front Desk Behavior → Booking Prompts
+    if (slotConfig?.question) {
+        // If this is the first ask, use the exact UI question
+        // For reprompts (askedCount > 0), try variants if available
+        if (askedCount === 0) {
+            return slotConfig.question;
+        }
+        // For reprompts, try UI-configured reprompt variants
+        const uiRepromptVariants = slotConfig?.repromptVariants;
+        if (uiRepromptVariants && uiRepromptVariants.length > 0) {
+            return uiRepromptVariants[(askedCount - 1) % uiRepromptVariants.length];
+        }
+        // No reprompt variants, use the main question again
+        return slotConfig.question;
+    }
+    
+    // Fallback: Try UI-configured prompt variants (legacy support)
     const uiVariants = slotConfig?.promptVariants;
     if (uiVariants && uiVariants.length > 0) {
         return uiVariants[askedCount % uiVariants.length];
     }
-    // Fallback to default variants
+    
+    // Fallback to default variants (only if NO UI config)
     const defaultVariants = DEFAULT_PROMPT_VARIANTS.slots[slotId];
     if (defaultVariants && defaultVariants.length > 0) {
         return defaultVariants[askedCount % defaultVariants.length];
     }
-    // Last resort: use configured question
-    return slotConfig?.question || `What's your ${slotId}?`;
+    
+    // Last resort
+    return `What's your ${slotId}?`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2810,7 +2830,11 @@ async function processTurn({
                         finalReply = "And what's your first name?";
                     } else {
                         // We have first name (or assumed first by default), need last
-                        finalReply = "And what's your last name?";
+                        // V36: Use the caller's first name for personalization
+                        const firstName = nameMeta.first || currentSlots.partialName || '';
+                        finalReply = firstName 
+                            ? `Hi ${firstName}, what's your last name?`
+                            : "And what's your last name?";
                     }
                     nextSlotId = 'name'; // Still on name
                     
@@ -3120,7 +3144,8 @@ async function processTurn({
                         // Now proceed to ask for last name or move on
                         if (askFullName) {
                             nameMeta.askedMissingPartOnce = true;
-                            finalReply = `Got it, ${chosenName}. And what's your last name?`;
+                            // V36: Personalized ask for last name
+                            finalReply = `Got it, ${chosenName}. What's your last name?`;
                             nextSlotId = 'name';
                         } else {
                             // Accept as complete
@@ -3136,8 +3161,12 @@ async function processTurn({
                         // Ask for the part we don't have
                         if (nameMeta.assumedSingleTokenAs === 'last') {
                             finalReply = "And what's your first name?";
-        } else {
-                            finalReply = "And what's your last name?";
+                        } else {
+                            // V36: Use the caller's first name for personalization
+                            const firstName = nameMeta.first || currentSlots.partialName || '';
+                            finalReply = firstName 
+                                ? `Hi ${firstName}, what's your last name?`
+                                : "And what's your last name?";
                         }
                         nextSlotId = 'name'; // Still on name
                         
