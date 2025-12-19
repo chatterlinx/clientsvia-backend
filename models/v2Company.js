@@ -1772,7 +1772,7 @@ const companySchema = new mongoose.Schema({
                             "What's the apartment or suite number?",
                             "Is there a unit or building number I should note?"
                         ]
-                    }
+                    },
                     
                     // ═══════════════════════════════════════════════════════════════
                     // EMAIL-SPECIFIC OPTIONS
