@@ -248,6 +248,8 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
                 fastPathBooking: config.fastPathBooking || null,
                 // 👤 Common First Names - UI-configurable name recognition
                 commonFirstNames: config.commonFirstNames || [],
+                // ✏️ V30: Name Spelling Variants - "Mark with K or C?"
+                nameSpellingVariants: config.nameSpellingVariants || null,
                 // 🎯 Booking Outcome - What AI says when all slots collected
                 bookingOutcome: config.bookingOutcome || {
                     mode: 'confirmed_on_call',
@@ -457,6 +459,36 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
                 count: (updates.commonFirstNames || []).length,
                 sample: (updates.commonFirstNames || []).slice(0, 10),
                 fullList: updates.commonFirstNames
+            });
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // ✏️ V30: Name Spelling Variants - "Mark with K or C?"
+        // ════════════════════════════════════════════════════════════════════════════
+        // Optional feature for dental/medical/membership contexts.
+        // OFF by default - only enable when exact spelling matters for record lookup.
+        // ════════════════════════════════════════════════════════════════════════════
+        if (updates.nameSpellingVariants) {
+            if (updates.nameSpellingVariants.enabled !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.nameSpellingVariants.enabled'] = updates.nameSpellingVariants.enabled;
+            }
+            if (updates.nameSpellingVariants.mode !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.nameSpellingVariants.mode'] = updates.nameSpellingVariants.mode;
+            }
+            if (updates.nameSpellingVariants.script !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.nameSpellingVariants.script'] = updates.nameSpellingVariants.script;
+            }
+            if (updates.nameSpellingVariants.maxAsksPerCall !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.nameSpellingVariants.maxAsksPerCall'] = updates.nameSpellingVariants.maxAsksPerCall;
+            }
+            if (updates.nameSpellingVariants.variantGroups !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.nameSpellingVariants.variantGroups'] = updates.nameSpellingVariants.variantGroups;
+            }
+            logger.info('[FRONT DESK BEHAVIOR] ✏️ V30 Saving nameSpellingVariants:', {
+                companyId,
+                enabled: updates.nameSpellingVariants.enabled,
+                mode: updates.nameSpellingVariants.mode,
+                variantGroupCount: updates.nameSpellingVariants.variantGroups ? Object.keys(updates.nameSpellingVariants.variantGroups).length : 0
             });
         }
         

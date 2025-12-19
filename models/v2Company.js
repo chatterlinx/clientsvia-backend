@@ -1781,6 +1781,59 @@ const companySchema = new mongoose.Schema({
             },
             
             // ═══════════════════════════════════════════════════════════════
+            // 🆕 V30: NAME SPELLING VARIANTS - "Mark with K or C?"
+            // ═══════════════════════════════════════════════════════════════
+            // Optional feature for dental/medical/membership contexts where
+            // exact spelling matters for record lookup.
+            // 
+            // OFF by default - only enable when spelling is critical.
+            // Uses Levenshtein distance to determine if variants are similar.
+            // 
+            // UI: Front Desk → Booking Prompts → Name Spelling Variants
+            // ═══════════════════════════════════════════════════════════════
+            nameSpellingVariants: {
+                // Master toggle - OFF by default (don't annoy HVAC callers)
+                enabled: { type: Boolean, default: false },
+                
+                // When to ask about spelling:
+                // - '1_char_only': Only ask if variant differs by exactly 1 character (Mark/Marc)
+                // - 'any_variant': Ask for any variant in the list (Steven/Stephen)
+                mode: { 
+                    type: String, 
+                    enum: ['1_char_only', 'any_variant'], 
+                    default: '1_char_only' 
+                },
+                
+                // Script template for asking about spelling
+                // Use {optionA} and {optionB} as placeholders
+                script: { 
+                    type: String, 
+                    default: 'Just to make sure I spell it correctly — is that {optionA} or {optionB}?',
+                    trim: true
+                },
+                
+                // Max spelling questions per call (hard cap to prevent annoyance)
+                maxAsksPerCall: { type: Number, default: 1, min: 0, max: 3 },
+                
+                // Variant groups: { "Mark": ["Marc"], "Brian": ["Bryan"], ... }
+                // AI will only ask if caller's name matches a group AND mode criteria is met
+                variantGroups: {
+                    type: Map,
+                    of: [String],
+                    default: new Map([
+                        ['Mark', ['Marc']],
+                        ['Brian', ['Bryan']],
+                        ['Eric', ['Erik']],
+                        ['Jon', ['John']],
+                        ['Sara', ['Sarah']],
+                        ['Cathy', ['Kathy']],
+                        ['Steven', ['Stephen']],
+                        ['Sean', ['Shawn', 'Shaun']]
+                    ])
+                }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
             // BOOKING TEMPLATES - Confirmation and completion messages
             // ═══════════════════════════════════════════════════════════════
             bookingTemplates: {

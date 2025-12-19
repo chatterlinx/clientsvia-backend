@@ -617,6 +617,98 @@ class FrontDeskBehaviorManager {
                 </div>
             </div>
             
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <!-- NAME SPELLING VARIANTS - Ask "Mark with K or C?" (V30) -->
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <div style="background: #161b22; border: 1px solid ${this.config.nameSpellingVariants?.enabled ? '#f0883e' : '#30363d'}; border-radius: 8px; padding: 20px; margin-top: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                    <div>
+                        <h3 style="margin: 0; color: #f0883e;">✏️ Name Spelling Variants</h3>
+                        <p style="color: #8b949e; font-size: 0.8rem; margin: 4px 0 0 0;">
+                            <strong>Optional:</strong> Ask about spelling for names with common variants (Mark/Marc, Brian/Bryan).
+                            <br><span style="color: #f85149;">⚠️ OFF by default</span> — Only enable for dental/medical/membership where exact spelling matters.
+                        </p>
+                    </div>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="fdb-spelling-enabled" ${this.config.nameSpellingVariants?.enabled ? 'checked' : ''} 
+                            style="accent-color: #f0883e; width: 18px; height: 18px;"
+                            onchange="window.frontDeskManager.toggleSpellingVariants(this.checked)">
+                        <span style="color: ${this.config.nameSpellingVariants?.enabled ? '#f0883e' : '#8b949e'}; font-weight: 600;">
+                            ${this.config.nameSpellingVariants?.enabled ? 'ENABLED' : 'DISABLED'}
+                        </span>
+                    </label>
+                </div>
+                
+                <div id="spelling-variants-settings" style="display: ${this.config.nameSpellingVariants?.enabled ? 'block' : 'none'};">
+                    <!-- Mode Selection -->
+                    <div style="margin-bottom: 16px; padding: 12px; background: #0d1117; border-radius: 6px; border: 1px solid #30363d;">
+                        <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 8px;">When to ask about spelling:</label>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="radio" name="spelling-mode" value="1_char_only" 
+                                    ${(this.config.nameSpellingVariants?.mode || '1_char_only') === '1_char_only' ? 'checked' : ''}
+                                    style="accent-color: #f0883e;">
+                                <span style="color: #c9d1d9; font-size: 0.875rem;">
+                                    <strong>1-character difference only</strong> 
+                                    <span style="color: #8b949e;">(recommended: Mark/Marc, Eric/Erik)</span>
+                                </span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="radio" name="spelling-mode" value="any_variant" 
+                                    ${this.config.nameSpellingVariants?.mode === 'any_variant' ? 'checked' : ''}
+                                    style="accent-color: #f0883e;">
+                                <span style="color: #c9d1d9; font-size: 0.875rem;">
+                                    <strong>Any variant in list</strong>
+                                    <span style="color: #8b949e;">(includes Steven/Stephen, Sean/Shawn)</span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Script Template -->
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Spelling question script:</label>
+                        <input type="text" id="fdb-spelling-script" 
+                            value="${this.config.nameSpellingVariants?.script || 'Just to make sure I spell it correctly — is that {optionA} or {optionB}?'}"
+                            placeholder="Just to make sure I spell it correctly — is that {optionA} or {optionB}?"
+                            style="width: 100%; padding: 10px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        <p style="color: #6e7681; font-size: 0.7rem; margin: 4px 0 0 0;">
+                            Use {optionA} and {optionB} as placeholders. Example: "Is that Mark with a K or Marc with a C?"
+                        </p>
+                    </div>
+                    
+                    <!-- Variant Groups -->
+                    <div style="margin-bottom: 12px;">
+                        <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">
+                            Name variant groups <span style="color: #6e7681;">(format: Name → Variant1, Variant2)</span>
+                        </label>
+                        <textarea id="fdb-variant-groups" rows="8" 
+                            placeholder="Mark → Marc
+Brian → Bryan
+Eric → Erik
+Jon → John
+Sara → Sarah
+Cathy → Kathy
+Steven → Stephen
+Sean → Shawn, Shaun"
+                            style="width: 100%; padding: 10px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 0.85rem; resize: vertical;">${this.renderVariantGroupsText()}</textarea>
+                        <p style="color: #6e7681; font-size: 0.7rem; margin: 4px 0 0 0;">
+                            One group per line. AI will only ask if caller's name matches a group AND mode criteria is met.
+                        </p>
+                    </div>
+                    
+                    <!-- Max Asks Per Call -->
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <label style="font-size: 0.875rem; color: #c9d1d9;">Max spelling questions per call:</label>
+                        <select id="fdb-spelling-max-asks" style="padding: 6px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                            <option value="1" ${(this.config.nameSpellingVariants?.maxAsksPerCall || 1) === 1 ? 'selected' : ''}>1 (recommended)</option>
+                            <option value="2" ${this.config.nameSpellingVariants?.maxAsksPerCall === 2 ? 'selected' : ''}>2</option>
+                            <option value="0" ${this.config.nameSpellingVariants?.maxAsksPerCall === 0 ? 'selected' : ''}>Unlimited</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Common First Names Section -->
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 16px;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
@@ -679,6 +771,99 @@ class FrontDeskBehaviorManager {
                     title="Remove ${name}">×</button>
             </span>
         `).join('');
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NAME SPELLING VARIANTS (V30)
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    renderVariantGroupsText() {
+        const groups = this.config.nameSpellingVariants?.variantGroups || {};
+        if (Object.keys(groups).length === 0) {
+            // Return default examples
+            return `Mark → Marc
+Brian → Bryan
+Eric → Erik
+Jon → John
+Sara → Sarah
+Cathy → Kathy
+Steven → Stephen
+Sean → Shawn, Shaun`;
+        }
+        return Object.entries(groups)
+            .map(([name, variants]) => `${name} → ${Array.isArray(variants) ? variants.join(', ') : variants}`)
+            .join('\n');
+    }
+    
+    toggleSpellingVariants(enabled) {
+        if (!this.config.nameSpellingVariants) {
+            this.config.nameSpellingVariants = {
+                enabled: false,
+                mode: '1_char_only',
+                maxAsksPerCall: 1,
+                script: 'Just to make sure I spell it correctly — is that {optionA} or {optionB}?',
+                variantGroups: {}
+            };
+        }
+        this.config.nameSpellingVariants.enabled = enabled;
+        
+        // Toggle visibility
+        const settingsDiv = document.getElementById('spelling-variants-settings');
+        if (settingsDiv) {
+            settingsDiv.style.display = enabled ? 'block' : 'none';
+        }
+        
+        // Update label
+        const labelSpan = document.querySelector('#fdb-spelling-enabled')?.parentElement?.querySelector('span');
+        if (labelSpan) {
+            labelSpan.textContent = enabled ? 'ENABLED' : 'DISABLED';
+            labelSpan.style.color = enabled ? '#f0883e' : '#8b949e';
+        }
+        
+        // Update border
+        const container = document.querySelector('#fdb-spelling-enabled')?.closest('div[style*="border"]');
+        if (container) {
+            container.style.borderColor = enabled ? '#f0883e' : '#30363d';
+        }
+        
+        this.isDirty = true;
+        console.log('[FRONT DESK] ✏️ Spelling variants toggled:', enabled);
+    }
+    
+    parseVariantGroups(text) {
+        const groups = {};
+        const lines = text.split('\n').filter(l => l.trim());
+        
+        for (const line of lines) {
+            // Support both → and -> as separators
+            const parts = line.split(/→|->/).map(p => p.trim());
+            if (parts.length === 2 && parts[0] && parts[1]) {
+                const name = parts[0];
+                const variants = parts[1].split(',').map(v => v.trim()).filter(v => v);
+                if (variants.length > 0) {
+                    groups[name] = variants;
+                }
+            }
+        }
+        
+        return groups;
+    }
+    
+    collectSpellingVariantsConfig() {
+        const enabled = document.getElementById('fdb-spelling-enabled')?.checked || false;
+        const mode = document.querySelector('input[name="spelling-mode"]:checked')?.value || '1_char_only';
+        const script = document.getElementById('fdb-spelling-script')?.value || 'Just to make sure I spell it correctly — is that {optionA} or {optionB}?';
+        const maxAsks = parseInt(document.getElementById('fdb-spelling-max-asks')?.value || '1', 10);
+        const variantGroupsText = document.getElementById('fdb-variant-groups')?.value || '';
+        const variantGroups = this.parseVariantGroups(variantGroupsText);
+        
+        return {
+            enabled,
+            mode,
+            script,
+            maxAsksPerCall: maxAsks,
+            variantGroups
+        };
     }
     
     addCommonFirstName() {
@@ -3038,6 +3223,14 @@ won't kick on → won't start"
                 logTranslations: true  // Always log for debugging
             };
             console.log('[FRONT DESK BEHAVIOR] 🔤 V26 Caller vocabulary saved:', this.config.callerVocabulary);
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // V30: Name Spelling Variants (Mark with K or C?)
+        // ════════════════════════════════════════════════════════════════════════════
+        if (document.getElementById('fdb-spelling-enabled')) {
+            this.config.nameSpellingVariants = this.collectSpellingVariantsConfig();
+            console.log('[FRONT DESK BEHAVIOR] ✏️ V30 Name spelling variants saved:', this.config.nameSpellingVariants);
         }
     }
 
