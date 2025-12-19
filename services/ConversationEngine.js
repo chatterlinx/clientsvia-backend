@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V35-WORLD-CLASS-UNIT-DETECTION';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V36-PROMPT-AS-LAW-STRICT-NAME';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -1131,12 +1131,15 @@ const SlotExtractors = {
             // Adjectives/states
             'great', 'fine', 'bad', 'hot', 'cold', 'here', 'there', 'back', 'home',
             'interested', 'concerned', 'worried', 'happy', 'sorry', 'glad',
-            // SERVICE/TRADE WORDS
+            // SERVICE/TRADE WORDS - V36 FIX: Added "conditioner", "heater", "cooler"
             'service', 'services', 'repair', 'repairs', 'maintenance', 'install', 'installation',
-            'conditioning', 'air', 'ac', 'hvac', 'heating', 'cooling', 'plumbing', 'electrical',
-            'unit', 'system', 'systems', 'equipment', 'furnace', 'thermostat', 'duct', 'ducts',
+            'conditioning', 'conditioner', 'air', 'ac', 'hvac', 'heating', 'heater', 'cooling', 'cooler',
+            'plumbing', 'plumber', 'electrical', 'electrician', 'unit', 'system', 'systems', 
+            'equipment', 'furnace', 'thermostat', 'duct', 'ducts', 'filter', 'filters', 'vent', 'vents',
             'appointment', 'schedule', 'scheduling', 'book', 'booking', 'call', 'help',
             'need', 'needs', 'want', 'wants', 'get', 'fix', 'check', 'look', 'today', 'tomorrow',
+            // V36 FIX: Common verbs that appear in "I'm looking for..."
+            'looking', 'for', 'about', 'regarding', 'concerning',
             // TIME/URGENCY words
             'soon', 'possible', 'asap', 'now', 'immediately', 'urgent', 'urgently',
             'available', 'earliest', 'soonest', 'first', 'next', 'whenever',
@@ -1155,8 +1158,20 @@ const SlotExtractors = {
         // V32: NAME INTENT DETECTION
         // Only extract if explicit name phrase OR we're expecting a name
         // This prevents "go ahead" from becoming a name in discovery
+        // V36 FIX: "I'm looking for..." should NOT trigger name extraction
+        // Must be followed by a capitalized word (likely a name)
         // ═══════════════════════════════════════════════════════════════════
-        const hasNameIntent = /\b(my name is|name is|this is|i am|i'?m|im|it'?s|call me)\b/i.test(lower);
+        // Strict patterns that indicate actual name introduction:
+        const strictNamePatterns = [
+            /\bmy name is\b/i,
+            /\bname is\b/i,
+            /\bthis is\s+[A-Z]/,  // "this is Mark" (capitalized)
+            /\bi am\s+[A-Z]/,     // "I am Mark" (capitalized)
+            /\bi'?m\s+[A-Z][a-z]+(?:\s|$|,)/,  // "I'm Mark" followed by space/end/comma, NOT "I'm looking"
+            /\bit'?s\s+[A-Z]/,    // "it's Mark" (capitalized)
+            /\bcall me\b/i
+        ];
+        const hasNameIntent = strictNamePatterns.some(p => p.test(raw));
         
         // Gate: Only extract if expecting name OR explicit name intent
         if (!expectingName && !hasNameIntent) {
