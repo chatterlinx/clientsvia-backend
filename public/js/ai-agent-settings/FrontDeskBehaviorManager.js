@@ -164,9 +164,43 @@ class FrontDeskBehaviorManager {
                 rawSample: Object.entries(templateSynonyms).slice(0, 2)
             });
             
+            // Also load filler words from template
+            await this.loadInheritedFillers(token, activeRef.templateId);
+            
         } catch (error) {
             console.error('[FRONT DESK BEHAVIOR] 🔤 Error loading inherited synonyms:', error);
             this.config.inheritedSynonyms = {};
+        }
+    }
+    
+    // Load filler words from template
+    async loadInheritedFillers(token, templateId) {
+        try {
+            const fillersResponse = await fetch(`/api/admin/global-instant-responses/${templateId}/filler-words`, {
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!fillersResponse.ok) {
+                console.warn('[FRONT DESK BEHAVIOR] 🔇 Could not fetch template fillers');
+                this.config.inheritedFillers = [];
+                return;
+            }
+            
+            const fillersData = await fillersResponse.json();
+            this.config.inheritedFillers = fillersData.fillerWords || [];
+            
+            console.log('[FRONT DESK BEHAVIOR] 🔇 Inherited fillers loaded:', {
+                templateId,
+                count: this.config.inheritedFillers.length,
+                sample: this.config.inheritedFillers.slice(0, 10)
+            });
+            
+        } catch (error) {
+            console.error('[FRONT DESK BEHAVIOR] 🔇 Error loading inherited fillers:', error);
+            this.config.inheritedFillers = [];
         }
     }
     
@@ -3447,6 +3481,130 @@ Sean → Shawn, Shaun`;
         this.isDirty = true;
     }
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V36: FILLER WORDS - Inherited + Custom
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    renderInheritedFillers() {
+        const fillers = this.config.inheritedFillers || [];
+        const templateName = this.config.activeTemplateName || 'No Template';
+        
+        if (fillers.length === 0) {
+            return `
+                <div style="padding: 30px 20px; text-align: center;">
+                    <div style="font-size: 1.5rem; margin-bottom: 8px; opacity: 0.4;">🔇</div>
+                    <p style="color: #6e7681; margin: 0; font-size: 0.8rem;">No inherited filler words from template</p>
+                    <p style="color: #484f58; margin: 4px 0 0 0; font-size: 0.7rem;">Select an AiCore template with fillers configured</p>
+                </div>
+            `;
+        }
+        
+        // Render as badge cloud
+        const badges = fillers.map(f => 
+            `<span style="display: inline-block; padding: 4px 10px; background: #238636; color: white; border-radius: 4px; font-size: 0.8rem; margin: 3px;">${this.escapeHtml(f)}</span>`
+        ).join('');
+        
+        return `
+            <!-- Scrollable Badge Container -->
+            <div style="max-height: 150px; overflow-y: auto; padding: 12px;">
+                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                    ${badges}
+                </div>
+            </div>
+            <!-- Footer with count and template name -->
+            <div style="padding: 8px 16px; background: #21262d; border-top: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #6e7681; font-size: 0.75rem;">${fillers.length} filler word${fillers.length !== 1 ? 's' : ''}</span>
+                <span style="color: #3fb950; font-size: 0.75rem;">📦 ${this.escapeHtml(templateName)}</span>
+            </div>
+        `;
+    }
+    
+    renderCustomFillers() {
+        // Initialize custom fillers array if not exists
+        if (!this.config.customFillers) {
+            this.config.customFillers = [];
+        }
+        
+        const fillers = this.config.customFillers || [];
+        
+        if (fillers.length === 0) {
+            return `
+                <div style="padding: 30px 20px; text-align: center;">
+                    <div style="font-size: 1.5rem; margin-bottom: 8px; opacity: 0.5;">🔧</div>
+                    <p style="color: #8b949e; margin: 0 0 4px 0; font-size: 0.85rem;">No company-specific filler words</p>
+                    <p style="color: #6e7681; margin: 0; font-size: 0.75rem;">Click "Add Filler" to add custom noise words</p>
+                </div>
+            `;
+        }
+        
+        // Render as editable badges with delete
+        const badges = fillers.map((f, idx) => `
+            <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 12px; background: #a371f7; color: white; border-radius: 4px; font-size: 0.8rem; margin: 3px;">
+                ${this.escapeHtml(f)}
+                <button type="button" 
+                    onclick="window.frontDeskManager.removeFillerWord(${idx})"
+                    style="background: rgba(255,255,255,0.2); border: none; color: white; width: 18px; height: 18px; border-radius: 50%; cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; justify-content: center;"
+                    title="Remove">×</button>
+            </span>
+        `).join('');
+        
+        return `
+            <!-- Scrollable Badge Container -->
+            <div style="max-height: 150px; overflow-y: auto; padding: 12px;">
+                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                    ${badges}
+                </div>
+            </div>
+            <!-- Footer with count -->
+            <div style="padding: 8px 16px; background: #21262d; border-top: 1px solid #30363d; text-align: center;">
+                <span style="color: #6e7681; font-size: 0.75rem;">${fillers.length} custom filler${fillers.length !== 1 ? 's' : ''}</span>
+            </div>
+        `;
+    }
+    
+    addFillerWord() {
+        const word = prompt('Enter filler word to add (e.g., "um", "like", "basically"):');
+        if (!word || !word.trim()) return;
+        
+        const normalized = word.toLowerCase().trim();
+        
+        if (!this.config.customFillers) {
+            this.config.customFillers = [];
+        }
+        
+        // Check for duplicates
+        if (this.config.customFillers.includes(normalized)) {
+            alert('This filler word already exists!');
+            return;
+        }
+        
+        this.config.customFillers.push(normalized);
+        
+        // Re-render
+        const container = document.getElementById('fdb-custom-fillers');
+        if (container) {
+            container.innerHTML = this.renderCustomFillers();
+        }
+        
+        this.isDirty = true;
+        console.log('[FRONT DESK] 🔇 Added filler word:', normalized);
+    }
+    
+    removeFillerWord(idx) {
+        if (!this.config.customFillers) return;
+        
+        const removed = this.config.customFillers.splice(idx, 1);
+        console.log('[FRONT DESK] 🔇 Removed filler word:', removed[0]);
+        
+        // Re-render
+        const container = document.getElementById('fdb-custom-fillers');
+        if (container) {
+            container.innerHTML = this.renderCustomFillers();
+        }
+        
+        this.isDirty = true;
+    }
+    
     // ════════════════════════════════════════════════════════════════════════════
     // V22 TAB: Vocabulary Guardrails
     // ════════════════════════════════════════════════════════════════════════════
@@ -3549,6 +3707,68 @@ Sean → Shawn, Shaun`;
                             <strong>Examples:</strong> pulling → cooling, froze up → frozen coils, went out → stopped working
                         </p>
                     </div>
+                </div>
+            </div>
+            
+            <!-- ═══════════════════════════════════════════════════════════════════ -->
+            <!-- FILLER WORDS - Words to ignore during intent matching V36 -->
+            <!-- ═══════════════════════════════════════════════════════════════════ -->
+            <div style="background: #161b22; border: 1px solid #a371f7; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                    <div>
+                        <h3 style="margin: 0 0 8px 0; color: #a371f7;">🔇 Filler Words (Noise Removal)</h3>
+                        <p style="color: #8b949e; font-size: 0.875rem; margin: 0;">
+                            <strong>Remove noise:</strong> Words like "um", "like", "you know" are stripped before AI processes input.
+                            <br><span style="color: #6e7681;">This improves intent detection accuracy by removing conversational noise.</span>
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <!-- SOURCE 1: INHERITED FILLERS FROM TEMPLATE (Read-Only) -->
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <div style="background: #0d1117; border: 1px solid #238636; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="background: #238636; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">INHERITED</span>
+                            <h4 style="margin: 0; color: #3fb950; font-size: 0.95rem;">📚 Template Fillers (from AiCore)</h4>
+                        </div>
+                        <span style="color: #6e7681; font-size: 0.75rem;">Read-only • From selected template</span>
+                    </div>
+                    <div id="fdb-inherited-fillers" style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; overflow: hidden;">
+                        ${this.renderInheritedFillers()}
+                    </div>
+                    <p style="color: #6e7681; font-size: 0.7rem; margin: 8px 0 0 0;">
+                        💡 These come from your selected AiCore template. To change them, edit the template in AiBrain.
+                    </p>
+                </div>
+                
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <!-- SOURCE 2: COMPANY-SPECIFIC FILLERS (Editable) -->
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <div style="background: #0d1117; border: 1px solid #a371f7; border-radius: 8px; padding: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="background: #a371f7; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">CUSTOM</span>
+                            <h4 style="margin: 0; color: #a371f7; font-size: 0.95rem;">🔧 Company Fillers (Additional)</h4>
+                        </div>
+                        <button type="button" onclick="window.frontDeskManager.addFillerWord()" 
+                            style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(35, 134, 54, 0.3);">
+                            <span style="font-size: 1.1rem;">+</span> Add Filler
+                        </button>
+                    </div>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 12px;">
+                        Add company-specific filler words. These are added to (not replacing) template fillers.
+                    </p>
+                    
+                    <!-- Filler Words Display -->
+                    <div id="fdb-custom-fillers" style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; overflow: hidden;">
+                        ${this.renderCustomFillers()}
+                    </div>
+                    
+                    <p style="color: #6e7681; font-size: 0.7rem; margin: 12px 0 0 0;">
+                        <strong>Examples:</strong> um, uh, like, you know, basically, actually, so, well
+                    </p>
                 </div>
             </div>
             
