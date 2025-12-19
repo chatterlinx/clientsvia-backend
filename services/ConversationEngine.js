@@ -44,13 +44,14 @@ const BookingStateMachine = require('./BookingStateMachine');
 const ResponseRenderer = require('./ResponseRenderer');
 const ConversationStateMachine = require('./ConversationStateMachine');
 const LLMDiscoveryEngine = require('./LLMDiscoveryEngine');
+const AddressValidationService = require('./AddressValidationService');
 const logger = require('../utils/logger');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V34-VALUE-BEATS-META';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V35-GOOGLE-MAPS-VALIDATION';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -58,6 +59,7 @@ logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
         '✅ Scenarios are TOOLS (not scripts)',
         '✅ Booking is DETERMINISTIC (consent-gated)',
         '✅ No triage gates, no pre-routing',
+        '✅ V35: Google Maps address validation (toggle per company)',
         '✅ session.mode = DISCOVERY | SUPPORT | BOOKING | COMPLETE',
         '✅ Consent detection via UI-configured phrases',
         '✅ Latency target: < 1.2s per turn',
@@ -3159,6 +3161,35 @@ async function processTurn({
                         log('🏠 ADDRESS: User provided new address instead of confirming');
                     }
                 }
+                // V35: Handle unit number response (after Google Maps asked for unit)
+                else if (addressMeta.unitAsked && !addressMeta.unitCollected && session.booking.activeSlot === 'address') {
+                    const userTextTrimmed = userText.trim();
+                    const noUnitPhrases = /\b(no|nope|none|n\/a|na|not applicable|no unit|no apartment|just that|that's it|that's all)\b/i;
+                    
+                    if (noUnitPhrases.test(userTextTrimmed)) {
+                        // No unit needed
+                        addressMeta.unitCollected = true;
+                        addressMeta.confirmed = true;
+                        session.booking.activeSlot = 'time';
+                        finalReply = `Perfect, got it. `;
+                        log('🏠 ADDRESS: No unit needed, moving to time');
+                    } else if (userTextTrimmed.length > 0 && userTextTrimmed.length < 20) {
+                        // User provided unit number
+                        const unitNumber = userTextTrimmed.replace(/^(apt|apartment|unit|suite|ste|#)\s*/i, '').trim();
+                        addressMeta.unit = unitNumber;
+                        addressMeta.unitCollected = true;
+                        addressMeta.confirmed = true;
+                        
+                        // Append unit to address
+                        if (currentSlots.address && unitNumber) {
+                            currentSlots.address = `${currentSlots.address}, Unit ${unitNumber}`;
+                        }
+                        
+                        session.booking.activeSlot = 'time';
+                        finalReply = `Got it, Unit ${unitNumber}. `;
+                        log('🏠 ADDRESS: Unit collected', { unit: unitNumber, fullAddress: currentSlots.address });
+                    }
+                }
                 // Handle breakDownIfUnclear step-by-step collection
                 else if (addressMeta.breakdownStep === 'street' && userText.length > 3) {
                     addressMeta.street = userText.trim();
@@ -3227,21 +3258,109 @@ async function processTurn({
                         isPartialAddress
                     });
                     
+                    // ═══════════════════════════════════════════════════════════════════
+                    // V35: GOOGLE MAPS ADDRESS VALIDATION (silent background validation)
+                    // ═══════════════════════════════════════════════════════════════════
+                    let googleMapsResult = null;
+                    let googleMapsConfirmNeeded = false;
+                    let googleMapsUnitNeeded = false;
+                    
+                    if (addressSlotConfig?.useGoogleMapsValidation) {
+                        try {
+                            log('🗺️ GOOGLE MAPS: Validating address...', { raw: extractedThisTurn.address });
+                            googleMapsResult = await AddressValidationService.validateAddress(
+                                extractedThisTurn.address,
+                                { companyId, enabled: true }
+                            );
+                            
+                            if (googleMapsResult.success && googleMapsResult.validated) {
+                                // Use normalized address from Google
+                                currentSlots.address = googleMapsResult.normalized;
+                                addressMeta.validated = true;
+                                addressMeta.googleMaps = {
+                                    normalized: googleMapsResult.normalized,
+                                    confidence: googleMapsResult.confidence,
+                                    components: googleMapsResult.components,
+                                    location: googleMapsResult.location,
+                                    placeId: googleMapsResult.placeId
+                                };
+                                
+                                // Check if confirmation or unit prompt is needed
+                                const confirmDecision = AddressValidationService.shouldConfirmAddress(
+                                    googleMapsResult,
+                                    addressSlotConfig
+                                );
+                                googleMapsConfirmNeeded = confirmDecision.shouldConfirm;
+                                googleMapsUnitNeeded = confirmDecision.shouldAskUnit;
+                                
+                                log('🗺️ GOOGLE MAPS: Validation complete', {
+                                    normalized: googleMapsResult.normalized,
+                                    confidence: googleMapsResult.confidence,
+                                    needsConfirm: googleMapsConfirmNeeded,
+                                    needsUnit: googleMapsUnitNeeded
+                                });
+                            } else {
+                                log('🗺️ GOOGLE MAPS: Validation failed or skipped', {
+                                    success: googleMapsResult?.success,
+                                    validated: googleMapsResult?.validated,
+                                    reason: googleMapsResult?.skipReason || googleMapsResult?.failReason
+                                });
+                            }
+                        } catch (gmError) {
+                            log('🗺️ GOOGLE MAPS: Error during validation', { error: gmError.message });
+                            // Continue without Google Maps - don't block the conversation
+                        }
+                    }
+                    
                     if (isPartialAddress && !addressSlotConfig?.acceptPartialAddress) {
                         finalReply = "I got part of that. Can you give me the full address including city?";
                         nextSlotId = 'address';
                         log('🏠 ADDRESS: Partial address not accepted, asking for full');
-                    } else if (addressConfirmBack) {
+                    } 
+                    // V35: Ask for unit if Google Maps detected multi-unit building
+                    else if (googleMapsUnitNeeded && !addressMeta.unitAsked) {
+                        addressMeta.unitAsked = true;
+                        const unitPrompt = addressSlotConfig?.unitNumberPrompt || 'Is there an apartment or unit number?';
+                        const displayAddress = googleMapsResult?.components?.street && googleMapsResult?.components?.city
+                            ? `${googleMapsResult.components.street} in ${googleMapsResult.components.city}`
+                            : (googleMapsResult?.normalized || extractedThisTurn.address);
+                        finalReply = `Got it — ${displayAddress}. ${unitPrompt}`;
+                        nextSlotId = 'address';
+                        log('🏠 ADDRESS: Google Maps detected multi-unit, asking for unit');
+                    }
+                    // V35: Confirm if Google Maps says low confidence
+                    else if (googleMapsConfirmNeeded && addressSlotConfig?.googleMapsValidationMode !== 'silent') {
                         addressMeta.pendingConfirm = true;
-                        const confirmText = addressConfirmPrompt.replace('{value}', extractedThisTurn.address);
+                        const displayAddress = googleMapsResult?.normalized || extractedThisTurn.address;
+                        const city = googleMapsResult?.components?.city;
+                        const street = googleMapsResult?.components?.street;
+                        if (street && city) {
+                            finalReply = `Just to confirm — is that ${street} in ${city}?`;
+                        } else {
+                            finalReply = `Just to confirm — is that ${displayAddress}?`;
+                        }
+                        nextSlotId = 'address';
+                        log('🏠 ADDRESS: Google Maps low confidence, confirming');
+                    }
+                    else if (addressConfirmBack) {
+                        addressMeta.pendingConfirm = true;
+                        const displayAddress = googleMapsResult?.normalized || extractedThisTurn.address;
+                        const confirmText = addressConfirmPrompt.replace('{value}', displayAddress);
                         finalReply = confirmText;
                         nextSlotId = 'address';
-                        log('🏠 ADDRESS: Confirming back', { address: extractedThisTurn.address });
+                        log('🏠 ADDRESS: Confirming back', { address: displayAddress });
                     } else {
                         addressMeta.confirmed = true;
                         session.booking.activeSlot = 'time';
-                        finalReply = 'Perfect. ';
-                        log('🏠 ADDRESS: Accepted (no confirmBack)', { address: extractedThisTurn.address });
+                        const displayAddress = googleMapsResult?.normalized || extractedThisTurn.address;
+                        const city = googleMapsResult?.components?.city;
+                        const street = googleMapsResult?.components?.street;
+                        if (street && city && googleMapsResult?.validated) {
+                            finalReply = `Perfect — I've got ${street} in ${city}. `;
+                        } else {
+                            finalReply = 'Perfect. ';
+                        }
+                        log('🏠 ADDRESS: Accepted', { address: displayAddress, validated: !!googleMapsResult?.validated });
                     }
                 }
                 // V34 FIX: Handle "I just told you" / "I already said" frustration

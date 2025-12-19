@@ -1690,6 +1690,21 @@ const companySchema = new mongoose.Schema({
                     acceptPartialAddress: { type: Boolean, default: false }, // Accept partial if caller unsure
                     breakDownIfUnclear: { type: Boolean, default: false }, // If unclear, ask street → city → zip step by step
                     
+                    // 🆕 V35: GOOGLE MAPS ADDRESS VALIDATION
+                    // Silent background validation - does NOT drive conversation
+                    // Validates, normalizes, and adds confidence without asking extra questions
+                    useGoogleMapsValidation: { type: Boolean, default: false }, // Toggle: Enable Google Maps validation
+                    googleMapsValidationMode: { 
+                        type: String, 
+                        enum: ['silent', 'confirm_low_confidence', 'always_confirm'], 
+                        default: 'confirm_low_confidence' 
+                    },
+                    // silent: Never ask, just normalize
+                    // confirm_low_confidence: Only ask if Google returns low/medium confidence
+                    // always_confirm: Always confirm normalized address
+                    askUnitNumber: { type: Boolean, default: true }, // Ask for unit/apt if Google detects multi-unit building
+                    unitNumberPrompt: { type: String, default: "Is there an apartment or unit number?" }
+                    
                     // ═══════════════════════════════════════════════════════════════
                     // EMAIL-SPECIFIC OPTIONS
                     // ═══════════════════════════════════════════════════════════════

@@ -428,9 +428,9 @@ class FrontDeskBehaviorManager {
                 <div style="margin-bottom: 20px; padding: 16px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                         <label style="color: #c9d1d9; font-weight: 500;">
-                            👋 Greeting Responses
-                            <span style="background: #238636; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px;">0 TOKENS</span>
-                        </label>
+                        👋 Greeting Responses
+                        <span style="background: #238636; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px;">0 TOKENS</span>
+                    </label>
                         <button type="button" onclick="window.frontDeskManager.addGreetingRow()" 
                             style="padding: 6px 12px; background: #238636; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 4px;">
                             <span>+</span> Add Greeting
@@ -447,12 +447,12 @@ class FrontDeskBehaviorManager {
                         <span style="color: #8b949e; font-size: 0.75rem; font-weight: 600; text-align: center;">FUZZY</span>
                         <span style="color: #8b949e; font-size: 0.75rem; font-weight: 600;">RESPONSE</span>
                         <span></span>
-                    </div>
+                        </div>
                     
                     <!-- Greeting Rows Container -->
                     <div id="fdb-greeting-rows" style="display: flex; flex-direction: column; gap: 8px;">
                         ${this.renderGreetingRows()}
-                    </div>
+                        </div>
                     
                     <p style="color: #6e7681; font-size: 0.7rem; margin-top: 12px; padding-top: 12px; border-top: 1px solid #21262d;">
                         💡 <strong>Tip:</strong> Use <code style="background: #21262d; padding: 1px 4px; border-radius: 3px;">{time}</code> placeholder for dynamic time-of-day (morning/afternoon/evening).
@@ -1707,6 +1707,39 @@ Sean → Shawn, Shaun`;
                         <input type="checkbox" class="slot-breakDownIfUnclear" data-index="${index}" ${slot.breakDownIfUnclear ? 'checked' : ''} style="accent-color: #f0883e;">
                         <span style="font-size: 12px; color: #c9d1d9;">Break down if unclear (street → city → zip)</span>
                     </label>
+                    
+                    <!-- V35: Google Maps Validation -->
+                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #30363d;">
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px;">
+                            <span style="font-size: 11px; color: #238636; font-weight: 600;">🗺️ Google Maps Validation:</span>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Use Google Maps to validate and normalize addresses (requires API key)">
+                                <input type="checkbox" class="slot-useGoogleMapsValidation" data-index="${index}" ${slot.useGoogleMapsValidation ? 'checked' : ''} style="accent-color: #238636;" onchange="window.frontDeskManager.toggleGoogleMapsOptions(${index}, this.checked)">
+                                <span style="font-size: 12px; color: #c9d1d9;">Enable Google Maps validation</span>
+                    </label>
+                        </div>
+                        <div class="google-maps-options" style="display: ${slot.useGoogleMapsValidation ? 'flex' : 'none'}; flex-direction: column; gap: 8px; padding: 8px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <label style="font-size: 12px; color: #8b949e;">Validation mode:</label>
+                                <select class="slot-googleMapsValidationMode" data-index="${index}" style="padding: 4px 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                    <option value="silent" ${slot.googleMapsValidationMode === 'silent' ? 'selected' : ''}>Silent (normalize only, never ask)</option>
+                                    <option value="confirm_low_confidence" ${(slot.googleMapsValidationMode === 'confirm_low_confidence' || !slot.googleMapsValidationMode) ? 'selected' : ''}>Confirm if low confidence</option>
+                                    <option value="always_confirm" ${slot.googleMapsValidationMode === 'always_confirm' ? 'selected' : ''}>Always confirm normalized address</option>
+                                </select>
+                            </div>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="If Google detects a multi-unit building, ask for apartment/unit number">
+                                <input type="checkbox" class="slot-askUnitNumber" data-index="${index}" ${slot.askUnitNumber !== false ? 'checked' : ''} style="accent-color: #238636;">
+                                <span style="font-size: 12px; color: #c9d1d9;">Ask for unit/apt number if multi-unit building detected</span>
+                            </label>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label style="font-size: 12px; color: #8b949e; white-space: nowrap;">Unit prompt:</label>
+                                <input type="text" class="slot-unitNumberPrompt" data-index="${index}" value="${slot.unitNumberPrompt || 'Is there an apartment or unit number?'}" 
+                                    style="flex: 1; padding: 4px 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
+                            </div>
+                            <div style="font-size: 10px; color: #6e7681; font-style: italic;">
+                                💡 Google Maps validates silently in the background — never blocks conversation or asks redundant questions.
+                            </div>
+                        </div>
+                    </div>
                 </div>
             `;
         }
@@ -1867,6 +1900,15 @@ Sean → Shawn, Shaun`;
         }
     }
     
+    // V35: Toggle Google Maps validation options visibility
+    toggleGoogleMapsOptions(index, enabled) {
+        const optionsContainer = document.querySelector(`.slot-useGoogleMapsValidation[data-index="${index}"]`)?.closest('.booking-slot')?.querySelector('.google-maps-options');
+        if (optionsContainer) {
+            optionsContainer.style.display = enabled ? 'flex' : 'none';
+        }
+        console.log(`[FRONT DESK] Google Maps validation ${enabled ? 'enabled' : 'disabled'} for slot ${index}`);
+    }
+    
     getDefaultBookingSlots() {
         // ════════════════════════════════════════════════════════════════
         // UI DEFAULTS for new/unconfigured companies
@@ -1910,7 +1952,12 @@ Sean → Shawn, Shaun`;
                 confirmBack: false, 
                 confirmPrompt: "So that's {value}, right?", 
                 addressConfirmLevel: 'street_city',
-                acceptPartialAddress: false
+                acceptPartialAddress: false,
+                // V35: Google Maps validation (off by default - enable per company)
+                useGoogleMapsValidation: false,
+                googleMapsValidationMode: 'confirm_low_confidence',
+                askUnitNumber: true,
+                unitNumberPrompt: 'Is there an apartment or unit number?'
             },
             { 
                 id: 'time', 
@@ -2060,6 +2107,20 @@ Sean → Shawn, Shaun`;
             }
             if (el.querySelector('.slot-acceptPartialAddress')) {
                 slotData.acceptPartialAddress = getChecked('.slot-acceptPartialAddress');
+            }
+            
+            // V35: GOOGLE MAPS VALIDATION options
+            if (el.querySelector('.slot-useGoogleMapsValidation')) {
+                slotData.useGoogleMapsValidation = getChecked('.slot-useGoogleMapsValidation');
+            }
+            if (el.querySelector('.slot-googleMapsValidationMode')) {
+                slotData.googleMapsValidationMode = el.querySelector('.slot-googleMapsValidationMode')?.value || 'confirm_low_confidence';
+            }
+            if (el.querySelector('.slot-askUnitNumber')) {
+                slotData.askUnitNumber = getCheckedDefault('.slot-askUnitNumber', true);
+            }
+            if (el.querySelector('.slot-unitNumberPrompt')) {
+                slotData.unitNumberPrompt = getVal('.slot-unitNumberPrompt') || 'Is there an apartment or unit number?';
             }
             
             // EMAIL options
