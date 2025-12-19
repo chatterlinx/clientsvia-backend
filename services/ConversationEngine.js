@@ -409,7 +409,7 @@ function searchCheatSheets(cheatSheetConfig, query) {
 // Example: "not pulling" → "not cooling" (HVAC)
 // 
 // Uses TWO sources (merged):
-// 1. Template-level nlpConfig.synonyms (from AiCore template)
+// 1. Template-level synonymMap (from Global AI Brain) OR nlpConfig.synonyms (legacy)
 // 2. Company-level callerVocabulary.synonymMap (Front Desk UI)
 // 
 // This helps the LLM understand what the caller means.
@@ -423,9 +423,28 @@ async function translateCallerVocabulary(userText, company, template) {
     // Build merged synonym map (template + company)
     const synonymMap = new Map();
     
-    // Source 1: Template-level synonyms (nlpConfig.synonyms)
+    // Source 1: Template-level synonyms
+    // V36: Check BOTH locations - synonymMap (Global AI Brain) and nlpConfig.synonyms (legacy)
     // Format: { "technical_term": ["variant1", "variant2"] }
-    if (template?.nlpConfig?.synonyms) {
+    
+    // Priority 1: template.synonymMap (Global AI Brain - current location)
+    if (template?.synonymMap) {
+        const templateSynonyms = template.synonymMap instanceof Map 
+            ? template.synonymMap 
+            : new Map(Object.entries(template.synonymMap || {}));
+        
+        for (const [technical, variants] of templateSynonyms.entries()) {
+            if (Array.isArray(variants)) {
+                for (const variant of variants) {
+                    synonymMap.set(variant.toLowerCase(), technical);
+                }
+            }
+        }
+        console.log('[VOCABULARY] 🔤 Loaded from template.synonymMap:', synonymMap.size, 'mappings');
+    }
+    
+    // Priority 2: template.nlpConfig.synonyms (legacy location - fallback)
+    if (template?.nlpConfig?.synonyms && synonymMap.size === 0) {
         const templateSynonyms = template.nlpConfig.synonyms instanceof Map 
             ? template.nlpConfig.synonyms 
             : new Map(Object.entries(template.nlpConfig.synonyms || {}));
@@ -437,6 +456,7 @@ async function translateCallerVocabulary(userText, company, template) {
                 }
             }
         }
+        console.log('[VOCABULARY] 🔤 Loaded from template.nlpConfig.synonyms (legacy):', synonymMap.size, 'mappings');
     }
     
     // Source 2: Company-level callerVocabulary.synonymMap (Front Desk UI)
@@ -1423,7 +1443,7 @@ async function processTurn({
             
             if (activeRef?.templateId) {
                 activeTemplate = await GlobalInstantResponseTemplate.findById(activeRef.templateId)
-                    .select('_id name nlpConfig categories')
+                    .select('_id name nlpConfig categories synonymMap')
                     .lean();
                 
                 if (activeTemplate) {

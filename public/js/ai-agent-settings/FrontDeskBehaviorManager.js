@@ -90,7 +90,7 @@ class FrontDeskBehaviorManager {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // V36: Load inherited synonyms from active AiCore template
+    // V36: Load inherited synonyms from active AiCore template's synonymMap
     // ═══════════════════════════════════════════════════════════════════════════
     async loadInheritedSynonyms(token) {
         try {
@@ -118,8 +118,60 @@ class FrontDeskBehaviorManager {
                 return;
             }
             
-            // Fetch the template to get nlpConfig.synonyms
-            const templateResponse = await fetch(`/api/admin/aicore-templates/${activeRef.templateId}`, {
+            // Fetch the template's synonymMap from Global AI Brain endpoint
+            // This returns { synonyms: { "air conditioner": ["ac", "a/c", ...], ... } }
+            // Correct endpoint: /api/admin/global-instant-responses/:id/synonyms
+            const synonymsResponse = await fetch(`/api/admin/global-instant-responses/${activeRef.templateId}/synonyms`, {
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!synonymsResponse.ok) {
+                console.warn('[FRONT DESK BEHAVIOR] 🔤 Could not fetch template synonyms:', activeRef.templateId);
+                // Try fallback to template endpoint
+                await this.loadInheritedSynonymsFallback(token, activeRef.templateId);
+                return;
+            }
+            
+            const synonymsData = await synonymsResponse.json();
+            
+            // Convert template synonymMap format to display format
+            // Template format: { "air conditioner": ["ac", "a/c", "cooling"] }
+            // Display format: { "ac": "air conditioner", "a/c": "air conditioner", "cooling": "air conditioner" }
+            const inheritedSynonyms = {};
+            const templateSynonyms = synonymsData.synonyms || {};
+            
+            for (const [technical, colloquials] of Object.entries(templateSynonyms)) {
+                if (Array.isArray(colloquials)) {
+                    for (const colloquial of colloquials) {
+                        inheritedSynonyms[colloquial.toLowerCase()] = technical;
+                    }
+                }
+            }
+            
+            this.config.inheritedSynonyms = inheritedSynonyms;
+            this.config.activeTemplateName = synonymsData.templateName || 'Unknown Template';
+            
+            console.log('[FRONT DESK BEHAVIOR] 🔤 Inherited synonyms loaded from Global AI Brain:', {
+                templateId: activeRef.templateId,
+                templateName: this.config.activeTemplateName,
+                technicalTerms: Object.keys(templateSynonyms).length,
+                totalMappings: Object.keys(inheritedSynonyms).length,
+                sample: Object.entries(inheritedSynonyms).slice(0, 5)
+            });
+            
+        } catch (error) {
+            console.error('[FRONT DESK BEHAVIOR] 🔤 Error loading inherited synonyms:', error);
+            this.config.inheritedSynonyms = {};
+        }
+    }
+    
+    // Fallback: Try to load from template directly if synonyms endpoint fails
+    async loadInheritedSynonymsFallback(token, templateId) {
+        try {
+            const templateResponse = await fetch(`/api/admin/aicore-templates/${templateId}`, {
                 headers: { 
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
@@ -127,24 +179,38 @@ class FrontDeskBehaviorManager {
             });
             
             if (!templateResponse.ok) {
-                console.warn('[FRONT DESK BEHAVIOR] 🔤 Could not fetch template:', activeRef.templateId);
+                console.warn('[FRONT DESK BEHAVIOR] 🔤 Fallback also failed');
+                this.config.inheritedSynonyms = {};
                 return;
             }
             
             const templateData = await templateResponse.json();
             const template = templateData.template || templateData;
             
-            // Convert nlpConfig.synonyms to flat map for display
-            // Template format: { "technical_term": ["variant1", "variant2"] }
-            // Display format: { "variant1": "technical_term", "variant2": "technical_term" }
+            // Try multiple possible locations for synonyms
             const inheritedSynonyms = {};
             
-            if (template?.nlpConfig?.synonyms) {
-                const synonyms = template.nlpConfig.synonyms;
-                for (const [technical, variants] of Object.entries(synonyms)) {
-                    if (Array.isArray(variants)) {
-                        for (const variant of variants) {
-                            inheritedSynonyms[variant.toLowerCase()] = technical;
+            // Location 1: template.synonymMap (Map or Object)
+            if (template?.synonymMap) {
+                const synonymMap = template.synonymMap instanceof Map 
+                    ? Object.fromEntries(template.synonymMap)
+                    : template.synonymMap;
+                    
+                for (const [technical, colloquials] of Object.entries(synonymMap)) {
+                    if (Array.isArray(colloquials)) {
+                        for (const colloquial of colloquials) {
+                            inheritedSynonyms[colloquial.toLowerCase()] = technical;
+                        }
+                    }
+                }
+            }
+            
+            // Location 2: template.nlpConfig.synonyms (older format)
+            if (template?.nlpConfig?.synonyms && Object.keys(inheritedSynonyms).length === 0) {
+                for (const [technical, colloquials] of Object.entries(template.nlpConfig.synonyms)) {
+                    if (Array.isArray(colloquials)) {
+                        for (const colloquial of colloquials) {
+                            inheritedSynonyms[colloquial.toLowerCase()] = technical;
                         }
                     }
                 }
@@ -153,15 +219,14 @@ class FrontDeskBehaviorManager {
             this.config.inheritedSynonyms = inheritedSynonyms;
             this.config.activeTemplateName = template?.name || 'Unknown Template';
             
-            console.log('[FRONT DESK BEHAVIOR] 🔤 Inherited synonyms loaded:', {
-                templateId: activeRef.templateId,
+            console.log('[FRONT DESK BEHAVIOR] 🔤 Inherited synonyms loaded (fallback):', {
+                templateId,
                 templateName: template?.name,
-                synonymCount: Object.keys(inheritedSynonyms).length,
-                synonyms: inheritedSynonyms
+                synonymCount: Object.keys(inheritedSynonyms).length
             });
             
         } catch (error) {
-            console.error('[FRONT DESK BEHAVIOR] 🔤 Error loading inherited synonyms:', error);
+            console.error('[FRONT DESK BEHAVIOR] 🔤 Fallback error:', error);
             this.config.inheritedSynonyms = {};
         }
     }
