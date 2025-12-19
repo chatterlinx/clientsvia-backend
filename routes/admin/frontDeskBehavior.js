@@ -260,6 +260,9 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
                 },
                 // 👋 V32: Conversation Stages (includes greetingRules)
                 conversationStages: config.conversationStages || null,
+                // 🔇 V36: Filler Words (company-specific custom fillers)
+                fillerWords: company.aiAgentSettings?.fillerWords || { inherited: [], custom: [] },
+                fillerWordsEnabled: config.fillerWordsEnabled !== false, // Default to true
                 lastUpdated: saved.lastUpdated || null
             }
         });
@@ -584,6 +587,26 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
                 greetingRulesCount: updates.conversationStages.greetingRules?.length || 0,
                 hasLegacyResponses: !!updates.conversationStages.greetingResponses
             });
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🔇 V36: Custom Filler Words (Company-Specific)
+        // These are saved to aiAgentSettings.fillerWords.custom (NOT frontDeskBehavior)
+        // ════════════════════════════════════════════════════════════════════════════
+        if (updates.fillerWords) {
+            if (updates.fillerWords.custom !== undefined) {
+                updateObj['aiAgentSettings.fillerWords.custom'] = updates.fillerWords.custom;
+            }
+            logger.info('[FRONT DESK BEHAVIOR] 🔇 V36 Saving custom fillers:', {
+                companyId,
+                customCount: (updates.fillerWords.custom || []).length,
+                customFillers: updates.fillerWords.custom || []
+            });
+        }
+        
+        // 🔇 V36: Filler words enabled toggle
+        if (updates.fillerWordsEnabled !== undefined) {
+            updateObj['aiAgentSettings.frontDeskBehavior.fillerWordsEnabled'] = updates.fillerWordsEnabled;
         }
         
         updateObj['aiAgentSettings.frontDeskBehavior.lastUpdated'] = new Date();
