@@ -509,6 +509,113 @@ function escapeRegex(string) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// V36: STRIP FILLER WORDS FROM USER INPUT
+// ═══════════════════════════════════════════════════════════════════════════
+// Uses TWO sources (merged):
+// 1. Template-level fillerWords (from Global AI Brain)
+// 2. Company-level fillerWords.custom (Front Desk UI)
+// 
+// This cleans up "um", "uh", "like", "you know" etc. before processing.
+// ═══════════════════════════════════════════════════════════════════════════
+function stripFillerWords(userText, company, template) {
+    if (!userText || typeof userText !== 'string') return { cleaned: userText, removed: [] };
+    
+    const removed = [];
+    let cleaned = userText;
+    
+    // Build merged filler set (template + company custom)
+    const fillerSet = new Set();
+    
+    // Source 1: Template-level fillerWords (from Global AI Brain)
+    if (template?.fillerWords && Array.isArray(template.fillerWords)) {
+        template.fillerWords.forEach(f => fillerSet.add(f.toLowerCase().trim()));
+    }
+    
+    // Source 2: Company-level custom fillers (Front Desk UI)
+    const customFillers = company?.aiAgentSettings?.fillerWords?.custom;
+    if (customFillers && Array.isArray(customFillers)) {
+        customFillers.forEach(f => fillerSet.add(f.toLowerCase().trim()));
+    }
+    
+    // Check if filler stripping is enabled (default: true)
+    const fillerEnabled = company?.aiAgentSettings?.frontDeskBehavior?.fillerWordsEnabled !== false;
+    
+    if (!fillerEnabled || fillerSet.size === 0) {
+        return { cleaned: userText, removed: [], enabled: fillerEnabled, fillerCount: fillerSet.size };
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════
+    // PROTECTED WORDS - NEVER STRIP THESE REGARDLESS OF FILLER LIST
+    // These are critical for understanding caller intent
+    // ════════════════════════════════════════════════════════════════════════
+    const PROTECTED_WORDS = new Set([
+        // Names and pronouns
+        'i', 'me', 'my', 'you', 'your', 'we', 'our', 'they', 'them', 'their',
+        'he', 'she', 'it', 'his', 'her', 'its',
+        
+        // Critical verbs
+        'is', 'are', 'was', 'were', 'be', 'been', 'being',
+        'have', 'has', 'had', 'do', 'does', 'did',
+        'can', 'could', 'will', 'would', 'should', 'may', 'might', 'must',
+        'need', 'want', 'get', 'got',
+        'know', 'think', 'say', 'tell', 'ask', 'call',
+        
+        // Confirmations (critical for consent detection)
+        'yes', 'yeah', 'yep', 'yup', 'sure', 'ok', 'okay', 'alright', 'absolutely',
+        'no', 'nope', 'nah',
+        
+        // Question words
+        'what', 'when', 'where', 'why', 'how', 'which', 'who',
+        
+        // Numbers (critical for phone/address)
+        'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'zero'
+    ]);
+    
+    // Sort fillers by length (longest first) to handle multi-word fillers
+    const sortedFillers = [...fillerSet]
+        .filter(f => !PROTECTED_WORDS.has(f.toLowerCase()))
+        .sort((a, b) => b.length - a.length);
+    
+    for (const filler of sortedFillers) {
+        // Build regex that matches whole words/phrases
+        const escaped = escapeRegex(filler);
+        const regex = new RegExp(`\\b${escaped}\\b`, 'gi');
+        
+        const matches = cleaned.match(regex);
+        if (matches) {
+            removed.push({
+                phrase: filler,
+                count: matches.length
+            });
+            cleaned = cleaned.replace(regex, ' ');
+        }
+    }
+    
+    // Clean up extra whitespace
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    
+    // Log if fillers were removed
+    if (removed.length > 0) {
+        console.log('[FILLER] 🔇 Stripped filler words:', {
+            original: userText,
+            cleaned,
+            removed: removed.map(r => `${r.phrase} (${r.count}x)`),
+            templateFillers: template?.fillerWords?.length || 0,
+            customFillers: customFillers?.length || 0,
+            totalFillers: fillerSet.size
+        });
+    }
+    
+    return { 
+        cleaned, 
+        removed, 
+        original: userText,
+        enabled: true,
+        fillerCount: fillerSet.size
+    };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // V31: NAME SPELLING VARIANT HELPER
 // Checks if a name has common spelling variants (Mark/Marc, Brian/Bryan)
 // Returns { hasVariant, optionA, optionB, letterA, letterB } or null
@@ -1443,7 +1550,7 @@ async function processTurn({
             
             if (activeRef?.templateId) {
                 activeTemplate = await GlobalInstantResponseTemplate.findById(activeRef.templateId)
-                    .select('_id name nlpConfig categories synonymMap')
+                    .select('_id name nlpConfig categories synonymMap fillerWords')
                     .lean();
                 
                 if (activeTemplate) {
@@ -1465,6 +1572,24 @@ async function processTurn({
                         });
                         // Use translated text for all downstream processing
                         userText = vocabularyTranslation.translated;
+                    }
+                    
+                    // ═══════════════════════════════════════════════════════════════════
+                    // V36: STRIP FILLER WORDS - Clean up "um", "uh", "like" etc.
+                    // Uses template fillers + company custom fillers
+                    // ═══════════════════════════════════════════════════════════════════
+                    const fillerResult = stripFillerWords(userText, company, activeTemplate);
+                    
+                    if (fillerResult.removed.length > 0) {
+                        log('CHECKPOINT 2.7: 🔇 FILLERS STRIPPED', {
+                            original: userText,
+                            cleaned: fillerResult.cleaned,
+                            removed: fillerResult.removed,
+                            templateFillers: activeTemplate?.fillerWords?.length || 0,
+                            customFillers: company?.aiAgentSettings?.fillerWords?.custom?.length || 0
+                        });
+                        // Use cleaned text for all downstream processing
+                        userText = fillerResult.cleaned;
                     }
                 } else {
                     log('CHECKPOINT 2.6: ⚠️ Template not found (non-fatal)', { templateId: activeRef.templateId });
