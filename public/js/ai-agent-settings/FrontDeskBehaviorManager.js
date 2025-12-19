@@ -65,6 +65,20 @@ class FrontDeskBehaviorManager {
                 this.config.customFillers = [];
             }
             
+            // 🚫 V36: Load custom stop words from nameStopWords.custom (if exists)
+            if (this.config.nameStopWords?.custom) {
+                this.config.customStopWords = this.config.nameStopWords.custom;
+                this.config.nameStopWordsEnabled = this.config.nameStopWords.enabled !== false;
+                console.log('[FRONT DESK BEHAVIOR] 🚫 Custom stop words loaded from DB:', {
+                    enabled: this.config.nameStopWordsEnabled,
+                    count: this.config.customStopWords.length,
+                    words: this.config.customStopWords
+                });
+            } else {
+                this.config.customStopWords = [];
+                this.config.nameStopWordsEnabled = true;
+            }
+            
             // 🔤 V36: Load inherited synonyms from active AiCore template
             await this.loadInheritedSynonyms(token);
             
@@ -3617,6 +3631,148 @@ Sean → Shawn, Shaun`;
     }
     
     // ════════════════════════════════════════════════════════════════════════════
+    // V36: NAME STOP WORDS - Words that should NEVER be extracted as names
+    // ════════════════════════════════════════════════════════════════════════════
+    
+    toggleStopWordsFields(enabled) {
+        const fields = document.getElementById('fdb-stopwords-fields');
+        if (fields) {
+            fields.style.display = enabled ? 'block' : 'none';
+        }
+        this.config.nameStopWordsEnabled = enabled;
+        this.isDirty = true;
+    }
+    
+    // Platform default stop words (read-only, shown for reference)
+    getPlatformStopWords() {
+        return [
+            // Greetings & fillers
+            'hi', 'hello', 'hey', 'good', 'morning', 'afternoon', 'evening', 'night',
+            'uh', 'um', 'erm', 'hmm', 'ah', 'oh', 'well', 'so', 'like', 'just',
+            // Confirmations
+            'yeah', 'yes', 'sure', 'okay', 'ok', 'alright', 'right', 'yep', 'yup',
+            'go', 'ahead', 'absolutely', 'definitely', 'certainly', 'perfect', 'sounds',
+            // Common words & auxiliary verbs
+            'the', 'that', 'this', 'what', 'please', 'thanks', 'thank', 'you',
+            'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am', 'has', 'have', 'had',
+            'do', 'does', 'did', 'will', 'would', 'could', 'should', 'can', 'may', 'might',
+            'it', 'its', 'my', 'your', 'our', 'their', 'his', 'her', 'a', 'an', 'and', 'or', 'but',
+            // Common sentence starters
+            'to', 'see', 'if', 'we', 'get', 'somebody', 'someone', 'here', 'there', 'today', 'now',
+            // Common verbs
+            'having', 'doing', 'calling', 'looking', 'trying', 'getting', 'going', 'coming',
+            'waiting', 'hoping', 'thinking', 'wondering', 'needing', 'wanting', 'asking',
+            'dealing', 'experiencing', 'seeing', 'feeling', 'hearing', 'running', 'working',
+            // Problem-related words
+            'failing', 'broken', 'leaking', 'stopped', 'making', 'noise', 'noisy', 'loud',
+            'not', 'wont', 'doesnt', 'isnt', 'cant', 'problem', 'problems', 'issue', 'issues',
+            'trouble', 'troubles', 'wrong', 'weird', 'strange', 'acting', 'up', 'down', 'out'
+        ];
+    }
+    
+    renderPlatformStopWords() {
+        const words = this.getPlatformStopWords();
+        const badges = words.map(w => `
+            <span style="display: inline-block; padding: 3px 8px; background: #238636; color: white; border-radius: 4px; font-size: 0.75rem; margin: 2px;">
+                ${this.escapeHtml(w)}
+            </span>
+        `).join('');
+        
+        return `
+            <div style="display: flex; flex-wrap: wrap; gap: 2px;">
+                ${badges}
+            </div>
+            <div style="padding: 8px 0 0 0; text-align: center;">
+                <span style="color: #6e7681; font-size: 0.75rem;">${words.length} platform stop words</span>
+            </div>
+        `;
+    }
+    
+    renderCustomStopWords() {
+        if (!this.config.customStopWords) {
+            this.config.customStopWords = [];
+        }
+        
+        const words = this.config.customStopWords || [];
+        
+        if (words.length === 0) {
+            return `
+                <div style="padding: 30px 20px; text-align: center;">
+                    <div style="font-size: 1.5rem; margin-bottom: 8px; opacity: 0.5;">🔧</div>
+                    <p style="color: #8b949e; margin: 0 0 4px 0; font-size: 0.85rem;">No company-specific stop words</p>
+                    <p style="color: #6e7681; margin: 0; font-size: 0.75rem;">Click "Add Stop Word" to add custom exclusions</p>
+                </div>
+            `;
+        }
+        
+        // Render as editable badges with delete
+        const badges = words.map((w, idx) => `
+            <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 12px; background: #f85149; color: white; border-radius: 4px; font-size: 0.8rem; margin: 3px;">
+                ${this.escapeHtml(w)}
+                <button type="button" 
+                    onclick="window.frontDeskManager.removeStopWord(${idx})"
+                    style="background: rgba(255,255,255,0.2); border: none; color: white; width: 18px; height: 18px; border-radius: 50%; cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; justify-content: center;"
+                    title="Remove">×</button>
+            </span>
+        `).join('');
+        
+        return `
+            <div style="display: flex; flex-wrap: wrap; gap: 4px; padding: 12px;">
+                ${badges}
+            </div>
+        `;
+    }
+    
+    addStopWord() {
+        const word = prompt('Enter word that should NEVER be extracted as a name:');
+        if (!word || !word.trim()) return;
+        
+        const normalized = word.toLowerCase().trim();
+        
+        if (!this.config.customStopWords) {
+            this.config.customStopWords = [];
+        }
+        
+        // Check for duplicates
+        if (this.config.customStopWords.includes(normalized)) {
+            alert('This stop word already exists!');
+            return;
+        }
+        
+        // Check if it's already a platform default
+        if (this.getPlatformStopWords().includes(normalized)) {
+            alert('This word is already in the platform defaults!');
+            return;
+        }
+        
+        this.config.customStopWords.push(normalized);
+        
+        // Re-render
+        const container = document.getElementById('fdb-custom-stopwords');
+        if (container) {
+            container.innerHTML = this.renderCustomStopWords();
+        }
+        
+        this.isDirty = true;
+        console.log('[FRONT DESK] 🚫 Added stop word:', normalized);
+    }
+    
+    removeStopWord(idx) {
+        if (!this.config.customStopWords) return;
+        
+        const removed = this.config.customStopWords.splice(idx, 1);
+        console.log('[FRONT DESK] 🚫 Removed stop word:', removed[0]);
+        
+        // Re-render
+        const container = document.getElementById('fdb-custom-stopwords');
+        if (container) {
+            container.innerHTML = this.renderCustomStopWords();
+        }
+        
+        this.isDirty = true;
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════════
     // V22 TAB: Vocabulary Guardrails
     // ════════════════════════════════════════════════════════════════════════════
     // Prevents cross-trade contamination (HVAC words in dental, etc.)
@@ -3780,6 +3936,73 @@ Sean → Shawn, Shaun`;
                     <p style="color: #6e7681; font-size: 0.7rem; margin: 12px 0 0 0;">
                         <strong>Examples:</strong> um, uh, like, you know, basically, actually, so, well
                     </p>
+                </div>
+            </div>
+            
+            <!-- ═══════════════════════════════════════════════════════════════════ -->
+            <!-- V36: NAME STOP WORDS - Words that should NEVER be extracted as names -->
+            <!-- ═══════════════════════════════════════════════════════════════════ -->
+            <div style="background: #161b22; border: 1px solid #f85149; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                    <div>
+                        <h3 style="margin: 0 0 8px 0; color: #f85149;">🚫 Name Extraction Stop Words</h3>
+                        <p style="color: #8b949e; font-size: 0.875rem; margin: 0;">
+                            <strong>Prevent false name extraction:</strong> Words like "to", "see", "if" should NEVER be extracted as names.
+                            <br><span style="color: #6e7681;">Example: "I am trying <strong>to see</strong> if..." should NOT extract "to see" as a name.</span>
+                        </p>
+                    </div>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
+                        <input type="checkbox" id="fdb-stopwords-enabled" ${this.config.nameStopWordsEnabled !== false ? 'checked' : ''} 
+                            onchange="window.frontDeskManager.toggleStopWordsFields(this.checked)"
+                            style="accent-color: #f85149; width: 16px; height: 16px;">
+                        <span style="color: #c9d1d9; font-size: 0.85rem; font-weight: 500;">Enabled</span>
+                    </label>
+                </div>
+
+                <div id="fdb-stopwords-fields" style="display: ${this.config.nameStopWordsEnabled !== false ? 'block' : 'none'};">
+                    <!-- PLATFORM DEFAULT STOP WORDS (Read-Only) -->
+                    <div style="background: #0d1117; border: 1px solid #238636; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="background: #238636; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">PLATFORM</span>
+                                <h4 style="margin: 0; color: #3fb950; font-size: 0.95rem;">📚 Default Stop Words (Built-in)</h4>
+                            </div>
+                            <span style="color: #6e7681; font-size: 0.75rem;">Read-only • Platform defaults</span>
+                        </div>
+                        <div id="fdb-platform-stopwords" style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; max-height: 150px; overflow-y: auto;">
+                            ${this.renderPlatformStopWords()}
+                        </div>
+                        <p style="color: #6e7681; font-size: 0.7rem; margin: 8px 0 0 0;">
+                            💡 These are platform defaults that prevent common false positives. Add custom words below if needed.
+                        </p>
+                    </div>
+
+                    <!-- CUSTOM COMPANY STOP WORDS (Editable) -->
+                    <div style="background: #0d1117; border: 1px solid #f85149; border-radius: 8px; padding: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="background: #f85149; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">CUSTOM</span>
+                                <h4 style="margin: 0; color: #f85149; font-size: 0.95rem;">🔧 Company Stop Words (Additional)</h4>
+                            </div>
+                            <button type="button" onclick="window.frontDeskManager.addStopWord()" 
+                                style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(35, 134, 54, 0.3);">
+                                <span style="font-size: 1.1rem;">+</span> Add Stop Word
+                            </button>
+                        </div>
+                        <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 12px;">
+                            Add company-specific words that should never be extracted as names.
+                        </p>
+                        
+                        <div id="fdb-custom-stopwords" style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px; max-height: 200px; overflow-y: auto;">
+                            ${this.renderCustomStopWords()}
+                        </div>
+                        <div style="padding: 8px 16px; background: #21262d; border-top: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; border-radius: 0 0 8px 8px; margin-top: -1px;">
+                            <span style="color: #6e7681; font-size: 0.75rem;">${(this.config.customStopWords || []).length} custom stop word${(this.config.customStopWords || []).length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <p style="color: #6e7681; font-size: 0.7rem; margin: 12px 0 0 0;">
+                            <strong>Examples:</strong> Company-specific words that might be mistaken for names in your industry.
+                        </p>
+                    </div>
                 </div>
             </div>
             
@@ -4372,6 +4595,26 @@ Sean → Shawn, Shaun`;
             enabled: fillerEnabled,
             count: customFillers.length,
             fillers: customFillers
+        });
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // V36: Name Stop Words (Words that should NEVER be extracted as names)
+        // ════════════════════════════════════════════════════════════════════════════
+        const stopWordsEnabled = document.getElementById('fdb-stopwords-enabled')?.checked ?? true;
+        const customStopWords = this.config.customStopWords || [];
+        
+        // Save to nameStopWords in the schema
+        if (!this.config.nameStopWords) {
+            this.config.nameStopWords = {};
+        }
+        this.config.nameStopWords.enabled = stopWordsEnabled;
+        this.config.nameStopWords.custom = customStopWords;
+        this.config.nameStopWordsEnabled = stopWordsEnabled;
+        
+        console.log('[FRONT DESK BEHAVIOR] 🚫 V36 Name stop words saved:', {
+            enabled: stopWordsEnabled,
+            count: customStopWords.length,
+            words: customStopWords
         });
         
         // ════════════════════════════════════════════════════════════════════════════

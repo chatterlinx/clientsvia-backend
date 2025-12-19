@@ -263,6 +263,9 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
                 // 🔇 V36: Filler Words (company-specific custom fillers)
                 fillerWords: company.aiAgentSettings?.fillerWords || { inherited: [], custom: [] },
                 fillerWordsEnabled: config.fillerWordsEnabled !== false, // Default to true
+                // 🚫 V36: Name Stop Words (words that should NEVER be extracted as names)
+                nameStopWords: company.aiAgentSettings?.nameStopWords || { enabled: true, custom: [] },
+                nameStopWordsEnabled: config.nameStopWordsEnabled !== false, // Default to true
                 lastUpdated: saved.lastUpdated || null
             }
         });
@@ -607,6 +610,30 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
         // 🔇 V36: Filler words enabled toggle
         if (updates.fillerWordsEnabled !== undefined) {
             updateObj['aiAgentSettings.frontDeskBehavior.fillerWordsEnabled'] = updates.fillerWordsEnabled;
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🚫 V36: Name Stop Words (Words that should NEVER be extracted as names)
+        // These are saved to aiAgentSettings.nameStopWords (NOT frontDeskBehavior)
+        // ════════════════════════════════════════════════════════════════════════════
+        if (updates.nameStopWords) {
+            if (updates.nameStopWords.enabled !== undefined) {
+                updateObj['aiAgentSettings.nameStopWords.enabled'] = updates.nameStopWords.enabled;
+            }
+            if (updates.nameStopWords.custom !== undefined) {
+                updateObj['aiAgentSettings.nameStopWords.custom'] = updates.nameStopWords.custom;
+            }
+            logger.info('[FRONT DESK BEHAVIOR] 🚫 V36 Saving name stop words:', {
+                companyId,
+                enabled: updates.nameStopWords.enabled,
+                customCount: (updates.nameStopWords.custom || []).length,
+                customWords: updates.nameStopWords.custom || []
+            });
+        }
+        
+        // 🚫 V36: Name stop words enabled toggle
+        if (updates.nameStopWordsEnabled !== undefined) {
+            updateObj['aiAgentSettings.frontDeskBehavior.nameStopWordsEnabled'] = updates.nameStopWordsEnabled;
         }
         
         updateObj['aiAgentSettings.frontDeskBehavior.lastUpdated'] = new Date();

@@ -904,6 +904,21 @@ const companySchema = new mongoose.Schema({
         },
         
         // -------------------------------------------------------------------
+        // V36: NAME STOP WORDS - Words that should NEVER be extracted as names
+        // -------------------------------------------------------------------
+        // These words are filtered out during name extraction to prevent false positives
+        // Example: "I am trying to see if..." should NOT extract "to see" as a name
+        // Inherited from template + custom additions (same pattern as fillers)
+        nameStopWords: {
+            enabled: { type: Boolean, default: true },
+            // Custom company-specific stop words (editable in UI)
+            custom: { 
+                type: [String], 
+                default: [] 
+            }
+        },
+        
+        // -------------------------------------------------------------------
         // SCENARIO CONTROLS - Per-company enable/disable for scenarios
         // -------------------------------------------------------------------
         // Allows companies to disable specific scenarios without editing Global AI Brain templates

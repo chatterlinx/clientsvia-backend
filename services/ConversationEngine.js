@@ -1085,10 +1085,11 @@ const SlotExtractors = {
     /**
      * Extract name from user input
      * V32: Robust extraction from sentences + stop word filtering
+     * V36: Now accepts customStopWords from company config (UI-controlled)
      * Handles: "hi my name is Mark do you have any issues" → "Mark"
      * Blocks: "yes go ahead" → null (not a name)
      */
-    extractName(text, { expectingName = false } = {}) {
+    extractName(text, { expectingName = false, customStopWords = [] } = {}) {
         if (!text || typeof text !== 'string') return null;
         
         const raw = text.trim();
@@ -1096,9 +1097,10 @@ const SlotExtractors = {
         
         // ═══════════════════════════════════════════════════════════════════
         // V32: STOP WORDS - Words that are NEVER part of a name
+        // V36: Platform defaults + company custom stop words (from UI)
         // These block extraction entirely if the candidate is just stop words
         // ═══════════════════════════════════════════════════════════════════
-        const STOP_WORDS = new Set([
+        const PLATFORM_STOP_WORDS = [
             // Greetings & fillers
             'hi', 'hello', 'hey', 'good', 'morning', 'afternoon', 'evening', 'night',
             'uh', 'um', 'erm', 'hmm', 'ah', 'oh', 'well', 'so', 'like', 'just',
@@ -1135,6 +1137,12 @@ const SlotExtractors = {
             'somebody', 'someone', 'anybody', 'anyone', 'technician', 'tech',
             // Question words
             'any', 'some', 'with'
+        ];
+        
+        // V36: Merge platform defaults with company custom stop words (from UI)
+        const STOP_WORDS = new Set([
+            ...PLATFORM_STOP_WORDS,
+            ...(customStopWords || []).map(w => w.toLowerCase().trim())
         ]);
         
         // ═══════════════════════════════════════════════════════════════════
@@ -2037,9 +2045,15 @@ async function processTurn({
                 }
                 
             // V32: Pass expectingName flag - true if we're in BOOKING mode and asking for name
+            // V36: Pass custom stop words from company config (UI-controlled)
             const expectingName = session.mode === 'BOOKING' && session.booking?.activeSlot === 'name';
-            let extractedName = SlotExtractors.extractName(userText, { expectingName });
-            log('🔍 V32 Extraction result:', extractedName || '(none)', { expectingName });
+            const customStopWords = company?.aiAgentSettings?.nameStopWords?.custom || [];
+            const stopWordsEnabled = company?.aiAgentSettings?.nameStopWords?.enabled !== false;
+            let extractedName = SlotExtractors.extractName(userText, { 
+                expectingName, 
+                customStopWords: stopWordsEnabled ? customStopWords : []
+            });
+            log('🔍 V36 Extraction result:', extractedName || '(none)', { expectingName, customStopWordsCount: customStopWords.length });
             
             // ═══════════════════════════════════════════════════════════════════
             // V29 FIX: Context-aware name extraction
