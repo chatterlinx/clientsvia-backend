@@ -1257,6 +1257,91 @@ async function processTurn({
         }
         
         // ═══════════════════════════════════════════════════════════════════
+        // V31: GREETING INTERCEPT - 0 tokens, no LLM needed!
+        // ═══════════════════════════════════════════════════════════════════
+        // If user says "hi", "hello", "good morning", etc. - return the
+        // UI-configured greeting response immediately without LLM
+        // This saves tokens AND provides faster response time
+        // ═══════════════════════════════════════════════════════════════════
+        const userTextLower = userText.toLowerCase().trim();
+        const greetingPatterns = {
+            morning: /^(good\s*morning|morning|gm)\b/i,
+            afternoon: /^(good\s*afternoon|afternoon)\b/i,
+            evening: /^(good\s*evening|evening)\b/i,
+            generic: /^(hi|hello|hey|howdy|yo|sup|what'?s\s*up|greetings?)\b/i
+        };
+        
+        // Check if this is JUST a greeting (not "hi I need help with my AC")
+        const isJustGreeting = userTextLower.length < 25 && (
+            greetingPatterns.morning.test(userTextLower) ||
+            greetingPatterns.afternoon.test(userTextLower) ||
+            greetingPatterns.evening.test(userTextLower) ||
+            greetingPatterns.generic.test(userTextLower)
+        );
+        
+        if (isJustGreeting) {
+            // Get UI-configured greeting responses
+            const greetingResponses = company.aiAgentSettings?.frontDeskBehavior?.personality?.greetingResponses || {};
+            
+            // Determine which greeting to use based on time of day
+            let greetingResponse;
+            const hour = new Date().getHours();
+            
+            if (greetingPatterns.morning.test(userTextLower)) {
+                // User said "good morning" - mirror it
+                greetingResponse = greetingResponses.morning || "Good morning! How can I help you today?";
+            } else if (greetingPatterns.afternoon.test(userTextLower)) {
+                // User said "good afternoon" - mirror it
+                greetingResponse = greetingResponses.afternoon || "Good afternoon! How can I help you today?";
+            } else if (greetingPatterns.evening.test(userTextLower)) {
+                // User said "good evening" - mirror it
+                greetingResponse = greetingResponses.evening || "Good evening! How can I help you today?";
+            } else {
+                // Generic greeting - use time-appropriate response
+                if (hour < 12) {
+                    greetingResponse = greetingResponses.morning || "Good morning! How can I help you today?";
+                } else if (hour < 17) {
+                    greetingResponse = greetingResponses.afternoon || "Good afternoon! How can I help you today?";
+                } else {
+                    greetingResponse = greetingResponses.evening || "Good evening! How can I help you today?";
+                }
+            }
+            
+            log('CHECKPOINT 2.7: ✅ GREETING INTERCEPT - 0 tokens!', {
+                userText,
+                greetingType: greetingPatterns.morning.test(userTextLower) ? 'morning' :
+                              greetingPatterns.afternoon.test(userTextLower) ? 'afternoon' :
+                              greetingPatterns.evening.test(userTextLower) ? 'evening' : 'generic',
+                response: greetingResponse
+            });
+            
+            // Return immediately without LLM - 0 tokens!
+            return {
+                response: greetingResponse,
+                sessionId: providedSessionId || `greeting-${Date.now()}`,
+                phase: 'DISCOVERY',
+                mode: 'DISCOVERY',
+                emotion: { emotion: 'neutral', confidence: 1.0 },
+                tokensUsed: 0,
+                llmUsed: false,
+                source: 'GREETING_INTERCEPT',
+                latencyMs: Date.now() - startTime,
+                debug: includeDebug ? {
+                    v22BlackBox: {
+                        mode: 'DISCOVERY',
+                        greetingIntercept: true,
+                        tokensUsed: 0,
+                        llmCalled: false,
+                        greetingType: greetingPatterns.morning.test(userTextLower) ? 'morning' :
+                                      greetingPatterns.afternoon.test(userTextLower) ? 'afternoon' :
+                                      greetingPatterns.evening.test(userTextLower) ? 'evening' : 'generic'
+                    },
+                    log: debugLog
+                } : undefined
+            };
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
         // STEP 2: Find or create customer
         // ═══════════════════════════════════════════════════════════════════
         log('CHECKPOINT 3: Customer lookup...');
