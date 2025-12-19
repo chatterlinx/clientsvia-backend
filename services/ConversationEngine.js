@@ -1246,72 +1246,117 @@ async function processTurn({
         }
         
         // ═══════════════════════════════════════════════════════════════════
-        // V31: GREETING INTERCEPT - 0 tokens, no LLM needed!
-        // ═══════════════════════════════════════════════════════════════════
-        // If user says "hi", "hello", "good morning", etc. - return the
-        // UI-configured greeting response immediately without LLM
-        // This saves tokens AND provides faster response time
+        // V32: GREETING INTERCEPT - 0 tokens, no LLM needed!
+        // Uses UI-configured greetingRules with exact/fuzzy matching
         // ═══════════════════════════════════════════════════════════════════
         const userTextLower = userText.toLowerCase().trim();
-        const greetingPatterns = {
-            morning: /^(good\s*morning|morning|gm)\b/i,
-            afternoon: /^(good\s*afternoon|afternoon)\b/i,
-            evening: /^(good\s*evening|evening)\b/i,
-            generic: /^(hi|hello|hey|howdy|yo|sup|what'?s\s*up|greetings?)\b/i
+        
+        // Get UI-configured greeting rules (V32 format)
+        const greetingRules = company.aiAgentSettings?.frontDeskBehavior?.conversationStages?.greetingRules || [];
+        const legacyResponses = company.aiAgentSettings?.frontDeskBehavior?.conversationStages?.greetingResponses || {};
+        
+        // Fuzzy matching patterns for common greetings (used when fuzzy=true)
+        const fuzzyPatterns = {
+            'good morning': /^(good\s*morning|morning|gm)\b/i,
+            'morning': /^(good\s*morning|morning|gm)\b/i,
+            'good afternoon': /^(good\s*afternoon|afternoon)\b/i,
+            'afternoon': /^(good\s*afternoon|afternoon)\b/i,
+            'good evening': /^(good\s*evening|evening)\b/i,
+            'evening': /^(good\s*evening|evening)\b/i,
+            'hi': /^(hi|hello|hey|howdy|yo|sup|what'?s\s*up|greetings?)\b/i,
+            'hello': /^(hi|hello|hey|howdy|yo|sup|what'?s\s*up|greetings?)\b/i,
+            'hey': /^(hi|hello|hey|howdy|yo|sup|what'?s\s*up|greetings?)\b/i
         };
         
         // Check if this is JUST a greeting (not "hi I need help with my AC")
-        const isJustGreeting = userTextLower.length < 25 && (
-            greetingPatterns.morning.test(userTextLower) ||
-            greetingPatterns.afternoon.test(userTextLower) ||
-            greetingPatterns.evening.test(userTextLower) ||
-            greetingPatterns.generic.test(userTextLower)
-        );
+        // Short message + starts with greeting-like word
+        const isShortMessage = userTextLower.length < 30;
+        const startsWithGreeting = /^(good\s*(morning|afternoon|evening)|hi|hello|hey|howdy|yo|sup|what'?s\s*up|greetings?|morning|afternoon|evening|gm)\b/i.test(userTextLower);
         
-        if (isJustGreeting) {
-            // Get UI-configured greeting responses from conversationStages
-            // UI saves to: frontDeskBehavior.conversationStages.greetingResponses
-            const greetingResponses = company.aiAgentSettings?.frontDeskBehavior?.conversationStages?.greetingResponses || {};
+        if (isShortMessage && startsWithGreeting) {
+            let greetingResponse = null;
+            let matchedTrigger = null;
+            let matchType = null;
             
-            // Determine which greeting to use based on time of day
-            let greetingResponse;
-            const hour = new Date().getHours();
-            
-            if (greetingPatterns.morning.test(userTextLower)) {
-                // User said "good morning" - mirror it
-                greetingResponse = greetingResponses.morning || "Good morning! How can I help you today?";
-            } else if (greetingPatterns.afternoon.test(userTextLower)) {
-                // User said "good afternoon" - mirror it
-                greetingResponse = greetingResponses.afternoon || "Good afternoon! How can I help you today?";
-            } else if (greetingPatterns.evening.test(userTextLower)) {
-                // User said "good evening" - mirror it
-                greetingResponse = greetingResponses.evening || "Good evening! How can I help you today?";
-            } else {
-                // Generic greeting - use time-appropriate response
-                if (hour < 12) {
-                    greetingResponse = greetingResponses.morning || "Good morning! How can I help you today?";
-                } else if (hour < 17) {
-                    greetingResponse = greetingResponses.afternoon || "Good afternoon! How can I help you today?";
-                } else {
-                    greetingResponse = greetingResponses.evening || "Good evening! How can I help you today?";
+            // V32: Try to match against greetingRules first
+            if (greetingRules.length > 0) {
+                for (const rule of greetingRules) {
+                    if (!rule.trigger || !rule.response) continue;
+                    
+                    const trigger = rule.trigger.toLowerCase().trim();
+                    
+                    if (rule.fuzzy) {
+                        // Fuzzy matching - use pattern if available, otherwise contains check
+                        const pattern = fuzzyPatterns[trigger];
+                        if (pattern && pattern.test(userTextLower)) {
+                            greetingResponse = rule.response;
+                            matchedTrigger = trigger;
+                            matchType = 'fuzzy';
+                            break;
+                        } else if (userTextLower.includes(trigger)) {
+                            greetingResponse = rule.response;
+                            matchedTrigger = trigger;
+                            matchType = 'fuzzy-contains';
+                            break;
+                        }
+                    } else {
+                        // Exact matching
+                        if (userTextLower === trigger || userTextLower.startsWith(trigger + ' ')) {
+                            greetingResponse = rule.response;
+                            matchedTrigger = trigger;
+                            matchType = 'exact';
+                            break;
+                        }
+                    }
                 }
+            }
+            
+            // Fallback to legacy format if no rule matched
+            if (!greetingResponse) {
+                const hour = new Date().getHours();
+                if (/^(good\s*morning|morning|gm)\b/i.test(userTextLower)) {
+                    greetingResponse = legacyResponses.morning || "Good morning! How can I help you today?";
+                    matchedTrigger = 'morning (legacy)';
+                } else if (/^(good\s*afternoon|afternoon)\b/i.test(userTextLower)) {
+                    greetingResponse = legacyResponses.afternoon || "Good afternoon! How can I help you today?";
+                    matchedTrigger = 'afternoon (legacy)';
+                } else if (/^(good\s*evening|evening)\b/i.test(userTextLower)) {
+                    greetingResponse = legacyResponses.evening || "Good evening! How can I help you today?";
+                    matchedTrigger = 'evening (legacy)';
+                } else {
+                    // Generic - use time-appropriate
+                    if (hour < 12) {
+                        greetingResponse = legacyResponses.morning || "Good morning! How can I help you today?";
+                    } else if (hour < 17) {
+                        greetingResponse = legacyResponses.afternoon || "Good afternoon! How can I help you today?";
+                    } else {
+                        greetingResponse = legacyResponses.evening || "Good evening! How can I help you today?";
+                    }
+                    matchedTrigger = 'generic (legacy)';
+                }
+                matchType = 'legacy';
+            }
+            
+            // Apply {time} placeholder if present
+            if (greetingResponse && greetingResponse.includes('{time}')) {
+                const hour = new Date().getHours();
+                const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+                greetingResponse = greetingResponse.replace(/{time}/gi, timeOfDay);
             }
             
             log('CHECKPOINT 2.7: ✅ GREETING INTERCEPT - 0 tokens!', {
                 userText,
-                greetingType: greetingPatterns.morning.test(userTextLower) ? 'morning' :
-                              greetingPatterns.afternoon.test(userTextLower) ? 'afternoon' :
-                              greetingPatterns.evening.test(userTextLower) ? 'evening' : 'generic',
+                matchedTrigger,
+                matchType,
+                rulesCount: greetingRules.length,
                 response: greetingResponse
             });
             
             // Return immediately without LLM - 0 tokens!
-            // IMPORTANT: Must match the return format expected by routes/api/chat.js
-            // Fields: success, reply, sessionId, latencyMs, debug
             return {
                 success: true,
                 reply: greetingResponse,
-                response: greetingResponse,  // Legacy compatibility
+                response: greetingResponse,
                 sessionId: providedSessionId || `greeting-${Date.now()}`,
                 phase: 'DISCOVERY',
                 mode: 'DISCOVERY',
@@ -1331,9 +1376,9 @@ async function processTurn({
                         greetingIntercept: true,
                         tokensUsed: 0,
                         llmCalled: false,
-                        greetingType: greetingPatterns.morning.test(userTextLower) ? 'morning' :
-                                      greetingPatterns.afternoon.test(userTextLower) ? 'afternoon' :
-                                      greetingPatterns.evening.test(userTextLower) ? 'evening' : 'generic'
+                        matchedTrigger,
+                        matchType,
+                        rulesCount: greetingRules.length
                     },
                     log: debugLog
                 } : undefined

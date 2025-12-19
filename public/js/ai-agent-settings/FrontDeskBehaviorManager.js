@@ -424,46 +424,40 @@ class FrontDeskBehaviorManager {
                     </p>
                 </div>
                 
-                <!-- Greeting Responses - Time-of-Day Specific -->
+                <!-- Greeting Responses - V32 Two-Column Format with Add/Remove -->
                 <div style="margin-bottom: 20px; padding: 16px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
-                    <label style="display: block; margin-bottom: 12px; color: #c9d1d9; font-weight: 500;">
-                        👋 Greeting Responses
-                        <span style="background: #238636; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px;">0 TOKENS</span>
-                    </label>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <label style="color: #c9d1d9; font-weight: 500;">
+                            👋 Greeting Responses
+                            <span style="background: #238636; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px;">0 TOKENS</span>
+                        </label>
+                        <button type="button" onclick="window.frontDeskManager.addGreetingRow()" 
+                            style="padding: 6px 12px; background: #238636; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 4px;">
+                            <span>+</span> Add Greeting
+                        </button>
+                    </div>
                     <p style="color: #8b949e; font-size: 0.75rem; margin-bottom: 16px;">
-                        When callers say "hi", "hello", or time-based greetings - AI responds with the appropriate time-of-day greeting. <strong style="color: #3fb950;">No LLM needed!</strong>
+                        Match caller greetings and respond instantly. <strong style="color: #3fb950;">No LLM needed!</strong>
+                        <br><span style="color: #6e7681;">Fuzzy = matches variations (e.g., "good morning" also matches "morning", "gm")</span>
                     </p>
                     
-                    <div style="display: grid; gap: 12px;">
-                        <div>
-                            <label style="display: block; margin-bottom: 4px; color: #8b949e; font-size: 0.8rem;">🌅 Morning (before 12pm):</label>
-                            <input type="text" id="fdb-greeting-morning" 
-                                value="${this.config.conversationStages?.greetingResponses?.morning || 'Good morning! How can I help you today?'}" 
-                                placeholder="Good morning! How can I help you today?"
-                                style="width: 100%; padding: 8px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
-                        </div>
-                        <div>
-                            <label style="display: block; margin-bottom: 4px; color: #8b949e; font-size: 0.8rem;">☀️ Afternoon (12pm - 5pm):</label>
-                            <input type="text" id="fdb-greeting-afternoon" 
-                                value="${this.config.conversationStages?.greetingResponses?.afternoon || 'Good afternoon! How can I help you today?'}" 
-                                placeholder="Good afternoon! How can I help you today?"
-                                style="width: 100%; padding: 8px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
-                        </div>
-                        <div>
-                            <label style="display: block; margin-bottom: 4px; color: #8b949e; font-size: 0.8rem;">🌙 Evening (after 5pm):</label>
-                            <input type="text" id="fdb-greeting-evening" 
-                                value="${this.config.conversationStages?.greetingResponses?.evening || 'Good evening! How can I help you today?'}" 
-                                placeholder="Good evening! How can I help you today?"
-                                style="width: 100%; padding: 8px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
-                        </div>
-                        <div>
-                            <label style="display: block; margin-bottom: 4px; color: #8b949e; font-size: 0.8rem;">👋 Generic (for "hi", "hello"):</label>
-                            <input type="text" id="fdb-greeting-generic" 
-                                value="${this.config.conversationStages?.greetingResponses?.generic || 'Hi there! How can I help you today?'}" 
-                                placeholder="Hi there! How can I help you today?"
-                                style="width: 100%; padding: 8px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
-                        </div>
+                    <!-- Header Row -->
+                    <div style="display: grid; grid-template-columns: 200px 80px 1fr 40px; gap: 8px; margin-bottom: 8px; padding: 0 4px;">
+                        <span style="color: #8b949e; font-size: 0.75rem; font-weight: 600;">TRIGGER PHRASE</span>
+                        <span style="color: #8b949e; font-size: 0.75rem; font-weight: 600; text-align: center;">FUZZY</span>
+                        <span style="color: #8b949e; font-size: 0.75rem; font-weight: 600;">RESPONSE</span>
+                        <span></span>
                     </div>
+                    
+                    <!-- Greeting Rows Container -->
+                    <div id="fdb-greeting-rows" style="display: flex; flex-direction: column; gap: 8px;">
+                        ${this.renderGreetingRows()}
+                    </div>
+                    
+                    <p style="color: #6e7681; font-size: 0.7rem; margin-top: 12px; padding-top: 12px; border-top: 1px solid #21262d;">
+                        💡 <strong>Tip:</strong> Use <code style="background: #21262d; padding: 1px 4px; border-radius: 3px;">{time}</code> placeholder for dynamic time-of-day (morning/afternoon/evening).
+                        Example: "Good {time}! How can I help?" → "Good morning! How can I help?"
+                    </p>
                 </div>
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
@@ -816,6 +810,113 @@ Sean → Shawn, Shaun"
                     title="Remove ${name}">×</button>
             </span>
         `).join('');
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GREETING RESPONSES (V32) - Two-column format with fuzzy matching
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    renderGreetingRows() {
+        // Initialize greetings array if not exists
+        if (!this.config.greetingRules) {
+            // Convert old format to new format
+            const oldGreetings = this.config.conversationStages?.greetingResponses || {};
+            this.config.greetingRules = [
+                { trigger: 'good morning', fuzzy: true, response: oldGreetings.morning || 'Good morning! How can I help you today?' },
+                { trigger: 'good afternoon', fuzzy: true, response: oldGreetings.afternoon || 'Good afternoon! How can I help you today?' },
+                { trigger: 'good evening', fuzzy: true, response: oldGreetings.evening || 'Good evening! How can I help you today?' },
+                { trigger: 'hi', fuzzy: true, response: oldGreetings.generic || 'Hi there! How can I help you today?' },
+                { trigger: 'hello', fuzzy: true, response: oldGreetings.generic || 'Hello! How can I help you today?' },
+                { trigger: 'hey', fuzzy: true, response: oldGreetings.generic || 'Hey there! How can I help you today?' }
+            ];
+        }
+        
+        const greetings = this.config.greetingRules || [];
+        
+        if (greetings.length === 0) {
+            return '<p style="color: #8b949e; margin: 0; padding: 12px; text-align: center; font-style: italic;">No greetings configured. Click "Add Greeting" to create one.</p>';
+        }
+        
+        return greetings.map((g, idx) => `
+            <div class="greeting-row" data-idx="${idx}" style="display: grid; grid-template-columns: 200px 80px 1fr 40px; gap: 8px; align-items: center; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 6px;">
+                <input type="text" 
+                    class="greeting-trigger" 
+                    value="${this.escapeHtml(g.trigger || '')}" 
+                    placeholder="e.g., good morning"
+                    onchange="window.frontDeskManager.updateGreetingRow(${idx}, 'trigger', this.value)"
+                    style="padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
+                <label style="display: flex; justify-content: center; align-items: center; cursor: pointer;">
+                    <input type="checkbox" 
+                        class="greeting-fuzzy"
+                        ${g.fuzzy ? 'checked' : ''} 
+                        onchange="window.frontDeskManager.updateGreetingRow(${idx}, 'fuzzy', this.checked)"
+                        style="accent-color: #58a6ff; width: 18px; height: 18px;">
+                </label>
+                <input type="text" 
+                    class="greeting-response" 
+                    value="${this.escapeHtml(g.response || '')}" 
+                    placeholder="Response to caller..."
+                    onchange="window.frontDeskManager.updateGreetingRow(${idx}, 'response', this.value)"
+                    style="padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
+                <button type="button" 
+                    onclick="window.frontDeskManager.removeGreetingRow(${idx})"
+                    style="padding: 6px 10px; background: #21262d; border: 1px solid #f85149; border-radius: 4px; color: #f85149; cursor: pointer; font-size: 1rem;"
+                    title="Remove this greeting">×</button>
+            </div>
+        `).join('');
+    }
+    
+    escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;')
+                  .replace(/'/g, '&#039;');
+    }
+    
+    addGreetingRow() {
+        if (!this.config.greetingRules) {
+            this.config.greetingRules = [];
+        }
+        
+        this.config.greetingRules.push({
+            trigger: '',
+            fuzzy: true,
+            response: ''
+        });
+        
+        // Re-render the rows
+        const container = document.getElementById('fdb-greeting-rows');
+        if (container) {
+            container.innerHTML = this.renderGreetingRows();
+        }
+        
+        this.isDirty = true;
+        console.log('[FRONT DESK] 👋 Added new greeting row');
+    }
+    
+    updateGreetingRow(idx, field, value) {
+        if (!this.config.greetingRules || !this.config.greetingRules[idx]) return;
+        
+        this.config.greetingRules[idx][field] = value;
+        this.isDirty = true;
+        console.log(`[FRONT DESK] 👋 Updated greeting ${idx}: ${field} = ${value}`);
+    }
+    
+    removeGreetingRow(idx) {
+        if (!this.config.greetingRules) return;
+        
+        const removed = this.config.greetingRules.splice(idx, 1);
+        console.log('[FRONT DESK] 👋 Removed greeting:', removed[0]?.trigger);
+        
+        // Re-render the rows
+        const container = document.getElementById('fdb-greeting-rows');
+        if (container) {
+            container.innerHTML = this.renderGreetingRows();
+        }
+        
+        this.isDirty = true;
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
@@ -3164,19 +3265,40 @@ won't kick on → won't start"
             console.log('[FRONT DESK BEHAVIOR] 💬 Style acknowledgments:', this.config.styleAcknowledgments);
         }
         
-        // Collect time-of-day greeting responses (for ConversationStateMachine)
-        if (document.getElementById('fdb-greeting-morning')) {
-            // Ensure conversationStages exists
+        // V32: Collect greeting rules (new 2-column format with fuzzy matching)
+        if (document.getElementById('fdb-greeting-rows')) {
+            // greetingRules is already maintained by addGreetingRow/updateGreetingRow/removeGreetingRow
+            // Just ensure it's properly formatted and log it
+            const rules = this.config.greetingRules || [];
+            
+            // Filter out empty rules
+            this.config.greetingRules = rules.filter(r => r.trigger && r.trigger.trim());
+            
+            // Also generate legacy format for backward compatibility
             if (!this.config.conversationStages) {
                 this.config.conversationStages = { enabled: true };
             }
-            this.config.conversationStages.greetingResponses = {
-                morning: get('fdb-greeting-morning') || "Good morning! How can I help you today?",
-                afternoon: get('fdb-greeting-afternoon') || "Good afternoon! How can I help you today?",
-                evening: get('fdb-greeting-evening') || "Good evening! How can I help you today?",
-                generic: get('fdb-greeting-generic') || "Hi there! How can I help you today?"
+            
+            // Map new rules to old format (find first matching trigger for each time period)
+            const findResponse = (triggers) => {
+                for (const t of triggers) {
+                    const rule = this.config.greetingRules.find(r => 
+                        r.trigger.toLowerCase().includes(t.toLowerCase())
+                    );
+                    if (rule) return rule.response;
+                }
+                return null;
             };
-            console.log('[FRONT DESK BEHAVIOR] 👋 Greeting responses saved:', this.config.conversationStages.greetingResponses);
+            
+            this.config.conversationStages.greetingResponses = {
+                morning: findResponse(['morning', 'gm']) || "Good morning! How can I help you today?",
+                afternoon: findResponse(['afternoon']) || "Good afternoon! How can I help you today?",
+                evening: findResponse(['evening']) || "Good evening! How can I help you today?",
+                generic: findResponse(['hi', 'hello', 'hey']) || "Hi there! How can I help you today?"
+            };
+            
+            console.log('[FRONT DESK BEHAVIOR] 👋 V32 Greeting rules saved:', this.config.greetingRules);
+            console.log('[FRONT DESK BEHAVIOR] 👋 Legacy format:', this.config.conversationStages.greetingResponses);
         }
 
         // Collect dynamic booking slots

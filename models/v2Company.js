@@ -2240,7 +2240,18 @@ const companySchema = new mongoose.Schema({
                 
                 // ═══════════════════════════════════════════════════════════════
                 // STAGE 1: GREETING RESPONSES (0 tokens - no LLM)
+                // V32: New format with greetingRules array (trigger + fuzzy + response)
+                // Legacy greetingResponses kept for backward compatibility
                 // ═══════════════════════════════════════════════════════════════
+                
+                // V32: New flexible greeting rules with exact/fuzzy matching
+                greetingRules: [{
+                    trigger: { type: String, trim: true, lowercase: true },  // e.g., "good morning", "hi"
+                    fuzzy: { type: Boolean, default: true },  // If true, matches variations (morning, gm, etc.)
+                    response: { type: String, trim: true }   // The response to send
+                }],
+                
+                // Legacy format (auto-generated from greetingRules for backward compat)
                 greetingResponses: {
                     morning: { type: String, default: "Good morning! How can I help you today?", trim: true },
                     afternoon: { type: String, default: "Good afternoon! How can I help you today?", trim: true },
