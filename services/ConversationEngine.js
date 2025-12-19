@@ -1433,35 +1433,31 @@ async function processTurn({
         // "morning" is a greeting ONLY at the start of the call
         // After that, "morning" means TIME PREFERENCE (not greeting!)
         // RULE: Slot-resolver beats intent classifier. Always.
+        // 
+        // NOTE: Session is NOT loaded yet at this point, so we use providedSessionId
+        // to determine if this is a new session (no ID = first turn = greeting OK)
         // ═══════════════════════════════════════════════════════════════════
         const userTextLower = userText.toLowerCase().trim();
         
-        // V34: Get session turn count and mode to determine context
-        // If we're past turn 2 OR in BOOKING mode, "morning/afternoon" = time preference, NOT greeting
-        const sessionTurnCount = session?.metrics?.totalTurns || 0;
-        const isEarlyTurn = sessionTurnCount <= 1; // Only first turn should treat as greeting
-        const isInBookingMode = session?.mode === 'BOOKING' || session?.booking?.consentGiven;
-        const lastAgentAskedTime = session?.booking?.activeSlot === 'time' || 
-                                   session?.lastAgentIntent === 'ASK_TIME_PREFERENCE';
+        // V34: Determine context WITHOUT session (session loaded later)
+        // If no sessionId provided, this is likely a new conversation = treat as greeting
+        // If sessionId exists, we need to be careful about ambiguous words
+        const hasExistingSession = !!providedSessionId;
         
         // V34: Words that are BOTH greetings AND time preferences
         const ambiguousTimeWords = ['morning', 'afternoon', 'evening'];
         const isAmbiguousTimeWord = ambiguousTimeWords.some(w => userTextLower === w || userTextLower === `good ${w}`);
         
-        // V34: If this looks like a time preference answer, DON'T treat as greeting
-        const shouldTreatAsTimePreference = isAmbiguousTimeWord && (
-            !isEarlyTurn ||           // Past first turn
-            isInBookingMode ||         // In booking mode
-            lastAgentAskedTime         // We just asked for time
-        );
+        // V34: If this looks like a time preference answer AND we have an existing session,
+        // DON'T treat as greeting - let normal processing handle it
+        // For new sessions (no providedSessionId), always treat ambiguous words as greetings
+        const shouldTreatAsTimePreference = isAmbiguousTimeWord && hasExistingSession;
         
         if (shouldTreatAsTimePreference) {
-            log('🕐 V34: Ambiguous word detected as TIME PREFERENCE, not greeting', {
+            log('🕐 V34: Ambiguous word in existing session, skipping greeting intercept', {
                 userText,
-                sessionTurnCount,
-                isEarlyTurn,
-                isInBookingMode,
-                lastAgentAskedTime
+                hasExistingSession,
+                providedSessionId
             });
             // Fall through to normal processing - don't intercept as greeting
         }
