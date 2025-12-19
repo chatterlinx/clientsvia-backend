@@ -137,8 +137,36 @@ class SessionService {
         customer = null,
         forceNewSession = false  // For Test Console - always create fresh session
     }) {
-        // Voice calls always create new sessions
+        // ═══════════════════════════════════════════════════════════════════
+        // V33 FIX: Voice calls should REUSE session within same call!
+        // The old code created a new session every turn, losing all slots.
+        // Now we look up by callSid first.
+        // ═══════════════════════════════════════════════════════════════════
         if (channel === 'voice') {
+            const callSid = identifiers.callSid;
+            
+            if (callSid) {
+                // Look for existing session with this callSid
+                const existing = await ConversationSession.findOne({
+                    companyId,
+                    channel: 'voice',
+                    'channelIdentifiers.twilioCallSid': callSid,
+                    status: 'active'
+                });
+                
+                if (existing) {
+                    logger.info('[SESSION SERVICE] ✅ Found existing voice session by callSid', { 
+                        sessionId: existing._id,
+                        callSid,
+                        collectedSlots: existing.collectedSlots,
+                        turns: existing.turns?.length
+                    });
+                    return existing;
+                }
+            }
+            
+            // No existing session, create new
+            logger.info('[SESSION SERVICE] 🆕 Creating new voice session', { callSid });
             return this.create({ companyId, channel, identifiers, customer });
         }
         

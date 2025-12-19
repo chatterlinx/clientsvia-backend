@@ -3284,9 +3284,11 @@ async function processTurn({
                         // Special handling for name slot (uses different confirmation logic)
                         const isNameSlot = slotId === 'name';
                         const nameMeta = session.booking.meta.name || {};
-                        const nameIsComplete = isNameSlot && hasValue && 
+                        // V33 FIX: Operator precedence bug - added parentheses
+                        const nameIsComplete = isNameSlot && hasValue && (
                             (nameMeta.first && nameMeta.last) || // Has both parts
-                            (!nameSlotConfig?.askFullName && hasValue); // Single name accepted
+                            (!nameSlotConfig?.askFullName) // Single name accepted when askFullName is false
+                        );
                         
                         // Slot is COMPLETE if:
                         // - Has value AND confirmed (for confirmBack slots)
