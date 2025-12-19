@@ -1147,15 +1147,28 @@ async function processTurn({
             throw new Error('companyId is required');
         }
         
-        if (!channel || !['phone', 'sms', 'website', 'test'].includes(channel)) {
-            throw new Error('channel must be one of: phone, sms, website, test');
+        if (!channel || !['phone', 'voice', 'sms', 'website', 'test'].includes(channel)) {
+            throw new Error('channel must be one of: phone, voice, sms, website, test');
         }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // CHANNEL NORMALIZATION - Map 'phone' to 'voice' for database compatibility
+        // The ConversationSession model uses enum ['voice', 'sms', 'website']
+        // but callers may use 'phone' which is more intuitive
+        // ═══════════════════════════════════════════════════════════════════
+        const originalChannel = channel;
+        const normalizedChannel = (channel === 'phone' || channel === 'test') ? 'voice' : channel;
         
         if (!userText || typeof userText !== 'string') {
             userText = ''; // Allow empty for silence/timeout handling
         }
         
-        log('CHECKPOINT 1: Starting processTurn', { companyId, channel, textLength: userText.length });
+        log('CHECKPOINT 1: Starting processTurn', { 
+            companyId, 
+            channel: originalChannel, 
+            normalizedChannel,
+            textLength: userText.length 
+        });
         
         // ═══════════════════════════════════════════════════════════════════
         // STEP 1: Load company
@@ -1408,7 +1421,7 @@ async function processTurn({
                         name: visitorInfo.name,
                         sessionId
                     },
-                    channel
+                    normalizedChannel  // Use 'voice' for phone/test channels
                 );
                 customer = result.customer;
                 isNewCustomer = result.isNew;
@@ -1424,15 +1437,17 @@ async function processTurn({
         // ═══════════════════════════════════════════════════════════════════
         log('CHECKPOINT 4: Session management...');
         
-        const identifiers = channel === 'phone' 
+        // Build identifiers based on original channel type (phone/sms/website)
+        const identifiers = (channel === 'phone' || channel === 'test')
             ? { callSid, callerPhone, calledNumber: metadata.calledNumber }
             : channel === 'sms'
             ? { smsPhone: callerPhone }
             : { sessionId, ip: visitorInfo.ip, userAgent: visitorInfo.userAgent, pageUrl: visitorInfo.pageUrl };
         
+        // Use normalizedChannel for database operations (voice/sms/website)
         const session = await SessionService.getOrCreate({
             companyId,
-            channel,
+            channel: normalizedChannel,  // 'voice' for phone/test, 'sms', or 'website'
             identifiers,
             customer,
             forceNewSession  // Test Console can force fresh session
