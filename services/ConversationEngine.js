@@ -1110,30 +1110,58 @@ const SlotExtractors = {
     
     /**
      * Extract address from user input
-     * STRICTER version - requires street number + street type
+     * V34 FIX: Accept FULL addresses with city/state/zip in one shot
+     * "12155 Metro Parkway Fort Myers Florida 33966" → complete address
      */
     extractAddress(text) {
         if (!text || typeof text !== 'string') return null;
         
-        // Must have a street number and street type indicator
-        // Comprehensive list of street types
-        const streetTypes = /\b(street|st|avenue|ave|road|rd|drive|dr|lane|ln|court|ct|boulevard|blvd|way|place|pl|circle|cir|parkway|pkwy|highway|hwy|terrace|ter|trail|trl|loop|alley|aly|path|crossing|xing|square|sq|plaza|plz|commons|point|pt|ridge|run|pass|grove|park|estates|meadow|meadows|valley|hills|heights|view|vista|landing|springs|creek|glen|cove|bay|beach|shore|pointe)\b/i;
-        const hasStreetNumber = /\b\d{1,5}\s+\w+/; // e.g., "123 Main"
-        
-        // Check for both requirements
-        if (!streetTypes.test(text) || !hasStreetNumber.test(text)) {
-            return null;
-        }
+        const lower = text.toLowerCase();
         
         // Filter out common complaint phrases that might have numbers
-        const complaintPhrases = ['not cooling', 'not working', 'system', 'unit', 'years old', 'degrees'];
+        const complaintPhrases = ['not cooling', 'not working', 'system', 'unit', 'years old', 'degrees', 'broken', 'issue'];
         for (const phrase of complaintPhrases) {
-            if (text.toLowerCase().includes(phrase)) {
+            if (lower.includes(phrase)) {
                 return null;
             }
         }
         
-        // Extract address-like pattern (with all street types)
+        // Must have a street number
+        const hasStreetNumber = /\b\d{1,5}\s+\w+/.test(text);
+        if (!hasStreetNumber) return null;
+        
+        // Street types (comprehensive)
+        const streetTypes = /\b(street|st|avenue|ave|road|rd|drive|dr|lane|ln|court|ct|boulevard|blvd|way|place|pl|circle|cir|parkway|pkwy|highway|hwy|terrace|ter|trail|trl|loop|alley|aly|path|crossing|xing|square|sq|plaza|plz|commons|point|pt|ridge|run|pass|grove|park|estates|meadow|meadows|valley|hills|heights|view|vista|landing|springs|creek|glen|cove|bay|beach|shore|pointe)\b/i;
+        
+        // Check for street type
+        if (!streetTypes.test(text)) return null;
+        
+        // V34 FIX: Check for ZIP code (indicates complete address)
+        const hasZip = /\b\d{5}(-\d{4})?\b/.test(text);
+        
+        // V34 FIX: Check for state (indicates complete address)
+        const statePattern = /\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b/i;
+        const hasState = statePattern.test(text);
+        
+        // V34 FIX: Extract the full address including city/state/zip
+        // Pattern: number + street name + street type + optional city/state/zip
+        let fullAddress = text.trim();
+        
+        // Clean up common prefixes
+        fullAddress = fullAddress.replace(/^(my\s+)?(address\s+is|it'?s|that'?s)\s*/i, '');
+        fullAddress = fullAddress.replace(/^(the\s+)?address\s*:?\s*/i, '');
+        
+        // If we have a complete address (has zip OR state), return the whole thing
+        if (hasZip || hasState) {
+            logger.debug('[ADDRESS EXTRACTOR] V34: Complete address detected', { 
+                address: fullAddress, 
+                hasZip, 
+                hasState 
+            });
+            return fullAddress;
+        }
+        
+        // Otherwise, extract just the street portion
         const addressPattern = /\b(\d{1,5}\s+[\w\s]+(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|court|ct|boulevard|blvd|way|place|pl|circle|cir|parkway|pkwy|highway|hwy|terrace|ter|trail|trl|loop|alley|aly|path|crossing|xing|square|sq|plaza|plz|commons|point|pt|ridge|run|pass|grove|park|estates|meadow|meadows|valley|hills|heights|view|vista|landing|springs|creek|glen|cove|bay|beach|shore|pointe)[\w\s,]*)/i;
         const match = text.match(addressPattern);
         
@@ -3177,8 +3205,28 @@ async function processTurn({
                     const addressConfirmBack = addressSlotConfig?.confirmBack === true || addressSlotConfig?.confirmBack === 'true';
                     const addressConfirmPrompt = addressSlotConfig?.confirmPrompt || "Just to confirm, that's {value}, correct?";
                     
-                    // Check if address is partial and acceptPartialAddress is off
-                    const isPartialAddress = !extractedThisTurn.address.includes(',') && extractedThisTurn.address.split(' ').length < 3;
+                    // V34 FIX: Better "complete address" detection
+                    // An address is COMPLETE if it has:
+                    // - A ZIP code (5 digits), OR
+                    // - A state name/abbreviation, OR
+                    // - 5+ words (likely has city/state)
+                    const hasZip = /\b\d{5}(-\d{4})?\b/.test(extractedThisTurn.address);
+                    const hasState = /\b(florida|fl|california|ca|texas|tx|new york|ny|georgia|ga|ohio|oh|michigan|mi|arizona|az|colorado|co|illinois|il|alabama|alaska|arkansas|connecticut|delaware|hawaii|idaho|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|north carolina|north dakota|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|al|ak|ar|ct|de|hi|id|in|ia|ks|ky|la|me|md|ma|mn|ms|mo|mt|ne|nv|nh|nj|nm|nc|nd|ok|or|pa|ri|sc|sd|tn|ut|vt|va|wa|wv|wi|wy)\b/i.test(extractedThisTurn.address);
+                    const wordCount = extractedThisTurn.address.split(/\s+/).length;
+                    const isCompleteAddress = hasZip || hasState || wordCount >= 5;
+                    
+                    // Only consider partial if it's truly incomplete
+                    const isPartialAddress = !isCompleteAddress && wordCount < 4;
+                    
+                    log('🏠 ADDRESS: Checking completeness', {
+                        address: extractedThisTurn.address,
+                        hasZip,
+                        hasState,
+                        wordCount,
+                        isCompleteAddress,
+                        isPartialAddress
+                    });
+                    
                     if (isPartialAddress && !addressSlotConfig?.acceptPartialAddress) {
                         finalReply = "I got part of that. Can you give me the full address including city?";
                         nextSlotId = 'address';
@@ -3194,6 +3242,26 @@ async function processTurn({
                         session.booking.activeSlot = 'time';
                         finalReply = 'Perfect. ';
                         log('🏠 ADDRESS: Accepted (no confirmBack)', { address: extractedThisTurn.address });
+                    }
+                }
+                // V34 FIX: Handle "I just told you" / "I already said" frustration
+                // If user is frustrated and we're in breakdown mode, use whatever we have
+                else if (addressMeta.breakdownStep && /\b(told you|already said|just said|i said|gave you|already gave)\b/i.test(userText.toLowerCase())) {
+                    // User is frustrated - use whatever address we have
+                    const existingAddress = currentSlots.address || addressMeta.street || '';
+                    if (existingAddress) {
+                        currentSlots.address = existingAddress;
+                        addressMeta.breakdownStep = null;
+                        addressMeta.confirmed = true;
+                        session.booking.activeSlot = 'time';
+                        finalReply = `You're right, I apologize. I have ${existingAddress}. `;
+                        log('🏠 ADDRESS: User frustrated, using existing address', { address: existingAddress });
+                    } else {
+                        // No address captured yet - apologize and ask simply
+                        addressMeta.breakdownStep = null;
+                        finalReply = "I apologize for the confusion. What's the full service address?";
+                        nextSlotId = 'address';
+                        log('🏠 ADDRESS: User frustrated but no address captured, asking simply');
                     }
                 }
                 // Handle unclear address - trigger breakdown if configured
@@ -3228,26 +3296,55 @@ async function processTurn({
                         log('⏰ TIME: User provided new time instead of confirming');
                     }
                 }
-                // Handle ASAP / morning / afternoon responses
-                // V34 FIX: Also accept morning/afternoon even if offerMorningAfternoon not explicitly set
+                // Handle ASAP / today / tomorrow / morning / afternoon responses
+                // V34 FIX: Better time handling that feels like real booking
                 else if (session.booking.activeSlot === 'time' && !currentSlots.time) {
                     const userTextLower = userText.toLowerCase().trim();
-                    const wantsAsap = /\b(asap|as soon as possible|soonest|earliest|first available|today|urgent|emergency|right away|immediately)\b/i.test(userTextLower);
-                    const wantsMorning = /\b(morning|am|before noon)\b/i.test(userTextLower);
-                    const wantsAfternoon = /\b(afternoon|pm|after noon|evening)\b/i.test(userTextLower);
                     
-                    if (wantsAsap && timeSlotConfig?.offerAsap !== false) {
-                        const asapPhrase = timeSlotConfig?.asapPhrase || 'first available';
-                        currentSlots.time = asapPhrase;
+                    // Day preference detection
+                    const wantsToday = /\b(today|asap|as soon as possible|soonest|earliest|first available|urgent|emergency|right away|immediately|now)\b/i.test(userTextLower);
+                    const wantsTomorrow = /\b(tomorrow|next day)\b/i.test(userTextLower);
+                    const wantsThisWeek = /\b(this week|whenever|any day|flexible)\b/i.test(userTextLower);
+                    
+                    // Time window detection
+                    const wantsMorning = /\b(morning|am|before noon|8|9|10|11)\b/i.test(userTextLower) && !/good morning/i.test(userTextLower);
+                    const wantsAfternoon = /\b(afternoon|pm|after noon|evening|12|1|2|3|4)\b/i.test(userTextLower) && !/good afternoon/i.test(userTextLower);
+                    
+                    // Build the time string that feels real
+                    let dayPart = '';
+                    let windowPart = '';
+                    
+                    if (wantsToday) dayPart = 'today';
+                    else if (wantsTomorrow) dayPart = 'tomorrow';
+                    else if (wantsThisWeek) dayPart = 'this week';
+                    
+                    if (wantsMorning) windowPart = 'morning';
+                    else if (wantsAfternoon) windowPart = 'afternoon';
+                    
+                    // V34 FIX: Build a realistic time string
+                    if (dayPart || windowPart) {
+                        if (dayPart && windowPart) {
+                            currentSlots.time = `${dayPart} ${windowPart}`;
+                        } else if (dayPart) {
+                            currentSlots.time = dayPart;
+                        } else {
+                            currentSlots.time = windowPart;
+                        }
                         timeMeta.confirmed = true;
-                        finalReply = `Perfect, I'll put you down for ${asapPhrase}. `;
-                        log('⏰ TIME: Accepted ASAP', { time: asapPhrase });
-                    } else if (wantsMorning || wantsAfternoon) {
-                        // V34 FIX: Accept morning/afternoon by default (don't require offerMorningAfternoon)
-                        currentSlots.time = wantsMorning ? 'morning' : 'afternoon';
-                        timeMeta.confirmed = true;
-                        finalReply = `Perfect, ${currentSlots.time} works. `;
-                        log('⏰ TIME: Accepted morning/afternoon', { time: currentSlots.time });
+                        
+                        // V34: More natural response based on what they said
+                        if (wantsToday && (wantsMorning || wantsAfternoon)) {
+                            finalReply = `Perfect, I'll get you in for ${currentSlots.time}. `;
+                        } else if (wantsToday) {
+                            finalReply = `Perfect, I'll get someone out today as soon as possible. `;
+                            currentSlots.time = 'today ASAP';
+                        } else if (wantsTomorrow) {
+                            finalReply = `Perfect, ${currentSlots.time} works. `;
+                        } else {
+                            finalReply = `Perfect, ${currentSlots.time} works. `;
+                        }
+                        
+                        log('⏰ TIME: Accepted', { time: currentSlots.time, dayPart, windowPart });
                     }
                 }
                 else if (extractedThisTurn.time && !timeMeta.confirmed) {
