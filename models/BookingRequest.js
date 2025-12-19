@@ -194,11 +194,16 @@ bookingRequestSchema.statics.generateCaseId = function() {
 bookingRequestSchema.methods.populateFinalScript = function(template) {
     if (!template) return '';
     
+    // V34 FIX: Don't say "your requested time" if no time was collected
+    // Use "as soon as possible" as default, or omit time reference entirely
+    const timeValue = this.slots?.time?.preference || this.slots?.time?.window;
+    const timeDisplay = timeValue || 'as soon as possible';
+    
     const replacements = {
         '{name}': this.slots?.name?.full || this.slots?.name?.first || 'there',
         '{phone}': this.slots?.phone || '',
         '{address}': this.slots?.address?.full || this.slots?.address?.street || '',
-        '{timePreference}': this.slots?.time?.preference || this.slots?.time?.window || 'your requested time',
+        '{timePreference}': timeDisplay,
         '{trade}': this.trade || 'service',
         '{serviceType}': this.serviceType || 'appointment',
         '{caseId}': this.caseId || '',

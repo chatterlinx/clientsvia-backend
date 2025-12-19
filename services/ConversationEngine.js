@@ -1428,8 +1428,43 @@ async function processTurn({
         // ═══════════════════════════════════════════════════════════════════
         // V32: GREETING INTERCEPT - 0 tokens, no LLM needed!
         // Uses UI-configured greetingRules with exact/fuzzy matching
+        // 
+        // V34 FIX: CONTEXT-AWARE GREETING DETECTION
+        // "morning" is a greeting ONLY at the start of the call
+        // After that, "morning" means TIME PREFERENCE (not greeting!)
+        // RULE: Slot-resolver beats intent classifier. Always.
         // ═══════════════════════════════════════════════════════════════════
         const userTextLower = userText.toLowerCase().trim();
+        
+        // V34: Get session turn count and mode to determine context
+        // If we're past turn 2 OR in BOOKING mode, "morning/afternoon" = time preference, NOT greeting
+        const sessionTurnCount = session?.metrics?.totalTurns || 0;
+        const isEarlyTurn = sessionTurnCount <= 1; // Only first turn should treat as greeting
+        const isInBookingMode = session?.mode === 'BOOKING' || session?.booking?.consentGiven;
+        const lastAgentAskedTime = session?.booking?.activeSlot === 'time' || 
+                                   session?.lastAgentIntent === 'ASK_TIME_PREFERENCE';
+        
+        // V34: Words that are BOTH greetings AND time preferences
+        const ambiguousTimeWords = ['morning', 'afternoon', 'evening'];
+        const isAmbiguousTimeWord = ambiguousTimeWords.some(w => userTextLower === w || userTextLower === `good ${w}`);
+        
+        // V34: If this looks like a time preference answer, DON'T treat as greeting
+        const shouldTreatAsTimePreference = isAmbiguousTimeWord && (
+            !isEarlyTurn ||           // Past first turn
+            isInBookingMode ||         // In booking mode
+            lastAgentAskedTime         // We just asked for time
+        );
+        
+        if (shouldTreatAsTimePreference) {
+            log('🕐 V34: Ambiguous word detected as TIME PREFERENCE, not greeting', {
+                userText,
+                sessionTurnCount,
+                isEarlyTurn,
+                isInBookingMode,
+                lastAgentAskedTime
+            });
+            // Fall through to normal processing - don't intercept as greeting
+        }
         
         // Get UI-configured greeting rules (V32 format)
         const greetingRules = company.aiAgentSettings?.frontDeskBehavior?.conversationStages?.greetingRules || [];
@@ -1453,7 +1488,8 @@ async function processTurn({
         const isShortMessage = userTextLower.length < 30;
         const startsWithGreeting = /^(good\s*(morning|afternoon|evening)|hi|hello|hey|howdy|yo|sup|what'?s\s*up|greetings?|morning|afternoon|evening|gm)\b/i.test(userTextLower);
         
-        if (isShortMessage && startsWithGreeting) {
+        // V34: Only intercept as greeting if NOT a time preference
+        if (isShortMessage && startsWithGreeting && !shouldTreatAsTimePreference) {
             let greetingResponse = null;
             let matchedTrigger = null;
             let matchType = null;
@@ -3196,6 +3232,7 @@ async function processTurn({
                     }
                 }
                 // Handle ASAP / morning / afternoon responses
+                // V34 FIX: Also accept morning/afternoon even if offerMorningAfternoon not explicitly set
                 else if (session.booking.activeSlot === 'time' && !currentSlots.time) {
                     const userTextLower = userText.toLowerCase().trim();
                     const wantsAsap = /\b(asap|as soon as possible|soonest|earliest|first available|today|urgent|emergency|right away|immediately)\b/i.test(userTextLower);
@@ -3208,7 +3245,8 @@ async function processTurn({
                         timeMeta.confirmed = true;
                         finalReply = `Perfect, I'll put you down for ${asapPhrase}. `;
                         log('⏰ TIME: Accepted ASAP', { time: asapPhrase });
-                    } else if ((wantsMorning || wantsAfternoon) && timeSlotConfig?.offerMorningAfternoon) {
+                    } else if (wantsMorning || wantsAfternoon) {
+                        // V34 FIX: Accept morning/afternoon by default (don't require offerMorningAfternoon)
                         currentSlots.time = wantsMorning ? 'morning' : 'afternoon';
                         timeMeta.confirmed = true;
                         finalReply = `Perfect, ${currentSlots.time} works. `;
