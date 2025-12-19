@@ -1317,17 +1317,26 @@ async function processTurn({
             });
             
             // Return immediately without LLM - 0 tokens!
+            // IMPORTANT: Must match the return format expected by routes/api/chat.js
+            // Fields: success, reply, sessionId, latencyMs, debug
             return {
-                response: greetingResponse,
+                success: true,
+                reply: greetingResponse,
+                response: greetingResponse,  // Legacy compatibility
                 sessionId: providedSessionId || `greeting-${Date.now()}`,
                 phase: 'DISCOVERY',
                 mode: 'DISCOVERY',
+                conversationMode: 'DISCOVERY',
                 emotion: { emotion: 'neutral', confidence: 1.0 },
                 tokensUsed: 0,
                 llmUsed: false,
                 source: 'GREETING_INTERCEPT',
                 latencyMs: Date.now() - startTime,
+                slotsCollected: {},
                 debug: includeDebug ? {
+                    latencyMs: Date.now() - startTime,
+                    tokensUsed: 0,
+                    responseSource: 'GREETING_INTERCEPT',
                     v22BlackBox: {
                         mode: 'DISCOVERY',
                         greetingIntercept: true,
