@@ -263,21 +263,67 @@ class CustomerService {
      * @returns {{ customer: Customer, isNew: boolean }}
      */
     static async findOrCreate(companyId, identifiers = {}, channel = 'voice') {
+        // ═══════════════════════════════════════════════════════════════════
+        // V33 FIX: Don't create customer with no identifiers
+        // This prevents duplicate key errors on (companyId, phone: null)
+        // ═══════════════════════════════════════════════════════════════════
+        const hasValidIdentifier = identifiers.phone || identifiers.email || identifiers.sessionId;
+        
+        if (!hasValidIdentifier) {
+            logger.debug('[CUSTOMER SERVICE] No valid identifier provided, skipping customer creation', {
+                companyId,
+                channel,
+                identifiers
+            });
+            return { customer: null, isNew: false };
+        }
+        
         // Try to find existing customer
         let customer = await this.findByAnyIdentifier(companyId, identifiers);
         
         if (customer) {
             // Record this interaction
-            customer.recordInteraction(channel);
-            await customer.save();
+            try {
+                customer.recordInteraction(channel);
+                await customer.save();
+            } catch (saveErr) {
+                logger.warn('[CUSTOMER SERVICE] Failed to update customer interaction (non-fatal)', {
+                    error: saveErr.message,
+                    customerId: customer._id
+                });
+            }
             
             return { customer, isNew: false };
         }
         
-        // Create new customer
-        customer = await this.create(companyId, identifiers, channel);
-        
-        return { customer, isNew: true };
+        // Create new customer (with try-catch for duplicate key errors)
+        try {
+            customer = await this.create(companyId, identifiers, channel);
+            return { customer, isNew: true };
+        } catch (createErr) {
+            // Handle duplicate key error gracefully
+            if (createErr.code === 11000) {
+                logger.warn('[CUSTOMER SERVICE] Duplicate key error during customer creation, trying to find existing', {
+                    error: createErr.message,
+                    companyId,
+                    identifiers
+                });
+                
+                // Race condition - customer was created by another request, try to find it
+                customer = await this.findByAnyIdentifier(companyId, identifiers);
+                if (customer) {
+                    return { customer, isNew: false };
+                }
+            }
+            
+            // For other errors, log and return null (non-fatal)
+            logger.error('[CUSTOMER SERVICE] Failed to create customer (non-fatal)', {
+                error: createErr.message,
+                companyId,
+                identifiers
+            });
+            return { customer: null, isNew: false };
+        }
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
