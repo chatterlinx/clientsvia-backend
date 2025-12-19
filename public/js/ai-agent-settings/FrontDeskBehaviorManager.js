@@ -54,6 +54,17 @@ class FrontDeskBehaviorManager {
             this.config = result.data;
             console.log('[FRONT DESK BEHAVIOR] Config loaded:', this.config);
             
+            // 🔇 V36: Load custom fillers from fillerWords.custom (if exists)
+            if (this.config.fillerWords?.custom) {
+                this.config.customFillers = this.config.fillerWords.custom;
+                console.log('[FRONT DESK BEHAVIOR] 🔇 Custom fillers loaded from DB:', {
+                    count: this.config.customFillers.length,
+                    fillers: this.config.customFillers
+                });
+            } else {
+                this.config.customFillers = [];
+            }
+            
             // 🔤 V36: Load inherited synonyms from active AiCore template
             await this.loadInheritedSynonyms(token);
             
@@ -4343,6 +4354,25 @@ Sean → Shawn, Shaun`;
                 synonymMap
             });
         }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // V36: Custom Filler Words (Company-Specific Noise Removal)
+        // ════════════════════════════════════════════════════════════════════════════
+        const fillerEnabled = document.getElementById('fdb-fillers-enabled')?.checked ?? true;
+        const customFillers = this.config.customFillers || [];
+        
+        // Save to fillerWords.custom in the schema
+        if (!this.config.fillerWords) {
+            this.config.fillerWords = {};
+        }
+        this.config.fillerWords.custom = customFillers;
+        this.config.fillerWordsEnabled = fillerEnabled;
+        
+        console.log('[FRONT DESK BEHAVIOR] 🔇 V36 Custom fillers saved:', {
+            enabled: fillerEnabled,
+            count: customFillers.length,
+            fillers: customFillers
+        });
         
         // ════════════════════════════════════════════════════════════════════════════
         // V30: Name Spelling Variants (Mark with K or C?)
