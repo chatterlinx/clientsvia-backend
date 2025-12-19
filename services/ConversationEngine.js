@@ -2277,6 +2277,36 @@ async function processTurn({
                 const nameMeta = session.booking.meta.name;
                 const hasPartialName = currentSlots.partialName || extractedThisTurn.name;
                 const hasFullName = currentSlots.name && currentSlots.name.includes(' ');
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // V33 FIX: Initialize nameMeta.first from partialName if not set
+                // This handles the case where name was captured in discovery mode
+                // but nameMeta.first was never set before entering booking mode
+                // ═══════════════════════════════════════════════════════════════════
+                if (hasPartialName && !nameMeta.first && !nameMeta.last) {
+                    const partialName = currentSlots.partialName || extractedThisTurn.name;
+                    const commonFirstNames = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+                    const commonFirstNamesSet = new Set(commonFirstNames.map(n => n.toLowerCase()));
+                    const listIsEmpty = commonFirstNames.length === 0;
+                    const isCommonFirstName = listIsEmpty || commonFirstNamesSet.has(partialName.toLowerCase());
+                    
+                    if (isCommonFirstName) {
+                        nameMeta.first = partialName;
+                        nameMeta.assumedSingleTokenAs = 'first';
+                        log('📝 V33 FIX: Initialized nameMeta.first from partialName', { 
+                            partialName, 
+                            reason: listIsEmpty ? 'list_empty_default' : 'in_common_names_list' 
+                        });
+                    } else {
+                        nameMeta.last = partialName;
+                        nameMeta.assumedSingleTokenAs = 'last';
+                        log('📝 V33 FIX: Initialized nameMeta.last from partialName', { 
+                            partialName, 
+                            reason: 'not_in_common_names_list' 
+                        });
+                    }
+                }
+                
                 const hasBothParts = nameMeta.first && nameMeta.last;
                 
                 log('📝 NAME SLOT STATE', {
