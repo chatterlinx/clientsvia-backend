@@ -1702,8 +1702,77 @@ const companySchema = new mongoose.Schema({
                     // silent: Never ask, just normalize
                     // confirm_low_confidence: Only ask if Google returns low/medium confidence
                     // always_confirm: Always confirm normalized address
-                    askUnitNumber: { type: Boolean, default: true }, // Ask for unit/apt if Google detects multi-unit building
-                    unitNumberPrompt: { type: String, default: "Is there an apartment or unit number?" }
+                    
+                    // 🆕 V35: UNIT/APARTMENT NUMBER DETECTION (World-Class)
+                    unitNumberMode: {
+                        type: String,
+                        enum: ['smart', 'always', 'never'],
+                        default: 'smart'
+                    },
+                    // smart: Ask only when Google detects multi-unit OR address contains trigger words
+                    // always: Always ask for unit/apt on every address
+                    // never: Never ask (for single-family home service areas)
+                    unitNumberPrompt: { type: String, default: "Is there an apartment or unit number?" },
+                    
+                    // Trigger words that indicate multi-unit (even if Google doesn't detect)
+                    unitTriggerWords: {
+                        type: [String],
+                        default: [
+                            // Building types
+                            'apartment', 'apt', 'apartments',
+                            'condo', 'condominium', 'condos',
+                            'suite', 'ste',
+                            'unit', 'units',
+                            'building', 'bldg',
+                            'floor', 'fl',
+                            'tower', 'towers',
+                            'plaza', 'plz',
+                            'complex',
+                            'loft', 'lofts',
+                            'penthouse', 'ph',
+                            'studio',
+                            // Common multi-unit indicators
+                            'manor',
+                            'terrace',
+                            'court', 'ct',
+                            'village',
+                            'commons',
+                            'gardens',
+                            'heights',
+                            'pointe',
+                            'landing',
+                            'crossing',
+                            'center', 'centre',
+                            // Business/commercial
+                            'office',
+                            'commercial',
+                            'professional',
+                            'medical',
+                            'business park'
+                        ]
+                    },
+                    
+                    // ZIP codes that ALWAYS ask for unit (downtown, apartment-heavy areas)
+                    unitAlwaysAskZips: {
+                        type: [String],
+                        default: [] // Admin can add: ['33101', '33130', '33132'] for Miami downtown
+                    },
+                    
+                    // ZIP codes that NEVER ask for unit (rural, single-family areas)
+                    unitNeverAskZips: {
+                        type: [String],
+                        default: [] // Admin can add ZIPs for rural areas
+                    },
+                    
+                    // Additional unit prompts for variety (agent picks randomly)
+                    unitPromptVariants: {
+                        type: [String],
+                        default: [
+                            "Is there an apartment or unit number?",
+                            "What's the apartment or suite number?",
+                            "Is there a unit or building number I should note?"
+                        ]
+                    }
                     
                     // ═══════════════════════════════════════════════════════════════
                     // EMAIL-SPECIFIC OPTIONS

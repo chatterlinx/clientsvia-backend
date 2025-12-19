@@ -264,9 +264,10 @@ function calculateConfidence(result) {
 /**
  * Detect if address might need a unit number
  * @param {Object} result - Google Geocoding result
+ * @param {Object} options - Detection options
  * @returns {boolean} True if unit number might be needed
  */
-function detectNeedsUnit(result) {
+function detectNeedsUnit(result, options = {}) {
     const types = result.types || [];
     const components = result.address_components || [];
     
@@ -277,13 +278,129 @@ function detectNeedsUnit(result) {
     // Check if unit already exists in components
     const hasUnit = components.some(c => c.types?.includes('subpremise'));
     
+    // If unit already provided, don't ask again
+    if (hasUnit) return false;
+    
     // Needs unit if it's a multi-unit type but no unit provided
     // Also check for common multi-unit indicators in the address
     const formattedAddress = result.formatted_address?.toLowerCase() || '';
-    const multiUnitIndicators = ['apartment', 'apt', 'suite', 'ste', 'unit', 'building', 'bldg', 'floor', 'fl'];
-    const hasMultiUnitIndicator = multiUnitIndicators.some(ind => formattedAddress.includes(ind));
+    const defaultIndicators = ['apartment', 'apt', 'suite', 'ste', 'unit', 'building', 'bldg', 'floor', 'fl'];
+    const hasMultiUnitIndicator = defaultIndicators.some(ind => formattedAddress.includes(ind));
     
-    return (isMultiUnit && !hasUnit) || hasMultiUnitIndicator;
+    return isMultiUnit || hasMultiUnitIndicator;
+}
+
+/**
+ * V35 WORLD-CLASS: Advanced unit number detection
+ * Checks multiple signals to determine if unit number should be asked
+ * 
+ * @param {string} rawAddress - Original user input
+ * @param {Object} googleResult - Google Maps validation result (optional)
+ * @param {Object} config - Address slot configuration
+ * @returns {Object} Detection result with reason
+ */
+function shouldAskForUnit(rawAddress, googleResult, config = {}) {
+    const {
+        unitNumberMode = 'smart',
+        unitTriggerWords = [],
+        unitAlwaysAskZips = [],
+        unitNeverAskZips = []
+    } = config;
+    
+    // Mode: never - skip all detection
+    if (unitNumberMode === 'never') {
+        return { shouldAsk: false, reason: 'mode_never' };
+    }
+    
+    // Mode: always - always ask
+    if (unitNumberMode === 'always') {
+        return { shouldAsk: true, reason: 'mode_always' };
+    }
+    
+    // Mode: smart - use multiple signals
+    const rawLower = (rawAddress || '').toLowerCase();
+    const normalizedAddress = (googleResult?.normalized || rawAddress || '').toLowerCase();
+    
+    // Check if unit already provided in the address
+    const unitPatterns = [
+        /\b(apt|apartment|unit|suite|ste|bldg|building|fl|floor|#)\s*[a-z0-9\-]+\b/i,
+        /\b[a-z]?\d{1,4}[a-z]?\b.*\b(floor|fl)\b/i
+    ];
+    const hasUnitInAddress = unitPatterns.some(p => p.test(rawLower));
+    if (hasUnitInAddress) {
+        return { shouldAsk: false, reason: 'unit_already_provided' };
+    }
+    
+    // Extract ZIP code for ZIP-based rules
+    const zipMatch = rawLower.match(/\b(\d{5})(-\d{4})?\b/);
+    const zipCode = zipMatch ? zipMatch[1] : null;
+    
+    // Check ZIP-based rules (highest priority)
+    if (zipCode) {
+        if (unitNeverAskZips.includes(zipCode)) {
+            return { shouldAsk: false, reason: 'zip_never_ask', zip: zipCode };
+        }
+        if (unitAlwaysAskZips.includes(zipCode)) {
+            return { shouldAsk: true, reason: 'zip_always_ask', zip: zipCode };
+        }
+    }
+    
+    // Check Google Maps detection
+    if (googleResult?.needsUnit) {
+        return { shouldAsk: true, reason: 'google_maps_detected' };
+    }
+    
+    // Check trigger words in address
+    const defaultTriggerWords = [
+        'apartment', 'apt', 'apartments',
+        'condo', 'condominium', 'condos',
+        'suite', 'ste',
+        'tower', 'towers',
+        'plaza', 'plz',
+        'complex',
+        'loft', 'lofts',
+        'penthouse',
+        'manor',
+        'terrace',
+        'village',
+        'commons',
+        'gardens',
+        'heights',
+        'pointe',
+        'landing',
+        'center', 'centre',
+        'office',
+        'professional',
+        'medical',
+        'business park'
+    ];
+    
+    const allTriggerWords = [...new Set([...defaultTriggerWords, ...unitTriggerWords])];
+    const foundTrigger = allTriggerWords.find(word => {
+        const wordLower = word.toLowerCase();
+        // Check both raw and normalized address
+        return rawLower.includes(wordLower) || normalizedAddress.includes(wordLower);
+    });
+    
+    if (foundTrigger) {
+        return { shouldAsk: true, reason: 'trigger_word', trigger: foundTrigger };
+    }
+    
+    // Check for common multi-unit street patterns
+    const multiUnitPatterns = [
+        /\b\d+\s+(n|s|e|w|north|south|east|west)?\s*(ocean|beach|bay|harbor|marina)\s+(dr|drive|blvd|boulevard|ave|avenue)\b/i, // Beach condos
+        /\b\d+\s+(downtown|midtown|uptown)\b/i, // Urban areas
+        /\bunit\s+\d+/i,
+        /\b#\s*\d+/i
+    ];
+    
+    const matchedPattern = multiUnitPatterns.find(p => p.test(rawLower) || p.test(normalizedAddress));
+    if (matchedPattern) {
+        return { shouldAsk: true, reason: 'pattern_match' };
+    }
+    
+    // Default: don't ask (assume single-family)
+    return { shouldAsk: false, reason: 'no_signals' };
 }
 
 /**
@@ -366,20 +483,24 @@ function createFailedResult(rawAddress, status, errorMessage = null) {
  * Determine if confirmation is needed based on validation result and config
  * @param {Object} validationResult - Result from validateAddress
  * @param {Object} config - Address slot configuration
+ * @param {string} rawAddress - Original user input (for unit detection)
  * @returns {Object} Confirmation decision with suggested phrase
  */
-function shouldConfirmAddress(validationResult, config = {}) {
+function shouldConfirmAddress(validationResult, config = {}, rawAddress = '') {
     const {
-        googleMapsValidationMode = 'confirm_low_confidence',
-        askUnitNumber = true
+        googleMapsValidationMode = 'confirm_low_confidence'
     } = config;
+    
+    // V35 WORLD-CLASS: Use advanced unit detection
+    const unitDecision = shouldAskForUnit(rawAddress, validationResult, config);
     
     // Mode: silent - never confirm
     if (googleMapsValidationMode === 'silent') {
         return {
             shouldConfirm: false,
             shouldAskUnit: false,
-            reason: 'silent_mode'
+            reason: 'silent_mode',
+            unitReason: unitDecision.reason
         };
     }
     
@@ -387,8 +508,9 @@ function shouldConfirmAddress(validationResult, config = {}) {
     if (googleMapsValidationMode === 'always_confirm') {
         return {
             shouldConfirm: true,
-            shouldAskUnit: askUnitNumber && validationResult.needsUnit,
+            shouldAskUnit: unitDecision.shouldAsk,
             reason: 'always_confirm_mode',
+            unitReason: unitDecision.reason,
             suggestedPhrase: buildConfirmationPhrase(validationResult, 'confirm')
         };
     }
@@ -398,21 +520,22 @@ function shouldConfirmAddress(validationResult, config = {}) {
                          validationResult.failed || 
                          !validationResult.validated;
     
-    const needsUnit = askUnitNumber && validationResult.needsUnit && !validationResult.components?.unit;
-    
-    if (!needsConfirm && !needsUnit) {
+    if (!needsConfirm && !unitDecision.shouldAsk) {
         return {
             shouldConfirm: false,
             shouldAskUnit: false,
-            reason: 'high_confidence'
+            reason: 'high_confidence',
+            unitReason: unitDecision.reason
         };
     }
     
     return {
         shouldConfirm: needsConfirm,
-        shouldAskUnit: needsUnit,
+        shouldAskUnit: unitDecision.shouldAsk,
         reason: needsConfirm ? `${validationResult.confidence.toLowerCase()}_confidence` : 'needs_unit',
-        suggestedPhrase: buildConfirmationPhrase(validationResult, needsUnit ? 'unit' : 'confirm')
+        unitReason: unitDecision.reason,
+        unitTrigger: unitDecision.trigger,
+        suggestedPhrase: buildConfirmationPhrase(validationResult, unitDecision.shouldAsk ? 'unit' : 'confirm')
     };
 }
 
@@ -460,6 +583,7 @@ function buildConfirmationPhrase(validationResult, type) {
 module.exports = {
     validateAddress,
     shouldConfirmAddress,
+    shouldAskForUnit,
     buildConfirmationPhrase,
     CONFIDENCE
 };

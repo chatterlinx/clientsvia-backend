@@ -1715,7 +1715,7 @@ Sean → Shawn, Shaun`;
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Use Google Maps to validate and normalize addresses (requires API key)">
                                 <input type="checkbox" class="slot-useGoogleMapsValidation" data-index="${index}" ${slot.useGoogleMapsValidation ? 'checked' : ''} style="accent-color: #238636;" onchange="window.frontDeskManager.toggleGoogleMapsOptions(${index}, this.checked)">
                                 <span style="font-size: 12px; color: #c9d1d9;">Enable Google Maps validation</span>
-                    </label>
+                            </label>
                         </div>
                         <div class="google-maps-options" style="display: ${slot.useGoogleMapsValidation ? 'flex' : 'none'}; flex-direction: column; gap: 8px; padding: 8px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;">
                             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -1726,17 +1726,71 @@ Sean → Shawn, Shaun`;
                                     <option value="always_confirm" ${slot.googleMapsValidationMode === 'always_confirm' ? 'selected' : ''}>Always confirm normalized address</option>
                                 </select>
                             </div>
-                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="If Google detects a multi-unit building, ask for apartment/unit number">
-                                <input type="checkbox" class="slot-askUnitNumber" data-index="${index}" ${slot.askUnitNumber !== false ? 'checked' : ''} style="accent-color: #238636;">
-                                <span style="font-size: 12px; color: #c9d1d9;">Ask for unit/apt number if multi-unit building detected</span>
-                            </label>
+                            <div style="font-size: 10px; color: #6e7681; font-style: italic; margin-top: 4px;">
+                                💡 Google Maps validates silently in the background — never blocks conversation or asks redundant questions.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- V35: Unit/Apartment Number Detection (World-Class) -->
+                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #30363d;">
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px;">
+                            <span style="font-size: 11px; color: #f0883e; font-weight: 600;">🏢 Unit/Apartment Detection:</span>
+                            <select class="slot-unitNumberMode" data-index="${index}" style="padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;" onchange="window.frontDeskManager.toggleUnitOptions(${index}, this.value)">
+                                <option value="smart" ${(slot.unitNumberMode === 'smart' || !slot.unitNumberMode) ? 'selected' : ''}>🧠 Smart (detect condos, apartments, offices)</option>
+                                <option value="always" ${slot.unitNumberMode === 'always' ? 'selected' : ''}>✅ Always ask for unit number</option>
+                                <option value="never" ${slot.unitNumberMode === 'never' ? 'selected' : ''}>❌ Never ask (single-family homes only)</option>
+                            </select>
+                        </div>
+                        <div class="unit-options" style="display: ${slot.unitNumberMode !== 'never' ? 'flex' : 'none'}; flex-direction: column; gap: 8px; padding: 8px; background: #0d1117; border-radius: 4px; border: 1px solid #f0883e;">
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <label style="font-size: 12px; color: #8b949e; white-space: nowrap;">Unit prompt:</label>
                                 <input type="text" class="slot-unitNumberPrompt" data-index="${index}" value="${slot.unitNumberPrompt || 'Is there an apartment or unit number?'}" 
                                     style="flex: 1; padding: 4px 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
                             </div>
-                            <div style="font-size: 10px; color: #6e7681; font-style: italic;">
-                                💡 Google Maps validates silently in the background — never blocks conversation or asks redundant questions.
+                            
+                            <!-- Prompt Variants -->
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                                <label style="font-size: 11px; color: #8b949e;">Prompt variants (one per line, agent picks randomly):</label>
+                                <textarea class="slot-unitPromptVariants" data-index="${index}" rows="3" 
+                                    placeholder="Is there an apartment or unit number?\nWhat's the apartment or suite number?\nIs there a unit or building number I should note?"
+                                    style="width: 100%; padding: 6px 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px; resize: vertical;">${(slot.unitPromptVariants || ['Is there an apartment or unit number?', "What's the apartment or suite number?", 'Is there a unit or building number I should note?']).join('\n')}</textarea>
+                            </div>
+                            
+                            <!-- Smart Mode Options -->
+                            <div class="smart-mode-options" style="display: ${slot.unitNumberMode !== 'always' ? 'block' : 'none'}; margin-top: 8px; padding: 8px; background: #161b22; border-radius: 4px; border: 1px dashed #30363d;">
+                                <div style="font-size: 11px; color: #f0883e; font-weight: 600; margin-bottom: 8px;">🧠 Smart Detection Settings:</div>
+                                
+                                <!-- Trigger Words -->
+                                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
+                                    <label style="font-size: 11px; color: #8b949e;">Trigger words (ask for unit if address contains these):</label>
+                                    <textarea class="slot-unitTriggerWords" data-index="${index}" rows="2" 
+                                        placeholder="apartment, condo, tower, plaza, suite, office..."
+                                        style="width: 100%; padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px; resize: vertical;">${(slot.unitTriggerWords || []).join(', ')}</textarea>
+                                    <div style="font-size: 10px; color: #6e7681;">Default triggers: apartment, condo, tower, plaza, suite, loft, manor, terrace, village, office, etc.</div>
+                                </div>
+                                
+                                <!-- ZIP Code Rules -->
+                                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                                    <div style="flex: 1; min-width: 200px;">
+                                        <label style="font-size: 11px; color: #8b949e; display: block; margin-bottom: 4px;">Always ask in these ZIPs (downtown, urban):</label>
+                                        <input type="text" class="slot-unitAlwaysAskZips" data-index="${index}" 
+                                            value="${(slot.unitAlwaysAskZips || []).join(', ')}"
+                                            placeholder="33101, 33130, 33132..."
+                                            style="width: 100%; padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                    </div>
+                                    <div style="flex: 1; min-width: 200px;">
+                                        <label style="font-size: 11px; color: #8b949e; display: block; margin-bottom: 4px;">Never ask in these ZIPs (rural, single-family):</label>
+                                        <input type="text" class="slot-unitNeverAskZips" data-index="${index}" 
+                                            value="${(slot.unitNeverAskZips || []).join(', ')}"
+                                            placeholder="33912, 33913..."
+                                            style="width: 100%; padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div style="font-size: 10px; color: #6e7681; font-style: italic; margin-top: 4px;">
+                                🏢 Smart mode detects: condos, apartments, office buildings, towers, plazas, and more. Customize with trigger words and ZIP rules.
                             </div>
                         </div>
                     </div>
@@ -1909,6 +1963,24 @@ Sean → Shawn, Shaun`;
         console.log(`[FRONT DESK] Google Maps validation ${enabled ? 'enabled' : 'disabled'} for slot ${index}`);
     }
     
+    // V35: Toggle unit number options visibility based on mode
+    toggleUnitOptions(index, mode) {
+        const slotContainer = document.querySelector(`.slot-unitNumberMode[data-index="${index}"]`)?.closest('.booking-slot');
+        if (!slotContainer) return;
+        
+        const unitOptions = slotContainer.querySelector('.unit-options');
+        const smartModeOptions = slotContainer.querySelector('.smart-mode-options');
+        
+        if (unitOptions) {
+            unitOptions.style.display = mode !== 'never' ? 'flex' : 'none';
+        }
+        if (smartModeOptions) {
+            smartModeOptions.style.display = mode === 'smart' ? 'block' : 'none';
+        }
+        
+        console.log(`[FRONT DESK] Unit detection mode changed to '${mode}' for slot ${index}`);
+    }
+    
     getDefaultBookingSlots() {
         // ════════════════════════════════════════════════════════════════
         // UI DEFAULTS for new/unconfigured companies
@@ -1956,8 +2028,17 @@ Sean → Shawn, Shaun`;
                 // V35: Google Maps validation (off by default - enable per company)
                 useGoogleMapsValidation: false,
                 googleMapsValidationMode: 'confirm_low_confidence',
-                askUnitNumber: true,
-                unitNumberPrompt: 'Is there an apartment or unit number?'
+                // V35: Unit/Apartment Detection (World-Class)
+                unitNumberMode: 'smart', // smart | always | never
+                unitNumberPrompt: 'Is there an apartment or unit number?',
+                unitPromptVariants: [
+                    'Is there an apartment or unit number?',
+                    "What's the apartment or suite number?",
+                    'Is there a unit or building number I should note?'
+                ],
+                unitTriggerWords: [], // Additional custom triggers
+                unitAlwaysAskZips: [], // Downtown/urban ZIPs
+                unitNeverAskZips: [] // Rural/single-family ZIPs
             },
             { 
                 id: 'time', 
@@ -2116,11 +2197,29 @@ Sean → Shawn, Shaun`;
             if (el.querySelector('.slot-googleMapsValidationMode')) {
                 slotData.googleMapsValidationMode = el.querySelector('.slot-googleMapsValidationMode')?.value || 'confirm_low_confidence';
             }
-            if (el.querySelector('.slot-askUnitNumber')) {
-                slotData.askUnitNumber = getCheckedDefault('.slot-askUnitNumber', true);
+            
+            // V35: UNIT/APARTMENT DETECTION options (World-Class)
+            if (el.querySelector('.slot-unitNumberMode')) {
+                slotData.unitNumberMode = el.querySelector('.slot-unitNumberMode')?.value || 'smart';
             }
             if (el.querySelector('.slot-unitNumberPrompt')) {
                 slotData.unitNumberPrompt = getVal('.slot-unitNumberPrompt') || 'Is there an apartment or unit number?';
+            }
+            if (el.querySelector('.slot-unitPromptVariants')) {
+                const variantsText = getVal('.slot-unitPromptVariants');
+                slotData.unitPromptVariants = variantsText ? variantsText.split('\n').map(v => v.trim()).filter(v => v) : [];
+            }
+            if (el.querySelector('.slot-unitTriggerWords')) {
+                const triggerText = getVal('.slot-unitTriggerWords');
+                slotData.unitTriggerWords = triggerText ? triggerText.split(',').map(w => w.trim().toLowerCase()).filter(w => w) : [];
+            }
+            if (el.querySelector('.slot-unitAlwaysAskZips')) {
+                const zipsText = getVal('.slot-unitAlwaysAskZips');
+                slotData.unitAlwaysAskZips = zipsText ? zipsText.split(',').map(z => z.trim()).filter(z => /^\d{5}$/.test(z)) : [];
+            }
+            if (el.querySelector('.slot-unitNeverAskZips')) {
+                const zipsText = getVal('.slot-unitNeverAskZips');
+                slotData.unitNeverAskZips = zipsText ? zipsText.split(',').map(z => z.trim()).filter(z => /^\d{5}$/.test(z)) : [];
             }
             
             // EMAIL options

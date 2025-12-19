@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V35-GOOGLE-MAPS-VALIDATION';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V35-WORLD-CLASS-UNIT-DETECTION';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -60,6 +60,7 @@ logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
         '✅ Booking is DETERMINISTIC (consent-gated)',
         '✅ No triage gates, no pre-routing',
         '✅ V35: Google Maps address validation (toggle per company)',
+        '✅ V35: World-class unit/apt detection (smart/always/never modes)',
         '✅ session.mode = DISCOVERY | SUPPORT | BOOKING | COMPLETE',
         '✅ Consent detection via UI-configured phrases',
         '✅ Latency target: < 1.2s per turn',
@@ -3263,7 +3264,7 @@ async function processTurn({
                     // ═══════════════════════════════════════════════════════════════════
                     let googleMapsResult = null;
                     let googleMapsConfirmNeeded = false;
-                    let googleMapsUnitNeeded = false;
+                    let unitDetectionResult = null;
                     
                     if (addressSlotConfig?.useGoogleMapsValidation) {
                         try {
@@ -3288,16 +3289,21 @@ async function processTurn({
                                 // Check if confirmation or unit prompt is needed
                                 const confirmDecision = AddressValidationService.shouldConfirmAddress(
                                     googleMapsResult,
-                                    addressSlotConfig
+                                    addressSlotConfig,
+                                    extractedThisTurn.address // Pass raw address for unit detection
                                 );
                                 googleMapsConfirmNeeded = confirmDecision.shouldConfirm;
-                                googleMapsUnitNeeded = confirmDecision.shouldAskUnit;
+                                unitDetectionResult = {
+                                    shouldAsk: confirmDecision.shouldAskUnit,
+                                    reason: confirmDecision.unitReason,
+                                    trigger: confirmDecision.unitTrigger
+                                };
                                 
                                 log('🗺️ GOOGLE MAPS: Validation complete', {
                                     normalized: googleMapsResult.normalized,
                                     confidence: googleMapsResult.confidence,
                                     needsConfirm: googleMapsConfirmNeeded,
-                                    needsUnit: googleMapsUnitNeeded
+                                    unitDetection: unitDetectionResult
                                 });
                             } else {
                                 log('🗺️ GOOGLE MAPS: Validation failed or skipped', {
@@ -3312,21 +3318,46 @@ async function processTurn({
                         }
                     }
                     
+                    // V35 WORLD-CLASS: Unit detection even without Google Maps
+                    if (!unitDetectionResult && addressSlotConfig?.unitNumberMode !== 'never') {
+                        unitDetectionResult = AddressValidationService.shouldAskForUnit(
+                            extractedThisTurn.address,
+                            googleMapsResult,
+                            addressSlotConfig
+                        );
+                        log('🏢 UNIT DETECTION: Standalone check', unitDetectionResult);
+                    }
+                    
                     if (isPartialAddress && !addressSlotConfig?.acceptPartialAddress) {
                         finalReply = "I got part of that. Can you give me the full address including city?";
                         nextSlotId = 'address';
                         log('🏠 ADDRESS: Partial address not accepted, asking for full');
                     } 
-                    // V35: Ask for unit if Google Maps detected multi-unit building
-                    else if (googleMapsUnitNeeded && !addressMeta.unitAsked) {
+                    // V35 WORLD-CLASS: Ask for unit if detection says we should
+                    else if (unitDetectionResult?.shouldAsk && !addressMeta.unitAsked) {
                         addressMeta.unitAsked = true;
-                        const unitPrompt = addressSlotConfig?.unitNumberPrompt || 'Is there an apartment or unit number?';
+                        addressMeta.unitDetectionReason = unitDetectionResult.reason;
+                        
+                        // Pick a random prompt variant for natural conversation
+                        const promptVariants = addressSlotConfig?.unitPromptVariants || [
+                            'Is there an apartment or unit number?',
+                            "What's the apartment or suite number?",
+                            'Is there a unit or building number I should note?'
+                        ];
+                        const unitPrompt = promptVariants.length > 0 
+                            ? promptVariants[Math.floor(Math.random() * promptVariants.length)]
+                            : (addressSlotConfig?.unitNumberPrompt || 'Is there an apartment or unit number?');
+                        
                         const displayAddress = googleMapsResult?.components?.street && googleMapsResult?.components?.city
                             ? `${googleMapsResult.components.street} in ${googleMapsResult.components.city}`
                             : (googleMapsResult?.normalized || extractedThisTurn.address);
                         finalReply = `Got it — ${displayAddress}. ${unitPrompt}`;
                         nextSlotId = 'address';
-                        log('🏠 ADDRESS: Google Maps detected multi-unit, asking for unit');
+                        log('🏢 UNIT: Asking for unit number', { 
+                            reason: unitDetectionResult.reason,
+                            trigger: unitDetectionResult.trigger,
+                            prompt: unitPrompt
+                        });
                     }
                     // V35: Confirm if Google Maps says low confidence
                     else if (googleMapsConfirmNeeded && addressSlotConfig?.googleMapsValidationMode !== 'silent') {
