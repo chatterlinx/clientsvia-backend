@@ -200,6 +200,10 @@ function isNameSlotComplete(currentSlots, nameMeta, slotConfig) {
     const first = nameMeta?.first || '';
     const last = nameMeta?.last || '';
     
+    // V34 FIX: THE GOLDEN RULE - If we have ANY name value, it's complete
+    // The askFullName setting controls WHETHER to ask for last name during collection,
+    // NOT whether to re-ask a name we already have.
+    
     // 1. Full name in meta (first AND last)
     if (first && last) {
         logger.debug('[SLOT COMPLETE] Name complete: meta has first+last', { first, last });
@@ -212,18 +216,29 @@ function isNameSlotComplete(currentSlots, nameMeta, slotConfig) {
         return true;
     }
     
-    // 3. Allow first-name only if configured (askFullName = false)
-    const allowFirstOnly = slotConfig?.askFullName === false || slotConfig?.askFullName === 'false';
-    if (allowFirstOnly && (nameValue || partialName || first)) {
-        logger.debug('[SLOT COMPLETE] Name complete: first-only allowed', { 
-            nameValue, partialName, first, allowFirstOnly 
-        });
+    // 3. V34 FIX: If we have a name value (even single word), it's complete!
+    // We should NEVER re-ask for a name we already have.
+    // The askFullName logic only applies during initial name collection.
+    if (nameValue) {
+        logger.debug('[SLOT COMPLETE] Name complete: has value (single or full)', { nameValue });
         return true;
     }
     
-    // Not complete
-    logger.debug('[SLOT COMPLETE] Name NOT complete', { 
-        nameValue, partialName, first, last, allowFirstOnly 
+    // 4. If we have a partialName, promote it and consider complete
+    if (partialName) {
+        logger.debug('[SLOT COMPLETE] Name complete: has partialName', { partialName });
+        return true;
+    }
+    
+    // 5. If we have first name in meta, it's complete
+    if (first) {
+        logger.debug('[SLOT COMPLETE] Name complete: has meta.first', { first });
+        return true;
+    }
+    
+    // Not complete - no name value at all
+    logger.debug('[SLOT COMPLETE] Name NOT complete: no value', { 
+        nameValue, partialName, first, last 
     });
     return false;
 }
@@ -2407,6 +2422,20 @@ async function processTurn({
                 const nameSlotConfig = bookingSlotsSafe.find(s => 
                     (s.slotId || s.id || s.type) === 'name'
                 );
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // V34 FIX: CHECK IF NAME IS ALREADY COMPLETE BEFORE PROCESSING
+                // If name was collected in DISCOVERY mode, skip name handling entirely
+                // ═══════════════════════════════════════════════════════════════════
+                const nameAlreadyComplete = isNameSlotComplete(currentSlots, session.booking.meta.name, nameSlotConfig);
+                if (nameAlreadyComplete && session.booking.activeSlot === 'name') {
+                    log('✅ V34: Name already complete from discovery, skipping to phone', {
+                        name: currentSlots.name,
+                        partialName: currentSlots.partialName
+                    });
+                    session.booking.activeSlot = 'phone';
+                }
+                
                 // 🎯 PROMPT AS LAW: Default askFullName to FALSE
                 // Only ask for last name if UI explicitly requires it
                 // CHECK BOTH: Direct property (UI saves here) AND nested nameOptions (legacy)
@@ -3086,8 +3115,10 @@ async function processTurn({
                         nextSlotId = 'address';
                         log('🏠 ADDRESS: Got city, asking for zip');
                     } else {
-                        // Combine and finish
-                        currentSlots.address = `${addressMeta.street}, ${addressMeta.city}`;
+                        // Combine and finish - V34 FIX: Handle missing street gracefully
+                        const street = addressMeta.street || currentSlots.address || '';
+                        const city = addressMeta.city || '';
+                        currentSlots.address = street && city ? `${street}, ${city}` : (street || city);
                         addressMeta.breakdownStep = null;
                         addressMeta.confirmed = true;
                         session.booking.activeSlot = 'time';
@@ -3097,7 +3128,12 @@ async function processTurn({
                 }
                 else if (addressMeta.breakdownStep === 'zip' && userText.length >= 3) {
                     addressMeta.zip = userText.trim();
-                    currentSlots.address = `${addressMeta.street}, ${addressMeta.city} ${addressMeta.zip}`;
+                    // V34 FIX: Handle missing parts gracefully
+                    const street = addressMeta.street || currentSlots.address || '';
+                    const city = addressMeta.city || '';
+                    const zip = addressMeta.zip || '';
+                    const parts = [street, city, zip].filter(Boolean);
+                    currentSlots.address = parts.join(', ').replace(/, (\d{5})/, ' $1'); // Format: "123 Main, City 12345"
                     addressMeta.breakdownStep = null;
                     addressMeta.confirmed = true;
                     session.booking.activeSlot = 'time';
