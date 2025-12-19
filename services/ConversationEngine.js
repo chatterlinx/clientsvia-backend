@@ -1935,7 +1935,8 @@ async function processTurn({
         // If askFullName is enabled in booking config, we DON'T auto-promote
         // partial names. Instead, the booking safety net will ask for last name.
         // ═══════════════════════════════════════════════════════════════════════
-        const isInBookingMode = session.mode === 'BOOKING' || session.booking?.consentGiven;
+        // V34 FIX: Renamed to avoid duplicate declaration with greeting intercept
+        const inBookingModeForName = session.mode === 'BOOKING' || session.booking?.consentGiven;
         
         // Check if askFullName is enabled in booking config
         const bookingConfigCheck = BookingScriptEngine.getBookingSlotsFromCompany(company);
@@ -1951,7 +1952,7 @@ async function processTurn({
                                    nameSlotCheck?.nameOptions?.requireFullName === true;
         
         if (currentSlots.partialName && !currentSlots.name) {
-            if (isInBookingMode && !askFullNameEnabled) {
+            if (inBookingModeForName && !askFullNameEnabled) {
                 // In booking mode with askFullName OFF: promote partial to full name
                 currentSlots.name = currentSlots.partialName;
                 extractedThisTurn.name = currentSlots.partialName;
@@ -1959,7 +1960,7 @@ async function processTurn({
                     partialName: currentSlots.partialName,
                     promotedTo: currentSlots.name
                 });
-            } else if (isInBookingMode && askFullNameEnabled) {
+            } else if (inBookingModeForName && askFullNameEnabled) {
                 // In booking mode with askFullName ON: keep as partial, will ask for last name
                 // Mark it as extracted so the safety net knows to handle it
                 extractedThisTurn.name = currentSlots.partialName;
@@ -1970,12 +1971,12 @@ async function processTurn({
             // In discovery mode: keep as partial, will ask for full name later
         }
         
-        const willAskForMissingNamePart = currentSlots.partialName && !currentSlots.name && !isInBookingMode;
+        const willAskForMissingNamePart = currentSlots.partialName && !currentSlots.name && !inBookingModeForName;
         log('CHECKPOINT 8: ✅ Slots extracted', { 
             currentSlots: JSON.stringify(currentSlots),
             extractedThisTurn: JSON.stringify(extractedThisTurn),
             willAskForMissingNamePart,
-            isInBookingMode
+            inBookingModeForName
         });
         
         // ═══════════════════════════════════════════════════════════════════════
