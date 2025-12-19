@@ -653,9 +653,18 @@ const SlotExtractors = {
             { regex: /name is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i, requireShort: false },
             { regex: /it'?s\s+([a-zA-Z]+)\s+(?:calling|here)/i, requireShort: false },
             
+            // ═══════════════════════════════════════════════════════════════════
+            // V29 FIX: Handle "yes it's Mark" / "it's Mark" patterns
+            // User responding to "May I have your name?" with confirmation + name
+            // ═══════════════════════════════════════════════════════════════════
+            { regex: /^(?:yes|yeah|yep|sure|okay|ok)\s+it'?s\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)$/i, requireShort: false },
+            { regex: /^it'?s\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)$/i, requireShort: true },
+            { regex: /^(?:yes|yeah|yep|sure)\s*,?\s*([a-zA-Z]+)$/i, requireShort: true }, // "yes, Mark" or "yes Mark"
+            
             // Medium confidence - only on shorter messages
             { regex: /this is\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i, requireShort: true },
             { regex: /i'?m\s+([a-zA-Z]+)$/i, requireShort: true },  // "I'm John" only at end
+            { regex: /call me\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i, requireShort: false }, // "call me John"
             
             // Low confidence patterns - require very short messages
             { regex: /(?:^|\s)([a-zA-Z]+\s+[a-zA-Z]+)(?:\s*$)/i, requireShort: true }  // "John Smith" at end
@@ -1257,8 +1266,36 @@ async function processTurn({
                     log('🔄 User explicitly stating name - will override previous:', currentSlots.name);
                 }
                 
-            const extractedName = SlotExtractors.extractName(userText);
+            let extractedName = SlotExtractors.extractName(userText);
             log('🔍 Extraction result:', extractedName || '(none)');
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // V29 FIX: Context-aware name extraction
+            // When we're in BOOKING mode and actively asking for name, be more aggressive
+            // "yes it's Mark" / "Mark" / "yes, Mark" should all work
+            // ═══════════════════════════════════════════════════════════════════
+            if (!extractedName && session.mode === 'BOOKING' && session.booking?.activeSlot === 'name') {
+                log('🔍 V29: Context-aware name extraction (activeSlot=name)');
+                
+                // Try to extract a capitalized word from short responses
+                const words = userText.trim().split(/\s+/);
+                const cleanWords = words.filter(w => {
+                    const lower = w.toLowerCase();
+                    // Filter out common non-name words
+                    const skipWords = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'no', 'nope', 
+                                       'it', 'is', 'its', "it's", 'my', 'name', 'the', 'a', 'an',
+                                       'please', 'hi', 'hello', 'hey'];
+                    return !skipWords.includes(lower) && /^[a-zA-Z]+$/.test(w) && w.length >= 2;
+                });
+                
+                if (cleanWords.length === 1 || cleanWords.length === 2) {
+                    // Title case the name(s)
+                    extractedName = cleanWords
+                        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+                        .join(' ');
+                    log('🔍 V29: Context-extracted name:', extractedName);
+                }
+            }
                 
             if (extractedName) {
                 const isPartialName = !extractedName.includes(' ');
