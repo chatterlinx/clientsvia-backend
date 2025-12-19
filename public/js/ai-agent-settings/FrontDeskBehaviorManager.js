@@ -3139,29 +3139,35 @@ Sean → Shawn, Shaun`;
         const templateSynonyms = this.config.inheritedSynonyms || this.config.templateSynonyms || {};
         const entries = Object.entries(templateSynonyms);
         
-        if (entries.length === 0) {
-            return `
-                <div style="padding: 30px 20px; text-align: center;">
-                    <div style="font-size: 2rem; margin-bottom: 8px; opacity: 0.4;">📚</div>
-                    <p style="color: #6e7681; margin: 0; font-size: 0.85rem;">No inherited synonyms from template</p>
-                    <p style="color: #484f58; margin: 4px 0 0 0; font-size: 0.75rem;">Select an AiCore template to inherit industry synonyms</p>
-                </div>
-            `;
-        }
+        // Always show 2-column table structure with scrollable body
+        const emptyRows = entries.length === 0 ? `
+            <div style="padding: 30px 20px; text-align: center; grid-column: 1 / -1;">
+                <div style="font-size: 1.5rem; margin-bottom: 8px; opacity: 0.4;">📚</div>
+                <p style="color: #6e7681; margin: 0; font-size: 0.8rem;">No inherited synonyms from template</p>
+                <p style="color: #484f58; margin: 4px 0 0 0; font-size: 0.7rem;">Select an AiCore template to inherit industry synonyms</p>
+            </div>
+        ` : '';
+        
+        const rows = entries.map(([slang, meaning]) => `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #30363d40;">
+                <div style="padding: 8px 16px; color: #8b949e; font-size: 0.85rem; font-family: monospace;">${this.escapeHtml(slang)}</div>
+                <div style="padding: 8px 16px; color: #3fb950; font-size: 0.85rem;">${this.escapeHtml(meaning)}</div>
+            </div>
+        `).join('');
         
         return `
-            <div style="display: grid; grid-template-columns: 1fr 1fr; background: #21262d; border-bottom: 1px solid #30363d;">
-                <div style="padding: 10px 16px; color: #8b949e; font-size: 0.7rem; font-weight: 600; text-transform: uppercase;">Caller Says</div>
-                <div style="padding: 10px 16px; color: #8b949e; font-size: 0.7rem; font-weight: 600; text-transform: uppercase;">AI Understands</div>
+            <!-- Table Header (sticky) -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; background: #21262d; border-bottom: 1px solid #30363d; position: sticky; top: 0; z-index: 1;">
+                <div style="padding: 10px 16px; color: #8b949e; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Caller Says (Slang)</div>
+                <div style="padding: 10px 16px; color: #8b949e; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">AI Understands (Standard)</div>
             </div>
-            ${entries.map(([slang, meaning]) => `
-                <div style="display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #30363d40;">
-                    <div style="padding: 10px 16px; color: #8b949e; font-size: 0.85rem; font-family: monospace;">${this.escapeHtml(slang)}</div>
-                    <div style="padding: 10px 16px; color: #3fb950; font-size: 0.85rem;">${this.escapeHtml(meaning)}</div>
-                </div>
-            `).join('')}
-            <div style="padding: 8px 16px; background: #21262d; text-align: center;">
-                <span style="color: #6e7681; font-size: 0.7rem;">${entries.length} inherited synonym${entries.length !== 1 ? 's' : ''}</span>
+            <!-- Scrollable Body -->
+            <div style="max-height: 200px; overflow-y: auto;">
+                ${entries.length === 0 ? emptyRows : rows}
+            </div>
+            <!-- Footer with count -->
+            <div style="padding: 6px 16px; background: #21262d; border-top: 1px solid #30363d; text-align: center;">
+                <span style="color: #6e7681; font-size: 0.7rem;">${entries.length} inherited synonym${entries.length !== 1 ? 's' : ''} from template</span>
             </div>
         `;
     }
@@ -3182,47 +3188,56 @@ Sean → Shawn, Shaun`;
         
         if (synonyms.length === 0) {
             return `
-                <div style="padding: 40px 20px; text-align: center;">
-                    <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5;">🔧</div>
-                    <p style="color: #8b949e; margin: 0 0 8px 0; font-size: 0.9rem;">No company-specific synonyms</p>
-                    <p style="color: #6e7681; margin: 0; font-size: 0.8rem;">Click "Add Synonym" to add custom slang translations</p>
+                <div style="padding: 30px 20px; text-align: center;">
+                    <div style="font-size: 1.5rem; margin-bottom: 8px; opacity: 0.5;">🔧</div>
+                    <p style="color: #8b949e; margin: 0 0 4px 0; font-size: 0.85rem;">No company-specific synonyms</p>
+                    <p style="color: #6e7681; margin: 0; font-size: 0.75rem;">Click "Add Synonym" to add custom slang translations</p>
                 </div>
             `;
         }
         
-        return synonyms.map((s, idx) => `
-            <div class="synonym-row" data-idx="${idx}" style="display: grid; grid-template-columns: 1fr 1fr 50px; border-bottom: 1px solid #30363d; transition: background 0.15s;">
-                <!-- Column 1: Caller Slang -->
-                <div style="padding: 12px 16px;">
-                    <input type="text" 
-                        class="synonym-slang" 
-                        value="${this.escapeHtml(s.slang || '')}" 
-                        placeholder="e.g., pulling, froze up, went out..."
-                        onchange="window.frontDeskManager.updateSynonymRow(${idx}, 'slang', this.value)"
-                        style="width: 100%; padding: 10px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.9rem;">
-                </div>
-                
-                <!-- Column 2: Standard Meaning -->
-                <div style="padding: 12px 16px;">
-                    <input type="text" 
-                        class="synonym-meaning" 
-                        value="${this.escapeHtml(s.meaning || '')}" 
-                        placeholder="e.g., cooling, frozen coils, stopped working..."
-                        onchange="window.frontDeskManager.updateSynonymRow(${idx}, 'meaning', this.value)"
-                        style="width: 100%; padding: 10px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.9rem;">
-                </div>
-                
-                <!-- Delete Button -->
-                <div style="padding: 12px 8px; display: flex; align-items: center; justify-content: center;">
-                    <button type="button" 
-                        onclick="window.frontDeskManager.removeSynonymRow(${idx})"
-                        style="width: 32px; height: 32px; background: transparent; border: 1px solid #f8514940; border-radius: 6px; color: #f85149; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; transition: all 0.15s;"
-                        onmouseover="this.style.background='#f8514920'; this.style.borderColor='#f85149'"
-                        onmouseout="this.style.background='transparent'; this.style.borderColor='#f8514940'"
-                        title="Remove this synonym">×</button>
-                </div>
+        // Scrollable container for rows
+        return `
+            <div style="max-height: 200px; overflow-y: auto;">
+                ${synonyms.map((s, idx) => `
+                    <div class="synonym-row" data-idx="${idx}" style="display: grid; grid-template-columns: 1fr 1fr 50px; border-bottom: 1px solid #30363d; transition: background 0.15s;">
+                        <!-- Column 1: Caller Slang -->
+                        <div style="padding: 10px 16px;">
+                            <input type="text" 
+                                class="synonym-slang" 
+                                value="${this.escapeHtml(s.slang || '')}" 
+                                placeholder="e.g., pulling, froze up..."
+                                onchange="window.frontDeskManager.updateSynonymRow(${idx}, 'slang', this.value)"
+                                style="width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.85rem;">
+                        </div>
+                        
+                        <!-- Column 2: Standard Meaning -->
+                        <div style="padding: 10px 16px;">
+                            <input type="text" 
+                                class="synonym-meaning" 
+                                value="${this.escapeHtml(s.meaning || '')}" 
+                                placeholder="e.g., cooling, frozen coils..."
+                                onchange="window.frontDeskManager.updateSynonymRow(${idx}, 'meaning', this.value)"
+                                style="width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.85rem;">
+                        </div>
+                        
+                        <!-- Delete Button -->
+                        <div style="padding: 10px 8px; display: flex; align-items: center; justify-content: center;">
+                            <button type="button" 
+                                onclick="window.frontDeskManager.removeSynonymRow(${idx})"
+                                style="width: 28px; height: 28px; background: transparent; border: 1px solid #f8514940; border-radius: 6px; color: #f85149; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; transition: all 0.15s;"
+                                onmouseover="this.style.background='#f8514920'; this.style.borderColor='#f85149'"
+                                onmouseout="this.style.background='transparent'; this.style.borderColor='#f8514940'"
+                                title="Remove this synonym">×</button>
+                        </div>
+                    </div>
+                `).join('')}
             </div>
-        `).join('');
+            <!-- Footer with count -->
+            <div style="padding: 6px 16px; background: #21262d; border-top: 1px solid #30363d; text-align: center;">
+                <span style="color: #6e7681; font-size: 0.7rem;">${synonyms.length} custom synonym${synonyms.length !== 1 ? 's' : ''}</span>
+            </div>
+        `;
     }
     
     addSynonymRow() {
