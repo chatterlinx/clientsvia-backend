@@ -669,11 +669,12 @@ class FrontDeskBehaviorManager {
                     <div style="margin-bottom: 16px;">
                         <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Spelling question script:</label>
                         <input type="text" id="fdb-spelling-script" 
-                            value="${this.config.nameSpellingVariants?.script || 'Just to make sure I spell it correctly — is that {optionA} or {optionB}?'}"
-                            placeholder="Just to make sure I spell it correctly — is that {optionA} or {optionB}?"
+                            value="${this.config.nameSpellingVariants?.script || 'Just to confirm — {optionA} with a {letterA} or {optionB} with a {letterB}?'}"
+                            placeholder="Just to confirm — {optionA} with a {letterA} or {optionB} with a {letterB}?"
                             style="width: 100%; padding: 10px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                         <p style="color: #6e7681; font-size: 0.7rem; margin: 4px 0 0 0;">
-                            Use {optionA} and {optionB} as placeholders. Example: "Is that Mark with a K or Marc with a C?"
+                            Placeholders: {optionA}, {optionB} = names, {letterA}, {letterB} = differing letters<br>
+                            Example output: "Just to confirm — Mark with a K or Marc with a C?"
                         </p>
                     </div>
                     
@@ -801,7 +802,7 @@ Sean → Shawn, Shaun`;
                 enabled: false,
                 mode: '1_char_only',
                 maxAsksPerCall: 1,
-                script: 'Just to make sure I spell it correctly — is that {optionA} or {optionB}?',
+                script: 'Just to confirm — {optionA} with a {letterA} or {optionB} with a {letterB}?',
                 variantGroups: {}
             };
         }

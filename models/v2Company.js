@@ -1805,10 +1805,11 @@ const companySchema = new mongoose.Schema({
                 },
                 
                 // Script template for asking about spelling
-                // Use {optionA} and {optionB} as placeholders
+                // Placeholders: {optionA}, {optionB} = names, {letterA}, {letterB} = differing letters
+                // Example output: "Just to confirm — Mark with a K or Marc with a C?"
                 script: { 
                     type: String, 
-                    default: 'Just to make sure I spell it correctly — is that {optionA} or {optionB}?',
+                    default: 'Just to confirm — {optionA} with a {letterA} or {optionB} with a {letterB}?',
                     trim: true
                 },
                 
