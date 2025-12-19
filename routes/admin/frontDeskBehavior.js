@@ -472,6 +472,9 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
             if (updates.nameSpellingVariants.enabled !== undefined) {
                 updateObj['aiAgentSettings.frontDeskBehavior.nameSpellingVariants.enabled'] = updates.nameSpellingVariants.enabled;
             }
+            if (updates.nameSpellingVariants.source !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.nameSpellingVariants.source'] = updates.nameSpellingVariants.source;
+            }
             if (updates.nameSpellingVariants.mode !== undefined) {
                 updateObj['aiAgentSettings.frontDeskBehavior.nameSpellingVariants.mode'] = updates.nameSpellingVariants.mode;
             }
@@ -487,6 +490,7 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
             logger.info('[FRONT DESK BEHAVIOR] ✏️ V30 Saving nameSpellingVariants:', {
                 companyId,
                 enabled: updates.nameSpellingVariants.enabled,
+                source: updates.nameSpellingVariants.source,
                 mode: updates.nameSpellingVariants.mode,
                 variantGroupCount: updates.nameSpellingVariants.variantGroups ? Object.keys(updates.nameSpellingVariants.variantGroups).length : 0
             });

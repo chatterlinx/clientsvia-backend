@@ -1795,6 +1795,15 @@ const companySchema = new mongoose.Schema({
                 // Master toggle - OFF by default (don't annoy HVAC callers)
                 enabled: { type: Boolean, default: false },
                 
+                // Where to get variant pairs from:
+                // - 'curated_list': Use manually entered variantGroups below
+                // - 'auto_scan': Auto-scan commonFirstNames for 1-char variants
+                source: {
+                    type: String,
+                    enum: ['curated_list', 'auto_scan'],
+                    default: 'curated_list'
+                },
+                
                 // When to ask about spelling:
                 // - '1_char_only': Only ask if variant differs by exactly 1 character (Mark/Marc)
                 // - 'any_variant': Ask for any variant in the list (Steven/Stephen)

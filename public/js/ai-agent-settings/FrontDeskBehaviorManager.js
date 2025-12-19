@@ -640,6 +640,37 @@ class FrontDeskBehaviorManager {
                 </div>
                 
                 <div id="spelling-variants-settings" style="display: ${this.config.nameSpellingVariants?.enabled ? 'block' : 'none'};">
+                    <!-- SOURCE SELECTION - Curated List vs Auto-Scan -->
+                    <div style="margin-bottom: 16px; padding: 12px; background: #0d1117; border-radius: 6px; border: 1px solid #58a6ff;">
+                        <label style="display: block; font-size: 11px; color: #58a6ff; margin-bottom: 8px; font-weight: 600;">📋 Variant Source:</label>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="radio" name="spelling-source" value="curated_list" 
+                                    ${(this.config.nameSpellingVariants?.source || 'curated_list') === 'curated_list' ? 'checked' : ''}
+                                    style="accent-color: #58a6ff;"
+                                    onchange="window.frontDeskManager.toggleSpellingSource('curated_list')">
+                                <span style="color: #c9d1d9; font-size: 0.875rem;">
+                                    <strong>Use curated list below</strong> 
+                                    <span style="color: #8b949e;">(manual control, 8-20 groups)</span>
+                                </span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="radio" name="spelling-source" value="auto_scan" 
+                                    ${this.config.nameSpellingVariants?.source === 'auto_scan' ? 'checked' : ''}
+                                    style="accent-color: #58a6ff;"
+                                    onchange="window.frontDeskManager.toggleSpellingSource('auto_scan')">
+                                <span style="color: #c9d1d9; font-size: 0.875rem;">
+                                    <strong>Auto-scan Common First Names</strong> 
+                                    <span style="color: #3fb950;">(${(this.config.commonFirstNames || []).length} names)</span>
+                                    <span style="color: #8b949e;">— finds all 1-char variants automatically</span>
+                                </span>
+                            </label>
+                        </div>
+                        <p style="color: #6e7681; font-size: 0.7rem; margin: 8px 0 0 0;">
+                            Auto-scan checks your full name list for pairs like Mark/Marc, Sara/Sarah automatically. No manual entry needed.
+                        </p>
+                    </div>
+                    
                     <!-- Mode Selection -->
                     <div style="margin-bottom: 16px; padding: 12px; background: #0d1117; border-radius: 6px; border: 1px solid #30363d;">
                         <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 8px;">When to ask about spelling:</label>
@@ -678,8 +709,8 @@ class FrontDeskBehaviorManager {
                         </p>
                     </div>
                     
-                    <!-- Variant Groups -->
-                    <div style="margin-bottom: 12px;">
+                    <!-- Variant Groups (only shown for curated_list) -->
+                    <div id="fdb-curated-list-section" style="margin-bottom: 12px; display: ${(this.config.nameSpellingVariants?.source || 'curated_list') === 'curated_list' ? 'block' : 'none'};">
                         <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">
                             Name variant groups <span style="color: #6e7681;">(format: Name → Variant1, Variant2)</span>
                         </label>
@@ -695,6 +726,19 @@ Sean → Shawn, Shaun"
                             style="width: 100%; padding: 10px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 0.85rem; resize: vertical;">${this.renderVariantGroupsText()}</textarea>
                         <p style="color: #6e7681; font-size: 0.7rem; margin: 4px 0 0 0;">
                             One group per line. AI will only ask if caller's name matches a group AND mode criteria is met.
+                        </p>
+                    </div>
+                    
+                    <!-- Auto-Scan Preview (only shown for auto_scan) -->
+                    <div id="fdb-auto-scan-section" style="margin-bottom: 12px; display: ${this.config.nameSpellingVariants?.source === 'auto_scan' ? 'block' : 'none'};">
+                        <label style="display: block; font-size: 11px; color: #3fb950; margin-bottom: 4px;">
+                            🔍 Auto-detected variant pairs from your ${(this.config.commonFirstNames || []).length} names:
+                        </label>
+                        <div id="fdb-auto-scan-preview" style="padding: 12px; background: #0d1117; border: 1px solid #238636; border-radius: 6px; max-height: 200px; overflow-y: auto;">
+                            ${this.renderAutoScanPreview()}
+                        </div>
+                        <p style="color: #6e7681; font-size: 0.7rem; margin: 4px 0 0 0;">
+                            These pairs were automatically found by scanning your Common First Names list for 1-character differences.
                         </p>
                     </div>
                     
@@ -852,19 +896,155 @@ Sean → Shawn, Shaun`;
     
     collectSpellingVariantsConfig() {
         const enabled = document.getElementById('fdb-spelling-enabled')?.checked || false;
+        const source = document.querySelector('input[name="spelling-source"]:checked')?.value || 'curated_list';
         const mode = document.querySelector('input[name="spelling-mode"]:checked')?.value || '1_char_only';
-        const script = document.getElementById('fdb-spelling-script')?.value || 'Just to make sure I spell it correctly — is that {optionA} or {optionB}?';
+        const script = document.getElementById('fdb-spelling-script')?.value || 'Just to confirm — {optionA} with a {letterA} or {optionB} with a {letterB}?';
         const maxAsks = parseInt(document.getElementById('fdb-spelling-max-asks')?.value || '1', 10);
         const variantGroupsText = document.getElementById('fdb-variant-groups')?.value || '';
         const variantGroups = this.parseVariantGroups(variantGroupsText);
         
         return {
             enabled,
+            source,
             mode,
             script,
             maxAsksPerCall: maxAsks,
             variantGroups
         };
+    }
+    
+    toggleSpellingSource(source) {
+        const curatedSection = document.getElementById('fdb-curated-list-section');
+        const autoScanSection = document.getElementById('fdb-auto-scan-section');
+        
+        if (curatedSection) {
+            curatedSection.style.display = source === 'curated_list' ? 'block' : 'none';
+        }
+        if (autoScanSection) {
+            autoScanSection.style.display = source === 'auto_scan' ? 'block' : 'none';
+            // Refresh preview when switching to auto-scan
+            if (source === 'auto_scan') {
+                const previewDiv = document.getElementById('fdb-auto-scan-preview');
+                if (previewDiv) {
+                    previewDiv.innerHTML = this.renderAutoScanPreview();
+                }
+            }
+        }
+        
+        this.isDirty = true;
+        console.log('[FRONT DESK] ✏️ Spelling source changed:', source);
+    }
+    
+    // Calculate Levenshtein distance between two strings
+    levenshteinDistance(str1, str2) {
+        const m = str1.length;
+        const n = str2.length;
+        const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+        
+        for (let i = 0; i <= m; i++) dp[i][0] = i;
+        for (let j = 0; j <= n; j++) dp[0][j] = j;
+        
+        for (let i = 1; i <= m; i++) {
+            for (let j = 1; j <= n; j++) {
+                if (str1[i - 1] === str2[j - 1]) {
+                    dp[i][j] = dp[i - 1][j - 1];
+                } else {
+                    dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+                }
+            }
+        }
+        return dp[m][n];
+    }
+    
+    // Find the differing character between two names (for 1-char difference)
+    findDifferingChar(name1, name2) {
+        const n1 = name1.toLowerCase();
+        const n2 = name2.toLowerCase();
+        
+        // Same length - find the different character
+        if (n1.length === n2.length) {
+            for (let i = 0; i < n1.length; i++) {
+                if (n1[i] !== n2[i]) {
+                    return { letter1: name1[i].toUpperCase(), letter2: name2[i].toUpperCase() };
+                }
+            }
+        }
+        
+        // Different length - find the extra character
+        const longer = n1.length > n2.length ? name1 : name2;
+        const shorter = n1.length > n2.length ? name2 : name1;
+        
+        for (let i = 0; i < longer.length; i++) {
+            if (shorter[i] !== longer[i]?.toLowerCase()) {
+                return { 
+                    letter1: n1.length > n2.length ? longer[i].toUpperCase() : 'no ' + longer[i].toUpperCase(),
+                    letter2: n1.length > n2.length ? 'no ' + longer[i].toUpperCase() : longer[i].toUpperCase()
+                };
+            }
+        }
+        
+        // Last character is extra
+        const extraChar = longer[longer.length - 1];
+        return {
+            letter1: n1.length > n2.length ? extraChar.toUpperCase() : 'no ' + extraChar.toUpperCase(),
+            letter2: n1.length > n2.length ? 'no ' + extraChar.toUpperCase() : extraChar.toUpperCase()
+        };
+    }
+    
+    // Auto-scan common first names for 1-character variants
+    findAutoVariants() {
+        const names = this.config.commonFirstNames || [];
+        if (names.length === 0) return [];
+        
+        const variants = [];
+        const processed = new Set();
+        
+        // Compare each pair of names
+        for (let i = 0; i < names.length; i++) {
+            for (let j = i + 1; j < names.length; j++) {
+                const name1 = names[i];
+                const name2 = names[j];
+                const key = [name1.toLowerCase(), name2.toLowerCase()].sort().join('|');
+                
+                if (processed.has(key)) continue;
+                
+                const distance = this.levenshteinDistance(name1.toLowerCase(), name2.toLowerCase());
+                
+                if (distance === 1) {
+                    const diff = this.findDifferingChar(name1, name2);
+                    variants.push({
+                        name1,
+                        name2,
+                        letter1: diff.letter1,
+                        letter2: diff.letter2
+                    });
+                    processed.add(key);
+                }
+            }
+        }
+        
+        return variants.sort((a, b) => a.name1.localeCompare(b.name1));
+    }
+    
+    renderAutoScanPreview() {
+        const variants = this.findAutoVariants();
+        
+        if (variants.length === 0) {
+            return '<p style="color: #8b949e; margin: 0; font-style: italic;">No 1-character variant pairs found in your name list. Add more names below, or use the curated list.</p>';
+        }
+        
+        return `
+            <p style="color: #3fb950; margin: 0 0 8px 0; font-weight: 600;">Found ${variants.length} variant pair(s):</p>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                ${variants.map(v => `
+                    <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #21262d; border: 1px solid #238636; border-radius: 16px; font-size: 0.8rem; color: #c9d1d9;">
+                        <strong>${v.name1}</strong> <span style="color: #8b949e;">(${v.letter1})</span>
+                        ↔
+                        <strong>${v.name2}</strong> <span style="color: #8b949e;">(${v.letter2})</span>
+                    </span>
+                `).join('')}
+            </div>
+        `;
     }
     
     addCommonFirstName() {
