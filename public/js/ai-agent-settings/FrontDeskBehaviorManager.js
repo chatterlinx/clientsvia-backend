@@ -818,17 +818,26 @@ Sean → Shawn, Shaun"
     
     renderGreetingRows() {
         // Initialize greetings array if not exists
+        // Check both locations: config.greetingRules (UI state) and config.conversationStages.greetingRules (from API)
         if (!this.config.greetingRules) {
-            // Convert old format to new format
-            const oldGreetings = this.config.conversationStages?.greetingResponses || {};
-            this.config.greetingRules = [
-                { trigger: 'good morning', fuzzy: true, response: oldGreetings.morning || 'Good morning! How can I help you today?' },
-                { trigger: 'good afternoon', fuzzy: true, response: oldGreetings.afternoon || 'Good afternoon! How can I help you today?' },
-                { trigger: 'good evening', fuzzy: true, response: oldGreetings.evening || 'Good evening! How can I help you today?' },
-                { trigger: 'hi', fuzzy: true, response: oldGreetings.generic || 'Hi there! How can I help you today?' },
-                { trigger: 'hello', fuzzy: true, response: oldGreetings.generic || 'Hello! How can I help you today?' },
-                { trigger: 'hey', fuzzy: true, response: oldGreetings.generic || 'Hey there! How can I help you today?' }
-            ];
+            // Try to load from conversationStages (from API)
+            const savedRules = this.config.conversationStages?.greetingRules;
+            if (savedRules && savedRules.length > 0) {
+                this.config.greetingRules = savedRules;
+                console.log('[FRONT DESK BEHAVIOR] 👋 Loaded greetingRules from conversationStages:', savedRules.length);
+            } else {
+                // Convert old format to new format (first-time migration)
+                const oldGreetings = this.config.conversationStages?.greetingResponses || {};
+                this.config.greetingRules = [
+                    { trigger: 'good morning', fuzzy: true, response: oldGreetings.morning || 'Good morning! How can I help you today?' },
+                    { trigger: 'good afternoon', fuzzy: true, response: oldGreetings.afternoon || 'Good afternoon! How can I help you today?' },
+                    { trigger: 'good evening', fuzzy: true, response: oldGreetings.evening || 'Good evening! How can I help you today?' },
+                    { trigger: 'hi', fuzzy: true, response: oldGreetings.generic || 'Hi there! How can I help you today?' },
+                    { trigger: 'hello', fuzzy: true, response: oldGreetings.generic || 'Hello! How can I help you today?' },
+                    { trigger: 'hey', fuzzy: true, response: oldGreetings.generic || 'Hey there! How can I help you today?' }
+                ];
+                console.log('[FRONT DESK BEHAVIOR] 👋 Created default greetingRules from legacy format');
+            }
         }
         
         const greetings = this.config.greetingRules || [];
@@ -3272,17 +3281,23 @@ won't kick on → won't start"
             const rules = this.config.greetingRules || [];
             
             // Filter out empty rules
-            this.config.greetingRules = rules.filter(r => r.trigger && r.trigger.trim());
+            const filteredRules = rules.filter(r => r.trigger && r.trigger.trim());
             
-            // Also generate legacy format for backward compatibility
+            // Ensure conversationStages exists
             if (!this.config.conversationStages) {
                 this.config.conversationStages = { enabled: true };
             }
             
+            // Store greetingRules in BOTH places for compatibility:
+            // 1. At config.greetingRules (for UI state)
+            // 2. At config.conversationStages.greetingRules (for backend/API)
+            this.config.greetingRules = filteredRules;
+            this.config.conversationStages.greetingRules = filteredRules;
+            
             // Map new rules to old format (find first matching trigger for each time period)
             const findResponse = (triggers) => {
                 for (const t of triggers) {
-                    const rule = this.config.greetingRules.find(r => 
+                    const rule = filteredRules.find(r => 
                         r.trigger.toLowerCase().includes(t.toLowerCase())
                     );
                     if (rule) return rule.response;
@@ -3297,7 +3312,7 @@ won't kick on → won't start"
                 generic: findResponse(['hi', 'hello', 'hey']) || "Hi there! How can I help you today?"
             };
             
-            console.log('[FRONT DESK BEHAVIOR] 👋 V32 Greeting rules saved:', this.config.greetingRules);
+            console.log('[FRONT DESK BEHAVIOR] 👋 V32 Greeting rules saved:', this.config.conversationStages.greetingRules);
             console.log('[FRONT DESK BEHAVIOR] 👋 Legacy format:', this.config.conversationStages.greetingResponses);
         }
 

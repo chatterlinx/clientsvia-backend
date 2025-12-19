@@ -258,6 +258,8 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
                     asapVariantScript: null,
                     customFinalScript: null
                 },
+                // 👋 V32: Conversation Stages (includes greetingRules)
+                conversationStages: config.conversationStages || null,
                 lastUpdated: saved.lastUpdated || null
             }
         });
@@ -556,6 +558,31 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
                 enabled: updates.fastPathBooking.enabled,
                 keywordCount: updates.fastPathBooking.triggerKeywords?.length,
                 maxQuestions: updates.fastPathBooking.maxDiscoveryQuestions
+            });
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 👋 V32: Conversation Stages (includes greetingRules)
+        // ════════════════════════════════════════════════════════════════════════════
+        if (updates.conversationStages) {
+            // Save greetingRules array (new V32 format)
+            if (updates.conversationStages.greetingRules !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.conversationStages.greetingRules'] = updates.conversationStages.greetingRules;
+            }
+            // Save legacy greetingResponses (for backward compat)
+            if (updates.conversationStages.greetingResponses) {
+                Object.entries(updates.conversationStages.greetingResponses).forEach(([key, value]) => {
+                    updateObj[`aiAgentSettings.frontDeskBehavior.conversationStages.greetingResponses.${key}`] = value;
+                });
+            }
+            // Save other conversationStages settings if present
+            if (updates.conversationStages.enabled !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.conversationStages.enabled'] = updates.conversationStages.enabled;
+            }
+            logger.info('[FRONT DESK BEHAVIOR] 👋 V32 Saving conversationStages:', {
+                companyId,
+                greetingRulesCount: updates.conversationStages.greetingRules?.length || 0,
+                hasLegacyResponses: !!updates.conversationStages.greetingResponses
             });
         }
         
