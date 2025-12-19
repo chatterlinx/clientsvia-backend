@@ -3158,64 +3158,161 @@ async function processTurn({
                 }
                 
                 // ═══════════════════════════════════════════════════════════════════
-                // Find next required slot (if we're not still on current slot)
-                // IMPORTANT: A slot is only "complete" if:
-                // 1. It's collected AND
-                // 2. It's NOT pending confirmation (if confirmBack is enabled)
+                // V33: STRICT STATE-DRIVEN SLOT SELECTION
+                // ═══════════════════════════════════════════════════════════════════
+                // A slot is COMPLETE when:
+                // 1. It has a value (currentSlots[slotId] is truthy) AND
+                // 2. If confirmBack is enabled: meta.confirmed = true
+                // 3. If confirmBack is disabled: just having the value is enough
+                //
+                // A slot is INCOMPLETE when:
+                // 1. No value OR
+                // 2. Value exists but pending confirmation (meta.pendingConfirm = true)
+                //
+                // CRITICAL: Once a slot is confirmed, NEVER ask it again.
                 // ═══════════════════════════════════════════════════════════════════
                 if (nextSlotId === null) {
+                    // Log current slot state for debugging
+                    log('🔍 V33: COMPUTING NEXT SLOT - Current state:', {
+                        'currentSlots.name': currentSlots.name,
+                        'currentSlots.phone': currentSlots.phone,
+                        'currentSlots.address': currentSlots.address,
+                        'currentSlots.time': currentSlots.time,
+                        'phoneMeta.confirmed': session.booking.meta.phone?.confirmed,
+                        'phoneMeta.pendingConfirm': session.booking.meta.phone?.pendingConfirm,
+                        'addressMeta.confirmed': session.booking.meta.address?.confirmed,
+                        'timeMeta.confirmed': session.booking.meta.time?.confirmed,
+                        'activeSlot': session.booking.activeSlot
+                    });
+                    
                     const nextMissingSlotSafe = bookingSlotsSafe.find(slot => {
                         const slotId = slot.slotId || slot.id || slot.type;
-                        const isCollected = currentSlots[slotId] || currentSlots[slot.type];
+                        const hasValue = !!(currentSlots[slotId] || currentSlots[slot.type]);
                         
-                        // Check if this slot is pending confirmation
+                        // Check slot meta for confirmation status
                         const slotMeta = session.booking.meta[slotId] || {};
                         const isPendingConfirm = slotMeta.pendingConfirm === true;
+                        const isConfirmed = slotMeta.confirmed === true;
                         
-                        // Slot is incomplete if: not collected OR pending confirmation
-                        const isIncomplete = !isCollected || isPendingConfirm;
+                        // Special handling for name slot (uses different confirmation logic)
+                        const isNameSlot = slotId === 'name';
+                        const nameMeta = session.booking.meta.name || {};
+                        const nameIsComplete = isNameSlot && hasValue && 
+                            (nameMeta.first && nameMeta.last) || // Has both parts
+                            (!nameSlotConfig?.askFullName && hasValue); // Single name accepted
+                        
+                        // Slot is COMPLETE if:
+                        // - Has value AND confirmed (for confirmBack slots)
+                        // - Has value AND not pending (for non-confirmBack slots)
+                        // - Name slot: has both parts OR single name accepted
+                        const slotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === slotId);
+                        const needsConfirmBack = slotConfig?.confirmBack === true || slotConfig?.confirmBack === 'true';
+                        
+                        let isComplete;
+                        if (isNameSlot) {
+                            isComplete = nameIsComplete;
+                        } else if (needsConfirmBack) {
+                            // ConfirmBack slot: complete only when confirmed
+                            isComplete = hasValue && isConfirmed && !isPendingConfirm;
+                        } else {
+                            // Non-confirmBack slot: complete when has value
+                            isComplete = hasValue && !isPendingConfirm;
+                        }
+                        
+                        const isIncomplete = !isComplete;
+                        
+                        log(`🔍 V33: Slot ${slotId} check:`, {
+                            hasValue,
+                            isPendingConfirm,
+                            isConfirmed,
+                            needsConfirmBack,
+                            isComplete,
+                            isIncomplete,
+                            required: slot.required
+                        });
                         
                         return slot.required && isIncomplete;
                     });
+                    
+                    // Log the result of slot selection
+                    if (nextMissingSlotSafe) {
+                        log('✅ V33: NEXT SLOT SELECTED:', {
+                            nextSlot: nextMissingSlotSafe.slotId || nextMissingSlotSafe.id || nextMissingSlotSafe.type,
+                            reason: 'First required incomplete slot'
+                        });
+                    } else {
+                        log('✅ V33: ALL SLOTS COMPLETE - Ready for finalization');
+                    }
                     
                     if (nextMissingSlotSafe) {
                         nextSlotId = nextMissingSlotSafe.slotId || nextMissingSlotSafe.id || nextMissingSlotSafe.type;
                         
                         // ═══════════════════════════════════════════════════════════════
-                        // V31: Use prompt variant for natural phrasing
+                        // V33: ANTI-LOOP BREAKER + PROMPT VARIANTS
+                        // ═══════════════════════════════════════════════════════════════
+                        // 1. Track how many times we've asked this slot
+                        // 2. Use different phrasing each time (variants)
+                        // 3. After max attempts, escalate (transfer offer)
                         // ═══════════════════════════════════════════════════════════════
                         session.booking.meta[nextSlotId] = session.booking.meta[nextSlotId] || {};
                         const askedCount = session.booking.meta[nextSlotId].askedCount || 0;
                         
-                        // Use reprompt variant if asked multiple times
-                        let exactQuestion;
-                        if (askedCount >= 2 && DEFAULT_PROMPT_VARIANTS.reprompt[nextSlotId]) {
-                            // Use reprompt variant (more helpful phrasing)
-                            exactQuestion = getVariant(DEFAULT_PROMPT_VARIANTS.reprompt[nextSlotId], askedCount - 2);
-                            log('📋 V31: Using REPROMPT variant (asked too many times)', { slotId: nextSlotId, askedCount });
-                        } else {
-                            // Use regular variant
-                            exactQuestion = getSlotPromptVariant(nextMissingSlotSafe, nextSlotId, askedCount);
-                        }
-                        session.booking.meta[nextSlotId].askedCount = askedCount + 1;
+                        // Get max attempts from config (default 3)
+                        const bookingConfig = company.aiAgentSettings?.frontDeskBehavior?.bookingSettings || {};
+                        const maxAttemptsPerSlot = bookingConfig.maxAttemptsPerSlot || 3;
+                        const escalationScript = bookingConfig.escalationScript || 
+                            "No problem. If you'd rather, I can transfer you to a service advisor to get you booked.";
                         
-                        // Check if we're waiting for confirmation (don't re-ask the question)
-                        const slotMeta = session.booking.meta[nextSlotId] || {};
-                        if (!slotMeta.pendingConfirm) {
-                            // Not pending confirm, ask the question
-                            finalReply += exactQuestion;
-                            log('📋 BOOKING SAFETY NET: Asking next slot', { 
+                        // Check if we've exceeded max attempts (ANTI-LOOP BREAKER)
+                        if (askedCount >= maxAttemptsPerSlot) {
+                            log('🚨 V33: ANTI-LOOP BREAKER TRIGGERED', { 
                                 slotId: nextSlotId, 
-                                question: exactQuestion,
-                                askedCount: askedCount + 1,
-                                finalReply
+                                askedCount, 
+                                maxAttemptsPerSlot 
                             });
+                            
+                            // Offer escalation/transfer
+                            finalReply = escalationScript;
+                            session.booking.meta[nextSlotId].escalated = true;
+                            
+                            // Don't increment askedCount anymore
                         } else {
-                            // Pending confirm - don't add question, just use the confirm text already set
-                            log('📋 BOOKING SAFETY NET: Slot pending confirmation', { 
-                                slotId: nextSlotId,
-                                finalReply
-                            });
+                            // Use reprompt variant if asked multiple times
+                            let exactQuestion;
+                            if (askedCount >= 2 && DEFAULT_PROMPT_VARIANTS.reprompt[nextSlotId]) {
+                                // Use reprompt variant (more helpful phrasing)
+                                exactQuestion = getVariant(DEFAULT_PROMPT_VARIANTS.reprompt[nextSlotId], askedCount - 2);
+                                log('📋 V33: Using REPROMPT variant', { slotId: nextSlotId, askedCount });
+                            } else if (askedCount >= 1) {
+                                // Second ask - use a different variant
+                                exactQuestion = getSlotPromptVariant(nextMissingSlotSafe, nextSlotId, askedCount);
+                                log('📋 V33: Using variant #' + askedCount, { slotId: nextSlotId });
+                            } else {
+                                // First ask - use primary prompt from UI
+                                exactQuestion = nextMissingSlotSafe.question || 
+                                    getSlotPromptVariant(nextMissingSlotSafe, nextSlotId, 0);
+                                log('📋 V33: Using PRIMARY prompt from UI', { slotId: nextSlotId });
+                            }
+                            session.booking.meta[nextSlotId].askedCount = askedCount + 1;
+                            
+                            // Check if we're waiting for confirmation (don't re-ask the question)
+                            const slotMeta = session.booking.meta[nextSlotId] || {};
+                            if (!slotMeta.pendingConfirm) {
+                                // Not pending confirm, ask the question
+                                finalReply += exactQuestion;
+                                log('📋 BOOKING SAFETY NET: Asking next slot', { 
+                                    slotId: nextSlotId, 
+                                    question: exactQuestion,
+                                    askedCount: askedCount + 1,
+                                    finalReply
+                                });
+                            } else {
+                                // Pending confirm - don't add question, just use the confirm text already set
+                                log('📋 BOOKING SAFETY NET: Slot pending confirmation', { 
+                                    slotId: nextSlotId,
+                                    finalReply
+                                });
+                            }
                         }
                     }
                 }

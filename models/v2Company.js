@@ -2305,7 +2305,19 @@ const companySchema = new mongoose.Schema({
                     // Transition message from discovery/triage to booking
                     transitionToBooking: { type: String, default: "Let's get you scheduled.", trim: true },
                     // Skip slots for returning customers with known info
-                    skipKnownSlots: { type: Boolean, default: true }
+                    skipKnownSlots: { type: Boolean, default: true },
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // V33: ANTI-LOOP BREAKER - Prevent robotic repetition
+                    // ═══════════════════════════════════════════════════════════════
+                    // Max times to ask the same slot before escalating
+                    maxAttemptsPerSlot: { type: Number, default: 3, min: 1, max: 5 },
+                    // Script to use when max attempts exceeded (offer transfer)
+                    escalationScript: { 
+                        type: String, 
+                        default: "No problem. If you'd rather, I can transfer you to a service advisor to get you booked.",
+                        trim: true
+                    }
                 },
                 
                 // ═══════════════════════════════════════════════════════════════
