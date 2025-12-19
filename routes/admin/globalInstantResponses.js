@@ -2835,6 +2835,8 @@ router.get('/:id/filler-words', async (req, res) => {
         
         res.json({
             success: true,
+            templateId: template._id,
+            templateName: template.name,
             fillerWords: template.fillerWords || [],
             count: (template.fillerWords || []).length
         });
@@ -3306,6 +3308,7 @@ router.get('/:id/synonyms', authenticateJWT, adminOnly, async (req, res) => {
         res.json({
             success: true,
             templateId: template._id,
+            templateName: template.name,
             synonyms: synonymObj,
             count: Object.keys(synonymObj).length
         });

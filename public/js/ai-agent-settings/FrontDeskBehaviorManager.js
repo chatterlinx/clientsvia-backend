@@ -154,7 +154,7 @@ class FrontDeskBehaviorManager {
             }
             
             this.config.inheritedSynonyms = inheritedSynonyms;
-            this.config.activeTemplateName = synonymsData.templateName || 'Unknown Template';
+            this.config.activeTemplateName = synonymsData.templateName || synonymsData.name || 'Unknown Template';
             
             console.log('[FRONT DESK BEHAVIOR] 🔤 Inherited synonyms loaded from Global AI Brain:', {
                 templateId: activeRef.templateId,
