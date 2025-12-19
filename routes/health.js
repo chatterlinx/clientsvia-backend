@@ -205,5 +205,44 @@ router.get('/ping', (req, res) => {
     });
 });
 
+// ============================================================================
+// VERSION ENDPOINT (PUBLIC - No Auth Required)
+// ============================================================================
+// Quick check to verify which version of code is deployed
+// Usage: curl https://clientsvia-backend.onrender.com/api/version
+// ============================================================================
+router.get('/version', (req, res) => {
+    // Lazy load to avoid circular dependencies
+    let engineVersion = 'UNKNOWN';
+    let llmVersion = 'UNKNOWN';
+    
+    try {
+        // Get ConversationEngine version
+        const ConversationEngine = require('../services/ConversationEngine');
+        engineVersion = ConversationEngine.ENGINE_VERSION || 'NOT_EXPORTED';
+    } catch (e) {
+        engineVersion = `ERROR: ${e.message}`;
+    }
+    
+    try {
+        // Get HybridReceptionistLLM version
+        const HybridReceptionistLLM = require('../services/HybridReceptionistLLM');
+        llmVersion = HybridReceptionistLLM.LLM_VERSION || 'NOT_EXPORTED';
+    } catch (e) {
+        llmVersion = `ERROR: ${e.message}`;
+    }
+    
+    res.json({
+        success: true,
+        versions: {
+            conversationEngine: engineVersion,
+            hybridReceptionistLLM: llmVersion
+        },
+        deployed: new Date().toISOString(),
+        node: process.version,
+        env: process.env.NODE_ENV || 'development'
+    });
+});
+
 module.exports = router;
 

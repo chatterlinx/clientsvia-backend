@@ -1248,5 +1248,7 @@ User: "What time do you open?"
     }
 }
 
+// Export class and version
 module.exports = HybridReceptionistLLM;
+module.exports.LLM_VERSION = HYBRID_LLM_VERSION;
 
