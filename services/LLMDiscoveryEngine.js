@@ -423,6 +423,20 @@ Answer: ${cheatSheetKnowledge.answer}
             discoveryContext = `\nCALLER'S ISSUE: ${session.discovery.issue}`;
         }
         
+        // ═══════════════════════════════════════════════════════════════════
+        // V33: CALLER NAME ACKNOWLEDGMENT
+        // If caller gave their name, use it naturally in responses
+        // ═══════════════════════════════════════════════════════════════════
+        let callerNameContext = '';
+        const callerName = session?.collectedSlots?.name || 
+                          session?.collectedSlots?.partialName ||
+                          session?.booking?.meta?.name?.first;
+        if (callerName) {
+            // Extract first name for natural use
+            const firstName = callerName.split(' ')[0];
+            callerNameContext = `\nCALLER'S NAME: ${firstName}. Use their name naturally in your response (e.g., "Hi ${firstName}," or "I understand, ${firstName}.").`;
+        }
+        
         return `You are a professional front desk agent for ${companyVars.companyName}, a ${tradeLabel}.
 
 Your job is to calmly understand the caller's situation and help them.
@@ -437,7 +451,7 @@ RULES:
 7. Never mention internal systems, scenarios, templates, or AI.
 8. Always sound human, confident, and helpful.
 9. Keep responses concise (2-3 sentences max unless explaining something).
-${knowledgeSection}${cheatSheetSection}${emotionContext}${discoveryContext}
+${knowledgeSection}${cheatSheetSection}${emotionContext}${discoveryContext}${callerNameContext}
 
 RESPONSE FORMAT:
 Respond naturally as a human receptionist would. Do not use bullet points or numbered lists unless explaining steps.`;

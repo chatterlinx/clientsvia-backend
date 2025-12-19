@@ -2366,26 +2366,67 @@ async function processTurn({
                     log('📝 NAME COMPLETE, moving to phone', { name: currentSlots.name });
                 }
                 // ═══════════════════════════════════════════════════════════════════
-                // V31 FIX: Handle missing name part (last name after first, or vice versa)
-                // When we've asked for last name and user says "Walter", accept it immediately
+                // V33 FIX: Handle missing name part (last name after first, or vice versa)
+                // When we've asked for last name and user says "Walter" or "the last name is Walter"
+                // Extract the actual name, not just the first word
                 // ═══════════════════════════════════════════════════════════════════
                 else if (session.booking.activeSlot === 'name' && nameMeta.askedMissingPartOnce && !hasBothParts) {
-                    // We asked for the missing part - accept whatever they say as that part
-                    const userWord = userText.trim().split(/\s+/)[0]; // First word only
-                    const cleanWord = userWord.replace(/[^a-zA-Z]/g, ''); // Remove punctuation
+                    // We asked for the missing part - extract name from various phrasings
+                    let extractedNamePart = null;
                     
-                    if (cleanWord.length >= 2) {
+                    // Pattern 1: "the last name is Walter" / "my last name is Walter" / "last name is Walter"
+                    const lastNameIsMatch = userText.match(/(?:the\s+)?(?:my\s+)?last\s+name\s+(?:is\s+)?([A-Za-z]+)/i);
+                    if (lastNameIsMatch && lastNameIsMatch[1]) {
+                        extractedNamePart = lastNameIsMatch[1];
+                        log('📝 V33: Extracted from "last name is X" pattern', { extracted: extractedNamePart });
+                    }
+                    
+                    // Pattern 2: "the first name is Mark" / "my first name is Mark"
+                    if (!extractedNamePart) {
+                        const firstNameIsMatch = userText.match(/(?:the\s+)?(?:my\s+)?first\s+name\s+(?:is\s+)?([A-Za-z]+)/i);
+                        if (firstNameIsMatch && firstNameIsMatch[1]) {
+                            extractedNamePart = firstNameIsMatch[1];
+                            log('📝 V33: Extracted from "first name is X" pattern', { extracted: extractedNamePart });
+                        }
+                    }
+                    
+                    // Pattern 3: "it's Walter" / "it is Walter"
+                    if (!extractedNamePart) {
+                        const itsMatch = userText.match(/(?:it'?s|it\s+is)\s+([A-Za-z]+)/i);
+                        if (itsMatch && itsMatch[1]) {
+                            extractedNamePart = itsMatch[1];
+                            log('📝 V33: Extracted from "it\'s X" pattern', { extracted: extractedNamePart });
+                        }
+                    }
+                    
+                    // Pattern 4: Just a single name word (filter out filler words, take LAST meaningful word)
+                    if (!extractedNamePart) {
+                        const words = userText.trim().split(/\s+/);
+                        const fillerWords = new Set(['the', 'my', 'is', 'its', "it's", 'a', 'an', 'name', 'last', 'first', 'yes', 'yeah', 'yep', 'sure', 'ok', 'okay']);
+                        const nameWords = words.filter(w => {
+                            const clean = w.replace(/[^a-zA-Z]/g, '').toLowerCase();
+                            return clean.length >= 2 && !fillerWords.has(clean);
+                        });
+                        
+                        if (nameWords.length > 0) {
+                            // Take the last meaningful word (most likely the actual name)
+                            extractedNamePart = nameWords[nameWords.length - 1].replace(/[^a-zA-Z]/g, '');
+                            log('📝 V33: Extracted last meaningful word', { extracted: extractedNamePart, allWords: nameWords });
+                        }
+                    }
+                    
+                    if (extractedNamePart && extractedNamePart.length >= 2) {
                         // Title case
-                        const formattedName = cleanWord.charAt(0).toUpperCase() + cleanWord.slice(1).toLowerCase();
+                        const formattedName = extractedNamePart.charAt(0).toUpperCase() + extractedNamePart.slice(1).toLowerCase();
                         
                         if (nameMeta.assumedSingleTokenAs === 'first') {
                             // We had first name (e.g., "Mark"), now got last name
                             nameMeta.last = formattedName;
-                            log('📝 V31: Got LAST name after asking', { lastName: formattedName });
+                            log('📝 V33: Got LAST name after asking', { lastName: formattedName });
                         } else {
                             // We had last name (e.g., "Subach"), now got first name
                             nameMeta.first = formattedName;
-                            log('📝 V31: Got FIRST name after asking', { firstName: formattedName });
+                            log('📝 V33: Got FIRST name after asking', { firstName: formattedName });
                         }
                         
                         // Build full name safely (no undefined)
@@ -2397,19 +2438,20 @@ async function processTurn({
                         // 🎯 DISPLAY NAME: Always use first name for personalization
                         const displayName = nameMeta.first || currentSlots.name.split(' ')[0] || currentSlots.name;
                         finalReply = `Perfect, ${displayName}. `;
-                        nextSlotId = null; // Will find phone below
+                        nextSlotId = null; // Will find next slot below
                         
-                        log('📝 V31: NAME COMPLETE after missing part', { 
+                        log('📝 V33: NAME COMPLETE after missing part', { 
                             name: currentSlots.name,
                             displayName,
                             first: nameMeta.first,
                             last: nameMeta.last
                         });
                     } else {
-                        // Too short - ask again with reprompt
-                        finalReply = "Sorry, I didn't catch that. What's your last name?";
+                        // Couldn't extract - ask again with reprompt
+                        const askingFor = nameMeta.assumedSingleTokenAs === 'first' ? 'last' : 'first';
+                        finalReply = `Sorry, I didn't catch that. What's your ${askingFor} name?`;
                         nextSlotId = 'name';
-                        log('📝 V31: Missing part too short, re-asking');
+                        log('📝 V33: Could not extract name part, re-asking', { userText, askingFor });
                     }
                 }
                 // Check if we're in the middle of name collection
@@ -3712,11 +3754,15 @@ async function processTurn({
             // Only proceed with LLM if fast-path didn't trigger
             if (!aiResult) {
             // Step 3: Build discovery prompt with scenario knowledge + cheat sheet fallback
+            // V33: Pass collectedSlots so LLM can acknowledge caller's name
             const discoveryPrompt = LLMDiscoveryEngine.buildDiscoveryPrompt({
                 company,
                 scenarios: scenarioRetrieval.scenarios,
                 emotion,
-                session,
+                session: {
+                    ...session.toObject ? session.toObject() : session,
+                    collectedSlots: currentSlots  // V33: Include current slots for name acknowledgment
+                },
                 // V23: Pass cheat sheet as fallback knowledge
                 cheatSheetKnowledge: cheatSheetKnowledge
             });
