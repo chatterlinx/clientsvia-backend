@@ -1280,8 +1280,9 @@ async function processTurn({
         );
         
         if (isJustGreeting) {
-            // Get UI-configured greeting responses
-            const greetingResponses = company.aiAgentSettings?.frontDeskBehavior?.personality?.greetingResponses || {};
+            // Get UI-configured greeting responses from conversationStages
+            // UI saves to: frontDeskBehavior.conversationStages.greetingResponses
+            const greetingResponses = company.aiAgentSettings?.frontDeskBehavior?.conversationStages?.greetingResponses || {};
             
             // Determine which greeting to use based on time of day
             let greetingResponse;
