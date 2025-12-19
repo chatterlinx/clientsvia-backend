@@ -3284,9 +3284,16 @@ async function processTurn({
                         // Special handling for name slot (uses different confirmation logic)
                         const isNameSlot = slotId === 'name';
                         const nameMeta = session.booking.meta.name || {};
-                        // V33 FIX: Operator precedence bug - added parentheses
+                        
+                        // V33 FIX: Check if name is complete by looking at:
+                        // 1. nameMeta.first AND nameMeta.last are both set
+                        // 2. OR currentSlots.name contains a space (full name in one string)
+                        // 3. OR askFullName is false (single name accepted)
+                        const nameValue = currentSlots.name || currentSlots[slot.type];
+                        const nameHasSpace = nameValue && nameValue.includes(' ');
                         const nameIsComplete = isNameSlot && hasValue && (
-                            (nameMeta.first && nameMeta.last) || // Has both parts
+                            (nameMeta.first && nameMeta.last) || // Has both parts in meta
+                            nameHasSpace || // Full name in single string (e.g., "Mark Walter")
                             (!nameSlotConfig?.askFullName) // Single name accepted when askFullName is false
                         );
                         
@@ -3294,6 +3301,8 @@ async function processTurn({
                         // - Has value AND confirmed (for confirmBack slots)
                         // - Has value AND not pending (for non-confirmBack slots)
                         // - Name slot: has both parts OR single name accepted
+                        // V33 FIX: If slot has value and NOT pending, consider complete
+                        //          (user must have confirmed in previous turn)
                         const slotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === slotId);
                         const needsConfirmBack = slotConfig?.confirmBack === true || slotConfig?.confirmBack === 'true';
                         
@@ -3301,8 +3310,10 @@ async function processTurn({
                         if (isNameSlot) {
                             isComplete = nameIsComplete;
                         } else if (needsConfirmBack) {
-                            // ConfirmBack slot: complete only when confirmed
-                            isComplete = hasValue && isConfirmed && !isPendingConfirm;
+                            // ConfirmBack slot: complete when:
+                            // 1. Has value AND confirmed, OR
+                            // 2. Has value AND NOT pending (must have been confirmed previously)
+                            isComplete = hasValue && (isConfirmed || !isPendingConfirm);
                         } else {
                             // Non-confirmBack slot: complete when has value
                             isComplete = hasValue && !isPendingConfirm;
