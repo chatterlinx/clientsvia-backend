@@ -424,39 +424,57 @@ class FrontDeskBehaviorManager {
                     </p>
                 </div>
                 
-                <!-- Greeting Responses - V32 Two-Column Format with Add/Remove -->
+                <!-- Greeting Responses - V36 Clean 2-Column Table with Add Button -->
                 <div style="margin-bottom: 20px; padding: 16px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <label style="color: #c9d1d9; font-weight: 500;">
-                        👋 Greeting Responses
-                        <span style="background: #238636; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 8px;">0 TOKENS</span>
-                    </label>
+                        <div>
+                            <label style="color: #c9d1d9; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+                                👋 Greeting Responses
+                                <span style="background: #238636; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">0 TOKENS</span>
+                            </label>
+                            <p style="color: #8b949e; font-size: 0.75rem; margin: 4px 0 0 0;">
+                                Instant responses to caller greetings. <strong style="color: #3fb950;">No LLM needed!</strong>
+                            </p>
+                        </div>
                         <button type="button" onclick="window.frontDeskManager.addGreetingRow()" 
-                            style="padding: 6px 12px; background: #238636; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 4px;">
-                            <span>+</span> Add Greeting
+                            style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(35, 134, 54, 0.3);">
+                            <span style="font-size: 1.1rem;">+</span> Add Greeting
                         </button>
                     </div>
-                    <p style="color: #8b949e; font-size: 0.75rem; margin-bottom: 16px;">
-                        Match caller greetings and respond instantly. <strong style="color: #3fb950;">No LLM needed!</strong>
-                        <br><span style="color: #6e7681;">Fuzzy = matches variations (e.g., "good morning" also matches "morning", "gm")</span>
-                    </p>
                     
-                    <!-- Header Row -->
-                    <div style="display: grid; grid-template-columns: 200px 80px 1fr 40px; gap: 8px; margin-bottom: 8px; padding: 0 4px;">
-                        <span style="color: #8b949e; font-size: 0.75rem; font-weight: 600;">TRIGGER PHRASE</span>
-                        <span style="color: #8b949e; font-size: 0.75rem; font-weight: 600; text-align: center;">FUZZY</span>
-                        <span style="color: #8b949e; font-size: 0.75rem; font-weight: 600;">RESPONSE</span>
-                        <span></span>
+                    <!-- Clean 2-Column Table -->
+                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; overflow: hidden;">
+                        <!-- Table Header -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 50px; background: #21262d; border-bottom: 1px solid #30363d;">
+                            <div style="padding: 12px 16px; color: #8b949e; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                                Caller Says (Trigger)
+                            </div>
+                            <div style="padding: 12px 16px; color: #8b949e; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                                AI Responds
+                            </div>
+                            <div></div>
                         </div>
-                    
-                    <!-- Greeting Rows Container -->
-                    <div id="fdb-greeting-rows" style="display: flex; flex-direction: column; gap: 8px;">
-                        ${this.renderGreetingRows()}
+                        
+                        <!-- Table Body -->
+                        <div id="fdb-greeting-rows" style="display: flex; flex-direction: column;">
+                            ${this.renderGreetingRows()}
                         </div>
+                    </div>
                     
-                    <p style="color: #6e7681; font-size: 0.7rem; margin-top: 12px; padding-top: 12px; border-top: 1px solid #21262d;">
-                        💡 <strong>Tip:</strong> Use <code style="background: #21262d; padding: 1px 4px; border-radius: 3px;">{time}</code> placeholder for dynamic time-of-day (morning/afternoon/evening).
-                        Example: "Good {time}! How can I help?" → "Good morning! How can I help?"
+                    <!-- Legend -->
+                    <div style="display: flex; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #21262d;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="background: #238636; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">EXACT</span>
+                            <span style="color: #6e7681; font-size: 0.7rem;">Matches exact phrase only</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="background: #58a6ff; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">FUZZY</span>
+                            <span style="color: #6e7681; font-size: 0.7rem;">Matches variations (e.g., "morning" → "good morning")</span>
+                        </div>
+                    </div>
+                    
+                    <p style="color: #6e7681; font-size: 0.7rem; margin-top: 8px;">
+                        💡 <strong>Tip:</strong> Use <code style="background: #21262d; padding: 1px 4px; border-radius: 3px;">{time}</code> for dynamic time → "Good {time}!" becomes "Good morning!"
                     </p>
                 </div>
                 
@@ -827,11 +845,12 @@ Sean → Shawn, Shaun"
                 console.log('[FRONT DESK BEHAVIOR] 👋 Loaded greetingRules from conversationStages:', savedRules.length);
             } else {
                 // Convert old format to new format (first-time migration)
+                // V36: Use EXACT for time-of-day greetings, FUZZY for generic greetings
                 const oldGreetings = this.config.conversationStages?.greetingResponses || {};
                 this.config.greetingRules = [
-                    { trigger: 'good morning', fuzzy: true, response: oldGreetings.morning || 'Good morning! How can I help you today?' },
-                    { trigger: 'good afternoon', fuzzy: true, response: oldGreetings.afternoon || 'Good afternoon! How can I help you today?' },
-                    { trigger: 'good evening', fuzzy: true, response: oldGreetings.evening || 'Good evening! How can I help you today?' },
+                    { trigger: 'good morning', fuzzy: false, response: oldGreetings.morning || 'Good morning! How can I help you today?' },
+                    { trigger: 'good afternoon', fuzzy: false, response: oldGreetings.afternoon || 'Good afternoon! How can I help you today?' },
+                    { trigger: 'good evening', fuzzy: false, response: oldGreetings.evening || 'Good evening! How can I help you today?' },
                     { trigger: 'hi', fuzzy: true, response: oldGreetings.generic || 'Hi there! How can I help you today?' },
                     { trigger: 'hello', fuzzy: true, response: oldGreetings.generic || 'Hello! How can I help you today?' },
                     { trigger: 'hey', fuzzy: true, response: oldGreetings.generic || 'Hey there! How can I help you today?' }
@@ -843,36 +862,75 @@ Sean → Shawn, Shaun"
         const greetings = this.config.greetingRules || [];
         
         if (greetings.length === 0) {
-            return '<p style="color: #8b949e; margin: 0; padding: 12px; text-align: center; font-style: italic;">No greetings configured. Click "Add Greeting" to create one.</p>';
+            return `
+                <div style="padding: 40px 20px; text-align: center;">
+                    <div style="font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5;">👋</div>
+                    <p style="color: #8b949e; margin: 0 0 8px 0; font-size: 0.9rem;">No greetings configured</p>
+                    <p style="color: #6e7681; margin: 0; font-size: 0.8rem;">Click "Add Greeting" above to create your first greeting response</p>
+                </div>
+            `;
         }
         
         return greetings.map((g, idx) => `
-            <div class="greeting-row" data-idx="${idx}" style="display: grid; grid-template-columns: 200px 80px 1fr 40px; gap: 8px; align-items: center; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 6px;">
-                <input type="text" 
-                    class="greeting-trigger" 
-                    value="${this.escapeHtml(g.trigger || '')}" 
-                    placeholder="e.g., good morning"
-                    onchange="window.frontDeskManager.updateGreetingRow(${idx}, 'trigger', this.value)"
-                    style="padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
-                <label style="display: flex; justify-content: center; align-items: center; cursor: pointer;">
-                    <input type="checkbox" 
-                        class="greeting-fuzzy"
-                        ${g.fuzzy ? 'checked' : ''} 
-                        onchange="window.frontDeskManager.updateGreetingRow(${idx}, 'fuzzy', this.checked)"
-                        style="accent-color: #58a6ff; width: 18px; height: 18px;">
-                </label>
-                <input type="text" 
-                    class="greeting-response" 
-                    value="${this.escapeHtml(g.response || '')}" 
-                    placeholder="Response to caller..."
-                    onchange="window.frontDeskManager.updateGreetingRow(${idx}, 'response', this.value)"
-                    style="padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
-                <button type="button" 
-                    onclick="window.frontDeskManager.removeGreetingRow(${idx})"
-                    style="padding: 6px 10px; background: #21262d; border: 1px solid #f85149; border-radius: 4px; color: #f85149; cursor: pointer; font-size: 1rem;"
-                    title="Remove this greeting">×</button>
+            <div class="greeting-row" data-idx="${idx}" style="display: grid; grid-template-columns: 1fr 1fr 50px; border-bottom: 1px solid #30363d; transition: background 0.15s;">
+                <!-- Column 1: Trigger with Exact/Fuzzy Toggle -->
+                <div style="padding: 12px 16px; display: flex; flex-direction: column; gap: 8px;">
+                    <input type="text" 
+                        class="greeting-trigger" 
+                        value="${this.escapeHtml(g.trigger || '')}" 
+                        placeholder="e.g., good morning, hi, hello..."
+                        onchange="window.frontDeskManager.updateGreetingRow(${idx}, 'trigger', this.value)"
+                        style="width: 100%; padding: 10px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.9rem;">
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" 
+                            onclick="window.frontDeskManager.setGreetingMatchType(${idx}, false)"
+                            style="flex: 1; padding: 6px 12px; background: ${!g.fuzzy ? '#238636' : '#21262d'}; border: 1px solid ${!g.fuzzy ? '#238636' : '#30363d'}; border-radius: 4px; color: ${!g.fuzzy ? 'white' : '#8b949e'}; cursor: pointer; font-size: 0.75rem; font-weight: 600; transition: all 0.15s;">
+                            EXACT
+                        </button>
+                        <button type="button" 
+                            onclick="window.frontDeskManager.setGreetingMatchType(${idx}, true)"
+                            style="flex: 1; padding: 6px 12px; background: ${g.fuzzy ? '#58a6ff' : '#21262d'}; border: 1px solid ${g.fuzzy ? '#58a6ff' : '#30363d'}; border-radius: 4px; color: ${g.fuzzy ? 'white' : '#8b949e'}; cursor: pointer; font-size: 0.75rem; font-weight: 600; transition: all 0.15s;">
+                            FUZZY
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Column 2: Response -->
+                <div style="padding: 12px 16px; display: flex; align-items: center;">
+                    <input type="text" 
+                        class="greeting-response" 
+                        value="${this.escapeHtml(g.response || '')}" 
+                        placeholder="AI response to caller..."
+                        onchange="window.frontDeskManager.updateGreetingRow(${idx}, 'response', this.value)"
+                        style="width: 100%; padding: 10px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.9rem;">
+                </div>
+                
+                <!-- Delete Button -->
+                <div style="padding: 12px 8px; display: flex; align-items: center; justify-content: center;">
+                    <button type="button" 
+                        onclick="window.frontDeskManager.removeGreetingRow(${idx})"
+                        style="width: 32px; height: 32px; background: transparent; border: 1px solid #f8514940; border-radius: 6px; color: #f85149; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; transition: all 0.15s;"
+                        onmouseover="this.style.background='#f8514920'; this.style.borderColor='#f85149'"
+                        onmouseout="this.style.background='transparent'; this.style.borderColor='#f8514940'"
+                        title="Remove this greeting">×</button>
+                </div>
             </div>
         `).join('');
+    }
+    
+    setGreetingMatchType(idx, fuzzy) {
+        if (!this.config.greetingRules || !this.config.greetingRules[idx]) return;
+        
+        this.config.greetingRules[idx].fuzzy = fuzzy;
+        this.isDirty = true;
+        
+        // Re-render to update button states
+        const container = document.getElementById('fdb-greeting-rows');
+        if (container) {
+            container.innerHTML = this.renderGreetingRows();
+        }
+        
+        console.log(`[FRONT DESK] 👋 Set greeting ${idx} match type to ${fuzzy ? 'FUZZY' : 'EXACT'}`);
     }
     
     escapeHtml(str) {
