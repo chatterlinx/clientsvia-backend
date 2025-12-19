@@ -1110,6 +1110,8 @@ const SlotExtractors = {
             'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am', 'has', 'have', 'had',
             'do', 'does', 'did', 'will', 'would', 'could', 'should', 'can', 'may', 'might',
             'it', 'its', 'my', 'your', 'our', 'their', 'his', 'her', 'a', 'an', 'and', 'or', 'but',
+            // V36 FIX: Add "to" and "see" - "I am trying to see if..." should NOT extract "to see" as name
+            'to', 'see', 'if', 'we', 'get', 'somebody', 'someone', 'here', 'there', 'today', 'now',
             // Common verbs
             'having', 'doing', 'calling', 'looking', 'trying', 'getting', 'going', 'coming',
             'waiting', 'hoping', 'thinking', 'wondering', 'needing', 'wanting', 'asking',
@@ -3297,7 +3299,8 @@ async function processTurn({
                     }
                 }
                 // Handle unclear phone - trigger breakdown if configured
-                else if (session.booking.activeSlot === 'phone' && !currentSlots.phone && !phoneMeta.breakdownStep && 
+                // V36 FIX: Only trigger if finalReply not already set (prevents overwriting name confirmation response)
+                else if (!finalReply && session.booking.activeSlot === 'phone' && !currentSlots.phone && !phoneMeta.breakdownStep && 
                          phoneSlotConfig?.breakDownIfUnclear && userText.length > 0 && !extractedThisTurn.phone) {
                     phoneMeta.breakdownStep = 'area_code';
                     finalReply = "I didn't quite catch that. Let's go step by step - what's the area code?";
@@ -3599,7 +3602,8 @@ async function processTurn({
                     }
                 }
                 // Handle unclear address - trigger breakdown if configured
-                else if (session.booking.activeSlot === 'address' && !currentSlots.address && !addressMeta.breakdownStep &&
+                // V36 FIX: Only trigger if finalReply not already set (prevents overwriting phone confirmation response)
+                else if (!finalReply && session.booking.activeSlot === 'address' && !currentSlots.address && !addressMeta.breakdownStep &&
                          addressSlotConfig?.breakDownIfUnclear && userText.length > 0 && !extractedThisTurn.address) {
                     addressMeta.breakdownStep = 'street';
                     finalReply = "I didn't quite catch that. Let's go step by step - what's the street address?";
