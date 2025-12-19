@@ -3042,6 +3042,10 @@ async function processTurn({
                         phoneMeta.confirmed = true;
                         phoneMeta.pendingConfirm = false;
                         session.booking.activeSlot = 'address';
+                        // V35 FIX: Set finalReply to ask for address (prevents fall-through to breakdown)
+                        const addressSlotConfigForPrompt = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'address');
+                        finalReply = "Perfect. " + (addressSlotConfigForPrompt?.question || "What's the service address?");
+                        nextSlotId = 'address';
                         log('📞 PHONE: User confirmed, moving to address');
                     } else if (userSaysNoGeneric) {
                         currentSlots.phone = null;
@@ -3149,6 +3153,15 @@ async function processTurn({
                         addressMeta.confirmed = true;
                         addressMeta.pendingConfirm = false;
                         session.booking.activeSlot = 'time';
+                        // V35 FIX: Set finalReply to ask for time (prevents fall-through to breakdown)
+                        const timeSlotConfigForPrompt = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'time');
+                        if (timeSlotConfigForPrompt?.required !== false) {
+                            finalReply = "Perfect. " + (timeSlotConfigForPrompt?.question || "When works best for you?");
+                            nextSlotId = 'time';
+                        } else {
+                            // Time is optional - finalize booking
+                            finalReply = `Perfect. You're all set. We'll be in touch at ${currentSlots.phone} to confirm your appointment.`;
+                        }
                         log('🏠 ADDRESS: User confirmed, moving to time');
                     } else if (userSaysNoGeneric) {
                         currentSlots.address = null;
