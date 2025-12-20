@@ -13,11 +13,32 @@
  * 4. Execute actions (mode transitions, responses, etc.)
  * 5. Log trace to Black Box
  * 
- * CRITICAL RULE:
- * The engine decides flow. The LLM only phrases responses.
- * The engine can VETO LLM decisions (re-greet, restart, etc.)
+ * ════════════════════════════════════════════════════════════════════════════
+ * CRITICAL RULES (PREVENT DOUBLE-BRAIN SYNDROME):
+ * ════════════════════════════════════════════════════════════════════════════
  * 
- * MULTI-TENANT: All operations scoped by companyId
+ * 1. ONLY ONE COMPONENT decides "next required item":
+ *    - DynamicFlowEngine: emits events, requirements, guardrails
+ *    - BookingEngine: owns slot order and next question
+ *    - LLM: only phrases responses, never decides flow
+ * 
+ * 2. DynamicFlowEngine CAN:
+ *    - Emit events (EVENT_RETURNING_CUSTOMER_CLAIM)
+ *    - Add requirements to pendingRequirements
+ *    - Set flags on session
+ *    - Apply guardrails (NO_REGREET, NO_RESTART_BOOKING)
+ *    - Transition mode (DISCOVERY → BOOKING)
+ * 
+ * 3. DynamicFlowEngine CANNOT:
+ *    - Directly choose the next prompt
+ *    - Override bookingSlots order
+ *    - Bypass guardrails
+ *    - Generate response text (only suggest)
+ * 
+ * 4. MULTI-TENANT ISOLATION:
+ *    - Runtime ONLY uses company-specific flows
+ *    - Global templates are NEVER used directly
+ *    - Companies must COPY templates to use them
  * 
  * ============================================================================
  */
@@ -594,12 +615,28 @@ function executeAction(action, context, session) {
             }
             
             case 'set_next_slot': {
+                // ═══════════════════════════════════════════════════════════════
+                // CRITICAL: Dynamic Flow Engine does NOT override booking order
+                // It only SUGGESTS a slot by adding to pendingRequirements
+                // The deterministic "nextMissingSlot" engine makes final decision
+                // ═══════════════════════════════════════════════════════════════
                 const slotId = action.config?.slotId;
                 if (slotId) {
-                    session.booking = session.booking || {};
-                    session.booking.activeSlot = slotId;
-                    result.stateChange = { activeSlot: slotId };
+                    // Add to pending requirements, NOT override activeSlot
+                    const flowState = getFlowState(session);
+                    flowState.pendingRequirements = flowState.pendingRequirements || [];
+                    flowState.pendingRequirements.push({
+                        type: 'collect_slot',
+                        config: { slotId, askImmediately: true },
+                        source: 'dynamic_flow_action'
+                    });
+                    result.stateChange = { suggestedSlot: slotId };
                     result.executed = true;
+                    
+                    logger.info('[DYNAMIC FLOW] Slot suggested (not forced)', {
+                        slotId,
+                        note: 'Booking engine makes final decision'
+                    });
                 }
                 break;
             }

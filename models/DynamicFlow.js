@@ -373,44 +373,30 @@ DynamicFlowSchema.index({ tradeType: 1, isTemplate: 1 });
 // ════════════════════════════════════════════════════════════════════════════
 
 /**
- * Get all enabled flows for a company (including applicable templates)
+ * Get all enabled flows for a company
+ * 
+ * CRITICAL MULTI-TENANT RULE:
+ * Runtime ONLY uses company-specific flows.
+ * Global templates are NEVER used directly in runtime.
+ * Companies must COPY templates to use them.
+ * 
+ * This prevents cross-tenant contamination.
  */
 DynamicFlowSchema.statics.getFlowsForCompany = async function(companyId, tradeType = null) {
     const mongoose = require('mongoose');
     
-    // Get company-specific flows
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MULTI-TENANT ISOLATION: ONLY company-specific flows
+    // Global templates are NEVER included in runtime
+    // Companies must explicitly copy templates to use them
+    // ═══════════════════════════════════════════════════════════════════════════
     const companyFlows = await this.find({
         companyId: new mongoose.Types.ObjectId(companyId),
-        enabled: true
+        enabled: true,
+        isTemplate: false  // Extra safety: never include templates
     }).sort({ priority: -1 }).lean();
     
-    // Get applicable global templates (not overridden by company)
-    const companyFlowKeys = companyFlows.map(f => f.flowKey);
-    
-    const templateQuery = {
-        isTemplate: true,
-        enabled: true,
-        flowKey: { $nin: companyFlowKeys }  // Not overridden
-    };
-    
-    // Filter by trade if specified
-    if (tradeType) {
-        templateQuery.$or = [
-            { tradeType: tradeType },
-            { tradeType: null },
-            { tradeType: 'general' }
-        ];
-    }
-    
-    const templates = await this.find(templateQuery)
-        .sort({ priority: -1 })
-        .lean();
-    
-    // Merge and sort by priority
-    const allFlows = [...companyFlows, ...templates];
-    allFlows.sort((a, b) => (b.priority || 0) - (a.priority || 0));
-    
-    return allFlows;
+    return companyFlows;
 };
 
 /**
