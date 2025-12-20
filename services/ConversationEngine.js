@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V38-FIX-META-INIT';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V39-ALL-META-INIT';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -2746,6 +2746,7 @@ async function processTurn({
                 const bookingSlotsSafe = bookingConfigSafe.slots || [];
                 
                 // Initialize booking meta state for tracking confirmations
+                // V38 FIX: Initialize ALL slot metas at the start of booking mode
                 session.booking.meta = session.booking.meta || {};
                 session.booking.meta.name = session.booking.meta.name || {
                     first: null,
@@ -2757,6 +2758,28 @@ async function processTurn({
                     // V31: Spelling variant tracking
                     askedSpellingVariant: false,
                     spellingVariantAnswer: null  // "optionA" | "optionB" | null
+                };
+                // V38 FIX: Initialize phone, address, time, email metas early
+                session.booking.meta.phone = session.booking.meta.phone || { 
+                    pendingConfirm: false, 
+                    confirmed: false,
+                    offeredCallerId: false,
+                    breakdownStep: null
+                };
+                session.booking.meta.address = session.booking.meta.address || { 
+                    pendingConfirm: false, 
+                    confirmed: false,
+                    breakdownStep: null
+                };
+                session.booking.meta.time = session.booking.meta.time || { 
+                    pendingConfirm: false, 
+                    confirmed: false,
+                    offeredAsap: false
+                };
+                session.booking.meta.email = session.booking.meta.email || { 
+                    pendingConfirm: false, 
+                    confirmed: false,
+                    spelledOut: false
                 };
                 
                 // ═══════════════════════════════════════════════════════════════════
