@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V39-ALL-META-INIT';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V40-STATE-LOCKS-BLACKBOX';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -91,7 +91,19 @@ logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
         '✅ V34: VALUE BEATS META - If slot has value, it\'s complete',
         '✅ V34: isSlotComplete() helper functions for consistent checks',
         '✅ V34: ANTI-REPEAT GUARDRAIL - Never ask slot just extracted',
-        '✅ V34: buildStateSummaryForLLM() for context awareness'
+        '✅ V34: buildStateSummaryForLLM() for context awareness',
+        '✅ V40: PHASE 1 - STATE + LOCKS (Deterministic Control Layer)',
+        '✅ V40: session.locks = { greeted, issueCaptured, bookingStarted, bookingLocked, askedSlots }',
+        '✅ V40: session.memory = { rollingSummary, facts, acknowledgedClaims }',
+        '✅ V40: NO RE-GREET after Turn 1',
+        '✅ V40: NO RE-ASK collected slots',
+        '✅ V40: NO RESTART booking once started',
+        '✅ V40: Rolling summary prevents goldfish memory',
+        '✅ V40: PHASE 2 - BLACK BOX UNIFICATION',
+        '✅ V40: Test Console calls → Black Box (source: test)',
+        '✅ V40: SMS calls → Black Box (source: sms)',
+        '✅ V40: Web chat → Black Box (source: web)',
+        '✅ V40: Session snapshot (phase, mode, locks, memory) persisted each turn'
     ]
 });
 
@@ -1740,6 +1752,14 @@ async function processTurn({
             // Fall through to normal processing - don't intercept as greeting
         }
         
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 PHASE 1 GUARDRAIL: NO RE-GREET AFTER TURN 1
+        // ═══════════════════════════════════════════════════════════════════
+        // If we have an existing session, we've already greeted - don't greet again
+        // This prevents the "goldfish memory" problem of re-greeting mid-conversation
+        // ═══════════════════════════════════════════════════════════════════
+        const shouldSkipGreetingDueToLock = hasExistingSession; // If session exists, we've greeted
+        
         // Get UI-configured greeting rules (V32 format)
         const greetingRules = company.aiAgentSettings?.frontDeskBehavior?.conversationStages?.greetingRules || [];
         const legacyResponses = company.aiAgentSettings?.frontDeskBehavior?.conversationStages?.greetingResponses || {};
@@ -1763,7 +1783,8 @@ async function processTurn({
         const startsWithGreeting = /^(good\s*(morning|afternoon|evening)|hi|hello|hey|howdy|yo|sup|what'?s\s*up|greetings?|morning|afternoon|evening|gm)\b/i.test(userTextLower);
         
         // V34: Only intercept as greeting if NOT a time preference
-        if (isShortMessage && startsWithGreeting && !shouldTreatAsTimePreference) {
+        // 🆕 PHASE 1: Also skip if we've already greeted (existing session)
+        if (isShortMessage && startsWithGreeting && !shouldTreatAsTimePreference && !shouldSkipGreetingDueToLock) {
             let greetingResponse = null;
             let matchedTrigger = null;
             let matchType = null;
@@ -1963,6 +1984,49 @@ async function processTurn({
             // 🔍 DIAGNOSTIC: Show what slots were already saved in this session
             existingSlots: JSON.stringify(session.collectedSlots || {}),
             isSessionReused: (session.metrics?.totalTurns || 0) > 0
+        });
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 PHASE 1: INITIALIZE STATE + LOCKS (Deterministic Control Layer)
+        // ═══════════════════════════════════════════════════════════════════
+        // These locks prevent the "goldfish memory" problem:
+        // - No re-greet after Turn 1
+        // - No re-ask collected slots
+        // - No restart booking once started
+        // - Always acknowledge what caller said
+        // ═══════════════════════════════════════════════════════════════════
+        if (!session.locks) {
+            session.locks = {
+                greeted: false,
+                issueCaptured: false,
+                bookingStarted: false,
+                bookingLocked: false,
+                askedSlots: {}
+            };
+        }
+        
+        if (!session.memory) {
+            session.memory = {
+                rollingSummary: '',
+                facts: {},
+                lastUserIntent: null,
+                lastUserNeed: null,
+                acknowledgedClaims: []
+            };
+        }
+        
+        // Track turn number for locks
+        const currentTurnNumber = (session.metrics?.totalTurns || 0) + 1;
+        
+        // 📊 PHASE 1 DEBUG: Log locks state
+        log('🔒 PHASE 1: Locks state', {
+            locks: session.locks,
+            memory: {
+                rollingSummary: session.memory?.rollingSummary?.substring(0, 50),
+                factsCount: Object.keys(session.memory?.facts || {}).length,
+                acknowledgedClaims: session.memory?.acknowledgedClaims?.length || 0
+            },
+            turnNumber: currentTurnNumber
         });
         
         // ═══════════════════════════════════════════════════════════════════
@@ -5186,6 +5250,83 @@ async function processTurn({
             session.lastAgentIntent = 'DISCOVERY';
         }
         
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 PHASE 1: UPDATE LOCKS + ROLLING SUMMARY
+        // ═══════════════════════════════════════════════════════════════════
+        // Update locks based on what happened this turn
+        if (!session.locks) {
+            session.locks = { greeted: false, issueCaptured: false, bookingStarted: false, bookingLocked: false, askedSlots: {} };
+        }
+        
+        // Mark as greeted if this was the first turn
+        if ((session.metrics?.totalTurns || 0) === 0) {
+            session.locks.greeted = true;
+        }
+        
+        // Mark issue captured if we have discovery data
+        if (session.discovery?.issue || currentSlots?.issue) {
+            session.locks.issueCaptured = true;
+        }
+        
+        // Mark booking started/locked if in booking mode
+        if (session.mode === 'BOOKING') {
+            session.locks.bookingStarted = true;
+            if (session.booking?.consentGiven) {
+                session.locks.bookingLocked = true;
+            }
+        }
+        
+        // Track which slots we've asked for (to prevent re-asking)
+        if (session.booking?.activeSlot) {
+            session.locks.askedSlots = session.locks.askedSlots || {};
+            session.locks.askedSlots[session.booking.activeSlot] = true;
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 PHASE 1: UPDATE ROLLING SUMMARY (Prevents goldfish memory)
+        // ═══════════════════════════════════════════════════════════════════
+        // Build a 1-2 sentence summary of the conversation so far
+        if (!session.memory) {
+            session.memory = { rollingSummary: '', facts: {}, acknowledgedClaims: [] };
+        }
+        
+        // Build facts from collected data
+        const facts = session.memory.facts || {};
+        if (currentSlots?.name || currentSlots?.partialName) {
+            facts.callerName = currentSlots.name || currentSlots.partialName;
+        }
+        if (session.discovery?.issue) {
+            facts.issue = session.discovery.issue;
+        }
+        if (currentSlots?.phone) {
+            facts.phoneCollected = true;
+        }
+        if (currentSlots?.address) {
+            facts.addressCollected = true;
+        }
+        session.memory.facts = facts;
+        
+        // Build rolling summary
+        const summaryParts = [];
+        if (facts.callerName) summaryParts.push(`Caller: ${facts.callerName}`);
+        if (facts.issue) summaryParts.push(`Issue: ${facts.issue}`);
+        if (session.mode === 'BOOKING') summaryParts.push('Booking in progress');
+        if (facts.phoneCollected) summaryParts.push('Phone captured');
+        if (facts.addressCollected) summaryParts.push('Address captured');
+        
+        session.memory.rollingSummary = summaryParts.join('. ') || 'New conversation';
+        session.memory.lastUserIntent = aiResult?.intent || 'unknown';
+        
+        // Mark modified for Mongoose
+        session.markModified('locks');
+        session.markModified('memory');
+        
+        log('🔒 PHASE 1: Locks + Memory updated', {
+            locks: session.locks,
+            rollingSummary: session.memory.rollingSummary,
+            factsCount: Object.keys(session.memory.facts).length
+        });
+        
         // Persist all session changes
         session.markModified('booking');
         session.markModified('conversationMemory');
@@ -5449,6 +5590,72 @@ async function processTurn({
         }
         
         log('✅ processTurn complete', { responseLength: aiResponse.length, latencyMs });
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 PHASE 2: BLACK BOX LOGGING FOR ALL CHANNELS
+        // ═══════════════════════════════════════════════════════════════════
+        // Log to Black Box for test console, SMS, and web (voice has its own path)
+        // This ensures ALL conversations are recorded for debugging
+        // ═══════════════════════════════════════════════════════════════════
+        if (channel === 'test' || channel === 'website' || channel === 'sms') {
+            try {
+                const BlackBoxLogger = require('./BlackBoxLogger');
+                
+                // Determine source type
+                const sourceType = channel === 'test' ? 'test' : channel === 'sms' ? 'sms' : 'web';
+                
+                // Check if we need to initialize the recording (first turn)
+                const isFirstTurn = (session.metrics?.totalTurns || 0) <= 1;
+                
+                if (isFirstTurn) {
+                    // Initialize Black Box recording for this session
+                    await BlackBoxLogger.initCall({
+                        callId: session._id.toString(),
+                        companyId,
+                        from: callerPhone || visitorInfo?.ip || 'test-console',
+                        to: company.companyName || 'AI Agent',
+                        source: sourceType,
+                        sessionSnapshot: {
+                            phase: session.phase,
+                            mode: session.mode,
+                            locks: session.locks,
+                            memory: session.memory
+                        }
+                    });
+                    
+                    log('📼 PHASE 2: Black Box recording initialized', { source: sourceType });
+                }
+                
+                // Log this turn's transcript
+                await BlackBoxLogger.addTranscript(session._id.toString(), companyId, {
+                    callerTurn: {
+                        turn: session.metrics?.totalTurns || 1,
+                        text: userText,
+                        timestamp: new Date()
+                    },
+                    agentTurn: {
+                        turn: session.metrics?.totalTurns || 1,
+                        text: aiResponse,
+                        timestamp: new Date(),
+                        latencyMs,
+                        tokensUsed: aiResult?.tokensUsed || 0
+                    }
+                });
+                
+                // Update session snapshot
+                await BlackBoxLogger.updateSessionSnapshot(session._id.toString(), companyId, session);
+                
+                log('📼 PHASE 2: Black Box turn logged', { 
+                    source: sourceType, 
+                    turn: session.metrics?.totalTurns,
+                    mode: session.mode 
+                });
+                
+            } catch (bbErr) {
+                // Non-blocking: Don't let Black Box failures kill the conversation
+                log('⚠️ Black Box logging failed (non-fatal)', { error: bbErr.message });
+            }
+        }
         
         return response;
         

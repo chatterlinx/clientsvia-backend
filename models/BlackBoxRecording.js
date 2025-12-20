@@ -96,6 +96,48 @@ const BlackBoxRecordingSchema = new Schema({
   },
   
   // ─────────────────────────────────────────────────────────────────────────
+  // 🆕 PHASE 2: SOURCE + SESSION SNAPSHOT (Unified Logging)
+  // ─────────────────────────────────────────────────────────────────────────
+  // Distinguishes voice calls from test console, SMS, and web chat
+  // sessionSnapshot captures state + locks + memory for debugging
+  // ─────────────────────────────────────────────────────────────────────────
+  source: { 
+    type: String, 
+    enum: ['voice', 'test', 'sms', 'web'], 
+    default: 'voice',
+    index: true 
+  },
+  
+  sessionSnapshot: {
+    phase: { type: String },
+    mode: { type: String },
+    locks: {
+      greeted: { type: Boolean },
+      issueCaptured: { type: Boolean },
+      bookingStarted: { type: Boolean },
+      bookingLocked: { type: Boolean },
+      askedSlots: { type: Schema.Types.Mixed }
+    },
+    memory: {
+      rollingSummary: { type: String },
+      facts: { type: Schema.Types.Mixed },
+      lastUserIntent: { type: String },
+      acknowledgedClaims: [{ type: String }]
+    }
+  },
+  
+  // Placeholder for Phase 3: Dynamic Flow
+  dynamicFlowTrace: [{
+    turn: { type: Number },
+    triggersEvaluated: [{ type: String }],
+    triggersFired: [{ type: String }],
+    eventsEmitted: [{ type: String }],
+    actionsExecuted: [{ type: String }],
+    stateChanges: { type: Schema.Types.Mixed },
+    guardrailsApplied: [{ type: String }]
+  }],
+  
+  // ─────────────────────────────────────────────────────────────────────────
   // CUSTOMER CONTEXT (link to existing customer record)
   // ─────────────────────────────────────────────────────────────────────────
   customerId: { 

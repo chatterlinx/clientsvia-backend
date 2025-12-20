@@ -41,9 +41,19 @@ function truncate(text, maxLen = 40) {
 
 /**
  * Initialize a new call recording
- * Call this at the START of /voice endpoint
+ * Call this at the START of /voice endpoint, test console, SMS, or web chat
+ * 
+ * @param {Object} options
+ * @param {string} options.callId - Unique call/session identifier
+ * @param {string} options.companyId - Company ID
+ * @param {string} options.from - Caller phone/identifier
+ * @param {string} options.to - Called number/identifier
+ * @param {string} options.source - 'voice' | 'test' | 'sms' | 'web'
+ * @param {string} options.customerId - Customer ID (optional)
+ * @param {Object} options.customerContext - Customer context (optional)
+ * @param {Object} options.sessionSnapshot - Initial session state (optional)
  */
-async function initCall({ callId, companyId, from, to, customerId, customerContext }) {
+async function initCall({ callId, companyId, from, to, source = 'voice', customerId, customerContext, sessionSnapshot }) {
   const now = new Date();
   
   try {
@@ -52,9 +62,27 @@ async function initCall({ callId, companyId, from, to, customerId, customerConte
       companyId,
       from,
       to,
+      source,  // 🆕 Phase 2: Source field
       startedAt: now,
       customerId: customerId || null,
       customerContext: customerContext || {},
+      sessionSnapshot: sessionSnapshot || {  // 🆕 Phase 2: Session snapshot
+        phase: 'greeting',
+        mode: 'DISCOVERY',
+        locks: {
+          greeted: false,
+          issueCaptured: false,
+          bookingStarted: false,
+          bookingLocked: false,
+          askedSlots: {}
+        },
+        memory: {
+          rollingSummary: '',
+          facts: {},
+          lastUserIntent: null,
+          acknowledgedClaims: []
+        }
+      },
       events: [{
         type: 'CALL_START',
         ts: now,
@@ -63,6 +91,7 @@ async function initCall({ callId, companyId, from, to, customerId, customerConte
         data: {
           from,
           to,
+          source,  // 🆕 Include source in event data
           customerId: customerId || null,
           isReturning: customerContext?.isReturning || false
         }
@@ -76,7 +105,8 @@ async function initCall({ callId, companyId, from, to, customerId, customerConte
     logger.info('[BLACK BOX] 📼 Recording started', {
       callId,
       companyId: companyId.toString(),
-      from
+      from,
+      source  // 🆕 Log source
     });
     
     return recording;
@@ -86,6 +116,7 @@ async function initCall({ callId, companyId, from, to, customerId, customerConte
     logger.error('[BLACK BOX] Failed to init recording (non-fatal)', {
       callId,
       companyId,
+      source,
       error: error.message
     });
     return null;
@@ -1158,6 +1189,104 @@ async function updateBookingProgress(callId, companyId, progress) {
 }
 
 // ============================================================================
+// 🆕 PHASE 2: UPDATE SESSION SNAPSHOT (called each turn)
+// ============================================================================
+
+/**
+ * Update the session snapshot in Black Box
+ * Called each turn to persist state + locks + memory
+ * 
+ * @param {string} callId - Call/session identifier
+ * @param {string|ObjectId} companyId - Company ID
+ * @param {Object} session - Session object with locks, memory, mode, phase
+ */
+async function updateSessionSnapshot(callId, companyId, session) {
+  try {
+    const snapshot = {
+      phase: session.phase || session.conversationMemory?.currentStage || 'unknown',
+      mode: session.mode || 'DISCOVERY',
+      locks: {
+        greeted: session.locks?.greeted || false,
+        issueCaptured: session.locks?.issueCaptured || false,
+        bookingStarted: session.locks?.bookingStarted || false,
+        bookingLocked: session.locks?.bookingLocked || false,
+        askedSlots: session.locks?.askedSlots || {}
+      },
+      memory: {
+        rollingSummary: session.memory?.rollingSummary || '',
+        facts: session.memory?.facts || {},
+        lastUserIntent: session.memory?.lastUserIntent || null,
+        acknowledgedClaims: session.memory?.acknowledgedClaims || []
+      }
+    };
+    
+    await BlackBoxRecording.updateOne(
+      { callId, companyId },
+      { $set: { sessionSnapshot: snapshot } }
+    );
+    
+    logger.debug('[BLACK BOX] Session snapshot updated', {
+      callId,
+      mode: snapshot.mode,
+      locks: snapshot.locks,
+      summaryLength: snapshot.memory.rollingSummary?.length || 0
+    });
+    
+  } catch (error) {
+    logger.error('[BLACK BOX] Failed to update session snapshot (non-fatal)', {
+      callId,
+      error: error.message
+    });
+  }
+}
+
+// ============================================================================
+// 🆕 PHASE 3 PLACEHOLDER: LOG DYNAMIC FLOW TRACE
+// ============================================================================
+
+/**
+ * Log a dynamic flow trace entry
+ * Called when triggers are evaluated and events fire
+ * 
+ * @param {string} callId - Call/session identifier
+ * @param {string|ObjectId} companyId - Company ID
+ * @param {number} turn - Turn number
+ * @param {Object} trace - Trace data
+ */
+async function logDynamicFlowTrace(callId, companyId, turn, trace) {
+  try {
+    await BlackBoxRecording.updateOne(
+      { callId, companyId },
+      {
+        $push: {
+          dynamicFlowTrace: {
+            turn,
+            triggersEvaluated: trace.triggersEvaluated || [],
+            triggersFired: trace.triggersFired || [],
+            eventsEmitted: trace.eventsEmitted || [],
+            actionsExecuted: trace.actionsExecuted || [],
+            stateChanges: trace.stateChanges || {},
+            guardrailsApplied: trace.guardrailsApplied || []
+          }
+        }
+      }
+    );
+    
+    logger.debug('[BLACK BOX] Dynamic flow trace logged', {
+      callId,
+      turn,
+      triggersFired: trace.triggersFired?.length || 0
+    });
+    
+  } catch (error) {
+    logger.error('[BLACK BOX] Failed to log dynamic flow trace (non-fatal)', {
+      callId,
+      error: error.message
+    });
+  }
+}
+
+// ============================================================================
 // LOG BOOKING CONFLICT (when booking is overridden by another module)
 // ============================================================================
 
@@ -1207,6 +1336,8 @@ module.exports = {
   finalizeCall,
   updateBookingProgress,
   logBookingConflict,
+  updateSessionSnapshot,     // 🆕 Phase 2
+  logDynamicFlowTrace,       // 🆕 Phase 3 placeholder
   QuickLog
 };
 

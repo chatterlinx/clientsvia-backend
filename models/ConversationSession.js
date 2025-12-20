@@ -352,6 +352,37 @@ const conversationSessionSchema = new Schema({
         default: 'DISCOVERY'
     },
     
+    // ════════════════════════════════════════════════════════════════════════════
+    // 🆕 PHASE 1: STATE + LOCKS (Deterministic Control Layer)
+    // ════════════════════════════════════════════════════════════════════════════
+    // These locks prevent the "goldfish memory" problem:
+    // - No re-greet after Turn 1
+    // - No re-ask collected slots
+    // - No restart booking once started
+    // - Always acknowledge what caller said
+    // ════════════════════════════════════════════════════════════════════════════
+    locks: {
+        greeted: { type: Boolean, default: false },           // Has agent greeted? Never greet again
+        issueCaptured: { type: Boolean, default: false },     // Has caller's issue been captured?
+        bookingStarted: { type: Boolean, default: false },    // Has booking flow started?
+        bookingLocked: { type: Boolean, default: false },     // HARD LOCK - booking owns conversation
+        askedSlots: { type: Schema.Types.Mixed, default: {} } // { name: true, phone: true } - track what we've asked
+    },
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // 🆕 PHASE 1: ROLLING MEMORY (Prevents "I'm sorry to hear that" loop)
+    // ════════════════════════════════════════════════════════════════════════════
+    // Updated each turn with a 1-2 sentence summary of the conversation
+    // This is what the LLM sees to maintain context
+    // ════════════════════════════════════════════════════════════════════════════
+    memory: {
+        rollingSummary: { type: String, default: '', trim: true }, // "Mark says AC not cooling, wants service ASAP"
+        facts: { type: Schema.Types.Mixed, default: {} },          // { returningCustomer: true, symptom: "not cooling" }
+        lastUserIntent: { type: String, default: null, trim: true },
+        lastUserNeed: { type: String, default: null, trim: true },
+        acknowledgedClaims: [{ type: String }]                     // ["returning customer", "AC not cooling"]
+    },
+    
     status: {
         type: String,
         enum: ['active', 'ended', 'transferred', 'abandoned', 'error'],

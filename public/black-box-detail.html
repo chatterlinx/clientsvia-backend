@@ -410,6 +410,74 @@
 
         .diagnosis-card.warning { border-left-color: var(--accent-orange); }
         .diagnosis-card.info { border-left-color: var(--accent-blue); }
+        
+        /* 🆕 PHASE 2: Source & State styles */
+        .source-card {
+            border-left: 4px solid var(--accent-purple);
+        }
+        
+        .source-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+        
+        .source-voice { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+        .source-test { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
+        .source-sms { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
+        .source-web { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); }
+        
+        .mode-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--accent-blue);
+        }
+        
+        .locks-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .lock-item {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            text-align: center;
+        }
+        
+        .lock-item.active {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--accent-green);
+        }
+        
+        .lock-item.locked {
+            background: rgba(234, 179, 8, 0.15);
+            color: var(--accent-yellow);
+        }
+        
+        .rolling-summary {
+            margin-top: 12px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        
+        .rolling-summary strong {
+            color: var(--text-primary);
+        }
 
         .diagnosis-text {
             font-size: 14px;
@@ -804,9 +872,39 @@
             const booking = recording.booking || {};
             const perf = recording.performance || {};
             const diag = recording.diagnosis || {};
+            const snapshot = recording.sessionSnapshot || {};
+            const locks = snapshot.locks || {};
 
             document.getElementById('tabOverview').innerHTML = `
                 <div class="overview-grid">
+                    <!-- 🆕 PHASE 2: Source & State Card -->
+                    <div class="info-card source-card">
+                        <h3>📡 Source & State</h3>
+                        <div class="info-row">
+                            <span class="info-label">Source</span>
+                            <span class="info-value source-badge source-${recording.source || 'voice'}">${(recording.source || 'voice').toUpperCase()}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Mode</span>
+                            <span class="info-value mode-badge">${snapshot.mode || 'DISCOVERY'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Phase</span>
+                            <span class="info-value">${snapshot.phase || 'greeting'}</span>
+                        </div>
+                        <div class="locks-grid">
+                            <span class="lock-item ${locks.greeted ? 'active' : ''}">✓ Greeted</span>
+                            <span class="lock-item ${locks.issueCaptured ? 'active' : ''}">✓ Issue</span>
+                            <span class="lock-item ${locks.bookingStarted ? 'active' : ''}">✓ Booking</span>
+                            <span class="lock-item ${locks.bookingLocked ? 'locked' : ''}">🔒 Locked</span>
+                        </div>
+                        ${snapshot.memory?.rollingSummary ? `
+                            <div class="rolling-summary">
+                                <strong>Summary:</strong> ${snapshot.memory.rollingSummary}
+                            </div>
+                        ` : ''}
+                    </div>
+                    
                     <div class="info-card">
                         <h3>🎯 Intent & Booking</h3>
                         <div class="info-row">
