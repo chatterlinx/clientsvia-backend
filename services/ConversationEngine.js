@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V37-FIX-NO-CORRECTION';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V37-FIX-12DIGIT-PHONE';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -1296,11 +1296,32 @@ const SlotExtractors = {
             return last10.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
         }
         
-        // V37 FIX: 12+ digits - take first 10 (user may have added extra)
-        if (digits.length >= 12) {
-            logger.info('[PHONE EXTRACT] V37: 12+ digits - taking first 10');
-            const first10 = digits.substring(0, 10);
-            return first10.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
+        // V37 FIX: 12+ digits - smart reconstruction
+        // People usually get area code (first 3) and last 4 digits correct
+        // Extra digits are typically typos in the middle (repeated keys)
+        // Example: "23933333 7747" → "239333337747" (12 digits)
+        //   - Area code: 239 (first 3)
+        //   - Last 4: 7747 (last 4)  
+        //   - Middle: 333337 (6 digits, need 3) → take last 3 = "337"
+        //   - Result: 239-337-7747
+        // Wait, that's still wrong. Let's just take first 3 + middle 3 + last 4
+        // For 12 digits: positions 0-2 (area) + positions 3-5 (exchange) + positions 8-11 (last 4)
+        if (digits.length === 12) {
+            logger.info('[PHONE EXTRACT] V37: 12 digits - reconstructing', { digits });
+            const areaCode = digits.substring(0, 3);      // First 3
+            const exchange = digits.substring(3, 6);       // Next 3 (positions 3-5)
+            const lastFour = digits.substring(8, 12);      // Last 4 (positions 8-11)
+            const reconstructed = areaCode + exchange + lastFour;
+            logger.info('[PHONE EXTRACT] V37: 12 digit result', { 
+                areaCode, exchange, lastFour, reconstructed 
+            });
+            return reconstructed.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
+        }
+        
+        // 13+ digits - too many, don't auto-correct (will trigger breakdown)
+        if (digits.length >= 13) {
+            logger.info('[PHONE EXTRACT] V37: 13+ digits - too many, not extracting');
+            return null;
         }
         
         // V37 FIX: 7 digits - local number (missing area code)
