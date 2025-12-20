@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V36-DISCOVERY-NAME-INIT-FIX';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V36-PROMPT-AS-LAW-FINAL';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -2884,13 +2884,21 @@ async function processTurn({
                     const nameToUse = currentSlots.partialName || nameMeta.first || currentSlots.name;
                     
                     if (nameToUse && !nameToUse.includes(' ')) {
-                        finalReply = `Thanks ${nameToUse}! And what's your last name?`;
+                        // V36 PROMPT AS LAW: Use UI template if it asks for last name, otherwise use generic
+                        const templateAsksForLastName = confirmBackTemplate.toLowerCase().includes('last name');
+                        if (templateAsksForLastName) {
+                            finalReply = confirmBackTemplate.replace('{value}', nameToUse);
+                        } else {
+                            finalReply = `Got it, ${nameToUse}. And what's your last name?`;
+                        }
                         nextSlotId = 'name';
                         nameMeta.askedMissingPartOnce = true;
+                        nameMeta.lastConfirmed = true; // Mark that we've asked
                         
                         log('📝 V36: Discovery name - asking for last name (no confirmBack)', {
                             nameToUse,
-                            askFullName
+                            askFullName,
+                            templateAsksForLastName
                         });
                     }
                 }
@@ -2907,22 +2915,19 @@ async function processTurn({
                     // User confirmed partial name, now ask for missing part
                     nameMeta.askedMissingPartOnce = true;
                     
-                    // V36 PROMPT AS LAW: Use UI-configured confirmPrompt for asking last name
-                    // The confirmPrompt template should handle asking for the missing part
-                    // Example UI config: "Got it, {value}. and may I have your last name?"
+                    // V36 PROMPT AS LAW: User said "yes" to confirmBack, now ask for missing part
+                    // Use consistent "Got it" style to match UI template
                     const firstName = nameMeta.first || currentSlots.partialName || '';
                     
                     if (nameMeta.assumedSingleTokenAs === 'last') {
-                        // We have last name, need first - use simple personalized ask
+                        // We have last name, need first
                         finalReply = firstName 
-                            ? `Thanks ${firstName}. And what's your first name?`
+                            ? `Got it, ${firstName}. And what's your first name?`
                             : "And what's your first name?";
                     } else {
-                        // We have first name, need last - use UI confirmPrompt if available
-                        // The confirmPrompt should already include "may I have your last name"
-                        // But if user already said yes to confirmBack, just ask for last name directly
+                        // We have first name, need last
                         finalReply = firstName 
-                            ? `Thanks ${firstName}! And what's your last name?`
+                            ? `Got it, ${firstName}. And what's your last name?`
                             : "And what's your last name?";
                     }
                     nextSlotId = 'name'; // Still on name
@@ -3244,23 +3249,48 @@ async function processTurn({
                             nextSlotId = null;
                         }
                     } else if (nameMeta.lastConfirmed && !nameMeta.askedMissingPartOnce && askFullName) {
-                        // User confirmed, now ask for missing part
-                        nameMeta.askedMissingPartOnce = true;
+                        // V36 FIX: Check if confirmPrompt ALREADY asked for last name
+                        // If so, the user's response IS the last name, not a confirmation
+                        const confirmPromptAsksForLastName = confirmBackTemplate.toLowerCase().includes('last name');
                         
-                        // V36 PROMPT AS LAW: Ask for missing part with personalization
-                        const firstName = nameMeta.first || currentSlots.partialName || '';
-                        if (nameMeta.assumedSingleTokenAs === 'last') {
-                            finalReply = firstName 
-                                ? `Thanks ${firstName}. And what's your first name?`
-                                : "And what's your first name?";
+                        if (confirmPromptAsksForLastName && extractedName) {
+                            // User responded to "Got it, Mark. and may I have your last name?" with their last name
+                            // So extractedName IS the last name!
+                            nameMeta.last = extractedName;
+                            nameMeta.askedMissingPartOnce = true;
+                            
+                            // Build full name
+                            const firstName = nameMeta.first || currentSlots.partialName || '';
+                            currentSlots.name = `${firstName} ${extractedName}`.trim();
+                            session.booking.activeSlot = 'phone';
+                            
+                            finalReply = `Perfect, ${firstName}. `;
+                            nextSlotId = null; // Move to phone
+                            
+                            log('📝 V36: confirmPrompt already asked for last name, extracted it directly', {
+                                firstName,
+                                lastName: extractedName,
+                                fullName: currentSlots.name
+                            });
                         } else {
-                            finalReply = firstName 
-                                ? `Thanks ${firstName}! And what's your last name?`
-                                : "And what's your last name?";
+                            // confirmPrompt didn't ask for last name, so ask now
+                            // V36 PROMPT AS LAW: Use consistent "Got it" style
+                            nameMeta.askedMissingPartOnce = true;
+                            
+                            const firstName = nameMeta.first || currentSlots.partialName || '';
+                            if (nameMeta.assumedSingleTokenAs === 'last') {
+                                finalReply = firstName 
+                                    ? `Got it, ${firstName}. And what's your first name?`
+                                    : "And what's your first name?";
+                            } else {
+                                finalReply = firstName 
+                                    ? `Got it, ${firstName}. And what's your last name?`
+                                    : "And what's your last name?";
+                            }
+                            nextSlotId = 'name'; // Still on name
+                            
+                            log('📝 NAME: Asking for missing part (confirmPrompt did not ask)');
                         }
-                        nextSlotId = 'name'; // Still on name
-                        
-                        log('📝 NAME: Asking for missing part');
                     } else if (nameMeta.askedMissingPartOnce) {
                         // User provided the missing part
                         if (nameMeta.assumedSingleTokenAs === 'first') {
