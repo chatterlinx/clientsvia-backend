@@ -2914,11 +2914,21 @@ Sean → Shawn, Shaun`;
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // FILTER TEMPLATES BY TRADE CATEGORY
+        // FILTER TEMPLATES BY TRADE CATEGORY (ObjectId ONLY - NO NAME LOOKUPS)
         // ═══════════════════════════════════════════════════════════════════════════
         if (templatesContainer) {
-            // Combine API templates with V1 sample templates
-            let allTemplates = (data.templates || []).concat(v1Templates);
+            // Start with API-persisted templates (these have real tradeCategoryIds)
+            let allTemplates = data.templates || [];
+            
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V1 SAMPLE TEMPLATES: Show ONLY when "All Categories" selected (no filter)
+            // When a specific category is selected, only DB templates with that exact
+            // ObjectId should appear. V1 samples are pre-seed, category-agnostic.
+            // ═══════════════════════════════════════════════════════════════════════════
+            if (!this.selectedTradeCategoryId) {
+                // "All Categories" mode: show V1 samples as seed sources
+                allTemplates = allTemplates.concat(v1Templates);
+            }
             
             // ═══════════════════════════════════════════════════════════════════════════
             // FILTER BY tradeCategoryId (ObjectId) - THE AUTHORITATIVE KEY
@@ -2955,9 +2965,19 @@ Sean → Shawn, Shaun`;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // V1 SAMPLE FLOWS - WORLD-CLASS PRODUCTION-READY TEMPLATES
+    // V1 SAMPLE FLOWS - STARTER TEMPLATES (JS-BASED, PRE-SEED)
     // ═══════════════════════════════════════════════════════════════════════════
     // 
+    // IMPORTANT: These are NOT production templates. They are SEED SOURCES.
+    // 
+    // The workflow is:
+    //   1. V1 samples appear ONLY when "All Categories" is selected (no filter)
+    //   2. Admin clicks "Seed Templates" to persist them to DB with correct tradeCategoryId
+    //   3. After seeding, DB templates are the truth, JS samples are ignored
+    //   4. Copy-to-Company uses the DROPDOWN-SELECTED tradeCategoryId (not name lookup)
+    //
+    // NO NAME-BASED LOOKUPS. The dropdown ObjectId is the ONLY source of truth.
+    //
     // ACTION ORDER (MANDATORY FOR V1):
     //   1. SET_FLAG (first - sets state)
     //   2. APPEND_LEDGER (second - logs the event)
@@ -2972,22 +2992,15 @@ Sean → Shawn, Shaun`;
     //    50 = BOOKING INTENT (standard)
     //    45 = QUOTE REQUEST (lowest)
     //
-    // TRADE CATEGORY BINDING:
-    //   - tradeCategoryId (ObjectId) is THE AUTHORITATIVE KEY
-    //   - tradeCategoryName is ONLY for display, never for logic
-    //   - When trade categories load, we dynamically assign the HVAC ObjectId
-    //
     // ═══════════════════════════════════════════════════════════════════════════
     getV1SampleFlows() {
         // ═══════════════════════════════════════════════════════════════════════════
-        // CRITICAL: Dynamically assign tradeCategoryId (ObjectId) from loaded categories
-        // This ensures filtering uses ObjectId, NOT name string matching
+        // V1 samples have NO tradeCategoryId (they're not in DB yet)
+        // They only show when dropdown = "All Categories" (no filter applied)
+        // When copied, they inherit the SELECTED dropdown tradeCategoryId
         // ═══════════════════════════════════════════════════════════════════════════
-        const hvacCategory = (this.tradeCategoriesCache || []).find(c => 
-            c.name.toLowerCase().includes('hvac')
-        );
-        const hvacTradeCategoryId = hvacCategory?._id || null;
-        const hvacTradeCategoryName = hvacCategory?.name || 'HVAC Residential';
+        const tradeCategoryId = null;  // V1 samples are category-agnostic until seeded
+        const tradeCategoryName = null; // No name - these are pre-seed templates
         
         return [
             // ─────────────────────────────────────────────────────────────────────
@@ -3003,8 +3016,8 @@ Sean → Shawn, Shaun`;
                 name: '🚨 Emergency Service Detection',
                 description: 'Detects TRUE emergencies (gas leak, fire, flooding, CO). Includes safety directive. Blocks all other flows.',
                 flowKey: 'emergency_service',
-                tradeCategoryId: hvacTradeCategoryId,      // AUTHORITATIVE: ObjectId binding
-                tradeCategoryName: hvacTradeCategoryName,  // Display only, never for logic
+                tradeCategoryId: tradeCategoryId,   // null until seeded to DB
+                tradeCategoryName: tradeCategoryName, // null - assigned at copy time from dropdown
                 enabled: true,
                 priority: 200,
                 triggers: [{
@@ -3127,8 +3140,8 @@ Sean → Shawn, Shaun`;
                 name: '🔄 Returning Customer Claim',
                 description: 'Detects existing/returning customers. Sets flag for CRM lookup and personalizes the conversation.',
                 flowKey: 'returning_customer_claim',
-                tradeCategoryId: hvacTradeCategoryId,      // AUTHORITATIVE: ObjectId binding
-                tradeCategoryName: hvacTradeCategoryName,  // Display only, never for logic
+                tradeCategoryId: tradeCategoryId,   // null until seeded to DB
+                tradeCategoryName: tradeCategoryName, // null - assigned at copy time from dropdown
                 enabled: true,
                 priority: 60,
                 triggers: [{
@@ -3216,8 +3229,8 @@ Sean → Shawn, Shaun`;
                 name: '✨ New Customer Detection',
                 description: 'Detects first-time callers. Welcomes them warmly and sets flag for special handling.',
                 flowKey: 'new_customer',
-                tradeCategoryId: hvacTradeCategoryId,      // AUTHORITATIVE: ObjectId binding
-                tradeCategoryName: hvacTradeCategoryName,  // Display only, never for logic
+                tradeCategoryId: tradeCategoryId,   // null until seeded to DB
+                tradeCategoryName: tradeCategoryName, // null - assigned at copy time from dropdown
                 enabled: true,
                 priority: 55,
                 triggers: [{
@@ -3299,8 +3312,8 @@ Sean → Shawn, Shaun`;
                 name: '📅 Standard Booking Intent',
                 description: 'Detects when caller wants to schedule service. Transitions to BOOKING mode.',
                 flowKey: 'booking_intent',
-                tradeCategoryId: hvacTradeCategoryId,      // AUTHORITATIVE: ObjectId binding
-                tradeCategoryName: hvacTradeCategoryName,  // Display only, never for logic
+                tradeCategoryId: tradeCategoryId,   // null until seeded to DB
+                tradeCategoryName: tradeCategoryName, // null - assigned at copy time from dropdown
                 enabled: true,
                 priority: 50,
                 triggers: [{
@@ -3389,8 +3402,8 @@ Sean → Shawn, Shaun`;
                 name: '💰 Quote/Pricing Request',
                 description: 'Detects pricing inquiries. Sets flag and acknowledges - does NOT transition to booking.',
                 flowKey: 'quote_request',
-                tradeCategoryId: hvacTradeCategoryId,      // AUTHORITATIVE: ObjectId binding
-                tradeCategoryName: hvacTradeCategoryName,  // Display only, never for logic
+                tradeCategoryId: tradeCategoryId,   // null until seeded to DB
+                tradeCategoryName: tradeCategoryName, // null - assigned at copy time from dropdown
                 enabled: true,
                 priority: 45,
                 triggers: [{
@@ -3475,8 +3488,8 @@ Sean → Shawn, Shaun`;
                 name: '❌ Cancellation Request',
                 description: 'Detects when caller wants to cancel an existing appointment. High priority handling.',
                 flowKey: 'cancellation_request',
-                tradeCategoryId: hvacTradeCategoryId,      // AUTHORITATIVE: ObjectId binding
-                tradeCategoryName: hvacTradeCategoryName,  // Display only, never for logic
+                tradeCategoryId: tradeCategoryId,   // null until seeded to DB
+                tradeCategoryName: tradeCategoryName, // null - assigned at copy time from dropdown
                 enabled: true,
                 priority: 100,
                 triggers: [{
@@ -3554,8 +3567,8 @@ Sean → Shawn, Shaun`;
                 name: '📆 Reschedule Request',
                 description: 'Detects when caller wants to reschedule an existing appointment.',
                 flowKey: 'reschedule_request',
-                tradeCategoryId: hvacTradeCategoryId,      // AUTHORITATIVE: ObjectId binding
-                tradeCategoryName: hvacTradeCategoryName,  // Display only, never for logic
+                tradeCategoryId: tradeCategoryId,   // null until seeded to DB
+                tradeCategoryName: tradeCategoryName, // null - assigned at copy time from dropdown
                 enabled: true,
                 priority: 90,
                 triggers: [{
@@ -3744,16 +3757,21 @@ Sean → Shawn, Shaun`;
                 console.log('[DYNAMIC FLOWS] Template actions:', JSON.stringify(sample.actions, null, 2));
                 
                 // ═══════════════════════════════════════════════════════════════════
-                // V2 TRADE CATEGORY: Include tradeCategoryId when copying
-                // This creates an audit trail: "where did this company flow come from?"
+                // V2 TRADE CATEGORY: Use DROPDOWN-SELECTED ObjectId (NEVER name lookup)
+                // The dropdown is the ONLY source of truth for tradeCategoryId
                 // ═══════════════════════════════════════════════════════════════════
+                const selectedCategory = (this.tradeCategoriesCache || []).find(c => 
+                    c._id === this.selectedTradeCategoryId
+                );
+                
                 const payload = { 
                     ...sample, 
                     _id: undefined, 
                     isTemplate: false,
-                    // Carry trade category info from selected category (or sample default)
+                    // tradeCategoryId comes from DROPDOWN SELECTION (ObjectId)
                     tradeCategoryId: this.selectedTradeCategoryId || null,
-                    tradeCategoryName: sample.tradeCategoryName || null
+                    // tradeCategoryName is just display - looked up from selection
+                    tradeCategoryName: selectedCategory?.name || null
                 };
                 
                 console.log('[DYNAMIC FLOWS] POST payload (with trade category):', JSON.stringify(payload, null, 2));
