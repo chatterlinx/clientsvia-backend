@@ -2572,10 +2572,24 @@ Sean → Shawn, Shaun`;
                 
                 <!-- Templates Section -->
                 <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #30363d;">
-                    <h4 style="color: #c9d1d9; margin: 0 0 12px 0;">📋 Available Templates</h4>
-                    <p style="color: #8b949e; font-size: 13px; margin-bottom: 16px;">
-                        Global templates you can copy and customize for this company.
-                    </p>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div>
+                            <h4 style="color: #c9d1d9; margin: 0;">📋 Available Templates</h4>
+                            <p style="color: #8b949e; font-size: 13px; margin: 4px 0 0 0;">
+                                Global templates you can copy and customize for this company.
+                            </p>
+                        </div>
+                        <button id="fdb-seed-templates-btn" style="
+                            padding: 8px 16px;
+                            background: #6e40c9;
+                            color: white;
+                            border: none;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-size: 12px;
+                            font-weight: 600;
+                        ">🌱 Seed Templates</button>
+                    </div>
                     <div id="fdb-templates-list" style="display: flex; flex-direction: column; gap: 8px;">
                         <div style="text-align: center; padding: 20px; color: #8b949e;">
                             Loading templates...
@@ -2769,6 +2783,49 @@ Sean → Shawn, Shaun`;
         if (addBtn) {
             addBtn.addEventListener('click', () => {
                 this.showNotification('Flow creator coming soon! Use API or copy a template.', 'info');
+            });
+        }
+        
+        // Seed templates button (Admin only)
+        const seedBtn = container.querySelector('#fdb-seed-templates-btn');
+        if (seedBtn) {
+            seedBtn.addEventListener('click', async () => {
+                seedBtn.disabled = true;
+                seedBtn.textContent = '⏳ Seeding...';
+                
+                try {
+                    const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+                    const response = await fetch('/api/admin/dynamic-flows/seed-templates', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.error || 'Failed to seed templates');
+                    }
+                    
+                    const data = await response.json();
+                    console.log('[DYNAMIC FLOWS] Seed result:', data);
+                    
+                    this.showNotification(
+                        `✅ Templates seeded! Created: ${data.results.created.length}, Updated: ${data.results.updated.length}`,
+                        'success'
+                    );
+                    
+                    // Reload the dynamic flows tab to show new templates
+                    await this.refreshFlowsList(container);
+                    
+                } catch (error) {
+                    console.error('[DYNAMIC FLOWS] Seed error:', error);
+                    this.showNotification(error.message, 'error');
+                } finally {
+                    seedBtn.disabled = false;
+                    seedBtn.textContent = '🌱 Seed Templates';
+                }
             });
         }
     }
