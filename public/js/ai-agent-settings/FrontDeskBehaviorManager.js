@@ -576,6 +576,7 @@ class FrontDeskBehaviorManager {
                     ${this.renderTab('discovery', '🧠 Discovery & Consent')}
                     ${this.renderTab('vocabulary', '📝 Vocabulary')}
                     ${this.renderTab('booking', '📅 Booking Prompts')}
+                    ${this.renderTab('flows', '🧠 Dynamic Flows')}
                     ${this.renderTab('emotions', '💭 Emotions')}
                     ${this.renderTab('frustration', '😤 Frustration')}
                     ${this.renderTab('escalation', '🆘 Escalation')}
@@ -2543,6 +2544,297 @@ Sean → Shawn, Shaun`;
         return slots.length > 0 ? slots : this.getDefaultBookingSlots();
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🧠 DYNAMIC FLOWS TAB - Phase 3: Trigger → Event → State → Action
+    // ═══════════════════════════════════════════════════════════════════════════
+    renderDynamicFlowsTab() {
+        return `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div>
+                        <h3 style="margin: 0; color: #58a6ff;">🧠 Dynamic Flows</h3>
+                        <p style="color: #8b949e; margin: 8px 0 0 0; font-size: 0.875rem;">
+                            Trigger-based conversation flows. The brain stem that controls how conversations evolve.
+                        </p>
+                    </div>
+                    <button id="fdb-add-flow-btn" style="padding: 10px 20px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                        ➕ Add Flow
+                    </button>
+                </div>
+                
+                <!-- Flow List -->
+                <div id="fdb-flows-list" style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="text-align: center; padding: 40px; color: #8b949e;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">⏳</div>
+                        <p>Loading flows...</p>
+                    </div>
+                </div>
+                
+                <!-- Templates Section -->
+                <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #30363d;">
+                    <h4 style="color: #c9d1d9; margin: 0 0 12px 0;">📋 Available Templates</h4>
+                    <p style="color: #8b949e; font-size: 13px; margin-bottom: 16px;">
+                        Global templates you can copy and customize for this company.
+                    </p>
+                    <div id="fdb-templates-list" style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="text-align: center; padding: 20px; color: #8b949e;">
+                            Loading templates...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    async loadDynamicFlows() {
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const response = await fetch(`/api/company/${this.companyId}/dynamic-flows?includeTemplates=true`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!response.ok) throw new Error('Failed to load flows');
+            
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('[DYNAMIC FLOWS] Load error:', error);
+            return { flows: [], templates: [] };
+        }
+    }
+    
+    renderFlowCard(flow, isTemplate = false) {
+        const statusColor = flow.enabled ? '#238636' : '#6e7681';
+        const statusText = flow.enabled ? 'ACTIVE' : 'DISABLED';
+        
+        const triggerCount = (flow.triggers || []).length;
+        const requirementCount = (flow.requirements || []).length;
+        const actionCount = (flow.actions || []).length;
+        
+        const templateBadge = isTemplate ? '<span style="font-size: 11px; padding: 2px 8px; background: #6e40c9; border-radius: 10px; color: white;">TEMPLATE</span>' : '';
+        const priorityBadge = flow.priority > 50 ? '<span style="font-size: 11px; padding: 2px 8px; background: #f85149; border-radius: 10px; color: white;">HIGH PRIORITY</span>' : '';
+        
+        let buttons = '';
+        if (isTemplate) {
+            buttons = `
+                <button class="flow-copy-btn" data-flow-id="${flow._id}" style="
+                    padding: 8px 12px;
+                    background: #238636;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 12px;
+                ">📋 Copy to Company</button>
+            `;
+        } else {
+            buttons = `
+                <button class="flow-toggle-btn" data-flow-id="${flow._id}" data-enabled="${flow.enabled}" style="
+                    padding: 8px 12px;
+                    background: ${flow.enabled ? '#6e7681' : '#238636'};
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 12px;
+                ">${flow.enabled ? '⏸️ Disable' : '▶️ Enable'}</button>
+                <button class="flow-edit-btn" data-flow-id="${flow._id}" style="
+                    padding: 8px 12px;
+                    background: #21262d;
+                    color: #c9d1d9;
+                    border: 1px solid #30363d;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 12px;
+                ">✏️ Edit</button>
+                <button class="flow-delete-btn" data-flow-id="${flow._id}" style="
+                    padding: 8px 12px;
+                    background: #21262d;
+                    color: #f85149;
+                    border: 1px solid #30363d;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 12px;
+                ">🗑️</button>
+            `;
+        }
+        
+        return `
+            <div class="flow-card" data-flow-id="${flow._id}" style="
+                background: #0d1117;
+                border: 1px solid #30363d;
+                border-radius: 8px;
+                padding: 16px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            ">
+                <div style="flex: 1;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                        <span style="font-weight: 600; color: #c9d1d9;">${flow.name}</span>
+                        <span style="font-size: 11px; padding: 2px 8px; background: ${statusColor}; border-radius: 10px; color: white;">
+                            ${statusText}
+                        </span>
+                        ${templateBadge}
+                        ${priorityBadge}
+                    </div>
+                    <p style="color: #8b949e; font-size: 13px; margin: 0 0 8px 0;">${flow.description || 'No description'}</p>
+                    <div style="display: flex; gap: 16px; font-size: 12px; color: #6e7681;">
+                        <span>🎯 ${triggerCount} triggers</span>
+                        <span>📋 ${requirementCount} requirements</span>
+                        <span>⚡ ${actionCount} actions</span>
+                        <span style="color: #58a6ff;">Key: ${flow.flowKey}</span>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    ${buttons}
+                </div>
+            </div>
+        `;
+    }
+    
+    async refreshFlowsList(container) {
+        const flowsContainer = container.querySelector('#fdb-flows-list');
+        const templatesContainer = container.querySelector('#fdb-templates-list');
+        
+        if (!flowsContainer) return;
+        
+        const data = await this.loadDynamicFlows();
+        
+        // Render company flows
+        if (data.flows && data.flows.length > 0) {
+            flowsContainer.innerHTML = data.flows.map(f => this.renderFlowCard(f, false)).join('');
+        } else {
+            flowsContainer.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #8b949e; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">🧠</div>
+                    <p style="font-weight: 600; margin-bottom: 8px;">No custom flows yet</p>
+                    <p style="font-size: 13px;">Add a flow or copy from templates below to get started.</p>
+                </div>
+            `;
+        }
+        
+        // Render templates
+        if (templatesContainer && data.templates && data.templates.length > 0) {
+            templatesContainer.innerHTML = data.templates.map(t => this.renderFlowCard(t, true)).join('');
+        } else if (templatesContainer) {
+            templatesContainer.innerHTML = '<p style="color: #6e7681; font-size: 13px;">No templates available.</p>';
+        }
+        
+        // Attach flow-specific event listeners
+        this.attachFlowEventListeners(container);
+    }
+    
+    attachFlowEventListeners(container) {
+        // Toggle buttons
+        container.querySelectorAll('.flow-toggle-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const flowId = btn.dataset.flowId;
+                const currentEnabled = btn.dataset.enabled === 'true';
+                await this.toggleFlow(flowId, !currentEnabled);
+                await this.refreshFlowsList(container);
+            });
+        });
+        
+        // Copy template buttons
+        container.querySelectorAll('.flow-copy-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const templateId = btn.dataset.flowId;
+                await this.copyTemplateToCompany(templateId);
+                await this.refreshFlowsList(container);
+            });
+        });
+        
+        // Delete buttons
+        container.querySelectorAll('.flow-delete-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const flowId = btn.dataset.flowId;
+                if (confirm('Delete this flow? This cannot be undone.')) {
+                    await this.deleteFlow(flowId);
+                    await this.refreshFlowsList(container);
+                }
+            });
+        });
+        
+        // Edit buttons - TODO: Open modal editor
+        container.querySelectorAll('.flow-edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const flowId = btn.dataset.flowId;
+                this.showNotification('Flow editor coming soon! Use API for now.', 'info');
+            });
+        });
+        
+        // Add flow button
+        const addBtn = container.querySelector('#fdb-add-flow-btn');
+        if (addBtn) {
+            addBtn.addEventListener('click', () => {
+                this.showNotification('Flow creator coming soon! Use API or copy a template.', 'info');
+            });
+        }
+    }
+    
+    async toggleFlow(flowId, enabled) {
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const response = await fetch(`/api/company/${this.companyId}/dynamic-flows/${flowId}/toggle`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ enabled })
+            });
+            
+            if (!response.ok) throw new Error('Failed to toggle flow');
+            
+            this.showNotification(`Flow ${enabled ? 'enabled' : 'disabled'}`, 'success');
+        } catch (error) {
+            console.error('[DYNAMIC FLOWS] Toggle error:', error);
+            this.showNotification('Failed to toggle flow', 'error');
+        }
+    }
+    
+    async copyTemplateToCompany(templateId) {
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const response = await fetch(`/api/company/${this.companyId}/dynamic-flows/from-template`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ templateId })
+            });
+            
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to copy template');
+            }
+            
+            this.showNotification('Template copied to company!', 'success');
+        } catch (error) {
+            console.error('[DYNAMIC FLOWS] Copy error:', error);
+            this.showNotification(error.message, 'error');
+        }
+    }
+    
+    async deleteFlow(flowId) {
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const response = await fetch(`/api/company/${this.companyId}/dynamic-flows/${flowId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!response.ok) throw new Error('Failed to delete flow');
+            
+            this.showNotification('Flow deleted', 'success');
+        } catch (error) {
+            console.error('[DYNAMIC FLOWS] Delete error:', error);
+            this.showNotification('Failed to delete flow', 'error');
+        }
+    }
+
     renderEmotionsTab() {
         const er = this.config.emotionResponses || {};
         return `
@@ -4224,6 +4516,11 @@ Sean → Shawn, Shaun`;
             case 'discovery': content.innerHTML = this.renderDiscoveryConsentTab(); break;
             case 'vocabulary': content.innerHTML = this.renderVocabularyTab(); break;
             case 'booking': content.innerHTML = this.renderBookingPromptsTab(); break;
+            case 'flows': 
+                content.innerHTML = this.renderDynamicFlowsTab(); 
+                // Load flows asynchronously after rendering
+                this.refreshFlowsList(container);
+                break;
             case 'emotions': content.innerHTML = this.renderEmotionsTab(); break;
             case 'frustration': content.innerHTML = this.renderFrustrationTab(); break;
             case 'escalation': content.innerHTML = this.renderEscalationTab(); break;
