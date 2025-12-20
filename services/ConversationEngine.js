@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V36-PROMPT-AS-LAW-STRICT-NAME';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V36-DISCOVERY-NAME-MUST-CONFIRM';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -2696,16 +2696,58 @@ async function processTurn({
                 );
                 
                 // ═══════════════════════════════════════════════════════════════════
-                // V34 FIX: CHECK IF NAME IS ALREADY COMPLETE BEFORE PROCESSING
-                // If name was collected in DISCOVERY mode, skip name handling entirely
+                // V36 FIX: PROMPT AS LAW - Even if name was captured in discovery,
+                // we MUST still follow the booking flow (confirmBack, askFullName)
+                // Only skip if ALL requirements are met:
+                // 1. Name exists AND
+                // 2. confirmBack is OFF or already confirmed AND
+                // 3. askFullName is OFF or we have full name (first + last)
                 // ═══════════════════════════════════════════════════════════════════
-                const nameAlreadyComplete = isNameSlotComplete(currentSlots, session.booking.meta.name, nameSlotConfig);
-                if (nameAlreadyComplete && session.booking.activeSlot === 'name') {
-                    log('✅ V34: Name already complete from discovery, skipping to phone', {
-                        name: currentSlots.name,
-                        partialName: currentSlots.partialName
-                    });
-                    session.booking.activeSlot = 'phone';
+                const nameMeta = session.booking.meta.name;
+                const confirmBackEnabled = nameSlotConfig?.confirmBack === true || nameSlotConfig?.confirmBack === 'true';
+                const askFullNameEnabled = nameSlotConfig?.askFullName === true || 
+                                          nameSlotConfig?.requireFullName === true ||
+                                          nameSlotConfig?.nameOptions?.askFullName === true;
+                const hasName = currentSlots.name || currentSlots.partialName;
+                const hasFullName = currentSlots.name && currentSlots.name.includes(' ');
+                const nameConfirmed = nameMeta?.confirmed === true;
+                
+                // V36: Check if we need to do confirmBack or askFullName
+                const needsConfirmBack = confirmBackEnabled && hasName && !nameConfirmed && !nameMeta?.lastConfirmed;
+                const needsLastName = askFullNameEnabled && hasName && !hasFullName && !nameMeta?.last;
+                
+                if (hasName && session.booking.activeSlot === 'name') {
+                    if (needsConfirmBack || needsLastName) {
+                        // DON'T skip - we need to confirm or get last name
+                        log('📝 V36: Name from discovery needs processing', {
+                            name: currentSlots.name || currentSlots.partialName,
+                            needsConfirmBack,
+                            needsLastName,
+                            confirmBackEnabled,
+                            askFullNameEnabled
+                        });
+                        
+                        // If we have a partial name from discovery and need to confirm/get last name,
+                        // set up the state for the name flow to handle it
+                        if (!nameMeta.first && (currentSlots.partialName || currentSlots.name)) {
+                            const discoveredName = currentSlots.partialName || currentSlots.name;
+                            if (!discoveredName.includes(' ')) {
+                                // Single name - assume it's first name
+                                nameMeta.first = discoveredName;
+                                nameMeta.assumedSingleTokenAs = 'first';
+                            }
+                        }
+                    } else {
+                        // All requirements met - skip to phone
+                        log('✅ V36: Name complete from discovery (all requirements met), skipping to phone', {
+                            name: currentSlots.name,
+                            confirmBackEnabled,
+                            nameConfirmed,
+                            askFullNameEnabled,
+                            hasFullName
+                        });
+                        session.booking.activeSlot = 'phone';
+                    }
                 }
                 
                 // 🎯 PROMPT AS LAW: Default askFullName to FALSE
@@ -2787,6 +2829,49 @@ async function processTurn({
                     currentSlotsName: currentSlots.name,
                     currentSlotsPartialName: currentSlots.partialName
                 });
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // V36 FIX: DISCOVERY NAME NEEDS CONFIRM/LAST NAME
+                // If we have a name from discovery but haven't confirmed it yet,
+                // ASK the confirmBack question NOW (first turn of booking mode)
+                // ═══════════════════════════════════════════════════════════════════
+                const discoveryNameNeedsProcessing = hasPartialName && !hasFullName && !nameMeta.lastConfirmed && session.booking.activeSlot === 'name';
+                
+                if (discoveryNameNeedsProcessing && confirmBackEnabled) {
+                    const nameToConfirm = currentSlots.partialName || nameMeta.first || currentSlots.name;
+                    
+                    if (nameToConfirm && !nameToConfirm.includes(' ')) {
+                        // Single name from discovery - need to confirm AND potentially ask for last name
+                        nameMeta.lastConfirmed = true; // Mark that we've asked for confirmation
+                        
+                        // Use UI-configured confirmPrompt which should include "may I have your last name"
+                        // Example: "Got it, {value}. and may I have your last name?"
+                        const confirmText = confirmBackTemplate.replace('{value}', nameToConfirm);
+                        finalReply = confirmText;
+                        nextSlotId = 'name';
+                        
+                        log('📝 V36: Confirming discovery name + asking for last name', {
+                            nameToConfirm,
+                            confirmBackTemplate,
+                            askFullName
+                        });
+                    }
+                }
+                // If we have discovery name but confirmBack is OFF, still ask for last name if needed
+                else if (discoveryNameNeedsProcessing && !confirmBackEnabled && askFullName) {
+                    const nameToUse = currentSlots.partialName || nameMeta.first || currentSlots.name;
+                    
+                    if (nameToUse && !nameToUse.includes(' ')) {
+                        finalReply = `Thanks ${nameToUse}! And what's your last name?`;
+                        nextSlotId = 'name';
+                        nameMeta.askedMissingPartOnce = true;
+                        
+                        log('📝 V36: Discovery name - asking for last name (no confirmBack)', {
+                            nameToUse,
+                            askFullName
+                        });
+                    }
+                }
                 
                 // ═══════════════════════════════════════════════════════════════════
                 // NAME CONFIRMATION HANDLING (V27)
