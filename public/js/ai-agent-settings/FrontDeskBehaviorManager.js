@@ -2746,52 +2746,111 @@ Sean → Shawn, Shaun`;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // V1 SAMPLE FLOWS - Production-ready templates showing proper setup
-    // These are the "gold standard" examples of how flows should be configured
+    // V1 SAMPLE FLOWS - WORLD-CLASS PRODUCTION-READY TEMPLATES
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 
+    // ACTION ORDER (MANDATORY FOR V1):
+    //   1. SET_FLAG (first - sets state)
+    //   2. APPEND_LEDGER (second - logs the event)
+    //   3. ACK_ONCE (third - speaks to caller)
+    //   4. TRANSITION_MODE (LAST - changes mode)
+    //
+    // PRIORITY HIERARCHY:
+    //   200 = EMERGENCY (blocks all others, allowConcurrent=false)
+    //   100 = CANCELLATION/COMPLAINT (high priority)
+    //    60 = RETURNING CUSTOMER (fires before booking if both match)
+    //    55 = NEW CUSTOMER
+    //    50 = BOOKING INTENT (standard)
+    //    45 = QUOTE REQUEST (lowest)
+    //
     // ═══════════════════════════════════════════════════════════════════════════
     getV1SampleFlows() {
         return [
             // ─────────────────────────────────────────────────────────────────────
-            // 1. BOOKING INTENT - Standard booking request detection
+            // 1. 🚨 EMERGENCY SERVICE (Priority 200 - HIGHEST)
+            // ─────────────────────────────────────────────────────────────────────
+            // BLOCKS all lower-priority flows with allowConcurrent=false
+            // Fast-tracks to booking with priority flag
             // ─────────────────────────────────────────────────────────────────────
             {
-                _id: 'template-booking-intent',
-                name: '📅 Standard Booking Intent',
-                description: 'Detects when caller wants to schedule service. Transitions to BOOKING mode, acknowledges once, and logs to ledger.',
-                flowKey: 'booking_intent',
+                _id: 'template-emergency-service',
+                name: '🚨 Emergency Service Detection',
+                description: 'Detects emergencies (no heat, flooding, gas leak). Blocks all other flows and fast-tracks to booking.',
+                flowKey: 'emergency_service',
                 enabled: true,
-                priority: 50,  // Medium priority - can be overridden by emergency
+                priority: 200,
                 triggers: [{
                     type: 'phrase',
                     config: { 
                         phrases: [
-                            'schedule an appointment',
-                            'book an appointment',
-                            'set up a visit',
-                            'need someone to come out',
-                            'send a technician',
-                            'can you come today',
-                            'i want to schedule',
-                            'when can you come',
-                            'book a service',
-                            'schedule a repair',
-                            'make an appointment',
-                            'set up service',
-                            'get someone out here'
+                            'emergency',
+                            'urgent',
+                            'asap',
+                            'right now',
+                            'immediately',
+                            'no heat',
+                            'no ac',
+                            'no air',
+                            'not cooling',
+                            'not heating',
+                            'no hot water',
+                            'no water',
+                            'water leaking',
+                            'water everywhere',
+                            'flooding',
+                            'flooded',
+                            'burst pipe',
+                            'pipe burst',
+                            'broken pipe',
+                            'frozen pipes',
+                            'gas leak',
+                            'smell gas',
+                            'smells like gas',
+                            'burning smell',
+                            'electrical smell',
+                            'smoke',
+                            'sparks',
+                            'sparking',
+                            'fire',
+                            'carbon monoxide',
+                            'co detector',
+                            'dangerous'
                         ], 
                         fuzzy: true 
                     },
                     priority: 10,
-                    minConfidence: 0.75
+                    minConfidence: 0.7
                 }],
                 actions: [
+                    // 1. SET_FLAG first
+                    {
+                        timing: 'on_activate',
+                        type: 'set_flag',
+                        config: { 
+                            flagName: 'priorityLevel', 
+                            flagValue: 'emergency',
+                            alsoWriteToCallLedgerFacts: true
+                        }
+                    },
+                    // 2. APPEND_LEDGER second
+                    {
+                        timing: 'on_activate',
+                        type: 'append_ledger',
+                        config: { 
+                            type: 'EVENT', 
+                            key: 'EMERGENCY_DETECTED', 
+                            note: 'Emergency keywords detected. Blocking lower-priority flows and fast-tracking to booking.' 
+                        }
+                    },
+                    // 3. ACK_ONCE third
                     {
                         timing: 'on_activate',
                         type: 'ack_once',
                         config: { 
-                            text: 'Got it — I can get that scheduled. Let me grab a few details real quick.' 
+                            text: 'Got it — that sounds urgent. I\'m going to get a technician scheduled as quickly as possible. Let me grab a few details.' 
                         }
                     },
+                    // 4. TRANSITION_MODE last
                     {
                         timing: 'on_activate',
                         type: 'transition_mode',
@@ -2799,54 +2858,60 @@ Sean → Shawn, Shaun`;
                             targetMode: 'BOOKING', 
                             setBookingLocked: true 
                         }
-                    },
-                    {
-                        timing: 'on_activate',
-                        type: 'append_ledger',
-                        config: { 
-                            type: 'EVENT', 
-                            key: 'BOOKING_INTENT', 
-                            note: 'Caller expressed intent to schedule service. Transitioned to BOOKING mode.' 
-                        }
                     }
                 ],
                 settings: {
-                    allowConcurrent: true,
+                    allowConcurrent: false,  // BLOCKS all lower-priority flows
                     persistent: true,
                     reactivatable: false,
-                    minConfidence: 0.75
+                    minConfidence: 0.7
                 },
-                meta: { createdFromTemplate: true, category: 'core' }
+                meta: { createdFromTemplate: true, category: 'priority' }
             },
             
             // ─────────────────────────────────────────────────────────────────────
-            // 2. RETURNING CUSTOMER CLAIM - Existing customer detection
+            // 2. 🔄 RETURNING CUSTOMER CLAIM (Priority 60)
+            // ─────────────────────────────────────────────────────────────────────
+            // Fires BEFORE booking_intent if both match in same utterance
+            // Sets flag for CRM lookup, can fire alongside booking
             // ─────────────────────────────────────────────────────────────────────
             {
                 _id: 'template-returning-customer',
                 name: '🔄 Returning Customer Claim',
-                description: 'Detects when caller identifies as an existing/returning customer. Sets flag for CRM lookup and personalizes conversation.',
+                description: 'Detects existing/returning customers. Sets flag for CRM lookup and personalizes the conversation.',
                 flowKey: 'returning_customer_claim',
                 enabled: true,
-                priority: 60,  // Higher than booking - fires first if both match
+                priority: 60,
                 triggers: [{
                     type: 'phrase',
                     config: { 
                         phrases: [
                             'long time customer',
+                            'longtime customer',
                             'returning customer',
                             'existing customer',
+                            'current customer',
                             'been with you',
                             'been with you guys',
-                            'you guys have been out before',
-                            'you installed my unit',
-                            'you serviced us last year',
+                            'been using you',
+                            'been using you guys',
+                            'use you guys',
+                            'you guys have been out',
                             'you came out before',
-                            'we use you guys',
-                            'been using you for years',
+                            'you were here before',
+                            'you installed',
+                            'you put in',
+                            'you serviced',
+                            'you fixed',
+                            'you repaired',
+                            'worked with you before',
+                            'used you before',
+                            'called before',
                             'loyal customer',
-                            'you did work for us',
-                            'previous customer'
+                            'years ago',
+                            'last year',
+                            'last time',
+                            'previous service'
                         ], 
                         fuzzy: true 
                     },
@@ -2854,6 +2919,7 @@ Sean → Shawn, Shaun`;
                     minConfidence: 0.75
                 }],
                 actions: [
+                    // 1. SET_FLAG first
                     {
                         timing: 'on_activate',
                         type: 'set_flag',
@@ -2863,20 +2929,22 @@ Sean → Shawn, Shaun`;
                             alsoWriteToCallLedgerFacts: true
                         }
                     },
-                    {
-                        timing: 'on_activate',
-                        type: 'ack_once',
-                        config: { 
-                            text: 'Perfect — thanks for letting me know you\'ve worked with us before.' 
-                        }
-                    },
+                    // 2. APPEND_LEDGER second
                     {
                         timing: 'on_activate',
                         type: 'append_ledger',
                         config: { 
                             type: 'CLAIM', 
                             key: 'RETURNING_CUSTOMER', 
-                            note: 'Caller identified as a returning/existing customer.' 
+                            note: 'Caller identified as returning/existing customer. Flag set for CRM lookup.' 
+                        }
+                    },
+                    // 3. ACK_ONCE third (NO transition - let booking handle that)
+                    {
+                        timing: 'on_activate',
+                        type: 'ack_once',
+                        config: { 
+                            text: 'Perfect — thanks for letting me know you\'ve worked with us before.' 
                         }
                     }
                 ],
@@ -2890,96 +2958,14 @@ Sean → Shawn, Shaun`;
             },
             
             // ─────────────────────────────────────────────────────────────────────
-            // 3. EMERGENCY SERVICE - High-priority emergency detection
+            // 3. ✨ NEW CUSTOMER (Priority 55)
             // ─────────────────────────────────────────────────────────────────────
-            {
-                _id: 'template-emergency-service',
-                name: '🚨 Emergency Service Detection',
-                description: 'Detects emergency situations (no heat, flooding, gas smell). Immediately transitions to BOOKING with high priority flag.',
-                flowKey: 'emergency_service',
-                enabled: true,
-                priority: 200,  // HIGHEST priority - overrides everything
-                triggers: [{
-                    type: 'phrase',
-                    config: { 
-                        phrases: [
-                            'emergency',
-                            'urgent',
-                            'no heat',
-                            'no air',
-                            'no AC',
-                            'no air conditioning',
-                            'flooding',
-                            'flooded',
-                            'water everywhere',
-                            'gas leak',
-                            'smell gas',
-                            'pipe burst',
-                            'burst pipe',
-                            'frozen pipes',
-                            'no hot water',
-                            'carbon monoxide',
-                            'sparking',
-                            'electrical fire',
-                            'smoke coming from',
-                            'dangerous situation'
-                        ], 
-                        fuzzy: true 
-                    },
-                    priority: 10,
-                    minConfidence: 0.7  // Lower threshold for safety
-                }],
-                actions: [
-                    {
-                        timing: 'on_activate',
-                        type: 'set_flag',
-                        config: { 
-                            flagName: 'priorityLevel', 
-                            flagValue: 'emergency',
-                            alsoWriteToCallLedgerFacts: true
-                        }
-                    },
-                    {
-                        timing: 'on_activate',
-                        type: 'ack_once',
-                        config: { 
-                            text: 'I understand this is urgent. Let me get someone out to you as quickly as possible.' 
-                        }
-                    },
-                    {
-                        timing: 'on_activate',
-                        type: 'transition_mode',
-                        config: { 
-                            targetMode: 'BOOKING', 
-                            setBookingLocked: true 
-                        }
-                    },
-                    {
-                        timing: 'on_activate',
-                        type: 'append_ledger',
-                        config: { 
-                            type: 'EVENT', 
-                            key: 'EMERGENCY_DETECTED', 
-                            note: 'Emergency situation detected. Fast-tracked to booking with priority flag.' 
-                        }
-                    }
-                ],
-                settings: {
-                    allowConcurrent: false,  // BLOCKS lower-priority flows
-                    persistent: true,
-                    reactivatable: false,
-                    minConfidence: 0.7
-                },
-                meta: { createdFromTemplate: true, category: 'priority' }
-            },
-            
-            // ─────────────────────────────────────────────────────────────────────
-            // 4. NEW CUSTOMER - First-time caller detection
+            // Detects first-time callers, welcomes them warmly
             // ─────────────────────────────────────────────────────────────────────
             {
                 _id: 'template-new-customer',
                 name: '✨ New Customer Detection',
-                description: 'Detects first-time callers. Sets flag for special handling and welcomes them warmly.',
+                description: 'Detects first-time callers. Welcomes them warmly and sets flag for special handling.',
                 flowKey: 'new_customer',
                 enabled: true,
                 priority: 55,
@@ -2988,16 +2974,25 @@ Sean → Shawn, Shaun`;
                     config: { 
                         phrases: [
                             'first time calling',
+                            'first time caller',
                             'never called before',
+                            'never used you',
                             'new customer',
+                            'new here',
                             'first time using',
                             'just found you',
+                            'just discovered you',
                             'saw your ad',
                             'found you online',
-                            'someone recommended you',
-                            'referral',
+                            'found you on google',
+                            'found you on yelp',
+                            'someone recommended',
                             'friend recommended',
-                            'neighbor uses you'
+                            'neighbor recommended',
+                            'family recommended',
+                            'got a referral',
+                            'was referred',
+                            'heard about you'
                         ], 
                         fuzzy: true 
                     },
@@ -3005,6 +3000,7 @@ Sean → Shawn, Shaun`;
                     minConfidence: 0.75
                 }],
                 actions: [
+                    // 1. SET_FLAG first
                     {
                         timing: 'on_activate',
                         type: 'set_flag',
@@ -3014,20 +3010,22 @@ Sean → Shawn, Shaun`;
                             alsoWriteToCallLedgerFacts: true
                         }
                     },
-                    {
-                        timing: 'on_activate',
-                        type: 'ack_once',
-                        config: { 
-                            text: 'Welcome! We\'re glad you reached out to us. I\'d be happy to help you.' 
-                        }
-                    },
+                    // 2. APPEND_LEDGER second
                     {
                         timing: 'on_activate',
                         type: 'append_ledger',
                         config: { 
                             type: 'CLAIM', 
                             key: 'NEW_CUSTOMER', 
-                            note: 'Caller identified as a new/first-time customer.' 
+                            note: 'Caller identified as first-time/new customer.' 
+                        }
+                    },
+                    // 3. ACK_ONCE third
+                    {
+                        timing: 'on_activate',
+                        type: 'ack_once',
+                        config: { 
+                            text: 'Welcome! We\'re glad you reached out. I\'d be happy to help you today.' 
                         }
                     }
                 ],
@@ -3041,12 +3039,102 @@ Sean → Shawn, Shaun`;
             },
             
             // ─────────────────────────────────────────────────────────────────────
-            // 5. QUOTE REQUEST - Price inquiry detection
+            // 4. 📅 BOOKING INTENT (Priority 50 - Standard)
+            // ─────────────────────────────────────────────────────────────────────
+            // The main booking flow - transitions to BOOKING mode
+            // ─────────────────────────────────────────────────────────────────────
+            {
+                _id: 'template-booking-intent',
+                name: '📅 Standard Booking Intent',
+                description: 'Detects when caller wants to schedule service. Transitions to BOOKING mode.',
+                flowKey: 'booking_intent',
+                enabled: true,
+                priority: 50,
+                triggers: [{
+                    type: 'phrase',
+                    config: { 
+                        phrases: [
+                            'schedule',
+                            'book',
+                            'appointment',
+                            'schedule an appointment',
+                            'book an appointment',
+                            'make an appointment',
+                            'set up an appointment',
+                            'schedule a visit',
+                            'schedule service',
+                            'book a service',
+                            'need someone to come out',
+                            'need someone out',
+                            'send someone',
+                            'send a technician',
+                            'send somebody',
+                            'come out',
+                            'come by',
+                            'stop by',
+                            'when can you come',
+                            'when is the next available',
+                            'next available',
+                            'get on the schedule',
+                            'put me on the schedule',
+                            'available today',
+                            'available tomorrow',
+                            'available this week',
+                            'come today',
+                            'come tomorrow'
+                        ], 
+                        fuzzy: true 
+                    },
+                    priority: 10,
+                    minConfidence: 0.75
+                }],
+                actions: [
+                    // 1. APPEND_LEDGER first (no flag needed for booking)
+                    {
+                        timing: 'on_activate',
+                        type: 'append_ledger',
+                        config: { 
+                            type: 'EVENT', 
+                            key: 'BOOKING_INTENT', 
+                            note: 'Caller expressed intent to schedule service. Transitioning to BOOKING mode.' 
+                        }
+                    },
+                    // 2. ACK_ONCE second
+                    {
+                        timing: 'on_activate',
+                        type: 'ack_once',
+                        config: { 
+                            text: 'Got it — I can get that scheduled for you. Let me grab a few details real quick.' 
+                        }
+                    },
+                    // 3. TRANSITION_MODE last
+                    {
+                        timing: 'on_activate',
+                        type: 'transition_mode',
+                        config: { 
+                            targetMode: 'BOOKING', 
+                            setBookingLocked: true 
+                        }
+                    }
+                ],
+                settings: {
+                    allowConcurrent: true,
+                    persistent: true,
+                    reactivatable: false,
+                    minConfidence: 0.75
+                },
+                meta: { createdFromTemplate: true, category: 'core' }
+            },
+            
+            // ─────────────────────────────────────────────────────────────────────
+            // 5. 💰 QUOTE REQUEST (Priority 45 - Lowest)
+            // ─────────────────────────────────────────────────────────────────────
+            // Detects pricing inquiries - sets flag, doesn't transition
             // ─────────────────────────────────────────────────────────────────────
             {
                 _id: 'template-quote-request',
                 name: '💰 Quote/Pricing Request',
-                description: 'Detects when caller is asking about pricing or wants a quote. Sets flag and acknowledges.',
+                description: 'Detects pricing inquiries. Sets flag and acknowledges - does NOT transition to booking.',
                 flowKey: 'quote_request',
                 enabled: true,
                 priority: 45,
@@ -3055,17 +3143,28 @@ Sean → Shawn, Shaun`;
                     config: { 
                         phrases: [
                             'how much',
+                            'how much does',
+                            'how much do you charge',
                             'what do you charge',
-                            'get a quote',
-                            'price estimate',
-                            'cost of',
+                            'what does it cost',
+                            'what\'s the cost',
+                            'what\'s the price',
+                            'price for',
+                            'cost for',
                             'pricing',
-                            'what are your rates',
+                            'estimate',
+                            'quote',
+                            'get a quote',
                             'free estimate',
-                            'ballpark figure',
-                            'rough estimate',
+                            'ballpark',
+                            'rough idea',
+                            'general idea',
+                            'rates',
+                            'your rates',
                             'service fee',
-                            'trip charge'
+                            'trip charge',
+                            'diagnostic fee',
+                            'inspection fee'
                         ], 
                         fuzzy: true 
                     },
@@ -3073,6 +3172,7 @@ Sean → Shawn, Shaun`;
                     minConfidence: 0.75
                 }],
                 actions: [
+                    // 1. SET_FLAG first
                     {
                         timing: 'on_activate',
                         type: 'set_flag',
@@ -3082,20 +3182,22 @@ Sean → Shawn, Shaun`;
                             alsoWriteToCallLedgerFacts: true
                         }
                     },
-                    {
-                        timing: 'on_activate',
-                        type: 'ack_once',
-                        config: { 
-                            text: 'I can help with pricing information. Let me get a few details so I can give you an accurate estimate.' 
-                        }
-                    },
+                    // 2. APPEND_LEDGER second
                     {
                         timing: 'on_activate',
                         type: 'append_ledger',
                         config: { 
                             type: 'EVENT', 
                             key: 'QUOTE_REQUEST', 
-                            note: 'Caller inquired about pricing or requested a quote.' 
+                            note: 'Caller inquired about pricing. Flag set - awaiting details for accurate quote.' 
+                        }
+                    },
+                    // 3. ACK_ONCE third (NO transition - need more info first)
+                    {
+                        timing: 'on_activate',
+                        type: 'ack_once',
+                        config: { 
+                            text: 'I can definitely help with pricing. Let me get a few details so I can give you an accurate estimate.' 
                         }
                     }
                 ],
@@ -3106,6 +3208,158 @@ Sean → Shawn, Shaun`;
                     minConfidence: 0.75
                 },
                 meta: { createdFromTemplate: true, category: 'sales' }
+            },
+            
+            // ─────────────────────────────────────────────────────────────────────
+            // 6. ❌ CANCELLATION REQUEST (Priority 100)
+            // ─────────────────────────────────────────────────────────────────────
+            // High priority - caller wants to cancel existing appointment
+            // ─────────────────────────────────────────────────────────────────────
+            {
+                _id: 'template-cancellation',
+                name: '❌ Cancellation Request',
+                description: 'Detects when caller wants to cancel an existing appointment. High priority handling.',
+                flowKey: 'cancellation_request',
+                enabled: true,
+                priority: 100,
+                triggers: [{
+                    type: 'phrase',
+                    config: { 
+                        phrases: [
+                            'cancel',
+                            'cancel my appointment',
+                            'cancel the appointment',
+                            'cancel service',
+                            'need to cancel',
+                            'want to cancel',
+                            'have to cancel',
+                            'cancellation',
+                            'cancel that',
+                            'don\'t need you to come',
+                            'don\'t come',
+                            'not going to be home',
+                            'won\'t be there',
+                            'can\'t make it',
+                            'something came up',
+                            'plans changed'
+                        ], 
+                        fuzzy: true 
+                    },
+                    priority: 10,
+                    minConfidence: 0.75
+                }],
+                actions: [
+                    // 1. SET_FLAG first
+                    {
+                        timing: 'on_activate',
+                        type: 'set_flag',
+                        config: { 
+                            flagName: 'wantsCancellation', 
+                            flagValue: true,
+                            alsoWriteToCallLedgerFacts: true
+                        }
+                    },
+                    // 2. APPEND_LEDGER second
+                    {
+                        timing: 'on_activate',
+                        type: 'append_ledger',
+                        config: { 
+                            type: 'EVENT', 
+                            key: 'CANCELLATION_REQUEST', 
+                            note: 'Caller requested to cancel existing appointment.' 
+                        }
+                    },
+                    // 3. ACK_ONCE third
+                    {
+                        timing: 'on_activate',
+                        type: 'ack_once',
+                        config: { 
+                            text: 'No problem — I can help you with that cancellation. Let me look up your appointment.' 
+                        }
+                    }
+                ],
+                settings: {
+                    allowConcurrent: false,  // Don't mix with booking
+                    persistent: true,
+                    reactivatable: false,
+                    minConfidence: 0.75
+                },
+                meta: { createdFromTemplate: true, category: 'service' }
+            },
+            
+            // ─────────────────────────────────────────────────────────────────────
+            // 7. 📆 RESCHEDULE REQUEST (Priority 90)
+            // ─────────────────────────────────────────────────────────────────────
+            // Caller wants to reschedule, not cancel
+            // ─────────────────────────────────────────────────────────────────────
+            {
+                _id: 'template-reschedule',
+                name: '📆 Reschedule Request',
+                description: 'Detects when caller wants to reschedule an existing appointment.',
+                flowKey: 'reschedule_request',
+                enabled: true,
+                priority: 90,
+                triggers: [{
+                    type: 'phrase',
+                    config: { 
+                        phrases: [
+                            'reschedule',
+                            'reschedule my appointment',
+                            'change my appointment',
+                            'move my appointment',
+                            'different time',
+                            'different day',
+                            'change the time',
+                            'change the date',
+                            'push it back',
+                            'move it up',
+                            'earlier time',
+                            'later time',
+                            'next week instead',
+                            'another day'
+                        ], 
+                        fuzzy: true 
+                    },
+                    priority: 10,
+                    minConfidence: 0.75
+                }],
+                actions: [
+                    // 1. SET_FLAG first
+                    {
+                        timing: 'on_activate',
+                        type: 'set_flag',
+                        config: { 
+                            flagName: 'wantsReschedule', 
+                            flagValue: true,
+                            alsoWriteToCallLedgerFacts: true
+                        }
+                    },
+                    // 2. APPEND_LEDGER second
+                    {
+                        timing: 'on_activate',
+                        type: 'append_ledger',
+                        config: { 
+                            type: 'EVENT', 
+                            key: 'RESCHEDULE_REQUEST', 
+                            note: 'Caller requested to reschedule existing appointment.' 
+                        }
+                    },
+                    // 3. ACK_ONCE third
+                    {
+                        timing: 'on_activate',
+                        type: 'ack_once',
+                        config: { 
+                            text: 'Sure thing — let me help you find a better time. What works for you?' 
+                        }
+                    }
+                ],
+                settings: {
+                    allowConcurrent: false,
+                    persistent: true,
+                    reactivatable: false,
+                    minConfidence: 0.75
+                },
+                meta: { createdFromTemplate: true, category: 'service' }
             }
         ];
     }
@@ -3618,34 +3872,57 @@ Sean → Shawn, Shaun`;
 
         // Copy JSON handler (uses normalized payload)
         // Pass editFlow so we can include ALL actions (not just the single dropdown selection)
-        // FALLBACK: If editFlow has empty actions but matches a sample template's flowKey, use template's actions
+        // FALLBACK: If editFlow is broken/incomplete but matches a sample template's flowKey, use template data
         const copyBtn = modal.querySelector('#flow-editor-copy-json');
         if (copyBtn) {
             copyBtn.addEventListener('click', () => {
-                // Check if editFlow has empty action configs and matches a sample template
                 let effectiveEditFlow = editFlow;
-                const hasEmptyActions = editFlow?.actions?.some(a => {
-                    const cfg = a.config || {};
-                    // Check if all key fields are empty
-                    return (a.type === 'set_flag' && !cfg.flagName) ||
-                           (a.type === 'ack_once' && !cfg.text) ||
-                           (a.type === 'append_ledger' && !cfg.type && !cfg.key);
-                });
                 
-                if (hasEmptyActions && editFlow?.flowKey) {
-                    // Try to find a sample template with matching flowKey
+                // Check if this flow matches a sample template and should use template data
+                if (editFlow?.flowKey) {
                     const sampleTemplates = this.getV1SampleFlows();
                     const matchingTemplate = sampleTemplates.find(t => t.flowKey === editFlow.flowKey);
+                    
                     if (matchingTemplate) {
-                        console.log('[COPY JSON] Company flow has empty actions, using sample template actions for:', editFlow.flowKey);
-                        effectiveEditFlow = { ...editFlow, actions: matchingTemplate.actions };
+                        // Check for broken/incomplete company flow:
+                        // 1. Empty trigger phrases
+                        const hasTriggerPhrases = editFlow.triggers?.[0]?.config?.phrases?.length > 0;
+                        // 2. Missing required actions (should have at least ack_once or append_ledger)
+                        const hasAckOnce = editFlow.actions?.some(a => a.type === 'ack_once' && a.config?.text);
+                        const hasAppendLedger = editFlow.actions?.some(a => a.type === 'append_ledger' && a.config?.type);
+                        // 3. Empty action configs
+                        const hasEmptyConfigs = editFlow.actions?.some(a => {
+                            const cfg = a.config || {};
+                            return (a.type === 'set_flag' && !cfg.flagName) ||
+                                   (a.type === 'ack_once' && !cfg.text) ||
+                                   (a.type === 'append_ledger' && !cfg.type && !cfg.key);
+                        });
+                        
+                        const isBroken = !hasTriggerPhrases || !hasAckOnce || !hasAppendLedger || hasEmptyConfigs;
+                        
+                        if (isBroken) {
+                            console.log('[COPY JSON] ⚠️ Company flow is broken/incomplete, using FULL sample template for:', editFlow.flowKey);
+                            console.log('[COPY JSON] Issues detected:', {
+                                hasTriggerPhrases,
+                                hasAckOnce,
+                                hasAppendLedger,
+                                hasEmptyConfigs
+                            });
+                            // Use the ENTIRE template (triggers + actions + settings)
+                            effectiveEditFlow = {
+                                ...editFlow,
+                                triggers: matchingTemplate.triggers,
+                                actions: matchingTemplate.actions,
+                                settings: { ...editFlow.settings, ...matchingTemplate.settings }
+                            };
+                        }
                     }
                 }
                 
                 const flowPayload = this.buildFlowPayloadFromModal(modal, isNew, { forCopy: true, editFlow: effectiveEditFlow });
                 if (!flowPayload) return;
                 navigator.clipboard.writeText(JSON.stringify(flowPayload, null, 2))
-                    .then(() => this.showNotification('Flow JSON copied', 'success'))
+                    .then(() => this.showNotification('Flow JSON copied (using template data)', 'success'))
                     .catch(() => this.showNotification('Copy failed', 'error'));
             });
         }
@@ -5881,6 +6158,15 @@ Sean → Shawn, Shaun`;
         
         if (forCopy) {
             // Normalized DFLOW_V1 shape
+            // Use editFlow's data when available (for Copy JSON on existing flows)
+            
+            // Use editFlow's trigger phrases if available and non-empty
+            const effectiveTriggerPhrases = (editFlow?.triggers?.[0]?.config?.phrases?.length > 0)
+                ? editFlow.triggers[0].config.phrases
+                : triggerPhrases;
+            const effectiveTriggerFuzzy = editFlow?.triggers?.[0]?.config?.fuzzy ?? triggerFuzzy;
+            const effectiveMinConfidence = editFlow?.settings?.minConfidence ?? minConfidence;
+            
             // If editFlow has multiple actions, use ALL of them (not just dropdown selection)
             const actionsToNormalize = (editFlow?.actions && editFlow.actions.length > 0) 
                 ? editFlow.actions 
@@ -5934,6 +6220,11 @@ Sean → Shawn, Shaun`;
                 return { type: aType.toUpperCase(), payload: aConfig };
             });
             
+            // Use effective settings from editFlow when available
+            const effectivePersistent = editFlow?.settings?.persistent ?? modal.querySelector('#flow-persistent').checked;
+            const effectiveAllowConcurrent = editFlow?.settings?.allowConcurrent ?? modal.querySelector('#flow-allow-concurrent').checked;
+            const effectiveReactivatable = editFlow?.settings?.reactivatable ?? modal.querySelector('#flow-reactivatable').checked;
+            
             return {
                 version: 'DFLOW_V1',
                 flowKey,
@@ -5943,14 +6234,14 @@ Sean → Shawn, Shaun`;
                 priority,
                 trigger: {
                     type: 'PHRASE_MATCH',
-                    fuzzy: triggerFuzzy,
-                    phrases: triggerPhrases,
-                    minConfidence
+                    fuzzy: effectiveTriggerFuzzy,
+                    phrases: effectiveTriggerPhrases,
+                    minConfidence: effectiveMinConfidence
                 },
                 settings: {
-                    persistentAcrossTurns: modal.querySelector('#flow-persistent').checked,
-                    allowConcurrentWithOtherFlows: modal.querySelector('#flow-allow-concurrent').checked,
-                    canReactivateAfterCompleting: modal.querySelector('#flow-reactivatable').checked
+                    persistentAcrossTurns: effectivePersistent,
+                    allowConcurrentWithOtherFlows: effectiveAllowConcurrent,
+                    canReactivateAfterCompleting: effectiveReactivatable
                 },
                 actions: normalizedActions,
                 meta: {}
