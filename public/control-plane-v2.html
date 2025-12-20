@@ -631,23 +631,27 @@
     </div>
     
     <!-- ═══════════════════════════════════════════════════════════════════════
-         FLOW TREE - Live AI Decision Visualization
+         FLOW TREE - Live AI Decision Visualization + System Snapshot
          Real-time understanding of how AI agent operates during calls
+         SINGLE SOURCE OF TRUTH - If it's not in the snapshot, it doesn't exist
          ═══════════════════════════════════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="flow-tree">
-      <div class="flow-tree-container">
-        <div class="flow-tree-header">
-          <div class="flow-tree-title">
-            <span class="icon">🌳</span>
-            <h2>AI Decision Flow Tree</h2>
-          </div>
-          <div class="flow-tree-status">
-            <i class="fas fa-circle"></i>
-            <span>Ready</span>
-          </div>
-        </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; min-height: 600px;">
         
-        <div id="flow-tree-content">
+        <!-- LEFT PANEL: Visual Flow Tree -->
+        <div class="flow-tree-container">
+          <div class="flow-tree-header">
+            <div class="flow-tree-title">
+              <span class="icon">🌳</span>
+              <h2>AI Decision Flow Tree</h2>
+            </div>
+            <div class="flow-tree-status" id="flow-tree-status">
+              <i class="fas fa-circle"></i>
+              <span>Ready</span>
+            </div>
+          </div>
+          
+          <div id="flow-tree-content">
           <!-- Static visualization - will be populated dynamically during live calls -->
           <div class="tree-node">
             <!-- Call Start -->
@@ -819,6 +823,88 @@
             </div>
           </div>
         </div>
+      </div>
+        
+        <!-- RIGHT PANEL: System Snapshot (Copyable JSON) -->
+        <div class="flow-tree-container" style="background: linear-gradient(135deg, #1a1f35 0%, #0f172a 100%);">
+          <div class="flow-tree-header">
+            <div class="flow-tree-title">
+              <span class="icon">📸</span>
+              <h2>System Snapshot</h2>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div id="snapshot-status" style="display: flex; align-items: center; gap: 8px; padding: 6px 14px; background: rgba(16, 185, 129, 0.2); border-radius: 20px; color: var(--accent-green); font-weight: 600; font-size: 13px;">
+                <span id="snapshot-mode-icon">🟡</span>
+                <span id="snapshot-mode-text">IDLE</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Snapshot Controls -->
+          <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+            <button onclick="copySystemSnapshot()" id="btn-copy-snapshot" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 8px; border: 2px solid var(--accent-orange); background: var(--accent-orange); color: white; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+              <i class="fas fa-copy"></i>
+              <span>📋 Copy JSON</span>
+            </button>
+            <button onclick="refreshSystemSnapshot()" id="btn-refresh-snapshot" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 8px; border: 2px solid var(--border-subtle); background: transparent; color: var(--text-primary); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+              <i class="fas fa-sync-alt" id="refresh-icon"></i>
+              <span>🔄 Refresh</span>
+            </button>
+          </div>
+          
+          <!-- Snapshot Info -->
+          <div style="display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary);">
+              <i class="fas fa-clock"></i>
+              <span>Generated: </span>
+              <span id="snapshot-timestamp" style="color: var(--text-primary);">—</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary);">
+              <i class="fas fa-bolt"></i>
+              <span>Time: </span>
+              <span id="snapshot-generation-time" style="color: var(--accent-green);">—</span>
+            </div>
+          </div>
+          
+          <!-- Snapshot Stats -->
+          <div id="snapshot-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
+            <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; text-align: center;">
+              <div style="font-size: 20px; font-weight: 700; color: var(--accent-orange);" id="stat-flows">—</div>
+              <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Flows</div>
+            </div>
+            <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; text-align: center;">
+              <div style="font-size: 20px; font-weight: 700; color: var(--accent-blue);" id="stat-transfers">—</div>
+              <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Transfers</div>
+            </div>
+            <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; text-align: center;">
+              <div style="font-size: 20px; font-weight: 700; color: var(--accent-green);" id="stat-contacts">—</div>
+              <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Contacts</div>
+            </div>
+          </div>
+          
+          <!-- JSON Display -->
+          <div style="position: relative;">
+            <div style="position: absolute; top: 8px; right: 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary); background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; z-index: 10;">
+              READ-ONLY
+            </div>
+            <pre id="snapshot-json" style="background: #0d1117; border: 1px solid var(--border-subtle); border-radius: 12px; padding: 16px; font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; font-size: 11px; line-height: 1.5; color: #c9d1d9; overflow: auto; max-height: 450px; margin: 0; white-space: pre-wrap; word-wrap: break-word;">
+{
+  "message": "Click 'Refresh' to load system snapshot",
+  "hint": "This JSON contains EVERYTHING the AI agent can see"
+}
+            </pre>
+          </div>
+          
+          <!-- Help Text -->
+          <div style="margin-top: 16px; padding: 12px; background: rgba(249, 115, 22, 0.1); border-radius: 8px; border-left: 4px solid var(--accent-orange);">
+            <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">
+              <strong style="color: var(--accent-orange);">💡 This is the Single Source of Truth</strong><br>
+              If something is missing from this JSON, it is <strong>not wired</strong> and will <strong>not work in production</strong>.
+              Copy this JSON when reporting issues or discussing system behavior.
+            </p>
+          </div>
+        </div>
+        
       </div>
     </div>
     
@@ -1119,12 +1205,10 @@
     
     // ═══════════════════════════════════════════════════════════════════════════
     // FLOW TREE INITIALIZATION
-    // Live visualization of AI decision flow
+    // Live visualization of AI decision flow + System Snapshot
     // ═══════════════════════════════════════════════════════════════════════════
     async function initFlowTree() {
       console.log('🌳 [INIT] Initializing Flow Tree...');
-      // Flow Tree is static visualization for now
-      // Will be populated dynamically during live calls via WebSocket
       
       // Load company's dynamic flows to populate the tree
       try {
@@ -1142,7 +1226,10 @@
         console.error('Failed to load flows for tree:', error);
       }
       
-      console.log('✅ [INIT] Flow Tree initialized');
+      // Auto-load system snapshot
+      await refreshSystemSnapshot();
+      
+      console.log('✅ [INIT] Flow Tree initialized with System Snapshot');
     }
     
     function renderFlowTreeNodes(flows) {
@@ -1346,6 +1433,128 @@
       
       const testConsole = new window.AITestConsole(currentCompanyId);
       testConsole.open();
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SYSTEM SNAPSHOT - Single Source of Truth
+    // ═══════════════════════════════════════════════════════════════════════════
+    let currentSnapshot = null;
+    
+    async function refreshSystemSnapshot() {
+      if (!currentCompanyId) {
+        alert('No company selected');
+        return;
+      }
+      
+      const refreshIcon = document.getElementById('refresh-icon');
+      const jsonDisplay = document.getElementById('snapshot-json');
+      
+      try {
+        // Show loading state
+        if (refreshIcon) refreshIcon.classList.add('fa-spin');
+        jsonDisplay.textContent = '{\n  "loading": true,\n  "message": "Generating system snapshot..."\n}';
+        
+        const response = await fetch(`/api/company/${currentCompanyId}/system-snapshot`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch snapshot: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.snapshot) {
+          currentSnapshot = data.snapshot;
+          
+          // Update display
+          jsonDisplay.textContent = JSON.stringify(data.snapshot, null, 2);
+          
+          // Update stats
+          document.getElementById('stat-flows').textContent = data.snapshot.dynamicFlows?.length || 0;
+          document.getElementById('stat-transfers').textContent = data.snapshot.transferTargets?.length || 0;
+          document.getElementById('stat-contacts').textContent = data.snapshot.companyContacts?.length || 0;
+          
+          // Update timestamp
+          document.getElementById('snapshot-timestamp').textContent = new Date(data.snapshot.timestamp).toLocaleTimeString();
+          document.getElementById('snapshot-generation-time').textContent = data.snapshot.generatedIn;
+          
+          // Update mode indicator
+          const modeIcon = document.getElementById('snapshot-mode-icon');
+          const modeText = document.getElementById('snapshot-mode-text');
+          const statusDiv = document.getElementById('snapshot-status');
+          
+          if (data.snapshot.mode === 'LIVE') {
+            modeIcon.textContent = '🟢';
+            modeText.textContent = 'LIVE CALL';
+            statusDiv.style.background = 'rgba(16, 185, 129, 0.2)';
+            statusDiv.style.color = 'var(--accent-green)';
+          } else {
+            modeIcon.textContent = '🟡';
+            modeText.textContent = 'IDLE';
+            statusDiv.style.background = 'rgba(249, 115, 22, 0.2)';
+            statusDiv.style.color = 'var(--accent-orange)';
+          }
+          
+          // Update Flow Tree status
+          const flowTreeStatus = document.getElementById('flow-tree-status');
+          if (flowTreeStatus) {
+            if (data.snapshot.mode === 'LIVE') {
+              flowTreeStatus.innerHTML = '<i class="fas fa-circle" style="color: var(--accent-green);"></i><span>Live Call</span>';
+              flowTreeStatus.style.background = 'rgba(16, 185, 129, 0.2)';
+              flowTreeStatus.style.color = 'var(--accent-green)';
+            } else {
+              flowTreeStatus.innerHTML = '<i class="fas fa-circle"></i><span>Ready</span>';
+              flowTreeStatus.style.background = 'rgba(16, 185, 129, 0.2)';
+              flowTreeStatus.style.color = 'var(--accent-green)';
+            }
+          }
+          
+          console.log('✅ [SNAPSHOT] System snapshot loaded:', {
+            mode: data.snapshot.mode,
+            flows: data.snapshot.dynamicFlows?.length,
+            generatedIn: data.snapshot.generatedIn
+          });
+          
+        } else {
+          throw new Error(data.error || 'Unknown error');
+        }
+        
+      } catch (error) {
+        console.error('❌ [SNAPSHOT] Error:', error);
+        jsonDisplay.textContent = JSON.stringify({
+          error: true,
+          message: error.message,
+          timestamp: new Date().toISOString()
+        }, null, 2);
+      } finally {
+        if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+      }
+    }
+    
+    function copySystemSnapshot() {
+      const jsonDisplay = document.getElementById('snapshot-json');
+      const text = jsonDisplay.textContent;
+      
+      navigator.clipboard.writeText(text).then(() => {
+        // Visual feedback
+        const btn = document.getElementById('btn-copy-snapshot');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i><span>✅ Copied!</span>';
+        btn.style.background = 'var(--accent-green)';
+        btn.style.borderColor = 'var(--accent-green)';
+        
+        setTimeout(() => {
+          btn.innerHTML = originalHTML;
+          btn.style.background = 'var(--accent-orange)';
+          btn.style.borderColor = 'var(--accent-orange)';
+        }, 2000);
+        
+        console.log('📋 [SNAPSHOT] Copied to clipboard');
+      }).catch(err => {
+        console.error('❌ [SNAPSHOT] Failed to copy:', err);
+        alert('Failed to copy to clipboard');
+      });
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
