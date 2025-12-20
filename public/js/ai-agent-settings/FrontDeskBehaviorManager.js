@@ -2921,13 +2921,21 @@ Sean → Shawn, Shaun`;
             let allTemplates = data.templates || [];
             
             // ═══════════════════════════════════════════════════════════════════════════
+            // DEDUPLICATE BY flowKey: DB templates are AUTHORITATIVE over V1 samples
+            // If a flowKey exists in DB, don't show the V1 sample (DB is the truth)
+            // ═══════════════════════════════════════════════════════════════════════════
+            const dbFlowKeys = new Set(allTemplates.map(t => t.flowKey?.toLowerCase()).filter(Boolean));
+            
+            // ═══════════════════════════════════════════════════════════════════════════
             // V1 SAMPLE TEMPLATES: Show ONLY when "All Categories" selected (no filter)
-            // When a specific category is selected, only DB templates with that exact
-            // ObjectId should appear. V1 samples are pre-seed, category-agnostic.
+            // AND only if the flowKey doesn't already exist in DB templates
             // ═══════════════════════════════════════════════════════════════════════════
             if (!this.selectedTradeCategoryId) {
-                // "All Categories" mode: show V1 samples as seed sources
-                allTemplates = allTemplates.concat(v1Templates);
+                // "All Categories" mode: show V1 samples that don't duplicate DB templates
+                const uniqueV1Samples = v1Templates.filter(v1 => 
+                    !dbFlowKeys.has(v1.flowKey?.toLowerCase())
+                );
+                allTemplates = allTemplates.concat(uniqueV1Samples);
             }
             
             // ═══════════════════════════════════════════════════════════════════════════
