@@ -2550,6 +2550,43 @@ Sean → Shawn, Shaun`;
     renderDynamicFlowsTab() {
         return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
+                
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <!-- TRADE CATEGORY SELECTOR - Filter templates by industry         -->
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <div style="
+                    background: linear-gradient(135deg, #1a1f35 0%, #161b22 100%);
+                    border: 1px solid #30363d;
+                    border-radius: 8px;
+                    padding: 16px;
+                    margin-bottom: 20px;
+                ">
+                    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 20px;">🏷️</span>
+                            <label style="color: #c9d1d9; font-weight: 600; white-space: nowrap;">
+                                Trade Category:
+                            </label>
+                        </div>
+                        <select id="fdb-trade-category-select" style="
+                            padding: 10px 16px;
+                            background: #0d1117;
+                            color: #58a6ff;
+                            border: 1px solid #30363d;
+                            border-radius: 6px;
+                            font-size: 14px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            min-width: 200px;
+                        ">
+                            <option value="">⏳ Loading categories...</option>
+                        </select>
+                        <span style="color: #8b949e; font-size: 13px; margin-left: auto;">
+                            Templates below are filtered by selected category
+                        </span>
+                    </div>
+                </div>
+                
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <div>
                         <h3 style="margin: 0; color: #58a6ff;">🧠 Dynamic Flows</h3>
@@ -2576,7 +2613,7 @@ Sean → Shawn, Shaun`;
                         <div>
                             <h4 style="color: #c9d1d9; margin: 0;">📋 Available Templates</h4>
                             <p style="color: #8b949e; font-size: 13px; margin: 4px 0 0 0;">
-                                Global templates you can copy and customize for this company.
+                                Templates for <span id="fdb-selected-category-name" style="color: #58a6ff;">selected trade category</span>
                             </p>
                         </div>
                         <button id="fdb-seed-templates-btn" style="
@@ -2592,7 +2629,7 @@ Sean → Shawn, Shaun`;
                     </div>
                     <div id="fdb-templates-list" style="display: flex; flex-direction: column; gap: 8px;">
                         <div style="text-align: center; padding: 20px; color: #8b949e;">
-                            Loading templates...
+                            Select a trade category above to view templates
                         </div>
                     </div>
                 </div>
@@ -2729,6 +2766,124 @@ Sean → Shawn, Shaun`;
         `;
     }
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // TRADE CATEGORY SYSTEM - Filter templates by industry
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    /**
+     * Initialize the Dynamic Flows tab with trade categories
+     */
+    async initDynamicFlowsTab(container) {
+        // Store selected trade category (default to first available)
+        this.selectedTradeCategoryId = null;
+        this.tradeCategoriesCache = [];
+        
+        // Load trade categories from API
+        await this.loadTradeCategories(container);
+        
+        // Set up trade category dropdown listener
+        const dropdown = container.querySelector('#fdb-trade-category-select');
+        if (dropdown) {
+            dropdown.addEventListener('change', async (e) => {
+                this.selectedTradeCategoryId = e.target.value || null;
+                const selectedOption = e.target.options[e.target.selectedIndex];
+                const categoryName = selectedOption?.text || 'selected trade category';
+                
+                // Update the label showing which category is selected
+                const nameSpan = container.querySelector('#fdb-selected-category-name');
+                if (nameSpan) {
+                    nameSpan.textContent = categoryName;
+                }
+                
+                // Refresh the flows list with the new filter
+                await this.refreshFlowsList(container);
+            });
+        }
+        
+        // Initial load of flows
+        await this.refreshFlowsList(container);
+    }
+    
+    /**
+     * Load trade categories from the API
+     */
+    async loadTradeCategories(container) {
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const response = await fetch('/api/v2global/tradecategories/categories?includeQnAs=false&includeStats=false', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!response.ok) throw new Error('Failed to load trade categories');
+            
+            const result = await response.json();
+            this.tradeCategoriesCache = result.data || [];
+            
+            // Populate the dropdown
+            const dropdown = container.querySelector('#fdb-trade-category-select');
+            if (dropdown) {
+                // Clear existing options
+                dropdown.innerHTML = '';
+                
+                // Add "All Categories" option
+                const allOption = document.createElement('option');
+                allOption.value = '';
+                allOption.textContent = '📂 All Categories';
+                dropdown.appendChild(allOption);
+                
+                // Add each trade category
+                this.tradeCategoriesCache.forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category._id;
+                    option.textContent = `${this.getTradeCategoryIcon(category.name)} ${category.name}`;
+                    dropdown.appendChild(option);
+                });
+                
+                // Pre-select HVAC if available (since that's what we're building now)
+                const hvacCategory = this.tradeCategoriesCache.find(c => 
+                    c.name.toLowerCase().includes('hvac')
+                );
+                if (hvacCategory) {
+                    dropdown.value = hvacCategory._id;
+                    this.selectedTradeCategoryId = hvacCategory._id;
+                    
+                    // Update the category name label
+                    const nameSpan = container.querySelector('#fdb-selected-category-name');
+                    if (nameSpan) {
+                        nameSpan.textContent = hvacCategory.name;
+                    }
+                }
+                
+                console.log('[DYNAMIC FLOWS] Trade categories loaded:', this.tradeCategoriesCache.length);
+            }
+        } catch (error) {
+            console.error('[DYNAMIC FLOWS] Failed to load trade categories:', error);
+            
+            // Show error in dropdown
+            const dropdown = container.querySelector('#fdb-trade-category-select');
+            if (dropdown) {
+                dropdown.innerHTML = '<option value="">⚠️ Failed to load categories</option>';
+            }
+        }
+    }
+    
+    /**
+     * Get an appropriate emoji icon for a trade category
+     */
+    getTradeCategoryIcon(categoryName) {
+        const name = (categoryName || '').toLowerCase();
+        if (name.includes('hvac') || name.includes('air') || name.includes('heating')) return '🌡️';
+        if (name.includes('plumb')) return '🔧';
+        if (name.includes('elect')) return '⚡';
+        if (name.includes('dent')) return '🦷';
+        if (name.includes('medic') || name.includes('health')) return '🏥';
+        if (name.includes('legal') || name.includes('law')) return '⚖️';
+        if (name.includes('auto') || name.includes('car')) return '🚗';
+        if (name.includes('roof')) return '🏠';
+        if (name.includes('pest')) return '🐜';
+        return '🏢';
+    }
+    
     async refreshFlowsList(container) {
         const flowsContainer = container.querySelector('#fdb-flows-list');
         const templatesContainer = container.querySelector('#fdb-templates-list');
@@ -2758,16 +2913,49 @@ Sean → Shawn, Shaun`;
             `;
         }
         
-        // Render templates (with "already copied" detection)
+        // ═══════════════════════════════════════════════════════════════════════════
+        // FILTER TEMPLATES BY TRADE CATEGORY
+        // ═══════════════════════════════════════════════════════════════════════════
         if (templatesContainer) {
-            const allTemplates = (data.templates || []).concat(v1Templates);
+            // Combine API templates with V1 sample templates
+            let allTemplates = (data.templates || []).concat(v1Templates);
+            
+            // Filter by selected trade category if one is selected
+            if (this.selectedTradeCategoryId) {
+                // Get the selected category name for matching V1 templates
+                const selectedCategory = this.tradeCategoriesCache.find(c => c._id === this.selectedTradeCategoryId);
+                const selectedCategoryName = selectedCategory?.name?.toLowerCase() || '';
+                
+                allTemplates = allTemplates.filter(t => {
+                    // API templates: match by tradeCategoryId
+                    if (t.tradeCategoryId === this.selectedTradeCategoryId) return true;
+                    
+                    // V1 sample templates: match by tradeCategoryName (HVAC, etc.)
+                    if (t.tradeCategoryName) {
+                        return t.tradeCategoryName.toLowerCase().includes(selectedCategoryName) ||
+                               selectedCategoryName.includes(t.tradeCategoryName.toLowerCase());
+                    }
+                    
+                    // If no category assigned, show in "All" only
+                    return !this.selectedTradeCategoryId;
+                });
+            }
+            
             if (allTemplates.length > 0) {
                 templatesContainer.innerHTML = allTemplates.map(t => {
                     const isAlreadyCopied = copiedFlowKeys.has(t.flowKey?.toLowerCase());
                     return this.renderFlowCard(t, true, isAlreadyCopied);
                 }).join('');
             } else {
-                templatesContainer.innerHTML = '<p style="color: #6e7681; font-size: 13px;">No templates available.</p>';
+                const selectedCategory = this.tradeCategoriesCache.find(c => c._id === this.selectedTradeCategoryId);
+                const categoryName = selectedCategory?.name || 'this category';
+                templatesContainer.innerHTML = `
+                    <div style="text-align: center; padding: 30px; color: #8b949e; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
+                        <div style="font-size: 32px; margin-bottom: 12px;">📋</div>
+                        <p style="font-weight: 600; margin-bottom: 8px;">No templates for ${categoryName}</p>
+                        <p style="font-size: 13px;">Templates will appear here when added for this trade category.</p>
+                    </div>
+                `;
             }
         }
         
@@ -2809,6 +2997,7 @@ Sean → Shawn, Shaun`;
                 name: '🚨 Emergency Service Detection',
                 description: 'Detects TRUE emergencies (gas leak, fire, flooding, CO). Includes safety directive. Blocks all other flows.',
                 flowKey: 'emergency_service',
+                tradeCategoryName: 'HVAC Residential',  // V2 Trade Category System
                 enabled: true,
                 priority: 200,
                 triggers: [{
@@ -2931,6 +3120,7 @@ Sean → Shawn, Shaun`;
                 name: '🔄 Returning Customer Claim',
                 description: 'Detects existing/returning customers. Sets flag for CRM lookup and personalizes the conversation.',
                 flowKey: 'returning_customer_claim',
+                tradeCategoryName: 'HVAC Residential',  // V2 Trade Category System
                 enabled: true,
                 priority: 60,
                 triggers: [{
@@ -3018,6 +3208,7 @@ Sean → Shawn, Shaun`;
                 name: '✨ New Customer Detection',
                 description: 'Detects first-time callers. Welcomes them warmly and sets flag for special handling.',
                 flowKey: 'new_customer',
+                tradeCategoryName: 'HVAC Residential',  // V2 Trade Category System
                 enabled: true,
                 priority: 55,
                 triggers: [{
@@ -3099,6 +3290,7 @@ Sean → Shawn, Shaun`;
                 name: '📅 Standard Booking Intent',
                 description: 'Detects when caller wants to schedule service. Transitions to BOOKING mode.',
                 flowKey: 'booking_intent',
+                tradeCategoryName: 'HVAC Residential',  // V2 Trade Category System
                 enabled: true,
                 priority: 50,
                 triggers: [{
@@ -3187,6 +3379,7 @@ Sean → Shawn, Shaun`;
                 name: '💰 Quote/Pricing Request',
                 description: 'Detects pricing inquiries. Sets flag and acknowledges - does NOT transition to booking.',
                 flowKey: 'quote_request',
+                tradeCategoryName: 'HVAC Residential',  // V2 Trade Category System
                 enabled: true,
                 priority: 45,
                 triggers: [{
@@ -3271,6 +3464,7 @@ Sean → Shawn, Shaun`;
                 name: '❌ Cancellation Request',
                 description: 'Detects when caller wants to cancel an existing appointment. High priority handling.',
                 flowKey: 'cancellation_request',
+                tradeCategoryName: 'HVAC Residential',  // V2 Trade Category System
                 enabled: true,
                 priority: 100,
                 triggers: [{
@@ -3348,6 +3542,7 @@ Sean → Shawn, Shaun`;
                 name: '📆 Reschedule Request',
                 description: 'Detects when caller wants to reschedule an existing appointment.',
                 flowKey: 'reschedule_request',
+                tradeCategoryName: 'HVAC Residential',  // V2 Trade Category System
                 enabled: true,
                 priority: 90,
                 triggers: [{
@@ -3535,8 +3730,20 @@ Sean → Shawn, Shaun`;
                 console.log('[DYNAMIC FLOWS] Copying V1 sample template:', templateId);
                 console.log('[DYNAMIC FLOWS] Template actions:', JSON.stringify(sample.actions, null, 2));
                 
-                const payload = { ...sample, _id: undefined, isTemplate: false };
-                console.log('[DYNAMIC FLOWS] POST payload:', JSON.stringify(payload, null, 2));
+                // ═══════════════════════════════════════════════════════════════════
+                // V2 TRADE CATEGORY: Include tradeCategoryId when copying
+                // This creates an audit trail: "where did this company flow come from?"
+                // ═══════════════════════════════════════════════════════════════════
+                const payload = { 
+                    ...sample, 
+                    _id: undefined, 
+                    isTemplate: false,
+                    // Carry trade category info from selected category (or sample default)
+                    tradeCategoryId: this.selectedTradeCategoryId || null,
+                    tradeCategoryName: sample.tradeCategoryName || null
+                };
+                
+                console.log('[DYNAMIC FLOWS] POST payload (with trade category):', JSON.stringify(payload, null, 2));
                 
                 const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
                 const createResp = await fetch(`/api/company/${this.companyId}/dynamic-flows`, {
@@ -3557,6 +3764,7 @@ Sean → Shawn, Shaun`;
                 return;
             }
 
+            // For API-persisted templates, include tradeCategoryId from selected category
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
             const response = await fetch(`/api/company/${this.companyId}/dynamic-flows/from-template`, {
                 method: 'POST',
@@ -3564,7 +3772,10 @@ Sean → Shawn, Shaun`;
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ templateId })
+                body: JSON.stringify({ 
+                    templateId,
+                    tradeCategoryId: this.selectedTradeCategoryId || null
+                })
             });
             
             if (!response.ok) {
@@ -5699,8 +5910,8 @@ Sean → Shawn, Shaun`;
             case 'booking': content.innerHTML = this.renderBookingPromptsTab(); break;
             case 'flows': 
                 content.innerHTML = this.renderDynamicFlowsTab(); 
-                // Load flows asynchronously after rendering
-                this.refreshFlowsList(container);
+                // Load trade categories and flows asynchronously after rendering
+                this.initDynamicFlowsTab(container);
                 break;
             case 'emotions': content.innerHTML = this.renderEmotionsTab(); break;
             case 'frustration': content.innerHTML = this.renderFrustrationTab(); break;
@@ -6192,6 +6403,33 @@ Sean → Shawn, Shaun`;
                 key: (modal.querySelector('#flow-ledger-key')?.value || '').trim(),
                 note: (modal.querySelector('#flow-ledger-note')?.value || '').trim()
             };
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // ACTION FIELD VALIDATION - Prevent saving incomplete/empty action configs
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (!forCopy) {
+            const validationErrors = [];
+            
+            if (actionType === 'set_flag') {
+                if (!actionConfig.flagName) {
+                    validationErrors.push('SET_FLAG requires a flag name (path)');
+                }
+            } else if (actionType === 'ack_once') {
+                if (!actionConfig.text) {
+                    validationErrors.push('ACK_ONCE requires acknowledgment text');
+                }
+            } else if (actionType === 'append_ledger') {
+                if (!actionConfig.type) validationErrors.push('APPEND_LEDGER requires a type (e.g., EVENT, CLAIM)');
+                if (!actionConfig.key) validationErrors.push('APPEND_LEDGER requires a key (e.g., BOOKING_INTENT)');
+                if (!actionConfig.note) validationErrors.push('APPEND_LEDGER requires a note (human-readable description)');
+            }
+            
+            if (validationErrors.length > 0) {
+                this.showNotification(`Validation failed:\n${validationErrors.join('\n')}`, 'error');
+                console.error('[FLOW EDITOR] Action validation failed:', validationErrors);
+                return null;
+            }
         }
         
         const action = {

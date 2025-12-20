@@ -299,10 +299,31 @@ const DynamicFlowSchema = new Schema({
         default: null
     },
     
-    // Trade type (for trade-specific flows)
+    // Trade type (for trade-specific flows) - LEGACY, use tradeCategoryId instead
     tradeType: {
         type: String,
         enum: ['hvac', 'plumbing', 'electrical', 'dental', 'medical', 'legal', 'general', null],
+        default: null
+    },
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // TRADE CATEGORY (V2 - Links to v2TradeCategory model)
+    // ─────────────────────────────────────────────────────────────────────────
+    // Global templates: link to a trade category (HVAC, Plumbing, Dental, etc.)
+    // Company flows: inherit tradeCategoryId from the template they were copied from
+    // This enables the "folder system" for organizing templates by industry
+    // ─────────────────────────────────────────────────────────────────────────
+    tradeCategoryId: {
+        type: Schema.Types.ObjectId,
+        ref: 'TradeCategory',
+        index: true,
+        default: null
+    },
+    
+    // Human-readable trade category name (denormalized for performance)
+    tradeCategoryName: {
+        type: String,
+        trim: true,
         default: null
     },
     
@@ -423,6 +444,13 @@ DynamicFlowSchema.index({ companyId: 1, enabled: 1, priority: -1 });
 DynamicFlowSchema.index({ companyId: 1, flowKey: 1 }, { unique: true, sparse: true });
 DynamicFlowSchema.index({ isTemplate: 1, enabled: 1 });
 DynamicFlowSchema.index({ tradeType: 1, isTemplate: 1 });
+// V2 Trade Category indexes
+DynamicFlowSchema.index({ tradeCategoryId: 1, isTemplate: 1, enabled: 1 });
+DynamicFlowSchema.index({ tradeCategoryId: 1, flowKey: 1 }, { 
+    unique: true, 
+    sparse: true,
+    partialFilterExpression: { isTemplate: true }  // Only enforce uniqueness for templates
+});
 
 // ════════════════════════════════════════════════════════════════════════════
 // STATIC METHODS
@@ -457,6 +485,9 @@ DynamicFlowSchema.statics.getFlowsForCompany = async function(companyId, tradeTy
 
 /**
  * Create a company copy of a template
+ * 
+ * CRITICAL: Carries tradeCategoryId and tradeCategoryName from template
+ * This enables auditing "where did this company flow come from?"
  */
 DynamicFlowSchema.statics.createFromTemplate = async function(templateId, companyId, overrides = {}) {
     const template = await this.findById(templateId).lean();
@@ -464,23 +495,43 @@ DynamicFlowSchema.statics.createFromTemplate = async function(templateId, compan
         throw new Error('Template not found');
     }
     
+    // Check for duplicate flowKey in company
+    const existingFlow = await this.findOne({
+        flowKey: template.flowKey,
+        companyId: companyId,
+        isTemplate: false
+    }).lean();
+    
+    if (existingFlow) {
+        throw new Error(`Flow with key "${template.flowKey}" already exists for this company`);
+    }
+    
     // Remove template-specific fields
     delete template._id;
     delete template.createdAt;
     delete template.updatedAt;
     
-    // Create company copy
+    // Create company copy (carries tradeCategoryId for audit trail)
     const companyFlow = {
         ...template,
         companyId,
         templateId,
         isTemplate: false,
+        // IMPORTANT: Carry trade category for audit trail
+        tradeCategoryId: template.tradeCategoryId,
+        tradeCategoryName: template.tradeCategoryName,
         ...overrides,
         metadata: {
             ...template.metadata,
             version: 1,
             usageCount: 0,
-            lastUsedAt: null
+            lastUsedAt: null,
+            copiedFrom: {
+                templateId: templateId,
+                tradeCategoryId: template.tradeCategoryId,
+                tradeCategoryName: template.tradeCategoryName,
+                copiedAt: new Date()
+            }
         }
     };
     
@@ -488,12 +539,18 @@ DynamicFlowSchema.statics.createFromTemplate = async function(templateId, compan
 };
 
 /**
- * Get global templates
+ * Get global templates (optionally filtered by trade category)
  */
-DynamicFlowSchema.statics.getTemplates = async function(tradeType = null) {
+DynamicFlowSchema.statics.getTemplates = async function(tradeType = null, tradeCategoryId = null) {
     const query = { isTemplate: true, enabled: true };
     
-    if (tradeType) {
+    // V2 Trade Category filter (preferred)
+    if (tradeCategoryId) {
+        const mongoose = require('mongoose');
+        query.tradeCategoryId = new mongoose.Types.ObjectId(tradeCategoryId);
+    } 
+    // Legacy trade type filter
+    else if (tradeType) {
         query.$or = [
             { tradeType: tradeType },
             { tradeType: null },
@@ -502,6 +559,59 @@ DynamicFlowSchema.statics.getTemplates = async function(tradeType = null) {
     }
     
     return this.find(query).sort({ priority: -1 }).lean();
+};
+
+/**
+ * Get templates by trade category ID
+ */
+DynamicFlowSchema.statics.getTemplatesByTradeCategory = async function(tradeCategoryId) {
+    const mongoose = require('mongoose');
+    
+    return this.find({
+        tradeCategoryId: new mongoose.Types.ObjectId(tradeCategoryId),
+        isTemplate: true,
+        enabled: true
+    }).sort({ priority: -1 }).lean();
+};
+
+/**
+ * Check if flowKey exists for this trade category (for templates)
+ */
+DynamicFlowSchema.statics.flowKeyExistsForTradeCategory = async function(flowKey, tradeCategoryId, excludeId = null) {
+    const mongoose = require('mongoose');
+    
+    const query = {
+        flowKey: flowKey.toLowerCase(),
+        tradeCategoryId: new mongoose.Types.ObjectId(tradeCategoryId),
+        isTemplate: true
+    };
+    
+    if (excludeId) {
+        query._id = { $ne: new mongoose.Types.ObjectId(excludeId) };
+    }
+    
+    const existing = await this.findOne(query).lean();
+    return !!existing;
+};
+
+/**
+ * Check if flowKey exists for this company (for company flows)
+ */
+DynamicFlowSchema.statics.flowKeyExistsForCompany = async function(flowKey, companyId, excludeId = null) {
+    const mongoose = require('mongoose');
+    
+    const query = {
+        flowKey: flowKey.toLowerCase(),
+        companyId: new mongoose.Types.ObjectId(companyId),
+        isTemplate: false
+    };
+    
+    if (excludeId) {
+        query._id = { $ne: new mongoose.Types.ObjectId(excludeId) };
+    }
+    
+    const existing = await this.findOne(query).lean();
+    return !!existing;
 };
 
 /**
