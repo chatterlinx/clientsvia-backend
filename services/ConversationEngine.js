@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V38-FIX-SURE-MY-NAME';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V38-FIX-META-INIT';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -4079,6 +4079,8 @@ async function processTurn({
                     const llmIntervention = refusalConfig.llmIntervention !== false;
                     
                     // Track refusal attempts
+                    // V38 FIX: Ensure session.booking.meta exists first
+                    session.booking.meta = session.booking.meta || {};
                     session.booking.meta[activeSlotId] = session.booking.meta[activeSlotId] || {};
                     const slotMeta = session.booking.meta[activeSlotId];
                     slotMeta.refusalCount = (slotMeta.refusalCount || 0) + 1;
@@ -4289,6 +4291,8 @@ async function processTurn({
                         // 2. Use different phrasing each time (variants)
                         // 3. After max attempts, escalate (transfer offer)
                         // ═══════════════════════════════════════════════════════════════
+                        // V38 FIX: Ensure session.booking.meta exists first
+                        session.booking.meta = session.booking.meta || {};
                         session.booking.meta[nextSlotId] = session.booking.meta[nextSlotId] || {};
                         const askedCount = session.booking.meta[nextSlotId].askedCount || 0;
                         
