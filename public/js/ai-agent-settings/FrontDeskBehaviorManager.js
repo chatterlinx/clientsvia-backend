@@ -638,9 +638,9 @@ class FrontDeskBehaviorManager {
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                         <div>
                             <label style="color: #c9d1d9; font-weight: 500; display: flex; align-items: center; gap: 8px;">
-                                👋 Greeting Responses
+                        👋 Greeting Responses
                                 <span style="background: #238636; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">0 TOKENS</span>
-                            </label>
+                    </label>
                             <p style="color: #8b949e; font-size: 0.75rem; margin: 4px 0 0 0;">
                                 Instant responses to caller greetings. <strong style="color: #3fb950;">No LLM needed!</strong>
                             </p>
@@ -657,10 +657,10 @@ class FrontDeskBehaviorManager {
                         <div style="display: grid; grid-template-columns: 1fr 1fr 50px; background: #21262d; border-bottom: 1px solid #30363d;">
                             <div style="padding: 12px 16px; color: #8b949e; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
                                 Caller Says (Trigger)
-                            </div>
+                        </div>
                             <div style="padding: 12px 16px; color: #8b949e; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
                                 AI Responds
-                            </div>
+                        </div>
                             <div></div>
                         </div>
                         
@@ -1982,7 +1982,7 @@ Sean → Shawn, Shaun`;
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Use Google Maps to validate and normalize addresses (requires API key)">
                                 <input type="checkbox" class="slot-useGoogleMapsValidation" data-index="${index}" ${slot.useGoogleMapsValidation ? 'checked' : ''} style="accent-color: #238636;" onchange="window.frontDeskManager.toggleGoogleMapsOptions(${index}, this.checked)">
                                 <span style="font-size: 12px; color: #c9d1d9;">Enable Google Maps validation</span>
-                            </label>
+                    </label>
                         </div>
                         <div class="google-maps-options" style="display: ${slot.useGoogleMapsValidation ? 'flex' : 'none'}; flex-direction: column; gap: 8px; padding: 8px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;">
                             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -2714,6 +2714,7 @@ Sean → Shawn, Shaun`;
         if (!flowsContainer) return;
         
         const data = await this.loadDynamicFlows();
+        const v1Templates = this.getV1SampleFlows();
         
         // Render company flows
         if (data.flows && data.flows.length > 0) {
@@ -2729,14 +2730,109 @@ Sean → Shawn, Shaun`;
         }
         
         // Render templates
-        if (templatesContainer && data.templates && data.templates.length > 0) {
-            templatesContainer.innerHTML = data.templates.map(t => this.renderFlowCard(t, true)).join('');
+        if (templatesContainer) {
+            const allTemplates = (data.templates || []).concat(v1Templates);
+            if (allTemplates.length > 0) {
+                templatesContainer.innerHTML = allTemplates.map(t => this.renderFlowCard(t, true)).join('');
+            } else {
+                templatesContainer.innerHTML = '<p style="color: #6e7681; font-size: 13px;">No templates available.</p>';
+            }
         } else if (templatesContainer) {
             templatesContainer.innerHTML = '<p style="color: #6e7681; font-size: 13px;">No templates available.</p>';
         }
         
         // Attach flow-specific event listeners
         this.attachFlowEventListeners(container);
+    }
+
+    // Prefilled V1 sample flows (booking_intent, returning_customer_claim)
+    getV1SampleFlows() {
+        return [
+            {
+                _id: 'template-booking-intent',
+                name: 'Standard Booking Intent',
+                description: 'Detects booking intent and transitions to BOOKING with ack + ledger.',
+                flowKey: 'booking_intent',
+                enabled: true,
+                priority: 50,
+                triggers: [{
+                    type: 'phrase',
+                    config: { phrases: [
+                        'schedule an appointment',
+                        'book an appointment',
+                        'set up a visit',
+                        'need someone to come out',
+                        'send a technician',
+                        'can you come today',
+                        'i want to schedule'
+                    ], fuzzy: true },
+                    priority: 10,
+                    minConfidence: 0.75
+                }],
+                actions: [{
+                    timing: 'on_activate',
+                    type: 'transition_mode',
+                    config: { targetMode: 'BOOKING', setBookingLocked: true }
+                },{
+                    timing: 'on_activate',
+                    type: 'ack_once',
+                    config: { text: 'Got it — I can get that scheduled. I’ll grab a few details real quick.' }
+                },{
+                    timing: 'on_activate',
+                    type: 'append_ledger',
+                    config: { type: 'EVENT', key: 'BOOKING_INTENT', note: 'Caller expressed intent to schedule service.' }
+                }],
+                settings: {
+                    allowConcurrent: true,
+                    persistent: true,
+                    reactivatable: false,
+                    minConfidence: 0.75
+                },
+                meta: { createdFromTemplate: true }
+            },
+            {
+                _id: 'template-returning-customer',
+                name: 'Returning Customer Claim',
+                description: 'Captures returning customer claim and sets flag + ack + ledger.',
+                flowKey: 'returning_customer_claim',
+                enabled: true,
+                priority: 60,
+                triggers: [{
+                    type: 'phrase',
+                    config: { phrases: [
+                        'long time customer',
+                        'returning customer',
+                        'existing customer',
+                        'been with you',
+                        'you guys have been out before',
+                        'you installed my unit',
+                        'you serviced us last year'
+                    ], fuzzy: true },
+                    priority: 10,
+                    minConfidence: 0.75
+                }],
+                actions: [{
+                    timing: 'on_activate',
+                    type: 'set_flag',
+                    config: { flagName: 'returningCustomerClaim', flagValue: true }
+                },{
+                    timing: 'on_activate',
+                    type: 'ack_once',
+                    config: { text: 'Perfect — thanks for letting me know you’ve worked with us before.' }
+                },{
+                    timing: 'on_activate',
+                    type: 'append_ledger',
+                    config: { type: 'CLAIM', key: 'RETURNING_CUSTOMER', note: 'Caller says they are a returning/existing customer.' }
+                }],
+                settings: {
+                    allowConcurrent: true,
+                    persistent: true,
+                    reactivatable: false,
+                    minConfidence: 0.75
+                },
+                meta: { createdFromTemplate: true }
+            }
+        ];
     }
     
     attachFlowEventListeners(container) {
@@ -2853,6 +2949,26 @@ Sean → Shawn, Shaun`;
     
     async copyTemplateToCompany(templateId) {
         try {
+            // Handle local V1 sample templates (not persisted)
+            const sample = this.getV1SampleFlows().find(t => t._id === templateId);
+            if (sample) {
+                const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+                const createResp = await fetch(`/api/company/${this.companyId}/dynamic-flows`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ ...sample, _id: undefined, isTemplate: false })
+                });
+                if (!createResp.ok) {
+                    const err = await createResp.json();
+                    throw new Error(err.error || 'Failed to create sample flow');
+                }
+                this.showNotification('Sample flow created for company!', 'success');
+                return;
+            }
+
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
             const response = await fetch(`/api/company/${this.companyId}/dynamic-flows/from-template`, {
                 method: 'POST',
@@ -2892,82 +3008,13 @@ Sean → Shawn, Shaun`;
         }
     }
     
-    // ═══════════════════════════════════════════════════════════════════════════
-    // 🔧 CUSTOM FIELDS TABLE RENDERER
-    // ═══════════════════════════════════════════════════════════════════════════
-    
-    renderCustomFieldsTable(customFields = []) {
-        if (!customFields || customFields.length === 0) {
-            return `
-                <div style="text-align: center; padding: 20px; color: #6e7681; font-size: 12px;">
-                    No custom fields yet. Click "+ Add Field" to add clientId, gateCode, etc.
-                </div>
-            `;
-        }
-        
+    // Placeholder (custom fields disabled for V1)
+    renderCustomFieldsTable() {
         return `
-            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
-                <thead>
-                    <tr style="border-bottom: 1px solid #30363d;">
-                        <th style="text-align: left; padding: 8px; color: #8b949e; font-weight: 500;">Field Key</th>
-                        <th style="text-align: left; padding: 8px; color: #8b949e; font-weight: 500;">Label</th>
-                        <th style="text-align: left; padding: 8px; color: #8b949e; font-weight: 500;">Prompt</th>
-                        <th style="text-align: center; padding: 8px; color: #8b949e; font-weight: 500;">Order</th>
-                        <th style="text-align: center; padding: 8px; color: #8b949e; font-weight: 500;">Req?</th>
-                        <th style="text-align: center; padding: 8px; color: #8b949e; font-weight: 500;"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${customFields.map((field, idx) => `
-                        <tr style="border-bottom: 1px solid #21262d;" data-field-idx="${idx}">
-                            <td style="padding: 8px;">
-                                <input type="text" class="custom-field-key" value="${field.fieldKey || ''}" placeholder="clientId" style="width: 100%; padding: 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
-                            </td>
-                            <td style="padding: 8px;">
-                                <input type="text" class="custom-field-label" value="${field.label || ''}" placeholder="Client ID" style="width: 100%; padding: 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
-                            </td>
-                            <td style="padding: 8px;">
-                                <input type="text" class="custom-field-prompt" value="${field.prompt || ''}" placeholder="What's your client ID number?" style="width: 100%; padding: 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
-                            </td>
-                            <td style="padding: 8px; text-align: center;">
-                                <input type="number" class="custom-field-order" value="${field.order || 25}" min="1" max="100" style="width: 50px; padding: 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px; text-align: center;">
-                            </td>
-                            <td style="padding: 8px; text-align: center;">
-                                <input type="checkbox" class="custom-field-required" ${field.required !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
-                            </td>
-                            <td style="padding: 8px; text-align: center;">
-                                <button type="button" class="custom-field-delete" data-idx="${idx}" style="padding: 4px 8px; background: #21262d; color: #f85149; border: 1px solid #30363d; border-radius: 4px; font-size: 10px; cursor: pointer;">🗑️</button>
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
+            <div style="text-align: center; padding: 12px; color: #6e7681; font-size: 12px;">
+                Custom fields / unified needs are parked for V1. Focus on triggers, ack, flags, mode.
+            </div>
         `;
-    }
-    
-    // Helper to collect custom fields from the table
-    collectCustomFieldsFromTable(modal) {
-        const container = modal.querySelector('#flow-custom-fields-container');
-        if (!container) return [];
-        
-        const rows = container.querySelectorAll('tbody tr');
-        const fields = [];
-        
-        rows.forEach(row => {
-            const fieldKey = row.querySelector('.custom-field-key')?.value?.trim();
-            if (!fieldKey) return; // Skip empty rows
-            
-            fields.push({
-                fieldKey,
-                label: row.querySelector('.custom-field-label')?.value?.trim() || fieldKey,
-                prompt: row.querySelector('.custom-field-prompt')?.value?.trim() || `What is your ${fieldKey}?`,
-                order: parseInt(row.querySelector('.custom-field-order')?.value) || 25,
-                required: row.querySelector('.custom-field-required')?.checked !== false,
-                validation: { type: 'text' } // Default validation
-            });
-        });
-        
-        return fields;
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
@@ -3114,8 +3161,9 @@ Sean → Shawn, Shaun`;
                                 <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Primary Action</label>
                                 <select id="flow-action-type" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
                                     <option value="transition_mode" ${editFlow.actions?.[0]?.type === 'transition_mode' ? 'selected' : ''}>🔄 Transition Mode</option>
+                                    <option value="ack_once" ${editFlow.actions?.[0]?.type === 'ack_once' ? 'selected' : ''}>💬 Ack Once</option>
                                     <option value="set_flag" ${editFlow.actions?.[0]?.type === 'set_flag' ? 'selected' : ''}>🚩 Set Flag</option>
-                                    <option value="send_response" ${editFlow.actions?.[0]?.type === 'send_response' ? 'selected' : ''}>💬 Send Response</option>
+                                    <option value="append_ledger" ${editFlow.actions?.[0]?.type === 'append_ledger' ? 'selected' : ''}>📜 Append Ledger</option>
                                 </select>
                             </div>
                             
@@ -3145,94 +3193,33 @@ Sean → Shawn, Shaun`;
                             </div>
                             
                             <!-- Response config -->
-                            <div id="action-config-response" style="${editFlow.actions?.[0]?.type === 'send_response' ? '' : 'display: none;'}">
-                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Response Text</label>
-                                <textarea id="flow-action-response" placeholder="I understand this is urgent. Let me help you right away." style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px; min-height: 60px; resize: vertical;">${editFlow.actions?.[0]?.config?.response || ''}</textarea>
+                            <div id="action-config-response" style="${editFlow.actions?.[0]?.type === 'ack_once' ? '' : 'display: none;'}">
+                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Ack Text (once)</label>
+                                <textarea id="flow-action-response" placeholder="Got it — I can get that scheduled. I’ll grab a few details real quick." style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px; min-height: 60px; resize: vertical;">${editFlow.actions?.[0]?.config?.text || ''}</textarea>
+                            </div>
+
+                            <!-- Ledger config -->
+                            <div id="action-config-ledger" style="${editFlow.actions?.[0]?.type === 'append_ledger' ? '' : 'display: none;'}">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px;">
+                                    <div>
+                                        <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Ledger Type</label>
+                                        <input type="text" id="flow-ledger-type" value="${editFlow.actions?.[0]?.config?.type || ''}" placeholder="EVENT" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                                    </div>
+                                    <div>
+                                        <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Ledger Key</label>
+                                        <input type="text" id="flow-ledger-key" value="${editFlow.actions?.[0]?.config?.key || ''}" placeholder="BOOKING_INTENT" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                                    </div>
+                                </div>
+                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Note</label>
+                                <textarea id="flow-ledger-note" placeholder="Caller expressed intent to schedule service." style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px; min-height: 60px; resize: vertical;">${editFlow.actions?.[0]?.config?.note || ''}</textarea>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- Requirements -->
-                    <div style="margin-bottom: 24px;">
+                    <!-- Requirements (hidden in V1 to avoid second booking system) -->
+                    <div style="margin-bottom: 24px; display: none;">
                         <h3 style="color: #58a6ff; margin: 0 0 8px 0; font-size: 14px;">📋 Requirements</h3>
-                        <p style="color: #6e7681; font-size: 11px; margin: 0 0 16px 0;">
-                            When this flow triggers, these requirements are added to the unified needs list. Standard slots use Booking Prompts; custom fields use their own prompts.
-                        </p>
-                        
-                        <!-- Standard Slots (uses Booking Prompts) -->
-                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                                <label style="color: #c9d1d9; font-size: 13px; font-weight: 600;">📝 Standard Slots</label>
-                                <span style="color: #6e7681; font-size: 10px;">Uses prompts from Booking Prompts tab</span>
-                            </div>
-                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                                <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
-                                    <input type="checkbox" id="flow-req-name" ${editFlow.requirements?.some(r => r.type === 'collect_slot' && r.config?.slotId === 'name') ? 'checked' : ''} style="accent-color: #58a6ff;">
-                                    👤 Name
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
-                                    <input type="checkbox" id="flow-req-phone" ${editFlow.requirements?.some(r => r.type === 'collect_slot' && r.config?.slotId === 'phone') ? 'checked' : ''} style="accent-color: #58a6ff;">
-                                    📞 Phone
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
-                                    <input type="checkbox" id="flow-req-address" ${editFlow.requirements?.some(r => r.type === 'collect_slot' && r.config?.slotId === 'address') ? 'checked' : ''} style="accent-color: #58a6ff;">
-                                    📍 Address
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
-                                    <input type="checkbox" id="flow-req-time" ${editFlow.requirements?.some(r => r.type === 'collect_slot' && r.config?.slotId === 'timePreference') ? 'checked' : ''} style="accent-color: #58a6ff;">
-                                    🕐 Time
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
-                                    <input type="checkbox" id="flow-req-issue" ${editFlow.requirements?.some(r => r.type === 'collect_slot' && r.config?.slotId === 'issue') ? 'checked' : ''} style="accent-color: #58a6ff;">
-                                    🔧 Issue
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
-                                    <input type="checkbox" id="flow-req-email" ${editFlow.requirements?.some(r => r.type === 'collect_slot' && r.config?.slotId === 'email') ? 'checked' : ''} style="accent-color: #58a6ff;">
-                                    ✉️ Email
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <!-- Custom Fields (Flow-Owned) -->
-                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                                <label style="color: #c9d1d9; font-size: 13px; font-weight: 600;">🔧 Custom Fields</label>
-                                <button type="button" id="flow-add-custom-field" style="padding: 4px 10px; background: #238636; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">+ Add Field</button>
-                            </div>
-                            <p style="color: #6e7681; font-size: 10px; margin: 0 0 12px 0;">
-                                Flow-specific fields like clientId, gateCode, unitNumber. These use their own prompts (not Booking Prompts).
-                            </p>
-                            <div id="flow-custom-fields-container">
-                                ${this.renderCustomFieldsTable(editFlow.customFields || [])}
-                            </div>
-                        </div>
-                        
-                        <!-- Acknowledgment -->
-                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-                            <label style="color: #c9d1d9; font-size: 13px; font-weight: 600; display: block; margin-bottom: 8px;">💬 Acknowledgment (ACK_ONCE)</label>
-                            <p style="color: #6e7681; font-size: 10px; margin: 0 0 8px 0;">Said once when flow activates. Locked so it won't repeat.</p>
-                            <input type="text" id="flow-req-acknowledgment" value="${editFlow.requirements?.find(r => r.type === 'acknowledge')?.config?.acknowledgment || ''}" placeholder="e.g., Got it — welcome back. Let me get a few details and I'll take care of you." style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
-                        </div>
-                        
-                        <!-- Set Flag -->
-                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;">
-                            <label style="color: #c9d1d9; font-size: 13px; font-weight: 600; display: block; margin-bottom: 8px;">🚩 Set Flag (SET_FLAG)</label>
-                            <p style="color: #6e7681; font-size: 10px; margin: 0 0 8px 0;">Marks session with a flag for downstream logic (e.g., isEmergency, returningCustomerClaim).</p>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                                <input type="text" id="flow-req-flag-name" value="${editFlow.requirements?.find(r => r.type === 'set_flag')?.config?.flagName || ''}" placeholder="Flag name (e.g., returningCustomerClaim)" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
-                                <input type="text" id="flow-req-flag-value" value="${editFlow.requirements?.find(r => r.type === 'set_flag')?.config?.flagValue || 'true'}" placeholder="Flag value (default: true)" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
-                            </div>
-                        </div>
-                        
-                        <!-- Info Box -->
-                        <div style="margin-top: 12px; padding: 12px; background: #1a2d1a; border: 1px solid #238636; border-radius: 6px;">
-                            <div style="color: #3fb950; font-size: 11px; font-weight: 600; margin-bottom: 4px;">💡 How Requirements Work</div>
-                            <div style="color: #8b949e; font-size: 11px; line-height: 1.5;">
-                                <strong>Standard Slots</strong> → Added to unified needs list, uses prompts from Booking Prompts tab.<br>
-                                <strong>Custom Fields</strong> → Added to unified needs list, uses prompts defined here. Stored in <code>session.dynamicFlows.facts</code>.<br>
-                                <strong>Order</strong> → Lower number = asked earlier. Standard slots: 10-50. Custom fields: configurable.
-                            </div>
-                        </div>
+                        <div style="color: #6e7681; font-size: 12px;">Requirements/custom fields are parked for V1. Booking engine owns slot prompts.</div>
                     </div>
                     
                     <!-- Settings -->
@@ -3263,6 +3250,7 @@ Sean → Shawn, Shaun`;
                 <!-- Footer -->
                 <div style="padding: 20px; border-top: 1px solid #30363d; display: flex; justify-content: flex-end; gap: 12px;">
                     <button id="flow-editor-cancel" style="padding: 10px 20px; background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; font-size: 14px;">Cancel</button>
+                    <button id="flow-editor-copy-json" style="padding: 10px 20px; background: #30363d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; font-size: 14px;">📋 Copy JSON</button>
                     <button id="flow-editor-save" style="padding: 10px 20px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">💾 ${isNew ? 'Create Flow' : 'Save Changes'}</button>
                 </div>
             </div>
@@ -3275,7 +3263,8 @@ Sean → Shawn, Shaun`;
         actionTypeSelect.addEventListener('change', () => {
             modal.querySelector('#action-config-transition').style.display = actionTypeSelect.value === 'transition_mode' ? '' : 'none';
             modal.querySelector('#action-config-flag').style.display = actionTypeSelect.value === 'set_flag' ? '' : 'none';
-            modal.querySelector('#action-config-response').style.display = actionTypeSelect.value === 'send_response' ? '' : 'none';
+            modal.querySelector('#action-config-response').style.display = actionTypeSelect.value === 'ack_once' ? '' : 'none';
+            modal.querySelector('#action-config-ledger').style.display = actionTypeSelect.value === 'append_ledger' ? '' : 'none';
         });
         
         // ═══════════════════════════════════════════════════════════════════════════
@@ -3332,134 +3321,23 @@ Sean → Shawn, Shaun`;
         modal.querySelector('#flow-editor-close').addEventListener('click', closeModal);
         modal.querySelector('#flow-editor-cancel').addEventListener('click', closeModal);
         modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+        // Copy JSON handler (uses normalized payload)
+        const copyBtn = modal.querySelector('#flow-editor-copy-json');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                const flowPayload = this.buildFlowPayloadFromModal(modal, isNew, { forCopy: true });
+                if (!flowPayload) return;
+                navigator.clipboard.writeText(JSON.stringify(flowPayload, null, 2))
+                    .then(() => this.showNotification('Flow JSON copied', 'success'))
+                    .catch(() => this.showNotification('Copy failed', 'error'));
+            });
+        }
         
         // Save handler
         modal.querySelector('#flow-editor-save').addEventListener('click', async () => {
-            const name = modal.querySelector('#flow-name').value.trim();
-            const flowKey = modal.querySelector('#flow-key').value.trim().toLowerCase().replace(/\s+/g, '_');
-            const description = modal.querySelector('#flow-description').value.trim();
-            const priority = parseInt(modal.querySelector('#flow-priority').value) || 50;
-            const enabled = modal.querySelector('#flow-enabled').value === 'true';
-            
-            // Validation
-            if (!name) {
-                this.showNotification('Flow name is required', 'error');
-                return;
-            }
-            if (isNew && !flowKey) {
-                this.showNotification('Flow key is required', 'error');
-                return;
-            }
-            
-            // Build trigger
-            const triggerType = modal.querySelector('#flow-trigger-type').value;
-            const triggerPhrases = modal.querySelector('#flow-trigger-phrases').value.split('\n').map(p => p.trim()).filter(p => p);
-            const triggerFuzzy = modal.querySelector('#flow-trigger-fuzzy').checked;
-            
-            const trigger = {
-                type: triggerType,
-                config: triggerType === 'keyword' 
-                    ? { keywords: triggerPhrases, matchAll: false }
-                    : { phrases: triggerPhrases, fuzzy: triggerFuzzy },
-                priority: 10
-            };
-            
-            // Build action
-            const actionType = modal.querySelector('#flow-action-type').value;
-            let actionConfig = {};
-            
-            if (actionType === 'transition_mode') {
-                actionConfig = { targetMode: modal.querySelector('#flow-action-mode').value };
-            } else if (actionType === 'set_flag') {
-                actionConfig = {
-                    flagName: modal.querySelector('#flow-action-flag-name').value.trim(),
-                    flagValue: modal.querySelector('#flow-action-flag-value').value.trim() === 'true' ? true : modal.querySelector('#flow-action-flag-value').value.trim()
-                };
-            } else if (actionType === 'send_response') {
-                actionConfig = { response: modal.querySelector('#flow-action-response').value.trim() };
-            }
-            
-            const action = {
-                timing: 'on_activate',
-                type: actionType,
-                config: actionConfig
-            };
-            
-            // Build requirements from checkboxes
-            const requirements = [];
-            let reqOrder = 1;
-            
-            // Slot collection requirements
-            const slotMappings = [
-                { checkbox: '#flow-req-name', slotId: 'name' },
-                { checkbox: '#flow-req-phone', slotId: 'phone' },
-                { checkbox: '#flow-req-address', slotId: 'address' },
-                { checkbox: '#flow-req-time', slotId: 'timePreference' },
-                { checkbox: '#flow-req-issue', slotId: 'issue' },
-                { checkbox: '#flow-req-email', slotId: 'email' }
-            ];
-            
-            for (const mapping of slotMappings) {
-                if (modal.querySelector(mapping.checkbox)?.checked) {
-                    requirements.push({
-                        type: 'collect_slot',
-                        config: { slotId: mapping.slotId, required: true, askImmediately: reqOrder === 1 },
-                        order: reqOrder++
-                    });
-                }
-            }
-            
-            // Acknowledgment requirement
-            const acknowledgment = modal.querySelector('#flow-req-acknowledgment')?.value?.trim();
-            if (acknowledgment) {
-                requirements.unshift({
-                    type: 'acknowledge',
-                    config: { acknowledgment, onlyOnce: true },
-                    order: 0
-                });
-            }
-            
-            // Set flag requirement
-            const flagName = modal.querySelector('#flow-req-flag-name')?.value?.trim();
-            if (flagName) {
-                const flagValue = modal.querySelector('#flow-req-flag-value')?.value?.trim() || 'true';
-                requirements.push({
-                    type: 'set_flag',
-                    config: { 
-                        flagName, 
-                        flagValue: flagValue === 'true' ? true : flagValue === 'false' ? false : flagValue 
-                    },
-                    order: reqOrder++
-                });
-            }
-            
-            // Build settings
-            const settings = {
-                allowConcurrent: modal.querySelector('#flow-allow-concurrent').checked,
-                persistent: modal.querySelector('#flow-persistent').checked,
-                reactivatable: modal.querySelector('#flow-reactivatable').checked,
-                minConfidence: parseFloat(modal.querySelector('#flow-min-confidence').value) || 0.7
-            };
-            
-            // Collect custom fields from table (final collection before save)
-            const finalCustomFields = this.collectCustomFieldsFromTable(modal).filter(f => f.fieldKey);
-            
-            // Build flow object
-            const flowData = {
-                name,
-                description,
-                priority,
-                enabled,
-                triggers: [trigger],
-                requirements,
-                customFields: finalCustomFields, // Flow-owned custom fields
-                actions: [action],
-                settings
-            };
-            
-            if (isNew) {
-                flowData.flowKey = flowKey;
-            }
+            const flowData = this.buildFlowPayloadFromModal(modal, isNew, { forCopy: false });
+            if (!flowData) return;
             
             // Save
             try {
@@ -5609,6 +5487,121 @@ Sean → Shawn, Shaun`;
         } catch (error) {
             this.showNotification('❌ Reset failed: ' + error.message, 'error');
         }
+    }
+
+    // Build flow payload from modal
+    // forCopy: returns normalized DFLOW_V1 shape
+    // default: returns backend payload (DB shape)
+    buildFlowPayloadFromModal(modal, isNew, { forCopy = false } = {}) {
+        const name = modal.querySelector('#flow-name').value.trim();
+        const flowKeyRaw = modal.querySelector('#flow-key').value.trim();
+        const flowKey = flowKeyRaw.toLowerCase().replace(/\s+/g, '_');
+        const description = modal.querySelector('#flow-description').value.trim();
+        const priority = parseInt(modal.querySelector('#flow-priority').value) || 50;
+        const enabled = modal.querySelector('#flow-enabled').value === 'true';
+        
+        if (!name) {
+            this.showNotification('Flow name is required', 'error');
+            return null;
+        }
+        if (isNew && !flowKey) {
+            this.showNotification('Flow key is required', 'error');
+            return null;
+        }
+        
+        const triggerPhrases = modal.querySelector('#flow-trigger-phrases').value.split('\n').map(p => p.trim()).filter(p => p);
+        const triggerFuzzy = modal.querySelector('#flow-trigger-fuzzy').checked;
+        const minConfidence = parseFloat(modal.querySelector('#flow-min-confidence').value) || 0.75;
+        
+        const trigger = {
+            type: 'phrase',
+            config: { phrases: triggerPhrases, fuzzy: triggerFuzzy },
+            priority: 10,
+            minConfidence
+        };
+        
+        const actionType = modal.querySelector('#flow-action-type').value;
+        let actionConfig = {};
+        if (actionType === 'transition_mode') {
+            actionConfig = { targetMode: modal.querySelector('#flow-action-mode').value || 'BOOKING', setBookingLocked: true };
+        } else if (actionType === 'set_flag') {
+            actionConfig = { 
+                flagName: modal.querySelector('#flow-action-flag-name').value.trim(),
+                flagValue: modal.querySelector('#flow-action-flag-value').value.trim() || 'true',
+                alsoWriteToCallLedgerFacts: true
+            };
+        } else if (actionType === 'ack_once') {
+            actionConfig = { text: modal.querySelector('#flow-action-response').value.trim() };
+        } else if (actionType === 'append_ledger') {
+            actionConfig = { 
+                type: (modal.querySelector('#flow-ledger-type')?.value || '').trim(),
+                key: (modal.querySelector('#flow-ledger-key')?.value || '').trim(),
+                note: (modal.querySelector('#flow-ledger-note')?.value || '').trim()
+            };
+        }
+        
+        const action = {
+            timing: 'on_activate',
+            type: actionType,
+            config: actionConfig
+        };
+        
+        const settings = {
+            allowConcurrent: modal.querySelector('#flow-allow-concurrent').checked,
+            persistent: modal.querySelector('#flow-persistent').checked,
+            reactivatable: modal.querySelector('#flow-reactivatable').checked,
+            minConfidence
+        };
+        
+        if (forCopy) {
+            // Normalized DFLOW_V1 shape
+            const normalizedActions = [];
+            if (actionType === 'ack_once') {
+                normalizedActions.push({ type: 'ACK_ONCE', payload: { text: actionConfig.text } });
+            }
+            if (actionType === 'transition_mode') {
+                normalizedActions.push({ type: 'TRANSITION_MODE', payload: { targetMode: actionConfig.targetMode, setBookingLocked: true } });
+            }
+            if (actionType === 'set_flag') {
+                normalizedActions.push({ type: 'SET_FLAG', payload: { path: actionConfig.flagName, value: actionConfig.flagValue, alsoWriteToCallLedgerFacts: true } });
+            }
+            if (actionType === 'append_ledger') {
+                normalizedActions.push({ type: 'APPEND_LEDGER', payload: { entry: { type: actionConfig.type, key: actionConfig.key, note: actionConfig.note } } });
+            }
+            return {
+                version: 'DFLOW_V1',
+                flowKey,
+                name,
+                description,
+                enabled,
+                priority,
+                trigger: {
+                    type: 'PHRASE_MATCH',
+                    fuzzy: triggerFuzzy,
+                    phrases: triggerPhrases,
+                    minConfidence
+                },
+                settings: {
+                    persistentAcrossTurns: modal.querySelector('#flow-persistent').checked,
+                    allowConcurrentWithOtherFlows: modal.querySelector('#flow-allow-concurrent').checked,
+                    canReactivateAfterCompleting: modal.querySelector('#flow-reactivatable').checked
+                },
+                actions: normalizedActions,
+                meta: {}
+            };
+        }
+        
+        // Backend payload (DB shape)
+        return {
+            name,
+            description,
+            priority,
+            enabled,
+            flowKey,
+            triggers: [trigger],
+            actions: [action],
+            settings
+        };
     }
 
     async testPhrase(container) {

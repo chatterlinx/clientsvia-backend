@@ -1027,102 +1027,25 @@ ${separator}`;
                 
                 // 🧠 V41: DYNAMIC FLOW TRACE - Show what flows were triggered
                 let dynamicFlowHtml = '';
-                if (entry.dynamicFlow) {
-                    const flow = entry.dynamicFlow;
-                    const unifiedNeeds = flow.unifiedNeeds || {};
+                if (entry.dynamicFlow && entry.dynamicFlow.trace) {
+                    const t = entry.dynamicFlow.trace;
+                    const firedHtml = (t.triggersFired || []).map(f => `<span style="background:#f0883e20;color:#f0883e;padding:1px 4px;border-radius:3px;font-size:9px;margin-right:4px;">${f.key}${f.confidence ? ' ('+Math.round(f.confidence*100)+'%)' : ''}</span>`).join('');
+                    const actionsHtml = (t.actionsExecuted || []).map(a => `<div style="color:#58a6ff;font-size:9px;">• ${a.type}${a.payload ? ' ' + JSON.stringify(a.payload) : ''}</div>`).join('');
+                    const ledgerHtml = (t.ledgerAppends || []).map(l => `<div style="color:#8b949e;font-size:9px;">• ${l.type || ''}:${l.key || ''}</div>`).join('');
+                    const modeChange = t.modeChange ? `<div style="color:#f0883e;font-size:9px;">Mode: ${t.modeChange.from || 'unknown'} → ${t.modeChange.to}</div>` : '';
                     
-                    const triggersHtml = flow.triggersFired?.map(t => 
-                        `<div style="color: #f0883e; font-size: 9px; margin-left: 8px;">• ${t.flowKey} (${t.trigger}, ${Math.round(t.confidence * 100)}%)</div>`
-                    ).join('') || '';
-                    const activatedHtml = flow.flowsActivated?.map(f => 
-                        `<div style="color: #3fb950; font-size: 9px; margin-left: 8px;">• ${f.flowKey} (${f.requirements} reqs, ${f.actions} actions)</div>`
-                    ).join('') || '';
-                    const actionsHtml = flow.actionsExecuted?.filter(a => a.executed).map(a => 
-                        `<div style="color: #58a6ff; font-size: 9px; margin-left: 8px;">• ${a.type}${a.stateChange ? ': ' + JSON.stringify(a.stateChange) : ''}</div>`
-                    ).join('') || '';
-                    const guardrailsHtml = flow.guardrailsApplied?.map(g => 
-                        `<span style="background: #6e7681; padding: 1px 4px; border-radius: 2px; font-size: 8px; margin-right: 4px;">${g}</span>`
-                    ).join('') || '';
-                    
-                    // ════════════════════════════════════════════════════════════════
-                    // V2.0: UNIFIED NEEDS LIST DISPLAY
-                    // ════════════════════════════════════════════════════════════════
-                    const pendingNeeds = unifiedNeeds.pendingNeeds || [];
-                    const completedNeeds = unifiedNeeds.completedNeeds || [];
-                    const nextNeed = unifiedNeeds.nextNeed;
-                    const facts = unifiedNeeds.facts || {};
-                    const ledger = unifiedNeeds.ledger || [];
-                    
-                    const pendingNeedsHtml = pendingNeeds.length > 0 ? pendingNeeds.map(n => 
-                        `<span style="background: ${n.key === nextNeed ? '#f0883e' : '#30363d'}; color: ${n.key === nextNeed ? '#fff' : '#8b949e'}; padding: 1px 4px; border-radius: 2px; font-size: 8px; margin-right: 4px;">${n.type === 'custom_field' ? '🔧' : '📝'}${n.key}</span>`
-                    ).join('') : '<span style="color: #3fb950; font-size: 9px;">All needs collected ✓</span>';
-                    
-                    const completedNeedsHtml = completedNeeds.length > 0 ? completedNeeds.map(n => 
-                        `<span style="background: #238636; color: white; padding: 1px 4px; border-radius: 2px; font-size: 8px; margin-right: 4px;">${n.type === 'custom_field' ? '🔧' : '📝'}${n.key}</span>`
-                    ).join('') : '';
-                    
-                    const factsHtml = Object.keys(facts).length > 0 ? Object.entries(facts).map(([k, v]) => 
-                        `<div style="color: #d2a8ff; font-size: 9px; margin-left: 8px;">• ${k}: ${v}</div>`
-                    ).join('') : '';
-                    
-                    const ledgerHtml = ledger.length > 0 ? ledger.slice(-3).map(entry => 
-                        `<div style="color: #8b949e; font-size: 8px; margin-left: 8px;">• ${entry.substring(0, 60)}${entry.length > 60 ? '...' : ''}</div>`
-                    ).join('') : '';
-                    
-                    // Show section if there's any flow activity or needs
-                    const hasActivity = flow.triggersFired?.length > 0 || flow.flowsActivated?.length > 0 || pendingNeeds.length > 0 || completedNeeds.length > 0;
-                    
-                    if (hasActivity) {
-                        dynamicFlowHtml = `
-                            <div style="background: #1a2d1a; border: 1px solid #238636; border-radius: 4px; padding: 6px 8px; margin: 6px 0; font-size: 10px;">
-                                <div style="color: #3fb950; font-weight: bold; margin-bottom: 6px;">🧠 DYNAMIC FLOW ENGINE V2.0</div>
-                                
-                                <div style="margin-bottom: 4px;">
-                                    <div style="color: #8b949e; font-size: 9px;">Evaluated: ${flow.triggersEvaluated || 0} triggers</div>
-                                </div>
-                                
-                                ${triggersHtml ? `<div style="margin-bottom: 4px;"><div style="color: #f0883e; font-size: 9px; margin-bottom: 2px;">🎯 Triggers Fired:</div>${triggersHtml}</div>` : ''}
-                                ${activatedHtml ? `<div style="margin-bottom: 4px;"><div style="color: #3fb950; font-size: 9px; margin-bottom: 2px;">✅ Flows Activated:</div>${activatedHtml}</div>` : ''}
-                                ${actionsHtml ? `<div style="margin-bottom: 4px;"><div style="color: #58a6ff; font-size: 9px; margin-bottom: 2px;">⚡ Actions Executed:</div>${actionsHtml}</div>` : ''}
-                                ${guardrailsHtml ? `<div style="margin-bottom: 4px;"><div style="color: #6e7681; font-size: 9px; margin-bottom: 2px;">🛡️ Guardrails:</div><div style="margin-left: 8px;">${guardrailsHtml}</div></div>` : ''}
-                                
-                                <!-- UNIFIED NEEDS LIST -->
-                                <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #30363d;">
-                                    <div style="color: #58a6ff; font-size: 9px; font-weight: bold; margin-bottom: 4px;">📋 UNIFIED NEEDS LIST</div>
-                                    
-                                    ${pendingNeeds.length > 0 || completedNeeds.length > 0 ? `
-                                        <div style="margin-bottom: 4px;">
-                                            <div style="color: #f0883e; font-size: 9px; margin-bottom: 2px;">⏳ Pending (${pendingNeeds.length}):</div>
-                                            <div style="margin-left: 8px;">${pendingNeedsHtml}</div>
-                                        </div>
-                                        ${completedNeedsHtml ? `
-                                            <div style="margin-bottom: 4px;">
-                                                <div style="color: #3fb950; font-size: 9px; margin-bottom: 2px;">✅ Collected (${completedNeeds.length}):</div>
-                                                <div style="margin-left: 8px;">${completedNeedsHtml}</div>
-                                            </div>
-                                        ` : ''}
-                                        ${nextNeed ? `<div style="color: #f0883e; font-size: 9px; font-weight: bold;">→ Next: ${nextNeed}</div>` : ''}
-                                    ` : '<div style="color: #6e7681; font-size: 9px;">No needs configured</div>'}
-                                    
-                                    ${factsHtml ? `
-                                        <div style="margin-top: 4px;">
-                                            <div style="color: #d2a8ff; font-size: 9px; margin-bottom: 2px;">🔧 Custom Facts:</div>
-                                            ${factsHtml}
-                                        </div>
-                                    ` : ''}
-                                    
-                                    ${ledgerHtml ? `
-                                        <div style="margin-top: 4px;">
-                                            <div style="color: #8b949e; font-size: 9px; margin-bottom: 2px;">📜 Ledger (last 3):</div>
-                                            ${ledgerHtml}
-                                        </div>
-                                    ` : ''}
-                                </div>
-                                
-                                ${flow.activeFlows?.length > 0 ? `<div style="margin-top: 4px; padding-top: 4px; border-top: 1px dashed #30363d;"><div style="color: #6e7681; font-size: 9px;">Active Flows: ${flow.activeFlows.length}</div></div>` : ''}
-                            </div>
-                        `;
-                    }
+                    dynamicFlowHtml = `
+                        <div style="background: #1a2d1a; border: 1px solid #238636; border-radius: 4px; padding: 6px 8px; margin: 6px 0; font-size: 10px;">
+                            <div style="color: #3fb950; font-weight: bold; margin-bottom: 4px;">🧠 Dynamic Flow Trace (Turn ${t.turn})</div>
+                            <div style="color:#8b949e;font-size:9px; margin-bottom:2px;">Time: ${new Date(t.timestamp).toLocaleTimeString()}</div>
+                            <div style="color:#8b949e;font-size:9px; margin-bottom:2px;">Input: ${(t.inputSnippet || '').substring(0,120)}</div>
+                            <div style="color:#8b949e;font-size:9px; margin-bottom:2px;">Evaluated: ${t.evaluatedCount || 0}</div>
+                            ${firedHtml ? `<div style="margin-bottom:4px;"><div style="color:#f0883e;font-size:9px;">Fired:</div><div>${firedHtml}</div></div>` : ''}
+                            ${actionsHtml ? `<div style="margin-bottom:4px;"><div style="color:#58a6ff;font-size:9px;">Actions:</div>${actionsHtml}</div>` : ''}
+                            ${ledgerHtml ? `<div style="margin-bottom:4px;"><div style="color:#8b949e;font-size:9px;">Ledger:</div>${ledgerHtml}</div>` : ''}
+                            ${modeChange}
+                        </div>
+                    `;
                 }
                 
                 return `

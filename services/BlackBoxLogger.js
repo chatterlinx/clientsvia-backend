@@ -1210,13 +1210,19 @@ async function updateSessionSnapshot(callId, companyId, session) {
         issueCaptured: session.locks?.issueCaptured || false,
         bookingStarted: session.locks?.bookingStarted || false,
         bookingLocked: session.locks?.bookingLocked || false,
-        askedSlots: session.locks?.askedSlots || {}
+        askedSlots: session.locks?.askedSlots || {},
+        flowAcked: session.locks?.flowAcked || {}
       },
       memory: {
         rollingSummary: session.memory?.rollingSummary || '',
         facts: session.memory?.facts || {},
         lastUserIntent: session.memory?.lastUserIntent || null,
         acknowledgedClaims: session.memory?.acknowledgedClaims || []
+      },
+      callLedger: {
+        activeScenarios: session.callLedger?.activeScenarios || [],
+        entries: session.callLedger?.entries || [],
+        facts: session.callLedger?.facts || {}
       }
     };
     
@@ -1261,12 +1267,13 @@ async function logDynamicFlowTrace(callId, companyId, turn, trace) {
         $push: {
           dynamicFlowTrace: {
             turn,
+            timestamp: trace.timestamp || new Date(),
+            inputSnippet: trace.inputSnippet || '',
             triggersEvaluated: trace.triggersEvaluated || [],
             triggersFired: trace.triggersFired || [],
-            eventsEmitted: trace.eventsEmitted || [],
             actionsExecuted: trace.actionsExecuted || [],
-            stateChanges: trace.stateChanges || {},
-            guardrailsApplied: trace.guardrailsApplied || []
+            ledgerAppends: trace.ledgerAppends || [],
+            modeChange: trace.modeChange || null
           }
         }
       }

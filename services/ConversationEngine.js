@@ -5661,22 +5661,8 @@ async function processTurn({
                     actionsExecuted: dynamicFlowResult.actionsExecuted || [],
                     guardrailsApplied: dynamicFlowResult.guardrailsApplied || [],
                     stateChanges: dynamicFlowResult.stateChanges || {},
-                    activeFlows: session.dynamicFlows?.activeFlows || [],
                     trace: dynamicFlowResult.trace,
-                    // ════════════════════════════════════════════════════════════════
-                    // V2.0: UNIFIED NEEDS LIST - The heart of the system
-                    // ════════════════════════════════════════════════════════════════
-                    unifiedNeeds: {
-                        active: session.dynamicFlows?.active || [],
-                        needs: session.dynamicFlows?.needs || [],
-                        facts: session.dynamicFlows?.facts || {},
-                        ledger: session.dynamicFlows?.ledger || [],
-                        locks: session.dynamicFlows?.locks || {},
-                        // Computed values for easy debugging
-                        pendingNeeds: (session.dynamicFlows?.needs || []).filter(n => !n.done),
-                        completedNeeds: (session.dynamicFlows?.needs || []).filter(n => n.done),
-                        nextNeed: (session.dynamicFlows?.needs || []).find(n => !n.done && n.required)?.key || null
-                    }
+                    callLedger: session.callLedger || {}
                 } : null
             };
         }
@@ -5733,6 +5719,24 @@ async function processTurn({
                         tokensUsed: aiResult?.tokensUsed || 0
                     }
                 });
+
+                // Log dynamic flow trace for this turn (V1)
+                if (dynamicFlowResult?.trace) {
+                    await BlackBoxLogger.logDynamicFlowTrace(
+                        session._id.toString(),
+                        companyId,
+                        dynamicFlowResult.trace.turn,
+                        {
+                            timestamp: dynamicFlowResult.trace.timestamp,
+                            inputSnippet: dynamicFlowResult.trace.inputSnippet,
+                            triggersEvaluated: dynamicFlowResult.trace.triggersEvaluated,
+                            triggersFired: dynamicFlowResult.trace.triggersFired,
+                            actionsExecuted: dynamicFlowResult.trace.actionsExecuted,
+                            ledgerAppends: dynamicFlowResult.trace.ledgerAppends,
+                            modeChange: dynamicFlowResult.trace.modeChange
+                        }
+                    );
+                }
                 
                 // Update session snapshot
                 await BlackBoxLogger.updateSessionSnapshot(session._id.toString(), companyId, session);

@@ -190,7 +190,11 @@ const ActionSchema = new Schema({
             'notify',           // Send notification (internal)
             'transfer',         // Transfer to live agent
             'end_call',         // End the conversation
-            'custom'            // Custom action (webhook, etc.)
+            'custom',           // Custom action (webhook, etc.)
+            // V1 Dynamic Flow additions
+            'ack_once',         // Speak an acknowledgment once per flow
+            'set_flag',         // Set a session flag / callLedger fact
+            'append_ledger'     // Append ledger entry (EVENT/CLAIM/etc.)
         ],
         required: true
     },

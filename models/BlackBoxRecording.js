@@ -116,25 +116,42 @@ const BlackBoxRecordingSchema = new Schema({
       issueCaptured: { type: Boolean },
       bookingStarted: { type: Boolean },
       bookingLocked: { type: Boolean },
-      askedSlots: { type: Schema.Types.Mixed }
+      askedSlots: { type: Schema.Types.Mixed },
+      flowAcked: { type: Schema.Types.Mixed }
     },
     memory: {
       rollingSummary: { type: String },
       facts: { type: Schema.Types.Mixed },
       lastUserIntent: { type: String },
       acknowledgedClaims: [{ type: String }]
+    },
+    callLedger: {
+      activeScenarios: [{ type: String }],
+      entries: [{
+        turn: { type: Number },
+        timestamp: { type: Date },
+        type: { type: String },
+        key: { type: String },
+        note: { type: String },
+        flowKey: { type: String }
+      }],
+      facts: { type: Schema.Types.Mixed }
     }
   },
   
-  // Placeholder for Phase 3: Dynamic Flow
+  // Dynamic Flow trace (per turn)
   dynamicFlowTrace: [{
     turn: { type: Number },
+    timestamp: { type: Date },
+    inputSnippet: { type: String },
     triggersEvaluated: [{ type: String }],
     triggersFired: [{ type: String }],
-    eventsEmitted: [{ type: String }],
     actionsExecuted: [{ type: String }],
-    stateChanges: { type: Schema.Types.Mixed },
-    guardrailsApplied: [{ type: String }]
+    ledgerAppends: [{ type: String }],
+    modeChange: {
+      from: { type: String },
+      to: { type: String }
+    }
   }],
   
   // ─────────────────────────────────────────────────────────────────────────
