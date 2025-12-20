@@ -3026,17 +3026,28 @@ Sean → Shawn, Shaun`;
         
         // Load existing flow if editing
         if (flowId) {
-            try {
-                const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-                const response = await fetch(`/api/company/${this.companyId}/dynamic-flows/${flowId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    flow = data.flow;
+            // First check if this is a local V1 sample template
+            const sampleTemplates = this.getV1SampleFlows();
+            const sampleMatch = sampleTemplates.find(t => t._id === flowId);
+            
+            if (sampleMatch) {
+                // Use the sample template data directly (it's local, not in DB)
+                flow = { ...sampleMatch };
+                console.log('[FLOW EDITOR] Loaded V1 sample template:', flowId);
+            } else {
+                // Try to load from API (DB-persisted flows)
+                try {
+                    const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+                    const response = await fetch(`/api/company/${this.companyId}/dynamic-flows/${flowId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        flow = data.flow;
+                    }
+                } catch (err) {
+                    console.error('[FLOW EDITOR] Load error:', err);
                 }
-            } catch (err) {
-                console.error('[FLOW EDITOR] Load error:', err);
             }
         }
         
@@ -5591,11 +5602,13 @@ Sean → Shawn, Shaun`;
                     };
                 }
                 if (aType === 'set_flag') {
+                    // Ensure value is always present (default to true if undefined)
+                    const flagValue = aConfig.flagValue !== undefined ? parseBoolean(aConfig.flagValue) : true;
                     return { 
                         type: 'SET_FLAG', 
                         payload: { 
                             path: aConfig.flagName || '', 
-                            value: parseBoolean(aConfig.flagValue),
+                            value: flagValue,
                             alsoWriteToCallLedgerFacts: aConfig.alsoWriteToCallLedgerFacts !== false 
                         } 
                     };
