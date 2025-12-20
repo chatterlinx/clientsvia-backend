@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V37-FIX-12DIGIT-PHONE';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V37-FIX-ABSOLUTELY';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -2995,7 +2995,8 @@ async function processTurn({
                 // NAME CONFIRMATION HANDLING (V27)
                 // Handle "yes" and "no" responses to name confirmBack
                 // ═══════════════════════════════════════════════════════════════════
-                const userSaysYesForName = /^(yes|yeah|yep|correct|that's right|right|yup|uh huh|mhm|affirmative|sure|ok|okay)/i.test(userText.trim());
+                // V37 FIX: Added "absolutely", "definitely", "certainly", "perfect", "exactly", etc.
+                const userSaysYesForName = /^(yes|yeah|yep|correct|that's right|right|yup|uh huh|mhm|affirmative|sure|ok|okay|absolutely|definitely|certainly|perfect|exactly|that's it|you got it|sounds good|that works)/i.test(userText.trim());
                 const userSaysNo = /^(no|nope|nah|that's wrong|wrong|incorrect|not right)/i.test(userText.trim());
                 
                 // Handle "YES" to name confirmBack - need to check if we should ask for last name
@@ -3466,8 +3467,9 @@ async function processTurn({
                 };
                 
                 // Check if user is responding to a confirmBack question
-                const userSaysYes = /^(yes|yeah|yep|correct|that's right|right|yup|uh huh|mhm|affirmative|sure|ok|okay)/i.test(userText.trim());
-                const userSaysNoGeneric = /^(no|nope|nah|that's wrong|wrong|incorrect|not right)/i.test(userText.trim());
+                // V37 FIX: Added "absolutely", "definitely", "certainly", "perfect", "exactly", "that's it", "you got it"
+                const userSaysYes = /^(yes|yeah|yep|correct|that's right|right|yup|uh huh|mhm|affirmative|sure|ok|okay|absolutely|definitely|certainly|perfect|exactly|that's it|you got it|sounds good|that works)/i.test(userText.trim());
+                const userSaysNoGeneric = /^(no|nope|nah|that's wrong|wrong|incorrect|not right|that's not right)/i.test(userText.trim());
                 const userSaysTextMe = /\b(text\s*me|send\s*(me\s+)?a?\s*text|text\s*(is\s+)?(fine|good|ok|okay))\b/i.test(userText.trim());
                 
                 // Get caller ID from metadata if available
