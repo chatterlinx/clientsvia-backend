@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V37-FIX-ACTIVESLOT';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V37-FIX-NO-CORRECTION';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -2166,7 +2166,18 @@ async function processTurn({
                 } else {
                     // Accept name as-is
                     if (currentSlots.partialName && isPartialName) {
-                        currentSlots.name = `${currentSlots.partialName} ${extractedName}`;
+                        // V37 FIX: Don't merge if extracted name is same as partial (prevents "Mark Mark")
+                        const partialLower = currentSlots.partialName.toLowerCase();
+                        const extractedLower = extractedName.toLowerCase();
+                        if (partialLower === extractedLower) {
+                            // Same name repeated - just keep the partial, don't duplicate
+                            currentSlots.name = currentSlots.partialName;
+                            log('📝 V37: Same name repeated, not duplicating', { name: currentSlots.name });
+                        } else {
+                            // Different names - merge as first + last
+                            currentSlots.name = `${currentSlots.partialName} ${extractedName}`;
+                            log('📝 V37: Merging partial + new as full name', { name: currentSlots.name });
+                        }
                         delete currentSlots.partialName;
                     } else {
                         currentSlots.name = extractedName;
@@ -3466,11 +3477,23 @@ async function processTurn({
                         nextSlotId = 'address';
                         log('📞 PHONE: User confirmed, moving to address');
                     } else if (userSaysNoGeneric) {
-                        currentSlots.phone = null;
-                        phoneMeta.pendingConfirm = false;
-                        finalReply = "I apologize. " + (phoneSlotConfig?.question || "What's the best phone number to reach you?");
-                        nextSlotId = 'phone';
-                        log('📞 PHONE: User denied confirmation, re-asking');
+                        // V37 FIX: Check if user provided a new number along with "no"
+                        // "no that's 2393337747" should extract the new number, not just re-ask
+                        if (extractedThisTurn.phone) {
+                            currentSlots.phone = extractedThisTurn.phone;
+                            phoneMeta.pendingConfirm = true; // Confirm the new number
+                            const confirmText = (phoneSlotConfig?.confirmPrompt || "Just to confirm, that's {value}, correct?")
+                                .replace('{value}', extractedThisTurn.phone);
+                            finalReply = confirmText;
+                            nextSlotId = 'phone';
+                            log('📞 PHONE: User said no but provided new number, confirming', { phone: extractedThisTurn.phone });
+                        } else {
+                            currentSlots.phone = null;
+                            phoneMeta.pendingConfirm = false;
+                            finalReply = "I apologize. " + (phoneSlotConfig?.question || "What's the best phone number to reach you?");
+                            nextSlotId = 'phone';
+                            log('📞 PHONE: User denied confirmation, re-asking');
+                        }
                     } else if (extractedThisTurn.phone) {
                         currentSlots.phone = extractedThisTurn.phone;
                         phoneMeta.pendingConfirm = false;
@@ -3583,11 +3606,23 @@ async function processTurn({
                         }
                         log('🏠 ADDRESS: User confirmed, moving to time');
                     } else if (userSaysNoGeneric) {
-                        currentSlots.address = null;
-                        addressMeta.pendingConfirm = false;
-                        finalReply = "I apologize. " + (addressSlotConfig?.question || "What's the service address?");
-                        nextSlotId = 'address';
-                        log('🏠 ADDRESS: User denied confirmation, re-asking');
+                        // V37 FIX: Check if user provided a new address along with "no"
+                        // "no that's 123 Main St" should extract the new address, not just re-ask
+                        if (extractedThisTurn.address) {
+                            currentSlots.address = extractedThisTurn.address;
+                            addressMeta.pendingConfirm = true; // Confirm the new address
+                            const confirmText = (addressSlotConfig?.confirmPrompt || "Just to confirm, that's {value}, correct?")
+                                .replace('{value}', extractedThisTurn.address);
+                            finalReply = confirmText;
+                            nextSlotId = 'address';
+                            log('🏠 ADDRESS: User said no but provided new address, confirming', { address: extractedThisTurn.address });
+                        } else {
+                            currentSlots.address = null;
+                            addressMeta.pendingConfirm = false;
+                            finalReply = "I apologize. " + (addressSlotConfig?.question || "What's the service address?");
+                            nextSlotId = 'address';
+                            log('🏠 ADDRESS: User denied confirmation, re-asking');
+                        }
                     } else if (extractedThisTurn.address) {
                         currentSlots.address = extractedThisTurn.address;
                         addressMeta.pendingConfirm = false;
