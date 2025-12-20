@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V37-FIX-ABSOLUTELY';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V38-FIX-SURE-MY-NAME';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -2996,8 +2996,21 @@ async function processTurn({
                 // Handle "yes" and "no" responses to name confirmBack
                 // ═══════════════════════════════════════════════════════════════════
                 // V37 FIX: Added "absolutely", "definitely", "certainly", "perfect", "exactly", etc.
-                const userSaysYesForName = /^(yes|yeah|yep|correct|that's right|right|yup|uh huh|mhm|affirmative|sure|ok|okay|absolutely|definitely|certainly|perfect|exactly|that's it|you got it|sounds good|that works)/i.test(userText.trim());
-                const userSaysNo = /^(no|nope|nah|that's wrong|wrong|incorrect|not right)/i.test(userText.trim());
+                // V38 FIX: But DON'T match if followed by "my name is" - that's a name statement, not a confirmation
+                const userTextTrimmed = userText.trim();
+                const startsWithYes = /^(yes|yeah|yep|correct|that's right|right|yup|uh huh|mhm|affirmative|sure|ok|okay|absolutely|definitely|certainly|perfect|exactly|that's it|you got it|sounds good|that works)/i.test(userTextTrimmed);
+                const hasNameStatement = /\b(my name is|name is|i'm|i am|call me)\b/i.test(userTextTrimmed);
+                const userSaysYesForName = startsWithYes && !hasNameStatement; // Don't treat "sure my name is Mark" as confirmation
+                const userSaysNo = /^(no|nope|nah|that's wrong|wrong|incorrect|not right)/i.test(userTextTrimmed);
+                
+                log('📝 V38 NAME CONFIRMATION CHECK', {
+                    userText: userTextTrimmed.substring(0, 50),
+                    startsWithYes,
+                    hasNameStatement,
+                    userSaysYesForName,
+                    lastConfirmed: nameMeta.lastConfirmed,
+                    askedMissingPartOnce: nameMeta.askedMissingPartOnce
+                });
                 
                 // Handle "YES" to name confirmBack - need to check if we should ask for last name
                 if (userSaysYesForName && nameMeta.lastConfirmed && !nameMeta.askedMissingPartOnce && askFullName && session.booking.activeSlot === 'name') {
