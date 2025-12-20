@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V37-FIX-PHONE-NAME';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V37-FIX-ACTIVESLOT';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -4282,6 +4282,9 @@ async function processTurn({
                 }
                 
                 if (nextSlotId) {
+                    // V37 FIX: Update activeSlot so next turn knows what we're expecting
+                    session.booking.activeSlot = nextSlotId;
+                    
                     // Save session state before responding (persist mode + booking meta)
                     session.markModified('booking');
                 
