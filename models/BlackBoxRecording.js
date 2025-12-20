@@ -401,7 +401,11 @@ BlackBoxRecordingSchema.statics.getCallList = async function(companyId, options 
     toDate,
     flag,
     phone,
-    onlyProblematic = false
+    onlyProblematic = false,
+    // 🆕 PHASE 2.5: New filter options
+    source,
+    mode,
+    bookingLock
   } = options;
 
   // Convert companyId to ObjectId for proper matching
@@ -434,6 +438,32 @@ BlackBoxRecordingSchema.statics.getCallList = async function(companyId, options 
       { 'flags.customerFrustrated': true }
     ];
   }
+  
+  // 🆕 PHASE 2.5: Source filter (voice/test/sms/web)
+  if (source) {
+    query.source = source;
+  }
+  
+  // 🆕 PHASE 2.5: Mode filter (DISCOVERY/BOOKING/COMPLETE/ERROR)
+  if (mode) {
+    query['sessionSnapshot.mode'] = mode;
+  }
+  
+  // 🆕 PHASE 2.5: Booking lock filter
+  if (bookingLock) {
+    switch (bookingLock) {
+      case 'locked':
+        query['sessionSnapshot.locks.bookingLocked'] = true;
+        break;
+      case 'started':
+        query['sessionSnapshot.locks.bookingStarted'] = true;
+        query['sessionSnapshot.locks.bookingLocked'] = { $ne: true };
+        break;
+      case 'none':
+        query['sessionSnapshot.locks.bookingStarted'] = { $ne: true };
+        break;
+    }
+  }
 
   const calls = await this.find(query)
     .select({
@@ -450,7 +480,10 @@ BlackBoxRecordingSchema.statics.getCallList = async function(companyId, options 
       'performance.avgTurnTimeMs': 1,
       flags: 1,
       'diagnosis.severity': 1,
-      'diagnosis.primaryBottleneck': 1
+      'diagnosis.primaryBottleneck': 1,
+      // 🆕 PHASE 2.5: Include new fields in projection
+      source: 1,
+      sessionSnapshot: 1
     })
     .sort({ startedAt: -1 })
     .skip(skip)

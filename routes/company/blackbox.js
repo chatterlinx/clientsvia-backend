@@ -44,7 +44,11 @@ router.get('/list', async (req, res) => {
       toDate,
       flag,
       phone,
-      onlyProblematic
+      onlyProblematic,
+      // 🆕 PHASE 2.5: New filter params
+      source,
+      mode,
+      bookingLock
     } = req.query;
     
     logger.info('[BLACK BOX API] List request', {
@@ -52,7 +56,10 @@ router.get('/list', async (req, res) => {
       limit,
       skip,
       flag,
-      onlyProblematic
+      onlyProblematic,
+      source,
+      mode,
+      bookingLock
     });
     
     const result = await BlackBoxRecording.getCallList(companyId, {
@@ -62,7 +69,11 @@ router.get('/list', async (req, res) => {
       toDate,
       flag,
       phone,
-      onlyProblematic: onlyProblematic === 'true'
+      onlyProblematic: onlyProblematic === 'true',
+      // 🆕 PHASE 2.5: Pass new filters
+      source,
+      mode,
+      bookingLock
     });
     
     res.json({
@@ -150,13 +161,14 @@ router.get('/stats', async (req, res) => {
     const fromDate = new Date();
     fromDate.setDate(fromDate.getDate() - parseInt(days, 10));
     
+    const matchStage = {
+      companyId: new mongoose.Types.ObjectId(companyId),
+      startedAt: { $gte: fromDate }
+    };
+    
+    // Main stats aggregation
     const stats = await BlackBoxRecording.aggregate([
-      {
-        $match: {
-          companyId: new mongoose.Types.ObjectId(companyId),
-          startedAt: { $gte: fromDate }
-        }
-      },
+      { $match: matchStage },
       {
         $group: {
           _id: null,
@@ -170,6 +182,46 @@ router.get('/stats', async (req, res) => {
           slowResponses: { $sum: { $cond: ['$flags.slowResponse', 1, 0] } },
           transfers: { $sum: { $cond: [{ $eq: ['$callOutcome', 'TRANSFERRED'] }, 1, 0] } },
           completed: { $sum: { $cond: [{ $eq: ['$callOutcome', 'COMPLETED'] }, 1, 0] } }
+        }
+      }
+    ]);
+    
+    // 🆕 PHASE 2.5: Source breakdown
+    const sourceStats = await BlackBoxRecording.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: { $ifNull: ['$source', 'voice'] },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    // 🆕 PHASE 2.5: Mode breakdown
+    const modeStats = await BlackBoxRecording.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: { $ifNull: ['$sessionSnapshot.mode', 'UNKNOWN'] },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    // 🆕 PHASE 2.5: Booking lock breakdown
+    const bookingStats = await BlackBoxRecording.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: null,
+          locked: { $sum: { $cond: ['$sessionSnapshot.locks.bookingLocked', 1, 0] } },
+          started: { $sum: { $cond: [
+            { $and: [
+              '$sessionSnapshot.locks.bookingStarted',
+              { $ne: ['$sessionSnapshot.locks.bookingLocked', true] }
+            ]}, 1, 0
+          ]}},
+          none: { $sum: { $cond: [{ $ne: ['$sessionSnapshot.locks.bookingStarted', true] }, 1, 0] } }
         }
       }
     ]);
@@ -194,9 +246,24 @@ router.get('/stats', async (req, res) => {
       ? Math.round((totalProblems / result.totalCalls) * 100) 
       : 0;
     
+    // 🆕 PHASE 2.5: Format source/mode/booking breakdowns
+    const bySource = {};
+    sourceStats.forEach(s => { bySource[s._id] = s.count; });
+    
+    const byMode = {};
+    modeStats.forEach(m => { byMode[m._id] = m.count; });
+    
+    const byBooking = bookingStats[0] || { locked: 0, started: 0, none: 0 };
+    
     res.json({
       success: true,
       stats: result,
+      // 🆕 PHASE 2.5: New breakdown stats
+      breakdown: {
+        bySource,   // { voice: 10, test: 5, sms: 2, web: 1 }
+        byMode,     // { DISCOVERY: 5, BOOKING: 8, COMPLETE: 5 }
+        byBooking   // { locked: 5, started: 3, none: 10 }
+      },
       period: {
         days: parseInt(days, 10),
         from: fromDate,

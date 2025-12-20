@@ -209,6 +209,62 @@
         }
 
         /* ═══════════════════════════════════════════════════════════════════
+           🆕 PHASE 2.5: BREAKDOWN BAR
+           ═══════════════════════════════════════════════════════════════════ */
+        .breakdown-bar {
+            padding: 12px 40px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            gap: 32px;
+            flex-wrap: wrap;
+        }
+        
+        .breakdown-section {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .breakdown-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .breakdown-chip {
+            font-size: 12px;
+            font-weight: 500;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .breakdown-chip:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        
+        /* Source chips */
+        .source-voice { background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); }
+        .source-test { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); }
+        .source-sms { background: rgba(34, 197, 94, 0.15); color: var(--accent-green); }
+        .source-web { background: rgba(249, 115, 22, 0.15); color: var(--accent-orange); }
+        
+        /* Mode chips */
+        .mode-discovery { background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); }
+        .mode-booking { background: rgba(234, 179, 8, 0.15); color: var(--accent-yellow); }
+        .mode-complete { background: rgba(34, 197, 94, 0.15); color: var(--accent-green); }
+        
+        /* Booking state chips */
+        .booking-locked { background: rgba(234, 179, 8, 0.15); color: var(--accent-yellow); }
+        .booking-started { background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); }
+        .booking-none { background: rgba(255, 255, 255, 0.05); color: var(--text-muted); }
+
+        /* ═══════════════════════════════════════════════════════════════════
            CALL LIST
            ═══════════════════════════════════════════════════════════════════ */
         .call-list {
@@ -522,6 +578,29 @@
             <div class="stat-label">Avg Turn Time</div>
         </div>
     </div>
+    
+    <!-- 🆕 PHASE 2.5: Source Breakdown Bar -->
+    <div class="breakdown-bar" id="breakdownBar">
+        <div class="breakdown-section">
+            <span class="breakdown-title">📡 By Source:</span>
+            <span class="breakdown-chip source-voice" id="breakdownVoice">📞 Voice: -</span>
+            <span class="breakdown-chip source-test" id="breakdownTest">🧪 Test: -</span>
+            <span class="breakdown-chip source-sms" id="breakdownSms">💬 SMS: -</span>
+            <span class="breakdown-chip source-web" id="breakdownWeb">🌐 Web: -</span>
+        </div>
+        <div class="breakdown-section">
+            <span class="breakdown-title">🎯 By Mode:</span>
+            <span class="breakdown-chip mode-discovery" id="breakdownDiscovery">🔍 Discovery: -</span>
+            <span class="breakdown-chip mode-booking" id="breakdownBooking">📋 Booking: -</span>
+            <span class="breakdown-chip mode-complete" id="breakdownComplete">✅ Complete: -</span>
+        </div>
+        <div class="breakdown-section">
+            <span class="breakdown-title">🔒 Booking State:</span>
+            <span class="breakdown-chip booking-locked" id="breakdownLocked">🔒 Locked: -</span>
+            <span class="breakdown-chip booking-started" id="breakdownStarted">📝 Started: -</span>
+            <span class="breakdown-chip booking-none" id="breakdownNone">⏳ None: -</span>
+        </div>
+    </div>
 
     <!-- Filters Bar -->
     <div class="filters-bar">
@@ -545,6 +624,41 @@
                 <option value="slowResponse">Slow Response</option>
                 <option value="noTriageMatch">No Triage Match</option>
                 <option value="customerFrustrated">Frustrated Customer</option>
+            </select>
+        </div>
+        
+        <!-- 🆕 PHASE 2.5: Source Filter -->
+        <div class="filter-group">
+            <span class="filter-label">Source</span>
+            <select id="filterSource">
+                <option value="">All Sources</option>
+                <option value="voice">📞 Voice</option>
+                <option value="test">🧪 Test Console</option>
+                <option value="sms">💬 SMS</option>
+                <option value="web">🌐 Web Chat</option>
+            </select>
+        </div>
+        
+        <!-- 🆕 PHASE 2.5: Mode Filter -->
+        <div class="filter-group">
+            <span class="filter-label">Mode</span>
+            <select id="filterMode">
+                <option value="">All Modes</option>
+                <option value="DISCOVERY">🔍 Discovery</option>
+                <option value="BOOKING">📋 Booking</option>
+                <option value="COMPLETE">✅ Complete</option>
+                <option value="ERROR">❌ Error</option>
+            </select>
+        </div>
+        
+        <!-- 🆕 PHASE 2.5: Booking Lock Filter -->
+        <div class="filter-group">
+            <span class="filter-label">Booking</span>
+            <select id="filterBookingLock">
+                <option value="">All States</option>
+                <option value="locked">🔒 Locked</option>
+                <option value="started">📝 Started</option>
+                <option value="none">⏳ Not Started</option>
             </select>
         </div>
 
@@ -601,6 +715,9 @@
 
             // Update nav links with companyId
             updateNavLinks();
+            
+            // 🆕 PHASE 2.5: Restore filters from URL
+            restoreFiltersFromURL();
 
             // Load stats and calls
             await Promise.all([
@@ -654,6 +771,37 @@
                     document.getElementById('statBailouts').textContent = data.stats.bailoutsTriggered;
                     document.getElementById('statAvgTurnTime').textContent = 
                         data.stats.avgTurnTimeMs ? `${(data.stats.avgTurnTimeMs / 1000).toFixed(1)}s` : '-';
+                    
+                    // 🆕 PHASE 2.5: Update breakdown bar
+                    if (data.breakdown) {
+                        const { bySource, byMode, byBooking } = data.breakdown;
+                        
+                        // Source breakdown (clickable to filter)
+                        document.getElementById('breakdownVoice').textContent = `📞 Voice: ${bySource.voice || 0}`;
+                        document.getElementById('breakdownVoice').onclick = () => setFilter('filterSource', 'voice');
+                        document.getElementById('breakdownTest').textContent = `🧪 Test: ${bySource.test || 0}`;
+                        document.getElementById('breakdownTest').onclick = () => setFilter('filterSource', 'test');
+                        document.getElementById('breakdownSms').textContent = `💬 SMS: ${bySource.sms || 0}`;
+                        document.getElementById('breakdownSms').onclick = () => setFilter('filterSource', 'sms');
+                        document.getElementById('breakdownWeb').textContent = `🌐 Web: ${bySource.web || 0}`;
+                        document.getElementById('breakdownWeb').onclick = () => setFilter('filterSource', 'web');
+                        
+                        // Mode breakdown (clickable to filter)
+                        document.getElementById('breakdownDiscovery').textContent = `🔍 Discovery: ${byMode.DISCOVERY || 0}`;
+                        document.getElementById('breakdownDiscovery').onclick = () => setFilter('filterMode', 'DISCOVERY');
+                        document.getElementById('breakdownBooking').textContent = `📋 Booking: ${byMode.BOOKING || 0}`;
+                        document.getElementById('breakdownBooking').onclick = () => setFilter('filterMode', 'BOOKING');
+                        document.getElementById('breakdownComplete').textContent = `✅ Complete: ${byMode.COMPLETE || 0}`;
+                        document.getElementById('breakdownComplete').onclick = () => setFilter('filterMode', 'COMPLETE');
+                        
+                        // Booking state breakdown (clickable to filter)
+                        document.getElementById('breakdownLocked').textContent = `🔒 Locked: ${byBooking.locked || 0}`;
+                        document.getElementById('breakdownLocked').onclick = () => setFilter('filterBookingLock', 'locked');
+                        document.getElementById('breakdownStarted').textContent = `📝 Started: ${byBooking.started || 0}`;
+                        document.getElementById('breakdownStarted').onclick = () => setFilter('filterBookingLock', 'started');
+                        document.getElementById('breakdownNone').textContent = `⏳ None: ${byBooking.none || 0}`;
+                        document.getElementById('breakdownNone').onclick = () => setFilter('filterBookingLock', 'none');
+                    }
                 }
             } catch (error) {
                 console.error('Failed to load stats:', error);
@@ -667,6 +815,11 @@
                 const search = document.getElementById('filterSearch').value;
                 const days = document.getElementById('filterPeriod').value;
                 
+                // 🆕 PHASE 2.5: New filter values
+                const source = document.getElementById('filterSource').value;
+                const mode = document.getElementById('filterMode').value;
+                const bookingLock = document.getElementById('filterBookingLock').value;
+                
                 const fromDate = new Date();
                 fromDate.setDate(fromDate.getDate() - parseInt(days));
                 
@@ -675,6 +828,11 @@
                 if (flag) url += `&flag=${flag}`;
                 if (search) url += `&phone=${encodeURIComponent(search)}`;
                 if (onlyProblematic) url += `&onlyProblematic=true`;
+                
+                // 🆕 PHASE 2.5: Add new filter params
+                if (source) url += `&source=${source}`;
+                if (mode) url += `&mode=${mode}`;
+                if (bookingLock) url += `&bookingLock=${bookingLock}`;
 
                 const response = await fetch(url, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -872,6 +1030,25 @@
                 currentPage = 0;
                 loadCalls();
             });
+            
+            // 🆕 PHASE 2.5: New filter event listeners
+            document.getElementById('filterSource').addEventListener('change', () => {
+                currentPage = 0;
+                loadCalls();
+                saveFiltersToURL();
+            });
+            
+            document.getElementById('filterMode').addEventListener('change', () => {
+                currentPage = 0;
+                loadCalls();
+                saveFiltersToURL();
+            });
+            
+            document.getElementById('filterBookingLock').addEventListener('change', () => {
+                currentPage = 0;
+                loadCalls();
+                saveFiltersToURL();
+            });
 
             let searchTimeout;
             document.getElementById('filterSearch').addEventListener('input', (e) => {
@@ -903,6 +1080,49 @@
                     loadCalls();
                 }
             });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 PHASE 2.5: URL STATE MANAGEMENT
+        // ═══════════════════════════════════════════════════════════════════
+        function saveFiltersToURL() {
+            const params = new URLSearchParams(window.location.search);
+            
+            const source = document.getElementById('filterSource').value;
+            const mode = document.getElementById('filterMode').value;
+            const bookingLock = document.getElementById('filterBookingLock').value;
+            
+            if (source) params.set('source', source);
+            else params.delete('source');
+            
+            if (mode) params.set('mode', mode);
+            else params.delete('mode');
+            
+            if (bookingLock) params.set('bookingLock', bookingLock);
+            else params.delete('bookingLock');
+            
+            const newURL = `${window.location.pathname}?${params.toString()}`;
+            window.history.replaceState({}, '', newURL);
+        }
+        
+        function restoreFiltersFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            
+            const source = params.get('source');
+            const mode = params.get('mode');
+            const bookingLock = params.get('bookingLock');
+            
+            if (source) document.getElementById('filterSource').value = source;
+            if (mode) document.getElementById('filterMode').value = mode;
+            if (bookingLock) document.getElementById('filterBookingLock').value = bookingLock;
+        }
+        
+        // 🆕 PHASE 2.5: Helper to set filter and reload
+        function setFilter(filterId, value) {
+            document.getElementById(filterId).value = value;
+            currentPage = 0;
+            loadCalls();
+            saveFiltersToURL();
         }
 
         // ═══════════════════════════════════════════════════════════════════
