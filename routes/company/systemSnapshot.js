@@ -15,7 +15,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 
 // Models
-const Company = require('../../models/Company');
+const Company = require('../../models/v2Company');
 const DynamicFlow = require('../../models/DynamicFlow');
 const ConversationSession = require('../../models/ConversationSession');
 
