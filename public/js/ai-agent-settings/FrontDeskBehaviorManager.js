@@ -2920,24 +2920,15 @@ Sean → Shawn, Shaun`;
             // Combine API templates with V1 sample templates
             let allTemplates = (data.templates || []).concat(v1Templates);
             
-            // Filter by selected trade category if one is selected
+            // ═══════════════════════════════════════════════════════════════════════════
+            // FILTER BY tradeCategoryId (ObjectId) - THE AUTHORITATIVE KEY
+            // Never match by name. ObjectId is the line number. Name is just decoration.
+            // ═══════════════════════════════════════════════════════════════════════════
             if (this.selectedTradeCategoryId) {
-                // Get the selected category name for matching V1 templates
-                const selectedCategory = this.tradeCategoriesCache.find(c => c._id === this.selectedTradeCategoryId);
-                const selectedCategoryName = selectedCategory?.name?.toLowerCase() || '';
-                
                 allTemplates = allTemplates.filter(t => {
-                    // API templates: match by tradeCategoryId
-                    if (t.tradeCategoryId === this.selectedTradeCategoryId) return true;
-                    
-                    // V1 sample templates: match by tradeCategoryName (HVAC, etc.)
-                    if (t.tradeCategoryName) {
-                        return t.tradeCategoryName.toLowerCase().includes(selectedCategoryName) ||
-                               selectedCategoryName.includes(t.tradeCategoryName.toLowerCase());
-                    }
-                    
-                    // If no category assigned, show in "All" only
-                    return !this.selectedTradeCategoryId;
+                    // ONLY match by tradeCategoryId (ObjectId)
+                    // This is the correct, immutable, database-native way
+                    return t.tradeCategoryId === this.selectedTradeCategoryId;
                 });
             }
             
@@ -2981,8 +2972,23 @@ Sean → Shawn, Shaun`;
     //    50 = BOOKING INTENT (standard)
     //    45 = QUOTE REQUEST (lowest)
     //
+    // TRADE CATEGORY BINDING:
+    //   - tradeCategoryId (ObjectId) is THE AUTHORITATIVE KEY
+    //   - tradeCategoryName is ONLY for display, never for logic
+    //   - When trade categories load, we dynamically assign the HVAC ObjectId
+    //
     // ═══════════════════════════════════════════════════════════════════════════
     getV1SampleFlows() {
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CRITICAL: Dynamically assign tradeCategoryId (ObjectId) from loaded categories
+        // This ensures filtering uses ObjectId, NOT name string matching
+        // ═══════════════════════════════════════════════════════════════════════════
+        const hvacCategory = (this.tradeCategoriesCache || []).find(c => 
+            c.name.toLowerCase().includes('hvac')
+        );
+        const hvacTradeCategoryId = hvacCategory?._id || null;
+        const hvacTradeCategoryName = hvacCategory?.name || 'HVAC Residential';
+        
         return [
             // ─────────────────────────────────────────────────────────────────────
             // 1. 🚨 EMERGENCY SERVICE (Priority 200 - HIGHEST)
@@ -2997,7 +3003,8 @@ Sean → Shawn, Shaun`;
                 name: '🚨 Emergency Service Detection',
                 description: 'Detects TRUE emergencies (gas leak, fire, flooding, CO). Includes safety directive. Blocks all other flows.',
                 flowKey: 'emergency_service',
-                tradeCategoryName: 'HVAC Residential',  // V2 Trade Category System
+                tradeCategoryId: hvacTradeCategoryId,      // AUTHORITATIVE: ObjectId binding
+                tradeCategoryName: hvacTradeCategoryName,  // Display only, never for logic
                 enabled: true,
                 priority: 200,
                 triggers: [{
@@ -3120,7 +3127,8 @@ Sean → Shawn, Shaun`;
                 name: '🔄 Returning Customer Claim',
                 description: 'Detects existing/returning customers. Sets flag for CRM lookup and personalizes the conversation.',
                 flowKey: 'returning_customer_claim',
-                tradeCategoryName: 'HVAC Residential',  // V2 Trade Category System
+                tradeCategoryId: hvacTradeCategoryId,      // AUTHORITATIVE: ObjectId binding
+                tradeCategoryName: hvacTradeCategoryName,  // Display only, never for logic
                 enabled: true,
                 priority: 60,
                 triggers: [{
@@ -3208,7 +3216,8 @@ Sean → Shawn, Shaun`;
                 name: '✨ New Customer Detection',
                 description: 'Detects first-time callers. Welcomes them warmly and sets flag for special handling.',
                 flowKey: 'new_customer',
-                tradeCategoryName: 'HVAC Residential',  // V2 Trade Category System
+                tradeCategoryId: hvacTradeCategoryId,      // AUTHORITATIVE: ObjectId binding
+                tradeCategoryName: hvacTradeCategoryName,  // Display only, never for logic
                 enabled: true,
                 priority: 55,
                 triggers: [{
@@ -3290,7 +3299,8 @@ Sean → Shawn, Shaun`;
                 name: '📅 Standard Booking Intent',
                 description: 'Detects when caller wants to schedule service. Transitions to BOOKING mode.',
                 flowKey: 'booking_intent',
-                tradeCategoryName: 'HVAC Residential',  // V2 Trade Category System
+                tradeCategoryId: hvacTradeCategoryId,      // AUTHORITATIVE: ObjectId binding
+                tradeCategoryName: hvacTradeCategoryName,  // Display only, never for logic
                 enabled: true,
                 priority: 50,
                 triggers: [{
@@ -3379,7 +3389,8 @@ Sean → Shawn, Shaun`;
                 name: '💰 Quote/Pricing Request',
                 description: 'Detects pricing inquiries. Sets flag and acknowledges - does NOT transition to booking.',
                 flowKey: 'quote_request',
-                tradeCategoryName: 'HVAC Residential',  // V2 Trade Category System
+                tradeCategoryId: hvacTradeCategoryId,      // AUTHORITATIVE: ObjectId binding
+                tradeCategoryName: hvacTradeCategoryName,  // Display only, never for logic
                 enabled: true,
                 priority: 45,
                 triggers: [{
@@ -3464,7 +3475,8 @@ Sean → Shawn, Shaun`;
                 name: '❌ Cancellation Request',
                 description: 'Detects when caller wants to cancel an existing appointment. High priority handling.',
                 flowKey: 'cancellation_request',
-                tradeCategoryName: 'HVAC Residential',  // V2 Trade Category System
+                tradeCategoryId: hvacTradeCategoryId,      // AUTHORITATIVE: ObjectId binding
+                tradeCategoryName: hvacTradeCategoryName,  // Display only, never for logic
                 enabled: true,
                 priority: 100,
                 triggers: [{
@@ -3542,7 +3554,8 @@ Sean → Shawn, Shaun`;
                 name: '📆 Reschedule Request',
                 description: 'Detects when caller wants to reschedule an existing appointment.',
                 flowKey: 'reschedule_request',
-                tradeCategoryName: 'HVAC Residential',  // V2 Trade Category System
+                tradeCategoryId: hvacTradeCategoryId,      // AUTHORITATIVE: ObjectId binding
+                tradeCategoryName: hvacTradeCategoryName,  // Display only, never for logic
                 enabled: true,
                 priority: 90,
                 triggers: [{
