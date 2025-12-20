@@ -146,6 +146,7 @@ async function loadAllRoutes() {
         routes.v2CompanyConfigurationRoutes = await loadRouteWithTimeout('./routes/company/v2companyConfiguration', 'v2CompanyConfigurationRoutes');
         routes.triageCardsRoutes = await loadRouteWithTimeout('./routes/company/triageCards', 'triageCardsRoutes'); // 🎯 Triage Cards Management (atomic source of truth)
         routes.blackboxRoutes = await loadRouteWithTimeout('./routes/company/blackbox', 'blackboxRoutes'); // 📼 Black Box Recorder (Enterprise Call Flight Recorder)
+        routes.dynamicFlowsRoutes = await loadRouteWithTimeout('./routes/company/dynamicFlows', 'dynamicFlowsRoutes'); // 🧠 Dynamic Flow Engine (Trigger → Event → State → Action)
         routes.companyOpsRouter = await loadRouteWithTimeout('./routes/company/companyOpsRouter', 'companyOpsRouter'); // 🏢 CompanyOps Console (Contacts, Locations, Appointments, Call Traces, Usage, Customer DB, Notifications, Settings, + Cheat Sheet Config)
         // 🗑️ DELETED: v2InstantResponses - replaced by v2InstantResponseCategories system
         // V2 DELETED: Legacy v2 testing routes - using V2 AI Agent Logic system
@@ -440,6 +441,7 @@ function registerRoutes(routes) {
     app.use('/api/company', routes.v2CompanyConfigurationRoutes); // V2: AI Agent Settings (Variables, Filler Words, Scenarios) - 100% ISOLATED
     app.use('/api/company/:companyId/triage-cards', routes.triageCardsRoutes); // V2: Triage Cards Management (atomic source of truth)
     app.use('/api/company/:companyId/blackbox', routes.blackboxRoutes); // 📼 Black Box Recorder (Enterprise Call Flight Recorder)
+    app.use('/api/company/:companyId/dynamic-flows', routes.dynamicFlowsRoutes); // 🧠 Dynamic Flow Engine (Trigger → Event → State → Action)
     app.use('/api/company/:companyId', routes.companyOpsRouter); // V2: CompanyOps Console + Cheat Sheet Config (Contacts, Locations, Appointments, Call Traces, Usage, Customer DB, Notifications, Settings, Booking Rules, Role Contacts, Links, Calculator)
     app.use('/api/company', routes.v2TwilioControlRoutes); // V2: Twilio Control Center (AI Agent Settings - Dashboard tab)
     app.use('/api/company', routes.v2ConnectionMessagesRoutes); // V2: Connection Messages (AI Agent Settings - Messages & Greetings tab)
