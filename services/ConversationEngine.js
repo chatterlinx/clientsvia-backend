@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V36-PROMPT-AS-LAW-FINAL';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V37-ASKFULLNAME-STRING-FIX';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -219,7 +219,9 @@ function isNameSlotComplete(currentSlots, nameMeta, slotConfig) {
     // 3. V36 FIX: Only consider single-word name complete if:
     //    - confirmBack is disabled OR we've already confirmed
     //    - AND we're not waiting for askFullName response
-    const askFullName = slotConfig?.askFullName === true || slotConfig?.requireFullName === true;
+    // V36 FIX: Check both boolean and string values
+    const askFullName = slotConfig?.askFullName === true || slotConfig?.askFullName === 'true' ||
+                       slotConfig?.requireFullName === true || slotConfig?.requireFullName === 'true';
     const needsLastName = askFullName && !last && first;
     
     if (nameValue && !needsLastName) {
@@ -2181,10 +2183,11 @@ async function processTurn({
         // 🎯 PROMPT AS LAW: Default askFullName to FALSE
         // Only ask for last name if UI explicitly requires it
         // CHECK BOTH: Direct property (UI saves here) AND nested nameOptions (legacy)
-        const askFullNameEnabled = nameSlotCheck?.askFullName === true || 
-                                   nameSlotCheck?.requireFullName === true ||
-                                   nameSlotCheck?.nameOptions?.askFullName === true || 
-                                   nameSlotCheck?.nameOptions?.requireFullName === true;
+        // V36 FIX: Check both boolean and string values
+        const askFullNameEnabled = nameSlotCheck?.askFullName === true || nameSlotCheck?.askFullName === 'true' ||
+                                   nameSlotCheck?.requireFullName === true || nameSlotCheck?.requireFullName === 'true' ||
+                                   nameSlotCheck?.nameOptions?.askFullName === true || nameSlotCheck?.nameOptions?.askFullName === 'true' ||
+                                   nameSlotCheck?.nameOptions?.requireFullName === true || nameSlotCheck?.nameOptions?.requireFullName === 'true';
         
         if (currentSlots.partialName && !currentSlots.name) {
             if (inBookingModeForName && !askFullNameEnabled) {
@@ -2728,9 +2731,10 @@ async function processTurn({
                 // ═══════════════════════════════════════════════════════════════════
                 const nameMeta = session.booking.meta.name;
                 const confirmBackEnabled = nameSlotConfig?.confirmBack === true || nameSlotConfig?.confirmBack === 'true';
-                const askFullNameEnabled = nameSlotConfig?.askFullName === true || 
-                                          nameSlotConfig?.requireFullName === true ||
-                                          nameSlotConfig?.nameOptions?.askFullName === true;
+                // V36 FIX: Check both boolean and string values (UI might save as string)
+                const askFullNameEnabled = nameSlotConfig?.askFullName === true || nameSlotConfig?.askFullName === 'true' ||
+                                          nameSlotConfig?.requireFullName === true || nameSlotConfig?.requireFullName === 'true' ||
+                                          nameSlotConfig?.nameOptions?.askFullName === true || nameSlotConfig?.nameOptions?.askFullName === 'true';
                 const hasName = currentSlots.name || currentSlots.partialName;
                 const hasFullName = currentSlots.name && currentSlots.name.includes(' ');
                 const nameConfirmed = nameMeta?.confirmed === true;
@@ -2776,10 +2780,11 @@ async function processTurn({
                 // 🎯 PROMPT AS LAW: Default askFullName to FALSE
                 // Only ask for last name if UI explicitly requires it
                 // CHECK BOTH: Direct property (UI saves here) AND nested nameOptions (legacy)
-                const askFullName = nameSlotConfig?.askFullName === true || 
-                                    nameSlotConfig?.requireFullName === true ||
-                                    nameSlotConfig?.nameOptions?.askFullName === true || 
-                                    nameSlotConfig?.nameOptions?.requireFullName === true;
+                // V36 FIX: Check both boolean and string values (UI might save as string)
+                const askFullName = nameSlotConfig?.askFullName === true || nameSlotConfig?.askFullName === 'true' ||
+                                    nameSlotConfig?.requireFullName === true || nameSlotConfig?.requireFullName === 'true' ||
+                                    nameSlotConfig?.nameOptions?.askFullName === true || nameSlotConfig?.nameOptions?.askFullName === 'true' ||
+                                    nameSlotConfig?.nameOptions?.requireFullName === true || nameSlotConfig?.nameOptions?.requireFullName === 'true';
                 const nameOptions = nameSlotConfig?.nameOptions || {};
                 const askOnceForMissingPart = nameOptions.askOnceForMissingPart !== false;
                 // V36: confirmBackEnabled already declared above at line 2707
