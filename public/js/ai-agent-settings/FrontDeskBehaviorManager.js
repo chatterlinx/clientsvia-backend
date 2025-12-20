@@ -2771,11 +2771,13 @@ Sean → Shawn, Shaun`;
             // ─────────────────────────────────────────────────────────────────────
             // BLOCKS all lower-priority flows with allowConcurrent=false
             // Fast-tracks to booking with priority flag
+            // HIGH PRECISION phrases only - no "not cooling" (too broad)
+            // Includes safety/liability ACK for gas/smoke/fire/CO
             // ─────────────────────────────────────────────────────────────────────
             {
                 _id: 'template-emergency-service',
                 name: '🚨 Emergency Service Detection',
-                description: 'Detects emergencies (no heat, flooding, gas leak). Blocks all other flows and fast-tracks to booking.',
+                description: 'Detects TRUE emergencies (gas leak, fire, flooding, CO). Includes safety directive. Blocks all other flows.',
                 flowKey: 'emergency_service',
                 enabled: true,
                 priority: 200,
@@ -2783,38 +2785,57 @@ Sean → Shawn, Shaun`;
                     type: 'phrase',
                     config: { 
                         phrases: [
+                            // URGENCY INDICATORS
                             'emergency',
                             'urgent',
                             'asap',
                             'right now',
                             'immediately',
-                            'no heat',
-                            'no ac',
-                            'no air',
-                            'not cooling',
-                            'not heating',
-                            'no hot water',
-                            'no water',
-                            'water leaking',
-                            'water everywhere',
+                            'dangerous',
+                            'dangerous situation',
+                            // COMPLETE SYSTEM FAILURE (extreme conditions)
+                            'no heat at all',
+                            'heat completely out',
+                            'no ac at all',
+                            'ac completely out',
+                            'no cooling at all',
+                            'no heating at all',
+                            // WATER EMERGENCIES
                             'flooding',
                             'flooded',
+                            'water everywhere',
+                            'water pouring',
+                            'ceiling leaking',
+                            'active leak',
                             'burst pipe',
                             'pipe burst',
                             'broken pipe',
+                            'pipes burst',
                             'frozen pipes',
+                            // GAS EMERGENCIES (high liability)
                             'gas leak',
+                            'leaking gas',
                             'smell gas',
                             'smells like gas',
-                            'burning smell',
-                            'electrical smell',
+                            'i smell gas',
+                            'gas smell',
+                            // FIRE/SMOKE/ELECTRICAL (high liability)
+                            'fire',
                             'smoke',
+                            'smoke smell',
+                            'burning smell',
+                            'burning wire smell',
+                            'electrical smell',
+                            'electrical burning smell',
                             'sparks',
                             'sparking',
-                            'fire',
+                            'electrical fire',
+                            // CARBON MONOXIDE (life safety)
                             'carbon monoxide',
+                            'carbon monoxide alarm',
                             'co detector',
-                            'dangerous'
+                            'co alarm',
+                            'alarm going off'
                         ], 
                         fuzzy: true 
                     },
@@ -2842,12 +2863,12 @@ Sean → Shawn, Shaun`;
                             note: 'Emergency keywords detected. Blocking lower-priority flows and fast-tracking to booking.' 
                         }
                     },
-                    // 3. ACK_ONCE third
+                    // 3. ACK_ONCE third - INCLUDES SAFETY DIRECTIVE for liability
                     {
                         timing: 'on_activate',
                         type: 'ack_once',
                         config: { 
-                            text: 'Got it — that sounds urgent. I\'m going to get a technician scheduled as quickly as possible. Let me grab a few details.' 
+                            text: 'Got it — that sounds urgent. If you\'re smelling gas, seeing smoke, sparks, or a CO alarm is going off, please get to a safe place and call 911 first. If it\'s safe to continue, I\'m going to get a technician scheduled as quickly as possible. Let me grab a few details.' 
                         }
                     },
                     // 4. TRANSITION_MODE last
