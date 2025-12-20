@@ -3343,10 +3343,31 @@ Sean → Shawn, Shaun`;
 
         // Copy JSON handler (uses normalized payload)
         // Pass editFlow so we can include ALL actions (not just the single dropdown selection)
+        // FALLBACK: If editFlow has empty actions but matches a sample template's flowKey, use template's actions
         const copyBtn = modal.querySelector('#flow-editor-copy-json');
         if (copyBtn) {
             copyBtn.addEventListener('click', () => {
-                const flowPayload = this.buildFlowPayloadFromModal(modal, isNew, { forCopy: true, editFlow });
+                // Check if editFlow has empty action configs and matches a sample template
+                let effectiveEditFlow = editFlow;
+                const hasEmptyActions = editFlow?.actions?.some(a => {
+                    const cfg = a.config || {};
+                    // Check if all key fields are empty
+                    return (a.type === 'set_flag' && !cfg.flagName) ||
+                           (a.type === 'ack_once' && !cfg.text) ||
+                           (a.type === 'append_ledger' && !cfg.type && !cfg.key);
+                });
+                
+                if (hasEmptyActions && editFlow?.flowKey) {
+                    // Try to find a sample template with matching flowKey
+                    const sampleTemplates = this.getV1SampleFlows();
+                    const matchingTemplate = sampleTemplates.find(t => t.flowKey === editFlow.flowKey);
+                    if (matchingTemplate) {
+                        console.log('[COPY JSON] Company flow has empty actions, using sample template actions for:', editFlow.flowKey);
+                        effectiveEditFlow = { ...editFlow, actions: matchingTemplate.actions };
+                    }
+                }
+                
+                const flowPayload = this.buildFlowPayloadFromModal(modal, isNew, { forCopy: true, editFlow: effectiveEditFlow });
                 if (!flowPayload) return;
                 navigator.clipboard.writeText(JSON.stringify(flowPayload, null, 2))
                     .then(() => this.showNotification('Flow JSON copied', 'success'))
