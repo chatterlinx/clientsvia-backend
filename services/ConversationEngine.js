@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V37-ASKFULLNAME-STRING-FIX';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V37-DEBUG-CONFIRM-TEMPLATE';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -2790,14 +2790,17 @@ async function processTurn({
                 // V36: confirmBackEnabled already declared above at line 2707
                 const confirmBackTemplate = nameSlotConfig?.confirmPrompt || 'Got it, {value}. Did I get that right?';
                 
-                // 🔍 DEBUG: Log askFullName evaluation
-                log('📝 NAME CONFIG DEBUG (V27)', {
+                // 🔍 DEBUG: Log askFullName and confirmBackTemplate evaluation
+                log('📝 NAME CONFIG DEBUG (V37)', {
                     askFullName,
+                    askFullNameEnabled,
                     'nameSlotConfig.askFullName': nameSlotConfig?.askFullName,
                     'nameSlotConfig.requireFullName': nameSlotConfig?.requireFullName,
-                    'nameSlotConfig.nameOptions?.askFullName': nameSlotConfig?.nameOptions?.askFullName,
+                    'nameSlotConfig.confirmPrompt': nameSlotConfig?.confirmPrompt,
+                    confirmBackTemplate,
                     confirmBackEnabled,
-                    activeSlot: session.booking.activeSlot
+                    activeSlot: session.booking.activeSlot,
+                    templateIncludesLastName: confirmBackTemplate.toLowerCase().includes('last name')
                 });
                 
                 aiLatencyMs = Date.now() - aiStartTime;
@@ -2920,19 +2923,19 @@ async function processTurn({
                     // User confirmed partial name, now ask for missing part
                     nameMeta.askedMissingPartOnce = true;
                     
-                    // V36 PROMPT AS LAW: User said "yes" to confirmBack, now ask for missing part
-                    // Use consistent "Got it" style to match UI template
+                    // V37 PROMPT AS LAW: User said "yes" to confirmBack, now ask for missing part
+                    // Since they already confirmed, just ask for the missing part directly
                     const firstName = nameMeta.first || currentSlots.partialName || '';
                     
                     if (nameMeta.assumedSingleTokenAs === 'last') {
                         // We have last name, need first
                         finalReply = firstName 
-                            ? `Got it, ${firstName}. And what's your first name?`
+                            ? `Perfect, ${firstName}. And what's your first name?`
                             : "And what's your first name?";
                     } else {
-                        // We have first name, need last
+                        // We have first name, need last - they already confirmed, so just ask
                         finalReply = firstName 
-                            ? `Got it, ${firstName}. And what's your last name?`
+                            ? `Perfect, ${firstName}. And what's your last name?`
                             : "And what's your last name?";
                     }
                     nextSlotId = 'name'; // Still on name
