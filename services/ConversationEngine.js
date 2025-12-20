@@ -2759,7 +2759,7 @@ async function processTurn({
                                     nameSlotConfig?.nameOptions?.requireFullName === true;
                 const nameOptions = nameSlotConfig?.nameOptions || {};
                 const askOnceForMissingPart = nameOptions.askOnceForMissingPart !== false;
-                const confirmBackEnabled = nameSlotConfig?.confirmBack === true || nameSlotConfig?.confirmBack === 'true';
+                // V36: confirmBackEnabled already declared above at line 2707
                 const confirmBackTemplate = nameSlotConfig?.confirmPrompt || 'Got it, {value}. Did I get that right?';
                 
                 // 🔍 DEBUG: Log askFullName evaluation
@@ -2784,9 +2784,8 @@ async function processTurn({
                 // 2. partialName (single token) → Confirm back, then ask missing part
                 // 3. firstName + lastName → Complete, move to phone
                 // ═══════════════════════════════════════════════════════════════════
-                const nameMeta = session.booking.meta.name;
+                // V36: nameMeta, hasName, hasFullName already declared above at line 2706-2712
                 const hasPartialName = currentSlots.partialName || extractedThisTurn.name;
-                const hasFullName = currentSlots.name && currentSlots.name.includes(' ');
                 
                 // ═══════════════════════════════════════════════════════════════════
                 // V33 FIX: Initialize nameMeta.first from partialName if not set
