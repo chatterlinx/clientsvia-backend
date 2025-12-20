@@ -45,13 +45,14 @@ const ResponseRenderer = require('./ResponseRenderer');
 const ConversationStateMachine = require('./ConversationStateMachine');
 const LLMDiscoveryEngine = require('./LLMDiscoveryEngine');
 const AddressValidationService = require('./AddressValidationService');
+const DynamicFlowEngine = require('./DynamicFlowEngine');
 const logger = require('../utils/logger');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V40-STATE-LOCKS-BLACKBOX';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V41-DYNAMIC-FLOW-ENGINE';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -103,7 +104,11 @@ logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
         '✅ V40: Test Console calls → Black Box (source: test)',
         '✅ V40: SMS calls → Black Box (source: sms)',
         '✅ V40: Web chat → Black Box (source: web)',
-        '✅ V40: Session snapshot (phase, mode, locks, memory) persisted each turn'
+        '✅ V40: Session snapshot (phase, mode, locks, memory) persisted each turn',
+        '✅ V41: PHASE 3 - DYNAMIC FLOW ENGINE',
+        '✅ V41: Trigger → Event → State → Action system',
+        '✅ V41: Flow evaluation each turn',
+        '✅ V41: Flow trace in Test Console + Black Box'
     ]
 });
 
@@ -2028,6 +2033,65 @@ async function processTurn({
             },
             turnNumber: currentTurnNumber
         });
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 PHASE 3: DYNAMIC FLOW ENGINE - Trigger → Event → State → Action
+        // ═══════════════════════════════════════════════════════════════════
+        // The Dynamic Flow Engine evaluates triggers BEFORE AI processing.
+        // It can:
+        // - Activate flows based on triggers (phrases, keywords, slots, etc.)
+        // - Execute actions (mode transitions, set flags, send responses)
+        // - Apply guardrails (no re-greet, no restart booking)
+        // - Log trace for debugging
+        // ═══════════════════════════════════════════════════════════════════
+        let dynamicFlowResult = null;
+        try {
+            const flowStartTime = Date.now();
+            
+            dynamicFlowResult = await DynamicFlowEngine.processTurn({
+                companyId,
+                session,
+                userText,
+                slots: session.collectedSlots || {},
+                customer,
+                company
+            });
+            
+            const flowLatency = Date.now() - flowStartTime;
+            
+            log('🧠 PHASE 3: Dynamic Flow Engine processed', {
+                latencyMs: flowLatency,
+                triggersEvaluated: dynamicFlowResult.triggersEvaluated?.length || 0,
+                triggersFired: dynamicFlowResult.triggersFired?.length || 0,
+                flowsActivated: dynamicFlowResult.flowsActivated?.length || 0,
+                actionsExecuted: dynamicFlowResult.actionsExecuted?.length || 0,
+                stateChanges: dynamicFlowResult.stateChanges
+            });
+            
+            // Apply state changes from flow engine
+            if (dynamicFlowResult.stateChanges?.mode) {
+                log('🧠 PHASE 3: Mode changed by flow engine', {
+                    from: session.mode,
+                    to: dynamicFlowResult.stateChanges.mode
+                });
+                session.mode = dynamicFlowResult.stateChanges.mode;
+            }
+            
+            // Check for pending responses from flows (prepend to AI response)
+            const flowResponses = dynamicFlowResult.actionsExecuted
+                ?.filter(a => a.type === 'send_response' && a.response)
+                ?.map(a => a.response) || [];
+                
+            if (flowResponses.length > 0) {
+                log('🧠 PHASE 3: Flow generated responses', { count: flowResponses.length });
+            }
+            
+        } catch (flowErr) {
+            // Non-fatal - system works without dynamic flows
+            log('⚠️ PHASE 3: Dynamic Flow Engine failed (non-fatal)', { 
+                error: flowErr.message 
+            });
+        }
         
         // ═══════════════════════════════════════════════════════════════════
         // STEP 4: Build customer context for AI
@@ -5585,7 +5649,21 @@ async function processTurn({
                     consentPhrase: session.booking?.consentPhrase || null,
                     bookingStarted: session.mode === 'BOOKING',
                     responseSource: aiResult?.debug?.source || (aiResult?.fromStateMachine ? 'STATE_MACHINE' : 'LLM')
-                }
+                },
+                // ════════════════════════════════════════════════════════════════
+                // 🧠 V41: DYNAMIC FLOW TRACE - What the flow engine decided
+                // ════════════════════════════════════════════════════════════════
+                dynamicFlow: dynamicFlowResult ? {
+                    triggersEvaluated: dynamicFlowResult.triggersEvaluated?.length || 0,
+                    triggersFired: dynamicFlowResult.triggersFired || [],
+                    flowsActivated: dynamicFlowResult.flowsActivated || [],
+                    flowsDeactivated: dynamicFlowResult.flowsDeactivated || [],
+                    actionsExecuted: dynamicFlowResult.actionsExecuted || [],
+                    guardrailsApplied: dynamicFlowResult.guardrailsApplied || [],
+                    stateChanges: dynamicFlowResult.stateChanges || {},
+                    activeFlows: session.dynamicFlows?.activeFlows || [],
+                    trace: dynamicFlowResult.trace
+                } : null
             };
         }
         

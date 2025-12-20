@@ -544,6 +544,7 @@ class AITestConsole {
                     bookingConfig: debug.bookingConfig,  // Shows what prompts AI was given
                     slotDiagnostics: debug.slotDiagnostics,  // Slot extraction details
                     llmBrain: debug.llmBrain,  // 🧠 LLM decision details
+                    dynamicFlow: debug.dynamicFlow,  // 🧠 V41: Dynamic Flow Engine trace
                     timestamp: new Date().toISOString()
                 });
                 
@@ -1024,6 +1025,41 @@ ${separator}`;
                     `;
                 }
                 
+                // 🧠 V41: DYNAMIC FLOW TRACE - Show what flows were triggered
+                let dynamicFlowHtml = '';
+                if (entry.dynamicFlow && (entry.dynamicFlow.triggersFired?.length > 0 || entry.dynamicFlow.flowsActivated?.length > 0)) {
+                    const flow = entry.dynamicFlow;
+                    const triggersHtml = flow.triggersFired?.map(t => 
+                        `<div style="color: #f0883e; font-size: 9px; margin-left: 8px;">• ${t.flowKey} (${t.trigger}, ${Math.round(t.confidence * 100)}%)</div>`
+                    ).join('') || '';
+                    const activatedHtml = flow.flowsActivated?.map(f => 
+                        `<div style="color: #3fb950; font-size: 9px; margin-left: 8px;">• ${f.flowKey} (${f.requirements} reqs, ${f.actions} actions)</div>`
+                    ).join('') || '';
+                    const actionsHtml = flow.actionsExecuted?.filter(a => a.executed).map(a => 
+                        `<div style="color: #58a6ff; font-size: 9px; margin-left: 8px;">• ${a.type}${a.stateChange ? ': ' + JSON.stringify(a.stateChange) : ''}</div>`
+                    ).join('') || '';
+                    const guardrailsHtml = flow.guardrailsApplied?.map(g => 
+                        `<span style="background: #6e7681; padding: 1px 4px; border-radius: 2px; font-size: 8px; margin-right: 4px;">${g}</span>`
+                    ).join('') || '';
+                    
+                    dynamicFlowHtml = `
+                        <div style="background: #1a2d1a; border: 1px solid #238636; border-radius: 4px; padding: 6px 8px; margin: 6px 0; font-size: 10px;">
+                            <div style="color: #3fb950; font-weight: bold; margin-bottom: 6px;">🧠 DYNAMIC FLOW ENGINE</div>
+                            
+                            <div style="margin-bottom: 4px;">
+                                <div style="color: #8b949e; font-size: 9px;">Evaluated: ${flow.triggersEvaluated || 0} triggers</div>
+                            </div>
+                            
+                            ${triggersHtml ? `<div style="margin-bottom: 4px;"><div style="color: #f0883e; font-size: 9px; margin-bottom: 2px;">🎯 Triggers Fired:</div>${triggersHtml}</div>` : ''}
+                            ${activatedHtml ? `<div style="margin-bottom: 4px;"><div style="color: #3fb950; font-size: 9px; margin-bottom: 2px;">✅ Flows Activated:</div>${activatedHtml}</div>` : ''}
+                            ${actionsHtml ? `<div style="margin-bottom: 4px;"><div style="color: #58a6ff; font-size: 9px; margin-bottom: 2px;">⚡ Actions Executed:</div>${actionsHtml}</div>` : ''}
+                            ${guardrailsHtml ? `<div><div style="color: #6e7681; font-size: 9px; margin-bottom: 2px;">🛡️ Guardrails:</div><div style="margin-left: 8px;">${guardrailsHtml}</div></div>` : ''}
+                            
+                            ${flow.activeFlows?.length > 0 ? `<div style="margin-top: 4px; padding-top: 4px; border-top: 1px dashed #30363d;"><div style="color: #6e7681; font-size: 9px;">Active Flows: ${flow.activeFlows.length}</div></div>` : ''}
+                        </div>
+                    `;
+                }
+                
                 return `
                 <div style="padding: 8px 0; ${i > 0 ? 'border-top: 1px dashed #30363d;' : ''}">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
@@ -1042,6 +1078,7 @@ ${separator}`;
                         <span>📍${entry.mode}</span>
                         <span>📨${entry.historySent} hist</span>
                     </div>
+                    ${dynamicFlowHtml}
                     ${thinkingHtml}
                     ${llmBrainHtml}
                     ${bookingHtml}
