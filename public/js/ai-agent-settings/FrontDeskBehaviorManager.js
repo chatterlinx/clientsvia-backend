@@ -2617,7 +2617,7 @@ Sean → Shawn, Shaun`;
         }
     }
     
-    renderFlowCard(flow, isTemplate = false) {
+    renderFlowCard(flow, isTemplate = false, isAlreadyCopied = false) {
         const statusColor = flow.enabled ? '#238636' : '#6e7681';
         const statusText = flow.enabled ? 'ACTIVE' : 'DISABLED';
         
@@ -2627,20 +2627,39 @@ Sean → Shawn, Shaun`;
         
         const templateBadge = isTemplate ? '<span style="font-size: 11px; padding: 2px 8px; background: #6e40c9; border-radius: 10px; color: white;">TEMPLATE</span>' : '';
         const priorityBadge = flow.priority > 50 ? '<span style="font-size: 11px; padding: 2px 8px; background: #f85149; border-radius: 10px; color: white;">HIGH PRIORITY</span>' : '';
+        const alreadyCopiedBadge = isAlreadyCopied ? '<span style="font-size: 11px; padding: 2px 8px; background: #388bfd; border-radius: 10px; color: white;">✓ ADDED</span>' : '';
+        
+        // Card opacity for already-copied templates
+        const cardOpacity = isAlreadyCopied ? 'opacity: 0.5;' : '';
         
         let buttons = '';
         if (isTemplate) {
-            buttons = `
-                <button class="flow-copy-btn" data-flow-id="${flow._id}" style="
-                    padding: 8px 12px;
-                    background: #238636;
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    font-size: 12px;
-                ">📋 Copy to Company</button>
-            `;
+            if (isAlreadyCopied) {
+                // Already copied - show disabled indicator
+                buttons = `
+                    <span style="
+                        padding: 8px 12px;
+                        background: #21262d;
+                        color: #388bfd;
+                        border: 1px solid #388bfd;
+                        border-radius: 4px;
+                        font-size: 12px;
+                        font-weight: 500;
+                    ">✓ Already Added</span>
+                `;
+            } else {
+                buttons = `
+                    <button class="flow-copy-btn" data-flow-id="${flow._id}" style="
+                        padding: 8px 12px;
+                        background: #238636;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 12px;
+                    ">📋 Copy to Company</button>
+                `;
+            }
         } else {
             buttons = `
                 <button class="flow-toggle-btn" data-flow-id="${flow._id}" data-enabled="${flow.enabled}" style="
@@ -2676,12 +2695,14 @@ Sean → Shawn, Shaun`;
         return `
             <div class="flow-card" data-flow-id="${flow._id}" style="
                 background: #0d1117;
-                border: 1px solid #30363d;
+                border: 1px solid ${isAlreadyCopied ? '#388bfd' : '#30363d'};
                 border-radius: 8px;
                 padding: 16px;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
+                ${cardOpacity}
+                transition: opacity 0.2s ease;
             ">
                 <div style="flex: 1;">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
@@ -2690,6 +2711,7 @@ Sean → Shawn, Shaun`;
                             ${statusText}
                         </span>
                         ${templateBadge}
+                        ${alreadyCopiedBadge}
                         ${priorityBadge}
                     </div>
                     <p style="color: #8b949e; font-size: 13px; margin: 0 0 8px 0;">${flow.description || 'No description'}</p>
@@ -2716,9 +2738,16 @@ Sean → Shawn, Shaun`;
         const data = await this.loadDynamicFlows();
         const v1Templates = this.getV1SampleFlows();
         
+        // Extract flowKeys that are already in company flows (for "already copied" detection)
+        const copiedFlowKeys = new Set(
+            (data.flows || [])
+                .map(f => f.flowKey?.toLowerCase())
+                .filter(Boolean)
+        );
+        
         // Render company flows
         if (data.flows && data.flows.length > 0) {
-            flowsContainer.innerHTML = data.flows.map(f => this.renderFlowCard(f, false)).join('');
+            flowsContainer.innerHTML = data.flows.map(f => this.renderFlowCard(f, false, false)).join('');
         } else {
             flowsContainer.innerHTML = `
                 <div style="text-align: center; padding: 40px; color: #8b949e; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
@@ -2729,16 +2758,17 @@ Sean → Shawn, Shaun`;
             `;
         }
         
-        // Render templates
+        // Render templates (with "already copied" detection)
         if (templatesContainer) {
             const allTemplates = (data.templates || []).concat(v1Templates);
             if (allTemplates.length > 0) {
-                templatesContainer.innerHTML = allTemplates.map(t => this.renderFlowCard(t, true)).join('');
+                templatesContainer.innerHTML = allTemplates.map(t => {
+                    const isAlreadyCopied = copiedFlowKeys.has(t.flowKey?.toLowerCase());
+                    return this.renderFlowCard(t, true, isAlreadyCopied);
+                }).join('');
             } else {
                 templatesContainer.innerHTML = '<p style="color: #6e7681; font-size: 13px;">No templates available.</p>';
             }
-        } else if (templatesContainer) {
-            templatesContainer.innerHTML = '<p style="color: #6e7681; font-size: 13px;">No templates available.</p>';
         }
         
         // Attach flow-specific event listeners
