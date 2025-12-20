@@ -2893,6 +2893,84 @@ Sean → Shawn, Shaun`;
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
+    // 🔧 CUSTOM FIELDS TABLE RENDERER
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    renderCustomFieldsTable(customFields = []) {
+        if (!customFields || customFields.length === 0) {
+            return `
+                <div style="text-align: center; padding: 20px; color: #6e7681; font-size: 12px;">
+                    No custom fields yet. Click "+ Add Field" to add clientId, gateCode, etc.
+                </div>
+            `;
+        }
+        
+        return `
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                <thead>
+                    <tr style="border-bottom: 1px solid #30363d;">
+                        <th style="text-align: left; padding: 8px; color: #8b949e; font-weight: 500;">Field Key</th>
+                        <th style="text-align: left; padding: 8px; color: #8b949e; font-weight: 500;">Label</th>
+                        <th style="text-align: left; padding: 8px; color: #8b949e; font-weight: 500;">Prompt</th>
+                        <th style="text-align: center; padding: 8px; color: #8b949e; font-weight: 500;">Order</th>
+                        <th style="text-align: center; padding: 8px; color: #8b949e; font-weight: 500;">Req?</th>
+                        <th style="text-align: center; padding: 8px; color: #8b949e; font-weight: 500;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${customFields.map((field, idx) => `
+                        <tr style="border-bottom: 1px solid #21262d;" data-field-idx="${idx}">
+                            <td style="padding: 8px;">
+                                <input type="text" class="custom-field-key" value="${field.fieldKey || ''}" placeholder="clientId" style="width: 100%; padding: 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                            </td>
+                            <td style="padding: 8px;">
+                                <input type="text" class="custom-field-label" value="${field.label || ''}" placeholder="Client ID" style="width: 100%; padding: 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                            </td>
+                            <td style="padding: 8px;">
+                                <input type="text" class="custom-field-prompt" value="${field.prompt || ''}" placeholder="What's your client ID number?" style="width: 100%; padding: 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                            </td>
+                            <td style="padding: 8px; text-align: center;">
+                                <input type="number" class="custom-field-order" value="${field.order || 25}" min="1" max="100" style="width: 50px; padding: 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px; text-align: center;">
+                            </td>
+                            <td style="padding: 8px; text-align: center;">
+                                <input type="checkbox" class="custom-field-required" ${field.required !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
+                            </td>
+                            <td style="padding: 8px; text-align: center;">
+                                <button type="button" class="custom-field-delete" data-idx="${idx}" style="padding: 4px 8px; background: #21262d; color: #f85149; border: 1px solid #30363d; border-radius: 4px; font-size: 10px; cursor: pointer;">🗑️</button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+    
+    // Helper to collect custom fields from the table
+    collectCustomFieldsFromTable(modal) {
+        const container = modal.querySelector('#flow-custom-fields-container');
+        if (!container) return [];
+        
+        const rows = container.querySelectorAll('tbody tr');
+        const fields = [];
+        
+        rows.forEach(row => {
+            const fieldKey = row.querySelector('.custom-field-key')?.value?.trim();
+            if (!fieldKey) return; // Skip empty rows
+            
+            fields.push({
+                fieldKey,
+                label: row.querySelector('.custom-field-label')?.value?.trim() || fieldKey,
+                prompt: row.querySelector('.custom-field-prompt')?.value?.trim() || `What is your ${fieldKey}?`,
+                order: parseInt(row.querySelector('.custom-field-order')?.value) || 25,
+                required: row.querySelector('.custom-field-required')?.checked !== false,
+                validation: { type: 'text' } // Default validation
+            });
+        });
+        
+        return fields;
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
     // 🧠 DYNAMIC FLOW EDITOR MODAL
     // ═══════════════════════════════════════════════════════════════════════════
     
@@ -2924,6 +3002,7 @@ Sean → Shawn, Shaun`;
             priority: 50,
             triggers: [{ type: 'phrase', config: { phrases: [], fuzzy: true }, priority: 10 }],
             requirements: [],
+            customFields: [], // Flow-owned custom fields (clientId, gateCode, etc.)
             actions: [{ timing: 'on_activate', type: 'transition_mode', config: { targetMode: 'BOOKING' } }],
             settings: {
                 allowConcurrent: true,
@@ -3073,66 +3152,85 @@ Sean → Shawn, Shaun`;
                         </div>
                     </div>
                     
-                    <!-- Requirements (Data Collection) -->
+                    <!-- Requirements -->
                     <div style="margin-bottom: 24px;">
-                        <h3 style="color: #58a6ff; margin: 0 0 8px 0; font-size: 14px;">📋 Requirements (data to collect when flow activates)</h3>
+                        <h3 style="color: #58a6ff; margin: 0 0 8px 0; font-size: 14px;">📋 Requirements</h3>
                         <p style="color: #6e7681; font-size: 11px; margin: 0 0 16px 0;">
-                            These are slots/fields the system will collect when this flow triggers. The booking engine uses these to know what questions to ask.
+                            When this flow triggers, these requirements are added to the unified needs list. Standard slots use Booking Prompts; custom fields use their own prompts.
                         </p>
                         
-                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;">
-                            <!-- Collect Slots -->
-                            <div style="margin-bottom: 16px;">
-                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 8px;">📝 Slots to Collect (check all that apply)</label>
-                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                                    <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
-                                        <input type="checkbox" id="flow-req-name" ${editFlow.requirements?.some(r => r.config?.slotId === 'name') ? 'checked' : ''} style="accent-color: #58a6ff;">
-                                        👤 Name
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
-                                        <input type="checkbox" id="flow-req-phone" ${editFlow.requirements?.some(r => r.config?.slotId === 'phone') ? 'checked' : ''} style="accent-color: #58a6ff;">
-                                        📞 Phone
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
-                                        <input type="checkbox" id="flow-req-address" ${editFlow.requirements?.some(r => r.config?.slotId === 'address') ? 'checked' : ''} style="accent-color: #58a6ff;">
-                                        📍 Address
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
-                                        <input type="checkbox" id="flow-req-time" ${editFlow.requirements?.some(r => r.config?.slotId === 'timePreference') ? 'checked' : ''} style="accent-color: #58a6ff;">
-                                        🕐 Time Preference
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
-                                        <input type="checkbox" id="flow-req-issue" ${editFlow.requirements?.some(r => r.config?.slotId === 'issue') ? 'checked' : ''} style="accent-color: #58a6ff;">
-                                        🔧 Issue/Problem
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
-                                        <input type="checkbox" id="flow-req-email" ${editFlow.requirements?.some(r => r.config?.slotId === 'email') ? 'checked' : ''} style="accent-color: #58a6ff;">
-                                        ✉️ Email
-                                    </label>
-                                </div>
+                        <!-- Standard Slots (uses Booking Prompts) -->
+                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                <label style="color: #c9d1d9; font-size: 13px; font-weight: 600;">📝 Standard Slots</label>
+                                <span style="color: #6e7681; font-size: 10px;">Uses prompts from Booking Prompts tab</span>
                             </div>
-                            
-                            <!-- Acknowledgment -->
-                            <div style="margin-bottom: 16px;">
-                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">💬 Acknowledgment (optional - said once when flow activates)</label>
-                                <input type="text" id="flow-req-acknowledgment" value="${editFlow.requirements?.find(r => r.type === 'acknowledge')?.config?.acknowledgment || ''}" placeholder="e.g., I understand this is urgent. Let me help you right away." style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
-                            </div>
-                            
-                            <!-- Set Flag -->
-                            <div>
-                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">🚩 Set Flag (optional - marks session with a flag)</label>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                                    <input type="text" id="flow-req-flag-name" value="${editFlow.requirements?.find(r => r.type === 'set_flag')?.config?.flagName || ''}" placeholder="Flag name (e.g., isEmergency)" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
-                                    <input type="text" id="flow-req-flag-value" value="${editFlow.requirements?.find(r => r.type === 'set_flag')?.config?.flagValue || 'true'}" placeholder="Flag value (default: true)" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
-                                </div>
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                                <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
+                                    <input type="checkbox" id="flow-req-name" ${editFlow.requirements?.some(r => r.type === 'collect_slot' && r.config?.slotId === 'name') ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                    👤 Name
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
+                                    <input type="checkbox" id="flow-req-phone" ${editFlow.requirements?.some(r => r.type === 'collect_slot' && r.config?.slotId === 'phone') ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                    📞 Phone
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
+                                    <input type="checkbox" id="flow-req-address" ${editFlow.requirements?.some(r => r.type === 'collect_slot' && r.config?.slotId === 'address') ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                    📍 Address
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
+                                    <input type="checkbox" id="flow-req-time" ${editFlow.requirements?.some(r => r.type === 'collect_slot' && r.config?.slotId === 'timePreference') ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                    🕐 Time
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
+                                    <input type="checkbox" id="flow-req-issue" ${editFlow.requirements?.some(r => r.type === 'collect_slot' && r.config?.slotId === 'issue') ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                    🔧 Issue
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
+                                    <input type="checkbox" id="flow-req-email" ${editFlow.requirements?.some(r => r.type === 'collect_slot' && r.config?.slotId === 'email') ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                    ✉️ Email
+                                </label>
                             </div>
                         </div>
                         
+                        <!-- Custom Fields (Flow-Owned) -->
+                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                <label style="color: #c9d1d9; font-size: 13px; font-weight: 600;">🔧 Custom Fields</label>
+                                <button type="button" id="flow-add-custom-field" style="padding: 4px 10px; background: #238636; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">+ Add Field</button>
+                            </div>
+                            <p style="color: #6e7681; font-size: 10px; margin: 0 0 12px 0;">
+                                Flow-specific fields like clientId, gateCode, unitNumber. These use their own prompts (not Booking Prompts).
+                            </p>
+                            <div id="flow-custom-fields-container">
+                                ${this.renderCustomFieldsTable(editFlow.customFields || [])}
+                            </div>
+                        </div>
+                        
+                        <!-- Acknowledgment -->
+                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                            <label style="color: #c9d1d9; font-size: 13px; font-weight: 600; display: block; margin-bottom: 8px;">💬 Acknowledgment (ACK_ONCE)</label>
+                            <p style="color: #6e7681; font-size: 10px; margin: 0 0 8px 0;">Said once when flow activates. Locked so it won't repeat.</p>
+                            <input type="text" id="flow-req-acknowledgment" value="${editFlow.requirements?.find(r => r.type === 'acknowledge')?.config?.acknowledgment || ''}" placeholder="e.g., Got it — welcome back. Let me get a few details and I'll take care of you." style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                        </div>
+                        
+                        <!-- Set Flag -->
+                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;">
+                            <label style="color: #c9d1d9; font-size: 13px; font-weight: 600; display: block; margin-bottom: 8px;">🚩 Set Flag (SET_FLAG)</label>
+                            <p style="color: #6e7681; font-size: 10px; margin: 0 0 8px 0;">Marks session with a flag for downstream logic (e.g., isEmergency, returningCustomerClaim).</p>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <input type="text" id="flow-req-flag-name" value="${editFlow.requirements?.find(r => r.type === 'set_flag')?.config?.flagName || ''}" placeholder="Flag name (e.g., returningCustomerClaim)" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                                <input type="text" id="flow-req-flag-value" value="${editFlow.requirements?.find(r => r.type === 'set_flag')?.config?.flagValue || 'true'}" placeholder="Flag value (default: true)" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                            </div>
+                        </div>
+                        
+                        <!-- Info Box -->
                         <div style="margin-top: 12px; padding: 12px; background: #1a2d1a; border: 1px solid #238636; border-radius: 6px;">
                             <div style="color: #3fb950; font-size: 11px; font-weight: 600; margin-bottom: 4px;">💡 How Requirements Work</div>
                             <div style="color: #8b949e; font-size: 11px; line-height: 1.5;">
-                                When this flow triggers, the booking engine will know to collect these slots using the prompts configured in <strong>Booking Prompts</strong> tab.
-                                The slots are collected in order: Name → Phone → Address → Time. The acknowledgment is spoken once at the start.
+                                <strong>Standard Slots</strong> → Added to unified needs list, uses prompts from Booking Prompts tab.<br>
+                                <strong>Custom Fields</strong> → Added to unified needs list, uses prompts defined here. Stored in <code>session.dynamicFlows.facts</code>.<br>
+                                <strong>Order</strong> → Lower number = asked earlier. Standard slots: 10-50. Custom fields: configurable.
                             </div>
                         </div>
                     </div>
@@ -3179,6 +3277,55 @@ Sean → Shawn, Shaun`;
             modal.querySelector('#action-config-flag').style.display = actionTypeSelect.value === 'set_flag' ? '' : 'none';
             modal.querySelector('#action-config-response').style.display = actionTypeSelect.value === 'send_response' ? '' : 'none';
         });
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Custom Fields Table Handlers
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        // Track custom fields in memory
+        let customFieldsData = [...(editFlow.customFields || [])];
+        
+        // Re-render the custom fields table
+        const rerenderCustomFields = () => {
+            const container = modal.querySelector('#flow-custom-fields-container');
+            if (container) {
+                container.innerHTML = this.renderCustomFieldsTable(customFieldsData);
+                attachCustomFieldDeleteHandlers();
+            }
+        };
+        
+        // Attach delete handlers to all delete buttons
+        const attachCustomFieldDeleteHandlers = () => {
+            modal.querySelectorAll('.custom-field-delete').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const idx = parseInt(btn.dataset.idx);
+                    customFieldsData.splice(idx, 1);
+                    rerenderCustomFields();
+                });
+            });
+        };
+        
+        // Add Field button
+        const addFieldBtn = modal.querySelector('#flow-add-custom-field');
+        if (addFieldBtn) {
+            addFieldBtn.addEventListener('click', () => {
+                // Collect current values from table before adding
+                customFieldsData = this.collectCustomFieldsFromTable(modal);
+                // Add new empty field
+                customFieldsData.push({
+                    fieldKey: '',
+                    label: '',
+                    prompt: '',
+                    order: 25,
+                    required: true,
+                    validation: { type: 'text' }
+                });
+                rerenderCustomFields();
+            });
+        }
+        
+        // Initial attach of delete handlers
+        attachCustomFieldDeleteHandlers();
         
         // Close handlers
         const closeModal = () => modal.remove();
@@ -3294,6 +3441,9 @@ Sean → Shawn, Shaun`;
                 minConfidence: parseFloat(modal.querySelector('#flow-min-confidence').value) || 0.7
             };
             
+            // Collect custom fields from table (final collection before save)
+            const finalCustomFields = this.collectCustomFieldsFromTable(modal).filter(f => f.fieldKey);
+            
             // Build flow object
             const flowData = {
                 name,
@@ -3302,6 +3452,7 @@ Sean → Shawn, Shaun`;
                 enabled,
                 triggers: [trigger],
                 requirements,
+                customFields: finalCustomFields, // Flow-owned custom fields
                 actions: [action],
                 settings
             };

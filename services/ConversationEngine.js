@@ -5662,7 +5662,21 @@ async function processTurn({
                     guardrailsApplied: dynamicFlowResult.guardrailsApplied || [],
                     stateChanges: dynamicFlowResult.stateChanges || {},
                     activeFlows: session.dynamicFlows?.activeFlows || [],
-                    trace: dynamicFlowResult.trace
+                    trace: dynamicFlowResult.trace,
+                    // ════════════════════════════════════════════════════════════════
+                    // V2.0: UNIFIED NEEDS LIST - The heart of the system
+                    // ════════════════════════════════════════════════════════════════
+                    unifiedNeeds: {
+                        active: session.dynamicFlows?.active || [],
+                        needs: session.dynamicFlows?.needs || [],
+                        facts: session.dynamicFlows?.facts || {},
+                        ledger: session.dynamicFlows?.ledger || [],
+                        locks: session.dynamicFlows?.locks || {},
+                        // Computed values for easy debugging
+                        pendingNeeds: (session.dynamicFlows?.needs || []).filter(n => !n.done),
+                        completedNeeds: (session.dynamicFlows?.needs || []).filter(n => n.done),
+                        nextNeed: (session.dynamicFlows?.needs || []).find(n => !n.done && n.required)?.key || null
+                    }
                 } : null
             };
         }

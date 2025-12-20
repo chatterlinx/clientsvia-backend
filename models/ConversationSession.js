@@ -383,6 +383,74 @@ const conversationSessionSchema = new Schema({
         acknowledgedClaims: [{ type: String }]                     // ["returning customer", "AC not cooling"]
     },
     
+    // ════════════════════════════════════════════════════════════════════════════
+    // 🆕 PHASE 3: DYNAMIC FLOWS (Unified Needs + Facts + Ledger + Trace)
+    // ════════════════════════════════════════════════════════════════════════════
+    // Dynamic Flows EXTEND collection, not replace it.
+    // - needs: unified list of what to collect (standard slots + custom fields)
+    // - facts: key/value store for custom field values (clientId, gateCode, etc.)
+    // - ledger: append-only event log (prevents loops, enables memory)
+    // - trace: per-turn debug data for Test Console + Black Box
+    // ════════════════════════════════════════════════════════════════════════════
+    dynamicFlows: {
+        // Active flows for this session
+        active: [{
+            flowKey: { type: String, required: true },
+            activatedAtTurn: { type: Number },
+            activatedAt: { type: Date, default: Date.now },
+            completedAtTurn: { type: Number },
+            completedAt: { type: Date },
+            status: { type: String, enum: ['active', 'completed', 'cancelled'], default: 'active' }
+        }],
+        
+        // Unified needs list (merged from base booking + flow requirements)
+        // Each need has: { type, key, order, done, source, prompt?, config? }
+        // type: 'standard_slot' | 'custom_field'
+        // key: 'name' | 'phone' | 'clientId' | etc.
+        // order: collection priority (lower = earlier)
+        // done: true if collected
+        // source: 'booking' | flowKey
+        // prompt: for custom fields, the exact question text
+        needs: [{
+            type: { type: String, enum: ['standard_slot', 'custom_field'], required: true },
+            key: { type: String, required: true },
+            order: { type: Number, default: 50 },
+            done: { type: Boolean, default: false },
+            source: { type: String, required: true }, // 'booking' or flowKey
+            prompt: { type: String },                  // For custom fields
+            required: { type: Boolean, default: true },
+            askedCount: { type: Number, default: 0 }
+        }],
+        
+        // Facts store for custom field values (flow-owned data)
+        // Example: { clientId: "ABC123", gateCode: "9823", unitNumber: "14B" }
+        facts: { type: Schema.Types.Mixed, default: {} },
+        
+        // Ledger: append-only event log (what happened)
+        // Prevents loops by tracking what we've acknowledged
+        // Example: ["Turn 2: Caller claims returning customer", "Turn 3: Flow activated"]
+        ledger: [{ type: String }],
+        
+        // Trace: per-turn debug data (for Test Console + Black Box)
+        trace: [{
+            turn: { type: Number },
+            triggersEvaluated: [{ type: String }],
+            triggersFired: [{ type: String }],
+            flowsActivated: [{ type: String }],
+            actionsExecuted: [{ type: String }],
+            needsAdded: [{ type: String }],
+            needsResolved: [{ type: String }],
+            nextNeed: { type: String },
+            nextQuestionChosen: { type: String },
+            guardrailsApplied: [{ type: String }]
+        }],
+        
+        // Locks for dynamic flow actions (prevent repeats)
+        locks: {
+            acked: { type: Schema.Types.Mixed, default: {} } // { flowKey: true } - ACK_ONCE spoken
+        }
+    },
+    
     status: {
         type: String,
         enum: ['active', 'ended', 'transferred', 'abandoned', 'error'],

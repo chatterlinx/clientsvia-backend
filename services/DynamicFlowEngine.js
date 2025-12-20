@@ -49,9 +49,22 @@ const logger = require('../utils/logger');
 // ════════════════════════════════════════════════════════════════════════════
 // ENGINE VERSION
 // ════════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V1.0-INITIAL';
+const ENGINE_VERSION = 'V2.0-UNIFIED-NEEDS';
 
 logger.info(`[DYNAMIC FLOW ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`);
+
+// ════════════════════════════════════════════════════════════════════════════
+// STANDARD SLOT ORDER (used when merging needs)
+// Lower number = asked earlier
+// ════════════════════════════════════════════════════════════════════════════
+const STANDARD_SLOT_ORDER = {
+    name: 10,
+    phone: 20,
+    address: 30,
+    timePreference: 40,
+    issue: 50,
+    email: 60
+};
 
 // ════════════════════════════════════════════════════════════════════════════
 // FLOW STATE MANAGEMENT
@@ -59,17 +72,46 @@ logger.info(`[DYNAMIC FLOW ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`);
 
 /**
  * Initialize flow state on session
+ * Uses the new schema: active, needs, facts, ledger, trace, locks
  */
 function initializeFlowState(session) {
     if (!session.dynamicFlows) {
         session.dynamicFlows = {
-            activeFlows: [],           // Currently active flow IDs
-            completedFlows: [],        // Completed flow IDs (for reactivation check)
-            pendingRequirements: [],   // Requirements waiting to be fulfilled
-            pendingActions: [],        // Actions waiting to execute
-            trace: []                  // Trace log for this session
+            // Active flows for this session
+            active: [],                // [{ flowKey, activatedAtTurn, status }]
+            
+            // Unified needs list (merged from base booking + flow requirements)
+            needs: [],                 // [{ type, key, order, done, source, prompt?, required? }]
+            
+            // Facts store for custom field values
+            facts: {},                 // { clientId: "ABC123", gateCode: "9823" }
+            
+            // Ledger: append-only event log
+            ledger: [],                // ["Turn 2: Caller claims returning customer"]
+            
+            // Trace: per-turn debug data
+            trace: [],                 // [{ turn, triggersEvaluated, triggersFired, ... }]
+            
+            // Locks for dynamic flow actions (prevent repeats)
+            locks: {
+                acked: {}              // { flowKey: true } - ACK_ONCE spoken
+            },
+            
+            // LEGACY: Keep for backward compatibility
+            activeFlows: [],
+            completedFlows: [],
+            pendingRequirements: [],
+            pendingActions: []
         };
     }
+    
+    // Ensure new fields exist on existing sessions
+    if (!session.dynamicFlows.active) session.dynamicFlows.active = [];
+    if (!session.dynamicFlows.needs) session.dynamicFlows.needs = [];
+    if (!session.dynamicFlows.facts) session.dynamicFlows.facts = {};
+    if (!session.dynamicFlows.ledger) session.dynamicFlows.ledger = [];
+    if (!session.dynamicFlows.locks) session.dynamicFlows.locks = { acked: {} };
+    
     return session.dynamicFlows;
 }
 
@@ -447,6 +489,8 @@ function evaluateTrigger(trigger, context) {
  */
 function activateFlow(flow, flowState, context) {
     const flowId = flow._id.toString();
+    const session = context.session;
+    const turnNumber = context.turnNumber;
     
     // Check for conflicts
     if (flow.settings?.conflictsWith?.length > 0) {
@@ -471,10 +515,30 @@ function activateFlow(flow, flowState, context) {
         return { activated: false, reason: 'no_concurrent' };
     }
     
-    // Add to active flows
+    // Add to active flows (legacy)
     flowState.activeFlows.push(flowId);
     
-    // Get requirements to add
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NEW: Add to active array (new schema)
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (!flowState.active) flowState.active = [];
+    flowState.active.push({
+        flowKey: flow.flowKey,
+        activatedAtTurn: turnNumber,
+        activatedAt: new Date(),
+        status: 'active'
+    });
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NEW: Merge requirements into unified needs list
+    // ═══════════════════════════════════════════════════════════════════════════
+    const needsAdded = mergeFlowRequirementsToNeeds(session, flow, turnNumber);
+    
+    // Add ledger entry for activation
+    if (!flowState.ledger) flowState.ledger = [];
+    flowState.ledger.push(`Turn ${turnNumber}: Flow "${flow.flowKey}" activated`);
+    
+    // Get requirements to add (legacy - for backward compatibility)
     const requirements = (flow.requirements || []).map(req => ({
         flowId,
         flowKey: flow.flowKey,
@@ -487,12 +551,15 @@ function activateFlow(flow, flowState, context) {
     logger.info('[DYNAMIC FLOW] Flow activated', {
         flowKey: flow.flowKey,
         requirements: requirements.length,
+        customFields: (flow.customFields || []).length,
+        needsAdded: needsAdded.length,
         onActivateActions: onActivateActions.length
     });
     
     return {
         activated: true,
         requirements,
+        needsAdded,
         onActivateActions
     };
 }
@@ -746,6 +813,228 @@ function applyGuardrails(flowState, session, context) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// UNIFIED NEEDS LIST MANAGEMENT
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Merge flow requirements into the unified needs list
+ * This is the HEART of the Dynamic Flow Engine
+ * 
+ * @param {Object} session - Session object
+ * @param {Object} flow - Flow that was activated
+ * @param {number} turnNumber - Current turn number
+ */
+function mergeFlowRequirementsToNeeds(session, flow, turnNumber) {
+    const flowState = initializeFlowState(session);
+    const flowKey = flow.flowKey;
+    const needsAdded = [];
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // 1. Add standard slots from flow requirements
+    // ─────────────────────────────────────────────────────────────────────────
+    const standardSlotRequirements = (flow.requirements || []).filter(r => r.type === 'collect_slot');
+    
+    for (const req of standardSlotRequirements) {
+        const slotId = req.config?.slotId;
+        if (!slotId) continue;
+        
+        // Check if this need already exists
+        const existingNeed = flowState.needs.find(n => n.key === slotId);
+        if (existingNeed) {
+            logger.debug('[DYNAMIC FLOW] Need already exists, skipping', { slotId, source: existingNeed.source });
+            continue;
+        }
+        
+        const need = {
+            type: 'standard_slot',
+            key: slotId,
+            order: STANDARD_SLOT_ORDER[slotId] || 50,
+            done: false,
+            source: flowKey,
+            required: req.config?.required !== false,
+            askedCount: 0
+        };
+        
+        flowState.needs.push(need);
+        needsAdded.push(slotId);
+        
+        logger.debug('[DYNAMIC FLOW] Added standard slot need', { slotId, order: need.order, source: flowKey });
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // 2. Add custom fields from flow (flow-owned prompts)
+    // ─────────────────────────────────────────────────────────────────────────
+    const customFields = flow.customFields || [];
+    
+    for (const field of customFields) {
+        const fieldKey = field.fieldKey;
+        if (!fieldKey) continue;
+        
+        // Check if this need already exists
+        const existingNeed = flowState.needs.find(n => n.key === fieldKey);
+        if (existingNeed) {
+            logger.debug('[DYNAMIC FLOW] Custom field need already exists, skipping', { fieldKey, source: existingNeed.source });
+            continue;
+        }
+        
+        const need = {
+            type: 'custom_field',
+            key: fieldKey,
+            order: field.order || 25,  // Custom fields typically asked after name but before address
+            done: false,
+            source: flowKey,
+            prompt: field.prompt,       // Flow owns this prompt
+            required: field.required !== false,
+            askedCount: 0,
+            validation: field.validation || { type: 'text' }
+        };
+        
+        flowState.needs.push(need);
+        needsAdded.push(fieldKey);
+        
+        logger.debug('[DYNAMIC FLOW] Added custom field need', { 
+            fieldKey, 
+            order: need.order, 
+            prompt: need.prompt?.substring(0, 50),
+            source: flowKey 
+        });
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // 3. Sort needs by order (lower = earlier)
+    // ─────────────────────────────────────────────────────────────────────────
+    flowState.needs.sort((a, b) => a.order - b.order);
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // 4. Add ledger entry
+    // ─────────────────────────────────────────────────────────────────────────
+    if (needsAdded.length > 0) {
+        flowState.ledger.push(`Turn ${turnNumber}: Flow "${flowKey}" added needs: ${needsAdded.join(', ')}`);
+    }
+    
+    return needsAdded;
+}
+
+/**
+ * Mark a need as done (collected)
+ * 
+ * @param {Object} session - Session object
+ * @param {string} key - The need key (slotId or fieldKey)
+ * @param {*} value - The collected value
+ * @param {number} turnNumber - Current turn number
+ */
+function markNeedDone(session, key, value, turnNumber) {
+    const flowState = initializeFlowState(session);
+    
+    const need = flowState.needs.find(n => n.key === key);
+    if (!need) return false;
+    
+    if (need.done) {
+        logger.debug('[DYNAMIC FLOW] Need already done, skipping', { key });
+        return false;
+    }
+    
+    need.done = true;
+    
+    // If it's a custom field, store in facts
+    if (need.type === 'custom_field') {
+        flowState.facts[key] = value;
+        flowState.ledger.push(`Turn ${turnNumber}: Custom field "${key}" collected: ${value}`);
+    } else {
+        flowState.ledger.push(`Turn ${turnNumber}: Slot "${key}" collected`);
+    }
+    
+    logger.info('[DYNAMIC FLOW] Need marked done', { key, type: need.type });
+    return true;
+}
+
+/**
+ * Get the next need to collect (deterministic)
+ * 
+ * @param {Object} session - Session object
+ * @returns {Object|null} The next need, or null if all done
+ */
+function getNextNeed(session) {
+    const flowState = initializeFlowState(session);
+    
+    // Find first need that is not done and is required
+    const nextNeed = flowState.needs.find(n => !n.done && n.required);
+    
+    if (nextNeed) {
+        logger.debug('[DYNAMIC FLOW] Next need determined', { 
+            key: nextNeed.key, 
+            type: nextNeed.type, 
+            order: nextNeed.order 
+        });
+    } else {
+        logger.debug('[DYNAMIC FLOW] All needs done');
+    }
+    
+    return nextNeed || null;
+}
+
+/**
+ * Get all pending needs (not done)
+ * 
+ * @param {Object} session - Session object
+ * @returns {Array} Array of pending needs
+ */
+function getPendingNeeds(session) {
+    const flowState = initializeFlowState(session);
+    return flowState.needs.filter(n => !n.done);
+}
+
+/**
+ * Get all completed needs
+ * 
+ * @param {Object} session - Session object
+ * @returns {Array} Array of completed needs
+ */
+function getCompletedNeeds(session) {
+    const flowState = initializeFlowState(session);
+    return flowState.needs.filter(n => n.done);
+}
+
+/**
+ * Add a ledger entry
+ * 
+ * @param {Object} session - Session object
+ * @param {string} entry - The ledger entry text
+ */
+function addLedgerEntry(session, entry) {
+    const flowState = initializeFlowState(session);
+    flowState.ledger.push(entry);
+    logger.debug('[DYNAMIC FLOW] Ledger entry added', { entry });
+}
+
+/**
+ * Execute ACK_ONCE action (with lock to prevent repeats)
+ * 
+ * @param {Object} session - Session object
+ * @param {string} flowKey - The flow key
+ * @param {string} acknowledgment - The acknowledgment text
+ * @returns {boolean} True if acknowledgment should be spoken, false if already acked
+ */
+function executeAckOnce(session, flowKey, acknowledgment) {
+    const flowState = initializeFlowState(session);
+    
+    // Check if already acked
+    if (flowState.locks.acked[flowKey]) {
+        logger.debug('[DYNAMIC FLOW] ACK_ONCE already spoken, skipping', { flowKey });
+        return false;
+    }
+    
+    // Lock it
+    flowState.locks.acked[flowKey] = true;
+    
+    // Add to ledger
+    flowState.ledger.push(`ACK_ONCE spoken for flow "${flowKey}": "${acknowledgment.substring(0, 50)}..."`);
+    
+    logger.info('[DYNAMIC FLOW] ACK_ONCE executed', { flowKey, acknowledgment: acknowledgment.substring(0, 50) });
+    return true;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // UTILITY FUNCTIONS
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -802,6 +1091,7 @@ function markAcknowledged(session, acknowledgment) {
 
 module.exports = {
     ENGINE_VERSION,
+    STANDARD_SLOT_ORDER,
     
     // Main functions
     processTurn,
@@ -823,7 +1113,18 @@ module.exports = {
     // Guardrails
     applyGuardrails,
     
-    // Utilities
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NEW: Unified Needs List Management
+    // ═══════════════════════════════════════════════════════════════════════════
+    mergeFlowRequirementsToNeeds,
+    markNeedDone,
+    getNextNeed,
+    getPendingNeeds,
+    getCompletedNeeds,
+    addLedgerEntry,
+    executeAckOnce,
+    
+    // Utilities (legacy)
     getNextRequiredSlot,
     getPendingAcknowledgments,
     markAcknowledged

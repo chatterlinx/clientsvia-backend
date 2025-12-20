@@ -311,8 +311,42 @@ const DynamicFlowSchema = new Schema({
     // Triggers that activate this flow
     triggers: [TriggerSchema],
     
-    // Requirements when flow is active
+    // Requirements when flow is active (standard slots)
     requirements: [RequirementSchema],
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // CUSTOM FIELDS (Flow-Owned)
+    // ─────────────────────────────────────────────────────────────────────────
+    // These are flow-specific fields like clientId, gateCode, unitNumber.
+    // They use their own prompts (not Booking Prompts).
+    // Stored in session.dynamicFlows.facts at runtime.
+    // ─────────────────────────────────────────────────────────────────────────
+    customFields: [{
+        // Unique key for this field (e.g., "clientId", "gateCode")
+        fieldKey: { type: String, required: true, trim: true },
+        
+        // Human-readable label (e.g., "Client ID")
+        label: { type: String, trim: true },
+        
+        // The exact question to ask (flow owns this, not Booking Prompts)
+        prompt: { type: String, required: true, trim: true },
+        
+        // Collection order (lower = earlier). Standard slots use 10-50.
+        order: { type: Number, default: 25 },
+        
+        // Is this field required?
+        required: { type: Boolean, default: true },
+        
+        // Validation rules
+        validation: {
+            type: { type: String, enum: ['text', 'number', 'phone', 'email', 'regex'], default: 'text' },
+            pattern: { type: String }, // For regex validation
+            minLength: { type: Number },
+            maxLength: { type: Number },
+            min: { type: Number }, // For number validation
+            max: { type: Number }
+        }
+    }],
     
     // Actions to execute
     actions: [ActionSchema],
