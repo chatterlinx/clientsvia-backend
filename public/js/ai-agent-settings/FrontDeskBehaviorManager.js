@@ -2810,7 +2810,7 @@ Sean → Shawn, Shaun`;
     async loadTradeCategories(container) {
         try {
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const response = await fetch('/api/v2global/tradecategories/categories?includeQnAs=false&includeStats=false', {
+            const response = await fetch('/api/v2global/trade-categories/categories?includeQnAs=false&includeStats=false', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
