@@ -2770,19 +2770,19 @@ Sean → Shawn, Shaun`;
             });
         });
         
-        // Edit buttons - TODO: Open modal editor
+        // Edit buttons - Open modal editor
         container.querySelectorAll('.flow-edit-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
                 const flowId = btn.dataset.flowId;
-                this.showNotification('Flow editor coming soon! Use API for now.', 'info');
+                await this.openFlowEditor(flowId, container);
             });
         });
         
         // Add flow button
         const addBtn = container.querySelector('#fdb-add-flow-btn');
         if (addBtn) {
-            addBtn.addEventListener('click', () => {
-                this.showNotification('Flow creator coming soon! Use API or copy a template.', 'info');
+            addBtn.addEventListener('click', async () => {
+                await this.openFlowEditor(null, container); // null = new flow
             });
         }
         
@@ -2890,6 +2890,344 @@ Sean → Shawn, Shaun`;
             console.error('[DYNAMIC FLOWS] Delete error:', error);
             this.showNotification('Failed to delete flow', 'error');
         }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🧠 DYNAMIC FLOW EDITOR MODAL
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    async openFlowEditor(flowId, container) {
+        let flow = null;
+        
+        // Load existing flow if editing
+        if (flowId) {
+            try {
+                const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+                const response = await fetch(`/api/company/${this.companyId}/dynamic-flows/${flowId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    flow = data.flow;
+                }
+            } catch (err) {
+                console.error('[FLOW EDITOR] Load error:', err);
+            }
+        }
+        
+        // Default empty flow structure
+        const defaultFlow = {
+            name: '',
+            description: '',
+            flowKey: '',
+            enabled: true,
+            priority: 50,
+            triggers: [{ type: 'phrase', config: { phrases: [], fuzzy: true }, priority: 10 }],
+            requirements: [],
+            actions: [{ timing: 'on_activate', type: 'transition_mode', config: { targetMode: 'BOOKING' } }],
+            settings: {
+                allowConcurrent: true,
+                minConfidence: 0.7,
+                persistent: true,
+                reactivatable: false
+            }
+        };
+        
+        const editFlow = flow || defaultFlow;
+        const isNew = !flowId;
+        
+        // Create modal
+        const modal = document.createElement('div');
+        modal.id = 'flow-editor-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        `;
+        
+        modal.innerHTML = `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 12px; width: 100%; max-width: 800px; max-height: 90vh; overflow-y: auto;">
+                <!-- Header -->
+                <div style="padding: 20px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center;">
+                    <h2 style="margin: 0; color: #c9d1d9;">🧠 ${isNew ? 'Create New Flow' : 'Edit Flow'}</h2>
+                    <button id="flow-editor-close" style="background: none; border: none; color: #8b949e; font-size: 24px; cursor: pointer;">✕</button>
+                </div>
+                
+                <!-- Body -->
+                <div style="padding: 20px;">
+                    <!-- Basic Info -->
+                    <div style="margin-bottom: 24px;">
+                        <h3 style="color: #58a6ff; margin: 0 0 16px 0; font-size: 14px;">📋 Basic Information</h3>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                            <div>
+                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Flow Name *</label>
+                                <input type="text" id="flow-name" value="${editFlow.name || ''}" placeholder="e.g., Emergency Service Detection" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                            </div>
+                            <div>
+                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Flow Key * (lowercase, no spaces)</label>
+                                <input type="text" id="flow-key" value="${editFlow.flowKey || ''}" placeholder="e.g., emergency_service" ${!isNew ? 'disabled' : ''} style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px; ${!isNew ? 'opacity: 0.6;' : ''}">
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 12px;">
+                            <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Description</label>
+                            <textarea id="flow-description" placeholder="What does this flow do?" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px; min-height: 60px; resize: vertical;">${editFlow.description || ''}</textarea>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px;">
+                            <div>
+                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Priority (higher = evaluated first)</label>
+                                <input type="number" id="flow-priority" value="${editFlow.priority || 50}" min="0" max="1000" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                            </div>
+                            <div>
+                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Status</label>
+                                <select id="flow-enabled" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                                    <option value="true" ${editFlow.enabled ? 'selected' : ''}>✅ Enabled</option>
+                                    <option value="false" ${!editFlow.enabled ? 'selected' : ''}>⏸️ Disabled</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Triggers -->
+                    <div style="margin-bottom: 24px;">
+                        <h3 style="color: #58a6ff; margin: 0 0 16px 0; font-size: 14px;">🎯 Triggers (when to activate this flow)</h3>
+                        
+                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;">
+                            <div style="margin-bottom: 12px;">
+                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Trigger Type</label>
+                                <select id="flow-trigger-type" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                                    <option value="phrase" ${editFlow.triggers?.[0]?.type === 'phrase' ? 'selected' : ''}>📝 Phrase Match (fuzzy)</option>
+                                    <option value="keyword" ${editFlow.triggers?.[0]?.type === 'keyword' ? 'selected' : ''}>🔑 Keyword Match</option>
+                                    <option value="regex" ${editFlow.triggers?.[0]?.type === 'regex' ? 'selected' : ''}>🔧 Regex Pattern</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Trigger Phrases/Keywords (one per line)</label>
+                                <textarea id="flow-trigger-phrases" placeholder="schedule an appointment&#10;book a visit&#10;need someone to come out" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px; min-height: 100px; resize: vertical; font-family: monospace;">${(editFlow.triggers?.[0]?.config?.phrases || editFlow.triggers?.[0]?.config?.keywords || []).join('\n')}</textarea>
+                            </div>
+                            
+                            <div style="margin-top: 12px;">
+                                <label style="display: flex; align-items: center; gap: 8px; color: #8b949e; font-size: 12px; cursor: pointer;">
+                                    <input type="checkbox" id="flow-trigger-fuzzy" ${editFlow.triggers?.[0]?.config?.fuzzy !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                    Fuzzy matching (contains vs exact)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div style="margin-bottom: 24px;">
+                        <h3 style="color: #58a6ff; margin: 0 0 16px 0; font-size: 14px;">⚡ Actions (what to do when triggered)</h3>
+                        
+                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;">
+                            <div style="margin-bottom: 12px;">
+                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Primary Action</label>
+                                <select id="flow-action-type" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                                    <option value="transition_mode" ${editFlow.actions?.[0]?.type === 'transition_mode' ? 'selected' : ''}>🔄 Transition Mode</option>
+                                    <option value="set_flag" ${editFlow.actions?.[0]?.type === 'set_flag' ? 'selected' : ''}>🚩 Set Flag</option>
+                                    <option value="send_response" ${editFlow.actions?.[0]?.type === 'send_response' ? 'selected' : ''}>💬 Send Response</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Mode transition config -->
+                            <div id="action-config-transition" style="${editFlow.actions?.[0]?.type === 'transition_mode' || !editFlow.actions?.[0]?.type ? '' : 'display: none;'}">
+                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Target Mode</label>
+                                <select id="flow-action-mode" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                                    <option value="BOOKING" ${editFlow.actions?.[0]?.config?.targetMode === 'BOOKING' ? 'selected' : ''}>📅 BOOKING</option>
+                                    <option value="DISCOVERY" ${editFlow.actions?.[0]?.config?.targetMode === 'DISCOVERY' ? 'selected' : ''}>🔍 DISCOVERY</option>
+                                    <option value="COMPLETE" ${editFlow.actions?.[0]?.config?.targetMode === 'COMPLETE' ? 'selected' : ''}>✅ COMPLETE</option>
+                                    <option value="TRANSFER" ${editFlow.actions?.[0]?.config?.targetMode === 'TRANSFER' ? 'selected' : ''}>📞 TRANSFER</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Flag config -->
+                            <div id="action-config-flag" style="${editFlow.actions?.[0]?.type === 'set_flag' ? '' : 'display: none;'}">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                    <div>
+                                        <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Flag Name</label>
+                                        <input type="text" id="flow-action-flag-name" value="${editFlow.actions?.[0]?.config?.flagName || ''}" placeholder="e.g., isEmergency" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                                    </div>
+                                    <div>
+                                        <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Flag Value</label>
+                                        <input type="text" id="flow-action-flag-value" value="${editFlow.actions?.[0]?.config?.flagValue || 'true'}" placeholder="true" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Response config -->
+                            <div id="action-config-response" style="${editFlow.actions?.[0]?.type === 'send_response' ? '' : 'display: none;'}">
+                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Response Text</label>
+                                <textarea id="flow-action-response" placeholder="I understand this is urgent. Let me help you right away." style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px; min-height: 60px; resize: vertical;">${editFlow.actions?.[0]?.config?.response || ''}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Settings -->
+                    <div style="margin-bottom: 24px;">
+                        <h3 style="color: #58a6ff; margin: 0 0 16px 0; font-size: 14px;">⚙️ Settings</h3>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <label style="display: flex; align-items: center; gap: 8px; padding: 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #8b949e; font-size: 12px; cursor: pointer;">
+                                <input type="checkbox" id="flow-allow-concurrent" ${editFlow.settings?.allowConcurrent !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                Allow concurrent with other flows
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; padding: 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #8b949e; font-size: 12px; cursor: pointer;">
+                                <input type="checkbox" id="flow-persistent" ${editFlow.settings?.persistent !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                Persistent across turns
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; padding: 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #8b949e; font-size: 12px; cursor: pointer;">
+                                <input type="checkbox" id="flow-reactivatable" ${editFlow.settings?.reactivatable ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                Can re-activate after completing
+                            </label>
+                            <div style="padding: 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
+                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">Min Confidence (0-1)</label>
+                                <input type="number" id="flow-min-confidence" value="${editFlow.settings?.minConfidence || 0.7}" min="0" max="1" step="0.05" style="width: 100%; padding: 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Footer -->
+                <div style="padding: 20px; border-top: 1px solid #30363d; display: flex; justify-content: flex-end; gap: 12px;">
+                    <button id="flow-editor-cancel" style="padding: 10px 20px; background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; font-size: 14px;">Cancel</button>
+                    <button id="flow-editor-save" style="padding: 10px 20px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;">💾 ${isNew ? 'Create Flow' : 'Save Changes'}</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Action type toggle
+        const actionTypeSelect = modal.querySelector('#flow-action-type');
+        actionTypeSelect.addEventListener('change', () => {
+            modal.querySelector('#action-config-transition').style.display = actionTypeSelect.value === 'transition_mode' ? '' : 'none';
+            modal.querySelector('#action-config-flag').style.display = actionTypeSelect.value === 'set_flag' ? '' : 'none';
+            modal.querySelector('#action-config-response').style.display = actionTypeSelect.value === 'send_response' ? '' : 'none';
+        });
+        
+        // Close handlers
+        const closeModal = () => modal.remove();
+        modal.querySelector('#flow-editor-close').addEventListener('click', closeModal);
+        modal.querySelector('#flow-editor-cancel').addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+        
+        // Save handler
+        modal.querySelector('#flow-editor-save').addEventListener('click', async () => {
+            const name = modal.querySelector('#flow-name').value.trim();
+            const flowKey = modal.querySelector('#flow-key').value.trim().toLowerCase().replace(/\s+/g, '_');
+            const description = modal.querySelector('#flow-description').value.trim();
+            const priority = parseInt(modal.querySelector('#flow-priority').value) || 50;
+            const enabled = modal.querySelector('#flow-enabled').value === 'true';
+            
+            // Validation
+            if (!name) {
+                this.showNotification('Flow name is required', 'error');
+                return;
+            }
+            if (isNew && !flowKey) {
+                this.showNotification('Flow key is required', 'error');
+                return;
+            }
+            
+            // Build trigger
+            const triggerType = modal.querySelector('#flow-trigger-type').value;
+            const triggerPhrases = modal.querySelector('#flow-trigger-phrases').value.split('\n').map(p => p.trim()).filter(p => p);
+            const triggerFuzzy = modal.querySelector('#flow-trigger-fuzzy').checked;
+            
+            const trigger = {
+                type: triggerType,
+                config: triggerType === 'keyword' 
+                    ? { keywords: triggerPhrases, matchAll: false }
+                    : { phrases: triggerPhrases, fuzzy: triggerFuzzy },
+                priority: 10
+            };
+            
+            // Build action
+            const actionType = modal.querySelector('#flow-action-type').value;
+            let actionConfig = {};
+            
+            if (actionType === 'transition_mode') {
+                actionConfig = { targetMode: modal.querySelector('#flow-action-mode').value };
+            } else if (actionType === 'set_flag') {
+                actionConfig = {
+                    flagName: modal.querySelector('#flow-action-flag-name').value.trim(),
+                    flagValue: modal.querySelector('#flow-action-flag-value').value.trim() === 'true' ? true : modal.querySelector('#flow-action-flag-value').value.trim()
+                };
+            } else if (actionType === 'send_response') {
+                actionConfig = { response: modal.querySelector('#flow-action-response').value.trim() };
+            }
+            
+            const action = {
+                timing: 'on_activate',
+                type: actionType,
+                config: actionConfig
+            };
+            
+            // Build settings
+            const settings = {
+                allowConcurrent: modal.querySelector('#flow-allow-concurrent').checked,
+                persistent: modal.querySelector('#flow-persistent').checked,
+                reactivatable: modal.querySelector('#flow-reactivatable').checked,
+                minConfidence: parseFloat(modal.querySelector('#flow-min-confidence').value) || 0.7
+            };
+            
+            // Build flow object
+            const flowData = {
+                name,
+                description,
+                priority,
+                enabled,
+                triggers: [trigger],
+                actions: [action],
+                settings
+            };
+            
+            if (isNew) {
+                flowData.flowKey = flowKey;
+            }
+            
+            // Save
+            try {
+                const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+                const url = isNew 
+                    ? `/api/company/${this.companyId}/dynamic-flows`
+                    : `/api/company/${this.companyId}/dynamic-flows/${flowId}`;
+                const method = isNew ? 'POST' : 'PUT';
+                
+                const response = await fetch(url, {
+                    method,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(flowData)
+                });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Failed to save flow');
+                }
+                
+                this.showNotification(isNew ? 'Flow created!' : 'Flow updated!', 'success');
+                closeModal();
+                await this.refreshFlowsList(container);
+                
+            } catch (error) {
+                console.error('[FLOW EDITOR] Save error:', error);
+                this.showNotification(error.message, 'error');
+            }
+        });
     }
 
     renderEmotionsTab() {
