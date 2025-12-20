@@ -1284,7 +1284,7 @@
       if (container && window.frontDeskManager) {
         // Render just the Dynamic Flows tab content
         container.innerHTML = window.frontDeskManager.renderDynamicFlowsTab();
-        window.frontDeskManager.initDynamicFlowsTab();
+        window.frontDeskManager.initDynamicFlowsTab(container);
         console.log('✅ [INIT] Dynamic Flow initialized');
       }
     }
