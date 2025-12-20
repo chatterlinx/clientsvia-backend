@@ -49,7 +49,7 @@ const logger = require('../utils/logger');
 // ════════════════════════════════════════════════════════════════════════════
 // ENGINE VERSION
 // ════════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V1.2-CALL-LEDGER-NORMALIZED';
+const ENGINE_VERSION = 'V1.3-CALL-LEDGER-NORMALIZED';
 
 logger.info(`[DYNAMIC FLOW ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`);
 
@@ -190,10 +190,22 @@ async function processTurn({
         };
         
         // ─────────────────────────────────────────────────────────────────────
-        // STEP 3: Evaluate triggers for non-active flows
+        // STEP 3: Evaluate triggers and collect all fired flows
+        // FIX 4: Deterministic concurrency + single mode transition per turn
         // ─────────────────────────────────────────────────────────────────────
+        
+        // 3.1: Evaluate all flows and collect matches (flows already sorted by priority DESC)
+        const firedFlows = [];
+        let concurrencyBarrierHit = false;
+        
         for (const flow of flows) {
             result.triggersEvaluated.push(flow.flowKey);
+            
+            // Stop evaluating if concurrency barrier was hit
+            if (concurrencyBarrierHit) {
+                logger.debug('[DYNAMIC FLOW] Skipping flow due to concurrency barrier', { flowKey: flow.flowKey });
+                continue;
+            }
             
             // Skip if already active (unless reactivatable)
             const isActive = flowState.activeFlows.includes(flow._id.toString());
@@ -205,18 +217,25 @@ async function processTurn({
             // Evaluate triggers
             const triggerResult = evaluateFlowTriggers(flow, context);
             
-            if (triggerResult.matched && triggerResult.confidence >= (flow.settings?.minConfidence || 0.7)) {
+            if (triggerResult.matched && triggerResult.matchScore >= (flow.settings?.minConfidence || 0.7)) {
                 result.triggersFired.push({
                     flowKey: flow.flowKey,
                     flowId: flow._id.toString(),
                     trigger: triggerResult.trigger?.type,
-                    confidence: triggerResult.confidence,
+                    matchScore: triggerResult.matchScore,
+                    matchScoreSource: triggerResult.matchScoreSource,
                     matchedValue: triggerResult.matchedValue
                 });
                 
-                // Activate flow
+                // Activate flow and collect actions
                 const activation = activateFlow(flow, flowState, context);
                 if (activation.activated) {
+                    firedFlows.push({
+                        flow,
+                        activation,
+                        triggerResult
+                    });
+                    
                     result.flowsActivated.push({
                         flowKey: flow.flowKey,
                         flowId: flow._id.toString(),
@@ -226,20 +245,114 @@ async function processTurn({
                     
                     result.requirementsAdded.push(...activation.requirements);
                     
-                    // Execute on_activate actions
-                    for (const action of activation.onActivateActions) {
-                        action.flowKey = flow.flowKey;
-                        const actionResult = executeAction(action, context, session);
-                        result.actionsExecuted.push(actionResult);
-                        
-                        if (actionResult.stateChange) {
-                            Object.assign(result.stateChanges, actionResult.stateChange);
-                        }
-                    }
-                    
                     // Record usage
                     DynamicFlow.recordUsage(flow._id).catch(() => {});
+                    
+                    // Apply concurrency barrier: if allowConcurrent=false, stop evaluating lower-priority flows
+                    if (flow.settings?.allowConcurrent === false) {
+                        concurrencyBarrierHit = true;
+                        logger.debug('[DYNAMIC FLOW] Concurrency barrier activated', { 
+                            flowKey: flow.flowKey,
+                            priority: flow.priority 
+                        });
+                    }
                 }
+            }
+        }
+        
+        // 3.2: Collect all actions from fired flows (sorted by flow priority)
+        const allActions = [];
+        for (const { flow, activation } of firedFlows) {
+            for (const action of activation.onActivateActions) {
+                action.flowKey = flow.flowKey;
+                action._flowPriority = flow.priority || 0;
+                allActions.push(action);
+            }
+        }
+        
+        // 3.3: Execute actions in DETERMINISTIC ORDER
+        // Order: set_flag → append_ledger → ack_once → transition_mode (LAST)
+        const setFlagActions = allActions.filter(a => a.type === 'set_flag');
+        const appendLedgerActions = allActions.filter(a => a.type === 'append_ledger');
+        const ackOnceActions = allActions.filter(a => a.type === 'ack_once');
+        const transitionModeActions = allActions.filter(a => a.type === 'transition_mode');
+        const otherActions = allActions.filter(a => 
+            !['set_flag', 'append_ledger', 'ack_once', 'transition_mode'].includes(a.type)
+        );
+        
+        // Execute set_flag actions first
+        for (const action of setFlagActions) {
+            const actionResult = executeAction(action, context, session);
+            result.actionsExecuted.push(actionResult);
+            if (actionResult.stateChange) {
+                Object.assign(result.stateChanges, actionResult.stateChange);
+            }
+        }
+        
+        // Execute append_ledger actions second
+        for (const action of appendLedgerActions) {
+            const actionResult = executeAction(action, context, session);
+            result.actionsExecuted.push(actionResult);
+            if (actionResult.stateChange) {
+                Object.assign(result.stateChanges, actionResult.stateChange);
+            }
+        }
+        
+        // Execute ack_once actions third
+        for (const action of ackOnceActions) {
+            const actionResult = executeAction(action, context, session);
+            result.actionsExecuted.push(actionResult);
+            if (actionResult.stateChange) {
+                Object.assign(result.stateChanges, actionResult.stateChange);
+            }
+        }
+        
+        // Execute other actions
+        for (const action of otherActions) {
+            const actionResult = executeAction(action, context, session);
+            result.actionsExecuted.push(actionResult);
+            if (actionResult.stateChange) {
+                Object.assign(result.stateChanges, actionResult.stateChange);
+            }
+        }
+        
+        // Execute transition_mode LAST - only ONE transition allowed (highest priority wins)
+        // Sort by flow priority (highest first) to ensure deterministic winner
+        transitionModeActions.sort((a, b) => (b._flowPriority || 0) - (a._flowPriority || 0));
+        
+        let modeTransitionExecuted = false;
+        let winningModeTransitionFlowKey = null;
+        
+        for (const action of transitionModeActions) {
+            if (!modeTransitionExecuted) {
+                const actionResult = executeAction(action, context, session);
+                result.actionsExecuted.push(actionResult);
+                if (actionResult.executed && actionResult.stateChange) {
+                    Object.assign(result.stateChanges, actionResult.stateChange);
+                    modeTransitionExecuted = true;
+                    winningModeTransitionFlowKey = action.flowKey;
+                    logger.info('[DYNAMIC FLOW] Mode transition executed (winner)', {
+                        flowKey: action.flowKey,
+                        targetMode: action.config?.targetMode,
+                        priority: action._flowPriority
+                    });
+                }
+            } else {
+                // Skip subsequent mode transitions - log that they were blocked
+                logger.debug('[DYNAMIC FLOW] Mode transition blocked (already transitioned)', {
+                    flowKey: action.flowKey,
+                    targetMode: action.config?.targetMode,
+                    winningFlowKey: winningModeTransitionFlowKey
+                });
+                result.actionsExecuted.push({
+                    type: action.type,
+                    timing: action.timing,
+                    executed: false,
+                    blocked: true,
+                    blockedReason: `Mode transition already executed by ${winningModeTransitionFlowKey}`,
+                    config: action.config,
+                    flowKey: action.flowKey
+                });
             }
         }
         
@@ -301,7 +414,17 @@ async function processTurn({
                 note: a.config?.note,
                 flowKey: a.flowKey
             }));
-        const modeChange = result.stateChanges?.mode ? { from: prevMode, to: result.stateChanges.mode } : null;
+        
+        // Find the winning mode transition to include flowKey in trace
+        const executedModeTransition = result.actionsExecuted.find(
+            a => a.type === 'transition_mode' && a.executed
+        );
+        const modeChange = result.stateChanges?.mode ? { 
+            from: prevMode, 
+            to: result.stateChanges.mode,
+            flowKey: executedModeTransition?.flowKey || null
+        } : null;
+        
         result.trace = {
             turn: context.turnNumber,
             timestamp: new Date(),
@@ -309,13 +432,16 @@ async function processTurn({
             latencyMs: Date.now() - startTime,
             evaluatedCount: result.triggersEvaluated.length,
             triggersEvaluated: result.triggersEvaluated,
-            triggersFired: result.triggersFired.map(t => ({ key: t.flowKey, confidence: t.confidence })),
+            triggersFired: result.triggersFired.map(t => ({ key: t.flowKey, matchScore: t.matchScore, matchScoreSource: t.matchScoreSource })),
             flowsActivated: result.flowsActivated.map(f => f.flowKey),
             flowsDeactivated: result.flowsDeactivated.map(f => f.flowKey),
             activeFlows: flowState.activeFlows,
             actionsExecuted: result.actionsExecuted.map(a => ({
                 type: a.type,
-                payload: a.config
+                payload: a.config,
+                flowKey: a.flowKey,
+                executed: a.executed,
+                blocked: a.blocked || false
             })),
             ledgerAppends,
             guardrailsApplied: result.guardrailsApplied,
@@ -370,7 +496,8 @@ function evaluateFlowTriggers(flow, context) {
             return {
                 matched: true,
                 trigger,
-                confidence: result.confidence,
+                matchScore: result.matchScore,
+                matchScoreSource: result.matchScoreSource,
                 matchedValue: result.matchedValue
             };
         }
@@ -381,6 +508,9 @@ function evaluateFlowTriggers(flow, context) {
 
 /**
  * Evaluate a single trigger
+ * Returns { matched, matchScore, matchScoreSource, matchedValue }
+ * matchScore is a HEURISTIC value (0-1), not probabilistic confidence
+ * matchScoreSource documents where the score came from
  */
 function evaluateTrigger(trigger, context) {
     const { userText, session, customer, slots } = context;
@@ -393,11 +523,11 @@ function evaluateTrigger(trigger, context) {
                 const phraseLower = phrase.toLowerCase();
                 if (trigger.config?.fuzzy !== false) {
                     if (userTextLower.includes(phraseLower)) {
-                        return { matched: true, confidence: 0.8, matchedValue: phrase };
+                        return { matched: true, matchScore: 0.8, matchScoreSource: 'heuristic_phrase_contains', matchedValue: phrase };
                     }
                 } else {
                     if (userTextLower === phraseLower) {
-                        return { matched: true, confidence: 1.0, matchedValue: phrase };
+                        return { matched: true, matchScore: 1.0, matchScoreSource: 'heuristic_exact_phrase', matchedValue: phrase };
                     }
                 }
             }
@@ -412,10 +542,10 @@ function evaluateTrigger(trigger, context) {
             
             if (trigger.config?.matchAll) {
                 if (matched.length === keywords.length) {
-                    return { matched: true, confidence: 0.9, matchedValue: matched };
+                    return { matched: true, matchScore: 0.9, matchScoreSource: 'heuristic_keyword_all', matchedValue: matched };
                 }
             } else if (matched.length > 0) {
-                return { matched: true, confidence: 0.7, matchedValue: matched };
+                return { matched: true, matchScore: 0.7, matchScoreSource: 'heuristic_keyword_any', matchedValue: matched };
             }
             break;
         }
@@ -425,7 +555,7 @@ function evaluateTrigger(trigger, context) {
                 const regex = new RegExp(trigger.config?.pattern, trigger.config?.flags || 'i');
                 const match = userText?.match(regex);
                 if (match) {
-                    return { matched: true, confidence: 0.85, matchedValue: match[0] };
+                    return { matched: true, matchScore: 0.85, matchScoreSource: 'heuristic_regex', matchedValue: match[0] };
                 }
             } catch (e) {
                 logger.warn('[DYNAMIC FLOW] Invalid regex', { pattern: trigger.config?.pattern });
@@ -440,7 +570,7 @@ function evaluateTrigger(trigger, context) {
                 const slotLower = slotValue.toLowerCase();
                 for (const tv of targetValues) {
                     if (slotLower.includes(tv.toLowerCase())) {
-                        return { matched: true, confidence: 0.9, matchedValue: slotValue };
+                        return { matched: true, matchScore: 0.9, matchScoreSource: 'heuristic_slot_value', matchedValue: slotValue };
                     }
                 }
             }
@@ -451,7 +581,7 @@ function evaluateTrigger(trigger, context) {
             const missing = trigger.config?.missingSlots || [];
             const actuallyMissing = missing.filter(s => !slots?.[s]);
             if (actuallyMissing.length === missing.length && missing.length > 0) {
-                return { matched: true, confidence: 1.0, matchedValue: actuallyMissing };
+                return { matched: true, matchScore: 1.0, matchScoreSource: 'heuristic_slot_missing', matchedValue: actuallyMissing };
             }
             break;
         }
@@ -461,7 +591,7 @@ function evaluateTrigger(trigger, context) {
             const min = trigger.config?.minTurns ?? 0;
             const max = trigger.config?.maxTurns ?? Infinity;
             if (turns >= min && turns <= max) {
-                return { matched: true, confidence: 1.0, matchedValue: turns };
+                return { matched: true, matchScore: 1.0, matchScoreSource: 'heuristic_turn_count', matchedValue: turns };
             }
             break;
         }
@@ -474,7 +604,7 @@ function evaluateTrigger(trigger, context) {
                                session?.signals?.[flag] ||
                                session?.memory?.facts?.[flag];
                 if (hasFlag) {
-                    return { matched: true, confidence: 1.0, matchedValue: flag };
+                    return { matched: true, matchScore: 1.0, matchScoreSource: 'heuristic_customer_flag', matchedValue: flag };
                 }
             }
             break;
@@ -486,8 +616,8 @@ function evaluateTrigger(trigger, context) {
             
             if (trigger.config?.operator === 'AND') {
                 if (results.every(r => r.matched)) {
-                    const avgConf = results.reduce((s, r) => s + r.confidence, 0) / results.length;
-                    return { matched: true, confidence: avgConf, matchedValue: results };
+                    const avgScore = results.reduce((s, r) => s + (r.matchScore || 0), 0) / results.length;
+                    return { matched: true, matchScore: avgScore, matchScoreSource: 'heuristic_composite_and', matchedValue: results };
                 }
             } else {
                 const first = results.find(r => r.matched);
@@ -497,7 +627,7 @@ function evaluateTrigger(trigger, context) {
         }
     }
     
-    return { matched: false };
+    return { matched: false, matchScore: 0, matchScoreSource: null };
 }
 
 // ════════════════════════════════════════════════════════════════════════════

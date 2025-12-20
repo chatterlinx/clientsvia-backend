@@ -3323,10 +3323,11 @@ Sean → Shawn, Shaun`;
         modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
         // Copy JSON handler (uses normalized payload)
+        // Pass editFlow so we can include ALL actions (not just the single dropdown selection)
         const copyBtn = modal.querySelector('#flow-editor-copy-json');
         if (copyBtn) {
             copyBtn.addEventListener('click', () => {
-                const flowPayload = this.buildFlowPayloadFromModal(modal, isNew, { forCopy: true });
+                const flowPayload = this.buildFlowPayloadFromModal(modal, isNew, { forCopy: true, editFlow });
                 if (!flowPayload) return;
                 navigator.clipboard.writeText(JSON.stringify(flowPayload, null, 2))
                     .then(() => this.showNotification('Flow JSON copied', 'success'))
@@ -5491,8 +5492,9 @@ Sean → Shawn, Shaun`;
 
     // Build flow payload from modal
     // forCopy: returns normalized DFLOW_V1 shape
+    // editFlow: pass the original flow data so we can include ALL actions (not just dropdown)
     // default: returns backend payload (DB shape)
-    buildFlowPayloadFromModal(modal, isNew, { forCopy = false } = {}) {
+    buildFlowPayloadFromModal(modal, isNew, { forCopy = false, editFlow = null } = {}) {
         const name = modal.querySelector('#flow-name').value.trim();
         const flowKeyRaw = modal.querySelector('#flow-key').value.trim();
         const flowKey = flowKeyRaw.toLowerCase().replace(/\s+/g, '_');
@@ -5520,14 +5522,23 @@ Sean → Shawn, Shaun`;
             minConfidence
         };
         
+        // Helper to convert string "true"/"false" to boolean
+        const parseBoolean = (val) => {
+            if (typeof val === 'boolean') return val;
+            if (val === 'true') return true;
+            if (val === 'false') return false;
+            return val; // Leave as-is if not a boolean string
+        };
+        
         const actionType = modal.querySelector('#flow-action-type').value;
         let actionConfig = {};
         if (actionType === 'transition_mode') {
             actionConfig = { targetMode: modal.querySelector('#flow-action-mode').value || 'BOOKING', setBookingLocked: true };
         } else if (actionType === 'set_flag') {
+            const rawValue = modal.querySelector('#flow-action-flag-value').value.trim() || 'true';
             actionConfig = { 
                 flagName: modal.querySelector('#flow-action-flag-name').value.trim(),
-                flagValue: modal.querySelector('#flow-action-flag-value').value.trim() || 'true',
+                flagValue: parseBoolean(rawValue),
                 alsoWriteToCallLedgerFacts: true
             };
         } else if (actionType === 'ack_once') {
@@ -5555,19 +5566,57 @@ Sean → Shawn, Shaun`;
         
         if (forCopy) {
             // Normalized DFLOW_V1 shape
-            const normalizedActions = [];
-            if (actionType === 'ack_once') {
-                normalizedActions.push({ type: 'ACK_ONCE', payload: { text: actionConfig.text } });
-            }
-            if (actionType === 'transition_mode') {
-                normalizedActions.push({ type: 'TRANSITION_MODE', payload: { targetMode: actionConfig.targetMode, setBookingLocked: true } });
-            }
-            if (actionType === 'set_flag') {
-                normalizedActions.push({ type: 'SET_FLAG', payload: { path: actionConfig.flagName, value: actionConfig.flagValue, alsoWriteToCallLedgerFacts: true } });
-            }
-            if (actionType === 'append_ledger') {
-                normalizedActions.push({ type: 'APPEND_LEDGER', payload: { entry: { type: actionConfig.type, key: actionConfig.key, note: actionConfig.note } } });
-            }
+            // If editFlow has multiple actions, use ALL of them (not just dropdown selection)
+            const actionsToNormalize = (editFlow?.actions && editFlow.actions.length > 0) 
+                ? editFlow.actions 
+                : [action];
+            
+            const normalizedActions = actionsToNormalize.map(a => {
+                const aType = a.type;
+                const aConfig = a.config || {};
+                
+                if (aType === 'ack_once') {
+                    return { 
+                        type: 'ACK_ONCE', 
+                        payload: { text: aConfig.text || '' } 
+                    };
+                }
+                if (aType === 'transition_mode') {
+                    return { 
+                        type: 'TRANSITION_MODE', 
+                        payload: { 
+                            targetMode: aConfig.targetMode || 'BOOKING', 
+                            setBookingLocked: aConfig.setBookingLocked !== false 
+                        } 
+                    };
+                }
+                if (aType === 'set_flag') {
+                    return { 
+                        type: 'SET_FLAG', 
+                        payload: { 
+                            path: aConfig.flagName || '', 
+                            value: parseBoolean(aConfig.flagValue),
+                            alsoWriteToCallLedgerFacts: aConfig.alsoWriteToCallLedgerFacts !== false 
+                        } 
+                    };
+                }
+                if (aType === 'append_ledger') {
+                    return { 
+                        type: 'APPEND_LEDGER', 
+                        payload: { 
+                            entry: { 
+                                type: aConfig.type || '', 
+                                key: aConfig.key || '', 
+                                note: aConfig.note || '',
+                                flowKey: flowKey
+                            } 
+                        } 
+                    };
+                }
+                // Unknown action type - preserve as-is
+                return { type: aType.toUpperCase(), payload: aConfig };
+            });
+            
             return {
                 version: 'DFLOW_V1',
                 flowKey,

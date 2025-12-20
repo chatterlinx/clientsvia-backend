@@ -1029,7 +1029,7 @@ ${separator}`;
                 let dynamicFlowHtml = '';
                 if (entry.dynamicFlow && entry.dynamicFlow.trace) {
                     const t = entry.dynamicFlow.trace;
-                    const firedHtml = (t.triggersFired || []).map(f => `<span style="background:#f0883e20;color:#f0883e;padding:1px 4px;border-radius:3px;font-size:9px;margin-right:4px;">${f.key}${f.confidence ? ' ('+Math.round(f.confidence*100)+'%)' : ''}</span>`).join('');
+                    const firedHtml = (t.triggersFired || []).map(f => `<span style="background:#f0883e20;color:#f0883e;padding:1px 4px;border-radius:3px;font-size:9px;margin-right:4px;">${f.key}${f.matchScore ? ' (' + Math.round(f.matchScore * 100) + '% ' + (f.matchScoreSource || 'heuristic') + ')' : ''}</span>`).join('');
                     const actionsHtml = (t.actionsExecuted || []).map(a => `<div style="color:#58a6ff;font-size:9px;">• ${a.type}${a.payload ? ' ' + JSON.stringify(a.payload) : ''}</div>`).join('');
                     const ledgerHtml = (t.ledgerAppends || []).map(l => `<div style="color:#8b949e;font-size:9px;">• ${l.type || ''}:${l.key || ''}</div>`).join('');
                     const modeChange = t.modeChange ? `<div style="color:#f0883e;font-size:9px;">Mode: ${t.modeChange.from || 'unknown'} → ${t.modeChange.to}</div>` : '';

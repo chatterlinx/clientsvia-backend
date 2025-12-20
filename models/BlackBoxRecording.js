@@ -145,12 +145,26 @@ const BlackBoxRecordingSchema = new Schema({
     timestamp: { type: Date },
     inputSnippet: { type: String },
     triggersEvaluated: [{ type: String }],
-    triggersFired: [{ type: String }],
-    actionsExecuted: [{ type: String }],
-    ledgerAppends: [{ type: String }],
+    fired: [{
+      key: { type: String },
+      matchScore: { type: Number },
+      matchScoreSource: { type: String }
+    }],
+    actionsExecuted: [{
+      type: { type: String },
+      payload: { type: Schema.Types.Mixed },
+      flowKey: { type: String }
+    }],
+    ledgerAppends: [{
+      type: { type: String },
+      key: { type: String },
+      note: { type: String },
+      flowKey: { type: String }
+    }],
     modeChange: {
       from: { type: String },
-      to: { type: String }
+      to: { type: String },
+      flowKey: { type: String }
     }
   }],
   

@@ -1261,6 +1261,36 @@ async function updateSessionSnapshot(callId, companyId, session) {
  */
 async function logDynamicFlowTrace(callId, companyId, turn, trace) {
   try {
+    // Map triggersFired (from DynamicFlowEngine) to fired (BlackBox schema)
+    // Each entry: { key, matchScore, matchScoreSource }
+    const firedArray = (trace.triggersFired || trace.fired || []).map(f => ({
+      key: f.key || f.flowKey,
+      matchScore: f.matchScore,
+      matchScoreSource: f.matchScoreSource
+    }));
+    
+    // Map actionsExecuted to structured objects
+    const actionsArray = (trace.actionsExecuted || []).map(a => ({
+      type: a.type,
+      payload: a.payload || a.config,
+      flowKey: a.flowKey
+    }));
+    
+    // Map ledgerAppends to structured objects
+    const ledgerArray = (trace.ledgerAppends || []).map(l => ({
+      type: l.type,
+      key: l.key,
+      note: l.note,
+      flowKey: l.flowKey
+    }));
+    
+    // Map modeChange to structured object
+    const modeChangeObj = trace.modeChange ? {
+      from: trace.modeChange.from,
+      to: trace.modeChange.to,
+      flowKey: trace.modeChange.flowKey
+    } : null;
+    
     await BlackBoxRecording.updateOne(
       { callId, companyId },
       {
@@ -1270,10 +1300,10 @@ async function logDynamicFlowTrace(callId, companyId, turn, trace) {
             timestamp: trace.timestamp || new Date(),
             inputSnippet: trace.inputSnippet || '',
             triggersEvaluated: trace.triggersEvaluated || [],
-            triggersFired: trace.triggersFired || [],
-            actionsExecuted: trace.actionsExecuted || [],
-            ledgerAppends: trace.ledgerAppends || [],
-            modeChange: trace.modeChange || null
+            fired: firedArray,
+            actionsExecuted: actionsArray,
+            ledgerAppends: ledgerArray,
+            modeChange: modeChangeObj
           }
         }
       }
@@ -1282,7 +1312,7 @@ async function logDynamicFlowTrace(callId, companyId, turn, trace) {
     logger.debug('[BLACK BOX] Dynamic flow trace logged', {
       callId,
       turn,
-      triggersFired: trace.triggersFired?.length || 0
+      triggersFired: firedArray.length
     });
     
   } catch (error) {

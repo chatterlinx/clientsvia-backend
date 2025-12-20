@@ -5027,6 +5027,30 @@ async function processTurn({
             if (scenarioRetrieval.scenarios?.length > 0) {
                 session.conversationMemory = session.conversationMemory || {};
                 session.conversationMemory.scenariosConsulted = scenarioRetrieval.scenarios.map(s => s.scenarioId);
+                
+                // ═══════════════════════════════════════════════════════════════
+                // FIX 3: Populate callLedger.activeScenarios when scenarios used
+                // ═══════════════════════════════════════════════════════════════
+                // Initialize callLedger if not present
+                session.callLedger = session.callLedger || { activeScenarios: [], entries: [], facts: {} };
+                
+                // Dedup push scenario keys to activeScenarios
+                for (const scenario of scenarioRetrieval.scenarios) {
+                    const scenarioKey = scenario.scenarioId || scenario.name;
+                    if (scenarioKey && !session.callLedger.activeScenarios.includes(scenarioKey)) {
+                        session.callLedger.activeScenarios.push(scenarioKey);
+                        
+                        // Append ledger entry for scenario usage
+                        session.callLedger.entries.push({
+                            turn: session.metrics?.totalTurns || 1,
+                            timestamp: new Date(),
+                            type: 'SCENARIO_USED',
+                            key: scenarioKey,
+                            note: `Scenario "${scenario.title || scenarioKey}" served during discovery`,
+                            flowKey: null
+                        });
+                    }
+                }
             }
             
             aiResult = {
