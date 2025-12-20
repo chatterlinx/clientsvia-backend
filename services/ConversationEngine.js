@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V37-FIX-PHONE-LOOP';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V37-FIX-PHONE-NAME';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -1155,6 +1155,9 @@ const SlotExtractors = {
             'soon', 'possible', 'asap', 'now', 'immediately', 'urgent', 'urgently',
             'available', 'earliest', 'soonest', 'first', 'next', 'whenever',
             'somebody', 'someone', 'anybody', 'anyone', 'technician', 'tech',
+            // V37 FIX: Time-related words that appear in "last week", "out here", etc.
+            'last', 'week', 'month', 'year', 'ago', 'before', 'recently', 'just',
+            'guys', 'were', 'out', 'still', 'again', 'already', 'yet',
             // Question words
             'any', 'some', 'with'
         ];
@@ -1220,11 +1223,12 @@ const SlotExtractors = {
         if (!candidate) return null;
         
         // ═══════════════════════════════════════════════════════════════════
-        // V32: CUT AT CLAUSE BOUNDARIES
+        // V37: CUT AT CLAUSE BOUNDARIES
         // "Mark do you have any issues" → "Mark"
         // "John Smith and I need help" → "John Smith"
+        // "Mark you guys were out here" → "Mark" (V37: added "you")
         // ═══════════════════════════════════════════════════════════════════
-        candidate = candidate.split(/(?:\band\b|\bbut\b|\bso\b|\bdo\b|\bcan\b|\bwill\b|\bhave\b|\bi\b|,|\?|\.|!)/i)[0].trim();
+        candidate = candidate.split(/(?:\band\b|\bbut\b|\bso\b|\bdo\b|\bcan\b|\bwill\b|\bhave\b|\bi\b|\byou\b|\bwe\b|\bthey\b|,|\?|\.|!)/i)[0].trim();
         
         // ═══════════════════════════════════════════════════════════════════
         // V32: TOKENIZE AND FILTER
@@ -1260,6 +1264,7 @@ const SlotExtractors = {
     
     /**
      * Extract phone number from user input
+     * V37 FIX: More forgiving - handle typos, extra digits, 7-digit local numbers
      */
     extractPhone(text) {
         if (!text || typeof text !== 'string') return null;
@@ -1267,14 +1272,48 @@ const SlotExtractors = {
         // Remove common words that might confuse extraction
         let cleaned = text.replace(/\b(phone|number|is|my|the|at|reach|me|call)\b/gi, ' ');
         
-        // Look for 10-digit patterns
+        // Extract all digits
         const digits = cleaned.replace(/\D/g, '');
         
-        // Must be 10 or 11 digits (with country code)
+        // V37: Log what we're working with
+        logger.debug('[PHONE EXTRACT] V37:', { raw: text, digits, length: digits.length });
+        
+        // 10 digits - perfect US phone number
         if (digits.length === 10) {
             return digits.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
-        } else if (digits.length === 11 && digits.startsWith('1')) {
+        }
+        
+        // 11 digits starting with 1 - US with country code
+        if (digits.length === 11 && digits.startsWith('1')) {
             return digits.substring(1).replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
+        }
+        
+        // V37 FIX: 11 digits NOT starting with 1 - likely typo, take last 10
+        // Example: "23933333747" → probably meant "2393337747" 
+        if (digits.length === 11 && !digits.startsWith('1')) {
+            logger.info('[PHONE EXTRACT] V37: 11 digits without country code - taking last 10 (possible typo)');
+            const last10 = digits.substring(1);
+            return last10.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
+        }
+        
+        // V37 FIX: 12+ digits - take first 10 (user may have added extra)
+        if (digits.length >= 12) {
+            logger.info('[PHONE EXTRACT] V37: 12+ digits - taking first 10');
+            const first10 = digits.substring(0, 10);
+            return first10.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
+        }
+        
+        // V37 FIX: 7 digits - local number (missing area code)
+        // Don't format, just return as-is so confirmBack can ask for area code
+        if (digits.length === 7) {
+            logger.info('[PHONE EXTRACT] V37: 7 digits - local number, may need area code');
+            return digits.replace(/(\d{3})(\d{4})/, '$1-$2');
+        }
+        
+        // 8-9 digits - partial, don't extract (will trigger breakdown)
+        if (digits.length >= 8 && digits.length <= 9) {
+            logger.info('[PHONE EXTRACT] V37: 8-9 digits - partial, not extracting');
+            return null;
         }
         
         return null;
