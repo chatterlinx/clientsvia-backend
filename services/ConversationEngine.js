@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V36-DISCOVERY-NAME-MUST-CONFIRM';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V36-DISCOVERY-NAME-INIT-FIX';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -2675,6 +2675,29 @@ async function processTurn({
                     askedSpellingVariant: false,
                     spellingVariantAnswer: null  // "optionA" | "optionB" | null
                 };
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // V36 FIX: Initialize nameMeta.first from discovery name IMMEDIATELY
+                // This must happen BEFORE any checks so hasName/needsConfirmBack work
+                // ═══════════════════════════════════════════════════════════════════
+                if (!session.booking.meta.name.first && !session.booking.meta.name.last) {
+                    const discoveryName = currentSlots.partialName || currentSlots.name;
+                    if (discoveryName && !discoveryName.includes(' ')) {
+                        // Single name from discovery - assume it's first name
+                        session.booking.meta.name.first = discoveryName;
+                        session.booking.meta.name.assumedSingleTokenAs = 'first';
+                        log('📝 V36: Initialized nameMeta.first from discovery', { discoveryName });
+                    } else if (discoveryName && discoveryName.includes(' ')) {
+                        // Full name from discovery
+                        const parts = discoveryName.split(' ');
+                        session.booking.meta.name.first = parts[0];
+                        session.booking.meta.name.last = parts.slice(1).join(' ');
+                        log('📝 V36: Initialized nameMeta from full discovery name', { 
+                            first: session.booking.meta.name.first, 
+                            last: session.booking.meta.name.last 
+                        });
+                    }
+                }
                 
                 // 🔍 DEBUG: Log nameMeta state at start of turn
                 log('📝 NAME META STATE AT TURN START', {
