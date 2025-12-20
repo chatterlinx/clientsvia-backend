@@ -51,7 +51,7 @@ const logger = require('../utils/logger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V37-DEBUG-CONFIRM-TEMPLATE';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V37-FIX-PHONE-LOOP';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -262,10 +262,19 @@ function isNameSlotComplete(currentSlots, nameMeta, slotConfig) {
  * @returns {boolean} True if slot is complete
  */
 function isConfirmBackSlotComplete(value, slotMeta, slotConfig) {
-    const hasValue = !!(value && value.trim());
+    const hasValue = !!(value && value.trim && value.trim());
     const isConfirmed = slotMeta?.confirmed === true;
     const isPending = slotMeta?.pendingConfirm === true;
     const needsConfirmBack = slotConfig?.confirmBack === true || slotConfig?.confirmBack === 'true';
+    
+    // V37 DEBUG: Log all inputs
+    logger.info('[SLOT COMPLETE] V37 DEBUG:', {
+        value: typeof value === 'string' ? value.substring(0, 20) : value,
+        hasValue,
+        slotMeta: slotMeta ? { confirmed: slotMeta.confirmed, pendingConfirm: slotMeta.pendingConfirm } : 'undefined',
+        needsConfirmBack,
+        slotConfigConfirmBack: slotConfig?.confirmBack
+    });
     
     // If no value, not complete
     if (!hasValue) {
@@ -283,11 +292,11 @@ function isConfirmBackSlotComplete(value, slotMeta, slotConfig) {
     // If we have a value and we're NOT waiting for confirmation, it was confirmed previously
     const isComplete = isConfirmed || !isPending;
     
-    logger.debug('[SLOT COMPLETE] ConfirmBack check', { 
-        value: value?.substring(0, 20), 
+    logger.info('[SLOT COMPLETE] V37 RESULT:', { 
         isConfirmed, 
         isPending, 
-        isComplete 
+        isComplete,
+        reason: isConfirmed ? 'confirmed=true' : (!isPending ? 'not pending' : 'pending and not confirmed')
     });
     
     return isComplete;
@@ -3358,6 +3367,9 @@ async function processTurn({
                 // - yesAction + noAction (yesno)
                 // - minValue + maxValue + unit (number)
                 // ═══════════════════════════════════════════════════════════════════════
+                
+                // V37 FIX: Ensure session.booking.meta exists FIRST
+                session.booking.meta = session.booking.meta || {};
                 
                 // Initialize meta tracking for all slots
                 session.booking.meta.phone = session.booking.meta.phone || { 
