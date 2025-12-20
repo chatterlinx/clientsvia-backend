@@ -3073,6 +3073,70 @@ Sean → Shawn, Shaun`;
                         </div>
                     </div>
                     
+                    <!-- Requirements (Data Collection) -->
+                    <div style="margin-bottom: 24px;">
+                        <h3 style="color: #58a6ff; margin: 0 0 8px 0; font-size: 14px;">📋 Requirements (data to collect when flow activates)</h3>
+                        <p style="color: #6e7681; font-size: 11px; margin: 0 0 16px 0;">
+                            These are slots/fields the system will collect when this flow triggers. The booking engine uses these to know what questions to ask.
+                        </p>
+                        
+                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;">
+                            <!-- Collect Slots -->
+                            <div style="margin-bottom: 16px;">
+                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 8px;">📝 Slots to Collect (check all that apply)</label>
+                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="flow-req-name" ${editFlow.requirements?.some(r => r.config?.slotId === 'name') ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                        👤 Name
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="flow-req-phone" ${editFlow.requirements?.some(r => r.config?.slotId === 'phone') ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                        📞 Phone
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="flow-req-address" ${editFlow.requirements?.some(r => r.config?.slotId === 'address') ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                        📍 Address
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="flow-req-time" ${editFlow.requirements?.some(r => r.config?.slotId === 'timePreference') ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                        🕐 Time Preference
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="flow-req-issue" ${editFlow.requirements?.some(r => r.config?.slotId === 'issue') ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                        🔧 Issue/Problem
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="flow-req-email" ${editFlow.requirements?.some(r => r.config?.slotId === 'email') ? 'checked' : ''} style="accent-color: #58a6ff;">
+                                        ✉️ Email
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Acknowledgment -->
+                            <div style="margin-bottom: 16px;">
+                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">💬 Acknowledgment (optional - said once when flow activates)</label>
+                                <input type="text" id="flow-req-acknowledgment" value="${editFlow.requirements?.find(r => r.type === 'acknowledge')?.config?.acknowledgment || ''}" placeholder="e.g., I understand this is urgent. Let me help you right away." style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                            </div>
+                            
+                            <!-- Set Flag -->
+                            <div>
+                                <label style="color: #8b949e; font-size: 12px; display: block; margin-bottom: 6px;">🚩 Set Flag (optional - marks session with a flag)</label>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                    <input type="text" id="flow-req-flag-name" value="${editFlow.requirements?.find(r => r.type === 'set_flag')?.config?.flagName || ''}" placeholder="Flag name (e.g., isEmergency)" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                                    <input type="text" id="flow-req-flag-value" value="${editFlow.requirements?.find(r => r.type === 'set_flag')?.config?.flagValue || 'true'}" placeholder="Flag value (default: true)" style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 12px; padding: 12px; background: #1a2d1a; border: 1px solid #238636; border-radius: 6px;">
+                            <div style="color: #3fb950; font-size: 11px; font-weight: 600; margin-bottom: 4px;">💡 How Requirements Work</div>
+                            <div style="color: #8b949e; font-size: 11px; line-height: 1.5;">
+                                When this flow triggers, the booking engine will know to collect these slots using the prompts configured in <strong>Booking Prompts</strong> tab.
+                                The slots are collected in order: Name → Phone → Address → Time. The acknowledgment is spoken once at the start.
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- Settings -->
                     <div style="margin-bottom: 24px;">
                         <h3 style="color: #58a6ff; margin: 0 0 16px 0; font-size: 14px;">⚙️ Settings</h3>
@@ -3174,6 +3238,54 @@ Sean → Shawn, Shaun`;
                 config: actionConfig
             };
             
+            // Build requirements from checkboxes
+            const requirements = [];
+            let reqOrder = 1;
+            
+            // Slot collection requirements
+            const slotMappings = [
+                { checkbox: '#flow-req-name', slotId: 'name' },
+                { checkbox: '#flow-req-phone', slotId: 'phone' },
+                { checkbox: '#flow-req-address', slotId: 'address' },
+                { checkbox: '#flow-req-time', slotId: 'timePreference' },
+                { checkbox: '#flow-req-issue', slotId: 'issue' },
+                { checkbox: '#flow-req-email', slotId: 'email' }
+            ];
+            
+            for (const mapping of slotMappings) {
+                if (modal.querySelector(mapping.checkbox)?.checked) {
+                    requirements.push({
+                        type: 'collect_slot',
+                        config: { slotId: mapping.slotId, required: true, askImmediately: reqOrder === 1 },
+                        order: reqOrder++
+                    });
+                }
+            }
+            
+            // Acknowledgment requirement
+            const acknowledgment = modal.querySelector('#flow-req-acknowledgment')?.value?.trim();
+            if (acknowledgment) {
+                requirements.unshift({
+                    type: 'acknowledge',
+                    config: { acknowledgment, onlyOnce: true },
+                    order: 0
+                });
+            }
+            
+            // Set flag requirement
+            const flagName = modal.querySelector('#flow-req-flag-name')?.value?.trim();
+            if (flagName) {
+                const flagValue = modal.querySelector('#flow-req-flag-value')?.value?.trim() || 'true';
+                requirements.push({
+                    type: 'set_flag',
+                    config: { 
+                        flagName, 
+                        flagValue: flagValue === 'true' ? true : flagValue === 'false' ? false : flagValue 
+                    },
+                    order: reqOrder++
+                });
+            }
+            
             // Build settings
             const settings = {
                 allowConcurrent: modal.querySelector('#flow-allow-concurrent').checked,
@@ -3189,6 +3301,7 @@ Sean → Shawn, Shaun`;
                 priority,
                 enabled,
                 triggers: [trigger],
+                requirements,
                 actions: [action],
                 settings
             };
