@@ -2952,6 +2952,12 @@ Sean → Shawn, Shaun`;
             // Handle local V1 sample templates (not persisted)
             const sample = this.getV1SampleFlows().find(t => t._id === templateId);
             if (sample) {
+                console.log('[DYNAMIC FLOWS] Copying V1 sample template:', templateId);
+                console.log('[DYNAMIC FLOWS] Template actions:', JSON.stringify(sample.actions, null, 2));
+                
+                const payload = { ...sample, _id: undefined, isTemplate: false };
+                console.log('[DYNAMIC FLOWS] POST payload:', JSON.stringify(payload, null, 2));
+                
                 const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
                 const createResp = await fetch(`/api/company/${this.companyId}/dynamic-flows`, {
                     method: 'POST',
@@ -2959,12 +2965,14 @@ Sean → Shawn, Shaun`;
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ ...sample, _id: undefined, isTemplate: false })
+                    body: JSON.stringify(payload)
                 });
                 if (!createResp.ok) {
                     const err = await createResp.json();
                     throw new Error(err.error || 'Failed to create sample flow');
                 }
+                const result = await createResp.json();
+                console.log('[DYNAMIC FLOWS] Created flow:', JSON.stringify(result, null, 2));
                 this.showNotification('Sample flow created for company!', 'success');
                 return;
             }

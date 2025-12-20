@@ -203,12 +203,13 @@ const ActionSchema = new Schema({
     config: {
         // For 'transition_mode'
         targetMode: { type: String, enum: ['DISCOVERY', 'BOOKING', 'COMPLETE', 'TRANSFER'] },
+        setBookingLocked: { type: Boolean, default: true },
         
         // For 'activate_flow' / 'deactivate_flow'
         flowId: { type: Schema.Types.ObjectId, ref: 'DynamicFlow' },
         flowName: { type: String },
         
-        // For 'send_response'
+        // For 'send_response' (deprecated, use ack_once)
         response: { type: String, trim: true },
         appendToNext: { type: Boolean, default: false },
         
@@ -229,7 +230,24 @@ const ActionSchema = new Schema({
         
         // For 'custom'
         customAction: { type: String },
-        customConfig: { type: Schema.Types.Mixed }
+        customConfig: { type: Schema.Types.Mixed },
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // V1 DYNAMIC FLOW ACTION FIELDS
+        // ═══════════════════════════════════════════════════════════════════
+        
+        // For 'set_flag'
+        flagName: { type: String, trim: true },         // e.g., "returningCustomerClaim"
+        flagValue: { type: Schema.Types.Mixed },        // true, false, or any value
+        alsoWriteToCallLedgerFacts: { type: Boolean, default: true },
+        
+        // For 'ack_once'
+        text: { type: String, trim: true },             // The acknowledgment text to speak
+        
+        // For 'append_ledger'
+        type: { type: String, trim: true },             // "EVENT", "CLAIM", "FACT"
+        key: { type: String, trim: true },              // "BOOKING_INTENT", "RETURNING_CUSTOMER"
+        note: { type: String, trim: true }              // Human-readable description
     },
     
     // Description for UI
