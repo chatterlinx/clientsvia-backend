@@ -5294,6 +5294,205 @@ Remember: Make every caller feel heard and confident they're in good hands.`;
   }
   
   // ═══════════════════════════════════════════════════════════════════
+  // STANDALONE CONTAINER WRAPPERS (for Control Plane V2 Clean Architecture)
+  // These methods render sections into custom containers instead of default ones
+  // ═══════════════════════════════════════════════════════════════════
+  
+  /**
+   * Render Links to a custom container (Control Plane V2)
+   */
+  renderLinksToContainer(container) {
+    console.log('[CHEAT SHEET] 🎨 renderLinksToContainer called');
+    
+    if (!this.cheatSheet) {
+      console.warn('[CHEAT SHEET] ⚠️ No cheatSheet loaded yet for Links');
+      container.innerHTML = '<div style="padding: 40px; text-align: center; color: #6b7280;">Loading...</div>';
+      return;
+    }
+    
+    if (!Array.isArray(this.cheatSheet.links)) {
+      this.cheatSheet.links = [];
+    }
+    
+    const links = this.cheatSheet.links;
+    
+    container.innerHTML = `
+      <div style="padding: 24px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+          <div>
+            <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
+              🔗 Links
+            </h3>
+            <p style="font-size: 13px; color: #6b7280; margin: 0;">
+              Financing, portals, policies, catalogs the AI can reference.
+            </p>
+          </div>
+          <button
+            id="btn-add-link-standalone"
+            onclick="cheatSheetManager.showAddLinkModal()"
+            style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 14px; font-weight: 600; border-radius: 8px; border: none; background: #4f46e5; color: #ffffff; cursor: pointer; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3); transition: all 0.2s;"
+            onmouseover="this.style.background='#4338ca'"
+            onmouseout="this.style.background='#4f46e5'"
+          >
+            <span style="font-size: 16px;">＋</span>
+            <span>Add Link</span>
+          </button>
+        </div>
+        
+        <div id="links-list-standalone" style="display: flex; flex-direction: column; gap: 12px;">
+          ${links.length === 0 ? `
+            <div style="border: 2px dashed #d1d5db; border-radius: 12px; padding: 32px; background: #f9fafb; text-align: center;">
+              <div style="font-size: 48px; margin-bottom: 12px;">🌐</div>
+              <p style="font-size: 14px; color: #6b7280; margin: 0;">
+                No links configured yet. Click <span style="font-weight: 600; color: #111827;">"Add Link"</span> to create your first link.
+              </p>
+            </div>
+          ` : links.map((link, index) => this.renderLinkCard(link, index)).join('')}
+        </div>
+      </div>
+    `;
+  }
+  
+  renderLinkCard(link, index) {
+    const categoryColors = {
+      'financing': '#10b981',
+      'portal': '#3b82f6',
+      'policy': '#8b5cf6',
+      'catalog': '#f59e0b',
+      'other': '#6b7280'
+    };
+    const categoryColor = categoryColors[link.category] || categoryColors['other'];
+    
+    return `
+      <div style="border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <span style="font-size: 16px; font-weight: 600; color: #111827;">
+                ${link.label || 'Unnamed Link'}
+              </span>
+              ${link.category ? `
+                <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 8px; border-radius: 999px; background: ${categoryColor}; color: #ffffff; font-weight: 600;">
+                  ${link.category}
+                </span>
+              ` : ''}
+            </div>
+            <div style="font-size: 12px; color: #6b7280; line-height: 1.6; margin-bottom: 6px;">
+              <a href="${link.url || '#'}" target="_blank" rel="noopener noreferrer" style="color: #4f46e5; text-decoration: none; word-break: break-all;">
+                ${link.url || 'No URL set'}
+              </a>
+            </div>
+            ${link.shortDescription ? `<div style="font-size: 13px; color: #374151;">${link.shortDescription}</div>` : ''}
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button onclick="cheatSheetManager.handleEditLink(${index})" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #d1d5db; background: white; color: #374151; cursor: pointer; font-size: 12px;">
+              <i class="fas fa-edit"></i> Edit
+            </button>
+            <button onclick="cheatSheetManager.handleDeleteLink(${index})" style="padding: 6px 10px; border-radius: 6px; border: none; background: #fee2e2; color: #dc2626; cursor: pointer; font-size: 12px;">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  
+  /**
+   * Render Version History to a custom container (Control Plane V2)
+   */
+  renderVersionHistoryToContainer(container) {
+    console.log('[CHEAT SHEET] 🎨 renderVersionHistoryToContainer called');
+    
+    if (!this.cheatSheet) {
+      console.warn('[CHEAT SHEET] ⚠️ No cheatSheet loaded yet');
+      container.innerHTML = '<div style="padding: 40px; text-align: center; color: #6b7280;">Loading...</div>';
+      return;
+    }
+    
+    // Version history rendering - simplified for standalone use
+    container.innerHTML = `
+      <div style="padding: 24px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+          <div>
+            <h3 style="font-size: 20px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
+              📚 Version History
+            </h3>
+            <p style="font-size: 13px; color: #6b7280; margin: 0;">
+              Manage configuration versions. Create drafts, publish changes, rollback if needed.
+            </p>
+          </div>
+          <button
+            id="btn-create-draft-standalone"
+            onclick="cheatSheetManager.createNewDraft()"
+            style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 14px; font-weight: 600; border-radius: 8px; border: none; background: #10b981; color: #ffffff; cursor: pointer; box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3); transition: all 0.2s;"
+            onmouseover="this.style.background='#059669'"
+            onmouseout="this.style.background='#10b981'"
+          >
+            <span style="font-size: 16px;">＋</span>
+            <span>Create New Draft</span>
+          </button>
+        </div>
+        
+        <div id="version-history-list-standalone" style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="border: 2px dashed #d1d5db; border-radius: 12px; padding: 32px; background: #f9fafb; text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 12px;">📜</div>
+            <p style="font-size: 14px; color: #6b7280; margin: 0;">
+              Version history will be displayed here. Use the Version Console dropdown to manage versions.
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Try to load and render actual version history
+    this.loadVersionHistoryToContainer(container);
+  }
+  
+  async loadVersionHistoryToContainer(container) {
+    try {
+      const listEl = container.querySelector('#version-history-list-standalone');
+      if (!listEl) return;
+      
+      // Fetch versions if available
+      const response = await fetch(`/api/company/${this.companyId}/cheatsheet/versions`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const versions = data.versions || [];
+        
+        if (versions.length > 0) {
+          listEl.innerHTML = versions.map((version, index) => `
+            <div style="border: 1px solid ${version.isLive ? '#10b981' : '#e5e7eb'}; border-radius: 12px; padding: 16px; background: ${version.isLive ? '#f0fdf4' : '#ffffff'}; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                  <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <span style="font-size: 14px; font-weight: 600; color: #111827;">
+                      ${version.label || 'Version ' + (versions.length - index)}
+                    </span>
+                    ${version.isLive ? '<span style="font-size: 10px; padding: 2px 8px; border-radius: 999px; background: #10b981; color: white; font-weight: 600;">LIVE</span>' : ''}
+                    ${version.isDraft ? '<span style="font-size: 10px; padding: 2px 8px; border-radius: 999px; background: #f59e0b; color: white; font-weight: 600;">DRAFT</span>' : ''}
+                  </div>
+                  <div style="font-size: 12px; color: #6b7280;">
+                    Created: ${new Date(version.createdAt).toLocaleString()}
+                  </div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                  ${!version.isLive ? `<button onclick="cheatSheetManager.publishVersion('${version._id}')" style="padding: 6px 12px; border-radius: 6px; border: none; background: #10b981; color: white; cursor: pointer; font-size: 12px; font-weight: 600;">Publish</button>` : ''}
+                  <button onclick="cheatSheetManager.loadVersion('${version._id}')" style="padding: 6px 12px; border-radius: 6px; border: 1px solid #d1d5db; background: white; color: #374151; cursor: pointer; font-size: 12px;">Load</button>
+                </div>
+              </div>
+            </div>
+          `).join('');
+        }
+      }
+    } catch (error) {
+      console.error('[CHEAT SHEET] Failed to load version history:', error);
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════
   // CALCULATOR RENDERER & HANDLERS
   // ═══════════════════════════════════════════════════════════════════
   

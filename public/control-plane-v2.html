@@ -5,1561 +5,1378 @@
   <title>ClientsVia Control Plane</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f3f4f6; color: #111827; }
-    .top-nav { display: flex; align-items: center; padding: 10px 18px; background: #111827; color: #e5e7eb; }
-    .btn-back { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border: 2px solid #3b82f6; border-radius: 8px; background: #3b82f6; color: #ffffff; font-size: 14px; font-weight: 600; cursor: pointer; margin-right: 16px; transition: all 0.2s; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); }
-    .btn-back:hover { background: #2563eb; border-color: #2563eb; transform: translateY(-1px); box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4); }
-    .btn-back i { font-size: 12px; }
-    .top-nav-title { font-weight: 700; margin-right: 24px; font-size: 18px; }
-    .top-nav-tabs { display: flex; gap: 10px; flex-wrap: wrap; }
-    /* LEVEL 1: Main Tabs - Bold & Prominent */
-    .tab-btn { padding: 10px 20px; border-radius: 999px; border: none; cursor: pointer; font-size: 15px; line-height: 1; background: transparent; color: #9ca3af; font-weight: 500; transition: all 0.2s; }
-    .tab-btn.active { background: #f97316; color: #111827; font-weight: 700; box-shadow: 0 2px 4px rgba(249, 115, 22, 0.3); }
-    .tab-btn:hover { background: rgba(249, 115, 22, 0.1); color: #f97316; }
-    /* LEVEL 2: AiCore Sub-nav - Medium & Clear */
-    .subnav { display: flex; gap: 6px; padding: 8px 18px; border-bottom: 2px solid #e5e7eb; background: #ffffff; flex-wrap: wrap;}
-    .subnav button { padding: 8px 14px; border-radius: 6px; border: none; background: transparent; color: #6b7280; font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.2s; }
-    .subnav button.active { background: #eef2ff; color: #4f46e5; font-weight: 600; border-bottom: 2px solid #4f46e5; }
-    .subnav button:hover { background: #f9fafb; color: #111827; }
-    /* LEVEL 3: Cheat Sheet Sub-tabs - Modern Blue Background with Color-Coded Groups */
-    #cheat-subnav { background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%); border-bottom: 3px solid #1e40af; padding: 12px 18px; box-shadow: 0 2px 8px rgba(30, 58, 138, 0.2); }
-    .cheatsheet-subtab-btn { padding: 10px 16px !important; font-size: 13px !important; font-weight: 500 !important; border-bottom: 3px solid transparent !important; color: #cbd5e1 !important; cursor: pointer !important; background: transparent !important; transition: all 0.2s !important; border-radius: 6px !important; margin-left: 8px !important; }
-    .cheatsheet-subtab-btn:hover { color: #ffffff !important; background: rgba(255, 255, 255, 0.1) !important; border-bottom-color: transparent !important; }
-    .cheatsheet-subtab-btn.active { color: #ffffff !important; font-weight: 700 !important; background: rgba(255, 255, 255, 0.15) !important; border-bottom-color: #60a5fa !important; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
-    /* Tab Group Visual Indicators */
-    .tab-group { position: relative; }
-    .tab-group::before { content: ''; position: absolute; left: -8px; top: 50%; transform: translateY(-50%); width: 2px; height: 60%; background: currentColor; opacity: 0.3; border-radius: 2px; }
-    .tab-group[data-group="ai-behavior"]::before { background: #f97316; }
-    .tab-group[data-group="reference"]::before { background: #3b82f6; }
-    .tab-group[data-group="admin"]::before { background: #10b981; }
-    /* Enhanced hover states for grouped tabs */
-    .tab-ai-behavior:hover { background: rgba(249, 115, 22, 0.2) !important; }
-    .tab-reference:hover { background: rgba(59, 130, 246, 0.2) !important; }
-    .tab-admin:hover { background: rgba(16, 185, 129, 0.2) !important; }
-    /* Active state: SOLID vibrant glow in group color - no fade, full intensity */
-    .tab-ai-behavior.active { background: #f97316 !important; border-bottom-color: #ea580c !important; color: #ffffff !important; box-shadow: 0 0 12px rgba(249, 115, 22, 0.6) !important; }
-    .tab-reference.active { background: #3b82f6 !important; border-bottom-color: #2563eb !important; color: #ffffff !important; box-shadow: 0 0 12px rgba(59, 130, 246, 0.6) !important; }
-    .tab-admin.active { background: #10b981 !important; border-bottom-color: #059669 !important; color: #ffffff !important; box-shadow: 0 0 12px rgba(16, 185, 129, 0.6) !important; }
-    /* Cheat Sheet Content Areas */
-    .cheatsheet-subtab-content { padding: 20px 0; min-height: 300px; }
-    .cheatsheet-subtab-content.hidden { display: none !important; }
-    .page { padding: 18px; }
-    .panel { display: none; }
-    .panel.active { display: block; }
-    .card { background: #ffffff; border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(15,23,42,0.06); margin-bottom: 16px; }
-    .card h2 { margin: 0 0 6px; font-size: 18px; }
-    .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; background: #eff6ff; color: #1d4ed8; margin-left: 8px;}
-    .muted { font-size: 13px; color: #6b7280; }
-    .pill-label { display:inline-flex; align-items:center; font-size:11px; padding:2px 8px; border-radius:999px; background:#f3f4f6; color:#4b5563; margin-right:4px;}
-    .btn { padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; }
-    .btn-primary { background: #4f46e5; color: #fff; }
-    .btn-primary:hover { background: #4338ca; }
-    .btn-secondary { background: #e5e7eb; color: #374151; }
-    .btn-secondary:hover { background: #d1d5db; }
-    .btn-danger { background: #dc2626; color: #fff; }
-    .btn-danger:hover { background: #b91c1c; }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
-    table th { background: #f9fafb; padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e7eb; }
-    table td { padding: 8px 10px; border-bottom: 1px solid #f3f4f6; }
-    table tr:hover { background: #f9fafb; }
-    input, select, textarea { padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; font-family: inherit; }
-    input:focus, select:focus, textarea:focus { outline: none; border-color: #4f46e5; }
-    .search-box { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
-    .pagination { display: flex; gap: 8px; align-items: center; margin-top: 12px; justify-content: center; }
-    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
-    .modal.active { display: flex; }
-    .modal-content { background: #fff; border-radius: 12px; padding: 24px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    .modal-header h3 { margin: 0; font-size: 18px; }
-    .close-modal { cursor: pointer; font-size: 24px; color: #6b7280; }
-    .close-modal:hover { color: #111827; }
-    .form-group { margin-bottom: 12px; }
-    .form-group label { display: block; font-weight: 500; margin-bottom: 4px; font-size: 13px; }
-    .status-badge { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-    .status-scheduled { background: #dbeafe; color: #1e40af; }
-    .status-confirmed { background: #d1fae5; color: #065f46; }
-    .status-completed { background: #e0e7ff; color: #3730a3; }
-    .status-canceled { background: #fee2e2; color: #991b1b; }
+    /* ═══════════════════════════════════════════════════════════════════════════
+       CLEAN SWEEP ARCHITECTURE - December 2025
+       Single Source of Truth: Dynamic Flow → All Routing
+       ═══════════════════════════════════════════════════════════════════════════ */
+    
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-card: #ffffff;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-dark: #1e293b;
+      --accent-orange: #f97316;
+      --accent-blue: #3b82f6;
+      --accent-green: #10b981;
+      --accent-purple: #8b5cf6;
+      --accent-cyan: #06b6d4;
+      --border-subtle: #334155;
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(135deg, var(--bg-primary) 0%, #1a1f35 100%);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+    
+    /* ═══════════════════════════════════════════════════════════════════════════
+       TOP HEADER BAR
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .top-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    
+    .btn-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      border: 2px solid var(--accent-blue);
+      background: var(--accent-blue);
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-back:hover {
+      background: #2563eb;
+      transform: translateY(-1px);
+    }
+    
+    .page-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .btn-test {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 10px;
+      border: 2px solid var(--accent-green);
+      background: linear-gradient(135deg, #059669, var(--accent-green));
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+    
+    .btn-test:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+    }
+    
+    .btn-black-box {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 10px;
+      border: 2px solid var(--accent-orange);
+      background: var(--accent-orange);
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    
+    .btn-black-box:hover {
+      background: #ea580c;
+      transform: translateY(-1px);
+    }
+    
+    /* ═══════════════════════════════════════════════════════════════════════════
+       MAIN NAVIGATION - FLAT, SINGLE-LEVEL
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .main-nav {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 12px 24px;
+      background: var(--bg-secondary);
+      border-bottom: 2px solid var(--border-subtle);
+      overflow-x: auto;
+    }
+    
+    .nav-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      border-radius: 10px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    
+    .nav-tab:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-primary);
+    }
+    
+    .nav-tab.active {
+      background: var(--accent-orange);
+      color: white;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+    }
+    
+    .nav-tab i {
+      font-size: 16px;
+    }
+    
+    .nav-divider {
+      width: 1px;
+      height: 24px;
+      background: var(--border-subtle);
+      margin: 0 8px;
+    }
+    
+    /* ═══════════════════════════════════════════════════════════════════════════
+       CONTENT AREA
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .content-area {
+      padding: 24px;
+      min-height: calc(100vh - 140px);
+    }
+    
+    .tab-panel {
+      display: none;
+    }
+    
+    .tab-panel.active {
+      display: block;
+    }
+    
+    .card {
+      background: var(--bg-card);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-md);
+      color: var(--text-dark);
+    }
+    
+    .card h2 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text-dark);
+    }
+    
+    .card .muted {
+      color: #64748b;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+    
+    /* Loading spinner */
+    .loading-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 20px;
+      color: #64748b;
+    }
+    
+    .loading-container i {
+      font-size: 48px;
+      margin-bottom: 20px;
+      color: var(--accent-orange);
+    }
+    
+    .loading-container p {
+      font-size: 16px;
+      font-weight: 500;
+    }
+    
+    /* ═══════════════════════════════════════════════════════════════════════════
+       FLOW TREE VISUALIZATION
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .flow-tree-container {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      border-radius: 16px;
+      padding: 24px;
+      min-height: 600px;
+      color: var(--text-primary);
+    }
+    
+    .flow-tree-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    
+    .flow-tree-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .flow-tree-title h2 {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 0;
+    }
+    
+    .flow-tree-title .icon {
+      font-size: 32px;
+    }
+    
+    .flow-tree-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: rgba(16, 185, 129, 0.2);
+      border-radius: 20px;
+      color: var(--accent-green);
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .tree-node {
+      display: flex;
+      flex-direction: column;
+      margin-left: 24px;
+      position: relative;
+    }
+    
+    .tree-node::before {
+      content: '';
+      position: absolute;
+      left: -16px;
+      top: 0;
+      bottom: 20px;
+      width: 2px;
+      background: var(--border-subtle);
+    }
+    
+    .tree-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 16px;
+      margin: 8px 0;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      border-left: 4px solid var(--accent-blue);
+      position: relative;
+    }
+    
+    .tree-item::before {
+      content: '';
+      position: absolute;
+      left: -20px;
+      top: 24px;
+      width: 16px;
+      height: 2px;
+      background: var(--border-subtle);
+    }
+    
+    .tree-item.active {
+      border-left-color: var(--accent-green);
+      background: rgba(16, 185, 129, 0.1);
+    }
+    
+    .tree-item.triggered {
+      border-left-color: var(--accent-orange);
+      background: rgba(249, 115, 22, 0.1);
+    }
+    
+    .tree-icon {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-secondary);
+      border-radius: 10px;
+      font-size: 20px;
+    }
+    
+    .tree-content {
+      flex: 1;
+    }
+    
+    .tree-content h4 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    
+    .tree-content p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+    
+    .tree-meta {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    
+    .meta-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    
+    .meta-badge.success {
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--accent-green);
+    }
+    
+    .meta-badge.warning {
+      background: rgba(249, 115, 22, 0.2);
+      color: var(--accent-orange);
+    }
+    
+    /* Data boxes for live call memory */
+    .data-boxes {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+    
+    .data-box {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid var(--border-subtle);
+    }
+    
+    .data-box-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    
+    .data-box-title {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+    }
+    
+    .data-box-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    
+    .data-box-value.empty {
+      color: var(--text-secondary);
+      font-style: italic;
+      font-weight: 400;
+    }
+    
+    /* ═══════════════════════════════════════════════════════════════════════════
+       BUTTONS & FORMS
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: var(--accent-blue);
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #2563eb;
+    }
+    
+    .btn-secondary {
+      background: #e2e8f0;
+      color: var(--text-dark);
+    }
+    
+    .btn-secondary:hover {
+      background: #cbd5e1;
+    }
+    
+    .btn-danger {
+      background: #dc2626;
+      color: white;
+    }
+    
+    .btn-danger:hover {
+      background: #b91c1c;
+    }
+    
+    /* ═══════════════════════════════════════════════════════════════════════════
+       TABLES
+       ═══════════════════════════════════════════════════════════════════════════ */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+      font-size: 14px;
+    }
+    
+    table th {
+      background: #f8fafc;
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid #e2e8f0;
+      color: var(--text-dark);
+    }
+    
+    table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #f1f5f9;
+      color: var(--text-dark);
+    }
+    
+    table tr:hover {
+      background: #f8fafc;
+    }
+    
+    /* Status badges */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .status-active {
+      background: #d1fae5;
+      color: #059669;
+    }
+    
+    .status-inactive {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+    
+    .status-pending {
+      background: #fef3c7;
+      color: #d97706;
+    }
   </style>
 </head>
 <body>
-  <!-- MAIN NAV: CONTROL PLANE SECTIONS -->
-  <header class="top-nav">
-    <button id="back-to-profile-btn" class="btn-back" onclick="goBackToProfile()" title="Back to Company Profile">
-      <i class="fas fa-arrow-left"></i>
-      <span>Back to Profile</span>
-    </button>
-    <div class="top-nav-title">ClientsVia Control Plane</div>
-    <nav class="top-nav-tabs">
-      <!-- MAIN TABS -->
-      <button class="tab-btn active js-main-tab" data-main-target="aicore">AiCore Control Center</button>
-      <button class="tab-btn js-main-tab" data-main-target="companyops">CompanyOps Console</button>
-    </nav>
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       TOP HEADER
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <header class="top-header">
+    <div class="header-left">
+      <button class="btn-back" onclick="goBackToProfile()">
+        <i class="fas fa-arrow-left"></i>
+        <span>Back to Profile</span>
+      </button>
+      <h1 class="page-title">🎛️ Control Plane</h1>
+    </div>
+    <div class="header-right">
+      <button class="btn-test" onclick="openAITestConsole()">
+        <i class="fas fa-phone-volume"></i>
+        <span>🧪 Test Agent</span>
+      </button>
+      <a href="#" class="btn-black-box" onclick="openBlackBox(); return false;">
+        <span>📼</span>
+        <span>Black Box</span>
+      </a>
+    </div>
   </header>
 
-  <!-- SECONDARY NAV (ONLY WHEN AICORE ACTIVE) -->
-  <nav id="aicore-subnav" class="subnav">
-    <!-- AICORE TOP-LEVEL TABS -->
-    <button class="active js-aicore-tab" data-aicore-target="variables">Variables</button>
-    <button class="js-aicore-tab" data-aicore-target="templates">AiCore Templates</button>
-    <button class="js-aicore-tab" data-aicore-target="live-scenarios">AiCore Live Scenarios</button>
-    <button class="js-aicore-tab" data-aicore-target="cheat-sheet">Cheat Sheet</button>
-    <!-- Call Flow REMOVED Dec 2025 - replaced by Mission Control in Cheat Sheet -->
-    <!-- AiCore Knowledgebase REMOVED Dec 2025 - always showed zeros, Black Box is better -->
-    <!-- Observability (AI Metrics) REMOVED Dec 2025 - broken, Black Box is better -->
-    <button class="js-aicore-tab" data-aicore-target="black-box" style="color: #f97316;">📼 Black Box</button>
-    <!-- LLM-0 Cortex-Intel REMOVED Dec 2025 - obsolete, Black Box does everything better -->
-    <button class="js-aicore-tab" id="agent-status-tab" data-aicore-target="agent-status">
-      <span id="agent-status-indicator">⚪</span> Live Agent Status
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       MAIN NAVIGATION - SINGLE LEVEL, FLAT STRUCTURE
+       Final Navigation: Front Desk | Flow Tree | Dynamic Flow | Call Protection | 
+                        Transfer Calls | Call Center | Company Contacts | Links | Version History
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <nav class="main-nav">
+    <button class="nav-tab active" data-tab="front-desk">
+      <i class="fas fa-concierge-bell"></i>
+      <span>Front Desk</span>
+    </button>
+    <button class="nav-tab" data-tab="flow-tree">
+      <i class="fas fa-project-diagram"></i>
+      <span>Flow Tree</span>
+    </button>
+    <button class="nav-tab" data-tab="dynamic-flow">
+      <i class="fas fa-code-branch"></i>
+      <span>Dynamic Flow</span>
+    </button>
+    
+    <div class="nav-divider"></div>
+    
+    <button class="nav-tab" data-tab="call-protection">
+      <i class="fas fa-shield-alt"></i>
+      <span>Call Protection</span>
+    </button>
+    <button class="nav-tab" data-tab="transfer-calls">
+      <i class="fas fa-phone-alt"></i>
+      <span>Transfer Calls</span>
+    </button>
+    
+    <div class="nav-divider"></div>
+    
+    <button class="nav-tab" data-tab="call-center" onclick="openCallCenter(); return false;">
+      <i class="fas fa-headset"></i>
+      <span>Call Center</span>
+    </button>
+    <button class="nav-tab" data-tab="company-contacts">
+      <i class="fas fa-address-book"></i>
+      <span>Company Contacts</span>
+    </button>
+    <button class="nav-tab" data-tab="links">
+      <i class="fas fa-link"></i>
+      <span>Links</span>
+    </button>
+    
+    <div class="nav-divider"></div>
+    
+    <button class="nav-tab" data-tab="version-history">
+      <i class="fas fa-history"></i>
+      <span>Version History</span>
     </button>
   </nav>
 
-  <!-- TERTIARY NAV (ONLY WHEN CHEAT SHEET ACTIVE) -->
-  <nav id="cheat-subnav" class="subnav" style="display:none;">
-    <!-- CHEAT SHEET SUB-TABS - ORGANIZED BY IMPACT -->
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       CONTENT PANELS
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <main class="content-area">
     
-    <!-- ⚡ AI BEHAVIOR CONFIG GROUP (Affects agent performance) -->
-    <div class="tab-group" data-group="ai-behavior" style="display: inline-flex; align-items: center; gap: 0; margin-right: 16px; position: relative;">
-      <span class="tab-group-indicator" style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #f97316; border-radius: 2px;" title="⚡ AI Behavior Config - Changes affect agent performance"></span>
-      <button class="active js-cheat-tab cheatsheet-subtab-btn tab-ai-behavior" data-cheat-target="triage" style="border-left: 3px solid #f97316;">Triage</button>
-      <button class="js-cheat-tab cheatsheet-subtab-btn tab-ai-behavior" data-cheat-target="frontline-intel" style="border-left: 3px solid #f97316;">🧠 Mission Control</button>
-      <button class="js-cheat-tab cheatsheet-subtab-btn tab-ai-behavior" data-cheat-target="transfer-calls" style="border-left: 3px solid #f97316;">Transfer Calls</button>
-      <button class="js-cheat-tab cheatsheet-subtab-btn tab-ai-behavior" data-cheat-target="edge-cases" style="border-left: 3px solid #f97316;">Edge Cases</button>
-      <button class="js-cheat-tab cheatsheet-subtab-btn tab-ai-behavior" data-cheat-target="behavior" style="border-left: 3px solid #f97316;">Behavior</button>
-      <button class="js-cheat-tab cheatsheet-subtab-btn tab-ai-behavior" data-cheat-target="guardrails" style="border-left: 3px solid #f97316;">Guardrails</button>
-      <button class="js-cheat-tab cheatsheet-subtab-btn tab-ai-behavior" data-cheat-target="booking" style="border-left: 3px solid #f97316;">Booking Rules</button>
-      <button class="cheatsheet-subtab-btn tab-call-center" style="border-left: 3px solid #06b6d4;" onclick="openCallCenter()">📞 Call Center</button>
-      <button class="js-cheat-tab cheatsheet-subtab-btn tab-ai-behavior" data-cheat-target="company-contacts" style="border-left: 3px solid #f97316;">Company Contacts</button>
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         FRONT DESK - The Config Brain
+         Greeting rules, tone, confirmation, policy guardrails, booking fields,
+         escalation preferences, quick answers
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="tab-panel active" data-panel="front-desk">
+      <div class="card">
+        <div id="front-desk-container">
+          <div class="loading-container">
+            <i class="fas fa-concierge-bell fa-spin"></i>
+            <p>Loading Front Desk Configuration...</p>
+          </div>
+        </div>
+      </div>
     </div>
     
-    <!-- 📚 REFERENCE DATA GROUP (Used by agent during calls) -->
-    <div class="tab-group" data-group="reference" style="display: inline-flex; align-items: center; gap: 0; margin-right: 16px; position: relative;">
-      <span class="tab-group-indicator" style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #3b82f6; border-radius: 2px;" title="📚 Reference Data - Used by agent during calls"></span>
-      <button class="js-cheat-tab cheatsheet-subtab-btn tab-reference" data-cheat-target="links" style="border-left: 3px solid #3b82f6;">Links</button>
-      <button class="js-cheat-tab cheatsheet-subtab-btn tab-reference" data-cheat-target="calculator" style="border-left: 3px solid #3b82f6;">Calculator</button>
-    </div>
-    
-    <!-- ⚙️ ADMIN TOOLS GROUP (Management & monitoring) -->
-    <div class="tab-group" data-group="admin" style="display: inline-flex; align-items: center; gap: 0; position: relative;">
-      <span class="tab-group-indicator" style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #10b981; border-radius: 2px;" title="⚙️ Admin Tools - Version management"></span>
-      <button class="js-cheat-tab cheatsheet-subtab-btn tab-admin" data-cheat-target="version-history" style="border-left: 3px solid #10b981;">📚 Version History</button>
-    </div>
-  </nav>
-
-  <main class="page">
-    <!-- ================= MAIN PANEL: AICORE ================= -->
-    <section class="panel active" data-main-panel="aicore">
-      <!-- AICORE: VARIABLES -->
-      <div class="panel active" data-aicore-panel="variables">
-        <div class="card">
-          <h2>Variables <span class="badge">AiCore Config</span></h2>
-          <p class="muted">Company-level and trade-level variables used inside templates, scenarios, and orchestrator prompts.</p>
-          
-          <!-- Variables Manager Container (uses same API as company-profile.html) -->
-          <div id="variables-container" style="margin-top: 20px;">
-            <div style="text-align: center; padding: 40px; color: #6b7280;">
-              <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
-              <p>Loading variables...</p>
-            </div>
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         FLOW TREE - Live AI Decision Visualization
+         Real-time understanding of how AI agent operates during calls
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="flow-tree">
+      <div class="flow-tree-container">
+        <div class="flow-tree-header">
+          <div class="flow-tree-title">
+            <span class="icon">🌳</span>
+            <h2>AI Decision Flow Tree</h2>
+          </div>
+          <div class="flow-tree-status">
+            <i class="fas fa-circle"></i>
+            <span>Ready</span>
           </div>
         </div>
-      </div>
-
-      <!-- AICORE: TEMPLATES -->
-      <div class="panel" data-aicore-panel="templates">
-        <div class="card">
-          <h2>AiCore Templates</h2>
-          <p class="muted">Global and per-trade templates that define scripts, flows, and 3-Tier routing.</p>
-          
-          <!-- Templates Manager Container -->
-          <div id="aicore-templates-container" style="margin-top: 20px;">
-            <div style="text-align: center; padding: 40px; color: #6b7280;">
-              <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
-              <p>Loading templates...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- AICORE: LIVE SCENARIOS -->
-      <div class="panel" data-aicore-panel="live-scenarios">
-        <div class="card">
-          <h2>AiCore Live Scenarios</h2>
-          <p class="muted">Active scenario cards used by the 3-Tier knowledge engine and Frontline-Intel.</p>
-          
-          <!-- Live Scenarios Manager Container -->
-          <div id="aicore-live-scenarios-container" style="margin-top: 20px;">
-            <div style="text-align: center; padding: 40px; color: #6b7280;">
-              <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 12px;"></i>
-              <p>Loading scenarios...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- AICORE: CHEAT SHEET (manager-provided UI) -->
-      <div class="panel" data-aicore-panel="cheat-sheet">
-        <div class="card">
-          <div id="cheatsheet-container">
-            <div style="text-align: center; padding: 32px; color: #6b7280;">
-              <i class="fas fa-spinner fa-spin" style="font-size: 28px; margin-bottom: 8px;"></i>
-              <p>Loading Cheat Sheet...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- END CHEAT SHEET -->
-
-      <!-- Call Flow REMOVED Dec 2025 - replaced by Mission Control in Cheat Sheet -->
-      <!-- AiCore Knowledgebase REMOVED Dec 2025 - always showed zeros -->
-      <!-- Observability REMOVED Dec 2025 - broken, use Black Box instead -->
-
-      <!-- AICORE: BLACK BOX RECORDER -->
-      <div class="panel" data-aicore-panel="black-box">
-        <div class="card">
-          <h2>📼 Black Box Call Recorder</h2>
-          <p class="muted">Enterprise-grade call flight recorder. Every decision point, every turn, visualized.</p>
-          
-          <div style="margin-top: 20px; padding: 20px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #f97316;">
-            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px;">
-              <div style="font-size: 48px;">📼</div>
-              <div>
-                <h3 style="margin: 0; color: #f97316; font-size: 20px;">Call Flight Recorder</h3>
-                <p style="margin: 4px 0 0; color: #94a3b8; font-size: 14px;">
-                  View complete call journeys: STT, intent detection, triage routing, 3-tier decisions, bailouts, and more.
-                </p>
+        
+        <div id="flow-tree-content">
+          <!-- Static visualization - will be populated dynamically during live calls -->
+          <div class="tree-node">
+            <!-- Call Start -->
+            <div class="tree-item active">
+              <div class="tree-icon">📞</div>
+              <div class="tree-content">
+                <h4>Call Arrives</h4>
+                <p>Incoming call detected, initializing AI agent</p>
+                <div class="tree-meta">
+                  <span class="meta-badge success">✓ Connected</span>
+                </div>
               </div>
             </div>
             
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px;">
-              <div style="background: #0f172a; padding: 16px; border-radius: 8px; text-align: center; border: 1px solid #334155;">
-                <div style="font-size: 24px; color: #22c55e; font-weight: bold;">Timeline</div>
-                <div style="color: #64748b; font-size: 12px;">Every event with timestamps</div>
+            <!-- Call Protection -->
+            <div class="tree-node">
+              <div class="tree-item">
+                <div class="tree-icon">🛡️</div>
+                <div class="tree-content">
+                  <h4>Call Protection</h4>
+                  <p>Pre-answer filters: spam detection, IVR detection, abuse protection</p>
+                  <div class="tree-meta">
+                    <span class="meta-badge">Spam Check</span>
+                    <span class="meta-badge">IVR Detection</span>
+                    <span class="meta-badge">Machine Detection</span>
+                  </div>
+                </div>
               </div>
-              <div style="background: #0f172a; padding: 16px; border-radius: 8px; text-align: center; border: 1px solid #334155;">
-                <div style="font-size: 24px; color: #3b82f6; font-weight: bold;">Waterfall</div>
-                <div style="color: #64748b; font-size: 12px;">Performance per turn</div>
-              </div>
-              <div style="background: #0f172a; padding: 16px; border-radius: 8px; text-align: center; border: 1px solid #334155;">
-                <div style="font-size: 24px; color: #a78bfa; font-weight: bold;">Diagnosis</div>
-                <div style="color: #64748b; font-size: 12px;">Auto-detected issues</div>
+              
+              <!-- Dynamic Flow Router -->
+              <div class="tree-node">
+                <div class="tree-item">
+                  <div class="tree-icon">🔀</div>
+                  <div class="tree-content">
+                    <h4>Dynamic Flow Router</h4>
+                    <p>Single source of truth for all routing decisions</p>
+                    <div class="tree-meta">
+                      <span class="meta-badge">Priority-based</span>
+                      <span class="meta-badge">Trigger matching</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Flow Nodes (populated from Dynamic Flows) -->
+                <div class="tree-node" id="dynamic-flows-tree">
+                  <div class="tree-item" style="border-left-color: #f97316;">
+                    <div class="tree-icon">⚡</div>
+                    <div class="tree-content">
+                      <h4>Emergency Service</h4>
+                      <p>Trigger: "no heat", "no air", "emergency"</p>
+                      <div class="tree-meta">
+                        <span class="meta-badge warning">Priority: 200</span>
+                        <span class="meta-badge">→ Booking</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="tree-item" style="border-left-color: #3b82f6;">
+                    <div class="tree-icon">📅</div>
+                    <div class="tree-content">
+                      <h4>Booking Intent</h4>
+                      <p>Trigger: "schedule", "appointment", "book"</p>
+                      <div class="tree-meta">
+                        <span class="meta-badge">Priority: 100</span>
+                        <span class="meta-badge">→ Booking</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="tree-item" style="border-left-color: #8b5cf6;">
+                    <div class="tree-icon">❓</div>
+                    <div class="tree-content">
+                      <h4>General Inquiry</h4>
+                      <p>Trigger: "question", "information", "help"</p>
+                      <div class="tree-meta">
+                        <span class="meta-badge">Priority: 50</span>
+                        <span class="meta-badge">→ Discovery</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Action Handler -->
+                <div class="tree-item">
+                  <div class="tree-icon">⚙️</div>
+                  <div class="tree-content">
+                    <h4>Action Handler</h4>
+                    <p>Transfer / Booking / Message / KB / Escalation</p>
+                    <div class="tree-meta">
+                      <span class="meta-badge">Target: Booking Engine</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- LLM Fallback -->
+                <div class="tree-item" style="opacity: 0.6;">
+                  <div class="tree-icon">🤖</div>
+                  <div class="tree-content">
+                    <h4>LLM Fallback</h4>
+                    <p>Last resort only - when no flow matches</p>
+                    <div class="tree-meta">
+                      <span class="meta-badge">$0.50/use</span>
+                      <span class="meta-badge">Target: &lt;1%</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-            
-            <a href="#" id="open-black-box-btn" 
-               style="display: inline-flex; align-items: center; gap: 8px; background: #f97316; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.2s;"
-               onmouseover="this.style.background='#ea580c'" onmouseout="this.style.background='#f97316'">
-              <span>Open Black Box Recorder</span>
-              <span style="font-size: 18px;">→</span>
-            </a>
           </div>
           
-          <div style="margin-top: 16px; padding: 12px; background: #fef3c7; border-radius: 8px; border: 1px solid #f59e0b;">
-            <p style="margin: 0; color: #92400e; font-size: 13px;">
-              <strong>💡 Tip:</strong> After a test call, open Black Box to see exactly what happened at each step. 
-              Click "Copy for Engineering" to get a snapshot you can paste directly into this chat.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <!-- LLM-0 Cortex-Intel REMOVED Dec 2025 - obsolete -->
-
-      <!-- AICORE: LIVE AGENT STATUS -->
-      <div class="panel" data-aicore-panel="agent-status">
-        <!-- Sub-Navigation for Agent Status -->
-        <nav class="agent-status-subnav" style="display: flex; gap: 12px; padding: 16px 20px; border-bottom: 1px solid #475569; background: #1e293b;">
-          <button class="agent-status-tab active" data-agent-tab="dashboard" onclick="switchAgentStatusTab('dashboard')" style="padding: 12px 24px; border-radius: 10px; border: 2px solid transparent; background: linear-gradient(135deg, #667eea, #764ba2); color: white; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
-            <i class="fas fa-tachometer-alt"></i> Dashboard
-          </button>
-          <button class="agent-status-tab" data-agent-tab="llm0-controls" onclick="switchAgentStatusTab('llm0-controls')" style="padding: 12px 24px; border-radius: 10px; border: 2px solid #64748b; background: #334155; color: #f1f5f9; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
-            <i class="fas fa-brain"></i> LLM-0 Controls
-            <span style="font-size: 10px; background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; padding: 2px 8px; border-radius: 10px;">Enterprise</span>
-          </button>
-          <button class="agent-status-tab" data-agent-tab="stt-settings" onclick="switchAgentStatusTab('stt-settings')" style="padding: 12px 24px; border-radius: 10px; border: 2px solid #64748b; background: #334155; color: #f1f5f9; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
-            <i class="fas fa-microphone-alt"></i> STT Settings
-            <span style="font-size: 10px; background: linear-gradient(135deg, #10b981, #3b82f6); color: white; padding: 2px 8px; border-radius: 10px;">Enterprise</span>
-          </button>
-          <button class="agent-status-tab" data-agent-tab="front-desk" onclick="switchAgentStatusTab('front-desk')" style="padding: 12px 24px; border-radius: 10px; border: 2px solid #64748b; background: #334155; color: #f1f5f9; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
-            <i class="fas fa-comments"></i> Front Desk
-          </button>
-          
-          <!-- 🧪 TEST AGENT BUTTON - Opens voice/text test console -->
-          <button onclick="openAITestConsole()" style="padding: 12px 24px; border-radius: 10px; border: 2px solid #10b981; background: linear-gradient(135deg, #059669, #10b981); color: white; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s; margin-left: auto; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
-            <i class="fas fa-phone-volume"></i> 🧪 Test Agent
-            <span style="font-size: 10px; background: linear-gradient(135deg, #f59e0b, #ef4444); color: white; padding: 2px 8px; border-radius: 10px;">NEW</span>
-          </button>
-        </nav>
-        
-        <!-- Tab Content: Dashboard -->
-        <div id="agent-status-tab-dashboard" class="agent-status-tab-content" style="display: block;">
-          <div id="agent-status-container" style="padding: 20px;">
-            <div style="text-align: center; padding: 60px; color: #6b7280;">
-              <i class="fas fa-spinner fa-spin" style="font-size: 48px; margin-bottom: 20px; color: #667eea;"></i>
-              <p style="font-size: 18px; font-weight: 600;">Loading Live Agent Status...</p>
-              <p style="font-size: 14px; margin-top: 10px;">Fetching real-time configuration and performance metrics</p>
+          <!-- Live Call Memory Boxes -->
+          <h3 style="margin-top: 32px; margin-bottom: 16px; font-size: 16px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">
+            📊 Live Call Memory (Populates During Calls)
+          </h3>
+          <div class="data-boxes">
+            <div class="data-box">
+              <div class="data-box-header">
+                <span class="data-box-title">Caller Name</span>
+              </div>
+              <div class="data-box-value empty">Not collected</div>
             </div>
-          </div>
-        </div>
-        
-        <!-- Tab Content: LLM-0 Controls -->
-        <div id="agent-status-tab-llm0-controls" class="agent-status-tab-content" style="display: none;">
-          <div id="llm0-controls-container" style="padding: 20px;">
-            <div style="text-align: center; padding: 60px; color: #6b7280;">
-              <i class="fas fa-spinner fa-spin" style="font-size: 48px; margin-bottom: 20px; color: #8b5cf6;"></i>
-              <p style="font-size: 18px; font-weight: 600;">Loading LLM-0 Controls...</p>
-              <p style="font-size: 14px; margin-top: 10px;">Enterprise-grade brain behavior configuration</p>
+            <div class="data-box">
+              <div class="data-box-header">
+                <span class="data-box-title">Phone Number</span>
+              </div>
+              <div class="data-box-value empty">Not collected</div>
             </div>
-          </div>
-        </div>
-        
-        <!-- Tab Content: STT Settings -->
-        <div id="agent-status-tab-stt-settings" class="agent-status-tab-content" style="display: none;">
-          <div id="stt-settings-container" style="padding: 20px;">
-            <div style="text-align: center; padding: 60px; color: #6b7280;">
-              <i class="fas fa-microphone-alt fa-spin" style="font-size: 48px; margin-bottom: 20px; color: #10b981;"></i>
-              <p style="font-size: 18px; font-weight: 600;">Loading STT Settings...</p>
-              <p style="font-size: 14px; margin-top: 10px;">Speech-to-Text intelligence configuration</p>
+            <div class="data-box">
+              <div class="data-box-header">
+                <span class="data-box-title">Service Type</span>
+              </div>
+              <div class="data-box-value empty">Not detected</div>
             </div>
-          </div>
-        </div>
-        
-        <!-- Tab Content: Front Desk Behavior -->
-        <div id="agent-status-tab-front-desk" class="agent-status-tab-content" style="display: none;">
-          <div id="front-desk-container" style="padding: 20px;">
-            <div style="text-align: center; padding: 60px; color: #6b7280;">
-              <i class="fas fa-comments fa-spin" style="font-size: 48px; margin-bottom: 20px; color: #f59e0b;"></i>
-              <p style="font-size: 18px; font-weight: 600;">Loading Front Desk Behavior...</p>
-              <p style="font-size: 14px; margin-top: 10px;">Control exactly how your AI talks to callers</p>
+            <div class="data-box">
+              <div class="data-box-header">
+                <span class="data-box-title">Urgency</span>
+              </div>
+              <div class="data-box-value empty">Not assessed</div>
+            </div>
+            <div class="data-box">
+              <div class="data-box-header">
+                <span class="data-box-title">Trigger Matched</span>
+              </div>
+              <div class="data-box-value empty">Awaiting call</div>
+            </div>
+            <div class="data-box">
+              <div class="data-box-header">
+                <span class="data-box-title">Match Score</span>
+              </div>
+              <div class="data-box-value empty">—</div>
+            </div>
+            <div class="data-box">
+              <div class="data-box-header">
+                <span class="data-box-title">Flow Priority</span>
+              </div>
+              <div class="data-box-value empty">—</div>
+            </div>
+            <div class="data-box">
+              <div class="data-box-header">
+                <span class="data-box-title">Action Taken</span>
+              </div>
+              <div class="data-box-value empty">—</div>
+            </div>
+            <div class="data-box">
+              <div class="data-box-header">
+                <span class="data-box-title">Booking Status</span>
+              </div>
+              <div class="data-box-value empty">—</div>
             </div>
           </div>
         </div>
       </div>
-
-    </section>
-
-    <!-- ================= MAIN PANEL: COMPANYOPS ================= -->
-    <section class="panel" data-main-panel="companyops">
-      <!-- COMPANYOPS SECOND-LEVEL NAV -->
-      <nav class="subnav" id="companyops-subnav" style="display:none;">
-        <button class="active js-companyops-tab" data-companyops-target="contacts">Contacts</button>
-        <button class="js-companyops-tab" data-companyops-target="locations">Locations</button>
-        <button class="js-companyops-tab" data-companyops-target="appointments">Appointments</button>
-        <button class="js-companyops-tab" data-companyops-target="call-logs">Call Logs / History</button>
-        <button class="js-companyops-tab" data-companyops-target="usage-billing">Usage / Billing</button>
-        <button class="js-companyops-tab" data-companyops-target="customer-db">Customer DB</button>
-        <button class="js-companyops-tab" data-companyops-target="notifications">Notifications</button>
-        <button class="js-companyops-tab" data-companyops-target="settings">Settings</button>
-      </nav>
-
-      <!-- COMPANYOPS: CONTACTS -->
-      <div class="panel active" data-companyops-panel="contacts">
-        <div class="card">
-          <h2>Contacts <span class="badge">CompanyOps</span></h2>
-          <p class="muted">Manage customer and company contacts with roles, tags, and communication history.</p>
-          <div class="search-box">
-            <input type="text" id="contacts-search" placeholder="Search by name, phone, or email..." style="flex:1;" />
-            <button class="btn btn-primary" onclick="loadContacts()">Search</button>
-            <button class="btn btn-secondary" onclick="openContactModal()">+ Add Contact</button>
-          </div>
-          <div id="contacts-table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Primary Phone</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Tags</th>
-                  <th>Last Call</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="contacts-table-body">
-                <tr><td colspan="7" class="muted" style="text-align:center;">Loading contacts...</td></tr>
-              </tbody>
-            </table>
-            <div class="pagination" id="contacts-pagination"></div>
+    </div>
+    
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         DYNAMIC FLOW - The ONLY Routing Brain
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="dynamic-flow">
+      <div class="card">
+        <div id="dynamic-flow-container">
+          <div class="loading-container">
+            <i class="fas fa-code-branch fa-spin"></i>
+            <p>Loading Dynamic Flow Configuration...</p>
           </div>
         </div>
       </div>
-
-      <!-- COMPANYOPS: LOCATIONS -->
-      <div class="panel" data-companyops-panel="locations">
-        <div class="card">
-          <h2>Locations <span class="badge">CompanyOps</span></h2>
-          <p class="muted">Service addresses with access profiles (gate codes, parking, pets, etc.).</p>
-          <button class="btn btn-primary" onclick="openLocationModal()">+ Add Location</button>
-          <div id="locations-content">
-            <table>
-              <thead>
-                <tr>
-                  <th>Address</th>
-                  <th>City</th>
-                  <th>Contact</th>
-                  <th>Access Profile</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="locations-table-body">
-                <tr><td colspan="5" class="muted" style="text-align:center;">Loading locations...</td></tr>
-              </tbody>
-            </table>
+    </div>
+    
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         CALL PROTECTION (formerly Edge Cases)
+         Pre-DFLOW filters: Spam, IVR, Machine, Silence, Abuse
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="call-protection">
+      <div class="card">
+        <h2>🛡️ Call Protection</h2>
+        <p class="muted">Pre-answer filters that execute BEFORE Dynamic Flow. Cannot route — only short-circuit or pass forward.</p>
+        <div id="call-protection-container">
+          <!-- CheatSheetManager will render Edge Cases here -->
+          <div id="cheatsheet-subtab-edge-cases">
+            <div id="edge-cases-section" class="bg-white rounded-lg p-6">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+                <div>
+                  <h4 style="font-size: 16px; font-weight: 600; color: #111827; margin:0;">
+                    <i class="fas fa-exclamation-triangle" style="margin-right:6px; color:#f59e0b;"></i>Edge Cases
+                  </h4>
+                  <p style="font-size: 12px; color:#6b7280; margin-top:4px;">
+                    Edge cases short-circuit everything else. Use for spam, IVR detection, wrong number, etc.
+                  </p>
+                </div>
+                <button type="button" data-cheatsheet-action="add-edge-case" style="padding:8px 14px; border-radius:8px; border:none; background:#f59e0b; color:#fff; font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
+                  <i class="fas fa-plus"></i>Add Edge Case
+                </button>
+              </div>
+              <div id="edge-cases-list" style="display:flex; flex-direction:column; gap:12px;">
+                <div class="loading-container">
+                  <i class="fas fa-shield-alt fa-spin"></i>
+                  <p>Loading Call Protection Settings...</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-
-      <!-- COMPANYOPS: APPOINTMENTS -->
-      <div class="panel" data-companyops-panel="appointments">
-        <div class="card">
-          <h2>Appointments <span class="badge">CompanyOps</span></h2>
-          <p class="muted">Schedule, confirm, and manage service appointments.</p>
-          <button class="btn btn-primary" onclick="openAppointmentModal()">+ New Appointment</button>
-          <div id="appointments-content">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Time Window</th>
-                  <th>Service Type</th>
-                  <th>Contact</th>
-                  <th>Location</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="appointments-table-body">
-                <tr><td colspan="7" class="muted" style="text-align:center;">Loading appointments...</td></tr>
-              </tbody>
-            </table>
+    </div>
+    
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         TRANSFER CALLS - Transfer Target Directory
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="transfer-calls">
+      <div class="card">
+        <h2>📞 Transfer Calls</h2>
+        <p class="muted">Transfer target directory. DFLOW references transferTargetId. Defines destination, availability, and pre-transfer script.</p>
+        <div id="transfer-calls-container">
+          <!-- CheatSheetManager will render Transfer Rules here -->
+          <div id="cheatsheet-subtab-transfer-calls">
+            <div id="transfer-rules-section" class="bg-white rounded-lg p-6">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+                <div>
+                  <h4 style="font-size: 16px; font-weight: 600; color: #111827; margin:0;">
+                    <i class="fas fa-phone" style="margin-right:6px; color:#2563eb;"></i>Transfer Rules
+                  </h4>
+                  <p style="font-size: 12px; color:#6b7280; margin-top:4px;">
+                    Transfer rules route calls to specific departments or people based on intent.
+                  </p>
+                </div>
+                <button type="button" data-cheatsheet-action="add-transfer-rule" style="padding:8px 14px; border-radius:8px; border:none; background:#2563eb; color:#fff; font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
+                  <i class="fas fa-plus"></i>Add Transfer Rule
+                </button>
+              </div>
+              <div id="transfer-rules-list" style="display:flex; flex-direction:column; gap:12px;">
+                <div class="loading-container">
+                  <i class="fas fa-phone-alt fa-spin"></i>
+                  <p>Loading Transfer Directory...</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-
-      <!-- COMPANYOPS: CALL LOGS / HISTORY -->
-      <div class="panel" data-companyops-panel="call-logs">
-        <div class="card">
-          <h2>Call Logs / History <span class="badge">CompanyOps</span></h2>
-          <p class="muted">Full call transcripts, tier usage, and outcome tracking.</p>
-          <div id="call-logs-content">
-            <table>
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Phone</th>
-                  <th>Intent</th>
-                  <th>Duration</th>
-                  <th>Tier Usage</th>
-                  <th>Outcome</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="call-logs-table-body">
-                <tr><td colspan="7" class="muted" style="text-align:center;">Loading call history...</td></tr>
-              </tbody>
-            </table>
+    </div>
+    
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         COMPANY CONTACTS - Directory of humans for escalation
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="company-contacts">
+      <div class="card">
+        <h2>📋 Company Contacts</h2>
+        <p class="muted">Directory of humans AI can escalate or notify. Used by transfers, escalations, and notifications.</p>
+        <div id="company-contacts-container">
+          <!-- CheatSheetManager will render Company Contacts here -->
+          <div id="cheatsheet-v2-dynamic-content" data-section="company-contacts" style="background: #fff; border-radius: 12px; min-height: 200px;">
+            <div class="loading-container">
+              <i class="fas fa-address-book fa-spin"></i>
+              <p>Loading Company Contacts...</p>
+            </div>
           </div>
         </div>
       </div>
-
-      <!-- COMPANYOPS: USAGE / BILLING -->
-      <div class="panel" data-companyops-panel="usage-billing">
-        <div class="card">
-          <h2>Usage / Billing <span class="badge">CompanyOps</span></h2>
-          <p class="muted">Minutes, AI costs, tier distribution, and billing cycle tracking.</p>
-          <button class="btn btn-secondary" onclick="exportUsage()">Export CSV</button>
-          <div id="usage-billing-content">
-            <p class="muted">Loading usage data...</p>
+    </div>
+    
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         LINKS - Outbound customer delivery
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="links">
+      <div class="card">
+        <h2>🔗 Links</h2>
+        <p class="muted">Outbound customer delivery: payments, forms, financing. DFLOW actions may reference linkId.</p>
+        <div id="links-container">
+          <!-- CheatSheetManager will render Links here -->
+          <div id="cheatsheet-v2-links-content" data-section="links" style="background: #fff; border-radius: 12px; min-height: 200px;">
+            <div class="loading-container">
+              <i class="fas fa-link fa-spin"></i>
+              <p>Loading Links...</p>
+            </div>
           </div>
         </div>
       </div>
-
-      <!-- COMPANYOPS: CUSTOMER DB -->
-      <div class="panel" data-companyops-panel="customer-db">
-        <div class="card">
-          <h2>Customer DB <span class="badge">CompanyOps</span></h2>
-          <p class="muted">360° view of customers with aggregated contacts, locations, appointments, and calls.</p>
-          <div class="search-box">
-            <input type="text" id="customer-search" placeholder="Search customers..." style="flex:1;" />
-            <button class="btn btn-primary" onclick="searchCustomers()">Search</button>
-          </div>
-          <div id="customer-db-content">
-            <table>
-              <thead>
-                <tr>
-                  <th>Customer Name</th>
-                  <th>Phone</th>
-                  <th>Locations</th>
-                  <th>Appointments</th>
-                  <th>Last Call</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="customer-db-table-body">
-                <tr><td colspan="6" class="muted" style="text-align:center;">Loading customers...</td></tr>
-              </tbody>
-            </table>
+    </div>
+    
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         VERSION HISTORY - Front Desk Configuration versioning
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="version-history">
+      <div class="card">
+        <h2>📚 Version History</h2>
+        <p class="muted">Versioning for Front Desk Configuration. Isolate LIVE vs DRAFT safely during calls.</p>
+        <div id="version-history-container">
+          <!-- CheatSheetManager will render Version History here -->
+          <div id="cheatsheet-v2-version-content" data-section="version-history" style="background: #fff; border-radius: 12px; min-height: 200px;">
+            <div class="loading-container">
+              <i class="fas fa-history fa-spin"></i>
+              <p>Loading Version History...</p>
+            </div>
           </div>
         </div>
       </div>
-
-      <!-- COMPANYOPS: NOTIFICATIONS -->
-      <div class="panel" data-companyops-panel="notifications">
-        <div class="card">
-          <h2>Notifications <span class="badge">CompanyOps</span></h2>
-          <p class="muted">Configure who receives SMS/email alerts for appointments, emergencies, and after-hours calls.</p>
-          <div id="notifications-content">
-            <p class="muted">Loading notification settings...</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- COMPANYOPS: SETTINGS -->
-      <div class="panel" data-companyops-panel="settings">
-        <div class="card">
-          <h2>Settings <span class="badge">CompanyOps</span></h2>
-          <p class="muted">AI agent configuration, operating hours, telephony, and risk & safety settings.</p>
-          <div id="settings-content">
-            <p class="muted">Loading settings...</p>
-          </div>
-        </div>
-      </div>
-    </section>
+    </div>
+    
   </main>
 
-  <!-- MODALS -->
-  <!-- Contact Modal -->
-  <div id="contact-modal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 id="contact-modal-title">Add Contact</h3>
-        <span class="close-modal" onclick="closeContactModal()">&times;</span>
-      </div>
-      <form id="contact-form" onsubmit="saveContact(event)">
-        <div class="form-group">
-          <label>Name *</label>
-          <input type="text" id="contact-name" required />
-        </div>
-        <div class="form-group">
-          <label>Primary Phone</label>
-          <input type="tel" id="contact-primary-phone" />
-        </div>
-        <div class="form-group">
-          <label>Email</label>
-          <input type="email" id="contact-email" />
-        </div>
-        <div class="form-group">
-          <label>Role</label>
-          <select id="contact-role">
-            <option value="Owner">Owner</option>
-            <option value="Tenant">Tenant</option>
-            <option value="Manager">Manager</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;">
-          <button type="button" class="btn btn-secondary" onclick="closeContactModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       JAVASCRIPT
+       ═══════════════════════════════════════════════════════════════════════════ -->
   <script>
-    // ═══════════════════════════════════════════════════════════════════════
-    // GLOBAL STATE & UTILITIES
-    // ═══════════════════════════════════════════════════════════════════════
-    let currentCompanyId = new URLSearchParams(window.location.search).get('companyId') || null;
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GLOBAL STATE
+    // ═══════════════════════════════════════════════════════════════════════════
+    const currentCompanyId = new URLSearchParams(window.location.search).get('companyId') || null;
+    const authToken = localStorage.getItem('adminToken');
     const API_BASE = '';
-    let authToken = localStorage.getItem('adminToken');
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // NAVIGATION: BACK TO COMPANY PROFILE (AI AGENT SETTINGS TAB)
-    // ═══════════════════════════════════════════════════════════════════════
-    // ═══════════════════════════════════════════════════════════════════════════
-    // CALL CENTER - Opens in new tab
-    // ═══════════════════════════════════════════════════════════════════════════
-    // BLACK BOX RECORDER - Open in new tab
-    // ═══════════════════════════════════════════════════════════════════════════
-    function openBlackBox() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const companyId = urlParams.get('companyId');
-      
-      if (!companyId) {
-        alert('No company ID found. Please select a company first.');
-        return;
-      }
-      
-      window.open(`/black-box.html?companyId=${companyId}`, '_blank');
-    }
     
-    // Wire up Black Box button after DOM loads
-    document.addEventListener('DOMContentLoaded', () => {
-      const blackBoxBtn = document.getElementById('open-black-box-btn');
-      if (blackBoxBtn) {
-        blackBoxBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          openBlackBox();
-        });
-      }
-    });
+    // Track initialized managers
+    const initializedTabs = new Set();
     
     // ═══════════════════════════════════════════════════════════════════════════
-    function openCallCenter() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const companyId = urlParams.get('companyId');
-      
-      if (!companyId) {
-        alert('No company ID found. Please select a company first.');
-        return;
-      }
-      
-      // Open Call Center in new tab
-      const callCenterUrl = `/call-center.html?companyId=${companyId}`;
-      window.open(callCenterUrl, '_blank');
-    }
-    
+    // NAVIGATION FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════════════════
     function goBackToProfile() {
       if (currentCompanyId) {
-        // Navigate back to AI Agent Settings tab where user clicked "Open AiCore Control Center"
         window.location.href = `/company-profile.html?id=${currentCompanyId}#ai-agent-settings`;
       } else {
-        alert('No company ID found. Navigating to directory.');
         window.location.href = '/admin-directory.html';
       }
     }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // AICORE MANAGERS INITIALIZATION (GLOBALLY ACCESSIBLE FOR ONCLICK HANDLERS)
-    // Each manager expects a specific global variable name (checked their onclick handlers)
-    // ═══════════════════════════════════════════════════════════════════════
-    window.variablesManager = null;
-    window.aiCoreTemplatesManager = null;  // Uses window.aiCoreTemplatesManager in onclick
-    window.aiCoreLiveScenariosManager = null;  // Uses aiCoreLiveScenariosManager in onclick
-    window.cheatSheetManager = null;  // Uses cheatSheetManager in onclick
-    // REMOVED Dec 2025: callFlowManager (replaced by Mission Control), aiCoreKnowledgebaseManager, analyticsManager, llmCortexIntelInitialized
-
-    // Mock parent object for all managers (matches company-profile.html interface)
-    const mockParent = {
-      companyId: currentCompanyId,
-      showSuccess: (message) => {
-        console.log('✅ SUCCESS:', message);
-        alert('✅ ' + message);
-      },
-      showError: (message) => {
-        console.error('❌ ERROR:', message);
-        alert('❌ ' + message);
-      },
-      showInfo: (message, duration) => {
-        console.log('ℹ️ INFO:', message);
-        alert('ℹ️ ' + message);
+    
+    function openCallCenter() {
+      if (!currentCompanyId) {
+        alert('No company ID found.');
+        return;
       }
-    };
-
-    // 🔧 LAZY SCRIPT LOADER - Prevents ERR_INSUFFICIENT_RESOURCES
+      window.open(`/call-center.html?companyId=${currentCompanyId}`, '_blank');
+    }
+    
+    function openBlackBox() {
+      if (!currentCompanyId) {
+        alert('No company ID found.');
+        return;
+      }
+      window.open(`/black-box.html?companyId=${currentCompanyId}`, '_blank');
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LAZY SCRIPT LOADER
+    // ═══════════════════════════════════════════════════════════════════════════
     const loadedScripts = new Set();
+    
     function loadScript(src) {
       return new Promise((resolve, reject) => {
         if (loadedScripts.has(src)) {
-          resolve(); // Already loaded
+          resolve();
           return;
         }
         
-        console.log(`📦 [LAZY LOAD] Loading script: ${src}`);
+        console.log(`📦 [LAZY LOAD] Loading: ${src}`);
         const script = document.createElement('script');
         script.src = src;
         script.onload = () => {
           loadedScripts.add(src);
-          console.log(`✅ [LAZY LOAD] Script loaded: ${src}`);
+          console.log(`✅ [LAZY LOAD] Loaded: ${src}`);
           resolve();
         };
         script.onerror = () => {
-          console.error(`❌ [LAZY LOAD] Failed to load: ${src}`);
-          reject(new Error(`Failed to load script: ${src}`));
+          console.error(`❌ [LAZY LOAD] Failed: ${src}`);
+          reject(new Error(`Failed to load: ${src}`));
         };
         document.body.appendChild(script);
       });
     }
-
-    // Initialize VariablesManager
-    function initVariablesManager() {
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // TAB SWITCHING
+    // ═══════════════════════════════════════════════════════════════════════════
+    function switchTab(tabId) {
+      console.log(`🎯 [NAV] Switching to: ${tabId}`);
+      
+      // Update nav buttons
+      document.querySelectorAll('.nav-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
+      });
+      
+      // Update panels
+      document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.toggle('active', panel.getAttribute('data-panel') === tabId);
+      });
+      
+      // Initialize tab content if not already done
+      initializeTab(tabId);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // TAB INITIALIZATION
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function initializeTab(tabId) {
+      if (initializedTabs.has(tabId)) return;
       if (!currentCompanyId) {
-        alert('No companyId provided in URL. Add ?companyId=... to the URL.');
+        console.error('No companyId provided');
         return;
       }
-      if (!window.variablesManager) {
-        console.log('🎯 [CONTROL PLANE] Initializing VariablesManager');
-        window.variablesManager = new window.VariablesManager(mockParent);
-        window.variablesManager.load();
-      }
-    }
-
-    // Initialize AiCoreTemplatesManager
-    async function initTemplatesManager() {
-      if (!currentCompanyId) return;
-      if (!window.aiCoreTemplatesManager) {
-        console.log('🎯 [CONTROL PLANE] Initializing AiCoreTemplatesManager');
-        await loadScript('/js/ai-agent-settings/AiCoreTemplatesManager.js');
-        window.aiCoreTemplatesManager = new window.AiCoreTemplatesManager(mockParent);
-        window.aiCoreTemplatesManager.load();
-      }
-    }
-
-    // Initialize AiCoreLiveScenariosManager
-    async function initLiveScenariosManager() {
-      if (!currentCompanyId) return;
-      if (!window.aiCoreLiveScenariosManager) {
-        console.log('🎯 [CONTROL PLANE] Initializing AiCoreLiveScenariosManager');
-        await loadScript('/js/ai-agent-settings/AiCoreLiveScenariosManager.js');
-        window.aiCoreLiveScenariosManager = new window.AiCoreLiveScenariosManager(mockParent);
-        window.aiCoreLiveScenariosManager.load();
-      }
-    }
-
-    // Initialize CheatSheetManager (use existing global instance from CheatSheetManager.js)
-    async function initCheatSheetManager() {
-      if (!currentCompanyId) return;
       
-      // Load CheatSheetVersioningAdapter first (dependency)
-      await loadScript('/js/ai-agent-settings/CheatSheetVersioningAdapter.js?t=1732651400');
-      // Then load CheatSheetManager
-      await loadScript('/js/ai-agent-settings/CheatSheetManager.js?t=1732652400');
-      
-      // Use the global instance that was auto-created when CheatSheetManager.js loaded
-      if (window.cheatSheetManager) {
-        // Only load if not already loaded for this company
-        if (window.cheatSheetManager.companyId !== currentCompanyId) {
-          console.log('🎯 [CONTROL PLANE] Loading CheatSheetManager for company:', currentCompanyId);
-          window.cheatSheetManager.load(currentCompanyId);
-        } else {
-          console.log('🎯 [CONTROL PLANE] CheatSheetManager already loaded for this company');
+      try {
+        switch (tabId) {
+          case 'front-desk':
+            await initFrontDesk();
+            break;
+          case 'flow-tree':
+            await initFlowTree();
+            break;
+          case 'dynamic-flow':
+            await initDynamicFlow();
+            break;
+          case 'call-protection':
+            await initCallProtection();
+            break;
+          case 'transfer-calls':
+            await initTransferCalls();
+            break;
+          case 'company-contacts':
+            await initCompanyContacts();
+            break;
+          case 'links':
+            await initLinks();
+            break;
+          case 'version-history':
+            await initVersionHistory();
+            break;
         }
-      } else {
-        console.error('🎯 [CONTROL PLANE] CheatSheetManager global instance not found!');
+        initializedTabs.add(tabId);
+      } catch (error) {
+        console.error(`❌ [INIT] Failed to initialize ${tabId}:`, error);
       }
     }
-
-    // CallFlowManager REMOVED Dec 2025 - replaced by Mission Control
-    // AiCoreKnowledgebaseManager REMOVED Dec 2025 - always showed zeros
-    // AnalyticsManager REMOVED Dec 2025 - broken, Black Box is better
-    // LLM Cortex Intel REMOVED Dec 2025 - obsolete, Black Box does everything better
-
-    // Initialize Agent Status Manager
-    async function initAgentStatus() {
-      if (!currentCompanyId) return;
-      if (!window.agentStatusManager) {
-        console.log('🎯 [CONTROL PLANE] Initializing AgentStatusManager');
-        await loadScript('/js/ai-agent-settings/AgentStatusManager.js');
-        window.agentStatusManager = new window.AgentStatusManager(currentCompanyId);
-        await window.agentStatusManager.init();
-      } else {
-        console.log('🎯 [CONTROL PLANE] AgentStatusManager already loaded');
-        await window.agentStatusManager.init(); // Refresh
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FRONT DESK INITIALIZATION
+    // Uses existing FrontDeskBehaviorManager
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function initFrontDesk() {
+      console.log('🏢 [INIT] Initializing Front Desk...');
+      await loadScript('/js/ai-agent-settings/FrontDeskBehaviorManager.js');
+      
+      const container = document.getElementById('front-desk-container');
+      if (container && window.FrontDeskBehaviorManager) {
+        window.frontDeskManager = new window.FrontDeskBehaviorManager(currentCompanyId);
+        await window.frontDeskManager.load();
+        window.frontDeskManager.render(container);
+        console.log('✅ [INIT] Front Desk initialized');
       }
     }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // 🧪 AI TEST CONSOLE - Test agent with voice or text without making calls
-    // ═══════════════════════════════════════════════════════════════════════
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FLOW TREE INITIALIZATION
+    // Live visualization of AI decision flow
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function initFlowTree() {
+      console.log('🌳 [INIT] Initializing Flow Tree...');
+      // Flow Tree is static visualization for now
+      // Will be populated dynamically during live calls via WebSocket
+      
+      // Load company's dynamic flows to populate the tree
+      try {
+        const response = await fetch(`/api/company/${currentCompanyId}/dynamic-flows`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.flows && data.flows.length > 0) {
+            renderFlowTreeNodes(data.flows);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load flows for tree:', error);
+      }
+      
+      console.log('✅ [INIT] Flow Tree initialized');
+    }
+    
+    function renderFlowTreeNodes(flows) {
+      const container = document.getElementById('dynamic-flows-tree');
+      if (!container) return;
+      
+      // Sort by priority descending
+      const sortedFlows = flows.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+      
+      container.innerHTML = sortedFlows.map(flow => {
+        const triggerPhrases = flow.trigger?.phrases?.slice(0, 3).join('", "') || 'No triggers';
+        const priority = flow.priority || 0;
+        const actions = flow.actions?.map(a => a.type).join(', ') || 'No actions';
+        
+        // Color based on priority
+        let borderColor = '#8b5cf6'; // Default purple
+        if (priority >= 200) borderColor = '#dc2626'; // Red for emergency
+        else if (priority >= 100) borderColor = '#f97316'; // Orange for high
+        else if (priority >= 50) borderColor = '#3b82f6'; // Blue for medium
+        
+        return `
+          <div class="tree-item" style="border-left-color: ${borderColor};">
+            <div class="tree-icon">${flow.isActive ? '✅' : '⏸️'}</div>
+            <div class="tree-content">
+              <h4>${flow.name || flow.flowKey || 'Unnamed Flow'}</h4>
+              <p>Trigger: "${triggerPhrases}"</p>
+              <div class="tree-meta">
+                <span class="meta-badge ${priority >= 100 ? 'warning' : ''}">Priority: ${priority}</span>
+                <span class="meta-badge">→ ${actions}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DYNAMIC FLOW INITIALIZATION
+    // Renders the Dynamic Flows tab from FrontDeskBehaviorManager
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function initDynamicFlow() {
+      console.log('🔀 [INIT] Initializing Dynamic Flow...');
+      
+      // Ensure FrontDeskBehaviorManager is loaded
+      if (!window.frontDeskManager) {
+        await loadScript('/js/ai-agent-settings/FrontDeskBehaviorManager.js');
+        window.frontDeskManager = new window.FrontDeskBehaviorManager(currentCompanyId);
+        await window.frontDeskManager.load();
+      }
+      
+      const container = document.getElementById('dynamic-flow-container');
+      if (container && window.frontDeskManager) {
+        // Render just the Dynamic Flows tab content
+        container.innerHTML = window.frontDeskManager.renderDynamicFlowsTab();
+        window.frontDeskManager.initDynamicFlowsTab();
+        console.log('✅ [INIT] Dynamic Flow initialized');
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CALL PROTECTION INITIALIZATION (formerly Edge Cases)
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function initCallProtection() {
+      console.log('🛡️ [INIT] Initializing Call Protection...');
+      
+      await loadScript('/js/ai-agent-settings/CheatSheetVersioningAdapter.js');
+      await loadScript('/js/ai-agent-settings/CheatSheetManager.js');
+      
+      if (window.cheatSheetManager) {
+        if (window.cheatSheetManager.companyId !== currentCompanyId) {
+          await window.cheatSheetManager.load(currentCompanyId);
+        }
+        
+        // Attach action handlers for Add Edge Case button
+        const container = document.getElementById('call-protection-container');
+        if (container) {
+          container.addEventListener('click', (e) => {
+            const actionBtn = e.target.closest('[data-cheatsheet-action]');
+            if (actionBtn && actionBtn.getAttribute('data-cheatsheet-action') === 'add-edge-case') {
+              e.preventDefault();
+              window.cheatSheetManager.addEdgeCase();
+            }
+          });
+        }
+        
+        window.cheatSheetManager.renderEdgeCases();
+        console.log('✅ [INIT] Call Protection initialized');
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // TRANSFER CALLS INITIALIZATION
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function initTransferCalls() {
+      console.log('📞 [INIT] Initializing Transfer Calls...');
+      
+      await loadScript('/js/ai-agent-settings/CheatSheetVersioningAdapter.js');
+      await loadScript('/js/ai-agent-settings/CheatSheetManager.js');
+      
+      if (window.cheatSheetManager) {
+        if (window.cheatSheetManager.companyId !== currentCompanyId) {
+          await window.cheatSheetManager.load(currentCompanyId);
+        }
+        
+        // Attach action handlers for Add Transfer Rule button
+        const container = document.getElementById('transfer-calls-container');
+        if (container) {
+          container.addEventListener('click', (e) => {
+            const actionBtn = e.target.closest('[data-cheatsheet-action]');
+            if (actionBtn && actionBtn.getAttribute('data-cheatsheet-action') === 'add-transfer-rule') {
+              e.preventDefault();
+              window.cheatSheetManager.addTransferRule();
+            }
+          });
+        }
+        
+        window.cheatSheetManager.renderTransferRules();
+        console.log('✅ [INIT] Transfer Calls initialized');
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COMPANY CONTACTS INITIALIZATION
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function initCompanyContacts() {
+      console.log('📋 [INIT] Initializing Company Contacts...');
+      
+      await loadScript('/js/ai-agent-settings/CheatSheetVersioningAdapter.js');
+      await loadScript('/js/ai-agent-settings/CheatSheetManager.js');
+      
+      if (window.cheatSheetManager) {
+        if (window.cheatSheetManager.companyId !== currentCompanyId) {
+          await window.cheatSheetManager.load(currentCompanyId);
+        }
+        
+        // renderCompanyContacts expects #cheatsheet-v2-dynamic-content
+        window.cheatSheetManager.renderCompanyContacts();
+        console.log('✅ [INIT] Company Contacts initialized');
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LINKS INITIALIZATION
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function initLinks() {
+      console.log('🔗 [INIT] Initializing Links...');
+      
+      await loadScript('/js/ai-agent-settings/CheatSheetVersioningAdapter.js');
+      await loadScript('/js/ai-agent-settings/CheatSheetManager.js');
+      
+      if (window.cheatSheetManager) {
+        if (window.cheatSheetManager.companyId !== currentCompanyId) {
+          await window.cheatSheetManager.load(currentCompanyId);
+        }
+        
+        // Links needs its own container - update cheatSheetManager to render there
+        const linksContainer = document.getElementById('cheatsheet-v2-links-content');
+        if (linksContainer) {
+          // Temporarily override the container lookup for links
+          window.cheatSheetManager.renderLinksToContainer(linksContainer);
+        }
+        console.log('✅ [INIT] Links initialized');
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // VERSION HISTORY INITIALIZATION
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function initVersionHistory() {
+      console.log('📚 [INIT] Initializing Version History...');
+      
+      await loadScript('/js/ai-agent-settings/CheatSheetVersioningAdapter.js');
+      await loadScript('/js/ai-agent-settings/CheatSheetManager.js');
+      
+      if (window.cheatSheetManager) {
+        if (window.cheatSheetManager.companyId !== currentCompanyId) {
+          await window.cheatSheetManager.load(currentCompanyId);
+        }
+        
+        // Version history needs its own container
+        const versionContainer = document.getElementById('cheatsheet-v2-version-content');
+        if (versionContainer) {
+          window.cheatSheetManager.renderVersionHistoryToContainer(versionContainer);
+        }
+        console.log('✅ [INIT] Version History initialized');
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // AI TEST CONSOLE
+    // ═══════════════════════════════════════════════════════════════════════════
     async function openAITestConsole() {
       if (!currentCompanyId) {
         alert('Please select a company first');
         return;
       }
       
-      // Load the test console script if not already loaded
       if (!window.AITestConsole) {
         await loadScript('/js/ai-agent-settings/AITestConsole.js');
       }
       
-      // Open the console
-      const console = new window.AITestConsole(currentCompanyId);
-      console.open();
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // AGENT STATUS SUB-TAB SWITCHING (Dashboard / LLM-0 Controls)
-    // ═══════════════════════════════════════════════════════════════════════
-    let llm0ControlsInitialized = false;
-    let sttSettingsInitialized = false;
-    let frontDeskInitialized = false;
-    
-    async function switchAgentStatusTab(tabName) {
-      console.log(`🎯 [CONTROL PLANE] Switching agent status tab to: ${tabName}`);
-      
-      // Update tab button styles with better contrast
-      document.querySelectorAll('.agent-status-tab').forEach(btn => {
-        const isActive = btn.getAttribute('data-agent-tab') === tabName;
-        btn.style.background = isActive ? 'linear-gradient(135deg, #667eea, #764ba2)' : '#334155';
-        btn.style.color = isActive ? 'white' : '#f1f5f9';
-        btn.style.border = isActive ? '2px solid transparent' : '2px solid #64748b';
-        btn.style.boxShadow = isActive ? '0 4px 12px rgba(102, 126, 234, 0.4)' : 'none';
-        btn.classList.toggle('active', isActive);
-      });
-      
-      // Show/hide tab content
-      document.querySelectorAll('.agent-status-tab-content').forEach(content => {
-        content.style.display = 'none';
-      });
-      
-      const targetContent = document.getElementById(`agent-status-tab-${tabName}`);
-      if (targetContent) {
-        targetContent.style.display = 'block';
-      }
-      
-      // Initialize LLM-0 Controls on first access
-      if (tabName === 'llm0-controls' && !llm0ControlsInitialized && currentCompanyId) {
-        await initLLM0Controls();
-      }
-      
-      // Initialize STT Settings on first access
-      if (tabName === 'stt-settings' && !sttSettingsInitialized && currentCompanyId) {
-        await initSTTSettings();
-      }
-      
-      // Initialize Front Desk Behavior on first access
-      if (tabName === 'front-desk' && !frontDeskInitialized && currentCompanyId) {
-        await initFrontDesk();
-      }
+      const testConsole = new window.AITestConsole(currentCompanyId);
+      testConsole.open();
     }
     
-    // Initialize LLM-0 Controls Manager
-    async function initLLM0Controls() {
-      if (!currentCompanyId) return;
-      
-      console.log('🧠 [CONTROL PLANE] Initializing LLM-0 Controls for company:', currentCompanyId);
-      
-      try {
-        await loadScript('/js/ai-agent-settings/LLM0ControlsManager.js');
-        
-        const container = document.getElementById('llm0-controls-container');
-        if (container && window.LLM0ControlsManager) {
-          window.llm0ControlsManager = new window.LLM0ControlsManager(currentCompanyId, container);
-          await window.llm0ControlsManager.load();
-          llm0ControlsInitialized = true;
-          console.log('✅ [CONTROL PLANE] LLM-0 Controls initialized');
-        } else {
-          console.error('❌ [CONTROL PLANE] LLM0ControlsManager not available');
-          if (container) {
-            container.innerHTML = `
-              <div style="text-align: center; padding: 60px; color: #ef4444;">
-                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 16px;"></i>
-                <h3>Failed to Load LLM-0 Controls</h3>
-                <p>Please refresh the page or contact support.</p>
-              </div>
-            `;
-          }
-        }
-      } catch (error) {
-        console.error('❌ [CONTROL PLANE] Error initializing LLM-0 Controls:', error);
-      }
-    }
-    
-    // Initialize STT Settings Manager
-    async function initSTTSettings() {
-      if (!currentCompanyId) return;
-      
-      console.log('🎤 [CONTROL PLANE] Initializing STT Settings for company:', currentCompanyId);
-      
-      try {
-        await loadScript('/js/ai-agent-settings/STTSettingsManager.js');
-        
-        const container = document.getElementById('stt-settings-container');
-        if (container && window.STTSettingsManager) {
-          window.sttManager = new window.STTSettingsManager(container, currentCompanyId);
-          sttSettingsInitialized = true;
-          console.log('✅ [CONTROL PLANE] STT Settings initialized');
-        } else {
-          console.error('❌ [CONTROL PLANE] STTSettingsManager not available');
-          if (container) {
-            container.innerHTML = `
-              <div style="text-align: center; padding: 60px; color: #ef4444;">
-                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 16px;"></i>
-                <h3>Failed to Load STT Settings</h3>
-                <p>Please refresh the page or contact support.</p>
-              </div>
-            `;
-          }
-        }
-      } catch (error) {
-        console.error('❌ [CONTROL PLANE] Error initializing STT Settings:', error);
-      }
-    }
-    
-    // Initialize Front Desk Behavior Manager
-    async function initFrontDesk() {
-      if (!currentCompanyId) return;
-      
-      console.log('💬 [CONTROL PLANE] Initializing Front Desk Behavior for company:', currentCompanyId);
-      
-      try {
-        await loadScript('/js/ai-agent-settings/FrontDeskBehaviorManager.js');
-        
-        const container = document.getElementById('front-desk-container');
-        if (container && window.FrontDeskBehaviorManager) {
-          window.frontDeskManager = new window.FrontDeskBehaviorManager(currentCompanyId);
-          await window.frontDeskManager.load();
-          window.frontDeskManager.render(container);
-          frontDeskInitialized = true;
-          console.log('✅ [CONTROL PLANE] Front Desk Behavior initialized');
-        } else {
-          console.error('❌ [CONTROL PLANE] FrontDeskBehaviorManager not available');
-          if (container) {
-            container.innerHTML = `
-              <div style="text-align: center; padding: 60px; color: #ef4444;">
-                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 16px;"></i>
-                <h3>Failed to Load Front Desk Behavior</h3>
-                <p>Please refresh the page or contact support.</p>
-              </div>
-            `;
-          }
-        }
-      } catch (error) {
-        console.error('❌ [CONTROL PLANE] Error initializing Front Desk Behavior:', error);
-      }
-    }
-
-    async function apiCall(endpoint, method = 'GET', body = null) {
-      const options = {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
-        }
-      };
-      if (body) options.body = JSON.stringify(body);
-      
-      const res = await fetch(`${API_BASE}${endpoint}`, options);
-      if (!res.ok) throw new Error(`API Error: ${res.status}`);
-      return res.json();
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // TAB SWITCHING LOGIC
-    // ═══════════════════════════════════════════════════════════════════════
-    // MAIN TABS (CONTROL PLANE SECTIONS)
-    const mainTabButtons = document.querySelectorAll('.js-main-tab');
-    const mainPanels = document.querySelectorAll('[data-main-panel]');
-    const aicoreSubnav = document.getElementById('aicore-subnav');
-
-    mainTabButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        mainTabButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        const target = btn.getAttribute('data-main-target');
-        mainPanels.forEach(panel => {
-          panel.classList.toggle('active', panel.getAttribute('data-main-panel') === target);
-        });
-
-        const companyopsSubnav = document.getElementById('companyops-subnav');
-        if (target === 'aicore') {
-          aicoreSubnav.style.display = 'flex';
-          toggleCheatSubnav();
-          if (companyopsSubnav) companyopsSubnav.style.display = 'none';
-        } else if (target === 'companyops') {
-          aicoreSubnav.style.display = 'none';
-          document.getElementById('cheat-subnav').style.display = 'none';
-          if (companyopsSubnav) companyopsSubnav.style.display = 'flex';
-          // Auto-load contacts on first open
-          if (!window.contactsLoaded) {
-            loadContacts();
-            window.contactsLoaded = true;
-          }
-        } else {
-          aicoreSubnav.style.display = 'none';
-          document.getElementById('cheat-subnav').style.display = 'none';
-          if (companyopsSubnav) companyopsSubnav.style.display = 'none';
-        }
-      });
-    });
-
-    // AICORE TABS
-    const aicoreTabButtons = document.querySelectorAll('.js-aicore-tab');
-    const aicorePanels = document.querySelectorAll('[data-aicore-panel]');
-    const cheatSubnav = document.getElementById('cheat-subnav');
-
-    function toggleCheatSubnav() {
-      const activeAicoreTab = document.querySelector('.js-aicore-tab.active');
-      const isCheat = activeAicoreTab && activeAicoreTab.getAttribute('data-aicore-target') === 'cheat-sheet';
-      cheatSubnav.style.display = isCheat ? 'flex' : 'none';
-    }
-
-    aicoreTabButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        aicoreTabButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        const target = btn.getAttribute('data-aicore-target');
-        aicorePanels.forEach(panel => {
-          panel.classList.toggle('active', panel.getAttribute('data-aicore-panel') === target);
-        });
-
-        toggleCheatSubnav();
-
-        // Initialize managers based on which tab is clicked
-        if (target === 'variables' && !window.variablesManagerLoaded) {
-          initVariablesManager();
-          window.variablesManagerLoaded = true;
-        } else if (target === 'templates' && !window.templatesManagerLoaded) {
-          initTemplatesManager();
-          window.templatesManagerLoaded = true;
-        } else if (target === 'live-scenarios' && !window.liveScenariosManagerLoaded) {
-          initLiveScenariosManager();
-          window.liveScenariosManagerLoaded = true;
-        } else if (target === 'cheat-sheet' && !window.cheatSheetManagerLoaded) {
-          initCheatSheetManager();
-          window.cheatSheetManagerLoaded = true;
-        // NUKED Dec 2025: call-flow (replaced by Mission Control), knowledgebase, observability, llm-cortex-intel
-        } else if (target === 'agent-status') {
-          initAgentStatus(); // Always refresh on tab click
-        }
-      });
-    });
-
-    // CHEAT SHEET SUB-TABS (CONTROL PLANE NAV → CheatSheetManager)
-    const cheatTabButtons = document.querySelectorAll('.js-cheat-tab');
-    // All tabs now handled by CheatSheetManager - working tabs render normally, Coming Soon tabs show placeholder
-    const cheatTabsHandledByManager = new Set(['triage','frontline-intel','transfer-calls','edge-cases','behavior','guardrails','booking','company-contacts','links','calculator','version-history']);
-    const cheatTabLabels = {
-      'triage': 'Triage',
-      'frontline-intel': 'Mission Control',
-      'transfer-calls': 'Transfer Calls',
-      'edge-cases': 'Edge Cases',
-      'behavior': 'Behavior',
-      'guardrails': 'Guardrails',
-      'booking': 'Booking Rules',
-      'company-contacts': 'Company Contacts',
-      'links': 'Links',
-      'calculator': 'Calculator',
-      'version-history': 'Version History'
-    };
-
-    let activeCheatTab = 'triage';
-
-    function setCheatTabActive(target) {
-      activeCheatTab = target;
-      cheatTabButtons.forEach(btn => {
-        const btnTarget = btn.getAttribute('data-cheat-target');
-        const isActive = btnTarget === target;
-        btn.classList.toggle('active', isActive);
-      });
-    }
-
-    function showCheatTabPlaceholder(target) {
-      const label = cheatTabLabels[target] || target;
-      console.warn(`[CONTROL PLANE] Cheat Sheet sub-tab "${label}" is not wired yet.`);
-      alert(`${label} UI is coming soon. For now, manage it inside company-profile AiCore.`);
-    }
-
-    cheatTabButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const target = btn.getAttribute('data-cheat-target');
-
-        if (!cheatTabsHandledByManager.has(target)) {
-          showCheatTabPlaceholder(target);
-          setCheatTabActive(activeCheatTab);
-          return;
-        }
-
-        setCheatTabActive(target);
-        initCheatSheetManager();
-
-        if (window.cheatSheetManager && typeof window.cheatSheetManager.switchSubTab === 'function') {
-          window.cheatSheetManager.switchSubTab(target);
-        } else {
-          console.warn('[CONTROL PLANE] CheatSheetManager not ready yet.');
-        }
-      });
-    });
-
-    // Ensure default tab looks active
-    setCheatTabActive('triage');
-
-    // COMPANYOPS TABS
-    const companyopsTabButtons = document.querySelectorAll('.js-companyops-tab');
-    const companyopsPanels = document.querySelectorAll('[data-companyops-panel]');
-
-    companyopsTabButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        companyopsTabButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        const target = btn.getAttribute('data-companyops-target');
-        companyopsPanels.forEach(panel => {
-          panel.classList.toggle('active', panel.getAttribute('data-companyops-panel') === target);
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EVENT LISTENERS
+    // ═══════════════════════════════════════════════════════════════════════════
+    document.addEventListener('DOMContentLoaded', () => {
+      // Wire up nav tabs
+      document.querySelectorAll('.nav-tab').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const tabId = btn.getAttribute('data-tab');
+          // Skip for Call Center (opens in new tab)
+          if (tabId === 'call-center') return;
+          switchTab(tabId);
         });
       });
-    });
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // COMPANYOPS: CONTACTS
-    // ═══════════════════════════════════════════════════════════════════════
-    async function loadContacts() {
-      if (!currentCompanyId) {
-        alert('No companyId provided in URL. Add ?companyId=... to the URL.');
-        return;
-      }
       
-      const tbody = document.getElementById('contacts-table-body');
-      tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;">Loading...</td></tr>';
-      
-      try {
-        const search = document.getElementById('contacts-search')?.value || '';
-        const data = await apiCall(`/api/company/${currentCompanyId}/contacts?search=${encodeURIComponent(search)}`);
-        
-        if (!data.data || data.data.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;">No contacts found.</td></tr>';
-          return;
-        }
-
-        tbody.innerHTML = data.data.map(c => `
-          <tr>
-            <td>${c.name || 'N/A'}</td>
-            <td>${c.primaryPhone || 'N/A'}</td>
-            <td>${c.email || 'N/A'}</td>
-            <td>${c.role || 'Other'}</td>
-            <td>${(c.tags || []).map(t => `<span class="pill-label">${t.label}</span>`).join('')}</td>
-            <td>${c.lastCallAt ? new Date(c.lastCallAt).toLocaleDateString() : 'Never'}</td>
-            <td>
-              <button class="btn btn-secondary" style="font-size:11px;padding:4px 8px;" onclick="editContact('${c._id}')">Edit</button>
-              <button class="btn btn-danger" style="font-size:11px;padding:4px 8px;" onclick="deleteContact('${c._id}')">Delete</button>
-            </td>
-          </tr>
-        `).join('');
-      } catch (err) {
-        console.error('Failed to load contacts:', err);
-        tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;color:#dc2626;">Error loading contacts. Check console.</td></tr>';
-      }
-    }
-
-    function openContactModal(contactId = null) {
-      const modal = document.getElementById('contact-modal');
-      modal.classList.add('active');
-      // TODO: If contactId, fetch and populate form
-    }
-
-    function closeContactModal() {
-      const modal = document.getElementById('contact-modal');
-      modal.classList.remove('active');
-      document.getElementById('contact-form').reset();
-    }
-
-    async function saveContact(event) {
-      event.preventDefault();
-      const name = document.getElementById('contact-name').value;
-      const primaryPhone = document.getElementById('contact-primary-phone').value;
-      const email = document.getElementById('contact-email').value;
-      const role = document.getElementById('contact-role').value;
-
-      try {
-        await apiCall(`/api/company/${currentCompanyId}/contacts`, 'POST', { name, primaryPhone, email, role });
-        closeContactModal();
-        loadContacts();
-      } catch (err) {
-        alert('Failed to save contact: ' + err.message);
-      }
-    }
-
-    async function deleteContact(contactId) {
-      if (!confirm('Delete this contact?')) return;
-      try {
-        await apiCall(`/api/company/${currentCompanyId}/contacts/${contactId}`, 'DELETE');
-        loadContacts();
-      } catch (err) {
-        alert('Failed to delete contact: ' + err.message);
-      }
-    }
-
-    async function editContact(id) {
-      // TODO: Fetch contact by ID and populate modal
-      openContactModal(id);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // COMPANYOPS: LOCATIONS
-    // ═══════════════════════════════════════════════════════════════════════
-    async function loadLocations() {
-      if (!currentCompanyId) return;
-      const tbody = document.getElementById('locations-table-body');
-      tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;">Loading...</td></tr>';
-      
-      try {
-        const data = await apiCall(`/api/company/${currentCompanyId}/locations`);
-        if (!data.data || data.data.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;">No locations found.</td></tr>';
-          return;
-        }
-
-        tbody.innerHTML = data.data.map(l => `
-          <tr>
-            <td>${l.addressLine1}</td>
-            <td>${l.city}, ${l.state}</td>
-            <td>${l.contactName || 'N/A'}</td>
-            <td>${l.hasAccessProfile ? '<span class="pill-label">✓ Has Profile</span>' : '<span class="muted">None</span>'}</td>
-            <td>
-              <button class="btn btn-secondary" style="font-size:11px;padding:4px 8px;" onclick="viewLocation('${l._id}')">View</button>
-              <button class="btn btn-danger" style="font-size:11px;padding:4px 8px;" onclick="deleteLocation('${l._id}')">Delete</button>
-            </td>
-          </tr>
-        `).join('');
-      } catch (err) {
-        console.error('Failed to load locations:', err);
-        tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;color:#dc2626;">Error loading locations.</td></tr>';
-      }
-    }
-
-    function openLocationModal() { alert('Location CRUD modal - will be implemented next'); }
-    function viewLocation(id) { alert('View location detail: ' + id); }
-    async function deleteLocation(id) {
-      if (!confirm('Delete this location?')) return;
-      try {
-        await apiCall(`/api/company/${currentCompanyId}/locations/${id}`, 'DELETE');
-        loadLocations();
-      } catch (err) {
-        alert('Failed to delete location: ' + err.message);
-      }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // COMPANYOPS: APPOINTMENTS
-    // ═══════════════════════════════════════════════════════════════════════
-    async function loadAppointments() {
-      if (!currentCompanyId) return;
-      const tbody = document.getElementById('appointments-table-body');
-      tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;">Loading...</td></tr>';
-      
-      try {
-        const data = await apiCall(`/api/company/${currentCompanyId}/appointments`);
-        if (!data.data || data.data.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;">No appointments found.</td></tr>';
-          return;
-        }
-
-        tbody.innerHTML = data.data.map(a => `
-          <tr>
-            <td>${a.scheduledDate}</td>
-            <td>${a.timeWindow}</td>
-            <td>${a.serviceType}</td>
-            <td>${a.contactName || 'N/A'}</td>
-            <td>${a.locationLabel || 'N/A'}</td>
-            <td><span class="status-badge status-${a.status}">${a.status}</span></td>
-            <td>
-              <button class="btn btn-secondary" style="font-size:11px;padding:4px 8px;" onclick="changeAppointmentStatus('${a._id}')">Change Status</button>
-            </td>
-          </tr>
-        `).join('');
-      } catch (err) {
-        console.error('Failed to load appointments:', err);
-        tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;color:#dc2626;">Error loading appointments.</td></tr>';
-      }
-    }
-
-    function openAppointmentModal() { alert('Appointment CRUD modal - will be implemented next'); }
-    function changeAppointmentStatus(id) { alert('Change status for: ' + id); }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // COMPANYOPS: CALL LOGS
-    // ═══════════════════════════════════════════════════════════════════════
-    async function loadCallLogs() {
-      if (!currentCompanyId) return;
-      const tbody = document.getElementById('call-logs-table-body');
-      tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;">Loading...</td></tr>';
-      
-      try {
-        const data = await apiCall(`/api/company/${currentCompanyId}/call-traces`);
-        if (!data.data || data.data.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;">No call history found.</td></tr>';
-          return;
-        }
-
-        tbody.innerHTML = data.data.map(c => `
-          <tr>
-            <td>${new Date(c.startedAt).toLocaleString()}</td>
-            <td>${c.phoneNumber}</td>
-            <td>${c.intentSummary || 'Unknown'}</td>
-            <td>${c.durationSeconds}s</td>
-            <td><span class="pill-label">T1: ${c.tierUsage.tier1}</span> <span class="pill-label">T2: ${c.tierUsage.tier2}</span> <span class="pill-label">T3: ${c.tierUsage.tier3}</span></td>
-            <td>${c.finalOutcome}</td>
-            <td>
-              <button class="btn btn-secondary" style="font-size:11px;padding:4px 8px;" onclick="viewCallDetail('${c.callId}')">View</button>
-            </td>
-          </tr>
-        `).join('');
-      } catch (err) {
-        console.error('Failed to load call logs:', err);
-        tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;color:#dc2626;">Error loading call history.</td></tr>';
-      }
-    }
-
-    function viewCallDetail(callId) { alert('View call detail: ' + callId + ' (transcript, context, etc.)'); }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // COMPANYOPS: USAGE / BILLING
-    // ═══════════════════════════════════════════════════════════════════════
-    async function loadUsageBilling() {
-      if (!currentCompanyId) return;
-      const container = document.getElementById('usage-billing-content');
-      container.innerHTML = '<p class="muted">Loading...</p>';
-      
-      try {
-        const usage = await apiCall(`/api/company/${currentCompanyId}/usage`);
-        const billing = await apiCall(`/api/company/${currentCompanyId}/billing-state`);
-        
-        container.innerHTML = `
-          <h3 style="margin-top:16px;">Usage Summary</h3>
-          <table style="margin-top:8px;">
-            <tr><th>Total Calls</th><td>${usage.data.totalCalls}</td></tr>
-            <tr><th>Billed Minutes</th><td>${usage.data.totalBilledMinutes}</td></tr>
-            <tr><th>LLM Turns</th><td>${usage.data.totalLlmTurns}</td></tr>
-            <tr><th>Estimated AI Cost</th><td>$${usage.data.totalEstimatedAiCost.toFixed(2)}</td></tr>
-            <tr><th>Avg Cost/Call</th><td>$${usage.data.avgCostPerCall.toFixed(2)}</td></tr>
-          </table>
-          
-          <h3 style="margin-top:24px;">Tier Distribution</h3>
-          <p class="muted">Tier 1: ${usage.data.tierDistribution.tier1.toFixed(1)}% | Tier 2: ${usage.data.tierDistribution.tier2.toFixed(1)}% | Tier 3: ${usage.data.tierDistribution.tier3.toFixed(1)}%</p>
-          
-          <h3 style="margin-top:24px;">Billing State</h3>
-          ${billing.data ? `
-            <table style="margin-top:8px;">
-              <tr><th>Billing Cycle</th><td>${new Date(billing.data.billingCycleStart).toLocaleDateString()} - ${new Date(billing.data.billingCycleEnd).toLocaleDateString()}</td></tr>
-              <tr><th>Minutes Included</th><td>${billing.data.minutesIncluded}</td></tr>
-              <tr><th>Minutes Used</th><td>${billing.data.minutesUsed}</td></tr>
-              <tr><th>Overage Minutes</th><td>${billing.data.overageMinutes}</td></tr>
-              <tr><th>Estimated AI Cost</th><td>$${billing.data.estimatedAiCost.toFixed(2)}</td></tr>
-            </table>
-          ` : '<p class="muted">No billing state found.</p>'}
+      // Auto-initialize Front Desk (default tab)
+      if (currentCompanyId) {
+        initializeTab('front-desk');
+      } else {
+        document.getElementById('front-desk-container').innerHTML = `
+          <div style="padding: 60px; text-align: center; color: #ef4444;">
+            <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 16px;"></i>
+            <h3>No Company Selected</h3>
+            <p>Please add ?companyId=... to the URL</p>
+          </div>
         `;
-      } catch (err) {
-        console.error('Failed to load usage/billing:', err);
-        container.innerHTML = '<p class="muted" style="color:#dc2626;">Error loading usage data.</p>';
       }
-    }
-
-    async function exportUsage() {
-      if (!currentCompanyId) return;
-      try {
-        window.open(`/api/company/${currentCompanyId}/usage/export`, '_blank');
-      } catch (err) {
-        alert('Failed to export usage: ' + err.message);
-      }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // COMPANYOPS: CUSTOMER DB
-    // ═══════════════════════════════════════════════════════════════════════
-    async function searchCustomers() {
-      if (!currentCompanyId) return;
-      const search = document.getElementById('customer-search')?.value || '';
-      const tbody = document.getElementById('customer-db-table-body');
-      tbody.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center;">Loading...</td></tr>';
-      
-      try {
-        const data = await apiCall(`/api/company/${currentCompanyId}/customers?search=${encodeURIComponent(search)}`);
-        if (!data.data || data.data.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center;">No customers found.</td></tr>';
-          return;
-        }
-
-        tbody.innerHTML = data.data.map(c => `
-          <tr>
-            <td>${c.customerName || 'N/A'}</td>
-            <td>${c.primaryPhone || 'N/A'}</td>
-            <td>${c.totalLocations || 0}</td>
-            <td>${c.totalAppointments || 0}</td>
-            <td>${c.lastCallAt ? new Date(c.lastCallAt).toLocaleDateString() : 'Never'}</td>
-            <td>
-              <button class="btn btn-secondary" style="font-size:11px;padding:4px 8px;" onclick="viewCustomerProfile('${c._id}')">Profile</button>
-            </td>
-          </tr>
-        `).join('');
-      } catch (err) {
-        console.error('Failed to search customers:', err);
-        tbody.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center;color:#dc2626;">Error loading customers.</td></tr>';
-      }
-    }
-
-    function viewCustomerProfile(contactId) { alert('View customer profile: ' + contactId); }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // COMPANYOPS: NOTIFICATIONS
-    // ═══════════════════════════════════════════════════════════════════════
-    async function loadNotifications() {
-      if (!currentCompanyId) return;
-      const container = document.getElementById('notifications-content');
-      container.innerHTML = '<p class="muted">Loading...</p>';
-      
-      try {
-        const data = await apiCall(`/api/company/${currentCompanyId}/notification-settings`);
-        container.innerHTML = `
-          <p class="muted">Notification settings loaded. UI for event matrix to be implemented.</p>
-          <pre style="background:#f3f4f6;padding:12px;border-radius:6px;font-size:12px;overflow:auto;">${JSON.stringify(data.data, null, 2)}</pre>
-        `;
-      } catch (err) {
-        console.error('Failed to load notifications:', err);
-        container.innerHTML = '<p class="muted" style="color:#dc2626;">Error loading notification settings.</p>';
-      }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // COMPANYOPS: SETTINGS
-    // ═══════════════════════════════════════════════════════════════════════
-    async function loadSettings() {
-      if (!currentCompanyId) return;
-      const container = document.getElementById('settings-content');
-      container.innerHTML = '<p class="muted">Loading...</p>';
-      
-      try {
-        const data = await apiCall(`/api/company/${currentCompanyId}/settings`);
-        container.innerHTML = `
-          <h3>AI Agent Settings</h3>
-          <pre style="background:#f3f4f6;padding:12px;border-radius:6px;font-size:12px;overflow:auto;">${JSON.stringify(data.data.aiAgentSettings, null, 2)}</pre>
-          
-          <h3 style="margin-top:24px;">Operating Hours</h3>
-          <pre style="background:#f3f4f6;padding:12px;border-radius:6px;font-size:12px;overflow:auto;">${JSON.stringify(data.data.operatingHours, null, 2)}</pre>
-          
-          <p class="muted" style="margin-top:16px;">Full settings UI (4 sections with forms) to be implemented.</p>
-        `;
-      } catch (err) {
-        console.error('Failed to load settings:', err);
-        container.innerHTML = '<p class="muted" style="color:#dc2626;">Error loading settings.</p>';
-      }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // CHEAT SHEET SUB-TABS: NOW HANDLED BY CheatSheetManager.js
-    // (Legacy functions removed - CheatSheetManager renders all 6 sub-tabs)
-    // ═══════════════════════════════════════════════════════════════════════
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // AUTO-LOAD DATA WHEN COMPANYOPS TABS ARE CLICKED
-    // ═══════════════════════════════════════════════════════════════════════
-    companyopsTabButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const target = btn.getAttribute('data-companyops-target');
-        if (target === 'locations' && !window.locationsLoaded) {
-          loadLocations();
-          window.locationsLoaded = true;
-        } else if (target === 'appointments' && !window.appointmentsLoaded) {
-          loadAppointments();
-          window.appointmentsLoaded = true;
-        } else if (target === 'call-logs' && !window.callLogsLoaded) {
-          loadCallLogs();
-          window.callLogsLoaded = true;
-        } else if (target === 'usage-billing' && !window.usageBillingLoaded) {
-          loadUsageBilling();
-          window.usageBillingLoaded = true;
-        } else if (target === 'customer-db' && !window.customerDbLoaded) {
-          searchCustomers();
-          window.customerDbLoaded = true;
-        } else if (target === 'notifications' && !window.notificationsLoaded) {
-          loadNotifications();
-          window.notificationsLoaded = true;
-        } else if (target === 'settings' && !window.settingsLoaded) {
-          loadSettings();
-          window.settingsLoaded = true;
-        }
-      });
-    });
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // AUTO-INITIALIZE VARIABLES ON PAGE LOAD (IT'S THE DEFAULT TAB)
-    // ═══════════════════════════════════════════════════════════════════════
-    window.addEventListener('DOMContentLoaded', () => {
-      // Check if Variables tab is active on page load
-      const activeMainTab = document.querySelector('.js-main-tab.active');
-      const activeAicoreTab = document.querySelector('.js-aicore-tab.active');
-      
-      if (activeMainTab && activeMainTab.getAttribute('data-main-target') === 'aicore' &&
-          activeAicoreTab && activeAicoreTab.getAttribute('data-aicore-target') === 'variables') {
-        console.log('🎯 [CONTROL PLANE] Variables tab is active on page load - auto-initializing');
-        
-        // Wait for VariablesManager to be loaded
-        setTimeout(() => {
-          if (window.VariablesManager && !window.variablesManagerLoaded) {
-            initVariablesManager();
-            window.variablesManagerLoaded = true;
-          }
-        }, 100);
-      }
-      
-      // ═══════════════════════════════════════════════════════════════════
-      // BACKGROUND HEALTH MONITORING - Runs immediately on page load
-      // Updates the Live Agent Status indicator without needing to open the tab
-      // ═══════════════════════════════════════════════════════════════════
-      startBackgroundHealthMonitor();
     });
     
-    /**
-     * Lightweight background health monitor
-     * Updates the tab indicator without loading the full AgentStatusManager
-     */
-    let backgroundHealthInterval = null;
-    
-    async function checkAgentHealth() {
-      if (!currentCompanyId) return;
-      
-      const indicator = document.getElementById('agent-status-indicator');
-      if (!indicator) return;
-      
-      try {
-        const token = localStorage.getItem('adminToken');
-        const response = await fetch(`/api/admin/agent-status/${currentCompanyId}/health`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          const status = data.status || 'unknown';
-          
-          // Update indicator based on status
-          const statusEmoji = {
-            'healthy': '🟢',
-            'degraded': '🟡', 
-            'down': '🔴',
-            'unknown': '⚪'
-          };
-          
-          indicator.textContent = statusEmoji[status] || '⚪';
-          // Silent success - only log errors
-        } else {
-          indicator.textContent = '🟡'; // API error = degraded
-        }
-      } catch (error) {
-        // Only log real errors, not network blips
-        if (!error.message.includes('Failed to fetch')) {
-          console.warn('[HEALTH] Check failed:', error.message);
-        }
-        indicator.textContent = '🔴'; // Network error = down
-      }
-    }
-    
-    function startBackgroundHealthMonitor() {
-      // Silent start - no console spam
-      
-      // Initial check immediately
-      checkAgentHealth();
-      
-      // Then every 60 seconds
-      if (backgroundHealthInterval) clearInterval(backgroundHealthInterval);
-      backgroundHealthInterval = setInterval(checkAgentHealth, 60000);
-    }
+    console.log('✅ [CONTROL PLANE] Clean Architecture loaded - Dec 2025');
   </script>
-
-  <!-- ═══════════════════════════════════════════════════════════════════════ -->
-  <!-- AICORE MANAGERS - LAZY LOADED (load on-demand to prevent resource exhaustion) -->
-  <!-- ═══════════════════════════════════════════════════════════════════════ -->
-  <!-- NAVIGATION: V2 Navigator for diagnostic "Fix Now" buttons -->
-  <script src="/js/control-plane-v2-navigator.js?v=1.0"></script>
-  
-  <!-- ONLY LOAD VARIABLES MANAGER IMMEDIATELY (first tab, always shown) -->
-  <script src="/js/ai-agent-settings/VariablesManager.js"></script>
-  
-  <!-- 
-    ALL OTHER MANAGERS ARE LAZY-LOADED VIA loadScript() WHEN THEIR TAB IS CLICKED
-    This prevents ERR_INSUFFICIENT_RESOURCES from loading 9+ scripts simultaneously
-  -->
 </body>
 </html>
