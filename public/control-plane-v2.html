@@ -1863,54 +1863,84 @@
       const container = document.getElementById('templates-list');
       
       try {
-        // Load trade categories first
-        const catResponse = await fetch('/api/v2global/trade-categories', {
+        // ═══════════════════════════════════════════════════════════════════
+        // LOAD FROM REAL GLOBAL AI BRAIN (GlobalInstantResponseTemplate)
+        // ═══════════════════════════════════════════════════════════════════
+        console.log('📄 [TEMPLATES] Loading from Global AI Brain...');
+        
+        // Load published templates from Global AI Brain
+        const response = await fetch('/api/admin/global-instant-responses/published', {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
         
-        let categories = [];
-        if (catResponse.ok) {
-          const catData = await catResponse.json();
-          categories = catData.categories || catData || [];
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
         }
         
-        // Populate filter dropdown
-        const filterSelect = document.getElementById('template-trade-filter');
-        filterSelect.innerHTML = '<option value="all">All Categories</option>' +
-          categories.map(c => `<option value="${c._id}">${c.name}</option>`).join('');
+        const templates = await response.json();
+        console.log('📄 [TEMPLATES] Loaded:', templates.length, 'templates');
         
-        // Load templates
-        const response = await fetch(`/api/company/${currentCompanyId}/dynamic-flows?includeTemplates=true`, {
+        // Load company's active templates
+        const activeResponse = await fetch(`/api/company/${currentCompanyId}/configuration/templates`, {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
         
-        if (response.ok) {
-          const data = await response.json();
-          const templates = (data.templates || []).concat(data.globalTemplates || []);
-          
-          if (templates.length === 0) {
-            container.innerHTML = `
-              <div style="text-align: center; padding: 60px; color: #94a3b8; grid-column: 1 / -1;">
-                <i class="fas fa-file-alt" style="font-size: 48px; margin-bottom: 16px; display: block;"></i>
-                No templates available. Templates are created per trade category.
+        let activeTemplateIds = [];
+        if (activeResponse.ok) {
+          const activeData = await activeResponse.json();
+          activeTemplateIds = (activeData.templates || []).map(t => t.templateId?.toString() || t._id?.toString());
+        }
+        
+        if (!templates || templates.length === 0) {
+          container.innerHTML = `
+            <div style="text-align: center; padding: 60px; color: #94a3b8; grid-column: 1 / -1;">
+              <i class="fas fa-brain" style="font-size: 48px; margin-bottom: 16px; display: block;"></i>
+              No templates in Global AI Brain. 
+              <br><br>
+              <a href="/admin-global-instant-responses.html" target="_blank" style="color: #3b82f6; text-decoration: underline;">
+                Open Global AI Brain →
+              </a>
+            </div>
+          `;
+        } else {
+          container.innerHTML = templates.map(t => {
+            const isActive = activeTemplateIds.includes(t._id?.toString());
+            const totalScenarios = (t.categories || []).reduce((sum, cat) => sum + (cat.scenarios?.length || 0), 0);
+            const totalTriggers = (t.categories || []).reduce((sum, cat) => 
+              sum + (cat.scenarios || []).reduce((s2, sc) => s2 + (sc.triggers?.length || 0), 0), 0);
+            
+            return `
+              <div style="background: ${isActive ? '#f0fdf4' : '#f8fafc'}; border-radius: 12px; padding: 16px; border: 2px solid ${isActive ? '#22c55e' : '#e2e8f0'};">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                  <div>
+                    <h4 style="margin: 0; font-size: 15px; font-weight: 600;">${t.name || 'Unnamed Template'}</h4>
+                    <span style="font-size: 11px; color: #64748b;">${t.industryLabel || t.templateType || 'Universal'}</span>
+                  </div>
+                  ${isActive ? '<span style="background: #22c55e; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">✓ Active</span>' : ''}
+                </div>
+                <div style="display: flex; gap: 16px; font-size: 12px; color: #64748b; margin-bottom: 12px;">
+                  <span><strong>${t.categories?.length || 0}</strong> Categories</span>
+                  <span><strong>${totalScenarios}</strong> Scenarios</span>
+                  <span><strong>${totalTriggers}</strong> Triggers</span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                  ${isActive ? `
+                    <button onclick="deactivateTemplate('${t._id}')" style="padding: 6px 12px; border: 1px solid #ef4444; background: white; color: #ef4444; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                      <i class="fas fa-times"></i> Deactivate
+                    </button>
+                  ` : `
+                    <button onclick="activateTemplate('${t._id}')" style="padding: 6px 12px; border: none; background: #3b82f6; color: white; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                      <i class="fas fa-check"></i> Activate
+                    </button>
+                  `}
+                  <a href="/admin-global-instant-responses.html?templateId=${t._id}" target="_blank" 
+                     style="padding: 6px 12px; border: 1px solid #e2e8f0; background: white; color: #64748b; border-radius: 6px; text-decoration: none; font-size: 12px;">
+                    <i class="fas fa-external-link-alt"></i> Edit
+                  </a>
+                </div>
               </div>
             `;
-          } else {
-            container.innerHTML = templates.map(t => `
-              <div style="background: #f8fafc; border-radius: 12px; padding: 16px; border: 1px solid #e2e8f0;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                  <h4 style="margin: 0; font-size: 15px; font-weight: 600;">${t.name || t.flowKey}</h4>
-                  <span style="background: #e2e8f0; padding: 2px 8px; border-radius: 12px; font-size: 11px;">P${t.priority || 0}</span>
-                </div>
-                <p style="font-size: 12px; color: #64748b; margin: 0 0 12px 0;">
-                  ${t.trigger?.phrases?.slice(0, 3).join(', ') || 'No triggers'}
-                </p>
-                <button onclick="copyTemplateToCompany('${t._id}')" style="padding: 6px 12px; border: none; background: #3b82f6; color: white; border-radius: 6px; cursor: pointer; font-size: 12px;">
-                  <i class="fas fa-copy"></i> Copy to Company
-                </button>
-              </div>
-            `).join('');
-          }
+          }).join('');
         }
       } catch (error) {
         console.error('Failed to load templates:', error);
@@ -1918,67 +1948,163 @@
           <div style="text-align: center; padding: 60px; color: #ef4444; grid-column: 1 / -1;">
             <i class="fas fa-exclamation-triangle" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
             Failed to load templates: ${error.message}
+            <br><br>
+            <a href="/admin-global-instant-responses.html" target="_blank" style="color: #3b82f6; text-decoration: underline;">
+              Open Global AI Brain directly →
+            </a>
           </div>
         `;
       }
     }
     
-    async function copyTemplateToCompany(templateId) {
+    async function activateTemplate(templateId) {
       try {
-        const response = await fetch(`/api/company/${currentCompanyId}/dynamic-flows/copy-template`, {
+        const response = await fetch(`/api/company/${currentCompanyId}/configuration/templates`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${authToken}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ templateId })
+          body: JSON.stringify({ templateId, priority: 10 })
         });
         
         if (response.ok) {
-          alert('✅ Template copied to company!');
+          alert('✅ Template activated!');
           loadTemplates();
         } else {
           const data = await response.json();
-          throw new Error(data.error || 'Failed to copy template');
+          throw new Error(data.error || 'Failed to activate template');
         }
       } catch (error) {
         alert('❌ ' + error.message);
       }
     }
     
-    async function loadScenarios() {
-      const container = document.getElementById('scenarios-list');
+    async function deactivateTemplate(templateId) {
+      if (!confirm('Remove this template from company?')) return;
       
       try {
-        // For now, show triage cards as scenarios (they serve the same purpose)
-        const response = await fetch(`/api/company/${currentCompanyId}`, {
+        const response = await fetch(`/api/company/${currentCompanyId}/configuration/templates/${templateId}`, {
+          method: 'DELETE',
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
         
         if (response.ok) {
+          alert('✅ Template deactivated');
+          loadTemplates();
+        } else {
           const data = await response.json();
-          const company = data.company || data;
-          const triageCards = company.cheatSheet?.triageCards || [];
+          throw new Error(data.error || 'Failed to deactivate');
+        }
+      } catch (error) {
+        alert('❌ ' + error.message);
+      }
+    }
+    
+    // copyTemplateToCompany removed - replaced by activateTemplate/deactivateTemplate above
+    
+    async function loadScenarios() {
+      const container = document.getElementById('scenarios-list');
+      
+      try {
+        // ═══════════════════════════════════════════════════════════════════
+        // LOAD LIVE SCENARIOS FROM ACTIVATED TEMPLATES (Real AI Brain data)
+        // ═══════════════════════════════════════════════════════════════════
+        console.log('🎭 [SCENARIOS] Loading live scenarios from Global AI Brain...');
+        
+        const response = await fetch(`/api/company/${currentCompanyId}/live-scenarios`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const scenarios = data.scenarios || [];
+        const categories = data.categories || [];
+        const summary = data.summary || {};
+        
+        console.log('🎭 [SCENARIOS] Loaded:', scenarios.length, 'scenarios in', categories.length, 'categories');
+        
+        if (scenarios.length === 0) {
+          container.innerHTML = `
+            <div style="text-align: center; padding: 60px; color: #94a3b8;">
+              <i class="fas fa-theater-masks" style="font-size: 48px; margin-bottom: 16px; display: block;"></i>
+              <p style="margin: 0 0 16px 0;">No scenarios available.</p>
+              <p style="font-size: 13px; margin: 0 0 20px 0;">
+                Scenarios come from activated Global AI Brain templates.<br>
+                Go to <strong>Templates</strong> tab to activate a template first.
+              </p>
+              <a href="/admin-global-instant-responses.html" target="_blank" style="color: #3b82f6; text-decoration: underline;">
+                Open Global AI Brain →
+              </a>
+            </div>
+          `;
+        } else {
+          // Group scenarios by category
+          const grouped = {};
+          scenarios.forEach(s => {
+            const cat = s.categoryName || 'Uncategorized';
+            if (!grouped[cat]) grouped[cat] = [];
+            grouped[cat].push(s);
+          });
           
-          if (triageCards.length === 0) {
-            container.innerHTML = `
-              <div style="text-align: center; padding: 60px; color: #94a3b8;">
-                <i class="fas fa-theater-masks" style="font-size: 48px; margin-bottom: 16px; display: block;"></i>
-                No scenarios configured. Scenarios help the AI handle specific situations.
-              </div>
-            `;
-          } else {
-            container.innerHTML = triageCards.map(s => `
-              <div style="background: #f8fafc; border-radius: 12px; padding: 16px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                  <h4 style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600;">${s.name || s.category || 'Unnamed Scenario'}</h4>
-                  <p style="font-size: 12px; color: #64748b; margin: 0;">
-                    ${(s.triggers || s.triggerPhrases || []).slice(0, 3).join(', ') || 'No triggers'}
-                  </p>
+          container.innerHTML = `
+            <div style="margin-bottom: 16px; padding: 12px; background: #f0f9ff; border-radius: 8px; border: 1px solid #bae6fd;">
+              <strong>📊 Summary:</strong> 
+              ${scenarios.length} scenarios across ${Object.keys(grouped).length} categories
+              ${summary.totalTriggers ? ` • ${summary.totalTriggers} triggers` : ''}
+            </div>
+            ${Object.entries(grouped).map(([catName, catScenarios]) => `
+              <div style="margin-bottom: 24px;">
+                <h4 style="font-size: 14px; font-weight: 600; color: #334155; margin: 0 0 12px 0; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
+                  📁 ${catName} <span style="font-weight: 400; color: #94a3b8;">(${catScenarios.length})</span>
+                </h4>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  ${catScenarios.map(s => `
+                    <div style="background: #f8fafc; border-radius: 8px; padding: 12px 16px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                      <div style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                          <span style="font-weight: 600; font-size: 14px;">${s.name || 'Unnamed'}</span>
+                          ${s.priority ? `<span style="background: #e2e8f0; padding: 1px 6px; border-radius: 4px; font-size: 10px;">P${s.priority}</span>` : ''}
+                        </div>
+                        <p style="font-size: 12px; color: #64748b; margin: 0;">
+                          ${(s.triggers || []).slice(0, 4).map(t => `"${t}"`).join(', ') || 'No triggers'}
+                          ${(s.triggers || []).length > 4 ? ` +${s.triggers.length - 4} more` : ''}
+                        </p>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 11px; color: ${s.isActive !== false ? '#22c55e' : '#ef4444'};">
+                          ${s.isActive !== false ? '● Live' : '○ Inactive'}
+                        </span>
+                      </div>
+                    </div>
+                  `).join('')}
                 </div>
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                  <input type="checkbox" ${s.enabled !== false ? 'checked' : ''} 
-                         onchange="toggleScenario('${s._id || s.id}', this.checked)"
+              </div>
+            `).join('')}
+          `;
+        }
+      } catch (error) {
+        console.error('Failed to load scenarios:', error);
+        container.innerHTML = `
+          <div style="text-align: center; padding: 60px; color: #ef4444;">
+            <i class="fas fa-exclamation-triangle" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
+            Failed to load scenarios: ${error.message}
+            <br><br>
+            <a href="/admin-global-instant-responses.html" target="_blank" style="color: #3b82f6; text-decoration: underline;">
+              Open Global AI Brain directly →
+            </a>
+          </div>
+        `;
+      }
+    }
+    
+    // Legacy function - keep for backward compatibility
+    async function toggleScenario(scenarioId, enabled) {
+      console.log('Toggle scenario:', scenarioId, enabled);
+      // TODO: Implement company-level scenario toggle when mapping layer is ready
                          style="width: 18px; height: 18px; cursor: pointer;">
                   <span style="font-size: 12px; color: #64748b;">Enabled</span>
                 </label>
