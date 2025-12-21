@@ -1574,9 +1574,11 @@
                         <i class="fas fa-sync-alt" id="truth-refresh-icon"></i>
                         Refresh
                     </button>
-                    <button onclick="copyTruthReport()" class="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-md transition-colors flex items-center gap-2">
-                        <i class="fas fa-copy"></i>
-                        Copy JSON
+                    <button id="copy-json-btn" onclick="copyTruthReport()" 
+                            class="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-md transition-all flex items-center gap-2"
+                            style="transform: scale(1); box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                        <i id="copy-json-icon" class="fas fa-copy"></i>
+                        <span id="copy-json-text">Copy JSON</span>
                     </button>
                     <button onclick="closeTruthReport()" class="p-2 hover:bg-slate-600 rounded-md transition-colors">
                         <i class="fas fa-times"></i>
@@ -2114,15 +2116,157 @@
                 return;
             }
             
+            const btn = document.getElementById('copy-json-btn');
+            const icon = document.getElementById('copy-json-icon');
+            const text = document.getElementById('copy-json-text');
+            
+            // Press effect
+            if (btn) {
+                btn.style.transform = 'scale(0.95)';
+                btn.style.boxShadow = '0 1px 2px rgba(0,0,0,0.1)';
+            }
+            
             try {
-                await navigator.clipboard.writeText(JSON.stringify(dataToCopy, null, 2));
+                const jsonString = JSON.stringify(dataToCopy, null, 2);
+                await navigator.clipboard.writeText(jsonString);
                 
-                // Show toast
-                showSaveVerifyToast(true, 'Copied!', `${label} JSON copied to clipboard`);
+                // Success visual feedback
+                if (btn) {
+                    btn.style.backgroundColor = '#059669'; // Green
+                }
+                if (icon) {
+                    icon.className = 'fas fa-check';
+                }
+                if (text) {
+                    text.textContent = 'Copied!';
+                }
+                
+                // Calculate stats for popup
+                const lines = jsonString.split('\n').length;
+                const sizeKB = (new Blob([jsonString]).size / 1024).toFixed(1);
+                const providersCount = Object.keys(dataToCopy.providers || {}).length;
+                const score = dataToCopy.completeness?.score || 'N/A';
+                const status = dataToCopy.completeness?.status || 'N/A';
+                
+                // Show detailed popup
+                showCopyPopup({
+                    label,
+                    lines,
+                    sizeKB,
+                    providersCount,
+                    score,
+                    status,
+                    companyName: dataToCopy.meta?.companyName || dataToCopy.company?.companyName || 'Unknown'
+                });
+                
+                // Reset button after delay
+                setTimeout(() => {
+                    if (btn) {
+                        btn.style.transform = 'scale(1)';
+                        btn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+                        btn.style.backgroundColor = '#4f46e5'; // Back to indigo
+                    }
+                    if (icon) {
+                        icon.className = 'fas fa-copy';
+                    }
+                    if (text) {
+                        text.textContent = 'Copy JSON';
+                    }
+                }, 2000);
+                
             } catch (error) {
                 console.error('[TRUTH REPORT] Copy failed:', error);
+                
+                // Reset press effect
+                if (btn) {
+                    btn.style.transform = 'scale(1)';
+                    btn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+                    btn.style.backgroundColor = '#dc2626'; // Red for error
+                }
+                
                 alert('Failed to copy: ' + error.message);
+                
+                setTimeout(() => {
+                    if (btn) btn.style.backgroundColor = '#4f46e5';
+                }, 2000);
             }
+        }
+        
+        // Show copy popup with details
+        function showCopyPopup(data) {
+            // Remove any existing popup
+            const existingPopup = document.getElementById('copy-popup');
+            if (existingPopup) existingPopup.remove();
+            
+            const popup = document.createElement('div');
+            popup.id = 'copy-popup';
+            popup.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+                color: white;
+                padding: 24px 32px;
+                border-radius: 12px;
+                box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+                z-index: 10001;
+                min-width: 320px;
+                animation: popupIn 0.3s ease-out;
+            `;
+            
+            popup.innerHTML = `
+                <style>
+                    @keyframes popupIn {
+                        from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+                        to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                    }
+                    @keyframes popupOut {
+                        from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                        to { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+                    }
+                </style>
+                <div style="text-align: center;">
+                    <div style="font-size: 48px; margin-bottom: 12px;">✅</div>
+                    <h3 style="font-size: 20px; font-weight: bold; margin-bottom: 4px;">Copied to Clipboard!</h3>
+                    <p style="color: #94a3b8; font-size: 14px; margin-bottom: 16px;">${data.label} for ${data.companyName}</p>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: left; background: rgba(255,255,255,0.05); padding: 16px; border-radius: 8px;">
+                        <div>
+                            <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase;">Lines</div>
+                            <div style="font-size: 18px; font-weight: bold;">${data.lines.toLocaleString()}</div>
+                        </div>
+                        <div>
+                            <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase;">Size</div>
+                            <div style="font-size: 18px; font-weight: bold;">${data.sizeKB} KB</div>
+                        </div>
+                        <div>
+                            <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase;">Providers</div>
+                            <div style="font-size: 18px; font-weight: bold;">${data.providersCount}</div>
+                        </div>
+                        <div>
+                            <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase;">Score</div>
+                            <div style="font-size: 18px; font-weight: bold; color: ${data.status === 'GREEN' ? '#22c55e' : data.status === 'YELLOW' ? '#eab308' : '#ef4444'};">
+                                ${data.score}%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(popup);
+            
+            // Auto-close after 2.5 seconds
+            setTimeout(() => {
+                popup.style.animation = 'popupOut 0.2s ease-in forwards';
+                setTimeout(() => popup.remove(), 200);
+            }, 2500);
+            
+            // Click anywhere to close
+            popup.addEventListener('click', () => {
+                popup.style.animation = 'popupOut 0.2s ease-in forwards';
+                setTimeout(() => popup.remove(), 200);
+            });
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
