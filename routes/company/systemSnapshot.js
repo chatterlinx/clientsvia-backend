@@ -18,6 +18,66 @@ const mongoose = require('mongoose');
 const Company = require('../../models/v2Company');
 const DynamicFlow = require('../../models/DynamicFlow');
 const ConversationSession = require('../../models/ConversationSession');
+const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+
+// Services
+const ScenarioEngine = require('../../services/ScenarioEngine');
+
+/**
+ * ============================================================================
+ * HELPER: Build Scenario Engine Snapshot
+ * ============================================================================
+ * Returns scenario engine configuration and stats for Flow Tree
+ */
+async function buildScenarioEngineSnapshot(companyId, company) {
+  try {
+    // Get tier config from ScenarioEngine
+    const tierConfig = await ScenarioEngine.getTierConfig(companyId);
+    
+    // Get enabled scenarios
+    const scenarioData = await ScenarioEngine.getEnabledScenarios(
+      companyId, 
+      company.tradeKey || company.industryType
+    );
+    
+    return {
+      enabled: true,
+      tiers: tierConfig,
+      scenarios: {
+        scope: 'GLOBAL_BY_TRADE',
+        tradeKey: scenarioData.tradeKey || 'universal',
+        totalCount: scenarioData.count || 0,
+        enabledCount: scenarioData.enabledCount || 0,
+        disabledCount: scenarioData.disabledCount || 0
+      },
+      categories: {
+        scope: 'GLOBAL_BY_TRADE',
+        count: 0 // TODO: Add category counting
+      },
+      wiring: {
+        scenarioEngineWired: true,
+        intelligentRouterWired: true,
+        hybridSelectorWired: true,
+        tier3LLMWired: tierConfig.tier3?.enabled || false
+      }
+    };
+  } catch (error) {
+    console.error('[SNAPSHOT] Failed to build scenario engine snapshot:', error.message);
+    return {
+      enabled: false,
+      error: error.message,
+      tiers: null,
+      scenarios: { count: 0, enabledCount: 0, disabledCount: 0 },
+      categories: { count: 0 },
+      wiring: {
+        scenarioEngineWired: false,
+        intelligentRouterWired: false,
+        hybridSelectorWired: false,
+        tier3LLMWired: false
+      }
+    };
+  }
+}
 
 /**
  * GET /api/company/:companyId/system-snapshot
@@ -268,6 +328,25 @@ router.get('/', async (req, res) => {
       tradeCategory: {
         id: company.tradeCategoryId || null,
         name: company.tradeCategoryName || company.industryType || null
+      },
+      
+      // ─────────────────────────────────────────────────────────────────
+      // SCENARIO ENGINE (3-Tier Intelligence Brain)
+      // Per December 2025 Directive: Must be visible in Flow Tree
+      // ─────────────────────────────────────────────────────────────────
+      scenarioEngine: await buildScenarioEngineSnapshot(companyId, company),
+      
+      // ─────────────────────────────────────────────────────────────────
+      // PLACEHOLDERS (Variables V2)
+      // ─────────────────────────────────────────────────────────────────
+      placeholders: {
+        enabled: true,
+        count: Object.keys(company.variables || {}).length,
+        items: Object.entries(company.variables || {}).map(([name, value]) => ({
+          name,
+          value,
+          scope: 'COMPANY'
+        }))
       }
     };
     
