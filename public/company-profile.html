@@ -1599,6 +1599,20 @@
                     </div>
                 </div>
                 
+                <!-- Write Test Panel -->
+                <div class="px-6 py-3 bg-amber-50 border-b border-amber-200">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-flask text-amber-600"></i>
+                        <span class="font-semibold text-amber-800 text-sm">Write Test (Verify Save Pipeline)</span>
+                        <button onclick="writeTestGreeting()" 
+                                class="ml-auto px-3 py-1.5 text-xs bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors flex items-center gap-2">
+                            <i class="fas fa-edit" id="write-test-icon"></i>
+                            Write Test Greeting
+                        </button>
+                        <span id="write-test-result" class="text-xs text-amber-700 hidden"></span>
+                    </div>
+                </div>
+                
                 <!-- Meta Info -->
                 <div id="truth-meta-panel" class="px-6 py-2 bg-gray-100 border-b text-xs text-gray-600 flex flex-wrap gap-4">
                     <span><strong>Company:</strong> <span id="truth-company-name">-</span></span>
@@ -1607,9 +1621,26 @@
                     <span><strong>Environment:</strong> <span id="truth-environment">-</span></span>
                 </div>
                 
-                <!-- JSON Viewer -->
-                <div class="flex-1 overflow-auto p-4 bg-slate-900">
+                <!-- Tab Switcher for JSON Views -->
+                <div class="flex border-b border-gray-300 bg-gray-50">
+                    <button id="tab-runtime-snapshot" onclick="switchTruthTab('runtime')" 
+                            class="px-4 py-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600">
+                        Runtime Snapshot
+                    </button>
+                    <button id="tab-db-echo" onclick="switchTruthTab('dbecho')" 
+                            class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                        DB Echo (Raw)
+                    </button>
+                </div>
+                
+                <!-- Runtime Snapshot JSON Viewer -->
+                <div id="truth-runtime-panel" class="flex-1 overflow-auto p-4 bg-slate-900">
                     <pre id="truth-json-viewer" class="text-xs text-green-400 font-mono whitespace-pre-wrap">Loading snapshot...</pre>
+                </div>
+                
+                <!-- DB Echo JSON Viewer (hidden by default) -->
+                <div id="truth-dbecho-panel" class="flex-1 overflow-auto p-4 bg-slate-900 hidden">
+                    <pre id="truth-dbecho-viewer" class="text-xs text-cyan-400 font-mono whitespace-pre-wrap">Loading DB echo...</pre>
                 </div>
             </div>
             
@@ -1668,8 +1699,10 @@
     <!-- TRUTH REPORT JAVASCRIPT - End-to-End Verification System -->
     <!-- ═══════════════════════════════════════════════════════════════════════════ -->
     <script>
-        // Store current snapshot for copy
+        // Store current data for copy
         let currentTruthSnapshot = null;
+        let currentDbEcho = null;
+        let currentTruthTab = 'runtime';
         
         // ═══════════════════════════════════════════════════════════════════════════
         // TRUTH REPORT - Open Modal
@@ -1742,9 +1775,137 @@
                 // Update JSON viewer
                 document.getElementById('truth-json-viewer').textContent = JSON.stringify(snapshot, null, 2);
                 
+                // Also load DB Echo
+                await loadDbEcho();
+                
             } catch (error) {
                 console.error('[TRUTH REPORT] Error:', error);
                 showTruthError(error.message);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // DB ECHO - Load Raw Company Data
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function loadDbEcho() {
+            const companyId = window.currentCompanyId || window.companyId;
+            if (!companyId) return;
+            
+            try {
+                const authToken = localStorage.getItem('adminToken');
+                const response = await fetch(`/api/company/${companyId}/raw`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const dbData = await response.json();
+                currentDbEcho = dbData;
+                
+                // Update DB Echo viewer
+                document.getElementById('truth-dbecho-viewer').textContent = JSON.stringify(dbData, null, 2);
+                
+            } catch (error) {
+                console.error('[DB ECHO] Error:', error);
+                document.getElementById('truth-dbecho-viewer').textContent = `Error loading DB echo: ${error.message}`;
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // TAB SWITCHING
+        // ═══════════════════════════════════════════════════════════════════════════
+        function switchTruthTab(tab) {
+            currentTruthTab = tab;
+            
+            const runtimeTab = document.getElementById('tab-runtime-snapshot');
+            const dbechoTab = document.getElementById('tab-db-echo');
+            const runtimePanel = document.getElementById('truth-runtime-panel');
+            const dbechoPanel = document.getElementById('truth-dbecho-panel');
+            
+            if (tab === 'runtime') {
+                runtimeTab.className = 'px-4 py-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600';
+                dbechoTab.className = 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700';
+                runtimePanel.classList.remove('hidden');
+                dbechoPanel.classList.add('hidden');
+            } else {
+                runtimeTab.className = 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700';
+                dbechoTab.className = 'px-4 py-2 text-sm font-medium border-b-2 border-cyan-600 text-cyan-600';
+                runtimePanel.classList.add('hidden');
+                dbechoPanel.classList.remove('hidden');
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // WRITE TEST GREETING - End-to-End Verification
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function writeTestGreeting() {
+            const companyId = window.currentCompanyId || window.companyId;
+            if (!companyId) {
+                alert('No company ID found');
+                return;
+            }
+            
+            const icon = document.getElementById('write-test-icon');
+            const resultEl = document.getElementById('write-test-result');
+            
+            if (icon) icon.className = 'fas fa-spinner fa-spin';
+            if (resultEl) resultEl.classList.add('hidden');
+            
+            try {
+                const authToken = localStorage.getItem('adminToken');
+                
+                // Step 1: Write test greeting
+                const writeResponse = await fetch(`/api/company/${companyId}/raw/write-test-greeting`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!writeResponse.ok) {
+                    throw new Error(`Write failed: HTTP ${writeResponse.status}`);
+                }
+                
+                const writeResult = await writeResponse.json();
+                
+                // Step 2: Refresh Truth Report (both snapshot and DB Echo)
+                await loadTruthReport();
+                
+                // Step 3: Verify the change
+                const verifySnapshot = currentTruthSnapshot;
+                const verifyDbEcho = currentDbEcho;
+                
+                const snapshotGreeting = verifySnapshot?.providers?.controlPlane?.data?.frontDesk?.greetingConfigured;
+                const snapshotSource = verifySnapshot?.providers?.controlPlane?.data?.frontDesk?.greetingSource;
+                const dbGreeting = verifyDbEcho?.greetingFields?.['frontDeskBehavior.greeting'];
+                
+                // Show result
+                if (resultEl) {
+                    if (writeResult.success && snapshotGreeting && dbGreeting === writeResult.testGreeting) {
+                        resultEl.textContent = `✅ PASSED: DB="${writeResult.testGreeting?.substring(0, 30)}..." | Snapshot: configured=${snapshotGreeting}, source=${snapshotSource}`;
+                        resultEl.className = 'text-xs text-green-700';
+                        showSaveVerifyToast(true, 'Write Test PASSED', 'Greeting saved to DB and visible in snapshot');
+                    } else {
+                        resultEl.textContent = `❌ MISMATCH: DB="${dbGreeting}" | Snapshot: configured=${snapshotGreeting}, source=${snapshotSource}`;
+                        resultEl.className = 'text-xs text-red-700';
+                        showSaveVerifyToast(false, 'Write Test FAILED', 'DB write succeeded but snapshot not updated');
+                    }
+                    resultEl.classList.remove('hidden');
+                }
+                
+            } catch (error) {
+                console.error('[WRITE TEST] Error:', error);
+                if (resultEl) {
+                    resultEl.textContent = `❌ ERROR: ${error.message}`;
+                    resultEl.className = 'text-xs text-red-700';
+                    resultEl.classList.remove('hidden');
+                }
+                showSaveVerifyToast(false, 'Write Test Error', error.message);
+            } finally {
+                if (icon) icon.className = 'fas fa-edit';
             }
         }
         
@@ -1865,16 +2026,19 @@
         // TRUTH REPORT - Copy to Clipboard
         // ═══════════════════════════════════════════════════════════════════════════
         async function copyTruthReport() {
-            if (!currentTruthSnapshot) {
-                alert('No snapshot loaded');
+            const dataToCopy = currentTruthTab === 'dbecho' ? currentDbEcho : currentTruthSnapshot;
+            const label = currentTruthTab === 'dbecho' ? 'DB Echo' : 'Runtime Snapshot';
+            
+            if (!dataToCopy) {
+                alert(`No ${label} loaded`);
                 return;
             }
             
             try {
-                await navigator.clipboard.writeText(JSON.stringify(currentTruthSnapshot, null, 2));
+                await navigator.clipboard.writeText(JSON.stringify(dataToCopy, null, 2));
                 
                 // Show toast
-                showSaveVerifyToast(true, 'Copied!', 'Snapshot JSON copied to clipboard');
+                showSaveVerifyToast(true, 'Copied!', `${label} JSON copied to clipboard`);
             } catch (error) {
                 console.error('[TRUTH REPORT] Copy failed:', error);
                 alert('Failed to copy: ' + error.message);
@@ -1975,6 +2139,9 @@
         window.closeTruthReport = closeTruthReport;
         window.refreshTruthReport = refreshTruthReport;
         window.copyTruthReport = copyTruthReport;
+        window.switchTruthTab = switchTruthTab;
+        window.loadDbEcho = loadDbEcho;
+        window.writeTestGreeting = writeTestGreeting;
     </script>
     
     <!-- Load Company Profile Modern JavaScript -->

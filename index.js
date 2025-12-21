@@ -152,6 +152,7 @@ async function loadAllRoutes() {
         routes.companyOverridesRoutes = await loadRouteWithTimeout('./routes/company/companyOverrides', 'companyOverridesRoutes'); // 🎚️ Company Overrides (Scenario/Category disable + Placeholders)
         routes.platformSnapshotRoutes = await loadRouteWithTimeout('./routes/company/platformSnapshot', 'platformSnapshotRoutes'); // 📄 Platform Snapshot (Enterprise Introspection - Single Source of Truth)
         routes.seedGoldenRoutes = await loadRouteWithTimeout('./routes/company/seedGolden', 'seedGoldenRoutes'); // 🟣 Seed Golden Setup (Penguin Air HVAC Reference)
+        routes.rawCompanyDataRoutes = await loadRouteWithTimeout('./routes/company/rawCompanyData', 'rawCompanyDataRoutes'); // 🔍 Raw Company Data (DB Echo for Truth Report)
         routes.companyOpsRouter = await loadRouteWithTimeout('./routes/company/companyOpsRouter', 'companyOpsRouter'); // 🏢 CompanyOps Console (Contacts, Locations, Appointments, Call Traces, Usage, Customer DB, Notifications, Settings, + Cheat Sheet Config)
         // 🗑️ DELETED: v2InstantResponses - replaced by v2InstantResponseCategories system
         // V2 DELETED: Legacy v2 testing routes - using V2 AI Agent Logic system
@@ -453,6 +454,7 @@ function registerRoutes(routes) {
     app.use('/api/company/:companyId', routes.companyOverridesRoutes); // 🎚️ Company Overrides (Scenario/Category disable + Placeholders)
     app.use('/api/company/:companyId/platform-snapshot', routes.platformSnapshotRoutes); // 📄 Platform Snapshot (Enterprise Introspection - Single Source of Truth)
     app.use('/api/company/:companyId/seed-golden', routes.seedGoldenRoutes); // 🟣 Seed Golden Setup (Penguin Air HVAC Reference)
+    app.use('/api/company/:companyId/raw', routes.rawCompanyDataRoutes); // 🔍 Raw Company Data (DB Echo for Truth Report)
     app.use('/api/company/:companyId', routes.companyOpsRouter); // V2: CompanyOps Console + Cheat Sheet Config (Contacts, Locations, Appointments, Call Traces, Usage, Customer DB, Notifications, Settings, Booking Rules, Role Contacts, Links, Calculator)
     app.use('/api/company', routes.v2TwilioControlRoutes); // V2: Twilio Control Center (AI Agent Settings - Dashboard tab)
     app.use('/api/company', routes.v2ConnectionMessagesRoutes); // V2: Connection Messages (AI Agent Settings - Messages & Greetings tab)
