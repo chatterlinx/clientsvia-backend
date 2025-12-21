@@ -2105,27 +2105,6 @@
     async function toggleScenario(scenarioId, enabled) {
       console.log('Toggle scenario:', scenarioId, enabled);
       // TODO: Implement company-level scenario toggle when mapping layer is ready
-                         style="width: 18px; height: 18px; cursor: pointer;">
-                  <span style="font-size: 12px; color: #64748b;">Enabled</span>
-                </label>
-              </div>
-            `).join('');
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load scenarios:', error);
-        container.innerHTML = `
-          <div style="text-align: center; padding: 60px; color: #ef4444;">
-            <i class="fas fa-exclamation-triangle" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
-            Failed to load scenarios: ${error.message}
-          </div>
-        `;
-      }
-    }
-    
-    async function toggleScenario(scenarioId, enabled) {
-      // This would update the scenario override - placeholder for now
-      console.log(`Toggle scenario ${scenarioId} to ${enabled}`);
     }
     
     function escapeHtml(text) {
