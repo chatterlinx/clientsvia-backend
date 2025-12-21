@@ -1,18 +1,28 @@
 /**
  * ============================================================================
- * SEED GOLDEN SETUP API
+ * SEED GOLDEN SETUP API - CLEAN SEPARATION
  * ============================================================================
  * 
+ * CRITICAL ARCHITECTURE (December 2025):
+ * 
+ * 1. GLOBAL TEMPLATES (isTemplate=true, companyId=null)
+ *    - Blueprints that live in the system
+ *    - Created by seedGlobalTemplates()
+ *    - NEVER used directly in runtime
+ * 
+ * 2. COMPANY FLOWS (isTemplate=false, companyId=<id>)
+ *    - Runtime execution flows
+ *    - Created ONLY via explicit "Copy to Company"
+ *    - NEVER auto-created during template seeding
+ * 
  * POST /api/company/:companyId/seed-golden
+ *   → Seeds company CONFIG (placeholders, front desk, booking, defaults, etc.)
+ *   → Seeds GLOBAL TEMPLATES for the trade
+ *   → Does NOT create company flows
  * 
- * Populates a company with a complete, valid, production-ready configuration
- * based on a golden reference profile (e.g., Penguin Air for HVAC).
- * 
- * RULES:
- * - Idempotent: Creates missing, updates incorrect, never duplicates
- * - Never wipes call logs or analytics
- * - Everything seeded is UI-editable
- * - All enabled rules are VALID (patterns + actions)
+ * POST /api/company/:companyId/seed-golden/copy-templates
+ *   → Copies templates to company as active flows
+ *   → Explicit user action
  * 
  * ============================================================================
  */
@@ -34,15 +44,13 @@ const goldenConfigs = {
 };
 
 // Auth middleware
-const { authenticateJWT, requireAdminRole } = require('../../middleware/auth');
+const { authenticateJWT } = require('../../middleware/auth');
 
 /**
  * POST /api/company/:companyId/seed-golden
  * 
- * Body: {
- *   profile: "penguin_air" | "hvac_standard",
- *   tradeCategoryKey: "hvac_residential"
- * }
+ * Seeds company config + global templates
+ * Does NOT create company flows (use /copy-templates for that)
  */
 router.post('/', authenticateJWT, async (req, res) => {
     const { companyId } = req.params;
@@ -55,7 +63,10 @@ router.post('/', authenticateJWT, async (req, res) => {
         tradeCategoryKey,
         actions: [],
         warnings: [],
-        errors: []
+        errors: [],
+        // New: Explicitly track what we're doing
+        templatesSeeded: 0,
+        companyFlowsCreated: 0 // Should always be 0 from this endpoint
     };
     
     logger.info('[SEED GOLDEN] Starting golden setup', { companyId, profile, tradeCategoryKey });
@@ -159,16 +170,22 @@ router.post('/', authenticateJWT, async (req, res) => {
         }
         
         // ═══════════════════════════════════════════════════════════════════
-        // G) SEED DYNAMIC FLOWS
+        // G) SEED GLOBAL DYNAMIC FLOW TEMPLATES (NOT company flows!)
         // ═══════════════════════════════════════════════════════════════════
         try {
-            const dynamicFlowsResult = await seedDynamicFlows(companyId, goldenConfig.dynamicFlows);
+            const templatesResult = await seedGlobalTemplates(tradeCategoryKey, goldenConfig.dynamicFlows);
             results.actions.push({
-                section: 'dynamicFlows',
-                ...dynamicFlowsResult
+                section: 'dynamicFlowTemplates',
+                ...templatesResult
             });
+            results.templatesSeeded = templatesResult.created + templatesResult.updated;
+            
+            // Add warning about needing to copy templates
+            if (templatesResult.created > 0 || templatesResult.updated > 0) {
+                results.warnings.push(`${results.templatesSeeded} templates seeded. Use "Copy Templates to Company" to activate them.`);
+            }
         } catch (error) {
-            results.errors.push({ section: 'dynamicFlows', error: error.message });
+            results.errors.push({ section: 'dynamicFlowTemplates', error: error.message });
         }
         
         // ═══════════════════════════════════════════════════════════════════
@@ -198,6 +215,8 @@ router.post('/', authenticateJWT, async (req, res) => {
             profile,
             duration: results.duration,
             actionsCount: results.actions.length,
+            templatesSeeded: results.templatesSeeded,
+            companyFlowsCreated: results.companyFlowsCreated,
             errorsCount: results.errors.length
         });
         
@@ -213,6 +232,262 @@ router.post('/', authenticateJWT, async (req, res) => {
     }
 });
 
+/**
+ * POST /api/company/:companyId/seed-golden/copy-templates
+ * 
+ * EXPLICIT action to copy global templates to company as active flows.
+ * This is the ONLY way company flows should be created from templates.
+ * 
+ * Body: {
+ *   tradeCategoryKey: "hvac_residential",
+ *   flowKeys: ["emergency_detection", "booking_intent"] // Optional: specific flows, or all if omitted
+ * }
+ */
+router.post('/copy-templates', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    const { tradeCategoryKey = 'hvac_residential', flowKeys = null } = req.body;
+    
+    const startTime = Date.now();
+    const results = {
+        companyId,
+        tradeCategoryKey,
+        copied: [],
+        skipped: [],
+        errors: []
+    };
+    
+    logger.info('[COPY TEMPLATES] Starting', { companyId, tradeCategoryKey, flowKeys });
+    
+    try {
+        // Get all templates for this trade
+        const templateQuery = {
+            isTemplate: true,
+            enabled: true,
+            $or: [
+                { tradeType: tradeCategoryKey.split('_')[0] }, // hvac
+                { tradeType: null },
+                { tradeType: 'general' }
+            ]
+        };
+        
+        // If specific flowKeys requested, filter to those
+        if (flowKeys && flowKeys.length > 0) {
+            templateQuery.flowKey = { $in: flowKeys };
+        }
+        
+        const templates = await DynamicFlow.find(templateQuery).lean();
+        
+        if (templates.length === 0) {
+            return res.json({
+                success: true,
+                message: 'No templates found for this trade category',
+                results
+            });
+        }
+        
+        // Copy each template to company
+        for (const template of templates) {
+            try {
+                // Check if company already has this flow
+                const existingFlow = await DynamicFlow.findOne({
+                    companyId,
+                    flowKey: template.flowKey,
+                    isTemplate: false
+                });
+                
+                if (existingFlow) {
+                    results.skipped.push({
+                        flowKey: template.flowKey,
+                        reason: 'Already exists for company'
+                    });
+                    continue;
+                }
+                
+                // Create company flow from template
+                const companyFlow = await DynamicFlow.createFromTemplate(template._id, companyId);
+                results.copied.push({
+                    flowKey: template.flowKey,
+                    name: template.name,
+                    companyFlowId: companyFlow._id.toString()
+                });
+                
+            } catch (error) {
+                results.errors.push({
+                    flowKey: template.flowKey,
+                    error: error.message
+                });
+            }
+        }
+        
+        results.duration = Date.now() - startTime;
+        results.success = results.errors.length === 0;
+        results.summary = {
+            copied: results.copied.length,
+            skipped: results.skipped.length,
+            errors: results.errors.length
+        };
+        
+        logger.info('[COPY TEMPLATES] Completed', results);
+        res.json(results);
+        
+    } catch (error) {
+        logger.error('[COPY TEMPLATES] Fatal error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            results
+        });
+    }
+});
+
+/**
+ * GET /api/company/:companyId/seed-golden/templates
+ * 
+ * List available templates for a trade category
+ */
+router.get('/templates', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    const { tradeCategoryKey = 'hvac_residential' } = req.query;
+    
+    try {
+        // Get company to check what flows already exist
+        const existingFlows = await DynamicFlow.find({
+            companyId,
+            isTemplate: false
+        }).select('flowKey').lean();
+        
+        const existingFlowKeys = new Set(existingFlows.map(f => f.flowKey));
+        
+        // Get templates
+        const templates = await DynamicFlow.find({
+            isTemplate: true,
+            enabled: true,
+            $or: [
+                { tradeType: tradeCategoryKey.split('_')[0] },
+                { tradeType: null },
+                { tradeType: 'general' }
+            ]
+        }).select('flowKey name description priority trigger.type settings').lean();
+        
+        // Mark which are already copied
+        const templatesWithStatus = templates.map(t => ({
+            ...t,
+            alreadyCopied: existingFlowKeys.has(t.flowKey)
+        }));
+        
+        res.json({
+            success: true,
+            tradeCategoryKey,
+            count: templates.length,
+            alreadyCopied: templates.filter(t => existingFlowKeys.has(t.flowKey)).length,
+            templates: templatesWithStatus
+        });
+        
+    } catch (error) {
+        logger.error('[LIST TEMPLATES] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/company/:companyId/seed-golden/profiles
+ * Returns available golden profiles
+ */
+router.get('/profiles', authenticateJWT, (req, res) => {
+    res.json({
+        success: true,
+        profiles: Object.keys(goldenConfigs).map(key => ({
+            tradeCategoryKey: key,
+            profileKey: goldenConfigs[key].profileKey,
+            name: goldenConfigs[key].placeholders.find(p => p.key === 'companyname')?.value || key
+        }))
+    });
+});
+
+/**
+ * POST /api/company/:companyId/seed-golden/copy-from/:sourceCompanyId
+ * 
+ * Copy settings from another company (e.g., golden reference)
+ */
+router.post('/copy-from/:sourceCompanyId', authenticateJWT, async (req, res) => {
+    const { companyId: targetCompanyId, sourceCompanyId } = req.params;
+    const { sections = ['frontDesk', 'booking', 'defaultReplies', 'transfers', 'callProtection'] } = req.body;
+    
+    const startTime = Date.now();
+    const results = {
+        targetCompanyId,
+        sourceCompanyId,
+        sections,
+        copied: [],
+        skipped: [],
+        errors: []
+    };
+    
+    logger.info('[COPY FROM COMPANY] Starting', { targetCompanyId, sourceCompanyId, sections });
+    
+    try {
+        const [sourceCompany, targetCompany] = await Promise.all([
+            Company.findById(sourceCompanyId),
+            Company.findById(targetCompanyId)
+        ]);
+        
+        if (!sourceCompany) {
+            return res.status(404).json({ success: false, error: 'Source company not found' });
+        }
+        if (!targetCompany) {
+            return res.status(404).json({ success: false, error: 'Target company not found' });
+        }
+        
+        for (const section of sections) {
+            try {
+                switch (section) {
+                    case 'frontDesk':
+                        await copyFrontDesk(sourceCompanyId, targetCompanyId, sourceCompany);
+                        results.copied.push('frontDesk');
+                        break;
+                    case 'booking':
+                        await copyBooking(sourceCompanyId, targetCompanyId, sourceCompany);
+                        results.copied.push('booking');
+                        break;
+                    case 'defaultReplies':
+                        await copyDefaultReplies(sourceCompanyId, targetCompanyId);
+                        results.copied.push('defaultReplies');
+                        break;
+                    case 'transfers':
+                        await copyTransfers(sourceCompanyId, targetCompanyId, sourceCompany);
+                        results.copied.push('transfers');
+                        break;
+                    case 'callProtection':
+                        await copyCallProtection(sourceCompanyId, targetCompanyId);
+                        results.copied.push('callProtection');
+                        break;
+                    case 'placeholders':
+                        await copyPlaceholders(sourceCompanyId, targetCompanyId);
+                        results.copied.push('placeholders');
+                        break;
+                    default:
+                        results.skipped.push(section);
+                }
+            } catch (error) {
+                results.errors.push({ section, error: error.message });
+            }
+        }
+        
+        results.duration = Date.now() - startTime;
+        results.success = results.errors.length === 0;
+        
+        logger.info('[COPY FROM COMPANY] Completed', results);
+        res.json(results);
+        
+    } catch (error) {
+        logger.error('[COPY FROM COMPANY] Fatal error:', error);
+        res.status(500).json({ success: false, error: error.message, results });
+    }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -220,14 +495,11 @@ router.post('/', authenticateJWT, async (req, res) => {
 async function seedPlaceholders(companyId, placeholders) {
     const result = { created: 0, updated: 0, skipped: 0 };
     
-    // Get or create placeholders document
     let doc = await CompanyPlaceholders.findOne({ companyId });
     if (!doc) {
         doc = new CompanyPlaceholders({ companyId, placeholders: [] });
-        result.created = placeholders.length;
     }
     
-    // Merge placeholders (don't overwrite existing values unless empty)
     const existingMap = new Map(doc.placeholders.map(p => [p.key, p]));
     
     for (const ph of placeholders) {
@@ -293,7 +565,6 @@ async function seedDefaultReplies(companyId, config) {
 async function seedTransfers(companyId, transfers, company) {
     const result = { created: 0, updated: 0 };
     
-    // Store in company document (aiAgentSettings.transferTargets)
     const existingTargets = company.aiAgentSettings?.transferTargets || [];
     const existingMap = new Map(existingTargets.map(t => [t.id, t]));
     
@@ -301,7 +572,6 @@ async function seedTransfers(companyId, transfers, company) {
     for (const transfer of transfers) {
         const existing = existingMap.get(transfer.id);
         if (existing) {
-            // Update existing
             Object.assign(existing, transfer);
             newTargets.push(existing);
             result.updated++;
@@ -311,7 +581,6 @@ async function seedTransfers(companyId, transfers, company) {
         }
     }
     
-    // Keep any existing targets not in golden config
     for (const [id, target] of existingMap) {
         if (!transfers.find(t => t.id === id)) {
             newTargets.push(target);
@@ -328,7 +597,6 @@ async function seedTransfers(companyId, transfers, company) {
 async function seedCallProtection(companyId, rules) {
     const result = { created: 0, updated: 0, removed: 0 };
     
-    // Get or create live cheatsheet version
     let cheatSheet = await CheatSheetVersion.findOne({ companyId, status: 'live' });
     
     if (!cheatSheet) {
@@ -339,10 +607,9 @@ async function seedCallProtection(companyId, rules) {
         });
     }
     
-    // Replace edge cases with valid golden rules
     const existingEdgeCases = cheatSheet.config?.edgeCases || [];
     
-    // Remove invalid rules (empty patterns, no response)
+    // Remove invalid rules
     const invalidRemoved = existingEdgeCases.filter(ec => 
         ec.enabled !== false && 
         ((ec.triggerPatterns?.length === 0 && !['voicemail', 'machine', 'spam'].includes(ec.type)) ||
@@ -350,7 +617,6 @@ async function seedCallProtection(companyId, rules) {
     );
     result.removed = invalidRemoved.length;
     
-    // Keep valid existing rules, add new golden rules
     const existingValidMap = new Map(
         existingEdgeCases
             .filter(ec => !invalidRemoved.includes(ec))
@@ -371,7 +637,6 @@ async function seedCallProtection(companyId, rules) {
         }
     }
     
-    // Keep remaining valid existing rules
     for (const [name, rule] of existingValidMap) {
         newEdgeCases.push(rule);
     }
@@ -382,146 +647,65 @@ async function seedCallProtection(companyId, rules) {
     return result;
 }
 
-async function seedDynamicFlows(companyId, flows) {
-    const result = { created: 0, updated: 0 };
+/**
+ * SEED GLOBAL TEMPLATES (NOT company flows!)
+ * 
+ * These are blueprint templates with isTemplate=true and companyId=null.
+ * They are NOT used in runtime until explicitly copied to a company.
+ */
+async function seedGlobalTemplates(tradeCategoryKey, flowConfigs) {
+    const result = { created: 0, updated: 0, skipped: 0 };
+    const tradeType = tradeCategoryKey.split('_')[0]; // "hvac" from "hvac_residential"
     
-    for (const flowConfig of flows) {
-        const existing = await DynamicFlow.findOne({ companyId, flowKey: flowConfig.flowKey });
-        
-        if (existing) {
-            // Update existing flow
-            Object.assign(existing, flowConfig, { companyId });
-            await existing.save();
-            result.updated++;
-        } else {
-            // Create new flow
-            const newFlow = new DynamicFlow({
-                ...flowConfig,
-                companyId
+    for (const flowConfig of flowConfigs) {
+        try {
+            // Check if template already exists
+            const existingTemplate = await DynamicFlow.findOne({
+                flowKey: flowConfig.flowKey,
+                isTemplate: true
             });
-            await newFlow.save();
-            result.created++;
+            
+            if (existingTemplate) {
+                // Update existing template
+                Object.assign(existingTemplate, {
+                    ...flowConfig,
+                    tradeType,
+                    isTemplate: true,
+                    companyId: null, // Templates have no company
+                    enabled: true
+                });
+                await existingTemplate.save();
+                result.updated++;
+            } else {
+                // Create new template
+                const newTemplate = new DynamicFlow({
+                    ...flowConfig,
+                    tradeType,
+                    isTemplate: true,
+                    companyId: null, // Templates have no company
+                    enabled: true,
+                    metadata: {
+                        version: 1,
+                        tags: [tradeCategoryKey, 'golden']
+                    }
+                });
+                await newTemplate.save();
+                result.created++;
+            }
+        } catch (error) {
+            logger.error('[SEED TEMPLATES] Error seeding template:', {
+                flowKey: flowConfig.flowKey,
+                error: error.message
+            });
+            result.skipped++;
         }
     }
     
     return result;
 }
 
-/**
- * GET /api/company/:companyId/seed-golden/profiles
- * Returns available golden profiles
- */
-router.get('/profiles', authenticateJWT, (req, res) => {
-    res.json({
-        success: true,
-        profiles: Object.keys(goldenConfigs).map(key => ({
-            tradeCategoryKey: key,
-            profileKey: goldenConfigs[key].profileKey,
-            name: goldenConfigs[key].placeholders.find(p => p.key === 'companyname')?.value || key
-        }))
-    });
-});
-
-/**
- * POST /api/company/:companyId/seed-golden/copy-from/:sourceCompanyId
- * 
- * Copy settings from a golden/reference company to the target company.
- * 
- * Body: {
- *   sections: ['frontDesk', 'booking', 'defaultReplies', 'transfers', 'dynamicFlows', 'callProtection', 'placeholders', 'scenarioToggles']
- * }
- */
-router.post('/copy-from/:sourceCompanyId', authenticateJWT, async (req, res) => {
-    const { companyId: targetCompanyId, sourceCompanyId } = req.params;
-    const { sections = ['frontDesk', 'booking', 'defaultReplies', 'transfers', 'dynamicFlows'] } = req.body;
-    
-    const startTime = Date.now();
-    const results = {
-        targetCompanyId,
-        sourceCompanyId,
-        sections,
-        copied: [],
-        skipped: [],
-        errors: []
-    };
-    
-    logger.info('[COPY FROM GOLDEN] Starting copy', { targetCompanyId, sourceCompanyId, sections });
-    
-    try {
-        // Verify both companies exist
-        const [sourceCompany, targetCompany] = await Promise.all([
-            Company.findById(sourceCompanyId),
-            Company.findById(targetCompanyId)
-        ]);
-        
-        if (!sourceCompany) {
-            return res.status(404).json({ success: false, error: 'Source company not found' });
-        }
-        if (!targetCompany) {
-            return res.status(404).json({ success: false, error: 'Target company not found' });
-        }
-        
-        // Copy each requested section
-        for (const section of sections) {
-            try {
-                switch (section) {
-                    case 'frontDesk':
-                        await copyFrontDesk(sourceCompanyId, targetCompanyId, sourceCompany);
-                        results.copied.push('frontDesk');
-                        break;
-                        
-                    case 'booking':
-                        await copyBooking(sourceCompanyId, targetCompanyId, sourceCompany);
-                        results.copied.push('booking');
-                        break;
-                        
-                    case 'defaultReplies':
-                        await copyDefaultReplies(sourceCompanyId, targetCompanyId);
-                        results.copied.push('defaultReplies');
-                        break;
-                        
-                    case 'transfers':
-                        await copyTransfers(sourceCompanyId, targetCompanyId, sourceCompany);
-                        results.copied.push('transfers');
-                        break;
-                        
-                    case 'dynamicFlows':
-                        await copyDynamicFlows(sourceCompanyId, targetCompanyId);
-                        results.copied.push('dynamicFlows');
-                        break;
-                        
-                    case 'callProtection':
-                        await copyCallProtection(sourceCompanyId, targetCompanyId);
-                        results.copied.push('callProtection');
-                        break;
-                        
-                    case 'placeholders':
-                        await copyPlaceholders(sourceCompanyId, targetCompanyId);
-                        results.copied.push('placeholders');
-                        break;
-                        
-                    default:
-                        results.skipped.push(section);
-                }
-            } catch (error) {
-                results.errors.push({ section, error: error.message });
-            }
-        }
-        
-        results.duration = Date.now() - startTime;
-        results.success = results.errors.length === 0;
-        
-        logger.info('[COPY FROM GOLDEN] Completed', results);
-        res.json(results);
-        
-    } catch (error) {
-        logger.error('[COPY FROM GOLDEN] Fatal error:', error);
-        res.status(500).json({ success: false, error: error.message, results });
-    }
-});
-
 // ═══════════════════════════════════════════════════════════════════════════
-// COPY HELPER FUNCTIONS
+// COPY HELPER FUNCTIONS (Company to Company)
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function copyFrontDesk(sourceId, targetId, sourceCompany) {
@@ -576,21 +760,6 @@ async function copyTransfers(sourceId, targetId, sourceCompany) {
     });
 }
 
-async function copyDynamicFlows(sourceId, targetId) {
-    const sourceFlows = await DynamicFlow.find({ companyId: sourceId }).lean();
-    
-    for (const flow of sourceFlows) {
-        const { _id, companyId, createdAt, updatedAt, ...flowData } = flow;
-        
-        // Upsert by flowKey
-        await DynamicFlow.findOneAndUpdate(
-            { companyId: targetId, flowKey: flow.flowKey },
-            { $set: { ...flowData, companyId: targetId } },
-            { upsert: true }
-        );
-    }
-}
-
 async function copyCallProtection(sourceId, targetId) {
     const sourceSheet = await CheatSheetVersion.findOne({ companyId: sourceId, status: 'live' }).lean();
     
@@ -621,4 +790,3 @@ async function copyPlaceholders(sourceId, targetId) {
 }
 
 module.exports = router;
-

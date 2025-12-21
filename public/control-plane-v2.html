@@ -3018,29 +3018,48 @@
           <div style="text-align: center; padding: 20px;">
             <div style="font-size: 64px; margin-bottom: 16px;">🐧</div>
             <h3 style="margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #1e293b;">Penguin Air Reference</h3>
-            <p style="color: #64748b; margin: 0 0 24px; line-height: 1.6;">
-              This will populate this company with a <strong>complete, production-ready HVAC configuration</strong>:
+            <p style="color: #64748b; margin: 0 0 16px; line-height: 1.6;">
+              This seeds the <strong>golden HVAC configuration</strong> in two parts:
             </p>
           </div>
           
-          <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px; color: #1e293b;">
-              <div style="display: flex; align-items: center; gap: 8px;"><span style="color: #10b981;">✓</span> <span style="color: #1e293b;">Placeholders (phone, address, etc.)</span></div>
-              <div style="display: flex; align-items: center; gap: 8px;"><span style="color: #10b981;">✓</span> <span style="color: #1e293b;">Front Desk Greeting & Tone</span></div>
-              <div style="display: flex; align-items: center; gap: 8px;"><span style="color: #10b981;">✓</span> <span style="color: #1e293b;">Booking Slots & Time Windows</span></div>
-              <div style="display: flex; align-items: center; gap: 8px;"><span style="color: #10b981;">✓</span> <span style="color: #1e293b;">Default Replies (Not Offered, etc.)</span></div>
-              <div style="display: flex; align-items: center; gap: 8px;"><span style="color: #10b981;">✓</span> <span style="color: #1e293b;">Transfer Targets</span></div>
-              <div style="display: flex; align-items: center; gap: 8px;"><span style="color: #10b981;">✓</span> <span style="color: #1e293b;">Call Protection Rules (valid)</span></div>
-              <div style="display: flex; align-items: center; gap: 8px;"><span style="color: #10b981;">✓</span> <span style="color: #1e293b;">Dynamic Flows (emergency, booking)</span></div>
-              <div style="display: flex; align-items: center; gap: 8px;"><span style="color: #10b981;">✓</span> <span style="color: #1e293b;">Trade Category = HVAC Residential</span></div>
+          <!-- STEP 1: Company Config -->
+          <div style="background: #f0fdf4; border: 2px solid #86efac; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+            <h4 style="margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #166534; display: flex; align-items: center; gap: 8px;">
+              <span style="background: #22c55e; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">1</span>
+              Company Config (Auto-applied)
+            </h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #166534;">
+              <div>✓ Placeholders (phone, address)</div>
+              <div>✓ Front Desk Greeting & Tone</div>
+              <div>✓ Booking Slots & Time Windows</div>
+              <div>✓ Default Replies (Not Offered)</div>
+              <div>✓ Transfer Targets</div>
+              <div>✓ Call Protection Rules</div>
             </div>
           </div>
           
-          <div style="background: #fef3c7; border-radius: 8px; padding: 12px; margin-bottom: 24px; display: flex; align-items: flex-start; gap: 12px;">
-            <span style="font-size: 20px;">⚠️</span>
-            <div style="font-size: 13px; color: #92400e; line-height: 1.5;">
-              <strong>Note:</strong> This will update existing configurations. Call logs and analytics are preserved.
-              All settings remain editable after seeding.
+          <!-- STEP 2: Templates -->
+          <div style="background: #fef3c7; border: 2px solid #fbbf24; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+            <h4 style="margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #92400e; display: flex; align-items: center; gap: 8px;">
+              <span style="background: #f59e0b; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">2</span>
+              Dynamic Flow Templates (Global, not auto-activated)
+            </h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #92400e;">
+              <div>📋 Emergency Detection</div>
+              <div>📋 After Hours Routing</div>
+              <div>📋 Technician Request</div>
+              <div>📋 Booking Intent</div>
+            </div>
+            <p style="font-size: 12px; color: #78350f; margin: 12px 0 0; padding-top: 12px; border-top: 1px solid #fcd34d;">
+              <strong>Note:</strong> Templates are seeded globally. Use "Copy Templates to Company" to activate them for this company.
+            </p>
+          </div>
+          
+          <div style="background: #f1f5f9; border-radius: 8px; padding: 12px; margin-bottom: 24px;">
+            <div style="font-size: 13px; color: #475569; line-height: 1.5;">
+              <strong>Why two steps?</strong> Global templates are shared blueprints. Company flows are 
+              editable copies. This separation prevents cross-company contamination and keeps templates stable.
             </div>
           </div>
           
@@ -3051,7 +3070,7 @@
             </button>
             <button id="btn-confirm-golden" onclick="executeGoldenSetup()" 
                     style="padding: 12px 24px; background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px;">
-              <i class="fas fa-magic"></i> Load Golden Setup
+              <i class="fas fa-magic"></i> Seed Config + Templates
             </button>
           </div>
         </div>
@@ -3107,6 +3126,50 @@
       overlay.classList.remove('active');
     }
     
+    async function copyTemplatesToCompany() {
+      // Show loading in the button
+      const btn = event.target;
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Copying...';
+      btn.disabled = true;
+      
+      try {
+        const response = await fetch(`/api/company/${currentCompanyId}/seed-golden/copy-templates`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+            tradeCategoryKey: 'hvac_residential'
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          btn.innerHTML = `<i class="fas fa-check"></i> Copied ${result.summary?.copied || 0} flows!`;
+          btn.style.background = '#22c55e';
+          
+          // Show toast
+          showToast(`✅ ${result.summary?.copied || 0} templates copied to company. ${result.summary?.skipped || 0} already existed.`, 'success');
+          
+          // Refresh badge
+          setTimeout(loadSnapshotBadge, 500);
+        } else {
+          btn.innerHTML = `<i class="fas fa-times"></i> Failed`;
+          btn.style.background = '#dc2626';
+          showToast(`❌ Copy failed: ${result.error}`, 'error');
+        }
+        
+      } catch (error) {
+        console.error('[COPY TEMPLATES] Error:', error);
+        btn.innerHTML = `<i class="fas fa-times"></i> Error`;
+        btn.style.background = '#dc2626';
+        showToast(`❌ Copy failed: ${error.message}`, 'error');
+      }
+    }
+    
     async function executeGoldenSetup() {
       // Show loading
       document.getElementById('golden-confirm-view').style.display = 'none';
@@ -3135,6 +3198,7 @@
         const resultContent = document.getElementById('golden-result-content');
         
         if (result.success) {
+          const hasTemplates = result.templatesSeeded > 0;
           resultContent.innerHTML = `
             <div style="text-align: center; padding: 20px;">
               <div style="font-size: 64px; margin-bottom: 16px;">✅</div>
@@ -3143,17 +3207,30 @@
             </div>
             
             <div style="background: #f0fdf4; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-              <h4 style="margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #166534;">Actions Performed:</h4>
+              <h4 style="margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #166534;">Config Applied:</h4>
               <div style="font-size: 13px; color: #15803d; line-height: 1.8;">
-                ${result.actions.map(a => `<div>✓ ${a.section}: ${JSON.stringify(a).replace(/[{}"]/g, '').substring(0, 60)}...</div>`).join('')}
+                ${result.actions.filter(a => a.section !== 'dynamicFlowTemplates').map(a => `<div>✓ ${a.section}</div>`).join('')}
               </div>
             </div>
             
+            ${hasTemplates ? `
+              <div style="background: #fef3c7; border: 2px solid #fbbf24; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                <h4 style="margin: 0 0 8px; font-size: 14px; font-weight: 600; color: #92400e;">📋 Templates Seeded: ${result.templatesSeeded}</h4>
+                <p style="font-size: 13px; color: #78350f; margin: 0 0 12px;">
+                  Templates are now available globally. To activate them for this company:
+                </p>
+                <button onclick="copyTemplatesToCompany()" 
+                        style="padding: 10px 20px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+                  <i class="fas fa-copy"></i> Copy Templates to This Company
+                </button>
+              </div>
+            ` : ''}
+            
             ${result.warnings.length > 0 ? `
               <div style="background: #fef3c7; border-radius: 8px; padding: 12px;">
-                <strong style="color: #92400e;">Warnings:</strong>
+                <strong style="color: #92400e;">Notes:</strong>
                 <div style="font-size: 13px; color: #92400e; margin-top: 8px;">
-                  ${result.warnings.map(w => `<div>⚠️ ${w}</div>`).join('')}
+                  ${result.warnings.map(w => `<div>ℹ️ ${w}</div>`).join('')}
                 </div>
               </div>
             ` : ''}
@@ -3199,3 +3276,4 @@
   
 </body>
 </html>
+
