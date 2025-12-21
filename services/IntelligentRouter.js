@@ -47,6 +47,7 @@ const { logTier3SuggestionSmart } = require('./LlmLearningLogger');  // 🧠 V2 
 const LLMCallLog = require('../models/LLMCallLog');
 const LLMLearningTask = require('../models/LLMLearningTask');  // 📋 Phase C.0: Tier-3 event queue
 const MemoryOptimizationEngine = require('./MemoryOptimizationEngine');  // 🧠 Brain-5: Optimization Engine
+const OverrideResolver = require('./OverrideResolver');  // 📋 December 2025: Company override determinism
 const logger = require('../utils/logger');
 
 // 🎯 Call Flow Engine (Dec 2025) - Universal flow routing
@@ -429,6 +430,9 @@ class IntelligentRouter {
                         cost: '$0.00'
                     });
                     
+                    // Apply company overrides (December 2025 - deterministic disabled handling)
+                    await this.applyCompanyOverrides(result, company, template);
+                    
                     // Log success and return
                     await this.logCall(result, template, company);
                     result.performance.totalTime = Date.now() - startTime;
@@ -533,6 +537,9 @@ class IntelligentRouter {
                         responseTime: `${result.tier2Result.responseTime}ms`,
                         cost: '$0.00'
                     });
+                    
+                    // Apply company overrides (December 2025 - deterministic disabled handling)
+                    await this.applyCompanyOverrides(result, company, template);
                     
                     await this.logCall(result, template, company);
                     result.performance.totalTime = Date.now() - startTime;
@@ -959,6 +966,11 @@ class IntelligentRouter {
                 });
             }
             
+            // Apply company overrides (December 2025 - deterministic disabled handling)
+            if (result.matched && result.scenario) {
+                await this.applyCompanyOverrides(result, company, template);
+            }
+            
             // Log to database
             await this.logCall(result, template, company);
             result.performance.totalTime = Date.now() - startTime;
@@ -1000,6 +1012,98 @@ class IntelligentRouter {
             
             return result;
         }
+    }
+    
+    /**
+     * ============================================================================
+     * APPLY COMPANY OVERRIDES (December 2025 Directive)
+     * ============================================================================
+     * 
+     * Called after a scenario is matched but BEFORE returning the result.
+     * Applies deterministic fallback when scenarios/categories are disabled.
+     * 
+     * RESOLUTION ORDER:
+     * 1. Scenario enabled → use normal reply
+     * 2. Scenario disabled + has alternate → use alternate
+     * 3. Scenario disabled + category has default → use category default
+     * 4. Scenario disabled → use company Not Offered reply
+     * 5. ONLY IF NONE → allow Tier 3 fallback
+     */
+    async applyCompanyOverrides(result, company, template) {
+        // Only apply if we have a matched scenario AND a company context
+        if (!result.matched || !result.scenario || !company?._id) {
+            return result;
+        }
+        
+        try {
+            const companyId = company._id.toString();
+            const scenario = result.scenario;
+            
+            // Get the category ID from the scenario
+            let categoryId = null;
+            if (template?.categories) {
+                for (const cat of template.categories) {
+                    const found = (cat.scenarios || []).find(s => 
+                        s.id === scenario.id || s._id?.toString() === scenario.id
+                    );
+                    if (found) {
+                        categoryId = cat.id || cat._id?.toString();
+                        break;
+                    }
+                }
+            }
+            
+            // Apply override resolution
+            const overrideResult = await OverrideResolver.resolveAndRender({
+                companyId,
+                matchedScenario: scenario,
+                templateId: template._id?.toString(),
+                categoryId,
+                scenarioId: scenario.id || scenario._id?.toString(),
+                originalReply: {
+                    quickReply: scenario.quickReply || scenario.responses?.[0],
+                    fullReply: scenario.fullReply || scenario.responses?.[1] || scenario.responses?.[0]
+                }
+            });
+            
+            // If override was applied, update the result
+            if (overrideResult.overrideApplied) {
+                logger.info('🔒 [OVERRIDE] Company override applied', {
+                    companyId,
+                    scenarioId: scenario.id,
+                    resolution: overrideResult.resolution,
+                    source: overrideResult.overrideSource
+                });
+                
+                // Update scenario with override reply
+                if (overrideResult.reply) {
+                    result.scenario.quickReply = overrideResult.reply.quickReply;
+                    result.scenario.fullReply = overrideResult.reply.fullReply;
+                    if (result.scenario.responses) {
+                        result.scenario.responses = [
+                            overrideResult.reply.quickReply,
+                            overrideResult.reply.fullReply
+                        ];
+                    }
+                }
+                
+                // Add override metadata to result
+                result.overrideApplied = true;
+                result.overrideResolution = overrideResult.resolution;
+                result.overrideSource = overrideResult.overrideSource;
+                
+                // If resolution is NO_OVERRIDE_CONFIGURED_LLM_FALLBACK, signal to use LLM
+                if (overrideResult.resolution === 'NO_OVERRIDE_CONFIGURED_LLM_FALLBACK') {
+                    result.shouldUseLLMFallback = true;
+                }
+            }
+            
+        } catch (error) {
+            logger.error('❌ [OVERRIDE] Failed to apply override:', error);
+            // Non-critical - continue with original result
+        }
+        
+        return result;
     }
     
     /**
