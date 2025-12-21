@@ -137,28 +137,43 @@ router.get('/', async (req, res) => {
                     flowKey: flow.flowKey,
                     name: flow.name,
                     enabled: flow.enabled,
+                    isActive: flow.isActive,
                     priority: flow.priority,
                     isTemplate: flow.isTemplate,
                     
-                    // TRIGGER (raw)
-                    trigger: {
-                        type: flow.trigger?.type,
-                        'config.phrases': flow.trigger?.config?.phrases || [],
-                        'config.phrases.length': flow.trigger?.config?.phrases?.length || 0,
-                        'config.fuzzy': flow.trigger?.config?.fuzzy,
-                        'config.minConfidence': flow.trigger?.config?.minConfidence,
-                        priority: flow.trigger?.priority
+                    // ═══════════════════════════════════════════════════════════
+                    // TRIGGER - FULL RAW OBJECT (no extraction, shows exactly what's stored)
+                    // ═══════════════════════════════════════════════════════════
+                    trigger_RAW: flow.trigger,
+                    
+                    // Analyzed paths for debugging
+                    trigger_analysis: {
+                        type: flow.trigger?.type || '❌ MISSING',
+                        'v2_path_config.phrases': flow.trigger?.config?.phrases || [],
+                        'v2_path_config.phrases.length': flow.trigger?.config?.phrases?.length || 0,
+                        'legacy_path_phrases': flow.trigger?.phrases || [],
+                        'legacy_path_phrases.length': flow.trigger?.phrases?.length || 0,
+                        schemaDetected: flow.trigger?.config?.phrases?.length > 0 ? 'v2' : 
+                                       flow.trigger?.phrases?.length > 0 ? 'legacy' : 'empty'
                     },
                     
-                    // ACTIONS (raw)
-                    actions: flow.actions?.map(a => ({
-                        type: a.type,
-                        timing: a.timing,
-                        config: a.config,
-                        description: a.description
-                    })) || [],
-                    actionsCount: flow.actions?.length || 0,
-                    actionTypes: flow.actions?.map(a => a.type) || [],
+                    // ═══════════════════════════════════════════════════════════
+                    // ACTIONS - FULL RAW ARRAY
+                    // ═══════════════════════════════════════════════════════════
+                    actions_RAW: flow.actions || [],
+                    actions_analysis: {
+                        count: flow.actions?.length || 0,
+                        types: flow.actions?.map(a => a.type) || [],
+                        hasSetFlag: flow.actions?.some(a => a.type === 'set_flag'),
+                        hasAppendLedger: flow.actions?.some(a => a.type === 'append_ledger'),
+                        hasAckOnce: flow.actions?.some(a => a.type === 'ack_once'),
+                        hasTransitionMode: flow.actions?.some(a => a.type === 'transition_mode'),
+                        completeV1: flow.actions?.length >= 4 && 
+                            flow.actions?.some(a => a.type === 'set_flag') &&
+                            flow.actions?.some(a => a.type === 'append_ledger') &&
+                            flow.actions?.some(a => a.type === 'ack_once') &&
+                            flow.actions?.some(a => a.type === 'transition_mode')
+                    },
                     
                     // Settings
                     settings: flow.settings,
@@ -166,7 +181,11 @@ router.get('/', async (req, res) => {
                     // Metadata
                     tradeCategoryId: flow.tradeCategoryId,
                     tradeCategoryName: flow.tradeCategoryName,
-                    templateId: flow.templateId
+                    templateId: flow.templateId,
+                    
+                    // Timestamps
+                    createdAt: flow.createdAt,
+                    updatedAt: flow.updatedAt
                 }))
             },
             
@@ -235,6 +254,210 @@ router.get('/', async (req, res) => {
     } catch (error) {
         logger.error('[RAW COMPANY DATA] Error', {
             companyId,
+            error: error.message,
+            stack: error.stack
+        });
+        
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/company/:companyId/raw/save-greeting
+ * 
+ * Saves a greeting string to frontDeskBehavior.greeting
+ * This is the canonical greeting path.
+ */
+router.post('/save-greeting', async (req, res) => {
+    const { companyId } = req.params;
+    const { greeting } = req.body;
+    
+    if (!greeting || typeof greeting !== 'string') {
+        return res.status(400).json({
+            success: false,
+            error: 'greeting (string) is required in body'
+        });
+    }
+    
+    logger.info('[SAVE GREETING] Initiated', { companyId, greetingLength: greeting.length });
+    
+    try {
+        // Write to the canonical path
+        const result = await Company.findByIdAndUpdate(
+            companyId,
+            {
+                $set: {
+                    'aiAgentSettings.frontDeskBehavior.greeting': greeting
+                }
+            },
+            { new: true }
+        );
+        
+        if (!result) {
+            return res.status(404).json({
+                success: false,
+                error: 'Company not found'
+            });
+        }
+        
+        // Verify it saved
+        const savedGreeting = result.aiAgentSettings?.frontDeskBehavior?.greeting;
+        const saveSuccess = savedGreeting === greeting;
+        
+        logger.info('[SAVE GREETING] Result', {
+            companyId,
+            saveSuccess,
+            savedLength: savedGreeting?.length
+        });
+        
+        res.json({
+            success: saveSuccess,
+            savedTo: 'aiAgentSettings.frontDeskBehavior.greeting',
+            savedValue: savedGreeting,
+            message: saveSuccess ? 'Greeting saved successfully' : 'Save completed but verification failed'
+        });
+        
+    } catch (error) {
+        logger.error('[SAVE GREETING] Error', {
+            companyId,
+            error: error.message
+        });
+        
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/company/:companyId/raw/save-flow-json
+ * 
+ * Saves a dynamic flow from raw JSON input.
+ * Validates V2 schema before saving.
+ * Upserts by (companyId + flowKey).
+ */
+router.post('/save-flow-json', async (req, res) => {
+    const { companyId } = req.params;
+    const { flow } = req.body;
+    
+    if (!flow || typeof flow !== 'object') {
+        return res.status(400).json({
+            success: false,
+            error: 'flow (object) is required in body'
+        });
+    }
+    
+    logger.info('[SAVE FLOW JSON] Initiated', { 
+        companyId, 
+        flowKey: flow.flowKey 
+    });
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // VALIDATE V2 SCHEMA
+    // ═══════════════════════════════════════════════════════════════════════
+    const validationErrors = [];
+    
+    if (!flow.flowKey) {
+        validationErrors.push('flowKey is required');
+    }
+    
+    if (!flow.trigger?.type) {
+        validationErrors.push('trigger.type is required');
+    }
+    
+    if (flow.trigger?.type === 'phrase' && (!flow.trigger?.config?.phrases || flow.trigger.config.phrases.length === 0)) {
+        validationErrors.push('trigger.config.phrases must have at least 1 phrase for phrase triggers');
+    }
+    
+    if (!flow.actions || flow.actions.length === 0) {
+        validationErrors.push('actions array is required and must not be empty');
+    }
+    
+    // Check for V1 action completeness
+    const actionTypes = (flow.actions || []).map(a => a.type);
+    const requiredActions = ['set_flag', 'append_ledger', 'ack_once', 'transition_mode'];
+    const missingActions = requiredActions.filter(t => !actionTypes.includes(t));
+    
+    if (missingActions.length > 0) {
+        validationErrors.push(`V1 flows should have all 4 action types. Missing: ${missingActions.join(', ')}`);
+    }
+    
+    if (validationErrors.length > 0) {
+        return res.status(400).json({
+            success: false,
+            error: 'Schema validation failed',
+            validationErrors
+        });
+    }
+    
+    try {
+        // Build the flow document
+        const flowDoc = {
+            companyId: new mongoose.Types.ObjectId(companyId),
+            flowKey: flow.flowKey,
+            name: flow.name || flow.flowKey,
+            enabled: flow.enabled !== false,
+            isActive: flow.enabled !== false,
+            isTemplate: false,
+            priority: flow.priority || 100,
+            
+            trigger: flow.trigger,
+            actions: flow.actions,
+            settings: flow.settings || { allowConcurrent: false },
+            
+            metadata: {
+                ...(flow.metadata || {}),
+                savedVia: 'save-flow-json',
+                savedAt: new Date().toISOString()
+            }
+        };
+        
+        // Upsert by companyId + flowKey
+        const result = await DynamicFlow.findOneAndUpdate(
+            {
+                companyId: flowDoc.companyId,
+                flowKey: flowDoc.flowKey,
+                isTemplate: false
+            },
+            { $set: flowDoc },
+            { new: true, upsert: true }
+        );
+        
+        // Verify
+        const verify = await DynamicFlow.findById(result._id).lean();
+        
+        const verification = {
+            _id: verify._id,
+            flowKey: verify.flowKey,
+            triggerType: verify.trigger?.type,
+            triggerPhrasesCount: verify.trigger?.config?.phrases?.length || 0,
+            actionsCount: verify.actions?.length || 0,
+            actionTypes: verify.actions?.map(a => a.type) || [],
+            schemaUsed: verify.trigger?.config?.phrases?.length > 0 ? 'v2' : 'legacy',
+            enabled: verify.enabled
+        };
+        
+        logger.info('[SAVE FLOW JSON] Success', {
+            companyId,
+            flowKey: flow.flowKey,
+            verification
+        });
+        
+        res.json({
+            success: true,
+            operation: result.isNew ? 'created' : 'updated',
+            verification,
+            message: `Flow "${flow.flowKey}" saved successfully with V2 schema`
+        });
+        
+    } catch (error) {
+        logger.error('[SAVE FLOW JSON] Error', {
+            companyId,
+            flowKey: flow.flowKey,
             error: error.message,
             stack: error.stack
         });

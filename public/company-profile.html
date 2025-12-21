@@ -1644,6 +1644,50 @@
                     <div id="convert-result" class="mt-2 text-xs hidden"></div>
                 </div>
                 
+                <!-- Manual Save Panel -->
+                <div class="px-6 py-3 bg-green-50 border-b border-green-200">
+                    <div class="text-sm font-semibold text-green-800 mb-2">
+                        <i class="fas fa-keyboard mr-2"></i>Manual Save (Direct to DB)
+                    </div>
+                    
+                    <!-- Greeting Input -->
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-green-700 mb-1">Greeting</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="manual-greeting-input" 
+                                   class="flex-1 px-3 py-2 text-sm border border-green-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
+                                   placeholder="e.g., Thank you for calling Penguin Air!">
+                            <button onclick="saveManualGreeting()" 
+                                    class="px-4 py-2 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors">
+                                <i class="fas fa-save" id="save-greeting-icon"></i> Save
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Flow JSON Input -->
+                    <div>
+                        <label class="block text-xs font-medium text-green-700 mb-1">
+                            Emergency Flow JSON (paste V2 schema)
+                            <button onclick="loadEmergencyFlowTemplate()" class="ml-2 text-green-600 underline text-xs">Load Template</button>
+                        </label>
+                        <textarea id="manual-flow-json-input" 
+                                  class="w-full h-40 px-3 py-2 text-xs font-mono border border-green-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
+                                  placeholder='{"flowKey": "emergency_service", "trigger": {...}, "actions": [...]}'></textarea>
+                        <div class="flex gap-2 mt-2">
+                            <button onclick="validateFlowJson()" 
+                                    class="px-3 py-1.5 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors">
+                                <i class="fas fa-check-circle"></i> Validate
+                            </button>
+                            <button onclick="saveManualFlowJson()" 
+                                    class="px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors">
+                                <i class="fas fa-save" id="save-flow-icon"></i> Save Flow
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="manual-save-result" class="mt-2 text-xs hidden"></div>
+                </div>
+                
                 <!-- Meta Info -->
                 <div id="truth-meta-panel" class="px-6 py-2 bg-gray-100 border-b text-xs text-gray-600 flex flex-wrap gap-4">
                     <span><strong>Company:</strong> <span id="truth-company-name">-</span></span>
@@ -2251,6 +2295,226 @@
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
+        // MANUAL SAVE - Greeting and Flow JSON
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        // Load the V2 emergency flow template into the textarea
+        function loadEmergencyFlowTemplate() {
+            const template = {
+                flowKey: "emergency_service",
+                name: "Emergency Service Detection",
+                enabled: true,
+                priority: 200,
+                
+                trigger: {
+                    type: "phrase",
+                    config: {
+                        phrases: [
+                            "emergency",
+                            "urgent",
+                            "no AC",
+                            "ac not working",
+                            "water leaking",
+                            "flooding",
+                            "smell gas",
+                            "burning smell",
+                            "sparking",
+                            "smoke"
+                        ],
+                        fuzzy: true,
+                        minConfidence: 0.7
+                    }
+                },
+                
+                actions: [
+                    {
+                        timing: "on_activate",
+                        type: "set_flag",
+                        config: {
+                            flagName: "isEmergency",
+                            flagValue: true,
+                            alsoWriteToCallLedgerFacts: true
+                        }
+                    },
+                    {
+                        timing: "on_activate",
+                        type: "append_ledger",
+                        config: {
+                            key: "alerts",
+                            value: "Emergency detected by phrase trigger"
+                        }
+                    },
+                    {
+                        timing: "on_activate",
+                        type: "ack_once",
+                        config: {
+                            key: "ack_emergency_service",
+                            response: "Understood — this sounds urgent. I'm going to prioritize this right now."
+                        }
+                    },
+                    {
+                        timing: "on_activate",
+                        type: "transition_mode",
+                        config: {
+                            mode: "EMERGENCY"
+                        }
+                    }
+                ],
+                
+                settings: {
+                    allowConcurrent: false
+                }
+            };
+            
+            document.getElementById('manual-flow-json-input').value = JSON.stringify(template, null, 2);
+            showSaveVerifyToast(true, 'Template Loaded', 'V2 emergency flow template ready to save');
+        }
+        
+        // Validate flow JSON without saving
+        function validateFlowJson() {
+            const textarea = document.getElementById('manual-flow-json-input');
+            const resultEl = document.getElementById('manual-save-result');
+            
+            try {
+                const flow = JSON.parse(textarea.value);
+                
+                const errors = [];
+                if (!flow.flowKey) errors.push('Missing flowKey');
+                if (!flow.trigger?.type) errors.push('Missing trigger.type');
+                if (flow.trigger?.type === 'phrase' && (!flow.trigger?.config?.phrases || flow.trigger.config.phrases.length === 0)) {
+                    errors.push('Missing trigger.config.phrases for phrase trigger');
+                }
+                if (!flow.actions || flow.actions.length === 0) errors.push('Missing actions array');
+                
+                const actionTypes = (flow.actions || []).map(a => a.type);
+                const required = ['set_flag', 'append_ledger', 'ack_once', 'transition_mode'];
+                const missing = required.filter(t => !actionTypes.includes(t));
+                if (missing.length > 0) errors.push(`Missing actions: ${missing.join(', ')}`);
+                
+                if (errors.length > 0) {
+                    resultEl.innerHTML = `<div class="p-2 bg-yellow-100 rounded text-yellow-800">⚠️ Validation Issues:<br>${errors.join('<br>')}</div>`;
+                } else {
+                    resultEl.innerHTML = `<div class="p-2 bg-green-100 rounded text-green-800">✅ Valid V2 schema! Ready to save.</div>`;
+                }
+                resultEl.classList.remove('hidden');
+                
+            } catch (e) {
+                resultEl.innerHTML = `<div class="p-2 bg-red-100 rounded text-red-800">❌ Invalid JSON: ${e.message}</div>`;
+                resultEl.classList.remove('hidden');
+            }
+        }
+        
+        // Save greeting to DB
+        async function saveManualGreeting() {
+            const companyId = window.currentCompanyId || window.companyId;
+            if (!companyId) return alert('No company ID');
+            
+            const greeting = document.getElementById('manual-greeting-input').value.trim();
+            if (!greeting) return alert('Please enter a greeting');
+            
+            const icon = document.getElementById('save-greeting-icon');
+            const resultEl = document.getElementById('manual-save-result');
+            
+            if (icon) icon.className = 'fas fa-spinner fa-spin';
+            
+            try {
+                const authToken = localStorage.getItem('adminToken');
+                const response = await fetch(`/api/company/${companyId}/raw/save-greeting`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ greeting })
+                });
+                
+                const result = await response.json();
+                
+                // Refresh Truth Report
+                await loadTruthReport();
+                
+                if (result.success) {
+                    resultEl.innerHTML = `<div class="p-2 bg-green-100 rounded text-green-800">✅ Greeting saved! Check snapshot for greetingConfigured.</div>`;
+                    showSaveVerifyToast(true, 'Greeting Saved', result.savedTo);
+                } else {
+                    resultEl.innerHTML = `<div class="p-2 bg-red-100 rounded text-red-800">❌ ${result.error}</div>`;
+                    showSaveVerifyToast(false, 'Save Failed', result.error);
+                }
+                resultEl.classList.remove('hidden');
+                
+            } catch (error) {
+                resultEl.innerHTML = `<div class="p-2 bg-red-100 rounded text-red-800">❌ Error: ${error.message}</div>`;
+                resultEl.classList.remove('hidden');
+                showSaveVerifyToast(false, 'Error', error.message);
+            } finally {
+                if (icon) icon.className = 'fas fa-save';
+            }
+        }
+        
+        // Save flow JSON to DB
+        async function saveManualFlowJson() {
+            const companyId = window.currentCompanyId || window.companyId;
+            if (!companyId) return alert('No company ID');
+            
+            const textarea = document.getElementById('manual-flow-json-input');
+            const resultEl = document.getElementById('manual-save-result');
+            const icon = document.getElementById('save-flow-icon');
+            
+            let flow;
+            try {
+                flow = JSON.parse(textarea.value);
+            } catch (e) {
+                resultEl.innerHTML = `<div class="p-2 bg-red-100 rounded text-red-800">❌ Invalid JSON: ${e.message}</div>`;
+                resultEl.classList.remove('hidden');
+                return;
+            }
+            
+            if (icon) icon.className = 'fas fa-spinner fa-spin';
+            
+            try {
+                const authToken = localStorage.getItem('adminToken');
+                const response = await fetch(`/api/company/${companyId}/raw/save-flow-json`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ flow })
+                });
+                
+                const result = await response.json();
+                
+                // Refresh Truth Report
+                await loadTruthReport();
+                
+                if (result.success) {
+                    const v = result.verification;
+                    resultEl.innerHTML = `
+                        <div class="p-2 bg-green-100 rounded text-green-800">
+                            ✅ Flow "${v.flowKey}" saved!<br>
+                            Schema: ${v.schemaUsed}, Phrases: ${v.triggerPhrasesCount}, Actions: ${v.actionsCount}<br>
+                            Types: ${v.actionTypes.join(', ')}
+                        </div>
+                    `;
+                    showSaveVerifyToast(true, 'Flow Saved', `${v.flowKey} with ${v.actionsCount} actions`);
+                } else {
+                    const errorsHtml = result.validationErrors ? 
+                        result.validationErrors.map(e => `• ${e}`).join('<br>') : result.error;
+                    resultEl.innerHTML = `<div class="p-2 bg-red-100 rounded text-red-800">❌ ${errorsHtml}</div>`;
+                    showSaveVerifyToast(false, 'Save Failed', result.error);
+                }
+                resultEl.classList.remove('hidden');
+                
+            } catch (error) {
+                resultEl.innerHTML = `<div class="p-2 bg-red-100 rounded text-red-800">❌ Error: ${error.message}</div>`;
+                resultEl.classList.remove('hidden');
+                showSaveVerifyToast(false, 'Error', error.message);
+            } finally {
+                if (icon) icon.className = 'fas fa-save';
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
         // CONVERT FLOW TO V2 - Fix legacy flows
         // ═══════════════════════════════════════════════════════════════════════════
         async function populateLegacyFlowSelector() {
@@ -2414,6 +2678,10 @@
         window.cleanupTestFlows = cleanupTestFlows;
         window.convertFlowToV2 = convertFlowToV2;
         window.populateLegacyFlowSelector = populateLegacyFlowSelector;
+        window.saveManualGreeting = saveManualGreeting;
+        window.saveManualFlowJson = saveManualFlowJson;
+        window.validateFlowJson = validateFlowJson;
+        window.loadEmergencyFlowTemplate = loadEmergencyFlowTemplate;
     </script>
     
     <!-- Load Company Profile Modern JavaScript -->
