@@ -93,7 +93,15 @@
                         <p id="company-id-subheader" class="text-xs text-gray-500 mt-1">ID: Loading...</p> 
                     </div>
                     <div class="flex items-center gap-x-3 mt-3 md:mt-0">
-                         <span id="company-status-badge" class="status-badge mr-3">Status</span> 
+                        <!-- Truth Report Button -->
+                        <button onclick="openTruthReport()" 
+                                class="px-3 py-2 text-sm font-medium rounded-md bg-slate-700 text-white hover:bg-slate-800 transition-colors flex items-center gap-2"
+                                title="View runtime snapshot and verify saves">
+                            <i class="fas fa-file-code"></i>
+                            <span>Truth Report</span>
+                            <span id="truth-report-badge" class="hidden px-1.5 py-0.5 text-xs font-bold rounded-full"></span>
+                        </button>
+                        <span id="company-status-badge" class="status-badge mr-3">Status</span> 
                     </div>
                 </div>
                 <hr class="mb-6 mt-3">
@@ -1545,6 +1553,88 @@
                     <!-- ===== TAB SECTION END: SPAM FILTER ===== -->
                     <!-- ============================================================================== -->
 
+    <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+    <!-- TRUTH REPORT MODAL - End-to-End Verification -->
+    <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+    <div id="truth-report-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-slate-800 text-white rounded-t-xl">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-file-code text-xl"></i>
+                    <div>
+                        <h2 class="text-lg font-bold">Truth Report</h2>
+                        <p class="text-xs text-slate-300">Runtime Snapshot + Health Verification</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="refreshTruthReport()" class="px-3 py-1.5 text-sm bg-slate-600 hover:bg-slate-500 rounded-md transition-colors flex items-center gap-2">
+                        <i class="fas fa-sync-alt" id="truth-refresh-icon"></i>
+                        Refresh
+                    </button>
+                    <button onclick="copyTruthReport()" class="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-md transition-colors flex items-center gap-2">
+                        <i class="fas fa-copy"></i>
+                        Copy JSON
+                    </button>
+                    <button onclick="closeTruthReport()" class="p-2 hover:bg-slate-600 rounded-md transition-colors">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Modal Body -->
+            <div class="flex-1 overflow-hidden flex flex-col">
+                <!-- Focused Health Panel -->
+                <div id="truth-health-panel" class="px-6 py-4 bg-slate-50 border-b border-gray-200">
+                    <div class="flex items-center gap-2 mb-3">
+                        <i class="fas fa-heartbeat text-slate-600"></i>
+                        <span class="font-semibold text-slate-700">Focused Health</span>
+                        <span id="truth-health-status" class="ml-auto px-2 py-0.5 text-xs font-bold rounded-full bg-gray-200">Loading...</span>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm" id="truth-health-grid">
+                        <!-- Health metrics will be inserted here -->
+                        <div class="p-2 bg-white rounded border text-center">
+                            <div class="text-xs text-gray-500">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Meta Info -->
+                <div id="truth-meta-panel" class="px-6 py-2 bg-gray-100 border-b text-xs text-gray-600 flex flex-wrap gap-4">
+                    <span><strong>Company:</strong> <span id="truth-company-name">-</span></span>
+                    <span><strong>ID:</strong> <span id="truth-company-id">-</span></span>
+                    <span><strong>Generated:</strong> <span id="truth-generated-at">-</span></span>
+                    <span><strong>Environment:</strong> <span id="truth-environment">-</span></span>
+                </div>
+                
+                <!-- JSON Viewer -->
+                <div class="flex-1 overflow-auto p-4 bg-slate-900">
+                    <pre id="truth-json-viewer" class="text-xs text-green-400 font-mono whitespace-pre-wrap">Loading snapshot...</pre>
+                </div>
+            </div>
+            
+            <!-- Modal Footer -->
+            <div class="px-6 py-3 border-t border-gray-200 bg-gray-50 rounded-b-xl flex items-center justify-between text-xs text-gray-500">
+                <span>
+                    <i class="fas fa-info-circle mr-1"></i>
+                    This is the runtime truth. If UI doesn't match, there's a persistence bug.
+                </span>
+                <span id="truth-fetch-time">-</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Post-Save Verification Toast -->
+    <div id="save-verify-toast" class="fixed bottom-6 right-6 z-50 hidden transform transition-all duration-300">
+        <div class="px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-[300px]" id="save-verify-toast-content">
+            <i id="save-verify-toast-icon" class="fas fa-check-circle text-xl"></i>
+            <div>
+                <div id="save-verify-toast-title" class="font-semibold">Saved & Verified</div>
+                <div id="save-verify-toast-detail" class="text-sm opacity-80">Runtime snapshot updated</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Footer -->
     <footer class="bg-white border-t border-gray-200 mt-auto">
         <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 text-center text-gray-500 text-sm">
@@ -1572,6 +1662,319 @@
             // This function can be used for any checkbox-related UI updates
             console.log(`Checkbox ${name} changed to: ${checked}`);
         }
+    </script>
+    
+    <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+    <!-- TRUTH REPORT JAVASCRIPT - End-to-End Verification System -->
+    <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+    <script>
+        // Store current snapshot for copy
+        let currentTruthSnapshot = null;
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // TRUTH REPORT - Open Modal
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function openTruthReport() {
+            const modal = document.getElementById('truth-report-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                await loadTruthReport();
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // TRUTH REPORT - Close Modal
+        // ═══════════════════════════════════════════════════════════════════════════
+        function closeTruthReport() {
+            const modal = document.getElementById('truth-report-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // TRUTH REPORT - Refresh
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function refreshTruthReport() {
+            const icon = document.getElementById('truth-refresh-icon');
+            if (icon) icon.classList.add('fa-spin');
+            await loadTruthReport();
+            if (icon) icon.classList.remove('fa-spin');
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // TRUTH REPORT - Load Snapshot
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function loadTruthReport() {
+            const companyId = window.currentCompanyId || window.companyId;
+            if (!companyId) {
+                showTruthError('No company ID found');
+                return;
+            }
+            
+            const startTime = Date.now();
+            
+            try {
+                const authToken = localStorage.getItem('adminToken');
+                const response = await fetch(`/api/company/${companyId}/platform-snapshot?scope=full`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const snapshot = await response.json();
+                currentTruthSnapshot = snapshot;
+                
+                const fetchTime = Date.now() - startTime;
+                
+                // Update meta panel
+                document.getElementById('truth-company-name').textContent = snapshot.providers?.controlPlane?.data?.companyName || '-';
+                document.getElementById('truth-company-id').textContent = companyId;
+                document.getElementById('truth-generated-at').textContent = snapshot.meta?.generatedAt ? new Date(snapshot.meta.generatedAt).toLocaleString() : '-';
+                document.getElementById('truth-environment').textContent = window.location.hostname.includes('localhost') ? 'Development' : 'Production';
+                document.getElementById('truth-fetch-time').textContent = `Fetched in ${fetchTime}ms`;
+                
+                // Update health panel
+                updateTruthHealthPanel(snapshot);
+                
+                // Update JSON viewer
+                document.getElementById('truth-json-viewer').textContent = JSON.stringify(snapshot, null, 2);
+                
+            } catch (error) {
+                console.error('[TRUTH REPORT] Error:', error);
+                showTruthError(error.message);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // TRUTH REPORT - Update Health Panel
+        // ═══════════════════════════════════════════════════════════════════════════
+        function updateTruthHealthPanel(snapshot) {
+            const grid = document.getElementById('truth-health-grid');
+            const statusBadge = document.getElementById('truth-health-status');
+            
+            if (!grid || !snapshot) return;
+            
+            // Extract key metrics
+            const controlPlane = snapshot.providers?.controlPlane?.data || {};
+            const dynamicFlow = snapshot.providers?.dynamicFlow?.data || {};
+            const callProtection = snapshot.providers?.callProtection?.data || {};
+            const drift = snapshot.drift || {};
+            const completeness = snapshot.completeness || {};
+            
+            const frontDesk = controlPlane.frontDesk || {};
+            const flows = dynamicFlow.flows || [];
+            const firstFlow = flows[0] || {};
+            
+            // Build health metrics
+            const metrics = [
+                {
+                    label: 'Greeting',
+                    value: frontDesk.greetingConfigured ? '✅ Configured' : '❌ Missing',
+                    detail: frontDesk.greetingSource || 'none',
+                    ok: frontDesk.greetingConfigured
+                },
+                {
+                    label: 'Dynamic Flow',
+                    value: dynamicFlow.flowsInvalid === 0 ? '✅ Valid' : `❌ ${dynamicFlow.flowsInvalid} Invalid`,
+                    detail: `${dynamicFlow.flowsTotal || 0} flows`,
+                    ok: dynamicFlow.flowsInvalid === 0
+                },
+                {
+                    label: 'Trigger Phrases',
+                    value: firstFlow.triggerPhraseCount > 0 ? `✅ ${firstFlow.triggerPhraseCount}` : '❌ 0',
+                    detail: firstFlow.flowKey || '-',
+                    ok: firstFlow.triggerPhraseCount > 0
+                },
+                {
+                    label: 'Actions',
+                    value: firstFlow.actionsCount || 0,
+                    detail: (dynamicFlow.actionTypesUsed || []).join(', ') || '-',
+                    ok: firstFlow.actionsCount >= 4
+                },
+                {
+                    label: 'Call Protection',
+                    value: (callProtection.invalidRules || []).length === 0 ? '✅ Valid' : `❌ ${callProtection.invalidRules?.length} Invalid`,
+                    detail: `${callProtection.rulesTotal || 0} rules`,
+                    ok: (callProtection.invalidRules || []).length === 0
+                },
+                {
+                    label: 'Warnings',
+                    value: (drift.warnings || []).length,
+                    detail: (drift.warnings || []).slice(0, 2).join(', ') || 'None',
+                    ok: (drift.warnings || []).length === 0
+                },
+                {
+                    label: 'Score',
+                    value: `${completeness.score || 0}%`,
+                    detail: completeness.grade || '-',
+                    ok: (completeness.score || 0) >= 80
+                },
+                {
+                    label: 'Status',
+                    value: completeness.status || '-',
+                    detail: completeness.summary?.split('.')[0] || '-',
+                    ok: completeness.status === 'GREEN'
+                }
+            ];
+            
+            // Render metrics
+            grid.innerHTML = metrics.map(m => `
+                <div class="p-2 bg-white rounded border ${m.ok ? 'border-green-200' : 'border-red-200'}">
+                    <div class="text-xs text-gray-500 truncate">${m.label}</div>
+                    <div class="font-semibold ${m.ok ? 'text-green-700' : 'text-red-700'}">${m.value}</div>
+                    <div class="text-xs text-gray-400 truncate" title="${m.detail}">${m.detail}</div>
+                </div>
+            `).join('');
+            
+            // Update overall status
+            const allOk = metrics.every(m => m.ok);
+            const someOk = metrics.some(m => m.ok);
+            
+            if (allOk) {
+                statusBadge.textContent = '🟢 HEALTHY';
+                statusBadge.className = 'ml-auto px-2 py-0.5 text-xs font-bold rounded-full bg-green-100 text-green-800';
+            } else if (someOk) {
+                statusBadge.textContent = '🟡 WARNINGS';
+                statusBadge.className = 'ml-auto px-2 py-0.5 text-xs font-bold rounded-full bg-yellow-100 text-yellow-800';
+            } else {
+                statusBadge.textContent = '🔴 ISSUES';
+                statusBadge.className = 'ml-auto px-2 py-0.5 text-xs font-bold rounded-full bg-red-100 text-red-800';
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // TRUTH REPORT - Show Error
+        // ═══════════════════════════════════════════════════════════════════════════
+        function showTruthError(message) {
+            const grid = document.getElementById('truth-health-grid');
+            const viewer = document.getElementById('truth-json-viewer');
+            const statusBadge = document.getElementById('truth-health-status');
+            
+            if (grid) grid.innerHTML = `<div class="col-span-4 p-4 bg-red-50 text-red-700 rounded">Error: ${message}</div>`;
+            if (viewer) viewer.textContent = `Error loading snapshot: ${message}`;
+            if (statusBadge) {
+                statusBadge.textContent = '🔴 ERROR';
+                statusBadge.className = 'ml-auto px-2 py-0.5 text-xs font-bold rounded-full bg-red-100 text-red-800';
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // TRUTH REPORT - Copy to Clipboard
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function copyTruthReport() {
+            if (!currentTruthSnapshot) {
+                alert('No snapshot loaded');
+                return;
+            }
+            
+            try {
+                await navigator.clipboard.writeText(JSON.stringify(currentTruthSnapshot, null, 2));
+                
+                // Show toast
+                showSaveVerifyToast(true, 'Copied!', 'Snapshot JSON copied to clipboard');
+            } catch (error) {
+                console.error('[TRUTH REPORT] Copy failed:', error);
+                alert('Failed to copy: ' + error.message);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // POST-SAVE VERIFICATION SYSTEM
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        /**
+         * Verify that a save operation actually persisted to runtime
+         * Call this after any save operation
+         * 
+         * @param {string} expectedField - e.g., 'greetingConfigured'
+         * @param {any} expectedValue - e.g., true
+         * @param {string} fieldPath - e.g., 'providers.controlPlane.data.frontDesk.greetingConfigured'
+         */
+        async function verifySaveWithSnapshot(expectedField, expectedValue, fieldPath) {
+            const companyId = window.currentCompanyId || window.companyId;
+            if (!companyId) {
+                showSaveVerifyToast(false, 'Verification Failed', 'No company ID');
+                return false;
+            }
+            
+            try {
+                const authToken = localStorage.getItem('adminToken');
+                const response = await fetch(`/api/company/${companyId}/platform-snapshot?scope=full`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const snapshot = await response.json();
+                
+                // Navigate to the field
+                const actualValue = getNestedValue(snapshot, fieldPath);
+                
+                if (actualValue === expectedValue) {
+                    showSaveVerifyToast(true, 'Saved & Verified', `${expectedField} updated in runtime`);
+                    return true;
+                } else {
+                    showSaveVerifyToast(false, 'Save Mismatch', `${expectedField}: expected ${expectedValue}, got ${actualValue}`);
+                    return false;
+                }
+                
+            } catch (error) {
+                console.error('[VERIFY SAVE] Error:', error);
+                showSaveVerifyToast(false, 'Verification Failed', error.message);
+                return false;
+            }
+        }
+        
+        /**
+         * Get nested value from object by path
+         */
+        function getNestedValue(obj, path) {
+            return path.split('.').reduce((current, key) => current?.[key], obj);
+        }
+        
+        /**
+         * Show save verification toast
+         */
+        function showSaveVerifyToast(success, title, detail) {
+            const toast = document.getElementById('save-verify-toast');
+            const content = document.getElementById('save-verify-toast-content');
+            const icon = document.getElementById('save-verify-toast-icon');
+            const titleEl = document.getElementById('save-verify-toast-title');
+            const detailEl = document.getElementById('save-verify-toast-detail');
+            
+            if (!toast) return;
+            
+            // Update content
+            if (success) {
+                content.className = 'px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-[300px] bg-green-600 text-white';
+                icon.className = 'fas fa-check-circle text-xl';
+            } else {
+                content.className = 'px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-[300px] bg-red-600 text-white';
+                icon.className = 'fas fa-exclamation-circle text-xl';
+            }
+            
+            titleEl.textContent = title;
+            detailEl.textContent = detail;
+            
+            // Show toast
+            toast.classList.remove('hidden');
+            
+            // Auto-hide after 4 seconds
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 4000);
+        }
+        
+        // Export for use by other scripts
+        window.verifySaveWithSnapshot = verifySaveWithSnapshot;
+        window.showSaveVerifyToast = showSaveVerifyToast;
+        window.openTruthReport = openTruthReport;
+        window.closeTruthReport = closeTruthReport;
+        window.refreshTruthReport = refreshTruthReport;
+        window.copyTruthReport = copyTruthReport;
     </script>
     
     <!-- Load Company Profile Modern JavaScript -->
