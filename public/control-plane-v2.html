@@ -1687,7 +1687,7 @@
       console.log('✅ [INIT] Data & Config initialized');
     }
     
-    function switchDataConfigSubtab(subtab) {
+    async function switchDataConfigSubtab(subtab) {
       // Update subtab buttons
       document.querySelectorAll('.data-config-subtab').forEach(btn => {
         const isActive = btn.getAttribute('data-subtab') === subtab;
