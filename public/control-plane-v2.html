@@ -3138,7 +3138,7 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${authToken}`
           },
           body: JSON.stringify({
             tradeCategoryKey: 'hvac_residential'
@@ -3181,7 +3181,7 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${authToken}`
           },
           body: JSON.stringify({
             profile: 'penguin_air',
