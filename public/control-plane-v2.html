@@ -539,9 +539,9 @@
   <header class="top-header">
     <div class="header-left">
       <button class="btn-back" onclick="goBackToProfile()">
-        <i class="fas fa-arrow-left"></i>
-        <span>Back to Profile</span>
-      </button>
+      <i class="fas fa-arrow-left"></i>
+      <span>Back to Profile</span>
+    </button>
       <h1 class="page-title">🎛️ Control Plane</h1>
     </div>
     <div class="header-right">
@@ -636,11 +636,11 @@
           <div class="loading-container">
             <i class="fas fa-concierge-bell fa-spin"></i>
             <p>Loading Front Desk Configuration...</p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-    
+
     <!-- ═══════════════════════════════════════════════════════════════════════
          FLOW TREE - Live AI Decision Visualization + System Snapshot
          Real-time understanding of how AI agent operates during calls
@@ -673,10 +673,10 @@
                 <p>Incoming call detected, initializing AI agent</p>
                 <div class="tree-meta">
                   <span class="meta-badge success">✓ Connected</span>
-                </div>
-              </div>
-            </div>
-            
+          </div>
+        </div>
+      </div>
+
             <!-- Call Protection -->
             <div class="tree-node">
               <div class="tree-item">
@@ -702,7 +702,7 @@
                     <div class="tree-meta">
                       <span class="meta-badge">Priority-based</span>
                       <span class="meta-badge">Trigger matching</span>
-                    </div>
+            </div>
                   </div>
                 </div>
                 
@@ -716,10 +716,10 @@
                       <div class="tree-meta">
                         <span class="meta-badge warning">Priority: 200</span>
                         <span class="meta-badge">→ Booking</span>
-                      </div>
-                    </div>
-                  </div>
-                  
+          </div>
+        </div>
+      </div>
+
                   <div class="tree-item" style="border-left-color: #3b82f6;">
                     <div class="tree-icon">📅</div>
                     <div class="tree-content">
@@ -728,9 +728,9 @@
                       <div class="tree-meta">
                         <span class="meta-badge">Priority: 100</span>
                         <span class="meta-badge">→ Booking</span>
-                      </div>
-                    </div>
-                  </div>
+            </div>
+          </div>
+        </div>
                   
                   <div class="tree-item" style="border-left-color: #8b5cf6;">
                     <div class="tree-icon">❓</div>
@@ -740,7 +740,7 @@
                       <div class="tree-meta">
                         <span class="meta-badge">Priority: 50</span>
                         <span class="meta-badge">→ Discovery</span>
-                      </div>
+      </div>
                     </div>
                   </div>
                 </div>
@@ -754,9 +754,9 @@
                     <div class="tree-meta">
                       <span class="meta-badge">Target: Booking Engine</span>
                     </div>
-                  </div>
-                </div>
-                
+              </div>
+            </div>
+            
                 <!-- LLM Fallback -->
                 <div class="tree-item" style="opacity: 0.6;">
                   <div class="tree-icon">🤖</div>
@@ -766,13 +766,13 @@
                     <div class="tree-meta">
                       <span class="meta-badge">$0.50/use</span>
                       <span class="meta-badge">Target: &lt;1%</span>
-                    </div>
-                  </div>
+              </div>
+              </div>
                 </div>
               </div>
+              </div>
             </div>
-          </div>
-          
+            
           <!-- Live Call Memory Boxes -->
           <h3 style="margin-top: 32px; margin-bottom: 16px; font-size: 16px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">
             📊 Live Call Memory (Populates During Calls)
@@ -834,8 +834,8 @@
             </div>
           </div>
         </div>
-      </div>
-        
+          </div>
+          
         <!-- RIGHT PANEL: System Snapshot (Copyable JSON) -->
         <div class="flow-tree-container" style="background: linear-gradient(135deg, #1a1f35 0%, #0f172a 100%);">
           <div class="flow-tree-header">
@@ -847,20 +847,20 @@
               <div id="snapshot-status" style="display: flex; align-items: center; gap: 8px; padding: 6px 14px; background: rgba(16, 185, 129, 0.2); border-radius: 20px; color: var(--accent-green); font-weight: 600; font-size: 13px;">
                 <span id="snapshot-mode-icon">🟡</span>
                 <span id="snapshot-mode-text">IDLE</span>
-              </div>
-            </div>
           </div>
-          
+        </div>
+      </div>
+
           <!-- Snapshot Controls -->
           <div style="display: flex; gap: 12px; margin-bottom: 16px;">
             <button onclick="copySystemSnapshot()" id="btn-copy-snapshot" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 8px; border: 2px solid var(--accent-orange); background: var(--accent-orange); color: white; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
               <i class="fas fa-copy"></i>
               <span>📋 Copy JSON</span>
-            </button>
+          </button>
             <button onclick="refreshSystemSnapshot()" id="btn-refresh-snapshot" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 8px; border: 2px solid var(--border-subtle); background: transparent; color: var(--text-primary); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
               <i class="fas fa-sync-alt" id="refresh-icon"></i>
               <span>🔄 Refresh</span>
-            </button>
+          </button>
           </div>
           
           <!-- Snapshot Info -->
@@ -874,9 +874,9 @@
               <i class="fas fa-bolt"></i>
               <span>Time: </span>
               <span id="snapshot-generation-time" style="color: var(--accent-green);">—</span>
-            </div>
           </div>
-          
+        </div>
+        
           <!-- Snapshot Stats -->
           <div id="snapshot-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
             <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; text-align: center;">
@@ -890,9 +890,9 @@
             <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; text-align: center;">
               <div style="font-size: 20px; font-weight: 700; color: var(--accent-green);" id="stat-contacts">—</div>
               <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Contacts</div>
-            </div>
           </div>
-          
+        </div>
+        
           <!-- JSON Display -->
           <div style="position: relative;">
             <div style="position: absolute; top: 8px; right: 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary); background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; z-index: 10;">
@@ -928,11 +928,11 @@
           <div class="loading-container">
             <i class="fas fa-code-branch fa-spin"></i>
             <p>Loading Dynamic Flow Configuration...</p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-    
+
     <!-- ═══════════════════════════════════════════════════════════════════════
          DATA & CONFIG - Placeholders, Templates, Scenarios
          Global data + company overrides for multi-tenant system
@@ -963,7 +963,7 @@
               <p style="font-size: 13px; color: #64748b; margin-top: 4px;">
                 Dynamic tokens resolved at runtime. Use <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">{companyName}</code> in prompts.
               </p>
-            </div>
+          </div>
             <div style="display: flex; gap: 8px;">
               <button onclick="importPlaceholderDefaults()" class="btn btn-secondary" style="font-size: 13px;">
                 <i class="fas fa-download"></i> Import Defaults
@@ -975,13 +975,13 @@
           </div>
           
           <table id="placeholders-table">
-            <thead>
-              <tr>
+              <thead>
+                <tr>
                 <th style="width: 30%;">Name (Token)</th>
                 <th style="width: 50%;">Value</th>
                 <th style="width: 20%;">Actions</th>
-              </tr>
-            </thead>
+                </tr>
+              </thead>
             <tbody id="placeholders-list">
               <tr>
                 <td colspan="3" style="text-align: center; padding: 40px; color: #94a3b8;">
@@ -989,8 +989,8 @@
                   Loading placeholders...
                 </td>
               </tr>
-            </tbody>
-          </table>
+              </tbody>
+            </table>
           
           <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 12px;">
             <button onclick="resetPlaceholders()" class="btn btn-secondary">
@@ -1002,58 +1002,36 @@
           </div>
         </div>
         
-        <!-- TEMPLATES (Global by Trade Category) -->
+        <!-- TEMPLATES (Using AiCoreTemplatesManager - YOUR original system) -->
         <div id="data-config-templates" class="data-config-content" style="display: none;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <div>
-              <h3 style="font-size: 18px; font-weight: 600; margin: 0;">📄 Templates</h3>
-              <p style="font-size: 13px; color: #64748b; margin-top: 4px;">
-                Global templates grouped by trade category. Copy into company to customize.
-              </p>
-            </div>
-            <select id="template-trade-filter" style="padding: 8px 16px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 14px;">
-              <option value="all">All Categories</option>
-            </select>
-          </div>
-          
-          <div id="templates-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
-            <div style="text-align: center; padding: 40px; color: #94a3b8; grid-column: 1 / -1;">
+          <!-- This container is used by AiCoreTemplatesManager -->
+          <div id="aicore-templates-container">
+            <div style="text-align: center; padding: 40px; color: #94a3b8;">
               <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px; display: block;"></i>
               Loading templates...
-            </div>
           </div>
         </div>
-        
-        <!-- SCENARIOS (Global + Company Overrides) -->
+      </div>
+
+        <!-- SCENARIOS (Using AiCoreLiveScenariosManager - YOUR original system) -->
         <div id="data-config-scenarios" class="data-config-content" style="display: none;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <div>
-              <h3 style="font-size: 18px; font-weight: 600; margin: 0;">🎭 Scenarios</h3>
-              <p style="font-size: 13px; color: #64748b; margin-top: 4px;">
-                Global scenarios with company-specific enable/disable. Toggle per company.
-              </p>
-            </div>
-            <select id="scenario-trade-filter" style="padding: 8px 16px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 14px;">
-              <option value="all">All Categories</option>
-            </select>
-          </div>
-          
-          <div id="scenarios-list" style="display: flex; flex-direction: column; gap: 12px;">
+          <!-- This container is used by AiCoreLiveScenariosManager -->
+          <div id="aicore-live-scenarios-container">
             <div style="text-align: center; padding: 40px; color: #94a3b8;">
               <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px; display: block;"></i>
               Loading scenarios...
             </div>
           </div>
+          </div>
         </div>
       </div>
-    </div>
-    
+
     <!-- ═══════════════════════════════════════════════════════════════════════
          CALL PROTECTION (formerly Edge Cases)
          Pre-DFLOW filters: Spam, IVR, Machine, Silence, Abuse
          ═══════════════════════════════════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="call-protection">
-      <div class="card">
+        <div class="card">
         <h2>🛡️ Call Protection</h2>
         <p class="muted">Pre-answer filters that execute BEFORE Dynamic Flow. Cannot route — only short-circuit or pass forward.</p>
         <div id="call-protection-container">
@@ -1068,7 +1046,7 @@
                   <p style="font-size: 12px; color:#6b7280; margin-top:4px;">
                     Edge cases short-circuit everything else. Use for spam, IVR detection, wrong number, etc.
                   </p>
-                </div>
+          </div>
                 <button type="button" data-cheatsheet-action="add-edge-case" style="padding:8px 14px; border-radius:8px; border:none; background:#f59e0b; color:#fff; font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
                   <i class="fas fa-plus"></i>Add Edge Case
                 </button>
@@ -1082,14 +1060,14 @@
             </div>
           </div>
         </div>
+        </div>
       </div>
-    </div>
-    
+
     <!-- ═══════════════════════════════════════════════════════════════════════
          TRANSFER CALLS - Transfer Target Directory
          ═══════════════════════════════════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="transfer-calls">
-      <div class="card">
+        <div class="card">
         <h2>📞 Transfer Calls</h2>
         <p class="muted">Transfer target directory. DFLOW references transferTargetId. Defines destination, availability, and pre-transfer script.</p>
         <div id="transfer-calls-container">
@@ -1104,7 +1082,7 @@
                   <p style="font-size: 12px; color:#6b7280; margin-top:4px;">
                     Transfer rules route calls to specific departments or people based on intent.
                   </p>
-                </div>
+          </div>
                 <button type="button" data-cheatsheet-action="add-transfer-rule" style="padding:8px 14px; border-radius:8px; border:none; background:#2563eb; color:#fff; font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
                   <i class="fas fa-plus"></i>Add Transfer Rule
                 </button>
@@ -1118,14 +1096,14 @@
             </div>
           </div>
         </div>
+        </div>
       </div>
-    </div>
-    
+
     <!-- ═══════════════════════════════════════════════════════════════════════
          COMPANY CONTACTS - Directory of humans for escalation
          ═══════════════════════════════════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="company-contacts">
-      <div class="card">
+        <div class="card">
         <h2>📋 Company Contacts</h2>
         <p class="muted">Directory of humans AI can escalate or notify. Used by transfers, escalations, and notifications.</p>
         <div id="company-contacts-container">
@@ -1136,15 +1114,15 @@
               <p>Loading Company Contacts...</p>
             </div>
           </div>
+          </div>
         </div>
       </div>
-    </div>
-    
+
     <!-- ═══════════════════════════════════════════════════════════════════════
          LINKS - Outbound customer delivery
          ═══════════════════════════════════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="links">
-      <div class="card">
+        <div class="card">
         <h2>🔗 Links</h2>
         <p class="muted">Outbound customer delivery: payments, forms, financing. DFLOW actions may reference linkId.</p>
         <div id="links-container">
@@ -1153,17 +1131,17 @@
             <div class="loading-container">
               <i class="fas fa-link fa-spin"></i>
               <p>Loading Links...</p>
-            </div>
+          </div>
+          </div>
           </div>
         </div>
       </div>
-    </div>
-    
+
     <!-- ═══════════════════════════════════════════════════════════════════════
          VERSION HISTORY - Front Desk Configuration versioning
          ═══════════════════════════════════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="version-history">
-      <div class="card">
+        <div class="card">
         <h2>📚 Version History</h2>
         <p class="muted">Versioning for Front Desk Configuration. Isolate LIVE vs DRAFT safely during calls.</p>
         <div id="version-history-container">
@@ -1174,10 +1152,10 @@
               <p>Loading Version History...</p>
             </div>
           </div>
+          </div>
         </div>
       </div>
-    </div>
-    
+
     <!-- ═══════════════════════════════════════════════════════════════════════
          LEGACY (Read-Only + Migration)
          Temporary tab to view old data modules during migration
@@ -1201,14 +1179,14 @@
           <button onclick="copyInventoryJson()" id="btn-copy-inventory" class="btn btn-secondary" style="margin-left: 12px;">
             <i class="fas fa-copy"></i> Copy JSON
           </button>
-        </div>
+      </div>
         
         <!-- Inventory Stats Summary -->
         <div id="inventory-summary" style="display: none; margin-bottom: 24px;">
           <h3 style="font-size: 16px; font-weight: 600; color: #92400e; margin-bottom: 12px;">📊 Inventory Summary</h3>
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;" id="inventory-stats-grid">
             <!-- Stats will be populated here -->
-          </div>
+      </div>
         </div>
         
         <!-- Legacy Sections Accordion -->
@@ -1222,8 +1200,8 @@
             </button>
             <div id="legacy-triage" style="display: none; padding: 16px; max-height: 400px; overflow-y: auto;">
               <pre id="legacy-triage-json" style="background: #0d1117; color: #c9d1d9; padding: 16px; border-radius: 8px; font-size: 11px; overflow-x: auto;">Click "Load Full Inventory" to view</pre>
-            </div>
-          </div>
+        </div>
+        </div>
           
           <!-- MISSION CONTROL -->
           <div class="legacy-section" style="background: white; border-radius: 12px; overflow: hidden;">
@@ -1233,8 +1211,8 @@
             </button>
             <div id="legacy-mission" style="display: none; padding: 16px; max-height: 400px; overflow-y: auto;">
               <pre id="legacy-mission-json" style="background: #0d1117; color: #c9d1d9; padding: 16px; border-radius: 8px; font-size: 11px; overflow-x: auto;">Click "Load Full Inventory" to view</pre>
-            </div>
-          </div>
+        </div>
+        </div>
           
           <!-- BEHAVIOR RULES -->
           <div class="legacy-section" style="background: white; border-radius: 12px; overflow: hidden;">
@@ -1244,9 +1222,9 @@
             </button>
             <div id="legacy-behavior" style="display: none; padding: 16px; max-height: 400px; overflow-y: auto;">
               <pre id="legacy-behavior-json" style="background: #0d1117; color: #c9d1d9; padding: 16px; border-radius: 8px; font-size: 11px; overflow-x: auto;">Click "Load Full Inventory" to view</pre>
-            </div>
-          </div>
-          
+    </div>
+  </div>
+
           <!-- GUARDRAILS -->
           <div class="legacy-section" style="background: white; border-radius: 12px; overflow: hidden;">
             <button onclick="toggleLegacySection('guardrails')" style="width: 100%; padding: 16px; background: #f8fafc; border: none; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
@@ -1332,7 +1310,7 @@
         window.location.href = '/admin-directory.html';
       }
     }
-    
+
     function openCallCenter() {
       if (!currentCompanyId) {
         alert('No company ID found.');
@@ -1376,7 +1354,7 @@
         document.body.appendChild(script);
       });
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // TAB SWITCHING
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1565,7 +1543,7 @@
         
         // Attach action handlers for Add Edge Case button
         const container = document.getElementById('call-protection-container');
-        if (container) {
+          if (container) {
           container.addEventListener('click', (e) => {
             const actionBtn = e.target.closest('[data-cheatsheet-action]');
             if (actionBtn && actionBtn.getAttribute('data-cheatsheet-action') === 'add-edge-case') {
@@ -1596,7 +1574,7 @@
         
         // Attach action handlers for Add Transfer Rule button
         const container = document.getElementById('transfer-calls-container');
-        if (container) {
+          if (container) {
           container.addEventListener('click', (e) => {
             const actionBtn = e.target.closest('[data-cheatsheet-action]');
             if (actionBtn && actionBtn.getAttribute('data-cheatsheet-action') === 'add-transfer-rule') {
@@ -1684,17 +1662,25 @@
     // ═══════════════════════════════════════════════════════════════════════════
     let currentPlaceholders = {};
     
+    // Store references to the original managers
+    let aiCoreTemplatesManager = null;
+    let aiCoreLiveScenariosManager = null;
+    
     async function initDataConfig() {
       console.log('📂 [INIT] Initializing Data & Config...');
+      
+      // Load the ORIGINAL manager scripts
+      await loadScript('/js/ai-agent-settings/AiCoreTemplatesManager.js');
+      await loadScript('/js/ai-agent-settings/AiCoreLiveScenariosManager.js');
       
       // Set up sub-tab switching
       document.querySelectorAll('.data-config-subtab').forEach(btn => {
         btn.addEventListener('click', () => {
           const subtab = btn.getAttribute('data-subtab');
           switchDataConfigSubtab(subtab);
-        });
       });
-      
+    });
+
       // Load placeholders by default
       await loadPlaceholders();
       
@@ -1720,10 +1706,54 @@
         activePanel.style.display = 'block';
       }
       
-      // Load content for the subtab
-      if (subtab === 'placeholders') loadPlaceholders();
-      else if (subtab === 'templates') loadTemplates();
-      else if (subtab === 'scenarios') loadScenarios();
+      // Load content for the subtab using ORIGINAL managers
+      if (subtab === 'placeholders') {
+        loadPlaceholders();
+      } else if (subtab === 'templates') {
+        await loadTemplatesWithOriginalManager();
+      } else if (subtab === 'scenarios') {
+        await loadScenariosWithOriginalManager();
+      }
+    }
+    
+    async function loadTemplatesWithOriginalManager() {
+      console.log('📄 [TEMPLATES] Using AiCoreTemplatesManager...');
+      
+      if (!window.AiCoreTemplatesManager) {
+        console.error('AiCoreTemplatesManager not loaded!');
+        return;
+      }
+      
+      // Create a minimal parent object that the manager expects
+      const parentManager = {
+        companyId: currentCompanyId
+      };
+      
+      if (!aiCoreTemplatesManager) {
+        aiCoreTemplatesManager = new window.AiCoreTemplatesManager(parentManager);
+      }
+      
+      await aiCoreTemplatesManager.load();
+    }
+    
+    async function loadScenariosWithOriginalManager() {
+      console.log('🎭 [SCENARIOS] Using AiCoreLiveScenariosManager...');
+      
+      if (!window.AiCoreLiveScenariosManager) {
+        console.error('AiCoreLiveScenariosManager not loaded!');
+        return;
+      }
+      
+      // Create a minimal parent object that the manager expects
+      const parentManager = {
+        companyId: currentCompanyId
+      };
+      
+      if (!aiCoreLiveScenariosManager) {
+        aiCoreLiveScenariosManager = new window.AiCoreLiveScenariosManager(parentManager);
+      }
+      
+      await aiCoreLiveScenariosManager.load();
     }
     
     async function loadPlaceholders() {
@@ -1766,9 +1796,9 @@
                   <button onclick="deletePlaceholder('${key}')" style="padding: 6px 12px; border: none; background: #fee2e2; color: #dc2626; border-radius: 6px; cursor: pointer; font-size: 12px;">
                     <i class="fas fa-trash"></i>
                   </button>
-                </td>
-              </tr>
-            `).join('');
+            </td>
+          </tr>
+        `).join('');
           }
         }
       } catch (error) {
@@ -1859,253 +1889,8 @@
       }
     }
     
-    async function loadTemplates() {
-      const container = document.getElementById('templates-list');
-      
-      try {
-        // ═══════════════════════════════════════════════════════════════════
-        // LOAD FROM REAL GLOBAL AI BRAIN (GlobalInstantResponseTemplate)
-        // ═══════════════════════════════════════════════════════════════════
-        console.log('📄 [TEMPLATES] Loading from Global AI Brain...');
-        
-        // Load published templates from Global AI Brain
-        const response = await fetch('/api/admin/global-instant-responses/published', {
-          headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const templates = await response.json();
-        console.log('📄 [TEMPLATES] Loaded:', templates.length, 'templates');
-        
-        // Load company's active templates
-        const activeResponse = await fetch(`/api/company/${currentCompanyId}/configuration/templates`, {
-          headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        
-        let activeTemplateIds = [];
-        if (activeResponse.ok) {
-          const activeData = await activeResponse.json();
-          activeTemplateIds = (activeData.templates || []).map(t => t.templateId?.toString() || t._id?.toString());
-        }
-        
-        if (!templates || templates.length === 0) {
-          container.innerHTML = `
-            <div style="text-align: center; padding: 60px; color: #94a3b8; grid-column: 1 / -1;">
-              <i class="fas fa-brain" style="font-size: 48px; margin-bottom: 16px; display: block;"></i>
-              No templates in Global AI Brain. 
-              <br><br>
-              <a href="/admin-global-instant-responses.html" target="_blank" style="color: #3b82f6; text-decoration: underline;">
-                Open Global AI Brain →
-              </a>
-            </div>
-          `;
-        } else {
-          container.innerHTML = templates.map(t => {
-            const isActive = activeTemplateIds.includes(t._id?.toString());
-            const totalScenarios = (t.categories || []).reduce((sum, cat) => sum + (cat.scenarios?.length || 0), 0);
-            const totalTriggers = (t.categories || []).reduce((sum, cat) => 
-              sum + (cat.scenarios || []).reduce((s2, sc) => s2 + (sc.triggers?.length || 0), 0), 0);
-            
-            return `
-              <div style="background: ${isActive ? '#f0fdf4' : '#f8fafc'}; border-radius: 12px; padding: 16px; border: 2px solid ${isActive ? '#22c55e' : '#e2e8f0'};">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                  <div>
-                    <h4 style="margin: 0; font-size: 15px; font-weight: 600;">${t.name || 'Unnamed Template'}</h4>
-                    <span style="font-size: 11px; color: #64748b;">${t.industryLabel || t.templateType || 'Universal'}</span>
-                  </div>
-                  ${isActive ? '<span style="background: #22c55e; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px;">✓ Active</span>' : ''}
-                </div>
-                <div style="display: flex; gap: 16px; font-size: 12px; color: #64748b; margin-bottom: 12px;">
-                  <span><strong>${t.categories?.length || 0}</strong> Categories</span>
-                  <span><strong>${totalScenarios}</strong> Scenarios</span>
-                  <span><strong>${totalTriggers}</strong> Triggers</span>
-                </div>
-                <div style="display: flex; gap: 8px;">
-                  ${isActive ? `
-                    <button onclick="deactivateTemplate('${t._id}')" style="padding: 6px 12px; border: 1px solid #ef4444; background: white; color: #ef4444; border-radius: 6px; cursor: pointer; font-size: 12px;">
-                      <i class="fas fa-times"></i> Deactivate
-                    </button>
-                  ` : `
-                    <button onclick="activateTemplate('${t._id}')" style="padding: 6px 12px; border: none; background: #3b82f6; color: white; border-radius: 6px; cursor: pointer; font-size: 12px;">
-                      <i class="fas fa-check"></i> Activate
-                    </button>
-                  `}
-                  <a href="/admin-global-instant-responses.html?templateId=${t._id}" target="_blank" 
-                     style="padding: 6px 12px; border: 1px solid #e2e8f0; background: white; color: #64748b; border-radius: 6px; text-decoration: none; font-size: 12px;">
-                    <i class="fas fa-external-link-alt"></i> Edit
-                  </a>
-                </div>
-              </div>
-            `;
-          }).join('');
-        }
-      } catch (error) {
-        console.error('Failed to load templates:', error);
-        container.innerHTML = `
-          <div style="text-align: center; padding: 60px; color: #ef4444; grid-column: 1 / -1;">
-            <i class="fas fa-exclamation-triangle" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
-            Failed to load templates: ${error.message}
-            <br><br>
-            <a href="/admin-global-instant-responses.html" target="_blank" style="color: #3b82f6; text-decoration: underline;">
-              Open Global AI Brain directly →
-            </a>
-          </div>
-        `;
-      }
-    }
-    
-    async function activateTemplate(templateId) {
-      try {
-        const response = await fetch(`/api/company/${currentCompanyId}/configuration/templates`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${authToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ templateId, priority: 10 })
-        });
-        
-        if (response.ok) {
-          alert('✅ Template activated!');
-          loadTemplates();
-        } else {
-          const data = await response.json();
-          throw new Error(data.error || 'Failed to activate template');
-        }
-      } catch (error) {
-        alert('❌ ' + error.message);
-      }
-    }
-    
-    async function deactivateTemplate(templateId) {
-      if (!confirm('Remove this template from company?')) return;
-      
-      try {
-        const response = await fetch(`/api/company/${currentCompanyId}/configuration/templates/${templateId}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        
-        if (response.ok) {
-          alert('✅ Template deactivated');
-          loadTemplates();
-        } else {
-          const data = await response.json();
-          throw new Error(data.error || 'Failed to deactivate');
-        }
-      } catch (error) {
-        alert('❌ ' + error.message);
-      }
-    }
-    
-    // copyTemplateToCompany removed - replaced by activateTemplate/deactivateTemplate above
-    
-    async function loadScenarios() {
-      const container = document.getElementById('scenarios-list');
-      
-      try {
-        // ═══════════════════════════════════════════════════════════════════
-        // LOAD LIVE SCENARIOS FROM ACTIVATED TEMPLATES (Real AI Brain data)
-        // ═══════════════════════════════════════════════════════════════════
-        console.log('🎭 [SCENARIOS] Loading live scenarios from Global AI Brain...');
-        
-        const response = await fetch(`/api/company/${currentCompanyId}/live-scenarios`, {
-          headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        
-        const data = await response.json();
-        const scenarios = data.scenarios || [];
-        const categories = data.categories || [];
-        const summary = data.summary || {};
-        
-        console.log('🎭 [SCENARIOS] Loaded:', scenarios.length, 'scenarios in', categories.length, 'categories');
-        
-        if (scenarios.length === 0) {
-          container.innerHTML = `
-            <div style="text-align: center; padding: 60px; color: #94a3b8;">
-              <i class="fas fa-theater-masks" style="font-size: 48px; margin-bottom: 16px; display: block;"></i>
-              <p style="margin: 0 0 16px 0;">No scenarios available.</p>
-              <p style="font-size: 13px; margin: 0 0 20px 0;">
-                Scenarios come from activated Global AI Brain templates.<br>
-                Go to <strong>Templates</strong> tab to activate a template first.
-              </p>
-              <a href="/admin-global-instant-responses.html" target="_blank" style="color: #3b82f6; text-decoration: underline;">
-                Open Global AI Brain →
-              </a>
-            </div>
-          `;
-        } else {
-          // Group scenarios by category
-          const grouped = {};
-          scenarios.forEach(s => {
-            const cat = s.categoryName || 'Uncategorized';
-            if (!grouped[cat]) grouped[cat] = [];
-            grouped[cat].push(s);
-          });
-          
-          container.innerHTML = `
-            <div style="margin-bottom: 16px; padding: 12px; background: #f0f9ff; border-radius: 8px; border: 1px solid #bae6fd;">
-              <strong>📊 Summary:</strong> 
-              ${scenarios.length} scenarios across ${Object.keys(grouped).length} categories
-              ${summary.totalTriggers ? ` • ${summary.totalTriggers} triggers` : ''}
-            </div>
-            ${Object.entries(grouped).map(([catName, catScenarios]) => `
-              <div style="margin-bottom: 24px;">
-                <h4 style="font-size: 14px; font-weight: 600; color: #334155; margin: 0 0 12px 0; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
-                  📁 ${catName} <span style="font-weight: 400; color: #94a3b8;">(${catScenarios.length})</span>
-                </h4>
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-                  ${catScenarios.map(s => `
-                    <div style="background: #f8fafc; border-radius: 8px; padding: 12px 16px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
-                      <div style="flex: 1;">
-                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                          <span style="font-weight: 600; font-size: 14px;">${s.name || 'Unnamed'}</span>
-                          ${s.priority ? `<span style="background: #e2e8f0; padding: 1px 6px; border-radius: 4px; font-size: 10px;">P${s.priority}</span>` : ''}
-                        </div>
-                        <p style="font-size: 12px; color: #64748b; margin: 0;">
-                          ${(s.triggers || []).slice(0, 4).map(t => `"${t}"`).join(', ') || 'No triggers'}
-                          ${(s.triggers || []).length > 4 ? ` +${s.triggers.length - 4} more` : ''}
-                        </p>
-                      </div>
-                      <div style="display: flex; align-items: center; gap: 12px;">
-                        <span style="font-size: 11px; color: ${s.isActive !== false ? '#22c55e' : '#ef4444'};">
-                          ${s.isActive !== false ? '● Live' : '○ Inactive'}
-                        </span>
-                      </div>
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-            `).join('')}
-          `;
-        }
-      } catch (error) {
-        console.error('Failed to load scenarios:', error);
-        container.innerHTML = `
-          <div style="text-align: center; padding: 60px; color: #ef4444;">
-            <i class="fas fa-exclamation-triangle" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
-            Failed to load scenarios: ${error.message}
-            <br><br>
-            <a href="/admin-global-instant-responses.html" target="_blank" style="color: #3b82f6; text-decoration: underline;">
-              Open Global AI Brain directly →
-            </a>
-          </div>
-        `;
-      }
-    }
-    
-    // Legacy function - keep for backward compatibility
-    async function toggleScenario(scenarioId, enabled) {
-      console.log('Toggle scenario:', scenarioId, enabled);
-      // TODO: Implement company-level scenario toggle when mapping layer is ready
-    }
+    // OLD loadTemplates/loadScenarios removed
+    // Now using AiCoreTemplatesManager and AiCoreLiveScenariosManager (the original managers)
     
     function escapeHtml(text) {
       const div = document.createElement('div');
@@ -2294,7 +2079,7 @@
           throw new Error(`Failed to fetch snapshot: ${response.status}`);
         }
         
-        const data = await response.json();
+          const data = await response.json();
         
         if (data.success && data.snapshot) {
           currentSnapshot = data.snapshot;
@@ -2321,7 +2106,7 @@
             modeText.textContent = 'LIVE CALL';
             statusDiv.style.background = 'rgba(16, 185, 129, 0.2)';
             statusDiv.style.color = 'var(--accent-green)';
-          } else {
+        } else {
             modeIcon.textContent = '🟡';
             modeText.textContent = 'IDLE';
             statusDiv.style.background = 'rgba(249, 115, 22, 0.2)';
