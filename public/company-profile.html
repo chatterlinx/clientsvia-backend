@@ -95,8 +95,10 @@
                     <div class="flex items-center gap-x-3 mt-3 md:mt-0">
                         <!-- Truth Report Button -->
                         <button onclick="openTruthReport()" 
-                                class="px-3 py-2 text-sm font-medium rounded-md bg-slate-700 text-white hover:bg-slate-800 transition-colors flex items-center gap-2"
-                                title="View runtime snapshot and verify saves">
+                                style="background-color: #1e40af; color: white; padding: 8px 16px; border-radius: 6px; font-weight: 600; display: flex; align-items: center; gap: 8px; border: none; cursor: pointer;"
+                                title="View runtime snapshot and verify saves"
+                                onmouseover="this.style.backgroundColor='#1e3a8a'"
+                                onmouseout="this.style.backgroundColor='#1e40af'">
                             <i class="fas fa-file-code"></i>
                             <span>Truth Report</span>
                             <span id="truth-report-badge" class="hidden px-1.5 py-0.5 text-xs font-bold rounded-full"></span>
