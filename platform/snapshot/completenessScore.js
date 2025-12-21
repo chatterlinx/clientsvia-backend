@@ -56,10 +56,10 @@ const PENALTY_CODES = {
 /**
  * Main scoring function
  * @param {Object} snapshot - The full platform snapshot
- * @param {String} scope - The scope being evaluated (full, scenarios, control, runtime)
+ * @param {String} scopeOverride - Optional scope override (reads from snapshot.meta.scope if not provided)
  * @returns {Object} - { score, status, grade, summary, penalties, recommendations, scope }
  */
-function computeCompleteness(snapshot, scope = 'full') {
+function computeCompleteness(snapshot, scopeOverride = null) {
     let score = 100;
     const penalties = [];
     const recommendations = [];
@@ -67,11 +67,18 @@ function computeCompleteness(snapshot, scope = 'full') {
     
     const providers = snapshot.providers || {};
     
+    // CRITICAL: Read scope from snapshot.meta.scope (primary) or use override/default
+    const scope = scopeOverride || snapshot?.meta?.scope || 'full';
+    
     // ═══════════════════════════════════════════════════════════════════════
     // 1. CHECK REQUIRED PROVIDERS (SCOPE-AWARE)
     // Only penalize missing providers that are required for the current scope
+    // DO NOT penalize providers not required for this scope
     // ═══════════════════════════════════════════════════════════════════════
     const requiredForScope = REQUIRED_PROVIDERS_BY_SCOPE[scope] || REQUIRED_PROVIDERS;
+    
+    logger.info(`[COMPLETENESS] Scoring with scope: ${scope}, required providers: ${requiredForScope.join(', ')}`);
+    logger.info(`[COMPLETENESS] Available providers: ${Object.keys(providers).join(', ')}`);
     
     requiredForScope.forEach(providerKey => {
         if (!providers[providerKey]) {

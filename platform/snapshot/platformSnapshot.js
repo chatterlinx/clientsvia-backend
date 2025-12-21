@@ -58,6 +58,7 @@ async function generateSnapshot(companyId, options = {}) {
             companyId,
             companyName: null,
             tradeKey: null,
+            scope, // CRITICAL: Store scope so computeCompleteness can read it
             environment: process.env.NODE_ENV || 'development',
             generatedAt: new Date().toISOString(),
             generationMs: 0,
