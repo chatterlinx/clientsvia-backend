@@ -149,6 +149,7 @@ async function loadAllRoutes() {
         routes.dynamicFlowsRoutes = await loadRouteWithTimeout('./routes/company/dynamicFlows', 'dynamicFlowsRoutes'); // 🧠 Dynamic Flow Engine (Trigger → Event → State → Action)
         routes.systemSnapshotRoutes = await loadRouteWithTimeout('./routes/company/systemSnapshot', 'systemSnapshotRoutes'); // 📸 System Snapshot (Flow Tree JSON - Single Source of Truth)
         routes.fullInventoryRoutes = await loadRouteWithTimeout('./routes/company/fullInventory', 'fullInventoryRoutes'); // 📦 Full Inventory (Prove Nothing Lost - Migration Safety)
+        routes.companyOverridesRoutes = await loadRouteWithTimeout('./routes/company/companyOverrides', 'companyOverridesRoutes'); // 🎚️ Company Overrides (Scenario/Category disable + Placeholders)
         routes.companyOpsRouter = await loadRouteWithTimeout('./routes/company/companyOpsRouter', 'companyOpsRouter'); // 🏢 CompanyOps Console (Contacts, Locations, Appointments, Call Traces, Usage, Customer DB, Notifications, Settings, + Cheat Sheet Config)
         // 🗑️ DELETED: v2InstantResponses - replaced by v2InstantResponseCategories system
         // V2 DELETED: Legacy v2 testing routes - using V2 AI Agent Logic system
@@ -447,6 +448,7 @@ function registerRoutes(routes) {
     app.use('/api/company/:companyId/dynamic-flows', routes.dynamicFlowsRoutes); // 🧠 Dynamic Flow Engine (Trigger → Event → State → Action)
     app.use('/api/company/:companyId/system-snapshot', routes.systemSnapshotRoutes); // 📸 System Snapshot (Flow Tree JSON - Single Source of Truth)
     app.use('/api/company/:companyId/full-inventory', routes.fullInventoryRoutes); // 📦 Full Inventory (Prove Nothing Lost - Migration Safety)
+    app.use('/api/company/:companyId', routes.companyOverridesRoutes); // 🎚️ Company Overrides (Scenario/Category disable + Placeholders)
     app.use('/api/company/:companyId', routes.companyOpsRouter); // V2: CompanyOps Console + Cheat Sheet Config (Contacts, Locations, Appointments, Call Traces, Usage, Customer DB, Notifications, Settings, Booking Rules, Role Contacts, Links, Calculator)
     app.use('/api/company', routes.v2TwilioControlRoutes); // V2: Twilio Control Center (AI Agent Settings - Dashboard tab)
     app.use('/api/company', routes.v2ConnectionMessagesRoutes); // V2: Connection Messages (AI Agent Settings - Messages & Greetings tab)

@@ -20,8 +20,105 @@ const DynamicFlow = require('../../models/DynamicFlow');
 const ConversationSession = require('../../models/ConversationSession');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 
+// NEW: Company Override Models (Disabled Scenario Handling)
+const CompanyScenarioOverride = require('../../models/CompanyScenarioOverride');
+const CompanyCategoryOverride = require('../../models/CompanyCategoryOverride');
+const CompanyResponseDefaults = require('../../models/CompanyResponseDefaults');
+const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
+
 // Services
 const ScenarioEngine = require('../../services/ScenarioEngine');
+
+/**
+ * ============================================================================
+ * HELPER: Build Company Overrides Snapshot
+ * ============================================================================
+ * Returns all company-level override data for disabled scenario handling
+ * Per December 2025 Directive: Deterministic fallback, NO LLM required
+ */
+async function buildCompanyOverridesSnapshot(companyId) {
+  try {
+    const [scenarioSummary, categorySummary, defaultsStatus] = await Promise.all([
+      CompanyScenarioOverride.getSummary(companyId),
+      CompanyCategoryOverride.getSummary(companyId),
+      CompanyResponseDefaults.hasConfigured(companyId)
+    ]);
+    
+    return {
+      scenarios: {
+        totalOverrides: scenarioSummary.totalOverrides,
+        disabledCount: scenarioSummary.disabledCount,
+        disabledWithAlternateCount: scenarioSummary.disabledWithAlternateCount
+      },
+      categories: {
+        totalOverrides: categorySummary.totalOverrides,
+        disabledCount: categorySummary.disabledCount,
+        disabledWithDefaultCount: categorySummary.disabledWithDefaultCount
+      },
+      companyDefaults: {
+        notOfferedConfigured: defaultsStatus.notOfferedConfigured,
+        unknownIntentConfigured: defaultsStatus.unknownIntentConfigured,
+        afterHoursConfigured: defaultsStatus.afterHoursConfigured,
+        strictDisabledBehavior: defaultsStatus.strictDisabledBehavior
+      },
+      wiringStatus: {
+        scenarioOverridesWired: true,
+        categoryOverridesWired: true,
+        companyDefaultsWired: true,
+        deterministicFallbackWired: true
+      }
+    };
+  } catch (error) {
+    console.error('[SNAPSHOT] Failed to build company overrides snapshot:', error.message);
+    return {
+      scenarios: { totalOverrides: 0, disabledCount: 0, disabledWithAlternateCount: 0 },
+      categories: { totalOverrides: 0, disabledCount: 0, disabledWithDefaultCount: 0 },
+      companyDefaults: { notOfferedConfigured: false },
+      wiringStatus: {
+        scenarioOverridesWired: false,
+        categoryOverridesWired: false,
+        companyDefaultsWired: false,
+        deterministicFallbackWired: false
+      },
+      error: error.message
+    };
+  }
+}
+
+/**
+ * ============================================================================
+ * HELPER: Build Placeholders Snapshot
+ * ============================================================================
+ * Returns company placeholders (NEW Variables V2 system)
+ */
+async function buildPlaceholdersSnapshot(companyId) {
+  try {
+    const summary = await CompanyPlaceholders.getSummary(companyId);
+    const placeholdersList = await CompanyPlaceholders.getPlaceholdersList(companyId);
+    
+    return {
+      enabled: true,
+      count: summary.count,
+      keys: summary.keys,
+      items: placeholdersList.map(p => ({
+        name: p.key,
+        value: p.value,
+        scope: 'COMPANY',
+        isSystem: p.isSystem || false
+      })),
+      lastUpdated: summary.lastUpdated
+    };
+  } catch (error) {
+    console.error('[SNAPSHOT] Failed to build placeholders snapshot:', error.message);
+    return {
+      enabled: false,
+      count: 0,
+      keys: [],
+      items: [],
+      error: error.message
+    };
+  }
+}
 
 /**
  * ============================================================================
@@ -337,17 +434,15 @@ router.get('/', async (req, res) => {
       scenarioEngine: await buildScenarioEngineSnapshot(companyId, company),
       
       // ─────────────────────────────────────────────────────────────────
-      // PLACEHOLDERS (Variables V2)
+      // COMPANY OVERRIDES (Disabled Scenario Handling)
+      // Per December 2025 Directive: Deterministic fallback, NO LLM required
       // ─────────────────────────────────────────────────────────────────
-      placeholders: {
-        enabled: true,
-        count: Object.keys(company.variables || {}).length,
-        items: Object.entries(company.variables || {}).map(([name, value]) => ({
-          name,
-          value,
-          scope: 'COMPANY'
-        }))
-      }
+      companyOverrides: await buildCompanyOverridesSnapshot(companyId),
+      
+      // ─────────────────────────────────────────────────────────────────
+      // PLACEHOLDERS (NEW Variables V2 System)
+      // ─────────────────────────────────────────────────────────────────
+      placeholders: await buildPlaceholdersSnapshot(companyId)
     };
     
     // Set generation time
@@ -360,6 +455,9 @@ router.get('/', async (req, res) => {
     console.log(`   - Company Contacts: ${snapshot.companyContacts.length}`);
     console.log(`   - Links: ${snapshot.links.length}`);
     console.log(`   - Call Protection Rules: ${snapshot.callProtection.rules.length}`);
+    console.log(`   - Placeholders: ${snapshot.placeholders?.count || 0}`);
+    console.log(`   - Scenario Overrides: ${snapshot.companyOverrides?.scenarios?.totalOverrides || 0}`);
+    console.log(`   - Category Overrides: ${snapshot.companyOverrides?.categories?.totalOverrides || 0}`);
     
     res.json({
       success: true,
