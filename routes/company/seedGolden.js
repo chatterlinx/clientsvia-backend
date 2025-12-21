@@ -652,10 +652,79 @@ async function seedCallProtection(companyId, rules) {
  * 
  * These are blueprint templates with isTemplate=true and companyId=null.
  * They are NOT used in runtime until explicitly copied to a company.
+ * 
+ * CRITICAL FIX (Dec 2025):
+ * Must set BOTH tradeType (legacy) AND tradeCategoryId (V2 ObjectId).
+ * The UI filters by tradeCategoryId, so templates without it won't appear!
  */
 async function seedGlobalTemplates(tradeCategoryKey, flowConfigs) {
-    const result = { created: 0, updated: 0, skipped: 0 };
+    const result = { created: 0, updated: 0, skipped: 0, tradeCategoryId: null };
     const tradeType = tradeCategoryKey.split('_')[0]; // "hvac" from "hvac_residential"
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CRITICAL: Look up the tradeCategoryId from v2TradeCategory collection
+    // Without this, templates won't appear in the UI (it filters by ObjectId)
+    // ═══════════════════════════════════════════════════════════════════════════
+    const TradeCategory = require('../../models/v2TradeCategory');
+    let tradeCategoryId = null;
+    let tradeCategoryName = null;
+    
+    try {
+        // Look for existing trade category by name patterns
+        // The model uses 'name' field (not 'key'), e.g., "HVAC Residential"
+        const searchPatterns = [
+            tradeCategoryKey.replace('_', ' '),                    // "hvac residential"
+            tradeType,                                              // "hvac"
+            tradeCategoryKey.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') // "Hvac Residential"
+        ];
+        
+        let tradeCategory = await TradeCategory.findOne({
+            name: new RegExp(`^${tradeType}`, 'i'),  // Starts with "hvac" (case-insensitive)
+            companyId: 'global'                       // Global trade categories only
+        });
+        
+        if (!tradeCategory) {
+            // Try broader search
+            tradeCategory = await TradeCategory.findOne({
+                name: new RegExp(tradeType, 'i'),
+                isActive: true
+            });
+        }
+        
+        if (!tradeCategory) {
+            // Log available categories to help debug
+            const availableCategories = await TradeCategory.find({ isActive: true })
+                .select('name companyId')
+                .lean();
+            logger.warn('[SEED TEMPLATES] No trade category found', { 
+                tradeCategoryKey, 
+                tradeType,
+                searchPatterns,
+                availableCategories: availableCategories.map(c => `${c.name} (${c.companyId})`)
+            });
+            
+            // Create the trade category if it doesn't exist
+            logger.info('[SEED TEMPLATES] Creating trade category: HVAC Residential');
+            tradeCategory = await TradeCategory.create({
+                name: 'HVAC Residential',
+                description: 'HVAC residential services templates and scenarios',
+                companyId: 'global',
+                isActive: true,
+                qnas: []
+            });
+        }
+        
+        tradeCategoryId = tradeCategory._id;
+        tradeCategoryName = tradeCategory.name;
+        result.tradeCategoryId = tradeCategoryId.toString();
+        logger.info('[SEED TEMPLATES] Using trade category', {
+            tradeCategoryKey,
+            tradeCategoryId: tradeCategoryId.toString(),
+            tradeCategoryName
+        });
+    } catch (err) {
+        logger.error('[SEED TEMPLATES] Error looking up trade category:', err.message);
+    }
     
     for (const flowConfig of flowConfigs) {
         try {
@@ -666,10 +735,12 @@ async function seedGlobalTemplates(tradeCategoryKey, flowConfigs) {
             });
             
             if (existingTemplate) {
-                // Update existing template
+                // Update existing template - SET BOTH tradeType AND tradeCategoryId
                 Object.assign(existingTemplate, {
                     ...flowConfig,
                     tradeType,
+                    tradeCategoryId,        // V2 ObjectId (CRITICAL!)
+                    tradeCategoryName,      // Human-readable name
                     isTemplate: true,
                     companyId: null, // Templates have no company
                     enabled: true
@@ -677,10 +748,12 @@ async function seedGlobalTemplates(tradeCategoryKey, flowConfigs) {
                 await existingTemplate.save();
                 result.updated++;
             } else {
-                // Create new template
+                // Create new template - SET BOTH tradeType AND tradeCategoryId
                 const newTemplate = new DynamicFlow({
                     ...flowConfig,
                     tradeType,
+                    tradeCategoryId,        // V2 ObjectId (CRITICAL!)
+                    tradeCategoryName,      // Human-readable name
                     isTemplate: true,
                     companyId: null, // Templates have no company
                     enabled: true,
