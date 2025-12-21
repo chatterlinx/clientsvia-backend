@@ -39,6 +39,43 @@ module.exports.getSnapshot = async function(companyId) {
         let health = 'GREEN';
         const warnings = [];
         
+        // ═══════════════════════════════════════════════════════════════════
+        // VALIDATE ENABLED RULES (December 2025 Directive)
+        // An enabled rule MUST have: patterns/detector AND valid action
+        // ═══════════════════════════════════════════════════════════════════
+        const invalidEnabledRules = [];
+        
+        enabledRules.forEach(ec => {
+            const patterns = ec.triggerPatterns || [];
+            const hasPatterns = patterns.length > 0;
+            const hasDetector = ['voicemail', 'machine', 'spam', 'abuse'].includes(ec.type);
+            const hasResponse = !!ec.responseText || !!ec.responseTemplateId || !!ec.action?.hangupMessage;
+            const hasTransfer = ec.action === 'transfer' && ec.transferTargetId;
+            const hasValidAction = hasResponse || hasTransfer || ec.action === 'hangup';
+            
+            // Rule is invalid if: enabled but (no patterns AND no detector) OR no valid action
+            if ((!hasPatterns && !hasDetector) || !hasValidAction) {
+                invalidEnabledRules.push({
+                    name: ec.name || 'Unnamed Edge Case',
+                    issues: []
+                });
+                
+                if (!hasPatterns && !hasDetector) {
+                    invalidEnabledRules[invalidEnabledRules.length - 1].issues.push('no patterns or detector type');
+                }
+                if (!hasValidAction) {
+                    invalidEnabledRules[invalidEnabledRules.length - 1].issues.push('no action response configured');
+                }
+            }
+        });
+        
+        if (invalidEnabledRules.length > 0) {
+            health = 'YELLOW';
+            invalidEnabledRules.forEach(rule => {
+                warnings.push(`Enabled call protection rule is invalid: "${rule.name}" (${rule.issues.join(', ')})`);
+            });
+        }
+        
         // No call protection is fine if intentional
         if (edgeCases.length === 0) {
             // Not a warning - call protection is optional
@@ -54,18 +91,23 @@ module.exports.getSnapshot = async function(companyId) {
             data: {
                 rulesTotal: edgeCases.length,
                 rulesEnabled: enabledRules.length,
+                rulesInvalid: invalidEnabledRules.length,
                 ruleNames: enabledRules.map(r => r.name),
                 
                 byType: rulesByType,
+                
+                invalidRules: invalidEnabledRules,
                 
                 rules: edgeCases.map(ec => ({
                     name: ec.name,
                     type: ec.type || 'custom',
                     enabled: ec.enabled !== false,
                     priority: ec.priority || 10,
-                    hasResponse: !!ec.responseText,
+                    hasResponse: !!ec.responseText || !!ec.responseTemplateId,
+                    hasTransfer: ec.action === 'transfer' && !!ec.transferTargetId,
                     action: ec.action || 'respond',
-                    patternsCount: (ec.triggerPatterns || []).length
+                    patternsCount: (ec.triggerPatterns || []).length,
+                    isValid: !invalidEnabledRules.some(inv => inv.name === ec.name)
                 })).sort((a, b) => (a.priority || 10) - (b.priority || 10))
             },
             generatedIn: Date.now() - startTime

@@ -36,6 +36,45 @@ module.exports.getSnapshot = async function(companyId) {
         let health = 'GREEN';
         const warnings = [];
         
+        // ═══════════════════════════════════════════════════════════════════
+        // VALIDATE ENABLED FLOWS (December 2025 Directive)
+        // PHRASE_MATCH flows MUST have at least 1 trigger phrase
+        // ═══════════════════════════════════════════════════════════════════
+        const invalidFlows = [];
+        
+        flows.filter(f => f.isActive !== false).forEach(f => {
+            const triggerType = f.trigger?.type || 'PHRASE_MATCH';
+            const phrases = f.trigger?.phrases || [];
+            const actions = f.actions || [];
+            
+            const issues = [];
+            
+            // PHRASE_MATCH flows need at least 1 phrase
+            if (triggerType === 'PHRASE_MATCH' && phrases.length === 0) {
+                issues.push('0 trigger phrases');
+            }
+            
+            // All flows need at least 1 action
+            if (actions.length === 0) {
+                issues.push('no actions configured');
+            }
+            
+            if (issues.length > 0) {
+                invalidFlows.push({
+                    flowKey: f.flowKey || 'unknown',
+                    name: f.name || 'Unnamed Flow',
+                    issues
+                });
+            }
+        });
+        
+        if (invalidFlows.length > 0) {
+            invalidFlows.forEach(f => {
+                warnings.push(`Enabled ${f.flowKey ? `flow "${f.flowKey}"` : 'flow'} is invalid: ${f.issues.join(', ')}`);
+            });
+            health = 'YELLOW';
+        }
+        
         if (duplicateFlowKeys.length > 0) {
             warnings.push(`Duplicate flowKeys: ${duplicateFlowKeys.join(', ')}`);
             health = 'YELLOW';
@@ -61,22 +100,29 @@ module.exports.getSnapshot = async function(companyId) {
             data: {
                 flowsTotal,
                 flowsEnabled,
+                flowsInvalid: invalidFlows.length,
                 flowKeys,
                 duplicateFlowKeys,
                 priorityOrderValid,
                 actionTypesUsed: Array.from(actionTypes),
                 
-                flows: flows.map(f => ({
-                    flowKey: f.flowKey,
-                    name: f.name,
-                    priority: f.priority || 0,
-                    enabled: f.isActive !== false,
-                    triggerType: f.trigger?.type || 'PHRASE_MATCH',
-                    triggerPhraseCount: (f.trigger?.phrases || []).length,
-                    minConfidence: f.trigger?.minConfidence || 0.7,
-                    actionsCount: (f.actions || []).length,
-                    allowConcurrent: f.settings?.allowConcurrent !== false
-                })).sort((a, b) => (b.priority || 0) - (a.priority || 0))
+                invalidFlows,
+                
+                flows: flows.map(f => {
+                    const flowKey = f.flowKey || 'unknown';
+                    return {
+                        flowKey,
+                        name: f.name,
+                        priority: f.priority || 0,
+                        enabled: f.isActive !== false,
+                        triggerType: f.trigger?.type || 'PHRASE_MATCH',
+                        triggerPhraseCount: (f.trigger?.phrases || []).length,
+                        minConfidence: f.trigger?.minConfidence || 0.7,
+                        actionsCount: (f.actions || []).length,
+                        allowConcurrent: f.settings?.allowConcurrent !== false,
+                        isValid: !invalidFlows.some(inv => inv.flowKey === flowKey)
+                    };
+                }).sort((a, b) => (b.priority || 0) - (a.priority || 0))
             },
             generatedIn: Date.now() - startTime
         };

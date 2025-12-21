@@ -18,9 +18,9 @@ module.exports.getSnapshot = async function(companyId) {
         const placeholdersDoc = await CompanyPlaceholders.findOne({ companyId }).lean();
         const placeholders = placeholdersDoc?.placeholders || [];
         
-        // Also check company document for legacy variables
+        // Also check company document for legacy variables + system fields
         const company = await Company.findById(companyId)
-            .select('companyName phoneNumber variables')
+            .select('companyName companyPhone phoneNumber companyAddress email website variables twilioIntegration')
             .lean();
         
         // Build placeholder map (NEW system takes precedence)
@@ -50,7 +50,12 @@ module.exports.getSnapshot = async function(companyId) {
             });
         }
         
-        // Auto-add critical company fields
+        // ═══════════════════════════════════════════════════════════════════
+        // AUTO-DERIVE SYSTEM PLACEHOLDERS FROM COMPANY RECORD
+        // These are injected automatically - users don't need to manually add
+        // ═══════════════════════════════════════════════════════════════════
+        
+        // companyname (CRITICAL)
         if (company?.companyName && !placeholderMap.has('companyname')) {
             placeholderMap.set('companyname', {
                 key: 'companyname',
@@ -60,10 +65,46 @@ module.exports.getSnapshot = async function(companyId) {
             });
         }
         
-        if (company?.phoneNumber && !placeholderMap.has('phone')) {
-            placeholderMap.set('phone', {
-                key: 'phone',
-                value: company.phoneNumber,
+        // phone (CRITICAL) - Check multiple possible fields
+        if (!placeholderMap.has('phone')) {
+            const phoneValue = company?.companyPhone || 
+                               company?.phoneNumber || 
+                               company?.twilioIntegration?.phoneNumber;
+            if (phoneValue) {
+                placeholderMap.set('phone', {
+                    key: 'phone',
+                    value: phoneValue,
+                    source: 'company',
+                    isSystem: true
+                });
+            }
+        }
+        
+        // address (optional but useful)
+        if (company?.companyAddress && !placeholderMap.has('address')) {
+            placeholderMap.set('address', {
+                key: 'address',
+                value: company.companyAddress,
+                source: 'company',
+                isSystem: true
+            });
+        }
+        
+        // email (optional)
+        if (company?.email && !placeholderMap.has('email')) {
+            placeholderMap.set('email', {
+                key: 'email',
+                value: company.email,
+                source: 'company',
+                isSystem: true
+            });
+        }
+        
+        // website (optional)
+        if (company?.website && !placeholderMap.has('website')) {
+            placeholderMap.set('website', {
+                key: 'website',
+                value: company.website,
                 source: 'company',
                 isSystem: true
             });
@@ -85,12 +126,23 @@ module.exports.getSnapshot = async function(companyId) {
             }
         });
         
-        // Determine health
+        // Determine health and provide actionable warnings
         let health = 'GREEN';
         const warnings = [];
         
         if (missingCritical.length > 0) {
-            warnings.push(`Missing critical placeholders: ${missingCritical.join(', ')}`);
+            // Provide specific actionable guidance
+            if (missingCritical.includes('phone')) {
+                warnings.push('Missing critical placeholder: phone — Add company phone in Company Profile');
+            }
+            if (missingCritical.includes('companyname')) {
+                warnings.push('Missing critical placeholder: companyname — Company name not set in profile');
+            }
+            // Generic fallback for any others
+            const otherMissing = missingCritical.filter(k => !['phone', 'companyname'].includes(k));
+            if (otherMissing.length > 0) {
+                warnings.push(`Missing critical placeholders: ${otherMissing.join(', ')}`);
+            }
             health = 'YELLOW';
         }
         

@@ -49,6 +49,12 @@ const PENALTY_CODES = {
     PRIORITY_ORDER_INVALID: { severity: 'YELLOW', weight: 10 },
     TEMPLATE_NOT_TRADE_SCOPED: { severity: 'YELLOW', weight: 15 },
     
+    // December 2025 Directive - New validation penalties
+    NO_GREETING_CONFIGURED: { severity: 'YELLOW', weight: 8 },
+    INVALID_CALL_PROTECTION_RULE: { severity: 'YELLOW', weight: 10 },
+    INVALID_DYNAMIC_FLOW: { severity: 'YELLOW', weight: 10 },
+    BOOKING_ENABLED_NO_SLOTS: { severity: 'YELLOW', weight: 8 },
+    
     // MINOR - GREEN
     PLACEHOLDER_OPTIONAL_MISSING: { severity: 'GREEN', weight: 2 }
 };
@@ -332,7 +338,71 @@ function computeCompleteness(snapshot, scopeOverride = null) {
     }
     
     // ═══════════════════════════════════════════════════════════════════════
-    // 6. COMPUTE FINAL STATUS
+    // 6. PROCESS PROVIDER WARNINGS (December 2025 Directive)
+    // Each provider can emit warnings that should become penalties
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    // Control Plane warnings
+    const controlPlane = providers.controlPlane;
+    if (controlPlane?.warnings?.length > 0) {
+        controlPlane.warnings.forEach(warning => {
+            if (warning.includes('No greeting configured')) {
+                penalties.push({
+                    code: 'NO_GREETING_CONFIGURED',
+                    severity: 'YELLOW',
+                    weight: PENALTY_CODES.NO_GREETING_CONFIGURED.weight,
+                    message: warning
+                });
+                score -= PENALTY_CODES.NO_GREETING_CONFIGURED.weight;
+                recommendations.push('Configure a greeting in Front Desk settings');
+            } else if (warning.includes('Booking enabled but no slots')) {
+                penalties.push({
+                    code: 'BOOKING_ENABLED_NO_SLOTS',
+                    severity: 'YELLOW',
+                    weight: PENALTY_CODES.BOOKING_ENABLED_NO_SLOTS.weight,
+                    message: warning
+                });
+                score -= PENALTY_CODES.BOOKING_ENABLED_NO_SLOTS.weight;
+                recommendations.push('Configure booking slots or disable booking');
+            }
+        });
+    }
+    
+    // Call Protection warnings (invalid enabled rules)
+    const callProtection = providers.callProtection;
+    if (callProtection?.warnings?.length > 0) {
+        callProtection.warnings.forEach(warning => {
+            if (warning.includes('invalid')) {
+                penalties.push({
+                    code: 'INVALID_CALL_PROTECTION_RULE',
+                    severity: 'YELLOW',
+                    weight: PENALTY_CODES.INVALID_CALL_PROTECTION_RULE.weight,
+                    message: warning
+                });
+                score -= PENALTY_CODES.INVALID_CALL_PROTECTION_RULE.weight;
+                recommendations.push('Fix or disable invalid call protection rules');
+            }
+        });
+    }
+    
+    // Dynamic Flow warnings (invalid enabled flows)
+    if (dynamicFlow && providers.dynamicFlow?.warnings?.length > 0) {
+        providers.dynamicFlow.warnings.forEach(warning => {
+            if (warning.includes('invalid') || warning.includes('0 trigger phrases')) {
+                penalties.push({
+                    code: 'INVALID_DYNAMIC_FLOW',
+                    severity: 'YELLOW',
+                    weight: PENALTY_CODES.INVALID_DYNAMIC_FLOW.weight,
+                    message: warning
+                });
+                score -= PENALTY_CODES.INVALID_DYNAMIC_FLOW.weight;
+                recommendations.push('Fix or disable invalid dynamic flows');
+            }
+        });
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // 7. COMPUTE FINAL STATUS (December 2025 - Fixed logic)
     // ═══════════════════════════════════════════════════════════════════════
     
     // Enforce score bounds
@@ -343,7 +413,7 @@ function computeCompleteness(snapshot, scopeOverride = null) {
         score = Math.min(score, 49);
     }
     
-    // Determine grade
+    // Determine grade (based on score)
     let grade;
     if (score >= 90) grade = 'A';
     else if (score >= 80) grade = 'B';
@@ -351,34 +421,48 @@ function computeCompleteness(snapshot, scopeOverride = null) {
     else if (score >= 50) grade = 'D';
     else grade = 'F';
     
-    // Determine status (stricter thresholds for ClientsVia)
+    // ═══════════════════════════════════════════════════════════════════════
+    // STATUS LOGIC (LOCKED - December 2025)
+    // Status is determined by PENALTY SEVERITY, not score alone
+    // This prevents "RED status with only YELLOW penalties" confusion
+    // ═══════════════════════════════════════════════════════════════════════
+    const hasYellowPenalty = penalties.some(p => p.severity === 'YELLOW');
+    
     let status;
-    if (hasRedPenalty || score < 80) {
+    if (hasRedPenalty) {
+        // Any RED penalty → status = RED (critical issues)
         status = 'RED';
-    } else if (score < 90 || penalties.some(p => p.severity === 'YELLOW')) {
+    } else if (hasYellowPenalty) {
+        // Any YELLOW penalty → status = YELLOW (warnings)
         status = 'YELLOW';
     } else {
+        // Only GREEN/no penalties → status = GREEN
         status = 'GREEN';
     }
     
-    // Build summary
+    // Build summary based on actual penalties
     const redCount = penalties.filter(p => p.severity === 'RED').length;
     const yellowCount = penalties.filter(p => p.severity === 'YELLOW').length;
+    const greenCount = penalties.filter(p => p.severity === 'GREEN').length;
     
     let summary;
     if (status === 'GREEN') {
-        summary = 'Platform is production-ready';
+        if (greenCount > 0) {
+            summary = `Production-ready with ${greenCount} minor suggestion${greenCount > 1 ? 's' : ''}`;
+        } else {
+            summary = 'Platform is production-ready';
+        }
     } else if (status === 'YELLOW') {
-        summary = `${yellowCount} warning${yellowCount > 1 ? 's' : ''} found - review recommended`;
+        summary = `${yellowCount} warning${yellowCount > 1 ? 's' : ''} found`;
     } else {
         summary = `${redCount} critical issue${redCount > 1 ? 's' : ''} blocking production`;
     }
     
-    // Add top issues to summary
+    // Add top issues to summary (show actual message, not just prefix)
     const topIssues = penalties
         .filter(p => p.severity === 'RED' || p.severity === 'YELLOW')
-        .slice(0, 2)
-        .map(p => p.message.split(':')[0])
+        .slice(0, 3)
+        .map(p => p.message)
         .join('; ');
     
     if (topIssues) {
@@ -396,7 +480,7 @@ function computeCompleteness(snapshot, scopeOverride = null) {
             return (severityOrder[a.severity] - severityOrder[b.severity]) || (b.weight - a.weight);
         }),
         recommendations: [...new Set(recommendations)], // Deduplicate
-        readinessLevel: getReadinessLevel(score),
+        readinessLevel: getReadinessLevel(score, status),
         requiredProviders: requiredForScope,
         providersChecked: Object.keys(providers)
     };
@@ -404,13 +488,17 @@ function computeCompleteness(snapshot, scopeOverride = null) {
 
 /**
  * Get readiness level description
+ * Now accepts status to ensure consistency
  */
-function getReadinessLevel(score) {
+function getReadinessLevel(score, status) {
+    // Status-based readiness (primary)
+    if (status === 'RED') return 'NOT_PRODUCTION_SAFE';
+    if (status === 'YELLOW') return 'WORKS_NEEDS_CLEANUP';
+    
+    // Score-based refinement for GREEN status
     if (score >= 95) return 'ELITE - Set-and-forget';
     if (score >= 90) return 'PRODUCTION_READY';
-    if (score >= 85) return 'WORKS - Needs cleanup soon';
-    if (score >= 80) return 'RISKY - Expect weird calls';
-    return 'NOT_PRODUCTION_SAFE';
+    return 'PRODUCTION_READY'; // GREEN status but score < 90 (shouldn't happen)
 }
 
 module.exports = {
