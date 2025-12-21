@@ -119,9 +119,11 @@
       font-weight: 700;
     }
     
-    .json-badge-score.green { background: #10b981; }
-    .json-badge-score.yellow { background: #f59e0b; }
-    .json-badge-score.red { background: #ef4444; }
+    .json-badge-score.notloaded { background: #64748b; color: white; }
+    .json-badge-score.green { background: #10b981; color: white; }
+    .json-badge-score.yellow { background: #f59e0b; color: white; }
+    .json-badge-score.red { background: #ef4444; color: white; }
+    .json-badge-score.error { background: #7f1d1d; color: white; }
     
     /* Platform Snapshot Modal */
     .snapshot-modal-overlay {
@@ -749,9 +751,9 @@
     <div class="header-right">
       <!-- 📄 PLATFORM SNAPSHOT BUTTON (Enterprise Introspection) -->
       <button id="btn-platform-json" class="btn-json" onclick="openPlatformSnapshotModal()">
-        <span id="json-badge-emoji">📄</span>
+        <span id="json-badge-emoji">⏳</span>
         <span>JSON</span>
-        <span id="json-badge-score" class="json-badge-score"></span>
+        <span id="json-badge-score" class="json-badge-score notloaded">—</span>
       </button>
       <button class="btn-test" onclick="openAITestConsole()">
         <i class="fas fa-phone-volume"></i>
@@ -2419,24 +2421,61 @@
     // Note: currentSnapshot is already declared above for Flow Tree
     let currentSnapshotScope = 'full';
     
-    // Load badge on page load
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BADGE STATE MACHINE (LOCKED)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // | State      | Meaning              | Display      |
+    // | ---------- | -------------------- | ------------ |
+    // | notloaded  | Snapshot not fetched | ⏳ — gray    |
+    // | GREEN      | ≥90                  | 🟢 92%       |
+    // | YELLOW     | 80–89                | 🟡 85%       |
+    // | RED        | <80                  | 🔴 72%       |
+    // | ERROR      | Snapshot failed      | ❌ ERR       |
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    function updateHeaderBadge(score, status, error = null) {
+      const emojiEl = document.getElementById('json-badge-emoji');
+      const scoreEl = document.getElementById('json-badge-score');
+      
+      if (error) {
+        emojiEl.textContent = '❌';
+        scoreEl.textContent = 'ERR';
+        scoreEl.className = 'json-badge-score error';
+        return;
+      }
+      
+      // Emoji based on status
+      if (status === 'GREEN') emojiEl.textContent = '🟢';
+      else if (status === 'YELLOW') emojiEl.textContent = '🟡';
+      else if (status === 'RED') emojiEl.textContent = '🔴';
+      else emojiEl.textContent = '📄';
+      
+      // Score display
+      scoreEl.textContent = score + '%';
+      scoreEl.className = 'json-badge-score ' + (status || 'notloaded').toLowerCase();
+    }
+    
+    // Load badge on page load (uses same endpoint as modal for consistency)
     async function loadSnapshotBadge() {
       try {
         const response = await fetch(`/api/company/${currentCompanyId}/platform-snapshot/badge`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
         });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
         
         if (data.success && data.badge) {
-          const badge = data.badge;
-          document.getElementById('json-badge-emoji').textContent = badge.emoji;
-          
-          const scoreEl = document.getElementById('json-badge-score');
-          scoreEl.textContent = badge.score + '%';
-          scoreEl.className = 'json-badge-score ' + badge.status.toLowerCase();
+          updateHeaderBadge(data.badge.score, data.badge.status);
+        } else {
+          throw new Error(data.error || 'Invalid badge response');
         }
       } catch (error) {
         console.warn('[SNAPSHOT] Badge load failed:', error);
+        updateHeaderBadge(0, null, error);
       }
     }
     
@@ -2529,8 +2568,8 @@
         // Update JSON display
         jsonPre.textContent = JSON.stringify(currentSnapshot, null, 2);
         
-        // Update header badge too
-        loadSnapshotBadge();
+        // SYNC: Update header badge from same data (single source of truth)
+        updateHeaderBadge(completeness.score, completeness.status);
         
       } catch (error) {
         console.error('[SNAPSHOT] Load failed:', error);
