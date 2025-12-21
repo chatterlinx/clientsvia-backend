@@ -15,16 +15,34 @@ const mongoose = require('mongoose');
 const logger = require('../../../utils/logger');
 
 /**
+ * Helper: Get the first trigger from flow (schema uses 'triggers' array)
+ */
+function getFirstTrigger(flow) {
+    // CORRECT SCHEMA: triggers[] array
+    if (flow.triggers?.length > 0) {
+        return flow.triggers[0];
+    }
+    // LEGACY: trigger object (for backward compatibility)
+    if (flow.trigger) {
+        return flow.trigger;
+    }
+    return null;
+}
+
+/**
  * Helper: Extract trigger phrases from flow (supports both schemas)
  */
 function getTriggerPhrases(flow) {
-    // NEW SCHEMA: trigger.config.phrases
-    if (flow.trigger?.config?.phrases?.length > 0) {
-        return flow.trigger.config.phrases;
+    const trigger = getFirstTrigger(flow);
+    if (!trigger) return [];
+    
+    // V2 SCHEMA: trigger.config.phrases
+    if (trigger.config?.phrases?.length > 0) {
+        return trigger.config.phrases;
     }
     // LEGACY: trigger.phrases
-    if (flow.trigger?.phrases?.length > 0) {
-        return flow.trigger.phrases;
+    if (trigger.phrases?.length > 0) {
+        return trigger.phrases;
     }
     return [];
 }
@@ -33,7 +51,10 @@ function getTriggerPhrases(flow) {
  * Helper: Get normalized trigger type
  */
 function getNormalizedTriggerType(flow) {
-    const type = flow.trigger?.type;
+    const trigger = getFirstTrigger(flow);
+    if (!trigger) return 'unknown';
+    
+    const type = trigger.type;
     // Normalize legacy types
     if (type === 'PHRASE_MATCH') return 'phrase';
     if (type === 'CONDITION') return 'condition';
@@ -44,7 +65,9 @@ function getNormalizedTriggerType(flow) {
  * Helper: Get min confidence (supports both schemas)
  */
 function getMinConfidence(flow) {
-    return flow.trigger?.config?.minConfidence || flow.trigger?.minConfidence || 0.7;
+    const trigger = getFirstTrigger(flow);
+    if (!trigger) return 0.7;
+    return trigger.config?.minConfidence || trigger.minConfidence || 0.7;
 }
 
 /**

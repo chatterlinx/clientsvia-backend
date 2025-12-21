@@ -142,20 +142,27 @@ router.get('/', async (req, res) => {
                     isTemplate: flow.isTemplate,
                     
                     // ═══════════════════════════════════════════════════════════
-                    // TRIGGER - FULL RAW OBJECT (no extraction, shows exactly what's stored)
+                    // TRIGGERS - FULL RAW ARRAY (schema uses 'triggers' not 'trigger')
                     // ═══════════════════════════════════════════════════════════
-                    trigger_RAW: flow.trigger,
+                    triggers_RAW: flow.triggers || [],
+                    // Also show legacy field if present (backward compat)
+                    trigger_LEGACY: flow.trigger || null,
                     
                     // Analyzed paths for debugging
-                    trigger_analysis: {
-                        type: flow.trigger?.type || '❌ MISSING',
-                        'v2_path_config.phrases': flow.trigger?.config?.phrases || [],
-                        'v2_path_config.phrases.length': flow.trigger?.config?.phrases?.length || 0,
-                        'legacy_path_phrases': flow.trigger?.phrases || [],
-                        'legacy_path_phrases.length': flow.trigger?.phrases?.length || 0,
-                        schemaDetected: flow.trigger?.config?.phrases?.length > 0 ? 'v2' : 
-                                       flow.trigger?.phrases?.length > 0 ? 'legacy' : 'empty'
-                    },
+                    trigger_analysis: (() => {
+                        const firstTrigger = flow.triggers?.[0] || flow.trigger;
+                        return {
+                            source: flow.triggers?.length > 0 ? 'triggers[] (correct)' : (flow.trigger ? 'trigger (legacy)' : '❌ MISSING'),
+                            triggersCount: flow.triggers?.length || 0,
+                            type: firstTrigger?.type || '❌ MISSING',
+                            'v2_path_config.phrases': firstTrigger?.config?.phrases || [],
+                            'v2_path_config.phrases.length': firstTrigger?.config?.phrases?.length || 0,
+                            'legacy_path_phrases': firstTrigger?.phrases || [],
+                            'legacy_path_phrases.length': firstTrigger?.phrases?.length || 0,
+                            schemaDetected: firstTrigger?.config?.phrases?.length > 0 ? 'v2' : 
+                                           firstTrigger?.phrases?.length > 0 ? 'legacy' : 'empty'
+                        };
+                    })(),
                     
                     // ═══════════════════════════════════════════════════════════
                     // ACTIONS - FULL RAW ARRAY
@@ -396,6 +403,7 @@ router.post('/save-flow-json', async (req, res) => {
     
     try {
         // Build the flow document
+        // NOTE: The DynamicFlow model uses 'triggers' (array) not 'trigger' (object)
         const flowDoc = {
             companyId: new mongoose.Types.ObjectId(companyId),
             flowKey: flow.flowKey,
@@ -405,7 +413,10 @@ router.post('/save-flow-json', async (req, res) => {
             isTemplate: false,
             priority: flow.priority || 100,
             
-            trigger: flow.trigger,
+            // CRITICAL: Schema uses 'triggers' (array), not 'trigger'
+            // Support both input formats for flexibility
+            triggers: flow.triggers ? flow.triggers : (flow.trigger ? [flow.trigger] : []),
+            
             actions: flow.actions,
             settings: flow.settings || { allowConcurrent: false },
             
@@ -415,6 +426,15 @@ router.post('/save-flow-json', async (req, res) => {
                 savedAt: new Date().toISOString()
             }
         };
+        
+        logger.info('[SAVE FLOW JSON] Flow doc built', {
+            companyId,
+            flowKey: flowDoc.flowKey,
+            triggersCount: flowDoc.triggers.length,
+            triggerType: flowDoc.triggers[0]?.type,
+            phrasesCount: flowDoc.triggers[0]?.config?.phrases?.length || 0,
+            actionsCount: flowDoc.actions?.length
+        });
         
         // Upsert by companyId + flowKey
         const result = await DynamicFlow.findOneAndUpdate(
@@ -430,14 +450,19 @@ router.post('/save-flow-json', async (req, res) => {
         // Verify
         const verify = await DynamicFlow.findById(result._id).lean();
         
+        // Get first trigger (the schema uses 'triggers' array)
+        const firstTrigger = verify.triggers?.[0];
+        
         const verification = {
             _id: verify._id,
             flowKey: verify.flowKey,
-            triggerType: verify.trigger?.type,
-            triggerPhrasesCount: verify.trigger?.config?.phrases?.length || 0,
+            triggersCount: verify.triggers?.length || 0,
+            triggerType: firstTrigger?.type || 'missing',
+            triggerPhrasesCount: firstTrigger?.config?.phrases?.length || 0,
+            triggerPhrasesSample: firstTrigger?.config?.phrases?.slice(0, 3) || [],
             actionsCount: verify.actions?.length || 0,
             actionTypes: verify.actions?.map(a => a.type) || [],
-            schemaUsed: verify.trigger?.config?.phrases?.length > 0 ? 'v2' : 'legacy',
+            schemaUsed: firstTrigger?.config?.phrases?.length > 0 ? 'v2' : 'legacy',
             enabled: verify.enabled
         };
         
