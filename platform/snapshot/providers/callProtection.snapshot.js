@@ -5,16 +5,20 @@
  * Provides: Pre-answer filters (spam, voicemail, abuse detection)
  */
 
-const CheatSheet = require('../../../models/CheatSheet');
+const CheatSheetVersion = require('../../../models/cheatsheet/CheatSheetVersion');
 const logger = require('../../../utils/logger');
 
 module.exports.getSnapshot = async function(companyId) {
     const startTime = Date.now();
     
     try {
-        const cheatSheet = await CheatSheet.findOne({ companyId }).lean();
+        // Get the LIVE cheatsheet version for this company
+        const cheatSheet = await CheatSheetVersion.findOne({ 
+            companyId, 
+            status: 'live' 
+        }).lean();
         
-        const edgeCases = cheatSheet?.edgeCases || [];
+        const edgeCases = cheatSheet?.config?.edgeCases || [];
         const enabledRules = edgeCases.filter(ec => ec.enabled !== false);
         
         // Categorize rules by type

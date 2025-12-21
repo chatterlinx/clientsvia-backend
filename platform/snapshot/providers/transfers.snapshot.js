@@ -5,16 +5,20 @@
  * Provides: Transfer targets, after-hours routing configuration
  */
 
-const CheatSheet = require('../../../models/CheatSheet');
+const CheatSheetVersion = require('../../../models/cheatsheet/CheatSheetVersion');
 const logger = require('../../../utils/logger');
 
 module.exports.getSnapshot = async function(companyId) {
     const startTime = Date.now();
     
     try {
-        const cheatSheet = await CheatSheet.findOne({ companyId }).lean();
+        // Get the LIVE cheatsheet version for this company
+        const cheatSheet = await CheatSheetVersion.findOne({ 
+            companyId, 
+            status: 'live' 
+        }).lean();
         
-        const transferRules = cheatSheet?.transferRules || [];
+        const transferRules = cheatSheet?.config?.transferRules || [];
         const enabledTargets = transferRules.filter(r => r.enabled !== false);
         
         // Check for after-hours routing
