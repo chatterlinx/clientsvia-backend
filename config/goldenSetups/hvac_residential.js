@@ -137,7 +137,7 @@ module.exports = {
         {
             name: 'Voicemail Detection',
             description: 'Detects voicemail systems and politely disconnects',
-            enabled: true,
+            enabled: false,  // DISABLED: Requires Twilio AMD or tone detector (not just keywords)
             priority: 1,
             // Enterprise match
             match: {
@@ -168,7 +168,7 @@ module.exports = {
         {
             name: 'Spam Call Detection',
             description: 'Detects robocalls and spam callers',
-            enabled: true,
+            enabled: false,  // DISABLED: Pattern-only detection is weak; enable when spam score integration ready
             priority: 2,
             match: {
                 keywordsAny: [

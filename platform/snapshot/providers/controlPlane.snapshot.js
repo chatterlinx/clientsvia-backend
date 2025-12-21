@@ -34,14 +34,34 @@ module.exports.getSnapshot = async function(companyId) {
         
         // Extract configuration
         // FIXED: Check correct DB paths for greeting (Dec 2025)
-        // - frontDesk.greeting is a STRING, not object with .text
-        // - greetingRules lives under conversationStages, not frontDesk
-        // - fallbackResponses.greeting is also valid
-        const greetingConfigured = !!(
-            (frontDesk.greeting && frontDesk.greeting.trim().length > 0) ||  // String field
-            settings.conversationStages?.greetingRules?.length > 0 ||        // Correct path
-            (settings.fallbackResponses?.greeting && settings.fallbackResponses.greeting.trim().length > 0)
-        );
+        // - frontDeskBehavior.greeting is a STRING (canonical)
+        // - conversationStages.greetingRules is array
+        // - fallbackResponses.greeting is fallback string
+        // 
+        // PRECEDENCE ORDER (locked):
+        // 1. frontDeskBehavior.greeting (canonical)
+        // 2. conversationStages.greetingRules (rule-based)
+        // 3. fallbackResponses.greeting (fallback)
+        
+        let greetingConfigured = false;
+        let greetingSource = 'none';
+        
+        if (frontDesk.greeting && frontDesk.greeting.trim().length > 0) {
+            greetingConfigured = true;
+            greetingSource = 'frontDeskBehavior';
+        } else if (settings.conversationStages?.greetingRules?.length > 0) {
+            // Check if at least one rule is valid (has trigger + response)
+            const validRules = settings.conversationStages.greetingRules.filter(
+                r => r.trigger && r.response
+            );
+            if (validRules.length > 0) {
+                greetingConfigured = true;
+                greetingSource = 'conversationStages';
+            }
+        } else if (settings.fallbackResponses?.greeting && settings.fallbackResponses.greeting.trim().length > 0) {
+            greetingConfigured = true;
+            greetingSource = 'fallbackResponses';
+        }
         
         const bookingEnabled = settings.bookingEnabled !== false;
         const bookingSlots = frontDesk.bookingSlots || [];
@@ -75,6 +95,7 @@ module.exports.getSnapshot = async function(companyId) {
                 
                 frontDesk: {
                     greetingConfigured,
+                    greetingSource,  // "frontDeskBehavior" | "conversationStages" | "fallbackResponses" | "none"
                     toneProfile: frontDesk.conversationStyle || 'balanced',
                     bookingEnabled,
                     bookingSlotsCount: bookingSlots.length,
