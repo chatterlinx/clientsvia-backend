@@ -147,7 +147,8 @@ router.get('/badge', async (req, res) => {
     }
     
     try {
-        const snapshot = await generateSnapshot(companyId, { scope: 'runtime' });
+        // ALWAYS use FULL scope for badge - this is the header truth indicator
+        const snapshot = await generateSnapshot(companyId, { scope: 'full' });
         
         const { score, status, grade, summary } = snapshot.completeness || {};
         

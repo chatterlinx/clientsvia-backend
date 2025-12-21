@@ -42,11 +42,11 @@ module.exports.getSnapshot = async function(companyId) {
             isPublished: true
         }).lean();
         
-        // Load company overrides
+        // Load company overrides (use getOrCreate for defaults to ensure document exists)
         const [scenarioOverrides, categoryOverrides, companyDefaults] = await Promise.all([
             CompanyScenarioOverride.find({ companyId }).lean(),
             CompanyCategoryOverride.find({ companyId }).lean(),
-            CompanyResponseDefaults.findOne({ companyId }).lean()
+            CompanyResponseDefaults.getOrCreate(companyId)
         ]);
         
         // Build override maps for quick lookup

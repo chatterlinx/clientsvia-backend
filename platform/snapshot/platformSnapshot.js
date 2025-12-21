@@ -156,8 +156,8 @@ async function generateSnapshot(companyId, options = {}) {
             }
         });
         
-        // Compute completeness score
-        snapshot.completeness = computeCompleteness(snapshot);
+        // Compute completeness score (SCOPE-AWARE)
+        snapshot.completeness = computeCompleteness(snapshot, scope);
         
         // Finalize timing
         snapshot.meta.generationMs = Date.now() - startTime;
@@ -179,7 +179,7 @@ async function generateSnapshot(companyId, options = {}) {
         snapshot.meta.generationMs = Date.now() - startTime;
         
         // Still compute completeness (will be low due to missing providers)
-        snapshot.completeness = computeCompleteness(snapshot);
+        snapshot.completeness = computeCompleteness(snapshot, scope);
         
         return snapshot;
     }

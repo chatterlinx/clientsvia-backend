@@ -20,7 +20,7 @@
  * ============================================================================
  */
 
-const { REQUIRED_PROVIDERS } = require('./snapshotRegistry');
+const { REQUIRED_PROVIDERS, REQUIRED_PROVIDERS_BY_SCOPE } = require('./snapshotRegistry');
 const logger = require('../../utils/logger');
 
 // Penalty codes for consistent logging/searching
@@ -56,9 +56,10 @@ const PENALTY_CODES = {
 /**
  * Main scoring function
  * @param {Object} snapshot - The full platform snapshot
- * @returns {Object} - { score, status, grade, summary, penalties, recommendations }
+ * @param {String} scope - The scope being evaluated (full, scenarios, control, runtime)
+ * @returns {Object} - { score, status, grade, summary, penalties, recommendations, scope }
  */
-function computeCompleteness(snapshot) {
+function computeCompleteness(snapshot, scope = 'full') {
     let score = 100;
     const penalties = [];
     const recommendations = [];
@@ -67,15 +68,18 @@ function computeCompleteness(snapshot) {
     const providers = snapshot.providers || {};
     
     // ═══════════════════════════════════════════════════════════════════════
-    // 1. CHECK REQUIRED PROVIDERS (CRITICAL)
+    // 1. CHECK REQUIRED PROVIDERS (SCOPE-AWARE)
+    // Only penalize missing providers that are required for the current scope
     // ═══════════════════════════════════════════════════════════════════════
-    REQUIRED_PROVIDERS.forEach(providerKey => {
+    const requiredForScope = REQUIRED_PROVIDERS_BY_SCOPE[scope] || REQUIRED_PROVIDERS;
+    
+    requiredForScope.forEach(providerKey => {
         if (!providers[providerKey]) {
             penalties.push({
                 code: 'MISSING_PROVIDER',
                 severity: 'RED',
                 weight: PENALTY_CODES.MISSING_PROVIDER.weight,
-                message: `Missing required provider: ${providerKey}`
+                message: `Missing required provider for ${scope} scope: ${providerKey}`
             });
             score -= PENALTY_CODES.MISSING_PROVIDER.weight;
             hasRedPenalty = true;
@@ -375,6 +379,7 @@ function computeCompleteness(snapshot) {
     }
     
     return {
+        scope,
         score,
         status,
         grade,
@@ -384,7 +389,9 @@ function computeCompleteness(snapshot) {
             return (severityOrder[a.severity] - severityOrder[b.severity]) || (b.weight - a.weight);
         }),
         recommendations: [...new Set(recommendations)], // Deduplicate
-        readinessLevel: getReadinessLevel(score)
+        readinessLevel: getReadinessLevel(score),
+        requiredProviders: requiredForScope,
+        providersChecked: Object.keys(providers)
     };
 }
 

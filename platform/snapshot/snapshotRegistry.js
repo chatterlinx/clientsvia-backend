@@ -13,7 +13,7 @@
  */
 
 module.exports = {
-    // Required providers for a complete platform snapshot
+    // Required providers for a complete platform snapshot (FULL scope)
     REQUIRED_PROVIDERS: [
         'controlPlane',
         'dynamicFlow',
@@ -23,6 +23,37 @@ module.exports = {
         'placeholders',
         'runtimeBindings'
     ],
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SCOPE-SPECIFIC REQUIRED PROVIDERS
+    // Only penalize missing providers that are required for the current scope
+    // ═══════════════════════════════════════════════════════════════════════════
+    REQUIRED_PROVIDERS_BY_SCOPE: {
+        full: [
+            'controlPlane',
+            'dynamicFlow',
+            'scenarioBrain',
+            'callProtection',
+            'transfers',
+            'placeholders',
+            'runtimeBindings'
+        ],
+        scenarios: [
+            'scenarioBrain',
+            'placeholders'
+        ],
+        control: [
+            'controlPlane',
+            'dynamicFlow',
+            'placeholders'
+        ],
+        runtime: [
+            'runtimeBindings',
+            'dynamicFlow',
+            'callProtection',
+            'transfers'
+        ]
+    },
     
     // Provider metadata for documentation
     PROVIDER_METADATA: {

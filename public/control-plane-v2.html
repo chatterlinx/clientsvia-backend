@@ -1159,6 +1159,9 @@
           <button class="data-config-subtab active" data-subtab="placeholders" style="padding: 10px 20px; border: none; background: #3b82f6; color: white; border-radius: 8px 8px 0 0; font-weight: 600; cursor: pointer;">
             <i class="fas fa-tags"></i> Placeholders
           </button>
+          <button class="data-config-subtab" data-subtab="defaults" style="padding: 10px 20px; border: none; background: #f1f5f9; color: #64748b; border-radius: 8px 8px 0 0; font-weight: 600; cursor: pointer;">
+            <i class="fas fa-reply-all"></i> Default Replies
+          </button>
           <button class="data-config-subtab" data-subtab="templates" style="padding: 10px 20px; border: none; background: #f1f5f9; color: #64748b; border-radius: 8px 8px 0 0; font-weight: 600; cursor: pointer;">
             <i class="fas fa-file-alt"></i> Templates
           </button>
@@ -1211,6 +1214,111 @@
             <button onclick="savePlaceholders()" class="btn btn-primary">
               <i class="fas fa-save"></i> Save Changes
             </button>
+          </div>
+        </div>
+        
+        <!-- DEFAULT REPLIES (Company-level fallback responses) -->
+        <div id="data-config-defaults" class="data-config-content" style="display: none;">
+          <div style="margin-bottom: 16px;">
+            <h3 style="font-size: 18px; font-weight: 600; margin: 0;">📝 Company Default Replies</h3>
+            <p style="font-size: 13px; color: #64748b; margin-top: 4px;">
+              Deterministic fallback responses when scenarios/categories are disabled. <strong>No LLM required.</strong>
+            </p>
+          </div>
+          
+          <div id="defaults-loading" style="text-align: center; padding: 40px; color: #94a3b8;">
+            <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px; display: block;"></i>
+            Loading company defaults...
+          </div>
+          
+          <div id="defaults-form" style="display: none;">
+            <!-- Not Offered Reply -->
+            <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid #f59e0b;">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                <span style="font-size: 24px;">🚫</span>
+                <div>
+                  <h4 style="margin: 0; font-size: 16px; font-weight: 600; color: #92400e;">Not Offered Reply</h4>
+                  <p style="margin: 4px 0 0 0; font-size: 12px; color: #78350f;">When a caller asks about a disabled scenario/category (e.g., "duct cleaning" disabled).</p>
+                </div>
+              </div>
+              <div style="margin-bottom: 12px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: #78350f; margin-bottom: 4px;">Quick Reply (TTS)</label>
+                <input type="text" id="defaults-notOffered-quick" placeholder="I'm sorry, we don't offer that service." 
+                  style="width: 100%; padding: 10px 12px; border: 1px solid #d97706; border-radius: 8px; font-size: 14px; background: white;">
+              </div>
+              <div>
+                <label style="display: block; font-size: 12px; font-weight: 600; color: #78350f; margin-bottom: 4px;">Full Reply (Required)</label>
+                <textarea id="defaults-notOffered-full" rows="3" placeholder="I'm sorry, that's not a service we currently provide. Is there anything else I can help you with today?"
+                  style="width: 100%; padding: 10px 12px; border: 1px solid #d97706; border-radius: 8px; font-size: 14px; resize: vertical; background: white;"></textarea>
+              </div>
+            </div>
+            
+            <!-- Unknown Intent Reply -->
+            <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid #3b82f6;">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                <span style="font-size: 24px;">❓</span>
+                <div>
+                  <h4 style="margin: 0; font-size: 16px; font-weight: 600; color: #1e40af;">Unknown Intent Reply</h4>
+                  <p style="margin: 4px 0 0 0; font-size: 12px; color: #1e3a8a;">When the system can't understand what the caller is asking (rare fallback).</p>
+                </div>
+              </div>
+              <div style="margin-bottom: 12px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: #1e40af; margin-bottom: 4px;">Quick Reply (TTS)</label>
+                <input type="text" id="defaults-unknownIntent-quick" placeholder="I'm not sure I understand."
+                  style="width: 100%; padding: 10px 12px; border: 1px solid #3b82f6; border-radius: 8px; font-size: 14px; background: white;">
+              </div>
+              <div>
+                <label style="display: block; font-size: 12px; font-weight: 600; color: #1e40af; margin-bottom: 4px;">Full Reply (Required)</label>
+                <textarea id="defaults-unknownIntent-full" rows="3" placeholder="I'm sorry, I didn't quite catch that. Could you tell me more about what you're looking for?"
+                  style="width: 100%; padding: 10px 12px; border: 1px solid #3b82f6; border-radius: 8px; font-size: 14px; resize: vertical; background: white;"></textarea>
+              </div>
+            </div>
+            
+            <!-- After Hours Reply -->
+            <div style="background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); border-radius: 12px; padding: 20px; margin-bottom: 16px; border: 1px solid #6366f1;">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                <span style="font-size: 24px;">🌙</span>
+                <div>
+                  <h4 style="margin: 0; font-size: 16px; font-weight: 600; color: #3730a3;">After Hours Reply</h4>
+                  <p style="margin: 4px 0 0 0; font-size: 12px; color: #312e81;">When a caller reaches you outside business hours.</p>
+                </div>
+              </div>
+              <div style="margin-bottom: 12px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: #3730a3; margin-bottom: 4px;">Quick Reply (TTS)</label>
+                <input type="text" id="defaults-afterHours-quick" placeholder="We're currently closed."
+                  style="width: 100%; padding: 10px 12px; border: 1px solid #6366f1; border-radius: 8px; font-size: 14px; background: white;">
+              </div>
+              <div>
+                <label style="display: block; font-size: 12px; font-weight: 600; color: #3730a3; margin-bottom: 4px;">Full Reply (Required)</label>
+                <textarea id="defaults-afterHours-full" rows="3" placeholder="Thanks for calling! Our office is currently closed. Our normal business hours are..."
+                  style="width: 100%; padding: 10px 12px; border: 1px solid #6366f1; border-radius: 8px; font-size: 14px; resize: vertical; background: white;"></textarea>
+              </div>
+            </div>
+            
+            <!-- Strict Behavior Toggle -->
+            <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #e2e8f0;">
+              <label style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;">
+                <input type="checkbox" id="defaults-strictBehavior" checked
+                  style="width: 20px; height: 20px; margin-top: 2px; accent-color: #10b981;">
+                <div>
+                  <span style="font-weight: 600; color: #1e293b;">Strict Disabled Behavior</span>
+                  <p style="font-size: 12px; color: #64748b; margin: 4px 0 0 0;">
+                    When enabled, always use Not Offered reply for disabled scenarios (never fall back to LLM).
+                    <strong style="color: #059669;">Recommended for predictable, cost-effective responses.</strong>
+                  </p>
+                </div>
+              </label>
+            </div>
+            
+            <!-- Save Button -->
+            <div style="display: flex; justify-content: flex-end; gap: 12px;">
+              <button onclick="loadCompanyDefaults()" class="btn btn-secondary">
+                <i class="fas fa-undo"></i> Reset
+              </button>
+              <button onclick="saveCompanyDefaults()" class="btn btn-primary">
+                <i class="fas fa-save"></i> Save Default Replies
+              </button>
+            </div>
           </div>
         </div>
         
@@ -1921,6 +2029,8 @@
       // Load content for the subtab using ORIGINAL managers
       if (subtab === 'placeholders') {
         loadPlaceholders();
+      } else if (subtab === 'defaults') {
+        await loadCompanyDefaults();
       } else if (subtab === 'templates') {
         await loadTemplatesWithOriginalManager();
       } else if (subtab === 'scenarios') {
@@ -2098,6 +2208,99 @@
       if (confirm('Reset all placeholders to defaults? This will clear custom values.')) {
         currentPlaceholders = {};
         importPlaceholderDefaults();
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COMPANY DEFAULT REPLIES - Deterministic fallback responses
+    // ═══════════════════════════════════════════════════════════════════════════
+    let currentDefaults = null;
+    
+    async function loadCompanyDefaults() {
+      const loadingEl = document.getElementById('defaults-loading');
+      const formEl = document.getElementById('defaults-form');
+      
+      if (loadingEl) loadingEl.style.display = 'block';
+      if (formEl) formEl.style.display = 'none';
+      
+      try {
+        const response = await fetch(`/api/company/${currentCompanyId}/overrides/defaults`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (!response.ok) throw new Error('Failed to load defaults');
+        
+        const data = await response.json();
+        currentDefaults = data.defaults;
+        
+        // Populate form fields
+        document.getElementById('defaults-notOffered-quick').value = currentDefaults?.notOfferedReply?.quickReply || '';
+        document.getElementById('defaults-notOffered-full').value = currentDefaults?.notOfferedReply?.fullReply || '';
+        document.getElementById('defaults-unknownIntent-quick').value = currentDefaults?.unknownIntentReply?.quickReply || '';
+        document.getElementById('defaults-unknownIntent-full').value = currentDefaults?.unknownIntentReply?.fullReply || '';
+        document.getElementById('defaults-afterHours-quick').value = currentDefaults?.afterHoursReply?.quickReply || '';
+        document.getElementById('defaults-afterHours-full').value = currentDefaults?.afterHoursReply?.fullReply || '';
+        document.getElementById('defaults-strictBehavior').checked = currentDefaults?.strictDisabledBehavior ?? true;
+        
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (formEl) formEl.style.display = 'block';
+        
+        console.log('✅ [DEFAULTS] Company defaults loaded');
+      } catch (error) {
+        console.error('❌ [DEFAULTS] Load failed:', error);
+        if (loadingEl) loadingEl.innerHTML = `
+          <div style="color: #ef4444;">
+            <i class="fas fa-exclamation-triangle" style="font-size: 24px; margin-bottom: 12px; display: block;"></i>
+            Failed to load defaults: ${error.message}
+          </div>
+        `;
+      }
+    }
+    
+    async function saveCompanyDefaults() {
+      try {
+        const updates = {
+          notOfferedReply: {
+            quickReply: document.getElementById('defaults-notOffered-quick').value.trim(),
+            fullReply: document.getElementById('defaults-notOffered-full').value.trim()
+          },
+          unknownIntentReply: {
+            quickReply: document.getElementById('defaults-unknownIntent-quick').value.trim(),
+            fullReply: document.getElementById('defaults-unknownIntent-full').value.trim()
+          },
+          afterHoursReply: {
+            quickReply: document.getElementById('defaults-afterHours-quick').value.trim(),
+            fullReply: document.getElementById('defaults-afterHours-full').value.trim()
+          },
+          strictDisabledBehavior: document.getElementById('defaults-strictBehavior').checked
+        };
+        
+        // Validate required fields
+        if (!updates.notOfferedReply.fullReply) {
+          alert('⚠️ "Not Offered" full reply is required for production readiness.');
+          return;
+        }
+        
+        const response = await fetch(`/api/company/${currentCompanyId}/overrides/defaults`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(updates)
+        });
+        
+        if (!response.ok) throw new Error('Failed to save defaults');
+        
+        showSnapshotToast('✅ Default Replies Saved!', 'Your deterministic fallback responses are now configured.', 'success');
+        
+        // Refresh the header badge to reflect new score
+        loadSnapshotBadge();
+        
+        console.log('✅ [DEFAULTS] Company defaults saved');
+      } catch (error) {
+        console.error('❌ [DEFAULTS] Save failed:', error);
+        alert('❌ Failed to save: ' + error.message);
       }
     }
     
@@ -2524,10 +2727,11 @@
         currentSnapshot = data.snapshot;
         const completeness = currentSnapshot.completeness || {};
         
-        // Update status badge
+        // Update status badge WITH SCOPE LABEL
         const emoji = completeness.status === 'GREEN' ? '🟢' : 
                       completeness.status === 'YELLOW' ? '🟡' : '🔴';
-        statusBadge.textContent = `${emoji} ${completeness.score}% (${completeness.grade})`;
+        const scopeLabel = scope.toUpperCase();
+        statusBadge.textContent = `${emoji} ${completeness.score}% (${completeness.grade}) — ${scopeLabel}`;
         statusBadge.className = `snapshot-status-badge ${completeness.status?.toLowerCase() || 'yellow'}`;
         
         // Update summary
@@ -2570,8 +2774,11 @@
         // Update JSON display
         jsonPre.textContent = JSON.stringify(currentSnapshot, null, 2);
         
-        // SYNC: Update header badge from same data (single source of truth)
-        updateHeaderBadge(completeness.score, completeness.status);
+        // SYNC: Update header badge ONLY if this is FULL scope
+        // Header badge always shows FULL platform score (single source of truth)
+        if (scope === 'full') {
+          updateHeaderBadge(completeness.score, completeness.status);
+        }
         
       } catch (error) {
         console.error('[SNAPSHOT] Load failed:', error);
