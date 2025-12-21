@@ -1601,16 +1601,28 @@
                 
                 <!-- Write Test Panel -->
                 <div class="px-6 py-3 bg-amber-50 border-b border-amber-200">
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center flex-wrap gap-3">
                         <i class="fas fa-flask text-amber-600"></i>
-                        <span class="font-semibold text-amber-800 text-sm">Write Test (Verify Save Pipeline)</span>
-                        <button onclick="writeTestGreeting()" 
-                                class="ml-auto px-3 py-1.5 text-xs bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors flex items-center gap-2">
-                            <i class="fas fa-edit" id="write-test-icon"></i>
-                            Write Test Greeting
-                        </button>
-                        <span id="write-test-result" class="text-xs text-amber-700 hidden"></span>
+                        <span class="font-semibold text-amber-800 text-sm">Write Tests (Verify Save Pipeline)</span>
+                        <div class="ml-auto flex items-center gap-2">
+                            <button onclick="writeTestGreeting()" 
+                                    class="px-3 py-1.5 text-xs bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors flex items-center gap-2">
+                                <i class="fas fa-comment" id="write-test-greeting-icon"></i>
+                                Greeting
+                            </button>
+                            <button onclick="writeTestDynamicFlow()" 
+                                    class="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                                <i class="fas fa-project-diagram" id="write-test-flow-icon"></i>
+                                Dynamic Flow
+                            </button>
+                            <button onclick="cleanupTestFlows()" 
+                                    class="px-3 py-1.5 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors flex items-center gap-2"
+                                    title="Delete test flows">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
                     </div>
+                    <div id="write-test-result" class="mt-2 text-xs text-amber-700 hidden"></div>
                 </div>
                 
                 <!-- Meta Info -->
@@ -1847,7 +1859,7 @@
                 return;
             }
             
-            const icon = document.getElementById('write-test-icon');
+            const icon = document.getElementById('write-test-greeting-icon');
             const resultEl = document.getElementById('write-test-result');
             
             if (icon) icon.className = 'fas fa-spinner fa-spin';
@@ -2132,6 +2144,120 @@
             }, 4000);
         }
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // WRITE TEST DYNAMIC FLOW - End-to-End Verification
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function writeTestDynamicFlow() {
+            const companyId = window.currentCompanyId || window.companyId;
+            if (!companyId) {
+                alert('No company ID found');
+                return;
+            }
+            
+            const icon = document.getElementById('write-test-flow-icon');
+            const resultEl = document.getElementById('write-test-result');
+            
+            if (icon) icon.className = 'fas fa-spinner fa-spin';
+            if (resultEl) resultEl.classList.add('hidden');
+            
+            try {
+                const authToken = localStorage.getItem('adminToken');
+                
+                // Step 1: Write test dynamic flow
+                const writeResponse = await fetch(`/api/company/${companyId}/raw/write-test-dynamic-flow`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!writeResponse.ok) {
+                    throw new Error(`Write failed: HTTP ${writeResponse.status}`);
+                }
+                
+                const writeResult = await writeResponse.json();
+                
+                // Step 2: Refresh Truth Report
+                await loadTruthReport();
+                
+                // Step 3: Check snapshot for the test flow
+                const verifySnapshot = currentTruthSnapshot;
+                const flows = verifySnapshot?.providers?.dynamicFlow?.data?.flows || [];
+                const testFlow = flows.find(f => f.flowKey === 'emergency_service_test');
+                
+                // Show result
+                if (resultEl) {
+                    const v = writeResult.verification;
+                    if (writeResult.success && testFlow && testFlow.triggerPhraseCount > 0 && testFlow.actionsCount === 4) {
+                        resultEl.innerHTML = `
+                            <div class="p-2 bg-green-100 rounded">
+                                <strong class="text-green-800">✅ DYNAMIC FLOW TEST PASSED</strong><br>
+                                <span class="text-green-700">
+                                    DB: triggerType=${v.triggerType}, phrases=${v.triggerPhrasesCount}, actions=${v.actionsCount}<br>
+                                    Snapshot: triggerType=${testFlow.triggerType}, phrases=${testFlow.triggerPhraseCount}, actions=${testFlow.actionsCount}<br>
+                                    Schema: ${testFlow.schemaUsed || 'unknown'}
+                                </span>
+                            </div>
+                        `;
+                        showSaveVerifyToast(true, 'Dynamic Flow Test PASSED', `${v.actionsCount} actions, ${v.triggerPhrasesCount} phrases`);
+                    } else {
+                        resultEl.innerHTML = `
+                            <div class="p-2 bg-red-100 rounded">
+                                <strong class="text-red-800">❌ DYNAMIC FLOW TEST FAILED</strong><br>
+                                <span class="text-red-700">
+                                    DB Verification: ${JSON.stringify(v, null, 2)}<br>
+                                    Snapshot Flow: ${testFlow ? JSON.stringify(testFlow, null, 2) : 'NOT FOUND IN SNAPSHOT'}
+                                </span>
+                            </div>
+                        `;
+                        showSaveVerifyToast(false, 'Dynamic Flow Test FAILED', 'Check result details');
+                    }
+                    resultEl.classList.remove('hidden');
+                }
+                
+            } catch (error) {
+                console.error('[WRITE TEST] Dynamic Flow Error:', error);
+                if (resultEl) {
+                    resultEl.innerHTML = `<div class="p-2 bg-red-100 rounded text-red-800">❌ ERROR: ${error.message}</div>`;
+                    resultEl.classList.remove('hidden');
+                }
+                showSaveVerifyToast(false, 'Write Test Error', error.message);
+            } finally {
+                if (icon) icon.className = 'fas fa-project-diagram';
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CLEANUP TEST FLOWS - Remove test data
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function cleanupTestFlows() {
+            const companyId = window.currentCompanyId || window.companyId;
+            if (!companyId) return;
+            
+            if (!confirm('Delete all test flows (emergency_service_test, DEBUG_*)?')) return;
+            
+            try {
+                const authToken = localStorage.getItem('adminToken');
+                const response = await fetch(`/api/company/${companyId}/raw/cleanup-test-flows`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showSaveVerifyToast(true, 'Cleanup Complete', `Deleted ${result.deletedCount} test flows`);
+                    await loadTruthReport();
+                } else {
+                    showSaveVerifyToast(false, 'Cleanup Failed', result.error);
+                }
+                
+            } catch (error) {
+                showSaveVerifyToast(false, 'Cleanup Error', error.message);
+            }
+        }
+        
         // Export for use by other scripts
         window.verifySaveWithSnapshot = verifySaveWithSnapshot;
         window.showSaveVerifyToast = showSaveVerifyToast;
@@ -2142,6 +2268,8 @@
         window.switchTruthTab = switchTruthTab;
         window.loadDbEcho = loadDbEcho;
         window.writeTestGreeting = writeTestGreeting;
+        window.writeTestDynamicFlow = writeTestDynamicFlow;
+        window.cleanupTestFlows = cleanupTestFlows;
     </script>
     
     <!-- Load Company Profile Modern JavaScript -->

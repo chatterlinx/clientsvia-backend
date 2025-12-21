@@ -315,5 +315,194 @@ router.post('/write-test-greeting', async (req, res) => {
     }
 });
 
+/**
+ * POST /api/company/:companyId/raw/write-test-dynamic-flow
+ * 
+ * Writes a test emergency_service flow with CORRECT V2 schema.
+ * Verifies the DynamicFlow save pipeline works end-to-end.
+ */
+router.post('/write-test-dynamic-flow', async (req, res) => {
+    const { companyId } = req.params;
+    
+    logger.info('[WRITE TEST] Dynamic flow test initiated', { companyId });
+    
+    try {
+        const timestamp = Date.now();
+        
+        // V2 CORRECT SCHEMA - This is what the runtime expects
+        const testFlow = {
+            companyId: new mongoose.Types.ObjectId(companyId),
+            flowKey: 'emergency_service_test',
+            name: `Emergency Service Test (${timestamp})`,
+            priority: 200,
+            enabled: true,
+            isActive: true,
+            isTemplate: false,
+            
+            // V2 TRIGGER SCHEMA
+            trigger: {
+                type: 'phrase',  // lowercase
+                config: {
+                    phrases: [
+                        'emergency',
+                        'no AC',
+                        'no heat',
+                        'smoke smell',
+                        'water leak',
+                        'gas smell'
+                    ],
+                    fuzzy: true,
+                    minConfidence: 0.7
+                },
+                priority: 200,
+                description: 'Test emergency detection trigger'
+            },
+            
+            // V2 ACTIONS SCHEMA
+            actions: [
+                {
+                    timing: 'on_activate',
+                    type: 'set_flag',
+                    config: {
+                        flagName: 'isEmergencyTest',
+                        flagValue: true,
+                        alsoWriteToCallLedgerFacts: true
+                    },
+                    description: 'Mark as emergency test'
+                },
+                {
+                    timing: 'on_activate',
+                    type: 'append_ledger',
+                    config: {
+                        type: 'EVENT',
+                        key: 'EMERGENCY_TEST_DETECTED',
+                        note: 'Test emergency detection triggered'
+                    },
+                    description: 'Log to ledger'
+                },
+                {
+                    timing: 'on_activate',
+                    type: 'ack_once',
+                    config: {
+                        text: 'I understand this is a test emergency. Let me help.'
+                    },
+                    description: 'Acknowledge test'
+                },
+                {
+                    timing: 'on_complete',
+                    type: 'transition_mode',
+                    config: {
+                        targetMode: 'BOOKING',
+                        setBookingLocked: true
+                    },
+                    description: 'Transition to booking'
+                }
+            ],
+            
+            settings: {
+                allowConcurrent: false
+            },
+            
+            metadata: {
+                version: 1,
+                createdBy: 'write-test',
+                tags: ['test', 'emergency']
+            }
+        };
+        
+        // Delete any existing test flow first
+        await DynamicFlow.deleteOne({
+            companyId: new mongoose.Types.ObjectId(companyId),
+            flowKey: 'emergency_service_test'
+        });
+        
+        // Create the test flow
+        const createdFlow = await DynamicFlow.create(testFlow);
+        
+        // Verify by reading back
+        const verifyFlow = await DynamicFlow.findOne({
+            companyId: new mongoose.Types.ObjectId(companyId),
+            flowKey: 'emergency_service_test'
+        }).lean();
+        
+        // Check what we got back
+        const verification = {
+            flowCreated: !!createdFlow,
+            flowFound: !!verifyFlow,
+            flowKey: verifyFlow?.flowKey,
+            triggerType: verifyFlow?.trigger?.type,
+            triggerPhrasesCount: verifyFlow?.trigger?.config?.phrases?.length || 0,
+            triggerPhrasesSample: verifyFlow?.trigger?.config?.phrases?.slice(0, 3) || [],
+            actionsCount: verifyFlow?.actions?.length || 0,
+            actionTypes: verifyFlow?.actions?.map(a => a.type) || [],
+            enabled: verifyFlow?.enabled,
+            isTemplate: verifyFlow?.isTemplate
+        };
+        
+        const allChecksPass = 
+            verification.flowFound &&
+            verification.triggerType === 'phrase' &&
+            verification.triggerPhrasesCount >= 4 &&
+            verification.actionsCount === 4 &&
+            verification.enabled === true &&
+            verification.isTemplate === false;
+        
+        logger.info('[WRITE TEST] Dynamic flow result', {
+            companyId,
+            verification,
+            allChecksPass
+        });
+        
+        res.json({
+            success: allChecksPass,
+            testFlowKey: 'emergency_service_test',
+            verification,
+            allChecksPass,
+            message: allChecksPass 
+                ? 'Write test PASSED - Dynamic flow created with correct V2 schema'
+                : 'Write test PARTIAL - Flow created but verification failed. Check verification object.'
+        });
+        
+    } catch (error) {
+        logger.error('[WRITE TEST] Dynamic flow error', {
+            companyId,
+            error: error.message,
+            stack: error.stack
+        });
+        
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * DELETE /api/company/:companyId/raw/cleanup-test-flows
+ * 
+ * Removes test flows created by write tests.
+ */
+router.delete('/cleanup-test-flows', async (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+        const result = await DynamicFlow.deleteMany({
+            companyId: new mongoose.Types.ObjectId(companyId),
+            flowKey: { $regex: /^(emergency_service_test|DEBUG_)/ }
+        });
+        
+        res.json({
+            success: true,
+            deletedCount: result.deletedCount
+        });
+        
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;
 
