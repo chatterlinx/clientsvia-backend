@@ -2585,23 +2585,97 @@
     
     function copySnapshotToClipboard() {
       if (!currentSnapshot) {
-        alert('No snapshot loaded');
+        showSnapshotToast('❌ No snapshot loaded', 'Load a snapshot first by clicking Refresh', 'error');
         return;
       }
       
       const jsonText = JSON.stringify(currentSnapshot, null, 2);
+      const charCount = jsonText.length;
+      const lineCount = jsonText.split('\n').length;
+      const providerCount = Object.keys(currentSnapshot.providers || {}).length;
+      const score = currentSnapshot.completeness?.score || 0;
+      const status = currentSnapshot.completeness?.status || 'UNKNOWN';
+      
       navigator.clipboard.writeText(jsonText).then(() => {
-        const btn = document.getElementById('btn-copy-snapshot');
-        const originalText = btn.innerHTML;
+        // Update button visual
+        const btn = document.getElementById('btn-copy-snapshot-modal');
         btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
         btn.style.background = '#10b981';
+        btn.style.transform = 'scale(1.05)';
+        
         setTimeout(() => {
-          btn.innerHTML = originalText;
-          btn.style.background = '';
-        }, 2000);
+          btn.innerHTML = '<i class="fas fa-copy"></i> Copy JSON';
+          btn.style.background = '#3b82f6';
+          btn.style.transform = 'scale(1)';
+        }, 2500);
+        
+        // Show detailed toast
+        showSnapshotToast(
+          '✅ Snapshot Copied!',
+          `${providerCount} providers • ${lineCount} lines • ${(charCount/1024).toFixed(1)}KB • Score: ${score}% (${status})`,
+          'success'
+        );
+        
       }).catch(err => {
-        alert('Failed to copy: ' + err);
+        showSnapshotToast('❌ Copy Failed', err.message, 'error');
       });
+    }
+    
+    function showSnapshotToast(title, message, type = 'info') {
+      // Remove existing toast
+      const existing = document.getElementById('snapshot-toast');
+      if (existing) existing.remove();
+      
+      const toast = document.createElement('div');
+      toast.id = 'snapshot-toast';
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(100px);
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        padding: 16px 24px;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        z-index: 100001;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 300px;
+        max-width: 500px;
+        animation: toastSlideUp 0.3s ease forwards;
+      `;
+      
+      toast.innerHTML = `
+        <div style="font-weight: 700; font-size: 15px;">${title}</div>
+        <div style="font-size: 13px; opacity: 0.9;">${message}</div>
+      `;
+      
+      // Add animation keyframes if not exists
+      if (!document.getElementById('toast-animation-style')) {
+        const style = document.createElement('style');
+        style.id = 'toast-animation-style';
+        style.textContent = `
+          @keyframes toastSlideUp {
+            from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+          }
+          @keyframes toastSlideDown {
+            from { transform: translateX(-50%) translateY(0); opacity: 1; }
+            to { transform: translateX(-50%) translateY(100px); opacity: 0; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      document.body.appendChild(toast);
+      
+      // Auto-dismiss after 3 seconds
+      setTimeout(() => {
+        toast.style.animation = 'toastSlideDown 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
     }
     
     function refreshPlatformSnapshot() {
@@ -2626,8 +2700,11 @@
           <span id="snapshot-status-badge" class="snapshot-status-badge">Loading...</span>
         </div>
         <div class="snapshot-modal-controls">
-          <button id="btn-copy-snapshot" onclick="copySnapshotToClipboard()" 
-                  style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 6px;">
+          <button id="btn-copy-snapshot-modal" onclick="copySnapshotToClipboard()" 
+                  style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; font-size: 14px; transition: all 0.15s ease; box-shadow: 0 2px 4px rgba(59,130,246,0.3);"
+                  onmousedown="this.style.transform='scale(0.95)'; this.style.boxShadow='0 1px 2px rgba(59,130,246,0.2)';"
+                  onmouseup="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 4px rgba(59,130,246,0.3)';"
+                  onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 4px rgba(59,130,246,0.3)';">
             <i class="fas fa-copy"></i> Copy JSON
           </button>
           <button onclick="refreshPlatformSnapshot()" 
