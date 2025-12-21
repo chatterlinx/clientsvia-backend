@@ -1921,9 +1921,9 @@
       
       if (!window.AiCoreTemplatesManager) {
         console.error('AiCoreTemplatesManager not loaded!');
-        return;
-      }
-      
+          return;
+        }
+
       // Create a minimal parent object that the manager expects
       const parentManager = {
         companyId: currentCompanyId
@@ -2241,9 +2241,9 @@
     async function openAITestConsole() {
       if (!currentCompanyId) {
         alert('Please select a company first');
-        return;
-      }
-      
+          return;
+        }
+
       if (!window.AITestConsole) {
         await loadScript('/js/ai-agent-settings/AITestConsole.js');
       }
@@ -2385,9 +2385,9 @@
           // Skip for Call Center (opens in new tab)
           if (tabId === 'call-center') return;
           switchTab(tabId);
-        });
       });
-      
+    });
+
       // Auto-initialize Front Desk (default tab)
       if (currentCompanyId) {
         initializeTab('front-desk');
@@ -2414,7 +2414,7 @@
     // Load badge on page load
     async function loadSnapshotBadge() {
       try {
-        const response = await fetch(`/api/company/${companyId}/platform-snapshot/badge`, {
+        const response = await fetch(`/api/company/${currentCompanyId}/platform-snapshot/badge`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
         });
         const data = await response.json();
@@ -2463,10 +2463,10 @@
       statusBadge.className = 'snapshot-status-badge';
       
       try {
-        const response = await fetch(`/api/company/${companyId}/platform-snapshot?scope=${scope}`, {
+        const response = await fetch(`/api/company/${currentCompanyId}/platform-snapshot?scope=${scope}`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
         });
-        const data = await response.json();
+          const data = await response.json();
         
         if (!data.success) {
           throw new Error(data.error || 'Failed to load snapshot');
@@ -2563,7 +2563,7 @@
       loadPlatformSnapshot(scope);
     }
   </script>
-  
+
   <!-- ═══════════════════════════════════════════════════════════════════════════
        PLATFORM SNAPSHOT MODAL
        ═══════════════════════════════════════════════════════════════════════════ -->
