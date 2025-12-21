@@ -88,6 +88,198 @@
       gap: 12px;
     }
     
+    /* Platform JSON Button */
+    .btn-json {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    
+    .btn-json:hover {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    
+    .json-badge-score {
+      background: rgba(255,255,255,0.2);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    
+    .json-badge-score.green { background: #10b981; }
+    .json-badge-score.yellow { background: #f59e0b; }
+    .json-badge-score.red { background: #ef4444; }
+    
+    /* Platform Snapshot Modal */
+    .snapshot-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+    
+    .snapshot-modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    .snapshot-modal {
+      background: white;
+      border-radius: 16px;
+      width: 95%;
+      max-width: 1200px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+      transform: scale(0.95) translateY(20px);
+      transition: transform 0.3s ease;
+    }
+    
+    .snapshot-modal-overlay.active .snapshot-modal {
+      transform: scale(1) translateY(0);
+    }
+    
+    .snapshot-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px;
+      border-bottom: 1px solid #e2e8f0;
+      background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+      border-radius: 16px 16px 0 0;
+      color: white;
+    }
+    
+    .snapshot-modal-title {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    
+    .snapshot-status-badge {
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    
+    .snapshot-status-badge.green { background: #10b981; color: white; }
+    .snapshot-status-badge.yellow { background: #f59e0b; color: white; }
+    .snapshot-status-badge.red { background: #ef4444; color: white; }
+    
+    .snapshot-modal-controls {
+      display: flex;
+      gap: 12px;
+    }
+    
+    .snapshot-modal-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    .snapshot-scope-selector {
+      padding: 16px 24px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    
+    .snapshot-scope-label {
+      font-weight: 600;
+      color: #475569;
+    }
+    
+    .snapshot-scope-options {
+      display: flex;
+      gap: 12px;
+    }
+    
+    .snapshot-scope-options label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      padding: 6px 12px;
+      border-radius: 6px;
+      background: white;
+      border: 1px solid #e2e8f0;
+      transition: all 0.2s;
+    }
+    
+    .snapshot-scope-options label:has(input:checked) {
+      background: #3b82f6;
+      color: white;
+      border-color: #3b82f6;
+    }
+    
+    .snapshot-scope-options input[type="radio"] {
+      display: none;
+    }
+    
+    .snapshot-json-container {
+      flex: 1;
+      overflow: auto;
+      background: #0d1117;
+      position: relative;
+    }
+    
+    .snapshot-json-pre {
+      margin: 0;
+      padding: 24px;
+      color: #c9d1d9;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    
+    .snapshot-penalties-panel {
+      padding: 16px 24px;
+      background: #fef3c7;
+      border-top: 1px solid #fcd34d;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .snapshot-penalties-panel.red { background: #fee2e2; border-color: #fca5a5; }
+    .snapshot-penalties-panel.green { background: #d1fae5; border-color: #6ee7b7; }
+    
+    .snapshot-modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f8fafc;
+      border-radius: 0 0 16px 16px;
+    }
+    
     .btn-test {
       display: inline-flex;
       align-items: center;
@@ -547,6 +739,12 @@
       <h1 class="page-title">🎛️ Control Plane</h1>
     </div>
     <div class="header-right">
+      <!-- 📄 PLATFORM SNAPSHOT BUTTON (Enterprise Introspection) -->
+      <button id="btn-platform-json" class="btn-json" onclick="openPlatformSnapshotModal()">
+        <span id="json-badge-emoji">📄</span>
+        <span>JSON</span>
+        <span id="json-badge-score" class="json-badge-score"></span>
+      </button>
       <button class="btn-test" onclick="openAITestConsole()">
         <i class="fas fa-phone-volume"></i>
         <span>🧪 Test Agent</span>
@@ -2205,6 +2403,234 @@
     });
     
     console.log('✅ [CONTROL PLANE] Clean Architecture loaded - Dec 2025');
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PLATFORM SNAPSHOT (Enterprise Introspection)
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    let currentSnapshot = null;
+    let currentSnapshotScope = 'full';
+    
+    // Load badge on page load
+    async function loadSnapshotBadge() {
+      try {
+        const response = await fetch(`/api/company/${companyId}/platform-snapshot/badge`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+        });
+        const data = await response.json();
+        
+        if (data.success && data.badge) {
+          const badge = data.badge;
+          document.getElementById('json-badge-emoji').textContent = badge.emoji;
+          
+          const scoreEl = document.getElementById('json-badge-score');
+          scoreEl.textContent = badge.score + '%';
+          scoreEl.className = 'json-badge-score ' + badge.status.toLowerCase();
+        }
+      } catch (error) {
+        console.warn('[SNAPSHOT] Badge load failed:', error);
+      }
+    }
+    
+    // Initialize badge on page load
+    setTimeout(loadSnapshotBadge, 1000);
+    
+    async function openPlatformSnapshotModal() {
+      const overlay = document.getElementById('snapshot-modal-overlay');
+      overlay.classList.add('active');
+      
+      // Load snapshot
+      await loadPlatformSnapshot(currentSnapshotScope);
+    }
+    
+    function closePlatformSnapshotModal() {
+      const overlay = document.getElementById('snapshot-modal-overlay');
+      overlay.classList.remove('active');
+    }
+    
+    async function loadPlatformSnapshot(scope = 'full') {
+      currentSnapshotScope = scope;
+      
+      const jsonPre = document.getElementById('snapshot-json-content');
+      const statusBadge = document.getElementById('snapshot-status-badge');
+      const penaltiesPanel = document.getElementById('snapshot-penalties-panel');
+      const summaryText = document.getElementById('snapshot-summary-text');
+      const genTimeText = document.getElementById('snapshot-gen-time');
+      
+      // Show loading
+      jsonPre.textContent = 'Loading snapshot...';
+      statusBadge.textContent = '⏳ Loading';
+      statusBadge.className = 'snapshot-status-badge';
+      
+      try {
+        const response = await fetch(`/api/company/${companyId}/platform-snapshot?scope=${scope}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+        });
+        const data = await response.json();
+        
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to load snapshot');
+        }
+        
+        currentSnapshot = data.snapshot;
+        const completeness = currentSnapshot.completeness || {};
+        
+        // Update status badge
+        const emoji = completeness.status === 'GREEN' ? '🟢' : 
+                      completeness.status === 'YELLOW' ? '🟡' : '🔴';
+        statusBadge.textContent = `${emoji} ${completeness.score}% (${completeness.grade})`;
+        statusBadge.className = `snapshot-status-badge ${completeness.status?.toLowerCase() || 'yellow'}`;
+        
+        // Update summary
+        summaryText.textContent = completeness.summary || '';
+        
+        // Update generation time
+        genTimeText.textContent = `Generated in ${currentSnapshot.meta?.generationMs || 0}ms`;
+        
+        // Update penalties panel
+        const penalties = completeness.penalties || [];
+        if (penalties.length > 0) {
+          penaltiesPanel.style.display = 'block';
+          penaltiesPanel.className = `snapshot-penalties-panel ${completeness.status?.toLowerCase()}`;
+          penaltiesPanel.innerHTML = `
+            <div style="font-weight: 600; margin-bottom: 12px;">
+              ⚠️ ${penalties.length} Issue${penalties.length > 1 ? 's' : ''} Found
+            </div>
+            ${penalties.map(p => `
+              <div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: rgba(255,255,255,0.5); border-radius: 6px; margin-bottom: 6px;">
+                <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600;
+                  background: ${p.severity === 'RED' ? '#ef4444' : p.severity === 'YELLOW' ? '#f59e0b' : '#10b981'};
+                  color: white;">${p.severity}</span>
+                <span style="flex: 1; font-size: 13px; color: #374151;">${p.message}</span>
+                <span style="font-size: 12px; color: #6b7280;">-${p.weight}</span>
+              </div>
+            `).join('')}
+            ${(completeness.recommendations || []).length > 0 ? `
+              <div style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed rgba(0,0,0,0.2);">
+                <div style="font-weight: 600; margin-bottom: 8px; font-size: 13px;">💡 Recommendations</div>
+                ${completeness.recommendations.map(r => `
+                  <div style="font-size: 12px; color: #4b5563; padding: 4px 0;">• ${r}</div>
+                `).join('')}
+              </div>
+            ` : ''}
+          `;
+        } else {
+          penaltiesPanel.style.display = 'none';
+        }
+        
+        // Update JSON display
+        jsonPre.textContent = JSON.stringify(currentSnapshot, null, 2);
+        
+        // Update header badge too
+        loadSnapshotBadge();
+        
+      } catch (error) {
+        console.error('[SNAPSHOT] Load failed:', error);
+        jsonPre.textContent = `Error: ${error.message}`;
+        statusBadge.textContent = '🔴 Error';
+        statusBadge.className = 'snapshot-status-badge red';
+        summaryText.textContent = error.message;
+        penaltiesPanel.style.display = 'none';
+      }
+    }
+    
+    function copySnapshotToClipboard() {
+      if (!currentSnapshot) {
+        alert('No snapshot loaded');
+        return;
+      }
+      
+      const jsonText = JSON.stringify(currentSnapshot, null, 2);
+      navigator.clipboard.writeText(jsonText).then(() => {
+        const btn = document.getElementById('btn-copy-snapshot');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        btn.style.background = '#10b981';
+        setTimeout(() => {
+          btn.innerHTML = originalText;
+          btn.style.background = '';
+        }, 2000);
+      }).catch(err => {
+        alert('Failed to copy: ' + err);
+      });
+    }
+    
+    function refreshPlatformSnapshot() {
+      loadPlatformSnapshot(currentSnapshotScope);
+    }
+    
+    function changeSnapshotScope(scope) {
+      loadPlatformSnapshot(scope);
+    }
   </script>
+  
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       PLATFORM SNAPSHOT MODAL
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="snapshot-modal-overlay" class="snapshot-modal-overlay" onclick="if(event.target === this) closePlatformSnapshotModal()">
+    <div class="snapshot-modal">
+      
+      <!-- Header -->
+      <div class="snapshot-modal-header">
+        <div class="snapshot-modal-title">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 600;">📄 Platform Snapshot</h2>
+          <span id="snapshot-status-badge" class="snapshot-status-badge">Loading...</span>
+        </div>
+        <div class="snapshot-modal-controls">
+          <button id="btn-copy-snapshot" onclick="copySnapshotToClipboard()" 
+                  style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 6px;">
+            <i class="fas fa-copy"></i> Copy JSON
+          </button>
+          <button onclick="refreshPlatformSnapshot()" 
+                  style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 6px;">
+            <i class="fas fa-sync-alt"></i> Refresh
+          </button>
+          <button onclick="closePlatformSnapshotModal()" 
+                  style="padding: 8px 16px; background: transparent; color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; cursor: pointer; font-weight: 500;">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Body -->
+      <div class="snapshot-modal-body">
+        
+        <!-- Scope Selector -->
+        <div class="snapshot-scope-selector">
+          <span class="snapshot-scope-label">Snapshot Scope:</span>
+          <div class="snapshot-scope-options">
+            <label><input type="radio" name="snapshot-scope" value="full" checked onchange="changeSnapshotScope('full')"> FULL PLATFORM</label>
+            <label><input type="radio" name="snapshot-scope" value="control" onchange="changeSnapshotScope('control')"> Control Plane Only</label>
+            <label><input type="radio" name="snapshot-scope" value="scenarios" onchange="changeSnapshotScope('scenarios')"> Scenario Brain Only</label>
+            <label><input type="radio" name="snapshot-scope" value="runtime" onchange="changeSnapshotScope('runtime')"> Runtime Wiring</label>
+          </div>
+        </div>
+        
+        <!-- Penalties Panel (conditional) -->
+        <div id="snapshot-penalties-panel" class="snapshot-penalties-panel" style="display: none;">
+          <!-- Populated by JS -->
+        </div>
+        
+        <!-- JSON Display -->
+        <div class="snapshot-json-container">
+          <pre id="snapshot-json-content" class="snapshot-json-pre">Click "Refresh" to load snapshot...</pre>
+        </div>
+        
+      </div>
+      
+      <!-- Footer -->
+      <div class="snapshot-modal-footer">
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <span id="snapshot-summary-text" style="font-size: 14px; color: #64748b;"></span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <span id="snapshot-gen-time" style="font-size: 12px; color: #94a3b8;"></span>
+          <span style="font-size: 12px; color: #94a3b8;">v1.0</span>
+        </div>
+      </div>
+      
+    </div>
+  </div>
+  
 </body>
 </html>
