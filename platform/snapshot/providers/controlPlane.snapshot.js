@@ -13,10 +13,8 @@ module.exports.getSnapshot = async function(companyId) {
     
     try {
         const company = await Company.findById(companyId)
-            .select('companyName aiAgentSettings frontDeskBehavior tradeKey industryType')
+            .select('companyName aiAgentSettings frontDeskBehavior tradeKey industryType connectionMessages')
             .lean();
-        
-        // Note: connectionMessages is inside aiAgentSettings, so it's already included
         
         if (!company) {
             return {
@@ -33,7 +31,12 @@ module.exports.getSnapshot = async function(companyId) {
         
         const settings = company.aiAgentSettings || {};
         const frontDesk = settings.frontDeskBehavior || {};
-        const connectionMessages = settings.connectionMessages || {};
+        
+        // CRITICAL: connectionMessages can be at ROOT level OR inside aiAgentSettings
+        // ConnectionMessagesManager saves to ROOT: company.connectionMessages
+        // Some legacy code may save to: company.aiAgentSettings.connectionMessages
+        // Check BOTH locations!
+        const connectionMessages = company.connectionMessages || settings.connectionMessages || {};
         
         // Extract configuration
         // FIXED: Check correct DB paths for greeting (Dec 2025)
