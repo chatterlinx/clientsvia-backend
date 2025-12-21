@@ -1559,7 +1559,7 @@
     <!-- TRUTH REPORT MODAL - End-to-End Verification -->
     <!-- ═══════════════════════════════════════════════════════════════════════════ -->
     <div id="truth-report-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div style="background-color: #1e293b; color: #f1f5f9; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); width: 100%; max-width: 900px; max-height: 90vh; display: flex; flex-direction: column;">
             <!-- Modal Header -->
             <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-slate-800 text-white rounded-t-xl">
                 <div class="flex items-center gap-3">
@@ -1589,80 +1589,77 @@
             <!-- Modal Body - SCROLLABLE -->
             <div class="flex-1 overflow-y-auto flex flex-col" style="max-height: calc(90vh - 140px);">
                 <!-- Focused Health Panel -->
-                <div id="truth-health-panel" class="px-6 py-4 bg-slate-50 border-b border-gray-200">
-                    <div class="flex items-center gap-2 mb-3">
-                        <i class="fas fa-heartbeat text-slate-600"></i>
-                        <span class="font-semibold text-slate-700">Focused Health</span>
-                        <span id="truth-health-status" class="ml-auto px-2 py-0.5 text-xs font-bold rounded-full bg-gray-200">Loading...</span>
+                <div id="truth-health-panel" style="padding: 16px 24px; background-color: #334155; border-bottom: 1px solid #475569;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <i class="fas fa-heartbeat" style="color: #94a3b8;"></i>
+                        <span style="font-weight: 600; color: #f1f5f9;">Focused Health</span>
+                        <span id="truth-health-status" style="margin-left: auto; padding: 4px 10px; font-size: 11px; font-weight: 700; border-radius: 12px; background-color: #475569; color: #f1f5f9;">Loading...</span>
                     </div>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm" id="truth-health-grid">
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; font-size: 14px;" id="truth-health-grid">
                         <!-- Health metrics will be inserted here -->
-                        <div class="p-2 bg-white rounded border text-center">
-                            <div class="text-xs text-gray-500">Loading...</div>
+                        <div style="padding: 12px; background-color: #475569; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 12px; color: #94a3b8;">Loading...</div>
                         </div>
                     </div>
                 </div>
                 
                 <!-- Write Test Panel -->
-                <div class="px-6 py-3 bg-amber-50 border-b border-amber-200">
-                    <div class="flex items-center flex-wrap gap-3">
-                        <i class="fas fa-flask text-amber-600"></i>
-                        <span class="font-semibold text-amber-800 text-sm">Write Tests</span>
-                        <div class="ml-auto flex items-center gap-2">
+                <div style="padding: 12px 24px; background-color: #78350f; border-bottom: 1px solid #92400e;">
+                    <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px;">
+                        <i class="fas fa-flask" style="color: #fbbf24;"></i>
+                        <span style="font-weight: 600; color: #fef3c7; font-size: 14px;">Write Tests</span>
+                        <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
                             <button onclick="writeTestGreeting()" 
-                                    class="px-3 py-1.5 text-xs bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors flex items-center gap-2">
-                                <i class="fas fa-comment" id="write-test-greeting-icon"></i>
-                                Greeting
+                                    style="padding: 8px 14px; font-size: 12px; background-color: #f59e0b; color: #1e293b; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                <i class="fas fa-comment" id="write-test-greeting-icon"></i> Greeting
                             </button>
                             <button onclick="writeTestDynamicFlow()" 
-                                    class="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors flex items-center gap-2">
-                                <i class="fas fa-project-diagram" id="write-test-flow-icon"></i>
-                                New Flow
+                                    style="padding: 8px 14px; font-size: 12px; background-color: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                <i class="fas fa-project-diagram" id="write-test-flow-icon"></i> New Flow
                             </button>
                             <button onclick="cleanupTestFlows()" 
-                                    class="px-3 py-1.5 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors flex items-center gap-2"
+                                    style="padding: 8px 14px; font-size: 12px; background-color: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer;"
                                     title="Delete test flows">
                                 <i class="fas fa-trash-alt"></i>
                             </button>
                         </div>
                     </div>
-                    <div id="write-test-result" class="mt-2 text-xs hidden"></div>
+                    <div id="write-test-result" style="margin-top: 8px; font-size: 12px; display: none;"></div>
                 </div>
                 
                 <!-- Fix Legacy Flows Panel -->
-                <div class="px-6 py-3 bg-purple-50 border-b border-purple-200">
-                    <div class="flex items-center flex-wrap gap-3">
-                        <i class="fas fa-wrench text-purple-600"></i>
-                        <span class="font-semibold text-purple-800 text-sm">Fix Legacy Flows</span>
-                        <div class="ml-auto flex items-center gap-2">
-                            <select id="legacy-flow-selector" class="px-2 py-1 text-xs border border-purple-300 rounded bg-white">
+                <div style="padding: 12px 24px; background-color: #581c87; border-bottom: 1px solid #7c3aed;">
+                    <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px;">
+                        <i class="fas fa-wrench" style="color: #c4b5fd;"></i>
+                        <span style="font-weight: 600; color: #f3e8ff; font-size: 14px;">Fix Legacy Flows</span>
+                        <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+                            <select id="legacy-flow-selector" style="padding: 8px 12px; font-size: 12px; border: 2px solid #a855f7; border-radius: 6px; background-color: #1e293b; color: #f1f5f9;">
                                 <option value="">Loading...</option>
                             </select>
                             <button onclick="convertFlowToV2()" 
-                                    class="px-3 py-1.5 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors flex items-center gap-2">
-                                <i class="fas fa-magic" id="convert-flow-icon"></i>
-                                Convert to V2
+                                    style="padding: 8px 14px; font-size: 12px; background-color: #a855f7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                <i class="fas fa-magic" id="convert-flow-icon"></i> Convert to V2
                             </button>
                         </div>
                     </div>
-                    <div id="convert-result" class="mt-2 text-xs hidden"></div>
+                    <div id="convert-result" style="margin-top: 8px; font-size: 12px; display: none;"></div>
                 </div>
                 
-                <!-- Manual Save Panel - INLINE STYLES FOR VISIBILITY -->
-                <div style="padding: 16px 24px; background-color: #dcfce7; border-bottom: 2px solid #16a34a;">
-                    <div style="font-size: 14px; font-weight: 700; color: #166534; margin-bottom: 12px;">
+                <!-- Manual Save Panel - DARK THEME -->
+                <div style="padding: 16px 24px; background-color: #14532d; border-bottom: 2px solid #22c55e;">
+                    <div style="font-size: 14px; font-weight: 700; color: #86efac; margin-bottom: 12px;">
                         <i class="fas fa-keyboard" style="margin-right: 8px;"></i>Manual Save (Direct to DB)
                     </div>
                     
                     <!-- Greeting Input -->
                     <div style="margin-bottom: 16px;">
-                        <label style="display: block; font-size: 12px; font-weight: 600; color: #166534; margin-bottom: 6px;">Greeting</label>
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: #86efac; margin-bottom: 6px;">Greeting</label>
                         <div style="display: flex; gap: 8px;">
                             <input type="text" id="manual-greeting-input" 
-                                   style="flex: 1; padding: 10px 14px; font-size: 14px; border: 2px solid #16a34a; border-radius: 6px; color: #1e293b; background: white;"
+                                   style="flex: 1; padding: 10px 14px; font-size: 14px; border: 2px solid #22c55e; border-radius: 6px; color: #1e293b; background: #f0fdf4;"
                                    placeholder="e.g., Thank you for calling Penguin Air!">
                             <button onclick="saveManualGreeting()" 
-                                    style="padding: 10px 20px; font-size: 13px; font-weight: 600; background-color: #16a34a; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                    style="padding: 10px 20px; font-size: 13px; font-weight: 600; background-color: #22c55e; color: #052e16; border: none; border-radius: 6px; cursor: pointer;">
                                 <i class="fas fa-save" id="save-greeting-icon"></i> Save
                             </button>
                         </div>
@@ -1670,23 +1667,23 @@
                     
                     <!-- Flow JSON Input -->
                     <div>
-                        <label style="display: block; font-size: 12px; font-weight: 600; color: #166534; margin-bottom: 6px;">
+                        <label style="display: block; font-size: 12px; font-weight: 600; color: #86efac; margin-bottom: 6px;">
                             Emergency Flow JSON (paste V2 schema)
                             <button onclick="loadEmergencyFlowTemplate()" 
-                                    style="margin-left: 12px; padding: 4px 12px; font-size: 12px; font-weight: 600; background-color: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none;">
-                                📄 Load Template
+                                    style="margin-left: 12px; padding: 6px 14px; font-size: 12px; font-weight: 700; background-color: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                📄 LOAD TEMPLATE
                             </button>
                         </label>
                         <textarea id="manual-flow-json-input" 
-                                  style="width: 100%; height: 160px; padding: 12px; font-size: 12px; font-family: monospace; border: 2px solid #16a34a; border-radius: 6px; color: #1e293b; background: white; resize: vertical;"
+                                  style="width: 100%; height: 160px; padding: 12px; font-size: 12px; font-family: monospace; border: 2px solid #22c55e; border-radius: 6px; color: #1e293b; background: #f0fdf4; resize: vertical;"
                                   placeholder='{"flowKey": "emergency_service", "trigger": {...}, "actions": [...]}'></textarea>
                         <div style="display: flex; gap: 8px; margin-top: 10px;">
                             <button onclick="validateFlowJson()" 
-                                    style="padding: 8px 16px; font-size: 12px; font-weight: 600; background-color: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                    style="padding: 10px 18px; font-size: 12px; font-weight: 600; background-color: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer;">
                                 <i class="fas fa-check-circle"></i> Validate
                             </button>
                             <button onclick="saveManualFlowJson()" 
-                                    style="padding: 8px 16px; font-size: 12px; font-weight: 600; background-color: #16a34a; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                    style="padding: 10px 18px; font-size: 12px; font-weight: 600; background-color: #22c55e; color: #052e16; border: none; border-radius: 6px; cursor: pointer;">
                                 <i class="fas fa-save" id="save-flow-icon"></i> Save Flow
                             </button>
                         </div>
@@ -1696,21 +1693,21 @@
                 </div>
                 
                 <!-- Meta Info -->
-                <div id="truth-meta-panel" class="px-6 py-2 bg-gray-100 border-b text-xs text-gray-600 flex flex-wrap gap-4">
-                    <span><strong>Company:</strong> <span id="truth-company-name">-</span></span>
-                    <span><strong>ID:</strong> <span id="truth-company-id">-</span></span>
-                    <span><strong>Generated:</strong> <span id="truth-generated-at">-</span></span>
-                    <span><strong>Environment:</strong> <span id="truth-environment">-</span></span>
+                <div id="truth-meta-panel" style="padding: 8px 24px; background-color: #475569; border-bottom: 1px solid #64748b; font-size: 12px; color: #cbd5e1; display: flex; flex-wrap: wrap; gap: 16px;">
+                    <span><strong style="color: #f1f5f9;">Company:</strong> <span id="truth-company-name">-</span></span>
+                    <span><strong style="color: #f1f5f9;">ID:</strong> <span id="truth-company-id">-</span></span>
+                    <span><strong style="color: #f1f5f9;">Generated:</strong> <span id="truth-generated-at">-</span></span>
+                    <span><strong style="color: #f1f5f9;">Environment:</strong> <span id="truth-environment">-</span></span>
                 </div>
                 
                 <!-- Tab Switcher for JSON Views -->
-                <div class="flex border-b border-gray-300 bg-gray-50">
+                <div style="display: flex; border-bottom: 1px solid #475569; background-color: #334155;">
                     <button id="tab-runtime-snapshot" onclick="switchTruthTab('runtime')" 
-                            class="px-4 py-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600">
+                            style="padding: 10px 20px; font-size: 14px; font-weight: 600; border: none; border-bottom: 3px solid #6366f1; background: transparent; color: #a5b4fc; cursor: pointer;">
                         Runtime Snapshot
                     </button>
                     <button id="tab-db-echo" onclick="switchTruthTab('dbecho')" 
-                            class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                            style="padding: 10px 20px; font-size: 14px; font-weight: 600; border: none; border-bottom: 3px solid transparent; background: transparent; color: #94a3b8; cursor: pointer;">
                         DB Echo (Raw)
                     </button>
                 </div>
@@ -1727,12 +1724,12 @@
             </div>
             
             <!-- Modal Footer -->
-            <div class="px-6 py-3 border-t border-gray-200 bg-gray-50 rounded-b-xl flex items-center justify-between text-xs text-gray-500">
+            <div style="padding: 12px 24px; border-top: 1px solid #475569; background-color: #0f172a; border-radius: 0 0 12px 12px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #94a3b8;">
                 <span>
-                    <i class="fas fa-info-circle mr-1"></i>
+                    <i class="fas fa-info-circle" style="margin-right: 6px;"></i>
                     This is the runtime truth. If UI doesn't match, there's a persistence bug.
                 </span>
-                <span id="truth-fetch-time">-</span>
+                <span id="truth-fetch-time" style="color: #22c55e;">-</span>
             </div>
         </div>
     </div>
