@@ -95,8 +95,8 @@ module.exports.getSnapshot = async function(companyId) {
         const warnings = [];
         
         // ═══════════════════════════════════════════════════════════════════
-        // VALIDATE ENABLED FLOWS (December 2025 - FIXED to use helpers)
-        // Phrase-based flows MUST have at least 1 trigger phrase
+        // VALIDATE ENABLED FLOWS (December 2025 - STRICT VALIDATION)
+        // No more "false GREEN" - flows must be properly configured
         // ═══════════════════════════════════════════════════════════════════
         const invalidFlows = [];
         
@@ -104,23 +104,52 @@ module.exports.getSnapshot = async function(companyId) {
             const triggerType = getNormalizedTriggerType(f);
             const phrases = getTriggerPhrases(f);
             const actions = f.actions || [];
+            const schemaUsed = f.trigger?.config?.phrases?.length > 0 ? 'v2' : 'legacy';
             
             const issues = [];
             
-            // Phrase-based flows need at least 1 phrase
-            if (isPhraseBasedTrigger(f) && phrases.length === 0) {
-                issues.push('0 trigger phrases');
+            // STRICT RULE 1: Trigger type must be recognized
+            if (triggerType === 'unknown') {
+                issues.push(`unrecognized trigger type: "${f.trigger?.type || 'missing'}"`);
             }
             
-            // All flows need at least 1 action
+            // STRICT RULE 2: Phrase-based flows need at least 1 phrase
+            if (isPhraseBasedTrigger(f) && phrases.length === 0) {
+                issues.push('0 trigger phrases (need at least 1)');
+            }
+            
+            // STRICT RULE 3: Legacy schema should be converted
+            if (schemaUsed === 'legacy' && f.trigger?.phrases?.length > 0) {
+                issues.push('uses legacy schema (should be trigger.config.phrases)');
+            }
+            
+            // STRICT RULE 4: All flows need at least 1 action
             if (actions.length === 0) {
                 issues.push('no actions configured');
+            }
+            
+            // STRICT RULE 5: V1 flows should have all 4 action types
+            const hasSetFlag = actions.some(a => a.type === 'set_flag');
+            const hasAppendLedger = actions.some(a => a.type === 'append_ledger');
+            const hasAckOnce = actions.some(a => a.type === 'ack_once');
+            const hasTransitionMode = actions.some(a => a.type === 'transition_mode');
+            
+            if (actions.length > 0 && actions.length < 4) {
+                const missing = [];
+                if (!hasSetFlag) missing.push('set_flag');
+                if (!hasAppendLedger) missing.push('append_ledger');
+                if (!hasAckOnce) missing.push('ack_once');
+                if (!hasTransitionMode) missing.push('transition_mode');
+                if (missing.length > 0) {
+                    issues.push(`incomplete V1 actions (missing: ${missing.join(', ')})`);
+                }
             }
             
             if (issues.length > 0) {
                 invalidFlows.push({
                     flowKey: f.flowKey || 'unknown',
                     name: f.name || 'Unnamed Flow',
+                    schemaUsed,
                     issues
                 });
             }

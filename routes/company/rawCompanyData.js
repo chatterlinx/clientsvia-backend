@@ -478,6 +478,193 @@ router.post('/write-test-dynamic-flow', async (req, res) => {
 });
 
 /**
+ * POST /api/company/:companyId/raw/convert-flow-to-v2
+ * 
+ * Converts a legacy flow to V2 schema.
+ * Fixes the "schemaUsed: legacy" problem.
+ */
+router.post('/convert-flow-to-v2', async (req, res) => {
+    const { companyId } = req.params;
+    const { flowKey } = req.body;
+    
+    if (!flowKey) {
+        return res.status(400).json({
+            success: false,
+            error: 'flowKey is required'
+        });
+    }
+    
+    logger.info('[CONVERT TO V2] Initiated', { companyId, flowKey });
+    
+    try {
+        // Find the flow
+        const flow = await DynamicFlow.findOne({
+            companyId: new mongoose.Types.ObjectId(companyId),
+            flowKey: flowKey,
+            isTemplate: { $ne: true }
+        });
+        
+        if (!flow) {
+            return res.status(404).json({
+                success: false,
+                error: `Flow "${flowKey}" not found for this company`
+            });
+        }
+        
+        // Detect current schema
+        const hasV2Trigger = flow.trigger?.config?.phrases?.length > 0;
+        const hasLegacyTrigger = flow.trigger?.phrases?.length > 0;
+        const currentSchema = hasV2Trigger ? 'v2' : (hasLegacyTrigger ? 'legacy' : 'empty');
+        
+        // Get phrases from wherever they are
+        let phrases = [];
+        if (hasV2Trigger) {
+            phrases = flow.trigger.config.phrases;
+        } else if (hasLegacyTrigger) {
+            phrases = flow.trigger.phrases;
+        }
+        
+        // If no phrases anywhere, provide defaults for emergency_service
+        if (phrases.length === 0 && flowKey.includes('emergency')) {
+            phrases = [
+                'emergency',
+                'no heat',
+                'no AC',
+                'no air',
+                'gas smell',
+                'carbon monoxide',
+                'water leak',
+                'flooding',
+                'smoke',
+                'fire'
+            ];
+        }
+        
+        // Build V2 trigger
+        const v2Trigger = {
+            type: 'phrase',
+            config: {
+                phrases: phrases,
+                fuzzy: flow.trigger?.fuzzy ?? flow.trigger?.config?.fuzzy ?? true,
+                minConfidence: flow.trigger?.minConfidence ?? flow.trigger?.config?.minConfidence ?? 0.7
+            },
+            priority: flow.trigger?.priority ?? flow.priority ?? 100,
+            description: flow.trigger?.description || `Trigger for ${flowKey}`
+        };
+        
+        // Build V2 actions if missing or incomplete
+        let v2Actions = flow.actions || [];
+        
+        // Check if actions are in V2 format
+        const hasValidActions = v2Actions.length >= 4 && 
+            v2Actions.some(a => a.type === 'set_flag') &&
+            v2Actions.some(a => a.type === 'append_ledger') &&
+            v2Actions.some(a => a.type === 'ack_once') &&
+            v2Actions.some(a => a.type === 'transition_mode');
+        
+        if (!hasValidActions && flowKey.includes('emergency')) {
+            // Provide default emergency actions
+            v2Actions = [
+                {
+                    timing: 'on_activate',
+                    type: 'set_flag',
+                    config: {
+                        flagName: 'isEmergency',
+                        flagValue: true,
+                        alsoWriteToCallLedgerFacts: true
+                    },
+                    description: 'Mark as emergency'
+                },
+                {
+                    timing: 'on_activate',
+                    type: 'append_ledger',
+                    config: {
+                        type: 'EVENT',
+                        key: 'EMERGENCY_DETECTED',
+                        note: 'Caller indicated emergency situation'
+                    },
+                    description: 'Log emergency to ledger'
+                },
+                {
+                    timing: 'on_activate',
+                    type: 'ack_once',
+                    config: {
+                        text: "I understand this is urgent. Let me get you help right away."
+                    },
+                    description: 'Acknowledge emergency'
+                },
+                {
+                    timing: 'on_complete',
+                    type: 'transition_mode',
+                    config: {
+                        targetMode: 'BOOKING',
+                        setBookingLocked: true
+                    },
+                    description: 'Transition to booking'
+                }
+            ];
+        }
+        
+        // Update the flow
+        flow.trigger = v2Trigger;
+        flow.actions = v2Actions;
+        flow.enabled = true;
+        flow.isActive = true;
+        
+        await flow.save();
+        
+        // Verify the conversion
+        const verifyFlow = await DynamicFlow.findById(flow._id).lean();
+        
+        const verification = {
+            flowKey: verifyFlow.flowKey,
+            triggerType: verifyFlow.trigger?.type,
+            triggerPhrasesCount: verifyFlow.trigger?.config?.phrases?.length || 0,
+            triggerPhrasesSample: verifyFlow.trigger?.config?.phrases?.slice(0, 5) || [],
+            actionsCount: verifyFlow.actions?.length || 0,
+            actionTypes: verifyFlow.actions?.map(a => a.type) || [],
+            schemaUsed: verifyFlow.trigger?.config?.phrases?.length > 0 ? 'v2' : 'legacy',
+            enabled: verifyFlow.enabled
+        };
+        
+        const conversionSuccess = 
+            verification.triggerType === 'phrase' &&
+            verification.triggerPhrasesCount > 0 &&
+            verification.actionsCount >= 4;
+        
+        logger.info('[CONVERT TO V2] Result', {
+            companyId,
+            flowKey,
+            currentSchema,
+            verification,
+            conversionSuccess
+        });
+        
+        res.json({
+            success: conversionSuccess,
+            previousSchema: currentSchema,
+            verification,
+            message: conversionSuccess 
+                ? `Flow "${flowKey}" converted to V2 schema successfully`
+                : `Conversion completed but verification failed. Check verification object.`
+        });
+        
+    } catch (error) {
+        logger.error('[CONVERT TO V2] Error', {
+            companyId,
+            flowKey,
+            error: error.message,
+            stack: error.stack
+        });
+        
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
  * DELETE /api/company/:companyId/raw/cleanup-test-flows
  * 
  * Removes test flows created by write tests.

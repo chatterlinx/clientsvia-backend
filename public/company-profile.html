@@ -1603,7 +1603,7 @@
                 <div class="px-6 py-3 bg-amber-50 border-b border-amber-200">
                     <div class="flex items-center flex-wrap gap-3">
                         <i class="fas fa-flask text-amber-600"></i>
-                        <span class="font-semibold text-amber-800 text-sm">Write Tests (Verify Save Pipeline)</span>
+                        <span class="font-semibold text-amber-800 text-sm">Write Tests</span>
                         <div class="ml-auto flex items-center gap-2">
                             <button onclick="writeTestGreeting()" 
                                     class="px-3 py-1.5 text-xs bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors flex items-center gap-2">
@@ -1613,7 +1613,7 @@
                             <button onclick="writeTestDynamicFlow()" 
                                     class="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors flex items-center gap-2">
                                 <i class="fas fa-project-diagram" id="write-test-flow-icon"></i>
-                                Dynamic Flow
+                                New Flow
                             </button>
                             <button onclick="cleanupTestFlows()" 
                                     class="px-3 py-1.5 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors flex items-center gap-2"
@@ -1622,7 +1622,26 @@
                             </button>
                         </div>
                     </div>
-                    <div id="write-test-result" class="mt-2 text-xs text-amber-700 hidden"></div>
+                    <div id="write-test-result" class="mt-2 text-xs hidden"></div>
+                </div>
+                
+                <!-- Fix Legacy Flows Panel -->
+                <div class="px-6 py-3 bg-purple-50 border-b border-purple-200">
+                    <div class="flex items-center flex-wrap gap-3">
+                        <i class="fas fa-wrench text-purple-600"></i>
+                        <span class="font-semibold text-purple-800 text-sm">Fix Legacy Flows</span>
+                        <div class="ml-auto flex items-center gap-2">
+                            <select id="legacy-flow-selector" class="px-2 py-1 text-xs border border-purple-300 rounded bg-white">
+                                <option value="">Loading...</option>
+                            </select>
+                            <button onclick="convertFlowToV2()" 
+                                    class="px-3 py-1.5 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors flex items-center gap-2">
+                                <i class="fas fa-magic" id="convert-flow-icon"></i>
+                                Convert to V2
+                            </button>
+                        </div>
+                    </div>
+                    <div id="convert-result" class="mt-2 text-xs hidden"></div>
                 </div>
                 
                 <!-- Meta Info -->
@@ -1789,6 +1808,9 @@
                 
                 // Also load DB Echo
                 await loadDbEcho();
+                
+                // Populate legacy flow selector for conversion tools
+                await populateLegacyFlowSelector();
                 
             } catch (error) {
                 console.error('[TRUTH REPORT] Error:', error);
@@ -2229,6 +2251,126 @@
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
+        // CONVERT FLOW TO V2 - Fix legacy flows
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function populateLegacyFlowSelector() {
+            const selector = document.getElementById('legacy-flow-selector');
+            if (!selector) return;
+            
+            // Get flows from current snapshot
+            const flows = currentTruthSnapshot?.providers?.dynamicFlow?.data?.flows || [];
+            
+            selector.innerHTML = '';
+            
+            if (flows.length === 0) {
+                selector.innerHTML = '<option value="">No flows found</option>';
+                return;
+            }
+            
+            // Add each flow, highlighting legacy ones
+            flows.forEach(f => {
+                const option = document.createElement('option');
+                option.value = f.flowKey;
+                const status = f.schemaUsed === 'legacy' ? '⚠️ LEGACY' : '✓ v2';
+                const issues = f.isValid ? '' : ' (INVALID)';
+                option.textContent = `${f.flowKey} [${status}]${issues}`;
+                if (f.schemaUsed === 'legacy' || !f.isValid) {
+                    option.style.color = '#dc2626';
+                    option.style.fontWeight = 'bold';
+                }
+                selector.appendChild(option);
+            });
+        }
+        
+        async function convertFlowToV2() {
+            const companyId = window.currentCompanyId || window.companyId;
+            const selector = document.getElementById('legacy-flow-selector');
+            const flowKey = selector?.value;
+            
+            if (!companyId || !flowKey) {
+                alert('Please select a flow to convert');
+                return;
+            }
+            
+            const icon = document.getElementById('convert-flow-icon');
+            const resultEl = document.getElementById('convert-result');
+            
+            if (icon) icon.className = 'fas fa-spinner fa-spin';
+            if (resultEl) resultEl.classList.add('hidden');
+            
+            try {
+                const authToken = localStorage.getItem('adminToken');
+                
+                // Step 1: Convert the flow
+                const convertResponse = await fetch(`/api/company/${companyId}/raw/convert-flow-to-v2`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ flowKey })
+                });
+                
+                if (!convertResponse.ok) {
+                    const errData = await convertResponse.json();
+                    throw new Error(errData.error || `HTTP ${convertResponse.status}`);
+                }
+                
+                const convertResult = await convertResponse.json();
+                
+                // Step 2: Refresh Truth Report
+                await loadTruthReport();
+                
+                // Step 3: Verify in snapshot
+                const flows = currentTruthSnapshot?.providers?.dynamicFlow?.data?.flows || [];
+                const updatedFlow = flows.find(f => f.flowKey === flowKey);
+                
+                // Update selector
+                await populateLegacyFlowSelector();
+                
+                // Show result
+                if (resultEl) {
+                    const v = convertResult.verification;
+                    if (convertResult.success && updatedFlow && updatedFlow.schemaUsed === 'v2') {
+                        resultEl.innerHTML = `
+                            <div class="p-2 bg-green-100 rounded">
+                                <strong class="text-green-800">✅ CONVERSION SUCCESSFUL</strong><br>
+                                <span class="text-green-700">
+                                    Previous: ${convertResult.previousSchema}<br>
+                                    Now: schema=${v.schemaUsed}, phrases=${v.triggerPhrasesCount}, actions=${v.actionsCount}<br>
+                                    Phrases: ${v.triggerPhrasesSample?.join(', ') || 'none'}
+                                </span>
+                            </div>
+                        `;
+                        showSaveVerifyToast(true, 'Conversion PASSED', `${flowKey} is now V2`);
+                    } else {
+                        resultEl.innerHTML = `
+                            <div class="p-2 bg-yellow-100 rounded">
+                                <strong class="text-yellow-800">⚠️ CONVERSION PARTIAL</strong><br>
+                                <span class="text-yellow-700">
+                                    Result: ${JSON.stringify(v, null, 2)}<br>
+                                    Snapshot: ${updatedFlow ? JSON.stringify(updatedFlow, null, 2) : 'NOT FOUND'}
+                                </span>
+                            </div>
+                        `;
+                        showSaveVerifyToast(false, 'Conversion needs review', 'Check details');
+                    }
+                    resultEl.classList.remove('hidden');
+                }
+                
+            } catch (error) {
+                console.error('[CONVERT] Error:', error);
+                if (resultEl) {
+                    resultEl.innerHTML = `<div class="p-2 bg-red-100 rounded text-red-800">❌ ERROR: ${error.message}</div>`;
+                    resultEl.classList.remove('hidden');
+                }
+                showSaveVerifyToast(false, 'Conversion Error', error.message);
+            } finally {
+                if (icon) icon.className = 'fas fa-magic';
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
         // CLEANUP TEST FLOWS - Remove test data
         // ═══════════════════════════════════════════════════════════════════════════
         async function cleanupTestFlows() {
@@ -2270,6 +2412,8 @@
         window.writeTestGreeting = writeTestGreeting;
         window.writeTestDynamicFlow = writeTestDynamicFlow;
         window.cleanupTestFlows = cleanupTestFlows;
+        window.convertFlowToV2 = convertFlowToV2;
+        window.populateLegacyFlowSelector = populateLegacyFlowSelector;
     </script>
     
     <!-- Load Company Profile Modern JavaScript -->
