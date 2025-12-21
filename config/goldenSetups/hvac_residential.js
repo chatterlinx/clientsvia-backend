@@ -131,54 +131,113 @@ module.exports = {
     ],
     
     // ═══════════════════════════════════════════════════════════════════════
-    // F) CALL PROTECTION (VALID rules only)
+    // F) CALL PROTECTION (Enterprise schema with proper action objects)
     // ═══════════════════════════════════════════════════════════════════════
     callProtection: [
         {
             name: 'Voicemail Detection',
-            type: 'voicemail',
+            description: 'Detects voicemail systems and politely disconnects',
             enabled: true,
             priority: 1,
-            triggerPatterns: [], // Detector type, no patterns needed
-            action: 'hangup',
-            responseText: null,
-            hangupMessage: 'This appears to be a voicemail. Goodbye.'
+            // Enterprise match
+            match: {
+                keywordsAny: ['leave a message', 'beep', 'voicemail', 'not available'],
+                keywordsAll: [],
+                regexPatterns: [],
+                callerType: [],
+                timeWindows: [],
+                spamFlagsRequired: [],
+                tradeRequired: []
+            },
+            // Enterprise action (OBJECT, not string)
+            action: {
+                type: 'polite_hangup',
+                hangupMessage: 'This appears to be a voicemail. Goodbye.',
+                responseTemplateId: '',
+                inlineResponse: '',
+                transferTarget: '',
+                transferMessage: ''
+            },
+            sideEffects: {
+                autoBlacklist: false,
+                autoTag: ['voicemail'],
+                notifyContacts: [],
+                logSeverity: 'info'
+            }
         },
         {
             name: 'Spam Call Detection',
-            type: 'spam',
+            description: 'Detects robocalls and spam callers',
             enabled: true,
             priority: 2,
-            triggerPatterns: [
-                'press 1 to',
-                'this is your captain',
-                'warranty expir',
-                'social security',
-                'irs',
-                'you have won'
-            ],
-            action: 'hangup',
-            responseText: null,
-            hangupMessage: null
+            match: {
+                keywordsAny: [
+                    'press 1 to',
+                    'this is your captain',
+                    'warranty expir',
+                    'social security',
+                    'irs',
+                    'you have won'
+                ],
+                keywordsAll: [],
+                regexPatterns: [],
+                callerType: [],
+                timeWindows: [],
+                spamFlagsRequired: [],
+                tradeRequired: []
+            },
+            action: {
+                type: 'polite_hangup',
+                hangupMessage: 'Thank you for calling. Goodbye.',
+                responseTemplateId: '',
+                inlineResponse: '',
+                transferTarget: '',
+                transferMessage: ''
+            },
+            sideEffects: {
+                autoBlacklist: true,
+                autoTag: ['spam'],
+                notifyContacts: [],
+                logSeverity: 'warning'
+            }
         },
         {
             name: 'Frustration Escalation',
-            type: 'escalation',
+            description: 'Transfers caller to human when frustrated',
             enabled: true,
             priority: 5,
-            triggerPatterns: [
-                'speak to a human',
-                'talk to someone',
-                'real person',
-                'supervisor',
-                'manager',
-                'this is ridiculous',
-                'fed up',
-                'unacceptable'
-            ],
-            action: 'transfer',
-            transferTargetId: 'service_advisor',
-            responseText: "I understand you'd like to speak with someone directly. Let me connect you with our service team right away."
+            match: {
+                keywordsAny: [
+                    'speak to a human',
+                    'talk to someone',
+                    'real person',
+                    'supervisor',
+                    'manager',
+                    'this is ridiculous',
+                    'fed up',
+                    'unacceptable'
+                ],
+                keywordsAll: [],
+                regexPatterns: [],
+                callerType: [],
+                timeWindows: [],
+                spamFlagsRequired: [],
+                tradeRequired: []
+            },
+            action: {
+                type: 'force_transfer',
+                transferTarget: 'service_advisor',
+                transferMessage: "I understand you'd like to speak with someone directly. Let me connect you with our service team right away.",
+                hangupMessage: '',
+                responseTemplateId: '',
+                inlineResponse: ''
+            },
+            sideEffects: {
+                autoBlacklist: false,
+                autoTag: ['escalation'],
+                notifyContacts: [],
+                logSeverity: 'info'
+            }
         }
     ],
     
