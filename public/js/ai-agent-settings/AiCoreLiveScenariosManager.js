@@ -383,7 +383,7 @@ class AiCoreLiveScenariosManager {
                                 <input type="checkbox" 
                                        id="${toggleId}"
                                        ${isEnabled ? 'checked' : ''}
-                                       onchange="aiCoreLiveScenariosManager.toggleScenario('${scenario.templateId}', '${scenario.scenarioId}', this.checked)"
+                                       onchange="aiCoreLiveScenariosManager.toggleScenario('${scenario.templateId}', '${scenario.scenarioId}', this.checked, '${scenario.categoryId || ''}', '${this.escapeHtml(scenario.name || scenario.trigger).replace(/'/g, "\\'")}')"
                                        style="opacity: 0; width: 0; height: 0;">
                                 <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ${isEnabled ? '#10b981' : '#ef4444'}; transition: 0.3s; border-radius: 24px;">
                                     <span style="position: absolute; content: ''; height: 18px; width: 18px; left: ${isEnabled ? '26px' : '3px'}; bottom: 3px; background-color: white; transition: 0.3s; border-radius: 50%;"></span>
@@ -517,25 +517,33 @@ class AiCoreLiveScenariosManager {
      * @param {String} templateId - Template ID
      * @param {String} scenarioId - Scenario ID
      * @param {Boolean} isEnabled - New enabled state
+     * @param {String} categoryId - Category ID (for disable modal)
+     * @param {String} scenarioName - Scenario name (for display)
      */
-    async toggleScenario(templateId, scenarioId, isEnabled) {
+    async toggleScenario(templateId, scenarioId, isEnabled, categoryId = null, scenarioName = '') {
         console.log(`🎯 [LIVE SCENARIOS] Toggle scenario: template=${templateId}, scenario=${scenarioId}, enabled=${isEnabled}`);
         
         const toggleId = `toggle-${templateId}-${scenarioId}`;
         const checkbox = document.getElementById(toggleId);
         
-        try {
-            // Optimistic UI update
-            const originalState = !isEnabled;
+        // If DISABLING, show modal for alternate reply configuration
+        if (!isEnabled) {
+            // Revert checkbox for now (modal will handle final state)
+            if (checkbox) checkbox.checked = true;
             
-            const url = `/api/aicore/${this.companyId}/scenarios/${templateId}/${scenarioId}`;
+            this.showDisableScenarioModal(templateId, scenarioId, categoryId, scenarioName);
+            return;
+        }
+        
+        // ENABLING - call API directly
+        try {
+            const url = `/api/company/${this.companyId}/overrides/scenarios/${scenarioId}/enable`;
             const response = await fetch(url, {
-                method: 'PATCH',
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-                },
-                body: JSON.stringify({ isEnabled })
+                }
             });
             
             if (!response.ok) {
@@ -545,35 +553,223 @@ class AiCoreLiveScenariosManager {
             const data = await response.json();
             
             if (!data.success) {
-                throw new Error(data.error || 'Toggle failed');
+                throw new Error(data.error || 'Enable failed');
             }
             
-            console.log(`✅ [LIVE SCENARIOS] Scenario ${isEnabled ? 'enabled' : 'disabled'} successfully`);
+            console.log(`✅ [LIVE SCENARIOS] Scenario enabled successfully`);
             
-            // Show success toast
-            this.showToast(
-                isEnabled ? '✅ Scenario Enabled' : '❌ Scenario Disabled',
-                `This scenario is now ${isEnabled ? 'active' : 'inactive'} for runtime matching.`,
-                'success'
-            );
-            
-            // Reload to reflect changes
+            this.showToast('✅ Scenario Enabled', 'This scenario is now active for runtime matching.', 'success');
             await this.load();
             
         } catch (error) {
-            console.error('❌ [LIVE SCENARIOS] Toggle failed:', error);
+            console.error('❌ [LIVE SCENARIOS] Enable failed:', error);
+            if (checkbox) checkbox.checked = false;
+            this.showToast('❌ Enable Failed', `Could not enable scenario: ${error.message}`, 'error');
+        }
+    }
+    
+    /**
+     * Show modal for disabling a scenario with alternate reply options
+     * Per December 2025 Directive: Deterministic fallback, NO LLM required
+     */
+    showDisableScenarioModal(templateId, scenarioId, categoryId, scenarioName) {
+        // Remove existing modal if any
+        const existingModal = document.getElementById('disable-scenario-modal');
+        if (existingModal) existingModal.remove();
+        
+        const modal = document.createElement('div');
+        modal.id = 'disable-scenario-modal';
+        modal.innerHTML = `
+            <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; display: flex; align-items: center; justify-content: center;">
+                <div style="background: white; border-radius: 16px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
+                    
+                    <!-- Header -->
+                    <div style="padding: 20px 24px; border-bottom: 1px solid #e2e8f0; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-radius: 16px 16px 0 0;">
+                        <h3 style="margin: 0; color: white; font-size: 18px; font-weight: 600;">
+                            🚫 Disable Scenario
+                        </h3>
+                        <p style="margin: 8px 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">
+                            "${scenarioName || 'This scenario'}"
+                        </p>
+                    </div>
+                    
+                    <!-- Body -->
+                    <div style="padding: 24px;">
+                        
+                        <!-- Explanation -->
+                        <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                            <p style="margin: 0; font-size: 14px; color: #92400e;">
+                                <strong>🧠 What happens when disabled?</strong><br>
+                                When a caller triggers this scenario, the system will use your configured fallback reply instead of the normal response. <strong>No LLM guessing required.</strong>
+                            </p>
+                        </div>
+                        
+                        <!-- Fallback Preference -->
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 12px; color: #1f2937;">
+                                Fallback Preference
+                            </label>
+                            
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <label style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer; transition: all 0.2s;" 
+                                       onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor=this.querySelector('input').checked?'#3b82f6':'#e2e8f0'">
+                                    <input type="radio" name="fallbackPreference" value="COMPANY" checked 
+                                           style="margin-top: 2px; accent-color: #3b82f6;">
+                                    <div>
+                                        <strong style="color: #1f2937;">Use Company Default</strong>
+                                        <p style="margin: 4px 0 0; font-size: 13px; color: #6b7280;">
+                                            Use the company's "Not Offered" reply. Best for services you don't provide.
+                                        </p>
+                                    </div>
+                                </label>
+                                
+                                <label style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer; transition: all 0.2s;"
+                                       onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor=this.querySelector('input').checked?'#3b82f6':'#e2e8f0'">
+                                    <input type="radio" name="fallbackPreference" value="CATEGORY"
+                                           style="margin-top: 2px; accent-color: #3b82f6;">
+                                    <div>
+                                        <strong style="color: #1f2937;">Use Category Default</strong>
+                                        <p style="margin: 4px 0 0; font-size: 13px; color: #6b7280;">
+                                            Use the category's disabled reply. Good when whole category is limited.
+                                        </p>
+                                    </div>
+                                </label>
+                                
+                                <label style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer; transition: all 0.2s;"
+                                       onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor=this.querySelector('input').checked?'#3b82f6':'#e2e8f0'">
+                                    <input type="radio" name="fallbackPreference" value="SCENARIO"
+                                           style="margin-top: 2px; accent-color: #3b82f6;">
+                                    <div>
+                                        <strong style="color: #1f2937;">Use Custom Alternate Reply</strong>
+                                        <p style="margin: 4px 0 0; font-size: 13px; color: #6b7280;">
+                                            Write a specific reply for this scenario. Most precise control.
+                                        </p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Custom Alternate Reply (shown when SCENARIO is selected) -->
+                        <div id="custom-reply-section" style="display: none; margin-bottom: 20px; padding: 16px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #1f2937;">
+                                Custom Alternate Reply
+                            </label>
+                            
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: block; font-size: 13px; color: #6b7280; margin-bottom: 4px;">
+                                    Quick Reply (short, for fast responses)
+                                </label>
+                                <input type="text" id="disable-quick-reply" 
+                                       placeholder="e.g., I'm sorry, we don't offer that service right now."
+                                       style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                            </div>
+                            
+                            <div>
+                                <label style="display: block; font-size: 13px; color: #6b7280; margin-bottom: 4px;">
+                                    Full Reply (detailed response) <span style="color: #ef4444;">*</span>
+                                </label>
+                                <textarea id="disable-full-reply" rows="4"
+                                          placeholder="e.g., I apologize, but we don't currently offer that service. However, I can help you with... Is there anything else I can assist you with today?"
+                                          style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; resize: vertical;"></textarea>
+                            </div>
+                        </div>
+                        
+                        <!-- Notes -->
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; font-size: 13px; color: #6b7280; margin-bottom: 4px;">
+                                Notes (optional, for audit trail)
+                            </label>
+                            <input type="text" id="disable-notes" 
+                                   placeholder="e.g., Temporarily disabled for Q4 promotion"
+                                   style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                        </div>
+                        
+                    </div>
+                    
+                    <!-- Footer -->
+                    <div style="padding: 16px 24px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 12px; background: #f8fafc; border-radius: 0 0 16px 16px;">
+                        <button onclick="document.getElementById('disable-scenario-modal').remove()" 
+                                style="padding: 10px 20px; border: 1px solid #d1d5db; background: white; color: #374151; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">
+                            Cancel
+                        </button>
+                        <button onclick="aiCoreLiveScenariosManager.confirmDisableScenario('${templateId}', '${scenarioId}', '${categoryId}')"
+                                style="padding: 10px 20px; border: none; background: #ef4444; color: white; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                            🚫 Disable Scenario
+                        </button>
+                    </div>
+                    
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Add event listener to show/hide custom reply section
+        const radios = modal.querySelectorAll('input[name="fallbackPreference"]');
+        const customSection = modal.querySelector('#custom-reply-section');
+        
+        radios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                customSection.style.display = radio.value === 'SCENARIO' ? 'block' : 'none';
+            });
+        });
+    }
+    
+    /**
+     * Confirm and execute scenario disable
+     */
+    async confirmDisableScenario(templateId, scenarioId, categoryId) {
+        const modal = document.getElementById('disable-scenario-modal');
+        
+        const fallbackPreference = modal.querySelector('input[name="fallbackPreference"]:checked')?.value || 'COMPANY';
+        const quickReply = modal.querySelector('#disable-quick-reply')?.value?.trim() || null;
+        const fullReply = modal.querySelector('#disable-full-reply')?.value?.trim() || null;
+        const notes = modal.querySelector('#disable-notes')?.value?.trim() || null;
+        
+        // Validate: if SCENARIO fallback, fullReply is required
+        if (fallbackPreference === 'SCENARIO' && !fullReply) {
+            alert('Please provide a Full Reply when using custom alternate reply.');
+            return;
+        }
+        
+        try {
+            const url = `/api/company/${this.companyId}/overrides/scenarios/${scenarioId}/disable`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                },
+                body: JSON.stringify({
+                    templateId,
+                    categoryId,
+                    quickReply,
+                    fullReply,
+                    fallbackPreference,
+                    notes
+                })
+            });
             
-            // Revert checkbox state on error
-            if (checkbox) {
-                checkbox.checked = !isEnabled;
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || `HTTP ${response.status}`);
             }
             
-            // Show error toast
-            this.showToast(
-                '❌ Toggle Failed',
-                `Could not ${isEnabled ? 'enable' : 'disable'} scenario: ${error.message}`,
-                'error'
-            );
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Disable failed');
+            }
+            
+            console.log('✅ [LIVE SCENARIOS] Scenario disabled with override:', data);
+            
+            modal.remove();
+            this.showToast('🚫 Scenario Disabled', 'Alternate reply configured. No LLM guessing required.', 'success');
+            await this.load();
+            
+        } catch (error) {
+            console.error('❌ [LIVE SCENARIOS] Disable failed:', error);
+            this.showToast('❌ Disable Failed', error.message, 'error');
         }
     }
     

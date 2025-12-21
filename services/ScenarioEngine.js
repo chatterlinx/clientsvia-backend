@@ -23,12 +23,14 @@
  */
 
 const IntelligentRouter = require('./IntelligentRouter');
+const OverrideResolver = require('./OverrideResolver');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const Company = require('../models/v2Company');
 const logger = require('../utils/logger');
 
-// Company scenario toggles collection (to be created)
-// const CompanyScenarioToggle = require('../models/CompanyScenarioToggle');
+// Company override models (December 2025 Directive)
+const CompanyScenarioOverride = require('../models/CompanyScenarioOverride');
+const CompanyCategoryOverride = require('../models/CompanyCategoryOverride');
 
 class ScenarioEngine {
   constructor() {
@@ -36,7 +38,7 @@ class ScenarioEngine {
       defaultTier1Threshold: 0.80,
       defaultTier2Threshold: 0.60,
       enableTradeFiltering: true,
-      enableCompanyToggles: false, // Enable when mapping layer is created
+      enableCompanyToggles: true, // December 2025: Company override models created
     };
   }
 
@@ -185,16 +187,64 @@ class ScenarioEngine {
       result.confidence = routingResult.confidence;
 
       if (routingResult.scenario) {
+        const originalQuickReply = this.selectReply(routingResult.scenario.quickReplies);
+        const originalFullReply = this.selectReply(routingResult.scenario.fullReplies);
+        
         result.scenario = {
           scenarioId: routingResult.scenario.scenarioId,
-          categoryId: routingResult.scenario.categoryId || null,
+          categoryId: routingResult.scenario.categoryId || routingResult.scenario.categories?.[0] || null,
           title: routingResult.scenario.name,
           priority: routingResult.scenario.priority || 0,
           toneLevel: routingResult.scenario.toneLevel || 2,
-          quickReply: this.selectReply(routingResult.scenario.quickReplies),
-          fullReply: this.selectReply(routingResult.scenario.fullReplies),
+          quickReply: originalQuickReply,
+          fullReply: originalFullReply,
           triggers: routingResult.scenario.triggers || []
         };
+        
+        // ═══════════════════════════════════════════════════════════════
+        // 6B. APPLY COMPANY OVERRIDES (December 2025 Directive)
+        // Deterministic fallback - NO LLM required for disabled scenarios
+        // ═══════════════════════════════════════════════════════════════
+        const overrideResult = await OverrideResolver.resolveAndRender({
+          companyId,
+          matchedScenario: routingResult.scenario,
+          templateId: template._id?.toString(),
+          categoryId: result.scenario.categoryId,
+          scenarioId: routingResult.scenario.scenarioId,
+          originalReply: {
+            quickReply: originalQuickReply,
+            fullReply: originalFullReply
+          }
+        });
+        
+        // Store override metadata for tracing
+        result.override = {
+          applied: overrideResult.overrideApplied,
+          resolution: overrideResult.resolution,
+          source: overrideResult.overrideSource || null,
+          resolvedIn: overrideResult.resolvedIn
+        };
+        
+        // Apply override reply if different from original
+        if (overrideResult.overrideApplied && overrideResult.reply) {
+          result.scenario.quickReply = overrideResult.reply.quickReply || result.scenario.quickReply;
+          result.scenario.fullReply = overrideResult.reply.fullReply || result.scenario.fullReply;
+          
+          logger.info('[SCENARIO ENGINE] Override applied', {
+            resolution: overrideResult.resolution,
+            source: overrideResult.overrideSource,
+            scenarioId: result.scenario.scenarioId
+          });
+        }
+        
+        // Handle case where no override configured and scenario is disabled
+        // (falls through to LLM fallback if reply is null)
+        if (overrideResult.resolution === 'NO_OVERRIDE_CONFIGURED_LLM_FALLBACK') {
+          logger.warn('[SCENARIO ENGINE] No override configured for disabled scenario, LLM fallback needed', {
+            scenarioId: result.scenario.scenarioId,
+            companyId
+          });
+        }
       }
 
       // Map match metadata
@@ -269,6 +319,7 @@ class ScenarioEngine {
    * GET ENABLED SCENARIOS FOR COMPANY
    * ============================================================================
    * Returns list of scenarios enabled for a company (for Flow Tree snapshot)
+   * Uses CompanyScenarioOverride to determine enabled/disabled status
    */
   async getEnabledScenarios(companyId, tradeKey) {
     try {
@@ -289,28 +340,45 @@ class ScenarioEngine {
         return { count: 0, scenarios: [], error: 'No active template' };
       }
 
-      // Extract all scenarios
+      // Load company scenario overrides (for disable status)
+      const overridesMap = await CompanyScenarioOverride.getOverridesMap(companyId);
+      
+      // Extract all scenarios and check override status
       const allScenarios = [];
+      let enabledCount = 0;
+      let disabledCount = 0;
+      
       for (const category of template.categories || []) {
         for (const scenario of category.scenarios || []) {
           if (scenario.isActive && scenario.status === 'live') {
+            const override = overridesMap.get(scenario.scenarioId);
+            const isEnabled = !override || override.enabled !== false;
+            
             allScenarios.push({
               scenarioId: scenario.scenarioId,
               name: scenario.name,
+              categoryId: category.id,
               categoryName: category.name,
               priority: scenario.priority || 0,
-              triggersCount: scenario.triggers?.length || 0
+              triggersCount: scenario.triggers?.length || 0,
+              isEnabled,
+              hasOverride: !!override,
+              overrideType: override ? override.fallbackPreference : null
             });
+            
+            if (isEnabled) {
+              enabledCount++;
+            } else {
+              disabledCount++;
+            }
           }
         }
       }
 
-      // TODO: Apply company toggles when implemented
-
       return {
         count: allScenarios.length,
-        enabledCount: allScenarios.length, // All enabled until toggles implemented
-        disabledCount: 0,
+        enabledCount,
+        disabledCount,
         scenarios: allScenarios,
         tradeKey: effectiveTradeKey
       };
