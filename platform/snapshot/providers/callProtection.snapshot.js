@@ -46,12 +46,29 @@ module.exports.getSnapshot = async function(companyId) {
         const invalidEnabledRules = [];
         
         enabledRules.forEach(ec => {
-            const patterns = ec.triggerPatterns || [];
-            const hasPatterns = patterns.length > 0;
+            // SUPPORT BOTH LEGACY AND ENTERPRISE SCHEMAS
+            // Legacy: triggerPatterns[]
+            // Enterprise: match.keywordsAny[], match.keywordsAll[], match.regexPatterns[]
+            const legacyPatterns = ec.triggerPatterns || [];
+            const enterpriseKeywordsAny = ec.match?.keywordsAny || [];
+            const enterpriseKeywordsAll = ec.match?.keywordsAll || [];
+            const enterpriseRegex = ec.match?.regexPatterns || [];
+            
+            const totalPatterns = legacyPatterns.length + enterpriseKeywordsAny.length + 
+                                 enterpriseKeywordsAll.length + enterpriseRegex.length;
+            const hasPatterns = totalPatterns > 0;
+            
             const hasDetector = ['voicemail', 'machine', 'spam', 'abuse'].includes(ec.type);
-            const hasResponse = !!ec.responseText || !!ec.responseTemplateId || !!ec.action?.hangupMessage;
-            const hasTransfer = ec.action === 'transfer' && ec.transferTargetId;
-            const hasValidAction = hasResponse || hasTransfer || ec.action === 'hangup';
+            
+            // Support both legacy and enterprise action formats
+            const hasResponse = !!ec.responseText || !!ec.responseTemplateId || 
+                               !!ec.action?.hangupMessage || !!ec.action?.inlineResponse ||
+                               !!ec.action?.transferMessage;
+            const hasTransfer = (ec.action === 'transfer' || ec.action?.type === 'force_transfer') && 
+                               (ec.transferTargetId || ec.action?.transferTarget);
+            const hasHangup = ec.action === 'hangup' || ec.action?.type === 'polite_hangup' || 
+                             ec.action?.type === 'silent_hangup';
+            const hasValidAction = hasResponse || hasTransfer || hasHangup;
             
             // Rule is invalid if: enabled but (no patterns AND no detector) OR no valid action
             if ((!hasPatterns && !hasDetector) || !hasValidAction) {
@@ -98,17 +115,29 @@ module.exports.getSnapshot = async function(companyId) {
                 
                 invalidRules: invalidEnabledRules,
                 
-                rules: edgeCases.map(ec => ({
-                    name: ec.name,
-                    type: ec.type || 'custom',
-                    enabled: ec.enabled !== false,
-                    priority: ec.priority || 10,
-                    hasResponse: !!ec.responseText || !!ec.responseTemplateId,
-                    hasTransfer: ec.action === 'transfer' && !!ec.transferTargetId,
-                    action: ec.action || 'respond',
-                    patternsCount: (ec.triggerPatterns || []).length,
-                    isValid: !invalidEnabledRules.some(inv => inv.name === ec.name)
-                })).sort((a, b) => (a.priority || 10) - (b.priority || 10))
+                rules: edgeCases.map(ec => {
+                    // Count patterns from BOTH legacy and enterprise schemas
+                    const legacyPatterns = ec.triggerPatterns || [];
+                    const enterpriseKeywordsAny = ec.match?.keywordsAny || [];
+                    const enterpriseKeywordsAll = ec.match?.keywordsAll || [];
+                    const enterpriseRegex = ec.match?.regexPatterns || [];
+                    const totalPatterns = legacyPatterns.length + enterpriseKeywordsAny.length + 
+                                         enterpriseKeywordsAll.length + enterpriseRegex.length;
+                    
+                    return {
+                        name: ec.name,
+                        type: ec.type || 'custom',
+                        enabled: ec.enabled !== false,
+                        priority: ec.priority || 10,
+                        hasResponse: !!ec.responseText || !!ec.responseTemplateId || 
+                                    !!ec.action?.hangupMessage || !!ec.action?.inlineResponse,
+                        hasTransfer: (ec.action === 'transfer' || ec.action?.type === 'force_transfer') && 
+                                    (!!ec.transferTargetId || !!ec.action?.transferTarget),
+                        action: ec.action || 'respond',
+                        patternsCount: totalPatterns,
+                        isValid: !invalidEnabledRules.some(inv => inv.name === ec.name)
+                    };
+                }).sort((a, b) => (a.priority || 10) - (b.priority || 10))
             },
             generatedIn: Date.now() - startTime
         };
