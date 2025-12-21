@@ -242,43 +242,79 @@ module.exports = {
     ],
     
     // ═══════════════════════════════════════════════════════════════════════
-    // G) DYNAMIC FLOWS (VALID triggers and actions)
+    // G) DYNAMIC FLOWS (CORRECT SCHEMA - matches DynamicFlow model)
     // ═══════════════════════════════════════════════════════════════════════
+    // SCHEMA RULES:
+    // - trigger.type must be lowercase enum: 'phrase', 'keyword', 'regex', etc.
+    // - trigger.config contains the phrases/keywords (NOT directly on trigger)
+    // - action.config must use correct field names: flagName, flagValue, text, etc.
     dynamicFlows: [
         {
             flowKey: 'emergency_detection',
             name: 'Emergency Service Detection',
             priority: 100,
-            isActive: true,
+            enabled: true,
+            // Trigger uses CORRECT schema structure
             trigger: {
-                type: 'PHRASE_MATCH',
-                phrases: [
-                    'emergency',
-                    'no heat',
-                    'no air',
-                    'gas smell',
-                    'carbon monoxide',
-                    'co detector',
-                    'house is freezing',
-                    'pipe burst',
-                    'flooding',
-                    'smoke',
-                    'fire'
-                ],
-                minConfidence: 0.7
+                type: 'phrase',  // Lowercase enum value
+                config: {        // Phrases go in config, not directly on trigger
+                    phrases: [
+                        'emergency',
+                        'no heat',
+                        'no air',
+                        'gas smell',
+                        'carbon monoxide',
+                        'co detector',
+                        'house is freezing',
+                        'pipe burst',
+                        'flooding',
+                        'smoke',
+                        'fire'
+                    ],
+                    fuzzy: true,
+                    minConfidence: 0.7
+                },
+                priority: 100,
+                description: 'Detects emergency service requests'
             },
+            // Actions use CORRECT field names
             actions: [
                 {
+                    timing: 'on_activate',
                     type: 'set_flag',
-                    config: { path: 'callLedger.facts.isEmergency', value: true }
+                    config: {
+                        flagName: 'isEmergency',
+                        flagValue: true,
+                        alsoWriteToCallLedgerFacts: true
+                    },
+                    description: 'Mark call as emergency'
                 },
                 {
+                    timing: 'on_activate',
+                    type: 'append_ledger',
+                    config: {
+                        type: 'EVENT',
+                        key: 'EMERGENCY_DETECTED',
+                        note: 'Caller indicated emergency situation'
+                    },
+                    description: 'Log emergency detection to ledger'
+                },
+                {
+                    timing: 'on_activate',
                     type: 'ack_once',
-                    config: { text: "I understand this is urgent. Let me get you help right away." }
+                    config: {
+                        text: "I understand this is urgent. Let me get you help right away."
+                    },
+                    description: 'Acknowledge emergency to caller'
                 },
                 {
+                    timing: 'on_complete',
                     type: 'transition_mode',
-                    config: { targetMode: 'EMERGENCY' }
+                    config: {
+                        targetMode: 'BOOKING',
+                        setBookingLocked: true
+                    },
+                    description: 'Transition to booking mode for emergency scheduling'
                 }
             ],
             settings: {
@@ -289,15 +325,25 @@ module.exports = {
             flowKey: 'after_hours_routing',
             name: 'After Hours Detection',
             priority: 90,
-            isActive: true,
+            enabled: true,
             trigger: {
-                type: 'CONDITION',
-                conditions: { businessHours: false }
+                type: 'customer_flag',
+                config: {
+                    flags: ['after_hours']
+                },
+                priority: 90,
+                description: 'Detects after-hours calls'
             },
             actions: [
                 {
+                    timing: 'on_activate',
                     type: 'set_flag',
-                    config: { path: 'callLedger.facts.isAfterHours', value: true }
+                    config: {
+                        flagName: 'isAfterHours',
+                        flagValue: true,
+                        alsoWriteToCallLedgerFacts: true
+                    },
+                    description: 'Mark call as after hours'
                 }
             ],
             settings: {
@@ -308,29 +354,44 @@ module.exports = {
             flowKey: 'technician_request',
             name: 'Technician Request Detection',
             priority: 80,
-            isActive: true,
+            enabled: true,
             trigger: {
-                type: 'PHRASE_MATCH',
-                phrases: [
-                    'dustin',
-                    'marcello',
-                    'speak to dustin',
-                    'talk to marcello',
-                    'is dustin there',
-                    'is marcello available',
-                    'my technician',
-                    'the guy who came'
-                ],
-                minConfidence: 0.6
+                type: 'phrase',
+                config: {
+                    phrases: [
+                        'dustin',
+                        'marcello',
+                        'speak to dustin',
+                        'talk to marcello',
+                        'is dustin there',
+                        'is marcello available',
+                        'my technician',
+                        'the guy who came'
+                    ],
+                    fuzzy: true,
+                    minConfidence: 0.6
+                },
+                priority: 80,
+                description: 'Detects requests for specific technicians'
             },
             actions: [
                 {
+                    timing: 'on_activate',
                     type: 'ack_once',
-                    config: { text: "I see you're trying to reach one of our technicians. Let me connect you with our service team." }
+                    config: {
+                        text: "I see you're trying to reach one of our technicians. Let me connect you with our service team."
+                    },
+                    description: 'Acknowledge technician request'
                 },
                 {
+                    timing: 'on_activate',
                     type: 'append_ledger',
-                    config: { type: 'TECHNICIAN_REQUEST', data: { matched: true } }
+                    config: {
+                        type: 'EVENT',
+                        key: 'TECHNICIAN_REQUEST',
+                        note: 'Caller requested specific technician'
+                    },
+                    description: 'Log technician request to ledger'
                 }
             ],
             settings: {
@@ -341,31 +402,65 @@ module.exports = {
             flowKey: 'booking_intent',
             name: 'Booking Intent Detection',
             priority: 50,
-            isActive: true,
+            enabled: true,
             trigger: {
-                type: 'PHRASE_MATCH',
-                phrases: [
-                    'schedule',
-                    'appointment',
-                    'book',
-                    'come out',
-                    'send someone',
-                    'need service',
-                    'need repair',
-                    'can you fix',
-                    'available',
-                    'when can you come'
-                ],
-                minConfidence: 0.6
+                type: 'phrase',
+                config: {
+                    phrases: [
+                        'schedule',
+                        'appointment',
+                        'book',
+                        'come out',
+                        'send someone',
+                        'need service',
+                        'need repair',
+                        'can you fix',
+                        'available',
+                        'when can you come'
+                    ],
+                    fuzzy: true,
+                    minConfidence: 0.6
+                },
+                priority: 50,
+                description: 'Detects booking/appointment intent'
             },
             actions: [
                 {
-                    type: 'ack_once',
-                    config: { text: "I'd be happy to help you schedule service!" }
+                    timing: 'on_activate',
+                    type: 'set_flag',
+                    config: {
+                        flagName: 'wantsBooking',
+                        flagValue: true,
+                        alsoWriteToCallLedgerFacts: true
+                    },
+                    description: 'Mark booking intent'
                 },
                 {
+                    timing: 'on_activate',
+                    type: 'append_ledger',
+                    config: {
+                        type: 'EVENT',
+                        key: 'BOOKING_INTENT',
+                        note: 'Caller wants to schedule service'
+                    },
+                    description: 'Log booking intent to ledger'
+                },
+                {
+                    timing: 'on_activate',
+                    type: 'ack_once',
+                    config: {
+                        text: "I'd be happy to help you schedule service!"
+                    },
+                    description: 'Acknowledge booking request'
+                },
+                {
+                    timing: 'on_complete',
                     type: 'transition_mode',
-                    config: { targetMode: 'BOOKING' }
+                    config: {
+                        targetMode: 'BOOKING',
+                        setBookingLocked: true
+                    },
+                    description: 'Transition to booking mode'
                 }
             ],
             settings: {

@@ -33,10 +33,14 @@ module.exports.getSnapshot = async function(companyId) {
         const frontDesk = settings.frontDeskBehavior || {};
         
         // Extract configuration
+        // FIXED: Check correct DB paths for greeting (Dec 2025)
+        // - frontDesk.greeting is a STRING, not object with .text
+        // - greetingRules lives under conversationStages, not frontDesk
+        // - fallbackResponses.greeting is also valid
         const greetingConfigured = !!(
-            frontDesk.greeting?.text || 
-            frontDesk.greetingRules?.length > 0 ||
-            settings.conversationStages?.greeting?.rules?.length > 0
+            (frontDesk.greeting && frontDesk.greeting.trim().length > 0) ||  // String field
+            settings.conversationStages?.greetingRules?.length > 0 ||        // Correct path
+            (settings.fallbackResponses?.greeting && settings.fallbackResponses.greeting.trim().length > 0)
         );
         
         const bookingEnabled = settings.bookingEnabled !== false;
