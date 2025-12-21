@@ -111,6 +111,28 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     }
     
+    /* Golden Setup Button */
+    .btn-golden {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+    
+    .btn-golden:hover {
+      background: linear-gradient(135deg, #6d28d9 0%, #9333ea 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+    }
+    
     .json-badge-score {
       background: rgba(255,255,255,0.2);
       padding: 2px 8px;
@@ -751,6 +773,11 @@
       <h1 class="page-title">🎛️ Control Plane</h1>
     </div>
     <div class="header-right">
+      <!-- 🟣 GOLDEN SETUP BUTTON (Admin Only) -->
+      <button id="btn-golden-setup" class="btn-golden" onclick="openGoldenSetupModal()" title="Load Golden HVAC Reference Setup">
+        <span>🟣</span>
+        <span>Golden Setup</span>
+      </button>
       <!-- 📄 PLATFORM SNAPSHOT BUTTON (Enterprise Introspection) -->
       <button id="btn-platform-json" class="btn-json" onclick="openPlatformSnapshotModal()">
         <span id="json-badge-emoji">⏳</span>
@@ -2964,6 +2991,211 @@
       
     </div>
   </div>
+  
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       GOLDEN SETUP MODAL
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="golden-modal-overlay" class="snapshot-modal-overlay" onclick="if(event.target === this) closeGoldenSetupModal()">
+    <div class="snapshot-modal" style="max-width: 600px;">
+      
+      <!-- Header -->
+      <div class="snapshot-modal-header" style="background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);">
+        <div class="snapshot-modal-title">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 600;">🟣 Load Golden HVAC Setup</h2>
+          <span id="golden-status-badge" class="snapshot-status-badge" style="display: none;"></span>
+        </div>
+        <div class="snapshot-modal-controls">
+          <button onclick="closeGoldenSetupModal()" 
+                  style="padding: 8px 16px; background: transparent; color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; cursor: pointer; font-weight: 500;">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      
+      <div class="snapshot-modal-body" style="padding: 24px;">
+        
+        <div id="golden-confirm-view">
+          <div style="text-align: center; padding: 20px;">
+            <div style="font-size: 64px; margin-bottom: 16px;">🐧</div>
+            <h3 style="margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #1e293b;">Penguin Air Reference</h3>
+            <p style="color: #64748b; margin: 0 0 24px; line-height: 1.6;">
+              This will populate this company with a <strong>complete, production-ready HVAC configuration</strong>:
+            </p>
+          </div>
+          
+          <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 14px;">
+              <div style="display: flex; align-items: center; gap: 8px;"><span style="color: #10b981;">✓</span> Placeholders (phone, address, etc.)</div>
+              <div style="display: flex; align-items: center; gap: 8px;"><span style="color: #10b981;">✓</span> Front Desk Greeting & Tone</div>
+              <div style="display: flex; align-items: center; gap: 8px;"><span style="color: #10b981;">✓</span> Booking Slots & Time Windows</div>
+              <div style="display: flex; align-items: center; gap: 8px;"><span style="color: #10b981;">✓</span> Default Replies (Not Offered, etc.)</div>
+              <div style="display: flex; align-items: center; gap: 8px;"><span style="color: #10b981;">✓</span> Transfer Targets</div>
+              <div style="display: flex; align-items: center; gap: 8px;"><span style="color: #10b981;">✓</span> Call Protection Rules (valid)</div>
+              <div style="display: flex; align-items: center; gap: 8px;"><span style="color: #10b981;">✓</span> Dynamic Flows (emergency, booking)</div>
+              <div style="display: flex; align-items: center; gap: 8px;"><span style="color: #10b981;">✓</span> Trade Category = HVAC Residential</div>
+            </div>
+          </div>
+          
+          <div style="background: #fef3c7; border-radius: 8px; padding: 12px; margin-bottom: 24px; display: flex; align-items: flex-start; gap: 12px;">
+            <span style="font-size: 20px;">⚠️</span>
+            <div style="font-size: 13px; color: #92400e; line-height: 1.5;">
+              <strong>Note:</strong> This will update existing configurations. Call logs and analytics are preserved.
+              All settings remain editable after seeding.
+            </div>
+          </div>
+          
+          <div style="display: flex; gap: 12px; justify-content: flex-end;">
+            <button onclick="closeGoldenSetupModal()" 
+                    style="padding: 12px 24px; background: #f1f5f9; color: #475569; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px;">
+              Cancel
+            </button>
+            <button id="btn-confirm-golden" onclick="executeGoldenSetup()" 
+                    style="padding: 12px 24px; background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+              <i class="fas fa-magic"></i> Load Golden Setup
+            </button>
+          </div>
+        </div>
+        
+        <div id="golden-loading-view" style="display: none; text-align: center; padding: 40px;">
+          <div style="font-size: 48px; margin-bottom: 16px; animation: spin 1s linear infinite;">⚙️</div>
+          <p style="color: #64748b; margin: 0;">Seeding golden configuration...</p>
+        </div>
+        
+        <div id="golden-result-view" style="display: none;">
+          <div id="golden-result-content"></div>
+          <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+            <button onclick="closeGoldenSetupModal()" 
+                    style="padding: 12px 24px; background: #f1f5f9; color: #475569; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px;">
+              Close
+            </button>
+            <button onclick="openPlatformSnapshotModal(); closeGoldenSetupModal();" 
+                    style="padding: 12px 24px; background: linear-gradient(135deg, #1e293b 0%, #334155 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+              <i class="fas fa-file-code"></i> View Snapshot
+            </button>
+          </div>
+        </div>
+        
+      </div>
+      
+    </div>
+  </div>
+  
+  <style>
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  </style>
+  
+  <script>
+    // ═══════════════════════════════════════════════════════════════════════
+    // GOLDEN SETUP MODAL FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    function openGoldenSetupModal() {
+      const overlay = document.getElementById('golden-modal-overlay');
+      overlay.classList.add('active');
+      
+      // Reset to confirm view
+      document.getElementById('golden-confirm-view').style.display = 'block';
+      document.getElementById('golden-loading-view').style.display = 'none';
+      document.getElementById('golden-result-view').style.display = 'none';
+    }
+    
+    function closeGoldenSetupModal() {
+      const overlay = document.getElementById('golden-modal-overlay');
+      overlay.classList.remove('active');
+    }
+    
+    async function executeGoldenSetup() {
+      // Show loading
+      document.getElementById('golden-confirm-view').style.display = 'none';
+      document.getElementById('golden-loading-view').style.display = 'block';
+      document.getElementById('golden-result-view').style.display = 'none';
+      
+      try {
+        const response = await fetch(`/api/company/${currentCompanyId}/seed-golden`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+            profile: 'penguin_air',
+            tradeCategoryKey: 'hvac_residential'
+          })
+        });
+        
+        const result = await response.json();
+        
+        // Show result
+        document.getElementById('golden-loading-view').style.display = 'none';
+        document.getElementById('golden-result-view').style.display = 'block';
+        
+        const resultContent = document.getElementById('golden-result-content');
+        
+        if (result.success) {
+          resultContent.innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+              <div style="font-size: 64px; margin-bottom: 16px;">✅</div>
+              <h3 style="margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #059669;">Golden Setup Complete!</h3>
+              <p style="color: #64748b; margin: 0 0 24px;">Completed in ${result.duration}ms</p>
+            </div>
+            
+            <div style="background: #f0fdf4; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+              <h4 style="margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #166534;">Actions Performed:</h4>
+              <div style="font-size: 13px; color: #15803d; line-height: 1.8;">
+                ${result.actions.map(a => `<div>✓ ${a.section}: ${JSON.stringify(a).replace(/[{}"]/g, '').substring(0, 60)}...</div>`).join('')}
+              </div>
+            </div>
+            
+            ${result.warnings.length > 0 ? `
+              <div style="background: #fef3c7; border-radius: 8px; padding: 12px;">
+                <strong style="color: #92400e;">Warnings:</strong>
+                <div style="font-size: 13px; color: #92400e; margin-top: 8px;">
+                  ${result.warnings.map(w => `<div>⚠️ ${w}</div>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+          `;
+          
+          // Refresh the snapshot badge
+          setTimeout(loadSnapshotBadge, 500);
+        } else {
+          resultContent.innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+              <div style="font-size: 64px; margin-bottom: 16px;">❌</div>
+              <h3 style="margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #dc2626;">Setup Failed</h3>
+              <p style="color: #64748b; margin: 0 0 24px;">${result.error || 'Unknown error'}</p>
+            </div>
+            
+            ${result.errors?.length > 0 ? `
+              <div style="background: #fef2f2; border-radius: 8px; padding: 12px;">
+                <strong style="color: #dc2626;">Errors:</strong>
+                <div style="font-size: 13px; color: #dc2626; margin-top: 8px;">
+                  ${result.errors.map(e => `<div>• ${e.section}: ${e.error}</div>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+          `;
+        }
+        
+      } catch (error) {
+        console.error('[GOLDEN] Setup failed:', error);
+        
+        document.getElementById('golden-loading-view').style.display = 'none';
+        document.getElementById('golden-result-view').style.display = 'block';
+        
+        document.getElementById('golden-result-content').innerHTML = `
+          <div style="text-align: center; padding: 20px;">
+            <div style="font-size: 64px; margin-bottom: 16px;">❌</div>
+            <h3 style="margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #dc2626;">Request Failed</h3>
+            <p style="color: #64748b; margin: 0;">${error.message}</p>
+          </div>
+        `;
+      }
+    }
+  </script>
   
 </body>
 </html>

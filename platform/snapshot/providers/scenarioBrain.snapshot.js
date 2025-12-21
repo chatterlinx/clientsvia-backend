@@ -36,7 +36,54 @@ module.exports.getSnapshot = async function(companyId) {
         
         const tradeKey = company.tradeKey || company.industryType || 'universal';
         
-        // Load active templates
+        // ═══════════════════════════════════════════════════════════════════
+        // TEMPLATE INVENTORY (December 2025 Directive)
+        // Shows ALL templates in DB, not just active, for debugging "missing templates"
+        // ═══════════════════════════════════════════════════════════════════
+        const allTemplates = await GlobalInstantResponseTemplate.find({}).lean();
+        
+        // Build template inventory
+        const templateInventory = {
+            totalInDB: allTemplates.length,
+            byTemplateType: {},
+            byStatus: {
+                active: 0,
+                inactive: 0,
+                published: 0,
+                unpublished: 0
+            },
+            activeForCompany: [],
+            visibleForCompany: [] // Universal OR matching tradeKey
+        };
+        
+        for (const t of allTemplates) {
+            // By templateType
+            const type = t.templateType || 'universal';
+            if (!templateInventory.byTemplateType[type]) {
+                templateInventory.byTemplateType[type] = { count: 0, names: [] };
+            }
+            templateInventory.byTemplateType[type].count++;
+            templateInventory.byTemplateType[type].names.push(t.name);
+            
+            // By status
+            if (t.isActive) templateInventory.byStatus.active++;
+            else templateInventory.byStatus.inactive++;
+            if (t.isPublished) templateInventory.byStatus.published++;
+            else templateInventory.byStatus.unpublished++;
+            
+            // Visible for company (universal OR matching trade)
+            if (type === 'universal' || type === tradeKey) {
+                templateInventory.visibleForCompany.push({
+                    id: t._id.toString(),
+                    name: t.name,
+                    templateType: type,
+                    isActive: t.isActive,
+                    isPublished: t.isPublished
+                });
+            }
+        }
+        
+        // Load active templates (for scenario processing)
         const activeTemplates = await GlobalInstantResponseTemplate.find({
             isActive: true,
             isPublished: true
@@ -185,6 +232,9 @@ module.exports.getSnapshot = async function(companyId) {
                 },
                 
                 tradeKey,
+                
+                // TEMPLATE INVENTORY - Debug "missing templates" issues
+                templateInventory,
                 
                 summary: {
                     templatesActive: templateSnapshots.length,
