@@ -705,10 +705,35 @@ router.patch('/save', async (req, res) => {
                 writtenTo.push('connectionMessages.voice.realtime.text');
             }
             
-            // OPTIONAL: Mirror to callFlowEngine.style.greeting if it exists
-            if (company.callFlowEngine?.style) {
-                company.callFlowEngine.style.greeting = migratedGreeting;
-                writtenTo.push('callFlowEngine.style.greeting');
+            // ═══════════════════════════════════════════════════════════════════════
+            // CLEAR LEGACY PATHS (CRITICAL - prevents overwrite during snapshot read)
+            // The snapshot provider checks canonical paths FIRST now, but we still
+            // clear legacy to prevent confusion and ensure single source of truth.
+            // ═══════════════════════════════════════════════════════════════════════
+            const clearedLegacy = [];
+            
+            // CLEAR: frontDeskBehavior.greeting (was winning over canonical!)
+            if (company.frontDeskBehavior?.greeting) {
+                company.frontDeskBehavior.greeting = null;
+                clearedLegacy.push('frontDeskBehavior.greeting');
+            }
+            
+            // CLEAR: callFlowEngine.style.greeting
+            if (company.callFlowEngine?.style?.greeting) {
+                company.callFlowEngine.style.greeting = null;
+                clearedLegacy.push('callFlowEngine.style.greeting');
+            }
+            
+            // CLEAR: aiAgentSettings.greeting
+            if (company.aiAgentSettings?.greeting) {
+                company.aiAgentSettings.greeting = null;
+                clearedLegacy.push('aiAgentSettings.greeting');
+            }
+            
+            // CLEAR: aiAgentSettings.frontDeskBehavior.greeting
+            if (company.aiAgentSettings?.frontDeskBehavior?.greeting) {
+                company.aiAgentSettings.frontDeskBehavior.greeting = null;
+                clearedLegacy.push('aiAgentSettings.frontDeskBehavior.greeting');
             }
             
             changes.push({
@@ -717,7 +742,8 @@ router.patch('/save', async (req, res) => {
                 original: greeting,
                 migrated: migratedGreeting,
                 wasMigrated: greeting !== migratedGreeting,
-                writtenTo
+                writtenTo,
+                clearedLegacy: clearedLegacy.length > 0 ? clearedLegacy : undefined
             });
         }
         

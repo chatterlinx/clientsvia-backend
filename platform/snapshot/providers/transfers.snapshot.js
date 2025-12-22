@@ -30,26 +30,44 @@ module.exports.getSnapshot = async function(companyId) {
         if (cheatSheet?.config?.transferRules?.length > 0) {
             transferRules = cheatSheet.config.transferRules;
             dataSource = 'CheatSheetVersion.transferRules';
-        } else {
-            // Fallback: Check frontDeskBehavior.transfers
-            const company = await Company.findById(companyId)
-                .select('frontDeskBehavior.transfers')
-                .lean();
-            
-            if (company?.frontDeskBehavior?.transfers?.targets?.length > 0) {
-                // Convert to transfer rule format
-                transferRules = company.frontDeskBehavior.transfers.targets.map(target => ({
-                    contactNameOrQueue: target.name || target.label || 'Unnamed',
-                    label: target.label || target.name || 'Unnamed',
-                    phoneNumber: target.phone || target.phoneNumber || null,
-                    intentTag: target.intentTag || null,
-                    enabled: target.enabled !== false,
-                    priority: target.priority || 10,
-                    afterHoursOnly: target.afterHoursOnly || false,
-                    preTransferScript: target.script || target.preTransferScript || null
-                }));
-                dataSource = 'frontDeskBehavior.transfers';
-            }
+        }
+        
+        // Check company for multiple possible locations
+        const company = await Company.findById(companyId)
+            .select('frontDeskBehavior.transfers aiAgentSettings.transferTargets')
+            .lean();
+        
+        // Fallback 1: Check aiAgentSettings.transferTargets (where seedGolden stores them)
+        if (transferRules.length === 0 && company?.aiAgentSettings?.transferTargets?.length > 0) {
+            transferRules = company.aiAgentSettings.transferTargets.map(target => ({
+                id: target.id,
+                contactNameOrQueue: target.name || target.id || 'Unnamed',
+                label: target.name || target.id || 'Unnamed',
+                phoneNumber: target.destination || target.phone || target.phoneNumber || null,
+                intentTag: target.id || null,  // Use ID as intent tag for routing
+                enabled: target.enabled !== false,
+                priority: target.priority || 10,
+                afterHoursOnly: target.afterHoursOnly || false,
+                preTransferScript: target.script || target.preTransferScript || null,
+                type: target.type || 'phone',
+                description: target.description || null
+            }));
+            dataSource = 'aiAgentSettings.transferTargets';
+        }
+        
+        // Fallback 2: Check frontDeskBehavior.transfers
+        if (transferRules.length === 0 && company?.frontDeskBehavior?.transfers?.targets?.length > 0) {
+            transferRules = company.frontDeskBehavior.transfers.targets.map(target => ({
+                contactNameOrQueue: target.name || target.label || 'Unnamed',
+                label: target.label || target.name || 'Unnamed',
+                phoneNumber: target.phone || target.phoneNumber || null,
+                intentTag: target.intentTag || null,
+                enabled: target.enabled !== false,
+                priority: target.priority || 10,
+                afterHoursOnly: target.afterHoursOnly || false,
+                preTransferScript: target.script || target.preTransferScript || null
+            }));
+            dataSource = 'frontDeskBehavior.transfers';
         }
         
         // If still no data, return NOT_CONFIGURED (not an error)

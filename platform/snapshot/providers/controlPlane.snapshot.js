@@ -55,39 +55,45 @@ module.exports.getSnapshot = async function(companyId) {
         let greetingSource = 'none';
         let greetingText = null;
         
-        // 1. Check frontDeskBehavior.greeting (canonical)
-        if (frontDesk.greeting && frontDesk.greeting.trim().length > 0) {
-            greetingConfigured = true;
-            greetingSource = 'frontDeskBehavior';
-            greetingText = frontDesk.greeting.trim();
-        } 
-        // 2. Check connectionMessages.voice (Voice Calls UI)
-        else if (connectionMessages.voice?.text?.trim().length > 0) {
+        // ═══════════════════════════════════════════════════════════════════════════
+        // GREETING RESOLUTION ORDER (CANONICAL FIRST)
+        // CRITICAL: connectionMessages.voice.text is CANONICAL
+        //           frontDeskBehavior.greeting is LEGACY (only read if canonical empty)
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        // 1. CANONICAL: connectionMessages.voice.text
+        if (connectionMessages.voice?.text?.trim().length > 0) {
             greetingConfigured = true;
             greetingSource = 'connectionMessages.voice';
             greetingText = connectionMessages.voice.text.trim();
         }
+        // 2. CANONICAL FALLBACK: connectionMessages.voice.realtime.text
         else if (connectionMessages.voice?.realtime?.text?.trim().length > 0) {
             greetingConfigured = true;
             greetingSource = 'connectionMessages.voice.realtime';
             greetingText = connectionMessages.voice.realtime.text.trim();
         }
-        // 3. Check conversationStages.greetingRules (rule-based)
+        // 3. LEGACY: frontDeskBehavior.greeting (deprecated - only if canonical empty)
+        else if (frontDesk.greeting && frontDesk.greeting.trim().length > 0) {
+            greetingConfigured = true;
+            greetingSource = 'frontDeskBehavior (LEGACY)';
+            greetingText = frontDesk.greeting.trim();
+        } 
+        // 4. LEGACY: conversationStages.greetingRules (rule-based)
         else if (settings.conversationStages?.greetingRules?.length > 0) {
-            // Check if at least one rule is valid (has trigger + response)
             const validRules = settings.conversationStages.greetingRules.filter(
                 r => r.trigger && r.response
             );
             if (validRules.length > 0) {
                 greetingConfigured = true;
-                greetingSource = 'conversationStages';
+                greetingSource = 'conversationStages (LEGACY)';
                 greetingText = validRules[0].response;
             }
         } 
-        // 4. Check fallbackResponses.greeting
+        // 5. LEGACY: fallbackResponses.greeting
         else if (settings.fallbackResponses?.greeting && settings.fallbackResponses.greeting.trim().length > 0) {
             greetingConfigured = true;
-            greetingSource = 'fallbackResponses';
+            greetingSource = 'fallbackResponses (LEGACY)';
             greetingText = settings.fallbackResponses.greeting.trim();
         }
         

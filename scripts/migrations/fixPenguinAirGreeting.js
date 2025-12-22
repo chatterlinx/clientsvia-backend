@@ -1,12 +1,15 @@
 /**
  * ============================================================================
- * FIX PENGUIN AIR GREETING
+ * FIX PENGUIN AIR GREETING (HARD SET)
  * ============================================================================
  * 
- * Sets the optimal greeting for Penguin Air (Golden HVAC Blueprint):
- * - Ultra-short for fast TTS (~2s)
- * - Contains {{companyName}} placeholder
- * - Passes all lint rules
+ * PROBLEM: The snapshot was checking frontDeskBehavior.greeting BEFORE
+ *          connectionMessages.voice.text, so the old greeting kept winning.
+ * 
+ * SOLUTION: 
+ * 1. Set connectionMessages.voice.text (CANONICAL)
+ * 2. CLEAR frontDeskBehavior.greeting (LEGACY - was overriding canonical!)
+ * 3. CLEAR any other legacy paths
  * 
  * Run: node scripts/migrations/fixPenguinAirGreeting.js
  * 
@@ -15,19 +18,15 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const { standardizePlaceholders } = require('../../utils/placeholderStandard');
 
 const PENGUIN_AIR_ID = '68e3f77a9d623b8058c700c4';
 
 // OPTIMAL GREETING (5 words, ~2s TTS, has placeholder)
 const OPTIMAL_GREETING = '{{companyName}} — how can I help?';
 
-// Alternative (7 words, ~2.5s TTS)
-const ALTERNATIVE_GREETING = 'Thanks for calling {{companyName}} — how can I help?';
-
 async function main() {
     console.log('═══════════════════════════════════════════════════════════════════════════');
-    console.log('FIX PENGUIN AIR GREETING');
+    console.log('FIX PENGUIN AIR GREETING (HARD SET + CLEAR LEGACY)');
     console.log('═══════════════════════════════════════════════════════════════════════════\n');
     
     const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
@@ -52,12 +51,13 @@ async function main() {
     console.log(`📍 ID: ${company._id}\n`);
     
     // Show current state
-    console.log('CURRENT GREETING LOCATIONS:');
+    console.log('CURRENT GREETING LOCATIONS (BEFORE FIX):');
     console.log('─────────────────────────────────────────────────────────────────────────────');
-    console.log(`connectionMessages.voice.text:          ${company.connectionMessages?.voice?.text || '(empty)'}`);
-    console.log(`connectionMessages.voice.realtime.text: ${company.connectionMessages?.voice?.realtime?.text || '(empty)'}`);
-    console.log(`frontDeskBehavior.greeting:             ${JSON.stringify(company.frontDeskBehavior?.greeting) || '(empty)'}`);
-    console.log(`callFlowEngine.style.greeting:          ${company.callFlowEngine?.style?.greeting || '(empty)'}`);
+    console.log(`1. connectionMessages.voice.text:          "${company.connectionMessages?.voice?.text || '(empty)'}"`);
+    console.log(`2. connectionMessages.voice.realtime.text: "${company.connectionMessages?.voice?.realtime?.text || '(empty)'}"`);
+    console.log(`3. frontDeskBehavior.greeting:             "${company.frontDeskBehavior?.greeting || '(empty)'}" ← LEGACY (was winning!)`);
+    console.log(`4. callFlowEngine.style.greeting:          "${company.callFlowEngine?.style?.greeting || '(empty)'}"`);
+    console.log(`5. aiAgentSettings.greeting:               "${company.aiAgentSettings?.greeting || '(empty)'}"`);
     console.log('');
     
     // Use the short optimal greeting
@@ -72,36 +72,84 @@ async function main() {
     if (!company.connectionMessages.voice) company.connectionMessages.voice = {};
     if (!company.connectionMessages.voice.realtime) company.connectionMessages.voice.realtime = {};
     
-    // Set canonical paths
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 1. SET CANONICAL PATHS
+    // ═══════════════════════════════════════════════════════════════════════════
     company.connectionMessages.voice.text = newGreeting;
     company.connectionMessages.voice.realtime.text = newGreeting;
+    console.log('✅ Set connectionMessages.voice.text = new greeting');
+    console.log('✅ Set connectionMessages.voice.realtime.text = new greeting');
     
-    // Clear legacy paths (mark as deprecated)
-    if (company.frontDeskBehavior?.greeting) {
-        console.log('🗑️  Clearing frontDeskBehavior.greeting (legacy)');
-        company.frontDeskBehavior.greeting = null;
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 2. CLEAR ALL LEGACY PATHS (CRITICAL - these were overriding canonical!)
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    // frontDeskBehavior.greeting (THE CULPRIT)
+    if (company.frontDeskBehavior) {
+        if (company.frontDeskBehavior.greeting) {
+            console.log(`🗑️  CLEARING frontDeskBehavior.greeting (was: "${company.frontDeskBehavior.greeting}")`);
+            company.frontDeskBehavior.greeting = null;
+        }
+        // Also check nested greeting object
+        if (company.frontDeskBehavior.greeting?.text) {
+            console.log(`🗑️  CLEARING frontDeskBehavior.greeting.text`);
+            company.frontDeskBehavior.greeting = null;
+        }
     }
     
+    // callFlowEngine.style.greeting
     if (company.callFlowEngine?.style?.greeting) {
-        console.log('🗑️  Clearing callFlowEngine.style.greeting (legacy)');
+        console.log(`🗑️  CLEARING callFlowEngine.style.greeting (was: "${company.callFlowEngine.style.greeting}")`);
         company.callFlowEngine.style.greeting = null;
     }
     
-    // Save
-    await company.save();
-    console.log('\n✅ Greeting updated successfully!\n');
+    // aiAgentSettings.greeting (if exists)
+    if (company.aiAgentSettings?.greeting) {
+        console.log(`🗑️  CLEARING aiAgentSettings.greeting`);
+        company.aiAgentSettings.greeting = null;
+    }
     
-    // Verify
-    const updated = await Company.findById(PENGUIN_AIR_ID);
-    console.log('VERIFIED GREETING LOCATIONS:');
-    console.log('─────────────────────────────────────────────────────────────────────────────');
-    console.log(`connectionMessages.voice.text:          ${updated.connectionMessages?.voice?.text}`);
-    console.log(`connectionMessages.voice.realtime.text: ${updated.connectionMessages?.voice?.realtime?.text}`);
-    console.log(`frontDeskBehavior.greeting:             ${updated.frontDeskBehavior?.greeting || '(cleared)'}`);
-    console.log(`callFlowEngine.style.greeting:          ${updated.callFlowEngine?.style?.greeting || '(cleared)'}`);
+    // aiAgentSettings.frontDeskBehavior.greeting (nested)
+    if (company.aiAgentSettings?.frontDeskBehavior?.greeting) {
+        console.log(`🗑️  CLEARING aiAgentSettings.frontDeskBehavior.greeting`);
+        company.aiAgentSettings.frontDeskBehavior.greeting = null;
+    }
+    
+    // profile.greeting (if exists)
+    if (company.profile?.greeting) {
+        console.log(`🗑️  CLEARING profile.greeting`);
+        company.profile.greeting = null;
+    }
+    
+    // greeting at root (if exists)
+    if (company.greeting) {
+        console.log(`🗑️  CLEARING company.greeting (root)`);
+        company.greeting = null;
+    }
+    
     console.log('');
     
-    // Clear Redis cache if available
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 3. SAVE
+    // ═══════════════════════════════════════════════════════════════════════════
+    await company.save();
+    console.log('✅ Saved to MongoDB!\n');
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 4. VERIFY (re-read from DB)
+    // ═══════════════════════════════════════════════════════════════════════════
+    const updated = await Company.findById(PENGUIN_AIR_ID);
+    console.log('VERIFIED GREETING LOCATIONS (AFTER FIX):');
+    console.log('─────────────────────────────────────────────────────────────────────────────');
+    console.log(`1. connectionMessages.voice.text:          "${updated.connectionMessages?.voice?.text}" ← CANONICAL ✅`);
+    console.log(`2. connectionMessages.voice.realtime.text: "${updated.connectionMessages?.voice?.realtime?.text}"`);
+    console.log(`3. frontDeskBehavior.greeting:             "${updated.frontDeskBehavior?.greeting || '(CLEARED)'}"`);
+    console.log(`4. callFlowEngine.style.greeting:          "${updated.callFlowEngine?.style?.greeting || '(CLEARED)'}"`);
+    console.log('');
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 5. CLEAR REDIS CACHE
+    // ═══════════════════════════════════════════════════════════════════════════
     try {
         const redisClient = require('../../config/redis');
         if (redisClient?.isOpen) {
@@ -113,7 +161,13 @@ async function main() {
     }
     
     console.log('═══════════════════════════════════════════════════════════════════════════');
-    console.log('DONE - Now refresh Control Plane and run Lint to verify');
+    console.log('DONE!');
+    console.log('');
+    console.log('NEXT STEPS:');
+    console.log('1. Refresh Control Plane UI');
+    console.log('2. Check Greeting Optimizer shows: "{{companyName}} — how can I help?"');
+    console.log('3. Run Lint - HAS_COMPANY_NAME should PASS');
+    console.log('4. Verify greetingSource = "connectionMessages.voice" (not frontDeskBehavior)');
     console.log('═══════════════════════════════════════════════════════════════════════════');
     
     await mongoose.disconnect();
