@@ -23,6 +23,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { generateSnapshot, quickHealthCheck } = require('../../platform/snapshot/platformSnapshot');
+const { signControlPlaneSnapshot, verifySignedSnapshot } = require('../../lib/snapshotIntegrity');
 const logger = require('../../utils/logger');
 
 /**
@@ -72,18 +73,25 @@ router.get('/', async (req, res) => {
         
         const apiTime = Date.now() - startTime;
         
+        // Sign the snapshot with HMAC integrity
+        const signedSnapshot = signControlPlaneSnapshot(snapshot, { 
+            companyId,
+            allowUnsigned: true  // Allow unsigned in dev mode
+        });
+        
         logger.info('[PLATFORM SNAPSHOT API] Response sent', {
             companyId,
             scope,
-            score: snapshot.completeness?.score,
-            status: snapshot.completeness?.status,
+            score: signedSnapshot.completeness?.score,
+            status: signedSnapshot.completeness?.status,
             apiTimeMs: apiTime,
-            generationMs: snapshot.meta?.generationMs
+            generationMs: signedSnapshot.meta?.generationMs,
+            signed: signedSnapshot._integrity?.algo !== 'none'
         });
         
         res.json({
             success: true,
-            snapshot
+            snapshot: signedSnapshot
         });
         
     } catch (error) {
@@ -181,6 +189,58 @@ router.get('/badge', async (req, res) => {
                 summary: 'Snapshot unavailable',
                 label: '⚠️ JSON'
             }
+        });
+    }
+});
+
+/**
+ * POST /api/company/:companyId/platform-snapshot/verify
+ * 
+ * Verify a signed snapshot's integrity.
+ * Useful for "Verify Snapshot" button in UI.
+ * 
+ * Body: The full signed snapshot object
+ * 
+ * Returns:
+ * - { success: true, ok: true, signedAt, companyId, snapshotVersion } if valid
+ * - { success: true, ok: false, reason: '...' } if invalid
+ */
+router.post('/verify', (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+        const signedSnapshot = req.body;
+        
+        if (!signedSnapshot || typeof signedSnapshot !== 'object') {
+            return res.status(400).json({
+                success: false,
+                error: 'Request body must be a signed snapshot object'
+            });
+        }
+        
+        // Verify the snapshot
+        const result = verifySignedSnapshot(signedSnapshot);
+        
+        logger.info('[PLATFORM SNAPSHOT API] Verify result', {
+            companyId,
+            ok: result.ok,
+            reason: result.reason || null
+        });
+        
+        res.json({
+            success: true,
+            ...result
+        });
+        
+    } catch (error) {
+        logger.error('[PLATFORM SNAPSHOT API] Verify error:', {
+            companyId,
+            error: error.message
+        });
+        
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 });
