@@ -312,5 +312,75 @@ router.put('/', async (req, res) => {
     }
 });
 
+/**
+ * PUT /api/company/:companyId/debug/greeting/add-transfer
+ * 
+ * EMERGENCY: Add service_advisor transfer target (fixes the trap door).
+ */
+router.put('/add-transfer', async (req, res) => {
+    const { companyId } = req.params;
+    const { 
+        id = 'service_advisor',
+        name = 'Service Advisor',
+        type = 'phone',
+        destination = '+15551234568',
+        description = 'Primary escalation for urgent calls'
+    } = req.body;
+    
+    try {
+        // Add to aiAgentSettings.transferTargets
+        const result = await v2Company.updateOne(
+            { _id: new mongoose.Types.ObjectId(companyId) },
+            {
+                $push: {
+                    'aiAgentSettings.transferTargets': {
+                        id,
+                        name,
+                        type,
+                        destination,
+                        description,
+                        priority: 1,
+                        enabled: true,
+                        isDefault: true
+                    }
+                }
+            }
+        );
+        
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ success: false, error: 'Company not found' });
+        }
+        
+        // Clear Redis cache
+        try {
+            const { redisClient } = require('../../db');
+            if (redisClient && redisClient.isOpen) {
+                await redisClient.del(`company:${companyId}`);
+            }
+        } catch (e) {
+            // Redis clear failed, not critical
+        }
+        
+        logger.info(`[DEBUG] Added transfer target ${id} for ${companyId}`);
+        
+        // Verify
+        const company = await v2Company.findById(companyId).lean();
+        const transfers = company?.aiAgentSettings?.transferTargets || [];
+        
+        res.json({
+            success: true,
+            action: 'ADD_TRANSFER',
+            companyId,
+            added: { id, name, type, destination },
+            totalTransfers: transfers.length,
+            transferIds: transfers.map(t => t.id)
+        });
+        
+    } catch (error) {
+        logger.error('[DEBUG ADD TRANSFER] Error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;
 
