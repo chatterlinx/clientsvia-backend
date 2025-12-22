@@ -94,26 +94,26 @@ module.exports = {
         }
     },
     
-    // Critical placeholders that MUST exist
+    // Critical placeholders that MUST exist (CANONICAL camelCase keys)
     CRITICAL_PLACEHOLDERS: [
-        'companyname',
-        'phone'
+        'companyName',   // Canonical: companyName (aliases: companyname, company_name)
+        'companyPhone'   // Canonical: companyPhone (aliases: phone, phonenumber)
     ],
     
-    // Optional placeholders (minor penalty if missing)
+    // Optional placeholders (minor penalty if missing) - CANONICAL keys
     OPTIONAL_PLACEHOLDERS: [
-        'hours',
-        'servicearea',
-        'license',
-        'address',
-        'email',
-        'website'
+        'businessHours',   // Canonical: businessHours (aliases: hours, business_hours)
+        'serviceArea',     // Canonical: serviceArea (aliases: servicearea, service_area)
+        'companyAddress',  // Canonical: companyAddress (aliases: address, company_address)
+        'companyEmail',    // Canonical: companyEmail (aliases: email, company_email)
+        'companyWebsite',  // Canonical: companyWebsite (aliases: website, url)
+        'license'          // Business license number
     ],
     
     // Schema version for contract testing
-    SCHEMA_VERSION: 'v1',
+    SCHEMA_VERSION: 'v2',  // Bumped for canonical placeholders
     
     // Snapshot system version
-    SNAPSHOT_VERSION: 'v1.0'
+    SNAPSHOT_VERSION: 'v2.0'
 };
 

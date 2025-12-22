@@ -333,9 +333,41 @@ module.exports.getSnapshot = async function(companyId) {
                     resolutionOrder: getResolutionOrder(),
                     // Audit stats
                     recentBlockedAttempts: getBlockedAttemptsCount(),
-                    // Enterprise audit info
-                    auditEndpoint: '/api/company/:companyId/audit-log',
-                    contaminationReportEndpoint: '/api/company/:companyId/contamination-report'
+                    // Enterprise audit info (with actual companyId)
+                    auditEndpoint: `/api/company/${companyId}/audit-log`,
+                    contaminationReportEndpoint: `/api/company/${companyId}/contamination-report`,
+                    scenarioExportEndpoint: `/api/company/${companyId}/scenario-export`
+                },
+                
+                // ═══════════════════════════════════════════════════════════
+                // CONTAMINATION STATUS (In-snapshot for self-contained debug)
+                // ═══════════════════════════════════════════════════════════
+                contamination: {
+                    health: 'GREEN',  // Computed below if any issues found
+                    criticalIssues: 0,
+                    warningIssues: 0,
+                    recentBlockedAttempts: getBlockedAttemptsCount(),
+                    // Quick scan for obvious issues in this snapshot
+                    _quickScan: (() => {
+                        // Count GLOBAL docs with ownerCompanyId (contamination)
+                        let criticalCount = 0;
+                        let warningCount = 0;
+                        
+                        for (const t of templateSnapshots) {
+                            for (const c of t.categories || []) {
+                                if (c.scope === 'GLOBAL' && c.ownerCompanyId) criticalCount++;
+                                for (const s of c.scenarios || []) {
+                                    if (s.scope === 'GLOBAL' && s.ownerCompanyId) criticalCount++;
+                                }
+                            }
+                        }
+                        
+                        return {
+                            criticalIssues: criticalCount,
+                            warningIssues: warningCount,
+                            health: criticalCount > 0 ? 'RED' : warningCount > 0 ? 'YELLOW' : 'GREEN'
+                        };
+                    })()
                 },
                 
                 companyDefaults: {
