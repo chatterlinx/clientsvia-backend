@@ -13,6 +13,7 @@
 
 const { REQUIRED_PROVIDERS, SNAPSHOT_VERSION, SCHEMA_VERSION } = require('./snapshotRegistry');
 const { computeCompleteness } = require('./completenessScore');
+const { signSnapshot } = require('./snapshotIntegrity');
 const Company = require('../../models/v2Company');
 const logger = require('../../utils/logger');
 
@@ -170,7 +171,8 @@ async function generateSnapshot(companyId, options = {}) {
             generationMs: snapshot.meta.generationMs
         });
         
-        return snapshot;
+        // Sign the snapshot (if SNAPSHOT_SIGNING_SECRET is configured)
+        return signSnapshot(snapshot);
         
     } catch (error) {
         logger.error('[PLATFORM SNAPSHOT] Generation failed:', error.message);
@@ -182,7 +184,8 @@ async function generateSnapshot(companyId, options = {}) {
         // Still compute completeness (will be low due to missing providers)
         snapshot.completeness = computeCompleteness(snapshot, scope);
         
-        return snapshot;
+        // Sign even on error (for consistency)
+        return signSnapshot(snapshot);
     }
 }
 
@@ -196,7 +199,9 @@ function getProvidersForScope(scope) {
         case 'scenarios':
             return ['scenarioBrain', 'placeholders'];
         case 'runtime':
-            return ['runtimeBindings', 'scenarioBrain', 'dynamicFlow'];
+            // CRITICAL: Include callProtection + transfers for runtime scope
+            // These are required by REQUIRED_PROVIDERS_BY_SCOPE.runtime
+            return ['runtimeBindings', 'dynamicFlow', 'callProtection', 'transfers'];
         case 'full':
         default:
             return PROVIDER_KEYS;
