@@ -1922,6 +1922,97 @@
                 
                 <!-- Tab Content: Lint Results -->
                 <div id="config-tab-lint" class="config-tab-content" style="padding: 20px; display: none;">
+                    
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <!-- GREETING OPTIMIZER WIDGET -->
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <div id="greeting-optimizer-panel" style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #334155;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="font-size: 20px;">🎯</span>
+                                <div>
+                                    <div style="font-weight: 700; font-size: 14px; color: #e2e8f0;">Greeting Optimizer</div>
+                                    <div style="font-size: 11px; color: #94a3b8;">Target: 6-8 words (~2.5s TTS)</div>
+                                </div>
+                            </div>
+                            <div id="greeting-status-badge" style="padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: #065f46; color: #10b981;">OK</div>
+                        </div>
+                        
+                        <!-- Current Greeting Stats -->
+                        <div style="display: flex; gap: 16px; margin-bottom: 12px; padding: 10px; background: #0f172a; border-radius: 8px;">
+                            <div style="text-align: center;">
+                                <div id="greeting-word-count" style="font-size: 24px; font-weight: 700; color: #14b8a6;">--</div>
+                                <div style="font-size: 10px; color: #94a3b8;">words</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div id="greeting-tts-seconds" style="font-size: 24px; font-weight: 700; color: #f59e0b;">--</div>
+                                <div style="font-size: 10px; color: #94a3b8;">seconds</div>
+                            </div>
+                            <div style="flex: 1; display: flex; align-items: center;">
+                                <div id="greeting-preview" style="font-size: 12px; color: #e2e8f0; font-style: italic; line-height: 1.4;">Loading...</div>
+                            </div>
+                        </div>
+                        
+                        <!-- One-Click Presets -->
+                        <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">⚡ One-click presets:</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            <button onclick="applyGreetingPreset('Thanks for calling {{companyName}} — how can I help?')" 
+                                    style="padding: 8px 12px; font-size: 11px; background: #334155; color: #e2e8f0; border: 1px solid #475569; border-radius: 6px; cursor: pointer; transition: all 0.15s;"
+                                    onmouseover="this.style.background='#475569'" onmouseout="this.style.background='#334155'">
+                                Thanks for calling {{companyName}} — how can I help?
+                            </button>
+                            <button onclick="applyGreetingPreset('{{companyName}} — how can I help?')" 
+                                    style="padding: 8px 12px; font-size: 11px; background: #334155; color: #e2e8f0; border: 1px solid #475569; border-radius: 6px; cursor: pointer; transition: all 0.15s;"
+                                    onmouseover="this.style.background='#475569'" onmouseout="this.style.background='#334155'">
+                                {{companyName}} — how can I help?
+                            </button>
+                            <button onclick="applyGreetingPreset('Hi — {{companyName}}. How can I help?')" 
+                                    style="padding: 8px 12px; font-size: 11px; background: #334155; color: #e2e8f0; border: 1px solid #475569; border-radius: 6px; cursor: pointer; transition: all 0.15s;"
+                                    onmouseover="this.style.background='#475569'" onmouseout="this.style.background='#334155'">
+                                Hi — {{companyName}}. How can I help?
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <!-- QUICKANSWERS DEDUPER -->
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <div id="quickanswers-deduper-panel" style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, #422006 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #78350f; display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="font-size: 20px;">⚠️</span>
+                                <div>
+                                    <div style="font-weight: 700; font-size: 14px; color: #fbbf24;">QuickAnswer Duplicates Detected</div>
+                                    <div style="font-size: 11px; color: #fcd34d;">Same triggers → inconsistent responses</div>
+                                </div>
+                            </div>
+                            <div id="qa-duplicates-count" style="padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: #78350f; color: #fbbf24;">0</div>
+                        </div>
+                        
+                        <!-- Duplicates List -->
+                        <div id="qa-duplicates-list" style="display: flex; flex-direction: column; gap: 8px;">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                    
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <!-- CONFIG HEALTH STATUS -->
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <div id="config-health-panel" style="margin-bottom: 20px; padding: 16px; background: #0f172a; border-radius: 12px; border: 1px solid #334155; display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span id="config-health-icon" style="font-size: 20px;">⚡</span>
+                                <div>
+                                    <div id="config-health-title" style="font-weight: 700; font-size: 14px; color: #e2e8f0;">Config Health</div>
+                                    <div id="config-health-summary" style="font-size: 11px; color: #94a3b8;">Checking...</div>
+                                </div>
+                            </div>
+                            <div id="config-health-badge" style="padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: #065f46; color: #10b981;">OK</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Lint Issues List -->
+                    <div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px; font-weight: 600;">Lint Issues:</div>
                     <div id="config-lint-list" style="display: flex; flex-direction: column; gap: 8px;">
                         <div style="padding: 20px; text-align: center; color: #94a3b8;">Loading lint results...</div>
                     </div>
@@ -3505,12 +3596,28 @@
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // CONFIG JSON - Render Lint Results
+        // CONFIG JSON - Render Lint Results + Widgets
         // ═══════════════════════════════════════════════════════════════════════════
         function renderConfigLintResults(data) {
             const listEl = document.getElementById('config-lint-list');
             const lint = data.lint || {};
             const warnings = data.warnings || [];
+            const effectiveConfig = data.effectiveConfig || {};
+            
+            // ─────────────────────────────────────────────────────────────────────────
+            // UPDATE GREETING OPTIMIZER
+            // ─────────────────────────────────────────────────────────────────────────
+            updateGreetingOptimizer(effectiveConfig);
+            
+            // ─────────────────────────────────────────────────────────────────────────
+            // UPDATE QUICKANSWERS DEDUPER
+            // ─────────────────────────────────────────────────────────────────────────
+            updateQuickAnswersDeduper(effectiveConfig);
+            
+            // ─────────────────────────────────────────────────────────────────────────
+            // UPDATE CONFIG HEALTH STATUS
+            // ─────────────────────────────────────────────────────────────────────────
+            updateConfigHealth(effectiveConfig);
             
             // Combine lint issues and warnings
             const allIssues = [...(lint.issues || []), ...warnings];
@@ -3544,6 +3651,173 @@
                     </div>
                 `;
             }).join('');
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // GREETING OPTIMIZER - Update Stats
+        // ═══════════════════════════════════════════════════════════════════════════
+        function updateGreetingOptimizer(config) {
+            const greeting = config.greeting?.standardized || config.greeting?.raw || '';
+            const words = greeting.split(/\s+/).filter(w => w.length > 0).length;
+            const ttsSeconds = (words / 2.5).toFixed(1); // ~2.5 words per second
+            
+            // Update stats
+            document.getElementById('greeting-word-count').textContent = words;
+            document.getElementById('greeting-tts-seconds').textContent = ttsSeconds;
+            document.getElementById('greeting-preview').textContent = greeting || '(No greeting configured)';
+            
+            // Update status badge
+            const badge = document.getElementById('greeting-status-badge');
+            const wordCountEl = document.getElementById('greeting-word-count');
+            const ttsEl = document.getElementById('greeting-tts-seconds');
+            
+            if (words <= 8) {
+                badge.textContent = 'OPTIMAL';
+                badge.style.background = '#065f46';
+                badge.style.color = '#10b981';
+                wordCountEl.style.color = '#10b981';
+                ttsEl.style.color = '#10b981';
+            } else if (words <= 15) {
+                badge.textContent = 'OK';
+                badge.style.background = '#78350f';
+                badge.style.color = '#fbbf24';
+                wordCountEl.style.color = '#fbbf24';
+                ttsEl.style.color = '#fbbf24';
+            } else {
+                badge.textContent = 'TOO LONG';
+                badge.style.background = '#7f1d1d';
+                badge.style.color = '#ef4444';
+                wordCountEl.style.color = '#ef4444';
+                ttsEl.style.color = '#ef4444';
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // GREETING OPTIMIZER - Apply Preset
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function applyGreetingPreset(greetingText) {
+            const companyId = window.currentCompanyId || window.companyId || 
+                              new URLSearchParams(window.location.search).get('id') ||
+                              localStorage.getItem('currentCompanyId');
+            if (!companyId) {
+                showConfigCopyToast(false, '❌ Error', 'No company ID found');
+                return;
+            }
+            
+            const authToken = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            
+            try {
+                // Save greeting via Control Plane endpoint
+                const response = await fetch(`/api/company/${companyId}/control-plane/save`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        greeting: greetingText
+                    })
+                });
+                
+                if (response.ok) {
+                    showConfigCopyToast(true, '✅ Greeting Updated!', greetingText.substring(0, 50) + '...');
+                    // Refresh to show new lint results
+                    await refreshConfigJson();
+                } else {
+                    const err = await response.json();
+                    showConfigCopyToast(false, '❌ Save Failed', err.error || 'Unknown error');
+                }
+            } catch (err) {
+                console.error('[GREETING] Apply preset failed:', err);
+                showConfigCopyToast(false, '❌ Error', err.message);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // QUICKANSWERS DEDUPER - Show Duplicates
+        // ═══════════════════════════════════════════════════════════════════════════
+        function updateQuickAnswersDeduper(config) {
+            const panel = document.getElementById('quickanswers-deduper-panel');
+            const listEl = document.getElementById('qa-duplicates-list');
+            const countBadge = document.getElementById('qa-duplicates-count');
+            
+            const duplicates = config.quickAnswers?.duplicates || [];
+            
+            if (duplicates.length === 0) {
+                panel.style.display = 'none';
+                return;
+            }
+            
+            panel.style.display = 'block';
+            countBadge.textContent = duplicates.length;
+            
+            listEl.innerHTML = duplicates.map((dup, i) => `
+                <div style="padding: 12px; background: #0f172a; border-radius: 8px; border: 1px solid #78350f;">
+                    <div style="font-size: 11px; color: #fbbf24; margin-bottom: 8px;">
+                        <strong>Triggers:</strong> ${(dup.triggers || []).join(', ')}
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div style="padding: 8px; background: #1e293b; border-radius: 6px;">
+                            <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px;">First QA:</div>
+                            <div style="font-size: 12px; color: #e2e8f0;">"${dup.firstAnswer || 'N/A'}"</div>
+                        </div>
+                        <div style="padding: 8px; background: #1e293b; border-radius: 6px;">
+                            <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px;">Duplicate QA:</div>
+                            <div style="font-size: 12px; color: #e2e8f0;">"${dup.duplicateAnswer || 'N/A'}"</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 8px; font-size: 11px; color: #fcd34d;">
+                        💡 ${dup.recommendation || 'Keep one, disable the other'}
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CONFIG HEALTH - Show Status
+        // ═══════════════════════════════════════════════════════════════════════════
+        function updateConfigHealth(config) {
+            const panel = document.getElementById('config-health-panel');
+            const iconEl = document.getElementById('config-health-icon');
+            const titleEl = document.getElementById('config-health-title');
+            const summaryEl = document.getElementById('config-health-summary');
+            const badge = document.getElementById('config-health-badge');
+            
+            const health = config._health || {};
+            const conflicts = config._conflicts || [];
+            const warnings = config._warnings || [];
+            
+            // Only show if there are issues
+            if (conflicts.length === 0 && warnings.length === 0) {
+                panel.style.display = 'none';
+                return;
+            }
+            
+            panel.style.display = 'block';
+            
+            if (health.status === 'CRITICAL' || conflicts.length > 0) {
+                iconEl.textContent = '🚨';
+                badge.textContent = 'CRITICAL';
+                badge.style.background = '#7f1d1d';
+                badge.style.color = '#ef4444';
+                panel.style.borderColor = '#ef4444';
+                panel.style.background = 'linear-gradient(135deg, #7f1d1d 0%, #0f172a 100%)';
+            } else if (health.status === 'WARNING' || warnings.length > 0) {
+                iconEl.textContent = '⚠️';
+                badge.textContent = 'WARNING';
+                badge.style.background = '#78350f';
+                badge.style.color = '#fbbf24';
+                panel.style.borderColor = '#f59e0b';
+                panel.style.background = 'linear-gradient(135deg, #422006 0%, #0f172a 100%)';
+            }
+            
+            summaryEl.textContent = health.summary || `${conflicts.length} conflict(s), ${warnings.length} warning(s)`;
+            
+            // Show conflict details
+            if (conflicts.length > 0) {
+                const conflict = conflicts[0];
+                titleEl.innerHTML = `Config Health: <span style="color: #ef4444;">${conflict.type}</span>`;
+            }
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
