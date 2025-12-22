@@ -58,25 +58,67 @@ function hasLegacyPlaceholderFormat(text) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const CANONICAL_KEYS = {
+    // GREETING (PRIMARY)
     greeting: 'connectionMessages.voice.text',
-    bookingEnabled: 'frontDeskBehavior.bookingEnabled',
+    greetingRealtime: 'connectionMessages.voice.realtime.text',
+    
+    // BOOKING (CANONICAL: frontDeskBehavior.booking.*)
+    bookingEnabled: 'frontDeskBehavior.booking.enabled',  // NOT frontDeskBehavior.bookingEnabled
     bookingSlots: 'frontDeskBehavior.bookingSlots',
+    
+    // LOOP PREVENTION (CANONICAL: frontDeskBehavior.loopPrevention.*)
+    loopPreventionEnabled: 'frontDeskBehavior.loopPrevention.enabled',
+    loopPreventionMaxSameQuestion: 'frontDeskBehavior.loopPrevention.maxSameQuestion',
+    loopPreventionOnLoop: 'frontDeskBehavior.loopPrevention.onLoop',
+    loopPreventionRephraseIntro: 'frontDeskBehavior.loopPrevention.rephraseIntro',
+    
+    // PERSONALITY
     conversationStyle: 'frontDeskBehavior.personality.conversationStyle',
     professionalismLevel: 'frontDeskBehavior.personality.professionalismLevel',
     empathyLevel: 'frontDeskBehavior.personality.empathyLevel',
     urgencyDetection: 'frontDeskBehavior.personality.urgencyDetection',
     personalityEnabled: 'frontDeskBehavior.personality.enabled',
+    
+    // VOCABULARY
     forbiddenPhrases: 'frontDeskBehavior.vocabulary.forbiddenPhrases',
     preferredTerms: 'frontDeskBehavior.vocabulary.preferredTerms',
+    
+    // POLICIES
     blockPricing: 'frontDeskBehavior.policies.blockPricing',
     blockCompetitorMention: 'frontDeskBehavior.policies.blockCompetitorMention',
     forbiddenTopics: 'frontDeskBehavior.policies.forbiddenTopics',
+    
+    // FRUSTRATION
     frustrationEnabled: 'frontDeskBehavior.frustration.enabled',
     frustrationThreshold: 'frontDeskBehavior.frustration.threshold',
+    
+    // DETECTION
     minConfidence: 'frontDeskBehavior.detection.minConfidence',
     fallbackBehavior: 'frontDeskBehavior.detection.fallbackBehavior',
+    
+    // MODES
     startMode: 'frontDeskBehavior.modes.startMode',
     autoTransitionToBooking: 'frontDeskBehavior.modes.autoTransitionToBooking'
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEPRECATED KEYS (read-only, map to canonical)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DEPRECATED_KEYS = {
+    // OLD booking enabled paths -> canonical
+    'frontDeskBehavior.bookingEnabled': 'frontDeskBehavior.booking.enabled',
+    'booking.enabled': 'frontDeskBehavior.booking.enabled',
+    'aiAgentSettings.booking.enabled': 'frontDeskBehavior.booking.enabled',
+    
+    // OLD loop prevention paths -> canonical
+    'frontDeskBehavior.loops.maxRepetitions': 'frontDeskBehavior.loopPrevention.maxSameQuestion',
+    'frontDeskBehavior.loops.variationStrategy': 'frontDeskBehavior.loopPrevention.onLoop',
+    
+    // OLD greeting paths -> canonical
+    'frontDeskBehavior.greeting.text': 'connectionMessages.voice.text',
+    'frontDeskBehavior.greeting': 'connectionMessages.voice.text',
+    'callFlowEngine.style.greeting': 'connectionMessages.voice.text'
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -325,17 +367,37 @@ function unifyBookingSlots(company, seedIfEmpty = false) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function unifyBookingEnabled(company) {
-    // Canonical: frontDeskBehavior.bookingEnabled
-    const canonical = getNestedValue(company, 'frontDeskBehavior.bookingEnabled');
+    // CANONICAL: frontDeskBehavior.booking.enabled (NOT frontDeskBehavior.bookingEnabled)
+    // This matches the cp.v2.0 registry schema
     
+    // 1. Primary canonical: frontDeskBehavior.booking.enabled
+    const canonical = getNestedValue(company, 'frontDeskBehavior.booking.enabled');
     if (canonical !== undefined) {
-        return { enabled: canonical, source: 'frontDeskBehavior.bookingEnabled' };
+        return { enabled: canonical, source: 'frontDeskBehavior.booking.enabled' };
     }
     
-    // Legacy: aiAgentSettings.bookingEnabled
-    const legacy = getNestedValue(company, 'aiAgentSettings.bookingEnabled');
-    if (legacy !== undefined) {
-        return { enabled: legacy, source: 'aiAgentSettings.bookingEnabled (legacy)' };
+    // 2. Legacy: frontDeskBehavior.bookingEnabled (old flat key)
+    const legacyFlat = getNestedValue(company, 'frontDeskBehavior.bookingEnabled');
+    if (legacyFlat !== undefined) {
+        return { enabled: legacyFlat, source: 'frontDeskBehavior.bookingEnabled (LEGACY)' };
+    }
+    
+    // 3. Legacy: aiAgentSettings.frontDeskBehavior.booking.enabled
+    const aiAgentNested = getNestedValue(company, 'aiAgentSettings.frontDeskBehavior.booking.enabled');
+    if (aiAgentNested !== undefined) {
+        return { enabled: aiAgentNested, source: 'aiAgentSettings.frontDeskBehavior.booking.enabled' };
+    }
+    
+    // 4. Very Legacy: booking.enabled at root
+    const rootBooking = getNestedValue(company, 'booking.enabled');
+    if (rootBooking !== undefined) {
+        return { enabled: rootBooking, source: 'booking.enabled (LEGACY)' };
+    }
+    
+    // 5. Legacy: aiAgentSettings.bookingEnabled
+    const aiAgentFlat = getNestedValue(company, 'aiAgentSettings.bookingEnabled');
+    if (aiAgentFlat !== undefined) {
+        return { enabled: aiAgentFlat, source: 'aiAgentSettings.bookingEnabled (LEGACY)' };
     }
     
     // Default
@@ -655,6 +717,33 @@ function unifyConfig(company, responseDefaults = {}, options = {}) {
         detection: {
             minConfidence: getNestedValue(company, 'frontDeskBehavior.detection.minConfidence') ?? 0.5,
             fallbackBehavior: getNestedValue(company, 'frontDeskBehavior.detection.fallbackBehavior') ?? 'ask_clarification'
+        },
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // UNIFIED LOOP PREVENTION (CANONICAL: frontDeskBehavior.loopPrevention.*)
+        // NOT frontDeskBehavior.loops.* (deprecated)
+        // ═══════════════════════════════════════════════════════════════════
+        loopPrevention: {
+            enabled: getNestedValue(company, 'frontDeskBehavior.loopPrevention.enabled')
+                    ?? getNestedValue(company, 'aiAgentSettings.frontDeskBehavior.loopPrevention.enabled')
+                    ?? getNestedValue(company, 'frontDeskBehavior.loops.enabled') // legacy fallback
+                    ?? true,
+            maxSameQuestion: getNestedValue(company, 'frontDeskBehavior.loopPrevention.maxSameQuestion')
+                    ?? getNestedValue(company, 'aiAgentSettings.frontDeskBehavior.loopPrevention.maxSameQuestion')
+                    ?? getNestedValue(company, 'frontDeskBehavior.loops.maxRepetitions') // legacy fallback
+                    ?? 2,
+            onLoop: getNestedValue(company, 'frontDeskBehavior.loopPrevention.onLoop')
+                    ?? getNestedValue(company, 'aiAgentSettings.frontDeskBehavior.loopPrevention.onLoop')
+                    ?? getNestedValue(company, 'frontDeskBehavior.loops.variationStrategy') // legacy fallback
+                    ?? 'rephrase',
+            rephraseIntro: getNestedValue(company, 'frontDeskBehavior.loopPrevention.rephraseIntro')
+                    ?? getNestedValue(company, 'aiAgentSettings.frontDeskBehavior.loopPrevention.rephraseIntro')
+                    ?? "Let me try this differently —",
+            // Legacy detection
+            hasLegacyLoops: !!(getNestedValue(company, 'frontDeskBehavior.loops.maxRepetitions') || getNestedValue(company, 'frontDeskBehavior.loops.variationStrategy')),
+            source: getNestedValue(company, 'frontDeskBehavior.loopPrevention.enabled') !== undefined 
+                    ? 'frontDeskBehavior.loopPrevention' 
+                    : (getNestedValue(company, 'frontDeskBehavior.loops.enabled') !== undefined ? 'frontDeskBehavior.loops (LEGACY)' : 'defaults')
         },
         
         // ═══════════════════════════════════════════════════════════════════

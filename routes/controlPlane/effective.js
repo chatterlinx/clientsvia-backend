@@ -9,8 +9,9 @@
  *           All reads go through canonical keys, legacy is merged automatically
  * 
  * CANONICAL KEYS:
- * - Greeting: connectionMessages.voice.text
- * - Booking: frontDeskBehavior.bookingEnabled + frontDeskBehavior.bookingSlots
+ * - Greeting: connectionMessages.voice.text (+ .realtime.text)
+ * - Booking: frontDeskBehavior.booking.enabled + frontDeskBehavior.bookingSlots
+ * - Loop Prevention: frontDeskBehavior.loopPrevention.* (NOT .loops.*)
  * - Personality: frontDeskBehavior.personality.*
  * - Fallbacks: companyResponseDefaults.*Reply.fullReply
  * 
@@ -636,9 +637,10 @@ router.post('/seed-booking-slots', async (req, res) => {
         // Initialize frontDeskBehavior if needed
         if (!company.frontDeskBehavior) company.frontDeskBehavior = {};
         
-        // Set default slots
+        // Set default slots (CANONICAL paths)
         company.frontDeskBehavior.bookingSlots = DEFAULT_HVAC_BOOKING_SLOTS;
-        company.frontDeskBehavior.bookingEnabled = true;
+        if (!company.frontDeskBehavior.booking) company.frontDeskBehavior.booking = {};
+        company.frontDeskBehavior.booking.enabled = true;
         
         await company.save();
         
