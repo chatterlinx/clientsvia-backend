@@ -441,64 +441,77 @@ router.get('/raw', async (req, res) => {
             });
         }
         
-        // Return specific sections that matter for debugging
+        // Build diagnosis first
+        const diagnosis = {
+            bookingSlotsLocation: 
+                (company.aiAgentSettings?.frontDeskBehavior?.bookingSlots?.length > 0) ? 'aiAgentSettings.frontDeskBehavior.bookingSlots' :
+                (company.frontDeskBehavior?.bookingSlots?.length > 0) ? 'frontDeskBehavior.bookingSlots' :
+                (company.aiAgentSettings?.bookingSlots?.length > 0) ? 'aiAgentSettings.bookingSlots (flat legacy)' :
+                (company.booking?.slots?.length > 0) ? 'booking.slots (legacy)' :
+                (company.bookingSlots?.length > 0) ? 'bookingSlots (root legacy)' : 'NONE FOUND',
+                
+            greetingLocation:
+                (company.connectionMessages?.voice?.text) ? 'connectionMessages.voice.text' :
+                (company.frontDeskBehavior?.greeting) ? 'frontDeskBehavior.greeting' :
+                (company.aiAgentSettings?.frontDeskBehavior?.greeting) ? 'aiAgentSettings.frontDeskBehavior.greeting' : 'NONE FOUND',
+                
+            personalityLocation:
+                (company.aiAgentSettings?.frontDeskBehavior?.personality) ? 'aiAgentSettings.frontDeskBehavior.personality' :
+                (company.frontDeskBehavior?.personality) ? 'frontDeskBehavior.personality' : 'NONE FOUND',
+                
+            needsMigration: 
+                (company.aiAgentSettings?.frontDeskBehavior?.bookingSlots?.length > 0 && !company.frontDeskBehavior?.bookingSlots?.length) ||
+                (company.aiAgentSettings?.frontDeskBehavior?.personality && !company.frontDeskBehavior?.personality)
+        };
+        
+        // Return structure that matches what UI expects
         res.json({
             success: true,
             companyId,
             companyName: company.companyName,
             
             // ═══════════════════════════════════════════════════════════════════
-            // RAW DB PATHS - No resolution, no defaults, just what's stored
+            // DATA WRAPPER - UI expects rawData.data.company
             // ═══════════════════════════════════════════════════════════════════
-            rawPaths: {
-                // Root level frontDeskBehavior
-                'frontDeskBehavior': company.frontDeskBehavior || null,
+            data: {
+                company: {
+                    _id: company._id,
+                    companyName: company.companyName,
+                    frontDeskBehavior: company.frontDeskBehavior || null,
+                    aiAgentSettings: company.aiAgentSettings || null,
+                    connectionMessages: company.connectionMessages || null,
+                    booking: company.booking || null,
+                    bookingSlots: company.bookingSlots || null,
+                    companyResponseDefaults: company.companyResponseDefaults || null,
+                    placeholders: company.placeholders || null,
+                    tradeKey: company.tradeKey || null,
+                    tradeCategoryId: company.tradeCategoryId || null
+                },
                 
-                // aiAgentSettings (where ControlPlane provider reads from!)
-                'aiAgentSettings': company.aiAgentSettings || null,
+                // ALL raw paths for deep debugging
+                rawPaths: {
+                    'frontDeskBehavior': company.frontDeskBehavior || null,
+                    'aiAgentSettings': company.aiAgentSettings || null,
+                    'aiAgentSettings.frontDeskBehavior': company.aiAgentSettings?.frontDeskBehavior || null,
+                    'frontDeskBehavior.bookingSlots': company.frontDeskBehavior?.bookingSlots || null,
+                    'aiAgentSettings.frontDeskBehavior.bookingSlots': company.aiAgentSettings?.frontDeskBehavior?.bookingSlots || null,
+                    'aiAgentSettings.bookingSlots': company.aiAgentSettings?.bookingSlots || null,
+                    'booking.slots': company.booking?.slots || null,
+                    'bookingSlots': company.bookingSlots || null,
+                    'frontDeskBehavior.personality': company.frontDeskBehavior?.personality || null,
+                    'aiAgentSettings.frontDeskBehavior.personality': company.aiAgentSettings?.frontDeskBehavior?.personality || null,
+                    'connectionMessages': company.connectionMessages || null,
+                    'connectionMessages.voice.text': company.connectionMessages?.voice?.text || null,
+                    'frontDeskBehavior.greeting': company.frontDeskBehavior?.greeting || null,
+                    'aiAgentSettings.frontDeskBehavior.greeting': company.aiAgentSettings?.frontDeskBehavior?.greeting || null,
+                    'companyResponseDefaults': company.companyResponseDefaults || null
+                },
                 
-                // Nested path (ControlPlane reads: aiAgentSettings.frontDeskBehavior)
-                'aiAgentSettings.frontDeskBehavior': company.aiAgentSettings?.frontDeskBehavior || null,
-                
-                // Booking slots - ALL possible locations
-                'frontDeskBehavior.bookingSlots': company.frontDeskBehavior?.bookingSlots || null,
-                'aiAgentSettings.frontDeskBehavior.bookingSlots': company.aiAgentSettings?.frontDeskBehavior?.bookingSlots || null,
-                'aiAgentSettings.bookingSlots': company.aiAgentSettings?.bookingSlots || null,
-                'booking.slots': company.booking?.slots || null,
-                'bookingSlots': company.bookingSlots || null,
-                
-                // Personality - ALL possible locations
-                'frontDeskBehavior.personality': company.frontDeskBehavior?.personality || null,
-                'aiAgentSettings.frontDeskBehavior.personality': company.aiAgentSettings?.frontDeskBehavior?.personality || null,
-                
-                // Greeting - ALL possible locations
-                'connectionMessages': company.connectionMessages || null,
-                'connectionMessages.voice.text': company.connectionMessages?.voice?.text || null,
-                'frontDeskBehavior.greeting': company.frontDeskBehavior?.greeting || null,
-                'aiAgentSettings.frontDeskBehavior.greeting': company.aiAgentSettings?.frontDeskBehavior?.greeting || null,
-                
-                // Response defaults
-                'companyResponseDefaults': company.companyResponseDefaults || null
+                diagnosis
             },
             
-            // Quick diagnosis
-            diagnosis: {
-                bookingSlotsLocation: 
-                    (company.aiAgentSettings?.frontDeskBehavior?.bookingSlots?.length > 0) ? 'aiAgentSettings.frontDeskBehavior.bookingSlots' :
-                    (company.frontDeskBehavior?.bookingSlots?.length > 0) ? 'frontDeskBehavior.bookingSlots' :
-                    (company.aiAgentSettings?.bookingSlots?.length > 0) ? 'aiAgentSettings.bookingSlots (flat legacy)' :
-                    (company.booking?.slots?.length > 0) ? 'booking.slots (legacy)' :
-                    (company.bookingSlots?.length > 0) ? 'bookingSlots (root legacy)' : 'NONE FOUND',
-                    
-                greetingLocation:
-                    (company.connectionMessages?.voice?.text) ? 'connectionMessages.voice.text' :
-                    (company.frontDeskBehavior?.greeting) ? 'frontDeskBehavior.greeting' :
-                    (company.aiAgentSettings?.frontDeskBehavior?.greeting) ? 'aiAgentSettings.frontDeskBehavior.greeting' : 'NONE FOUND',
-                    
-                personalityLocation:
-                    (company.aiAgentSettings?.frontDeskBehavior?.personality) ? 'aiAgentSettings.frontDeskBehavior.personality' :
-                    (company.frontDeskBehavior?.personality) ? 'frontDeskBehavior.personality' : 'NONE FOUND'
-            },
+            // Quick diagnosis at top level for convenience
+            diagnosis,
             
             _note: 'This shows RAW DB paths. Use this to verify where Effective/ControlPlane should read from.'
         });

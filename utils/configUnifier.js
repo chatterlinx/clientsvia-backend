@@ -19,6 +19,41 @@
 const { standardizePlaceholders } = require('./placeholderStandard');
 
 // ═══════════════════════════════════════════════════════════════════════════
+// LEGACY PLACEHOLDER FORMAT DETECTION
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Detect if text contains legacy placeholder formats
+ * Legacy formats: {x}, ${x}, %x%
+ * Standard format: {{x}}
+ * 
+ * @param {string} text - Text to check
+ * @returns {boolean} - True if legacy formats detected
+ */
+function hasLegacyPlaceholderFormat(text) {
+    if (!text) return false;
+    
+    // Standard format: {{word}} - these are GOOD
+    const standardPattern = /\{\{[a-zA-Z_][a-zA-Z0-9_]*\}\}/g;
+    
+    // Legacy formats: {word} (single brace), ${word}, %word%
+    const legacyPatterns = [
+        /(?<!\{)\{([a-zA-Z_][a-zA-Z0-9_]*)\}(?!\})/g,  // {x} but not {{x}}
+        /\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g,              // ${x}
+        /%([a-zA-Z_][a-zA-Z0-9_]*)%/g                   // %x%
+    ];
+    
+    // Check each legacy pattern
+    for (const pattern of legacyPatterns) {
+        if (pattern.test(text)) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CANONICAL KEY DEFINITIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -476,13 +511,13 @@ function unifyConfig(company, responseDefaults = {}, options = {}) {
         fallbacks: {
             notOfferedReply,
             notOfferedConfigured: !!notOfferedReply,
-            notOfferedHasLegacyPlaceholders: notOfferedReply !== (responseDefaults?.notOfferedReply?.fullReply || ''),
+            notOfferedHasLegacyPlaceholders: hasLegacyPlaceholderFormat(notOfferedReply),
             unknownIntentReply,
             unknownIntentConfigured: !!unknownIntentReply,
-            unknownIntentHasLegacyPlaceholders: unknownIntentReply !== (responseDefaults?.unknownIntentReply?.fullReply || ''),
+            unknownIntentHasLegacyPlaceholders: hasLegacyPlaceholderFormat(unknownIntentReply),
             afterHoursReply,
             afterHoursConfigured: !!afterHoursReply,
-            afterHoursHasLegacyPlaceholders: afterHoursReply !== (responseDefaults?.afterHoursReply?.fullReply || '')
+            afterHoursHasLegacyPlaceholders: hasLegacyPlaceholderFormat(afterHoursReply)
         },
         
         // ═══════════════════════════════════════════════════════════════════
