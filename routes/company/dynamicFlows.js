@@ -26,6 +26,75 @@ const DynamicFlow = require('../../models/DynamicFlow');
 const logger = require('../../utils/logger');
 
 // ============================================================================
+// FLOW VALIDATION - HARD RULES
+// ============================================================================
+// 
+// RULE: A flow CANNOT be ENABLED unless triggers.length > 0
+// This eliminates 50% of future bugs (dead flows that look active)
+//
+
+/**
+ * Validate a dynamic flow before save.
+ * Returns { valid: boolean, errors: string[] }
+ */
+function validateDynamicFlow(flowData) {
+    const errors = [];
+    
+    // HARD RULE: Enabled flows MUST have at least one trigger
+    const triggers = flowData.triggers || [];
+    const enabled = flowData.enabled !== false;
+    
+    if (enabled && triggers.length === 0) {
+        errors.push('INVALID: Flow cannot be ENABLED with 0 triggers. Add at least one trigger or set enabled=false.');
+    }
+    
+    // Validate each trigger
+    triggers.forEach((trigger, idx) => {
+        if (!trigger.type) {
+            errors.push(`Trigger[${idx}]: Missing "type" field`);
+        }
+        
+        // Phrase triggers need phrases
+        if (trigger.type === 'phrase') {
+            const phrases = trigger.config?.phrases || [];
+            if (phrases.length === 0) {
+                errors.push(`Trigger[${idx}]: Phrase trigger has 0 phrases - it will NEVER fire`);
+            } else if (phrases.length < 3) {
+                // Warning but not error
+                logger.warn('[FLOW VALIDATION] Phrase trigger has < 3 phrases (recommend 3+)', {
+                    flowKey: flowData.flowKey,
+                    phraseCount: phrases.length
+                });
+            }
+        }
+        
+        // Keyword triggers need keywords
+        if (trigger.type === 'keyword') {
+            const keywords = trigger.config?.keywords || [];
+            if (keywords.length === 0) {
+                errors.push(`Trigger[${idx}]: Keyword trigger has 0 keywords - it will NEVER fire`);
+            }
+        }
+    });
+    
+    // Validate actions have types
+    const actions = flowData.actions || [];
+    actions.forEach((action, idx) => {
+        if (!action.type) {
+            errors.push(`Action[${idx}]: Missing "type" field`);
+        }
+    });
+    
+    return {
+        valid: errors.length === 0,
+        errors,
+        warnings: [], // Could add non-blocking warnings here
+        triggerCount: triggers.length,
+        actionCount: actions.length
+    };
+}
+
+// ============================================================================
 // MIDDLEWARE
 // ============================================================================
 
@@ -151,6 +220,26 @@ router.post('/', async (req, res) => {
             });
         }
         
+        // ═══════════════════════════════════════════════════════════════════
+        // HARD RULE: Validate flow before save
+        // A flow CANNOT be ENABLED with 0 triggers
+        // ═══════════════════════════════════════════════════════════════════
+        const validation = validateDynamicFlow(flowData);
+        if (!validation.valid) {
+            logger.warn('[DYNAMIC FLOWS API] Validation failed on CREATE', {
+                companyId,
+                flowKey: flowData.flowKey,
+                errors: validation.errors
+            });
+            return res.status(400).json({
+                success: false,
+                error: 'Flow validation failed',
+                validationErrors: validation.errors,
+                triggerCount: validation.triggerCount,
+                actionCount: validation.actionCount
+            });
+        }
+        
         // Check for duplicate flowKey
         const existing = await DynamicFlow.findOne({
             companyId: new mongoose.Types.ObjectId(companyId),
@@ -222,6 +311,31 @@ router.put('/:flowId', async (req, res) => {
             return res.status(400).json({
                 success: false,
                 error: 'Cannot modify global templates. Create a copy first.'
+            });
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // HARD RULE: Validate flow before update
+        // A flow CANNOT be ENABLED with 0 triggers
+        // ═══════════════════════════════════════════════════════════════════
+        // Merge existing with updates for validation
+        const mergedForValidation = {
+            ...existing.toObject(),
+            ...updates
+        };
+        const validation = validateDynamicFlow(mergedForValidation);
+        if (!validation.valid) {
+            logger.warn('[DYNAMIC FLOWS API] Validation failed on UPDATE', {
+                flowId,
+                flowKey: existing.flowKey,
+                errors: validation.errors
+            });
+            return res.status(400).json({
+                success: false,
+                error: 'Flow validation failed',
+                validationErrors: validation.errors,
+                triggerCount: validation.triggerCount,
+                actionCount: validation.actionCount
             });
         }
         
@@ -304,29 +418,53 @@ router.post('/:flowId/toggle', async (req, res) => {
     try {
         const { companyId, flowId } = req.params;
         const { enabled } = req.body;
+        const wantEnabled = enabled !== false;
         
         logger.info('[DYNAMIC FLOWS API] Toggle request', {
             companyId,
             flowId,
-            enabled
+            enabled: wantEnabled
         });
         
-        const flow = await DynamicFlow.findOneAndUpdate(
-            {
-                _id: flowId,
-                companyId: new mongoose.Types.ObjectId(companyId)
-            },
-            { enabled: enabled !== false },
-            { new: true }
-        ).lean();
+        // First, get the existing flow to validate
+        const existing = await DynamicFlow.findOne({
+            _id: flowId,
+            companyId: new mongoose.Types.ObjectId(companyId)
+        });
         
-        if (!flow) {
+        if (!existing) {
             return res.status(404).json({ success: false, error: 'Flow not found' });
         }
         
+        // ═══════════════════════════════════════════════════════════════════
+        // HARD RULE: Cannot ENABLE a flow with 0 triggers
+        // ═══════════════════════════════════════════════════════════════════
+        if (wantEnabled) {
+            const triggers = existing.triggers || [];
+            if (triggers.length === 0) {
+                logger.warn('[DYNAMIC FLOWS API] Cannot enable flow with 0 triggers', {
+                    flowId,
+                    flowKey: existing.flowKey
+                });
+                return res.status(400).json({
+                    success: false,
+                    error: 'Cannot enable flow with 0 triggers. Add at least one trigger first.',
+                    flowKey: existing.flowKey,
+                    triggerCount: 0
+                });
+            }
+        }
+        
+        const flow = await DynamicFlow.findByIdAndUpdate(
+            flowId,
+            { enabled: wantEnabled },
+            { new: true }
+        ).lean();
+        
         logger.info('[DYNAMIC FLOWS API] Flow toggled', {
             flowId,
-            enabled: flow.enabled
+            enabled: flow.enabled,
+            triggerCount: (flow.triggers || []).length
         });
         
         res.json({ success: true, flow });
