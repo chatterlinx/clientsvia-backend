@@ -156,6 +156,7 @@ async function loadAllRoutes() {
         routes.seedGoldenRoutes = await loadRouteWithTimeout('./routes/company/seedGolden', 'seedGoldenRoutes'); // 🟣 Seed Golden Setup (Penguin Air HVAC Reference)
         routes.rawCompanyDataRoutes = await loadRouteWithTimeout('./routes/company/rawCompanyData', 'rawCompanyDataRoutes'); // 🔍 Raw Company Data (DB Echo for Truth Report)
         routes.debugGreetingRoutes = await loadRouteWithTimeout('./routes/debug/greeting', 'debugGreetingRoutes'); // 🐛 Debug Greeting (Raw DB values + Force Write)
+        routes.debugTransfersRoutes = await loadRouteWithTimeout('./routes/debug/transfers', 'debugTransfersRoutes'); // 🐛 Debug Transfers (Add/Update + Read-back)
         routes.companyQuickAnswersRoutes = await loadRouteWithTimeout('./routes/company/quickAnswers', 'companyQuickAnswersRoutes'); // ❓ QuickAnswers Dedupe + Management (company-scoped)
         routes.companyOpsRouter = await loadRouteWithTimeout('./routes/company/companyOpsRouter', 'companyOpsRouter'); // 🏢 CompanyOps Console (Contacts, Locations, Appointments, Call Traces, Usage, Customer DB, Notifications, Settings, + Cheat Sheet Config)
         // 🗑️ DELETED: v2InstantResponses - replaced by v2InstantResponseCategories system
@@ -468,6 +469,7 @@ function registerRoutes(routes) {
     app.use('/api/company/:companyId/seed-golden', routes.seedGoldenRoutes); // 🟣 Seed Golden Setup (Penguin Air HVAC Reference)
     app.use('/api/company/:companyId/raw', routes.rawCompanyDataRoutes); // 🔍 Raw Company Data (DB Echo for Truth Report)
     app.use('/api/company/:companyId/debug/greeting', routes.debugGreetingRoutes); // 🐛 Debug Greeting (Raw DB values + Force Write)
+    app.use('/api/company/:companyId/debug/transfers', routes.debugTransfersRoutes); // 🐛 Debug Transfers (Add/Update + Read-back)
     app.use('/api/company/:companyId/quickanswers', routes.companyQuickAnswersRoutes); // ❓ QuickAnswers Dedupe + Management
     app.use('/api/company/:companyId', routes.companyOpsRouter); // V2: CompanyOps Console + Cheat Sheet Config (Contacts, Locations, Appointments, Call Traces, Usage, Customer DB, Notifications, Settings, Booking Rules, Role Contacts, Links, Calculator)
     app.use('/api/company', routes.v2TwilioControlRoutes); // V2: Twilio Control Center (AI Agent Settings - Dashboard tab)
