@@ -232,6 +232,7 @@ async function loadAllRoutes() {
         routes.globalIntelligenceRoutes = await loadRouteWithTimeout('./routes/admin/globalIntelligence', 'globalIntelligenceRoutes'); // ADMIN: Global Production Intelligence (platform-wide 3-tier defaults, inheritance system)
         routes.enterpriseSuggestionsRoutes = await loadRouteWithTimeout('./routes/admin/enterpriseSuggestions', 'enterpriseSuggestionsRoutes'); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost)
         routes.seedDynamicFlowTemplatesRoutes = await loadRouteWithTimeout('./routes/admin/seedDynamicFlowTemplates', 'seedDynamicFlowTemplatesRoutes'); // ADMIN: Seed/Fix Golden Dynamic Flow Templates
+        routes.jsonExportImportRoutes = await loadRouteWithTimeout('./routes/admin/jsonExportImport', 'jsonExportImportRoutes'); // ADMIN: JSON Export/Import/Patch (ChatGPT workflow)
         routes.healthRoutes = await loadRouteWithTimeout('./routes/health', 'healthRoutes');
         // llm0TraceRoutes REMOVED Dec 2025 - LLM-0 Cortex-Intel nuked, Black Box is better
         routes.frontlineScriptBuilderRoutes = await loadRouteWithTimeout('./routes/admin/frontlineScriptBuilder', 'frontlineScriptBuilderRoutes'); // Frontline Script Builder: LLM-powered script generation
@@ -485,6 +486,7 @@ function registerRoutes(routes) {
     app.use('/api/admin', routes.globalIntelligenceRoutes); // ADMIN: Global Production Intelligence API (platform-wide 3-tier defaults, inheritance system)
     app.use('/api/admin/suggestions', routes.enterpriseSuggestionsRoutes); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost projections)
     app.use('/api/admin/dynamic-flow-templates', routes.seedDynamicFlowTemplatesRoutes); // ADMIN: Seed/Fix Golden Dynamic Flow Templates
+    app.use('/api', routes.jsonExportImportRoutes); // ADMIN: JSON Export/Import/Patch (ChatGPT workflow)
     // healthRoutes moved to top of routes (before auth-protected routes) for public access
     // llm0TraceRoutes REMOVED Dec 2025 - nuked
     app.use('/api/admin/frontline-script', routes.frontlineScriptBuilderRoutes); // Frontline Script Builder: LLM-powered script generation

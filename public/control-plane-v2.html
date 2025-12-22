@@ -133,6 +133,69 @@
       box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
     }
     
+    /* Export Config Button */
+    .btn-export {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      transition: all 0.2s ease;
+    }
+    .btn-export:hover {
+      background: linear-gradient(135deg, #0284c7 0%, #0891b2 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+    }
+    
+    /* Apply Patch Button */
+    .btn-patch {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+      color: #1e293b;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      transition: all 0.2s ease;
+    }
+    .btn-patch:hover {
+      background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+    }
+    
+    /* Validator Button */
+    .btn-validator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      transition: all 0.2s ease;
+    }
+    .btn-validator:hover {
+      background: linear-gradient(135deg, #db2777 0%, #ec4899 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);
+    }
+    
     .json-badge-score {
       background: rgba(255,255,255,0.2);
       padding: 2px 8px;
@@ -777,6 +840,21 @@
       <button id="btn-golden-setup" class="btn-golden" onclick="openGoldenSetupModal()" title="Load Golden HVAC Reference Setup">
         <span>🟣</span>
         <span>Golden Setup</span>
+      </button>
+      <!-- 📤 EXPORT CONFIG BUTTON (ChatGPT Workflow) -->
+      <button id="btn-export-config" class="btn-export" onclick="openExportModal()" title="Export full config for ChatGPT analysis">
+        <span>📤</span>
+        <span>Export</span>
+      </button>
+      <!-- 📥 APPLY PATCH BUTTON (ChatGPT Workflow) -->
+      <button id="btn-apply-patch" class="btn-patch" onclick="openApplyPatchModal()" title="Apply JSON patch from ChatGPT">
+        <span>📥</span>
+        <span>Patch</span>
+      </button>
+      <!-- 🔍 VALIDATOR BUTTON -->
+      <button id="btn-validator" class="btn-validator" onclick="openValidatorModal()" title="Validate scenario completeness">
+        <span>🔍</span>
+        <span>Validate</span>
       </button>
       <!-- 📄 PLATFORM SNAPSHOT BUTTON (Enterprise Introspection) -->
       <button id="btn-platform-json" class="btn-json" onclick="openPlatformSnapshotModal()">
@@ -3271,6 +3349,532 @@
           </div>
         `;
       }
+    }
+  </script>
+  
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       EXPORT CONFIG MODAL (ChatGPT Workflow)
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="export-modal-overlay" class="snapshot-modal-overlay" onclick="if(event.target === this) closeExportModal()">
+    <div class="snapshot-modal" style="max-width: 900px; max-height: 90vh; display: flex; flex-direction: column;">
+      
+      <div class="snapshot-modal-header" style="background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);">
+        <div class="snapshot-modal-title">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 600;">📤 Export Config for ChatGPT Analysis</h2>
+          <span id="export-status-badge" class="snapshot-status-badge" style="display: none;"></span>
+        </div>
+        <div class="snapshot-modal-controls">
+          <button onclick="closeExportModal()" 
+                  style="padding: 8px 16px; background: transparent; color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; cursor: pointer; font-weight: 500;">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      
+      <div class="snapshot-modal-body" style="padding: 24px; overflow-y: auto; flex: 1;">
+        
+        <div style="margin-bottom: 20px; background: #f0f9ff; border-radius: 8px; padding: 16px;">
+          <h3 style="margin: 0 0 8px; font-size: 14px; font-weight: 600; color: #0369a1;">How to use:</h3>
+          <ol style="margin: 0; padding-left: 20px; font-size: 13px; color: #0c4a6e; line-height: 1.8;">
+            <li>Click <strong>"Load Export"</strong> to fetch full company config</li>
+            <li>Click <strong>"Copy JSON"</strong> to copy to clipboard</li>
+            <li>Paste into ChatGPT with your analysis prompt</li>
+            <li>Get ChatGPT's JSON patch directive → use "Apply Patch" modal</li>
+          </ol>
+        </div>
+        
+        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+          <button onclick="loadExportData()" id="btn-load-export"
+                  style="padding: 10px 20px; background: #0ea5e9; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+            <i class="fas fa-download"></i> Load Export
+          </button>
+          <button onclick="copyExportToClipboard()" id="btn-copy-export"
+                  style="padding: 10px 20px; background: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px;" disabled>
+            <i class="fas fa-copy"></i> Copy JSON
+          </button>
+        </div>
+        
+        <div id="export-stats" style="display: none; background: #f1f5f9; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px;">
+            <div style="text-align: center;">
+              <div id="stat-categories" style="font-size: 24px; font-weight: 700; color: #0ea5e9;">-</div>
+              <div style="font-size: 11px; color: #64748b; text-transform: uppercase;">Categories</div>
+            </div>
+            <div style="text-align: center;">
+              <div id="stat-scenarios" style="font-size: 24px; font-weight: 700; color: #059669;">-</div>
+              <div style="font-size: 11px; color: #64748b; text-transform: uppercase;">Scenarios</div>
+            </div>
+            <div style="text-align: center;">
+              <div id="stat-triggers" style="font-size: 24px; font-weight: 700; color: #f59e0b;">-</div>
+              <div style="font-size: 11px; color: #64748b; text-transform: uppercase;">Triggers</div>
+            </div>
+            <div style="text-align: center;">
+              <div id="stat-flows" style="font-size: 24px; font-weight: 700; color: #8b5cf6;">-</div>
+              <div style="font-size: 11px; color: #64748b; text-transform: uppercase;">Flows</div>
+            </div>
+          </div>
+        </div>
+        
+        <div style="position: relative;">
+          <textarea id="export-json-output" readonly
+                    style="width: 100%; height: 400px; font-family: 'SF Mono', Monaco, monospace; font-size: 11px; background: #1e293b; color: #a5f3fc; border: none; border-radius: 8px; padding: 16px; resize: vertical;"
+                    placeholder="Click 'Load Export' to fetch company configuration..."></textarea>
+        </div>
+        
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    let currentExportData = null;
+    
+    function openExportModal() {
+      document.getElementById('export-modal-overlay').classList.add('active');
+    }
+    
+    function closeExportModal() {
+      document.getElementById('export-modal-overlay').classList.remove('active');
+    }
+    
+    async function loadExportData() {
+      const btn = document.getElementById('btn-load-export');
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+      btn.disabled = true;
+      
+      try {
+        const response = await fetch(`/api/export/company/${currentCompanyId}`, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`
+          }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          currentExportData = result.export;
+          
+          // Update stats
+          document.getElementById('export-stats').style.display = 'block';
+          document.getElementById('stat-categories').textContent = currentExportData.categories?.length || 0;
+          document.getElementById('stat-scenarios').textContent = currentExportData.scenarios?.length || 0;
+          document.getElementById('stat-triggers').textContent = (currentExportData.scenarios || []).reduce((sum, s) => sum + (s.triggers?.length || 0), 0);
+          document.getElementById('stat-flows').textContent = currentExportData.dynamicFlows?.length || 0;
+          
+          // Show JSON
+          document.getElementById('export-json-output').value = JSON.stringify(currentExportData, null, 2);
+          
+          // Enable copy button
+          document.getElementById('btn-copy-export').disabled = false;
+          
+          btn.innerHTML = '<i class="fas fa-check"></i> Loaded!';
+          btn.style.background = '#059669';
+          
+          showToast('✅ Export loaded - ' + (currentExportData.scenarios?.length || 0) + ' scenarios', 'success');
+        } else {
+          throw new Error(result.error);
+        }
+        
+      } catch (error) {
+        console.error('[EXPORT] Error:', error);
+        btn.innerHTML = '<i class="fas fa-times"></i> Error';
+        btn.style.background = '#dc2626';
+        showToast('❌ Export failed: ' + error.message, 'error');
+      }
+      
+      setTimeout(() => {
+        btn.innerHTML = '<i class="fas fa-download"></i> Load Export';
+        btn.style.background = '#0ea5e9';
+        btn.disabled = false;
+      }, 2000);
+    }
+    
+    async function copyExportToClipboard() {
+      if (!currentExportData) return;
+      
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(currentExportData, null, 2));
+        showToast('✅ Copied to clipboard! Paste into ChatGPT.', 'success');
+      } catch (error) {
+        showToast('❌ Copy failed: ' + error.message, 'error');
+      }
+    }
+  </script>
+  
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       APPLY PATCH MODAL (ChatGPT Workflow)
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="patch-modal-overlay" class="snapshot-modal-overlay" onclick="if(event.target === this) closeApplyPatchModal()">
+    <div class="snapshot-modal" style="max-width: 900px; max-height: 90vh; display: flex; flex-direction: column;">
+      
+      <div class="snapshot-modal-header" style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);">
+        <div class="snapshot-modal-title">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 600; color: #1e293b;">📥 Apply JSON Patch from ChatGPT</h2>
+        </div>
+        <div class="snapshot-modal-controls">
+          <button onclick="closeApplyPatchModal()" 
+                  style="padding: 8px 16px; background: transparent; color: #1e293b; border: 1px solid rgba(0,0,0,0.2); border-radius: 6px; cursor: pointer; font-weight: 500;">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      
+      <div class="snapshot-modal-body" style="padding: 24px; overflow-y: auto; flex: 1;">
+        
+        <div style="margin-bottom: 20px; background: #fffbeb; border-radius: 8px; padding: 16px;">
+          <h3 style="margin: 0 0 8px; font-size: 14px; font-weight: 600; color: #92400e;">⚠️ Admin Only - Modifies Database</h3>
+          <p style="margin: 0; font-size: 13px; color: #78350f; line-height: 1.6;">
+            Paste the JSON patch from ChatGPT. Click "Preview" first to see what will change, then "Apply" to execute.
+          </p>
+        </div>
+        
+        <div style="margin-bottom: 16px;">
+          <label style="font-size: 13px; font-weight: 600; color: #374151; display: block; margin-bottom: 8px;">Patch JSON:</label>
+          <textarea id="patch-json-input"
+                    style="width: 100%; height: 300px; font-family: 'SF Mono', Monaco, monospace; font-size: 11px; background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 8px; padding: 12px; resize: vertical;"
+                    placeholder='Paste JSON patch here. Example:
+{
+  "patchType": "template",
+  "targetId": "template_id_here",
+  "operations": [
+    {
+      "op": "update",
+      "path": "scenario",
+      "categoryId": "cat_1",
+      "scenarioId": "scenario_1",
+      "value": {
+        "triggers": ["new trigger", "another trigger"],
+        "quickReplies": ["Reply 1", "Reply 2", ...]
+      }
+    }
+  ]
+}'></textarea>
+        </div>
+        
+        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+          <button onclick="previewPatch()" id="btn-preview-patch"
+                  style="padding: 10px 20px; background: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+            <i class="fas fa-search"></i> Preview Changes
+          </button>
+          <button onclick="applyPatch()" id="btn-apply-patch-confirm"
+                  style="padding: 10px 20px; background: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px;" disabled>
+            <i class="fas fa-bolt"></i> Apply Patch
+          </button>
+        </div>
+        
+        <div id="patch-preview" style="display: none; background: #f0fdf4; border: 2px solid #22c55e; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+          <h4 style="margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #166534;">Preview:</h4>
+          <div id="patch-preview-content" style="font-size: 13px; color: #15803d; line-height: 1.8;"></div>
+        </div>
+        
+        <div id="patch-result" style="display: none; background: #f8fafc; border-radius: 8px; padding: 16px;">
+          <h4 style="margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #374151;">Result:</h4>
+          <pre id="patch-result-content" style="font-family: 'SF Mono', Monaco, monospace; font-size: 11px; background: #1e293b; color: #a5f3fc; padding: 12px; border-radius: 6px; overflow-x: auto;"></pre>
+        </div>
+        
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    function openApplyPatchModal() {
+      document.getElementById('patch-modal-overlay').classList.add('active');
+      document.getElementById('patch-preview').style.display = 'none';
+      document.getElementById('patch-result').style.display = 'none';
+      document.getElementById('btn-apply-patch-confirm').disabled = true;
+    }
+    
+    function closeApplyPatchModal() {
+      document.getElementById('patch-modal-overlay').classList.remove('active');
+    }
+    
+    async function previewPatch() {
+      const patchInput = document.getElementById('patch-json-input').value.trim();
+      
+      if (!patchInput) {
+        showToast('❌ Please paste a JSON patch first', 'error');
+        return;
+      }
+      
+      let patch;
+      try {
+        patch = JSON.parse(patchInput);
+      } catch (e) {
+        showToast('❌ Invalid JSON: ' + e.message, 'error');
+        return;
+      }
+      
+      const btn = document.getElementById('btn-preview-patch');
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+      btn.disabled = true;
+      
+      try {
+        const response = await fetch('/api/apply-patch', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify({ patch, dryRun: true })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          const diff = result.diff;
+          document.getElementById('patch-preview').style.display = 'block';
+          document.getElementById('patch-preview-content').innerHTML = `
+            <div>✅ Patch is valid</div>
+            <div>📝 Creates: ${diff.creates}</div>
+            <div>📝 Updates: ${diff.updates}</div>
+            <div>📝 Deletes: ${diff.deletes}</div>
+            <div>🎯 Affected IDs: ${diff.affectedIds.join(', ') || 'none'}</div>
+          `;
+          
+          // Enable apply button
+          document.getElementById('btn-apply-patch-confirm').disabled = false;
+          
+          showToast('✅ Patch validated - ready to apply', 'success');
+        } else {
+          throw new Error(result.error + (result.validationErrors ? ': ' + result.validationErrors.join(', ') : ''));
+        }
+        
+      } catch (error) {
+        console.error('[PATCH] Preview error:', error);
+        showToast('❌ Validation failed: ' + error.message, 'error');
+        document.getElementById('patch-preview').style.display = 'none';
+        document.getElementById('btn-apply-patch-confirm').disabled = true;
+      }
+      
+      btn.innerHTML = '<i class="fas fa-search"></i> Preview Changes';
+      btn.disabled = false;
+    }
+    
+    async function applyPatch() {
+      const patchInput = document.getElementById('patch-json-input').value.trim();
+      
+      let patch;
+      try {
+        patch = JSON.parse(patchInput);
+      } catch (e) {
+        showToast('❌ Invalid JSON: ' + e.message, 'error');
+        return;
+      }
+      
+      // Confirm
+      if (!confirm('Are you sure you want to apply this patch? This will modify the database.')) {
+        return;
+      }
+      
+      const btn = document.getElementById('btn-apply-patch-confirm');
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Applying...';
+      btn.disabled = true;
+      
+      try {
+        const response = await fetch('/api/apply-patch', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify({ patch, dryRun: false })
+        });
+        
+        const result = await response.json();
+        
+        document.getElementById('patch-result').style.display = 'block';
+        document.getElementById('patch-result-content').textContent = JSON.stringify(result, null, 2);
+        
+        if (result.success) {
+          btn.innerHTML = '<i class="fas fa-check"></i> Applied!';
+          btn.style.background = '#059669';
+          showToast('✅ Patch applied successfully!', 'success');
+          
+          // Refresh snapshot badge
+          setTimeout(loadSnapshotBadge, 500);
+        } else {
+          throw new Error(result.error);
+        }
+        
+      } catch (error) {
+        console.error('[PATCH] Apply error:', error);
+        btn.innerHTML = '<i class="fas fa-times"></i> Failed';
+        btn.style.background = '#dc2626';
+        showToast('❌ Apply failed: ' + error.message, 'error');
+      }
+      
+      setTimeout(() => {
+        btn.innerHTML = '<i class="fas fa-bolt"></i> Apply Patch';
+        btn.style.background = '#dc2626';
+        btn.disabled = true;
+      }, 3000);
+    }
+  </script>
+  
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       VALIDATOR PANEL (Phase D)
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="validator-modal-overlay" class="snapshot-modal-overlay" onclick="if(event.target === this) closeValidatorModal()">
+    <div class="snapshot-modal" style="max-width: 950px; max-height: 90vh; display: flex; flex-direction: column;">
+      
+      <div class="snapshot-modal-header" style="background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);">
+        <div class="snapshot-modal-title">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 600;">🔍 Scenario Validator</h2>
+        </div>
+        <div class="snapshot-modal-controls">
+          <button onclick="closeValidatorModal()" 
+                  style="padding: 8px 16px; background: transparent; color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; cursor: pointer; font-weight: 500;">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      
+      <div class="snapshot-modal-body" style="padding: 24px; overflow-y: auto; flex: 1;">
+        
+        <div style="margin-bottom: 20px;">
+          <label style="font-size: 13px; font-weight: 600; color: #374151; display: block; margin-bottom: 8px;">Template ID:</label>
+          <div style="display: flex; gap: 12px;">
+            <input type="text" id="validator-template-id" 
+                   style="flex: 1; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 13px;"
+                   placeholder="Enter template ID to validate">
+            <button onclick="runValidation()" id="btn-run-validation"
+                    style="padding: 10px 20px; background: #ec4899; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">
+              <i class="fas fa-play"></i> Validate
+            </button>
+          </div>
+        </div>
+        
+        <div id="validation-results" style="display: none;">
+          <div id="validation-summary" style="background: #f1f5f9; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+          </div>
+          
+          <div id="validation-issues" style="margin-bottom: 16px;">
+          </div>
+          
+          <div id="validation-scenarios">
+          </div>
+        </div>
+        
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    function openValidatorModal() {
+      document.getElementById('validator-modal-overlay').classList.add('active');
+    }
+    
+    function closeValidatorModal() {
+      document.getElementById('validator-modal-overlay').classList.remove('active');
+    }
+    
+    async function runValidation() {
+      const templateId = document.getElementById('validator-template-id').value.trim();
+      
+      if (!templateId) {
+        showToast('❌ Please enter a template ID', 'error');
+        return;
+      }
+      
+      const btn = document.getElementById('btn-run-validation');
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Validating...';
+      btn.disabled = true;
+      
+      try {
+        const response = await fetch(`/api/validate/template/${templateId}`, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`
+          }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          document.getElementById('validation-results').style.display = 'block';
+          
+          // Summary
+          const summary = result.summary;
+          const summaryColor = summary.errorCount === 0 ? '#059669' : '#dc2626';
+          document.getElementById('validation-summary').innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; text-align: center;">
+              <div>
+                <div style="font-size: 28px; font-weight: 700; color: #0ea5e9;">${summary.categoryCount}</div>
+                <div style="font-size: 11px; color: #64748b;">Categories</div>
+              </div>
+              <div>
+                <div style="font-size: 28px; font-weight: 700; color: #8b5cf6;">${summary.scenarioCount}</div>
+                <div style="font-size: 11px; color: #64748b;">Scenarios</div>
+              </div>
+              <div>
+                <div style="font-size: 28px; font-weight: 700; color: #dc2626;">${summary.errorCount}</div>
+                <div style="font-size: 11px; color: #64748b;">Errors</div>
+              </div>
+              <div>
+                <div style="font-size: 28px; font-weight: 700; color: #f59e0b;">${summary.warningCount}</div>
+                <div style="font-size: 11px; color: #64748b;">Warnings</div>
+              </div>
+              <div>
+                <div style="font-size: 28px; font-weight: 700; color: ${summaryColor};">${summary.valid ? '✅' : '❌'}</div>
+                <div style="font-size: 11px; color: #64748b;">${summary.valid ? 'Valid' : 'Invalid'}</div>
+              </div>
+            </div>
+          `;
+          
+          // Issues
+          if (result.issues.length > 0) {
+            document.getElementById('validation-issues').innerHTML = `
+              <h4 style="margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #dc2626;">⚠️ Issues Found:</h4>
+              ${result.issues.map(i => `
+                <div style="background: ${i.severity === 'error' ? '#fef2f2' : '#fffbeb'}; border-radius: 6px; padding: 12px; margin-bottom: 8px;">
+                  <strong style="color: ${i.severity === 'error' ? '#dc2626' : '#f59e0b'};">${i.type}</strong>
+                  <div style="font-size: 13px; margin-top: 4px;">${i.message}</div>
+                </div>
+              `).join('')}
+            `;
+          } else {
+            document.getElementById('validation-issues').innerHTML = '';
+          }
+          
+          // Scenario details (show issues only)
+          const problemScenarios = result.scenarios.filter(s => !s.valid || s.warnings.length > 0);
+          if (problemScenarios.length > 0) {
+            document.getElementById('validation-scenarios').innerHTML = `
+              <h4 style="margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #374151;">📋 Scenarios Needing Attention:</h4>
+              <div style="max-height: 300px; overflow-y: auto;">
+                ${problemScenarios.map(s => `
+                  <div style="background: #f8fafc; border-radius: 6px; padding: 12px; margin-bottom: 8px; border-left: 4px solid ${s.valid ? '#f59e0b' : '#dc2626'};">
+                    <strong>${s.name}</strong> <span style="font-size: 11px; color: #64748b;">(${s.scenarioId})</span>
+                    <div style="font-size: 12px; margin-top: 6px;">
+                      ${s.issues.map(i => `<div style="color: ${i.severity === 'error' ? '#dc2626' : '#f59e0b'};">• ${i.message}</div>`).join('')}
+                      ${s.warnings.map(w => `<div style="color: #f59e0b;">• ${w.message}</div>`).join('')}
+                    </div>
+                    <div style="font-size: 11px; color: #64748b; margin-top: 6px;">
+                      Triggers: ${s.stats.triggerCount} | Quick: ${s.stats.quickReplyCount} | Full: ${s.stats.fullReplyCount}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            `;
+          } else {
+            document.getElementById('validation-scenarios').innerHTML = `
+              <div style="text-align: center; padding: 20px; color: #059669;">
+                <div style="font-size: 48px; margin-bottom: 8px;">✅</div>
+                <div>All scenarios pass validation!</div>
+              </div>
+            `;
+          }
+          
+          showToast(`Validation complete: ${summary.errorCount} errors, ${summary.warningCount} warnings`, summary.errorCount > 0 ? 'error' : 'success');
+        } else {
+          throw new Error(result.error);
+        }
+        
+      } catch (error) {
+        console.error('[VALIDATION] Error:', error);
+        showToast('❌ Validation failed: ' + error.message, 'error');
+      }
+      
+      btn.innerHTML = '<i class="fas fa-play"></i> Validate';
+      btn.disabled = false;
     }
   </script>
   
