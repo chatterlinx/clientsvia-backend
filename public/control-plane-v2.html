@@ -5214,7 +5214,9 @@ Loading field report...
       
       if (data) {
         navigator.clipboard.writeText(JSON.stringify(data, null, 2));
-        showToast('📋 JSON copied to clipboard!', 'success');
+        showSnapshotToast('📋 JSON Copied!', `${type} config copied to clipboard`, 'success');
+      } else {
+        showSnapshotToast('❌ No Data', 'No data available to copy', 'error');
       }
     }
   </script>
