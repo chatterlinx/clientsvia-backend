@@ -415,6 +415,45 @@ function migratePlaceholders(text) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DETECT QUICKANSWER DUPLICATES
+// ═══════════════════════════════════════════════════════════════════════════
+
+function detectQuickAnswerDuplicates(quickAnswers) {
+    if (!Array.isArray(quickAnswers) || quickAnswers.length === 0) return [];
+    
+    const duplicates = [];
+    const triggerMap = new Map(); // key: normalized triggers string -> first QA
+    
+    for (const qa of quickAnswers) {
+        if (!qa.triggers || !Array.isArray(qa.triggers)) continue;
+        
+        // Create normalized key from triggers (sorted, lowercase)
+        const normalizedTriggers = qa.triggers
+            .map(t => (t || '').toLowerCase().trim())
+            .sort()
+            .join('|');
+        
+        if (!normalizedTriggers) continue;
+        
+        if (triggerMap.has(normalizedTriggers)) {
+            const first = triggerMap.get(normalizedTriggers);
+            duplicates.push({
+                triggers: qa.triggers,
+                firstQuestion: first.question || first.name,
+                firstAnswer: (first.answer || '').substring(0, 50) + '...',
+                duplicateQuestion: qa.question || qa.name,
+                duplicateAnswer: (qa.answer || '').substring(0, 50) + '...',
+                recommendation: 'Keep one, disable the other'
+            });
+        } else {
+            triggerMap.set(normalizedTriggers, qa);
+        }
+    }
+    
+    return duplicates;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // UNIFY FULL CONFIG (MAIN ENTRY POINT)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -426,6 +465,76 @@ function unifyConfig(company, responseDefaults = {}, options = {}) {
     const bookingSlots = unifyBookingSlots(company, seedBookingSlotsIfEmpty);
     const bookingEnabled = unifyBookingEnabled(company);
     const conversationStyle = unifyConversationStyle(company);
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DETECT BOOKING ENGINE CONFLICT
+    // Two booking systems: callFlowEngine.bookingFields vs frontDeskBehavior.bookingSlots
+    // ═══════════════════════════════════════════════════════════════════════════
+    const callFlowBookingFields = getNestedValue(company, 'callFlowEngine.bookingFields') || [];
+    const frontDeskBookingSlots = bookingSlots.slots || [];
+    const hasCallFlowFields = Array.isArray(callFlowBookingFields) && callFlowBookingFields.length > 0;
+    const hasFrontDeskSlots = Array.isArray(frontDeskBookingSlots) && frontDeskBookingSlots.length > 0;
+    
+    // Determine active booking engine mode (default: SLOTS if available, else FIELDS)
+    const explicitMode = getNestedValue(company, 'frontDeskBehavior.bookingEngineMode') 
+                      || getNestedValue(company, 'aiAgentSettings.frontDeskBehavior.bookingEngineMode');
+    let bookingEngineMode = explicitMode || (hasFrontDeskSlots ? 'SLOTS' : (hasCallFlowFields ? 'FIELDS' : 'NONE'));
+    
+    const bookingEngineConflict = hasCallFlowFields && hasFrontDeskSlots && !explicitMode;
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DETECT DISCOVERY CONSENT ISSUES
+    // If these are too restrictive, scenarios get blocked
+    // ═══════════════════════════════════════════════════════════════════════════
+    const discoveryConsent = getNestedValue(company, 'callFlowEngine.discoveryConsent') || {};
+    const disableScenarioAutoResponses = discoveryConsent.disableScenarioAutoResponses ?? false;
+    const forceLLMDiscovery = discoveryConsent.forceLLMDiscovery ?? false;
+    const bookingRequiresExplicitConsent = discoveryConsent.bookingRequiresExplicitConsent ?? true;
+    
+    // Warn if scenarios are being blocked unnecessarily
+    const scenariosBlockedByConsent = disableScenarioAutoResponses || forceLLMDiscovery;
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DETECT QUICKANSWERS DUPLICATES
+    // ═══════════════════════════════════════════════════════════════════════════
+    const quickAnswers = getNestedValue(company, 'aiAgentSettings.quickAnswers') || [];
+    const quickAnswerDuplicates = detectQuickAnswerDuplicates(quickAnswers);
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BUILD CONFLICTS & WARNINGS LIST
+    // ═══════════════════════════════════════════════════════════════════════════
+    const conflicts = [];
+    const warnings = [];
+    
+    if (bookingEngineConflict) {
+        conflicts.push({
+            type: 'BOOKING_ENGINE_CONFLICT',
+            severity: 'critical',
+            message: `Two booking systems active: callFlowEngine.bookingFields (${callFlowBookingFields.length} fields) AND frontDeskBehavior.bookingSlots (${frontDeskBookingSlots.length} slots). Set bookingEngineMode to resolve.`,
+            fix: 'Set frontDeskBehavior.bookingEngineMode to "SLOTS" or "FIELDS"',
+            activeMode: bookingEngineMode
+        });
+    }
+    
+    if (scenariosBlockedByConsent) {
+        warnings.push({
+            type: 'SCENARIOS_BLOCKED_BY_CONSENT',
+            severity: 'high',
+            message: 'Scenario auto-responses disabled by discovery consent settings. AI will feel "dumb" or stall.',
+            flags: { disableScenarioAutoResponses, forceLLMDiscovery },
+            fix: 'Set disableScenarioAutoResponses=false and forceLLMDiscovery=false'
+        });
+    }
+    
+    if (quickAnswerDuplicates.length > 0) {
+        warnings.push({
+            type: 'QUICKANSWER_DUPLICATES',
+            severity: 'medium',
+            message: `${quickAnswerDuplicates.length} duplicate QuickAnswer(s) detected. Inconsistent responses possible.`,
+            duplicates: quickAnswerDuplicates,
+            fix: 'Remove or disable duplicate QuickAnswers'
+        });
+    }
     
     // Standardize fallback placeholders
     const notOfferedReply = migratePlaceholders(responseDefaults?.notOfferedReply?.fullReply || '');
@@ -477,7 +586,27 @@ function unifyConfig(company, responseDefaults = {}, options = {}) {
             slotsCount: bookingSlots.slotsCount,
             slotNames: bookingSlots.slotNames,
             slotsSource: bookingSlots.source,
-            misconfigured: bookingEnabled.enabled && bookingSlots.isEmpty
+            misconfigured: bookingEnabled.enabled && bookingSlots.isEmpty,
+            
+            // Booking Engine Mode (resolves SLOTS vs FIELDS conflict)
+            engineMode: bookingEngineMode,
+            engineModeExplicit: !!explicitMode,
+            hasConflict: bookingEngineConflict,
+            callFlowFieldsCount: callFlowBookingFields.length,
+            frontDeskSlotsCount: frontDeskBookingSlots.length
+        },
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // DISCOVERY CONSENT (affects scenario behavior)
+        // ═══════════════════════════════════════════════════════════════════
+        discoveryConsent: {
+            disableScenarioAutoResponses,
+            forceLLMDiscovery,
+            bookingRequiresExplicitConsent,
+            scenariosBlockedByConsent,
+            recommendation: scenariosBlockedByConsent 
+                ? 'Set disableScenarioAutoResponses=false and forceLLMDiscovery=false to allow scenario replies'
+                : 'OK - Scenarios can respond normally'
         },
         
         // ═══════════════════════════════════════════════════════════════════
@@ -537,6 +666,32 @@ function unifyConfig(company, responseDefaults = {}, options = {}) {
         },
         
         // ═══════════════════════════════════════════════════════════════════
+        // QUICKANSWERS STATUS
+        // ═══════════════════════════════════════════════════════════════════
+        quickAnswers: {
+            count: quickAnswers.length,
+            duplicatesCount: quickAnswerDuplicates.length,
+            duplicates: quickAnswerDuplicates,
+            hasDuplicates: quickAnswerDuplicates.length > 0
+        },
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // CONFLICTS & WARNINGS (Critical for debugging)
+        // ═══════════════════════════════════════════════════════════════════
+        _conflicts: conflicts,
+        _warnings: warnings,
+        _health: {
+            status: conflicts.length > 0 ? 'CRITICAL' : (warnings.length > 0 ? 'WARNING' : 'OK'),
+            conflictsCount: conflicts.length,
+            warningsCount: warnings.length,
+            summary: conflicts.length > 0 
+                ? `${conflicts.length} critical conflict(s) need immediate attention`
+                : (warnings.length > 0 
+                    ? `${warnings.length} warning(s) may affect AI behavior`
+                    : 'Configuration looks healthy')
+        },
+        
+        // ═══════════════════════════════════════════════════════════════════
         // METADATA
         // ═══════════════════════════════════════════════════════════════════
         _meta: {
@@ -544,6 +699,7 @@ function unifyConfig(company, responseDefaults = {}, options = {}) {
             bookingEnabledSource: bookingEnabled.source,
             bookingSlotsSource: bookingSlots.source,
             conversationStyleSource: conversationStyle.source,
+            bookingEngineMode: bookingEngineMode,
             canonicalKeys: CANONICAL_KEYS,
             unifiedAt: new Date().toISOString()
         }
@@ -561,6 +717,7 @@ module.exports = {
     unifyBookingEnabled,
     unifyConversationStyle,
     migratePlaceholders,
+    detectQuickAnswerDuplicates,
     getNestedValue,
     setNestedValue,
     CANONICAL_KEYS,

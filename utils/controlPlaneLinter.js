@@ -474,6 +474,45 @@ function lintControlPlane(config, placeholders = {}) {
     }
     
     // ─────────────────────────────────────────────────────────────────────────
+    // BOOKING ENGINE CONFLICT (SLOTS vs FIELDS)
+    // ─────────────────────────────────────────────────────────────────────────
+    if (config.booking?.hasConflict) {
+        issues.push({
+            field: 'booking',
+            rule: 'BOOKING_ENGINE_CONFLICT',
+            severity: 'error',
+            message: `Two booking systems detected! callFlowEngine.bookingFields (${config.booking.callFlowFieldsCount || 0} fields) AND frontDeskBehavior.bookingSlots (${config.booking.frontDeskSlotsCount || 0} slots). Set bookingEngineMode to "SLOTS" or "FIELDS" to resolve.`
+        });
+        totalPenalty += 25; // Critical penalty
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // DISCOVERY CONSENT BLOCKING SCENARIOS
+    // ─────────────────────────────────────────────────────────────────────────
+    if (config.discoveryConsent?.scenariosBlockedByConsent) {
+        issues.push({
+            field: 'discoveryConsent',
+            rule: 'SCENARIOS_BLOCKED',
+            severity: 'error',
+            message: `Scenario replies are blocked by consent settings (disableScenarioAutoResponses=${config.discoveryConsent.disableScenarioAutoResponses}, forceLLMDiscovery=${config.discoveryConsent.forceLLMDiscovery}). This makes the AI feel "dumb" or stall.`
+        });
+        totalPenalty += 20; // High penalty - major UX issue
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // QUICKANSWER DUPLICATES
+    // ─────────────────────────────────────────────────────────────────────────
+    if (config.quickAnswers?.hasDuplicates) {
+        issues.push({
+            field: 'quickAnswers',
+            rule: 'QUICKANSWER_DUPLICATES',
+            severity: 'warning',
+            message: `${config.quickAnswers.duplicatesCount} duplicate QuickAnswer(s) with identical triggers. This causes inconsistent responses.`
+        });
+        totalPenalty += 10;
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
     // CALCULATE SCORE & GRADE
     // ─────────────────────────────────────────────────────────────────────────
     const score = Math.max(0, 100 - totalPenalty);
