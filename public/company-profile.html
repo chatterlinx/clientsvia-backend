@@ -2087,6 +2087,62 @@
                         </div>
                     </div>
                     
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <!-- LEGACY KEYS DETECTED (Golden Blueprint Validator) -->
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <div id="legacy-keys-panel" style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, #4c1d95 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #7c3aed; display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="font-size: 20px;">🗑️</span>
+                                <div>
+                                    <div style="font-weight: 700; font-size: 14px; color: #c4b5fd;">Legacy Keys Detected</div>
+                                    <div style="font-size: 11px; color: #a78bfa;">Not in Golden Blueprint → ignored at runtime</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <button onclick="nukeLegacyKeys(true)" 
+                                        style="padding: 4px 8px; font-size: 10px; background: transparent; color: #c4b5fd; border: 1px solid #7c3aed; border-radius: 4px; cursor: pointer;"
+                                        title="Preview what would be deleted">
+                                    👁️ Preview Nuke
+                                </button>
+                                <button onclick="nukeLegacyKeys(false)" 
+                                        style="padding: 4px 8px; font-size: 10px; background: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer;"
+                                        title="Delete legacy keys (safe)">
+                                    🔥 Nuke Legacy
+                                </button>
+                                <div id="legacy-keys-count" style="padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: #7c3aed; color: white;">0</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Blueprint Version -->
+                        <div id="blueprint-version" style="font-size: 10px; color: #a78bfa; margin-bottom: 12px;">
+                            Golden Blueprint: <span id="blueprint-version-text">Loading...</span>
+                        </div>
+                        
+                        <!-- Legacy Keys List -->
+                        <div id="legacy-keys-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto;">
+                            <!-- Populated by JS -->
+                        </div>
+                        
+                        <!-- Deprecated Namespaces Warning -->
+                        <div id="deprecated-namespaces-warning" style="display: none; margin-top: 12px; padding: 10px; background: #7f1d1d; border-radius: 6px; border: 1px solid #ef4444;">
+                            <div style="font-size: 11px; color: #fca5a5; font-weight: 600;">⚠️ DEPRECATED NAMESPACES FOUND:</div>
+                            <div id="deprecated-namespaces-list" style="font-size: 10px; color: #fecaca; margin-top: 4px;"></div>
+                        </div>
+                        
+                        <!-- Variables Migration Prompt -->
+                        <div id="variables-migration-prompt" style="display: none; margin-top: 12px; padding: 10px; background: #422006; border-radius: 6px; border: 1px solid #f59e0b;">
+                            <div style="font-size: 11px; color: #fcd34d; font-weight: 600;">📦 Legacy "variables" detected</div>
+                            <div style="font-size: 10px; color: #fef3c7; margin-top: 4px;">
+                                These should be migrated to "placeholders" (the canonical system).
+                            </div>
+                            <button onclick="migrateVariablesToPlaceholders()" 
+                                    style="margin-top: 8px; padding: 6px 12px; font-size: 10px; background: #f59e0b; color: #0f172a; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                                ⚡ Migrate to Placeholders
+                            </button>
+                        </div>
+                    </div>
+                    
                     <!-- Lint Issues List -->
                     <div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px; font-weight: 600;">Lint Issues:</div>
                     <div id="config-lint-list" style="display: flex; flex-direction: column; gap: 8px;">
@@ -3695,6 +3751,11 @@
             // ─────────────────────────────────────────────────────────────────────────
             updateConfigHealth(effectiveConfig);
             
+            // ─────────────────────────────────────────────────────────────────────────
+            // LOAD LEGACY KEYS REPORT (Golden Blueprint Validation)
+            // ─────────────────────────────────────────────────────────────────────────
+            loadLegacyReport();
+            
             // Combine lint issues and warnings
             const allIssues = [...(lint.issues || []), ...warnings];
             
@@ -4264,6 +4325,180 @@
                 }
             } catch (err) {
                 console.error('[CONFIG HEALTH] Fix conflict failed:', err);
+                showConfigCopyToast(false, '❌ Error', err.message);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // LEGACY KEYS - Load and Display
+        // ═══════════════════════════════════════════════════════════════════════════
+        let currentLegacyReport = null;
+        
+        async function loadLegacyReport() {
+            const companyId = window.currentCompanyId || window.companyId || 
+                              new URLSearchParams(window.location.search).get('id') ||
+                              localStorage.getItem('currentCompanyId');
+            if (!companyId) return;
+            
+            const authToken = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            
+            try {
+                const response = await fetch(`/api/company/${companyId}/control-plane/legacy-report`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentLegacyReport = data.data;
+                    updateLegacyKeysPanel(data.data);
+                }
+            } catch (err) {
+                console.error('[LEGACY REPORT] Load failed:', err);
+            }
+        }
+        
+        function updateLegacyKeysPanel(report) {
+            const panel = document.getElementById('legacy-keys-panel');
+            const countBadge = document.getElementById('legacy-keys-count');
+            const listEl = document.getElementById('legacy-keys-list');
+            const versionEl = document.getElementById('blueprint-version-text');
+            const deprecatedWarning = document.getElementById('deprecated-namespaces-warning');
+            const deprecatedList = document.getElementById('deprecated-namespaces-list');
+            const variablesMigrationPrompt = document.getElementById('variables-migration-prompt');
+            
+            if (!report || (report.legacyCount === 0 && report.deprecatedKeys?.length === 0)) {
+                panel.style.display = 'none';
+                return;
+            }
+            
+            panel.style.display = 'block';
+            countBadge.textContent = report.legacyCount || 0;
+            versionEl.textContent = report.blueprintVersion || 'unknown';
+            
+            // Combine legacy and deprecated keys
+            const allLegacy = [...(report.legacyKeys || []), ...(report.deprecatedKeys || [])];
+            
+            listEl.innerHTML = allLegacy.slice(0, 20).map(item => `
+                <div style="padding: 6px 10px; background: #1e1b4b; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <span style="font-size: 11px; font-family: monospace; color: #c4b5fd;">${item.key}</span>
+                        <span style="font-size: 9px; color: #a78bfa; margin-left: 8px;">${item.reason}</span>
+                    </div>
+                    <span style="font-size: 9px; padding: 2px 6px; background: ${item.action === 'MIGRATE_OR_DELETE' ? '#dc2626' : '#7c3aed'}; border-radius: 3px; color: white;">${item.action || 'REVIEW'}</span>
+                </div>
+            `).join('');
+            
+            if (allLegacy.length > 20) {
+                listEl.innerHTML += `
+                    <div style="padding: 8px; text-align: center; font-size: 10px; color: #a78bfa;">
+                        + ${allLegacy.length - 20} more legacy keys...
+                    </div>
+                `;
+            }
+            
+            // Show deprecated namespaces warning
+            const deprecatedNamespaces = report.deprecatedKeys?.filter(k => 
+                k.key.startsWith('variables') || 
+                k.key.startsWith('callFlowEngine.bookingFields')
+            ) || [];
+            
+            if (deprecatedNamespaces.length > 0) {
+                deprecatedWarning.style.display = 'block';
+                deprecatedList.textContent = deprecatedNamespaces.map(k => k.key.split('.')[0]).filter((v, i, a) => a.indexOf(v) === i).join(', ');
+            } else {
+                deprecatedWarning.style.display = 'none';
+            }
+            
+            // Show variables migration prompt
+            const hasVariables = report.deprecatedKeys?.some(k => k.key.startsWith('variables'));
+            variablesMigrationPrompt.style.display = hasVariables ? 'block' : 'none';
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // LEGACY KEYS - Nuke (Delete)
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function nukeLegacyKeys(dryRun = true) {
+            const companyId = window.currentCompanyId || window.companyId || 
+                              new URLSearchParams(window.location.search).get('id') ||
+                              localStorage.getItem('currentCompanyId');
+            if (!companyId) {
+                showConfigCopyToast(false, '❌ Error', 'No company ID found');
+                return;
+            }
+            
+            const authToken = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            
+            try {
+                const response = await fetch(`/api/company/${companyId}/control-plane/nuke-legacy`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        dryRun,
+                        confirmNuke: !dryRun
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    
+                    if (result.dryRun) {
+                        const keys = result.wouldDelete || [];
+                        showConfigCopyToast(true, '👁️ Preview', `Would delete ${keys.length} keys: ${keys.slice(0, 3).join(', ')}${keys.length > 3 ? '...' : ''}`);
+                    } else {
+                        showConfigCopyToast(true, '🔥 Nuked!', result.message || 'Legacy keys deleted');
+                        await refreshConfigJson();
+                        await loadLegacyReport();
+                    }
+                } else {
+                    const err = await response.json();
+                    showConfigCopyToast(false, '❌ Nuke Failed', err.error || 'Unknown error');
+                }
+            } catch (err) {
+                console.error('[NUKE LEGACY] Failed:', err);
+                showConfigCopyToast(false, '❌ Error', err.message);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // LEGACY KEYS - Migrate Variables to Placeholders
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function migrateVariablesToPlaceholders() {
+            const companyId = window.currentCompanyId || window.companyId || 
+                              new URLSearchParams(window.location.search).get('id') ||
+                              localStorage.getItem('currentCompanyId');
+            if (!companyId) {
+                showConfigCopyToast(false, '❌ Error', 'No company ID found');
+                return;
+            }
+            
+            const authToken = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            
+            try {
+                const response = await fetch(`/api/company/${companyId}/control-plane/migrate-variables`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        dryRun: false
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showConfigCopyToast(true, '⚡ Migrated!', result.message || 'Variables migrated to placeholders');
+                    await refreshConfigJson();
+                    await loadLegacyReport();
+                } else {
+                    const err = await response.json();
+                    showConfigCopyToast(false, '❌ Migration Failed', err.error || 'Unknown error');
+                }
+            } catch (err) {
+                console.error('[MIGRATE VARIABLES] Failed:', err);
                 showConfigCopyToast(false, '❌ Error', err.message);
             }
         }

@@ -1,0 +1,155 @@
+{
+  "version": "penguin-air-v1",
+  "lastUpdated": "2024-12-22",
+  "description": "Golden Blueprint allowlist for Control Plane effective config. Variables are DEPRECATED. Placeholders are CANONICAL. Anything not listed is legacy/ignored.",
+  
+  "rules": {
+    "STRICT_MODE": true,
+    "DROP_UNKNOWN_KEYS": true,
+    "LOG_LEGACY_ONCE": true,
+    "BLOCK_VARIABLES_NAMESPACE": true
+  },
+  
+  "deprecatedNamespaces": [
+    "variables",
+    "callFlowEngine.bookingFields",
+    "callFlowEngine.style.greeting",
+    "profile.greeting",
+    "aiAgentLogic.greeting"
+  ],
+  
+  "allowlist": {
+    "meta": [
+      "meta.companyId",
+      "meta.companyName", 
+      "meta.environment",
+      "meta.tradeCategory",
+      "meta.tradeCategoryId"
+    ],
+    
+    "placeholders": [
+      "placeholders.companyName",
+      "placeholders.companyType",
+      "placeholders.serviceAreas",
+      "placeholders.mainPhone",
+      "placeholders.phone",
+      "placeholders.emergencyPhone",
+      "placeholders.businessHours",
+      "placeholders.hours",
+      "placeholders.bookingUrl",
+      "placeholders.website",
+      "placeholders.email",
+      "placeholders.address",
+      "placeholders.license"
+    ],
+    
+    "connectionMessages": [
+      "connectionMessages.voice.mode",
+      "connectionMessages.voice.text",
+      "connectionMessages.voice.enabled",
+      "connectionMessages.voice.realtime.text",
+      "connectionMessages.voice.realtime.enabled",
+      "connectionMessages.voice.fallback.enabled",
+      "connectionMessages.voice.fallback.voiceMessage",
+      "connectionMessages.voice.fallback.smsEnabled",
+      "connectionMessages.voice.fallback.smsMessage",
+      "connectionMessages.voice.fallback.notifyAdmin",
+      "connectionMessages.voice.fallback.adminNotificationMethod",
+      "connectionMessages.voice.fallback.adminPhone",
+      "connectionMessages.voice.fallback.adminEmail",
+      "connectionMessages.voice.fallback.adminSmsMessage"
+    ],
+    
+    "callExperience": [
+      "callExperience.speechTimeout",
+      "callExperience.initialTimeout",
+      "callExperience.endSilenceTimeout",
+      "callExperience.speakingSpeed",
+      "callExperience.pauseBetweenSentences",
+      "callExperience.allowInterruption",
+      "callExperience.interruptSensitivity",
+      "callExperience.llmTimeout",
+      "callExperience.maxSilenceBeforePrompt",
+      "callExperience.responseLength"
+    ],
+    
+    "frontDeskBehavior": [
+      "frontDeskBehavior.greeting.text",
+      "frontDeskBehavior.greeting.enabled",
+      "frontDeskBehavior.conversationStyle",
+      "frontDeskBehavior.personality.enabled",
+      "frontDeskBehavior.personality.professionalismLevel",
+      "frontDeskBehavior.personality.empathyLevel",
+      "frontDeskBehavior.bookingSlots",
+      "frontDeskBehavior.bookingEnabled",
+      "frontDeskBehavior.bookingPrompts",
+      "frontDeskBehavior.bookingTemplates",
+      "frontDeskBehavior.discoveryConsent.enabled",
+      "frontDeskBehavior.discoveryConsent.disableScenarioAutoResponses",
+      "frontDeskBehavior.discoveryConsent.forceLLMDiscovery",
+      "frontDeskBehavior.fastPathBooking",
+      "frontDeskBehavior.loopPrevention",
+      "frontDeskBehavior.escalation",
+      "frontDeskBehavior.emotionResponses",
+      "frontDeskBehavior.forbiddenPhrases",
+      "frontDeskBehavior.frustrationTriggers",
+      "frontDeskBehavior.nameSpellingVariants",
+      "frontDeskBehavior.commonFirstNames",
+      "frontDeskBehavior.blockPricing",
+      "frontDeskBehavior.pricingDeflection"
+    ],
+    
+    "defaultReplies": [
+      "defaultReplies.notOfferedReply.quickReply",
+      "defaultReplies.notOfferedReply.fullReply",
+      "defaultReplies.unknownIntentReply.quickReply", 
+      "defaultReplies.unknownIntentReply.fullReply",
+      "defaultReplies.afterHoursReply.quickReply",
+      "defaultReplies.afterHoursReply.fullReply",
+      "defaultReplies.strictDisabledBehavior"
+    ],
+    
+    "callProtection": [
+      "callProtection.enabled",
+      "callProtection.rules"
+    ],
+    
+    "dynamicFlows": [
+      "dynamicFlows.enabled",
+      "dynamicFlows.flows"
+    ],
+    
+    "transfers": [
+      "transfers.enabled",
+      "transfers.targets"
+    ],
+    
+    "quickAnswers": [
+      "quickAnswers.enabled",
+      "quickAnswers.items"
+    ]
+  },
+  
+  "goldenDefaults": {
+    "greeting": "Thanks for calling {{companyName}} — how can I help?",
+    "greetingMaxWords": 10,
+    "greetingMaxTTSSeconds": 3.0,
+    "conversationStyle": "balanced",
+    "professionalismLevel": 4,
+    "empathyLevel": 4
+  },
+  
+  "nukeTargets": {
+    "description": "Keys that should be deleted if found (not in allowlist, not bound)",
+    "safeToDelete": [
+      "variables.*",
+      "callFlowEngine.bookingFields",
+      "callFlowEngine.style.greeting",
+      "profile.greeting",
+      "aiAgentLogic.greeting",
+      "aiAgentLogic.variables",
+      "oldConfig.*"
+    ]
+  }
+}
+

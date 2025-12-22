@@ -26,6 +26,7 @@ const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth
 const { lintControlPlane } = require('../../utils/controlPlaneLinter');
 const { substitutePlaceholders } = require('../../utils/placeholderStandard');
 const { unifyConfig, migratePlaceholders } = require('../../utils/configUnifier');
+const goldenBlueprint = require('../../utils/goldenBlueprintValidator');
 const logger = require('../../utils/logger');
 
 // TTS performance constants
@@ -896,6 +897,272 @@ router.post('/fix-conflict', async (req, res) => {
         
     } catch (error) {
         logger.error('[CONTROL PLANE FIX] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/company/:companyId/control-plane/legacy-report
+ * Detect legacy keys that are not in the Golden Blueprint
+ */
+router.get('/legacy-report', async (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+        const company = await v2Company.findById(companyId).lean();
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                error: 'Company not found'
+            });
+        }
+        
+        // Validate against Golden Blueprint
+        const validation = goldenBlueprint.validateConfig(company);
+        
+        // Get golden defaults for comparison
+        const goldenDefaults = goldenBlueprint.getGoldenDefaults();
+        
+        res.json({
+            success: true,
+            data: {
+                blueprintVersion: goldenBlueprint.getVersion(),
+                companyId,
+                companyName: company.name || company.profile?.name,
+                
+                // Summary
+                health: validation.health,
+                recommendation: validation.recommendation,
+                
+                // Counts
+                totalKeys: validation.totalKeys,
+                allowedCount: validation.allowedCount,
+                legacyCount: validation.legacyCount,
+                nukeEligibleCount: validation.nukeEligibleCount,
+                
+                // Details
+                legacyKeys: validation.legacyKeys,
+                deprecatedKeys: validation.deprecatedKeys,
+                nukeEligible: validation.nukeEligible,
+                warnings: validation.warnings,
+                
+                // Reference
+                goldenDefaults
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[LEGACY REPORT] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/company/:companyId/control-plane/nuke-legacy
+ * Delete legacy keys that are safe to remove
+ */
+router.post('/nuke-legacy', async (req, res) => {
+    const { companyId } = req.params;
+    const { dryRun = true, confirmNuke = false } = req.body;
+    
+    try {
+        const company = await v2Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                error: 'Company not found'
+            });
+        }
+        
+        // Get nukeable keys
+        const nukeableKeys = goldenBlueprint.getNukeableKeys(company.toObject());
+        
+        if (nukeableKeys.length === 0) {
+            return res.json({
+                success: true,
+                message: 'No legacy keys to nuke - config is clean!',
+                nuked: [],
+                dryRun
+            });
+        }
+        
+        // If dry run, just return what would be deleted
+        if (dryRun || !confirmNuke) {
+            return res.json({
+                success: true,
+                dryRun: true,
+                message: `Found ${nukeableKeys.length} keys that can be safely deleted`,
+                wouldDelete: nukeableKeys,
+                instruction: 'Set confirmNuke=true and dryRun=false to actually delete'
+            });
+        }
+        
+        // Actually delete the keys
+        const nukedKeys = [];
+        
+        for (const keyPath of nukeableKeys) {
+            const parts = keyPath.split('.');
+            let obj = company;
+            
+            // Navigate to parent
+            for (let i = 0; i < parts.length - 1; i++) {
+                if (obj && obj[parts[i]]) {
+                    obj = obj[parts[i]];
+                } else {
+                    obj = null;
+                    break;
+                }
+            }
+            
+            // Delete the key using unset
+            if (obj) {
+                const lastKey = parts[parts.length - 1];
+                if (obj[lastKey] !== undefined) {
+                    obj[lastKey] = undefined;
+                    nukedKeys.push(keyPath);
+                }
+            }
+        }
+        
+        // Handle top-level deprecated namespaces
+        if (company.variables) {
+            delete company.variables;
+            nukedKeys.push('variables');
+        }
+        
+        if (company.callFlowEngine?.bookingFields) {
+            delete company.callFlowEngine.bookingFields;
+            nukedKeys.push('callFlowEngine.bookingFields');
+        }
+        
+        // Save changes
+        await company.save();
+        
+        // Clear Redis cache
+        const { redisClient } = require('../../db');
+        if (redisClient && redisClient.isOpen) {
+            await redisClient.del(`company:${companyId}`);
+        }
+        
+        logger.info(`[NUKE LEGACY] Deleted ${nukedKeys.length} legacy keys for company ${companyId}: ${nukedKeys.join(', ')}`);
+        
+        res.json({
+            success: true,
+            dryRun: false,
+            message: `Successfully nuked ${nukedKeys.length} legacy keys`,
+            nuked: nukedKeys
+        });
+        
+    } catch (error) {
+        logger.error('[NUKE LEGACY] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/company/:companyId/control-plane/migrate-variables
+ * Migrate legacy variables.* to placeholders.*
+ */
+router.post('/migrate-variables', async (req, res) => {
+    const { companyId } = req.params;
+    const { dryRun = true } = req.body;
+    
+    try {
+        const company = await v2Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                error: 'Company not found'
+            });
+        }
+        
+        // Check for legacy variables
+        const legacyVariables = company.variables || 
+                               company.aiAgentSettings?.variables ||
+                               company.aiAgentLogic?.variables || {};
+        
+        if (Object.keys(legacyVariables).length === 0) {
+            return res.json({
+                success: true,
+                message: 'No legacy variables to migrate',
+                migrated: []
+            });
+        }
+        
+        // Get or create placeholders
+        let placeholders = await CompanyPlaceholders.findOne({ companyId });
+        if (!placeholders) {
+            placeholders = new CompanyPlaceholders({ companyId, placeholders: [] });
+        }
+        
+        const migrated = [];
+        
+        // Migrate each variable to placeholder
+        for (const [key, value] of Object.entries(legacyVariables)) {
+            // Normalize key (lowercase → camelCase canonical)
+            const canonicalKey = key.charAt(0).toLowerCase() + key.slice(1);
+            
+            // Check if placeholder already exists
+            const existing = placeholders.placeholders.find(p => 
+                p.key.toLowerCase() === canonicalKey.toLowerCase()
+            );
+            
+            if (!existing && !dryRun) {
+                placeholders.placeholders.push({
+                    key: canonicalKey,
+                    value: value,
+                    isSystem: false,
+                    migratedFrom: `variables.${key}`,
+                    migratedAt: new Date()
+                });
+            }
+            
+            migrated.push({
+                from: `variables.${key}`,
+                to: `placeholders.${canonicalKey}`,
+                value,
+                alreadyExists: !!existing
+            });
+        }
+        
+        if (!dryRun) {
+            await placeholders.save();
+            
+            // Delete legacy variables
+            if (company.variables) delete company.variables;
+            if (company.aiAgentSettings?.variables) delete company.aiAgentSettings.variables;
+            if (company.aiAgentLogic?.variables) delete company.aiAgentLogic.variables;
+            
+            await company.save();
+            
+            // Clear cache
+            const { redisClient } = require('../../db');
+            if (redisClient && redisClient.isOpen) {
+                await redisClient.del(`company:${companyId}`);
+                await redisClient.del(`placeholders:${companyId}`);
+            }
+        }
+        
+        logger.info(`[MIGRATE VARIABLES] ${dryRun ? 'Would migrate' : 'Migrated'} ${migrated.length} variables for company ${companyId}`);
+        
+        res.json({
+            success: true,
+            dryRun,
+            message: `${dryRun ? 'Would migrate' : 'Migrated'} ${migrated.length} variables to placeholders`,
+            migrated
+        });
+        
+    } catch (error) {
+        logger.error('[MIGRATE VARIABLES] Error:', error);
         res.status(500).json({
             success: false,
             error: error.message
