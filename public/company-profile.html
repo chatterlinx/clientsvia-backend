@@ -93,6 +93,15 @@
                         <p id="company-id-subheader" class="text-xs text-gray-500 mt-1">ID: Loading...</p> 
                     </div>
                     <div class="flex items-center gap-x-3 mt-3 md:mt-0">
+                        <!-- Control Plane Config Button -->
+                        <button onclick="openConfigJsonModal()" 
+                                style="background-color: #0d9488; color: white; padding: 8px 16px; border-radius: 6px; font-weight: 600; display: flex; align-items: center; gap: 8px; border: none; cursor: pointer;"
+                                title="View Control Plane effective configuration"
+                                onmouseover="this.style.backgroundColor='#0f766e'"
+                                onmouseout="this.style.backgroundColor='#0d9488'">
+                            <i class="fas fa-sliders-h"></i>
+                            <span>Config JSON</span>
+                        </button>
                         <!-- Truth Report Button -->
                         <button onclick="openTruthReport()" 
                                 style="background-color: #1e40af; color: white; padding: 8px 16px; border-radius: 6px; font-weight: 600; display: flex; align-items: center; gap: 8px; border: none; cursor: pointer;"
@@ -1745,6 +1754,97 @@
         </div>
     </div>
 
+    <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+    <!-- CONFIG JSON MODAL - Control Plane Effective Configuration -->
+    <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+    <div id="config-json-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div style="background-color: #0f172a; color: #f1f5f9; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); width: 100%; max-width: 1000px; max-height: 90vh; display: flex; flex-direction: column;">
+            <!-- Modal Header -->
+            <div style="padding: 16px 24px; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; background-color: #1e293b; border-radius: 12px 12px 0 0;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <i class="fas fa-sliders-h" style="font-size: 20px; color: #14b8a6;"></i>
+                    <div>
+                        <h2 style="font-size: 18px; font-weight: 700; margin: 0;">Control Plane Config</h2>
+                        <p style="font-size: 12px; color: #94a3b8; margin: 0;">Effective Configuration + Lint Results</p>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <button onclick="refreshConfigJson()" style="padding: 6px 12px; font-size: 14px; background-color: #475569; color: white; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-sync-alt" id="config-refresh-icon"></i>
+                        Refresh
+                    </button>
+                    <button onclick="copyConfigJson('effective')" style="padding: 6px 12px; font-size: 14px; background-color: #0d9488; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                        📋 Copy Effective
+                    </button>
+                    <button onclick="copyConfigJson('raw')" style="padding: 6px 12px; font-size: 14px; background-color: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                        📋 Copy Raw
+                    </button>
+                    <button onclick="closeConfigJsonModal()" style="padding: 8px; background: transparent; border: none; color: #94a3b8; cursor: pointer; border-radius: 6px;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Modal Body with Tabs -->
+            <div style="flex: 1; overflow-y: auto; padding: 0;">
+                <!-- Tabs -->
+                <div style="display: flex; border-bottom: 1px solid #334155; background-color: #1e293b;">
+                    <button onclick="switchConfigTab('effective')" class="config-tab active" data-tab="effective" 
+                            style="padding: 12px 24px; border: none; background: transparent; color: #f1f5f9; cursor: pointer; font-weight: 500; border-bottom: 2px solid transparent;">
+                        <i class="fas fa-check-circle" style="color: #22c55e;"></i> Effective Config
+                    </button>
+                    <button onclick="switchConfigTab('raw')" class="config-tab" data-tab="raw"
+                            style="padding: 12px 24px; border: none; background: transparent; color: #94a3b8; cursor: pointer; font-weight: 500; border-bottom: 2px solid transparent;">
+                        <i class="fas fa-database" style="color: #60a5fa;"></i> Raw Company
+                    </button>
+                    <button onclick="switchConfigTab('lint')" class="config-tab" data-tab="lint"
+                            style="padding: 12px 24px; border: none; background: transparent; color: #94a3b8; cursor: pointer; font-weight: 500; border-bottom: 2px solid transparent;">
+                        <i class="fas fa-clipboard-check" style="color: #f59e0b;"></i> Lint Results
+                    </button>
+                </div>
+                
+                <!-- Tab Content: Effective Config -->
+                <div id="config-tab-effective" class="config-tab-content" style="padding: 20px;">
+                    <div style="margin-bottom: 16px; padding: 12px; background-color: #1e293b; border-radius: 8px; display: flex; gap: 24px;">
+                        <div>
+                            <span style="color: #94a3b8; font-size: 12px;">Score</span>
+                            <div id="config-score-badge" style="font-size: 24px; font-weight: 700; color: #22c55e;">--</div>
+                        </div>
+                        <div>
+                            <span style="color: #94a3b8; font-size: 12px;">Grade</span>
+                            <div id="config-grade-badge" style="font-size: 24px; font-weight: 700; color: #22c55e;">--</div>
+                        </div>
+                        <div>
+                            <span style="color: #94a3b8; font-size: 12px;">Issues</span>
+                            <div id="config-issues-badge" style="font-size: 24px; font-weight: 700; color: #f59e0b;">--</div>
+                        </div>
+                        <div>
+                            <span style="color: #94a3b8; font-size: 12px;">Booking Slots</span>
+                            <div id="config-slots-badge" style="font-size: 24px; font-weight: 700; color: #60a5fa;">--</div>
+                        </div>
+                    </div>
+                    <pre id="config-effective-json" style="background-color: #0f172a; padding: 16px; border-radius: 8px; font-size: 11px; overflow-x: auto; max-height: 400px; overflow-y: auto; border: 1px solid #334155; color: #e2e8f0;">Loading...</pre>
+                </div>
+                
+                <!-- Tab Content: Raw Company -->
+                <div id="config-tab-raw" class="config-tab-content" style="padding: 20px; display: none;">
+                    <div style="margin-bottom: 16px; padding: 12px; background-color: #1e293b; border-radius: 8px;">
+                        <span style="color: #94a3b8; font-size: 12px;">Source</span>
+                        <div style="color: #e2e8f0;">MongoDB company document (raw)</div>
+                    </div>
+                    <pre id="config-raw-json" style="background-color: #0f172a; padding: 16px; border-radius: 8px; font-size: 11px; overflow-x: auto; max-height: 400px; overflow-y: auto; border: 1px solid #334155; color: #e2e8f0;">Loading...</pre>
+                </div>
+                
+                <!-- Tab Content: Lint Results -->
+                <div id="config-tab-lint" class="config-tab-content" style="padding: 20px; display: none;">
+                    <div id="config-lint-list" style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="padding: 20px; text-align: center; color: #94a3b8;">Loading lint results...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Footer -->
     <footer class="bg-white border-t border-gray-200 mt-auto">
         <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 text-center text-gray-500 text-sm">
@@ -3192,6 +3292,241 @@
             init();
         }
     })();
+    </script>
+    
+    <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+    <!-- CONFIG JSON JAVASCRIPT - Control Plane Effective Config Modal -->
+    <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+    <script>
+        // Store Config JSON data
+        let configEffectiveData = null;
+        let configRawData = null;
+        let currentConfigTab = 'effective';
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CONFIG JSON - Open Modal
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function openConfigJsonModal() {
+            const modal = document.getElementById('config-json-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                await loadConfigJsonData();
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CONFIG JSON - Close Modal
+        // ═══════════════════════════════════════════════════════════════════════════
+        function closeConfigJsonModal() {
+            const modal = document.getElementById('config-json-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CONFIG JSON - Load Data
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function loadConfigJsonData() {
+            const companyId = getCompanyId();
+            if (!companyId) {
+                console.error('[CONFIG JSON] No companyId');
+                return;
+            }
+            
+            try {
+                // Load effective config
+                const effectiveResponse = await fetch(`/api/company/${companyId}/control-plane/effective`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (effectiveResponse.ok) {
+                    const data = await effectiveResponse.json();
+                    if (data.success) {
+                        configEffectiveData = data.data;
+                        
+                        // Update badges
+                        const lint = data.data.lint || {};
+                        const computed = data.data.computed || {};
+                        const config = data.data.effectiveConfig || {};
+                        
+                        document.getElementById('config-score-badge').textContent = lint.score || '--';
+                        document.getElementById('config-score-badge').style.color = 
+                            lint.score >= 80 ? '#22c55e' : lint.score >= 60 ? '#f59e0b' : '#ef4444';
+                        
+                        document.getElementById('config-grade-badge').textContent = lint.grade || '--';
+                        document.getElementById('config-grade-badge').style.color = 
+                            lint.score >= 80 ? '#22c55e' : lint.score >= 60 ? '#f59e0b' : '#ef4444';
+                        
+                        document.getElementById('config-issues-badge').textContent = 
+                            (lint.issuesCount || 0) + ' issues';
+                        
+                        document.getElementById('config-slots-badge').textContent = 
+                            (config.booking?.slotsCount || 0);
+                        
+                        // Show effective config
+                        document.getElementById('config-effective-json').textContent = 
+                            JSON.stringify(data.data.effectiveConfig, null, 2);
+                        
+                        // Show lint results
+                        renderConfigLintResults(data.data);
+                    }
+                } else {
+                    document.getElementById('config-effective-json').textContent = 
+                        JSON.stringify({ error: 'Failed to load effective config' }, null, 2);
+                }
+                
+                // Load raw company data
+                const rawResponse = await fetch(`/api/company/${companyId}/raw-data/full`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (rawResponse.ok) {
+                    const rawData = await rawResponse.json();
+                    if (rawData.success) {
+                        configRawData = rawData.data;
+                        // Extract relevant sections for display
+                        const relevantSections = {
+                            frontDeskBehavior: rawData.data?.company?.frontDeskBehavior,
+                            connectionMessages: rawData.data?.company?.connectionMessages,
+                            aiAgentSettings: rawData.data?.company?.aiAgentSettings,
+                            booking: rawData.data?.company?.booking,
+                            // Add scope info
+                            _source: 'MongoDB company document',
+                            _companyId: companyId
+                        };
+                        document.getElementById('config-raw-json').textContent = 
+                            JSON.stringify(relevantSections, null, 2);
+                    }
+                } else {
+                    document.getElementById('config-raw-json').textContent = 
+                        JSON.stringify({ error: 'Failed to load raw company data' }, null, 2);
+                }
+                
+            } catch (error) {
+                console.error('[CONFIG JSON] Error loading data:', error);
+                document.getElementById('config-effective-json').textContent = 
+                    JSON.stringify({ error: error.message }, null, 2);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CONFIG JSON - Render Lint Results
+        // ═══════════════════════════════════════════════════════════════════════════
+        function renderConfigLintResults(data) {
+            const listEl = document.getElementById('config-lint-list');
+            const lint = data.lint || {};
+            const warnings = data.warnings || [];
+            
+            // Combine lint issues and warnings
+            const allIssues = [...(lint.issues || []), ...warnings];
+            
+            if (allIssues.length === 0) {
+                listEl.innerHTML = `
+                    <div style="padding: 20px; background-color: #065f46; border-radius: 8px; color: white; text-align: center;">
+                        <i class="fas fa-check-circle" style="font-size: 24px; margin-bottom: 8px;"></i>
+                        <div style="font-weight: 600;">No issues found!</div>
+                        <div style="font-size: 12px; opacity: 0.8;">Copy quality is excellent.</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            listEl.innerHTML = allIssues.map(issue => {
+                const severityColors = {
+                    error: { bg: '#7f1d1d', border: '#ef4444', icon: '✕' },
+                    warning: { bg: '#78350f', border: '#f59e0b', icon: '!' },
+                    info: { bg: '#1e3a5f', border: '#3b82f6', icon: 'i' }
+                };
+                const colors = severityColors[issue.severity] || severityColors.info;
+                
+                return `
+                    <div style="padding: 12px; background-color: ${colors.bg}; border-radius: 8px; border-left: 4px solid ${colors.border}; display: flex; gap: 12px; align-items: flex-start;">
+                        <span style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background-color: ${colors.border}; border-radius: 50%; font-weight: bold; font-size: 12px; flex-shrink: 0;">${colors.icon}</span>
+                        <div>
+                            <div style="font-weight: 600; margin-bottom: 4px;">${issue.field || 'unknown'} • ${issue.rule || issue.severity}</div>
+                            <div style="font-size: 13px; opacity: 0.9;">${issue.message || 'No message'}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CONFIG JSON - Switch Tab
+        // ═══════════════════════════════════════════════════════════════════════════
+        function switchConfigTab(tabId) {
+            currentConfigTab = tabId;
+            
+            // Update tab buttons
+            document.querySelectorAll('.config-tab').forEach(tab => {
+                if (tab.getAttribute('data-tab') === tabId) {
+                    tab.style.color = '#f1f5f9';
+                    tab.style.borderBottomColor = '#14b8a6';
+                    tab.classList.add('active');
+                } else {
+                    tab.style.color = '#94a3b8';
+                    tab.style.borderBottomColor = 'transparent';
+                    tab.classList.remove('active');
+                }
+            });
+            
+            // Show/hide content
+            document.querySelectorAll('.config-tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            const activeContent = document.getElementById(`config-tab-${tabId}`);
+            if (activeContent) {
+                activeContent.style.display = 'block';
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CONFIG JSON - Refresh
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function refreshConfigJson() {
+            const icon = document.getElementById('config-refresh-icon');
+            if (icon) icon.classList.add('fa-spin');
+            
+            await loadConfigJsonData();
+            
+            setTimeout(() => {
+                if (icon) icon.classList.remove('fa-spin');
+            }, 500);
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CONFIG JSON - Copy to Clipboard
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function copyConfigJson(type) {
+            let data;
+            let label;
+            
+            if (type === 'effective') {
+                data = configEffectiveData?.effectiveConfig;
+                label = 'Effective Config';
+            } else if (type === 'raw') {
+                data = configRawData;
+                label = 'Raw Company Config';
+            }
+            
+            if (data) {
+                try {
+                    await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+                    // Show toast using existing function if available
+                    if (typeof showSaveVerifyToast === 'function') {
+                        showSaveVerifyToast(true, '📋 Copied!', `${label} copied to clipboard`);
+                    } else {
+                        alert(`${label} copied to clipboard!`);
+                    }
+                } catch (err) {
+                    console.error('[CONFIG JSON] Copy failed:', err);
+                    alert('Failed to copy: ' + err.message);
+                }
+            } else {
+                alert('No data available to copy. Please refresh first.');
+            }
+        }
     </script>
     
 </body>
