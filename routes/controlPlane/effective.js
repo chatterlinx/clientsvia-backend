@@ -47,7 +47,7 @@ router.use(requireCompanyAccess);
  * AUTO-CONVERGENCE: If legacy sources are detected, writes back to canonical
  * to prevent perpetual legacy dependency
  */
-router.get('/', async (req, res) => {
+router.get('/effective', async (req, res) => {
     const startTime = Date.now();
     const { companyId } = req.params;
     const autoConverge = req.query.converge !== 'false'; // Default: converge
