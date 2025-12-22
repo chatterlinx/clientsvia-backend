@@ -1,172 +1,125 @@
 /**
  * ============================================================================
- * FIX PENGUIN AIR GREETING - ONE-TIME MIGRATION
+ * FIX PENGUIN AIR GREETING
  * ============================================================================
  * 
- * Updates Penguin Air's greeting to the optimal version:
- * "Thanks for calling {{companyName}} — how can I help?"
+ * Sets the optimal greeting for Penguin Air (Golden HVAC Blueprint):
+ * - Ultra-short for fast TTS (~2s)
+ * - Contains {{companyName}} placeholder
+ * - Passes all lint rules
  * 
- * This is the gold standard greeting:
- * - 8 words
- * - ~2.5s TTS time
- * - Uses {{companyName}} placeholder
- * - Fast first-turn response
- * 
- * Run with: node scripts/migrations/fixPenguinAirGreeting.js
+ * Run: node scripts/migrations/fixPenguinAirGreeting.js
  * 
  * ============================================================================
  */
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const v2Company = require('../../models/v2Company');
+const { standardizePlaceholders } = require('../../utils/placeholderStandard');
 
-const OPTIMAL_GREETING = "Thanks for calling {{companyName}} — how can I help?";
+const PENGUIN_AIR_ID = '68e3f77a9d623b8058c700c4';
+
+// OPTIMAL GREETING (5 words, ~2s TTS, has placeholder)
+const OPTIMAL_GREETING = '{{companyName}} — how can I help?';
+
+// Alternative (7 words, ~2.5s TTS)
+const ALTERNATIVE_GREETING = 'Thanks for calling {{companyName}} — how can I help?';
 
 async function main() {
-    console.log('\n========================================');
-    console.log('FIX PENGUIN AIR GREETING MIGRATION');
-    console.log('========================================\n');
+    console.log('═══════════════════════════════════════════════════════════════════════════');
+    console.log('FIX PENGUIN AIR GREETING');
+    console.log('═══════════════════════════════════════════════════════════════════════════\n');
     
-    // Connect to MongoDB
     const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
     if (!mongoUri) {
-        console.error('❌ No MongoDB URI found in environment');
+        console.error('❌ No MongoDB URI found. Set MONGODB_URI or MONGO_URI env var.');
         process.exit(1);
     }
     
-    console.log('📡 Connecting to MongoDB...');
     await mongoose.connect(mongoUri);
     console.log('✅ Connected to MongoDB\n');
     
-    try {
-        // Find Penguin Air by name (case-insensitive)
-        const penguinAir = await v2Company.findOne({
-            $or: [
-                { name: /penguin.*air/i },
-                { 'profile.name': /penguin.*air/i },
-                { companyName: /penguin.*air/i }
-            ]
-        });
-        
-        if (!penguinAir) {
-            console.log('❌ Penguin Air not found in database');
-            console.log('   Looking for any company with "penguin" in name...');
-            
-            const anyPenguin = await v2Company.findOne({
-                $or: [
-                    { name: /penguin/i },
-                    { 'profile.name': /penguin/i }
-                ]
-            });
-            
-            if (anyPenguin) {
-                console.log(`   Found: ${anyPenguin.name || anyPenguin.profile?.name} (ID: ${anyPenguin._id})`);
-            } else {
-                console.log('   No Penguin company found at all');
-            }
-            
-            process.exit(1);
-        }
-        
-        console.log(`✅ Found Penguin Air: ${penguinAir.name || penguinAir.profile?.name}`);
-        console.log(`   Company ID: ${penguinAir._id}\n`);
-        
-        // Show current greeting state
-        console.log('📋 CURRENT GREETING STATE:');
-        console.log('   connectionMessages.voice.text:', 
-            penguinAir.connectionMessages?.voice?.text || '(not set)');
-        console.log('   connectionMessages.voice.realtime.text:', 
-            penguinAir.connectionMessages?.voice?.realtime?.text || '(not set)');
-        console.log('   callFlowEngine.style.greeting:', 
-            penguinAir.callFlowEngine?.style?.greeting || '(not set)');
-        console.log('');
-        
-        // Update greeting in ALL canonical paths
-        console.log('🔧 UPDATING TO OPTIMAL GREETING:');
-        console.log(`   "${OPTIMAL_GREETING}"\n`);
-        
-        // Ensure nested objects exist
-        if (!penguinAir.connectionMessages) penguinAir.connectionMessages = {};
-        if (!penguinAir.connectionMessages.voice) penguinAir.connectionMessages.voice = {};
-        if (!penguinAir.connectionMessages.voice.realtime) penguinAir.connectionMessages.voice.realtime = {};
-        
-        // Write to PRIMARY path
-        penguinAir.connectionMessages.voice.text = OPTIMAL_GREETING;
-        console.log('   ✅ connectionMessages.voice.text');
-        
-        // Write to REALTIME path
-        penguinAir.connectionMessages.voice.realtime.text = OPTIMAL_GREETING;
-        console.log('   ✅ connectionMessages.voice.realtime.text');
-        
-        // Mirror to callFlowEngine if it exists
-        if (penguinAir.callFlowEngine?.style) {
-            penguinAir.callFlowEngine.style.greeting = OPTIMAL_GREETING;
-            console.log('   ✅ callFlowEngine.style.greeting (mirrored)');
-        }
-        
-        // Also update frontDeskBehavior if it exists
-        if (!penguinAir.frontDeskBehavior) penguinAir.frontDeskBehavior = {};
-        if (!penguinAir.frontDeskBehavior.greeting) penguinAir.frontDeskBehavior.greeting = {};
-        penguinAir.frontDeskBehavior.greeting.text = OPTIMAL_GREETING;
-        penguinAir.frontDeskBehavior.greeting.enabled = true;
-        console.log('   ✅ frontDeskBehavior.greeting.text');
-        
-        // Also update aiAgentSettings if it exists
-        if (penguinAir.aiAgentSettings?.frontDeskBehavior) {
-            if (!penguinAir.aiAgentSettings.frontDeskBehavior.greeting) {
-                penguinAir.aiAgentSettings.frontDeskBehavior.greeting = {};
-            }
-            penguinAir.aiAgentSettings.frontDeskBehavior.greeting.text = OPTIMAL_GREETING;
-            penguinAir.aiAgentSettings.frontDeskBehavior.greeting.enabled = true;
-            console.log('   ✅ aiAgentSettings.frontDeskBehavior.greeting.text');
-        }
-        
-        // Add migration metadata
-        if (!penguinAir._meta) penguinAir._meta = {};
-        penguinAir._meta.greetingOptimizedAt = new Date().toISOString();
-        penguinAir._meta.greetingOptimizedVersion = 'penguin_air_gold_v1';
-        
-        // Save
-        await penguinAir.save();
-        console.log('\n💾 Saved to database');
-        
-        // Clear Redis cache
-        try {
-            const { redisClient } = require('../../db');
-            if (redisClient && redisClient.isOpen) {
-                await redisClient.del(`company:${penguinAir._id}`);
-                console.log('🗑️  Cleared Redis cache');
-            }
-        } catch (e) {
-            console.log('⚠️  Could not clear Redis cache (may not be connected)');
-        }
-        
-        // Verify
-        console.log('\n========================================');
-        console.log('✅ MIGRATION COMPLETE');
-        console.log('========================================');
-        console.log('');
-        console.log('Penguin Air greeting is now optimal:');
-        console.log(`  "${OPTIMAL_GREETING}"`);
-        console.log('');
-        console.log('Stats:');
-        console.log('  • Word count: 8');
-        console.log('  • Estimated TTS: ~2.5s');
-        console.log('  • Uses placeholder: ✅ {{companyName}}');
-        console.log('  • Lint status: OPTIMAL');
-        console.log('');
-        console.log('All future companies cloned from Penguin Air will inherit this greeting.');
-        console.log('');
-        
-    } catch (error) {
-        console.error('❌ Migration failed:', error);
-        process.exit(1);
-    } finally {
+    const Company = require('../../models/v2Company');
+    
+    const company = await Company.findById(PENGUIN_AIR_ID);
+    if (!company) {
+        console.error(`❌ Company not found: ${PENGUIN_AIR_ID}`);
         await mongoose.disconnect();
-        console.log('📡 Disconnected from MongoDB');
+        process.exit(1);
     }
+    
+    console.log(`📍 Company: ${company.companyName}`);
+    console.log(`📍 ID: ${company._id}\n`);
+    
+    // Show current state
+    console.log('CURRENT GREETING LOCATIONS:');
+    console.log('─────────────────────────────────────────────────────────────────────────────');
+    console.log(`connectionMessages.voice.text:          ${company.connectionMessages?.voice?.text || '(empty)'}`);
+    console.log(`connectionMessages.voice.realtime.text: ${company.connectionMessages?.voice?.realtime?.text || '(empty)'}`);
+    console.log(`frontDeskBehavior.greeting:             ${JSON.stringify(company.frontDeskBehavior?.greeting) || '(empty)'}`);
+    console.log(`callFlowEngine.style.greeting:          ${company.callFlowEngine?.style?.greeting || '(empty)'}`);
+    console.log('');
+    
+    // Use the short optimal greeting
+    const newGreeting = OPTIMAL_GREETING;
+    console.log(`📝 NEW GREETING: "${newGreeting}"`);
+    console.log(`   Words: ${newGreeting.split(/\s+/).length}`);
+    console.log(`   Est. TTS: ~${(newGreeting.split(/\s+/).length * 0.4).toFixed(1)}s`);
+    console.log('');
+    
+    // Initialize paths
+    if (!company.connectionMessages) company.connectionMessages = {};
+    if (!company.connectionMessages.voice) company.connectionMessages.voice = {};
+    if (!company.connectionMessages.voice.realtime) company.connectionMessages.voice.realtime = {};
+    
+    // Set canonical paths
+    company.connectionMessages.voice.text = newGreeting;
+    company.connectionMessages.voice.realtime.text = newGreeting;
+    
+    // Clear legacy paths (mark as deprecated)
+    if (company.frontDeskBehavior?.greeting) {
+        console.log('🗑️  Clearing frontDeskBehavior.greeting (legacy)');
+        company.frontDeskBehavior.greeting = null;
+    }
+    
+    if (company.callFlowEngine?.style?.greeting) {
+        console.log('🗑️  Clearing callFlowEngine.style.greeting (legacy)');
+        company.callFlowEngine.style.greeting = null;
+    }
+    
+    // Save
+    await company.save();
+    console.log('\n✅ Greeting updated successfully!\n');
+    
+    // Verify
+    const updated = await Company.findById(PENGUIN_AIR_ID);
+    console.log('VERIFIED GREETING LOCATIONS:');
+    console.log('─────────────────────────────────────────────────────────────────────────────');
+    console.log(`connectionMessages.voice.text:          ${updated.connectionMessages?.voice?.text}`);
+    console.log(`connectionMessages.voice.realtime.text: ${updated.connectionMessages?.voice?.realtime?.text}`);
+    console.log(`frontDeskBehavior.greeting:             ${updated.frontDeskBehavior?.greeting || '(cleared)'}`);
+    console.log(`callFlowEngine.style.greeting:          ${updated.callFlowEngine?.style?.greeting || '(cleared)'}`);
+    console.log('');
+    
+    // Clear Redis cache if available
+    try {
+        const redisClient = require('../../config/redis');
+        if (redisClient?.isOpen) {
+            await redisClient.del(`company:${PENGUIN_AIR_ID}`);
+            console.log('🗑️  Redis cache cleared\n');
+        }
+    } catch (e) {
+        console.log('⚠️  Redis not available, skip cache clear\n');
+    }
+    
+    console.log('═══════════════════════════════════════════════════════════════════════════');
+    console.log('DONE - Now refresh Control Plane and run Lint to verify');
+    console.log('═══════════════════════════════════════════════════════════════════════════');
+    
+    await mongoose.disconnect();
 }
 
-main().catch(console.error);
-
+main().catch(err => {
+    console.error('❌ Migration failed:', err);
+    process.exit(1);
+});
