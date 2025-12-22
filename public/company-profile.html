@@ -1783,10 +1783,18 @@
                         <i class="fas fa-sync-alt" id="config-refresh-icon"></i>
                         Refresh
                     </button>
-                    <button onclick="copyConfigJson('effective')" style="padding: 6px 12px; font-size: 14px; background-color: #0d9488; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                    <button onclick="copyConfigJson('effective', this)" 
+                            style="padding: 6px 12px; font-size: 14px; background-color: #0d9488; color: white; border: none; border-radius: 6px; cursor: pointer; transition: all 0.15s ease;"
+                            onmousedown="this.style.transform='scale(0.95)'; this.style.boxShadow='inset 0 2px 4px rgba(0,0,0,0.2)';"
+                            onmouseup="this.style.transform='scale(1)'; this.style.boxShadow='none';"
+                            onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='none';">
                         📋 Copy Effective
                     </button>
-                    <button onclick="copyConfigJson('raw')" style="padding: 6px 12px; font-size: 14px; background-color: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                    <button onclick="copyConfigJson('raw', this)" 
+                            style="padding: 6px 12px; font-size: 14px; background-color: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer; transition: all 0.15s ease;"
+                            onmousedown="this.style.transform='scale(0.95)'; this.style.boxShadow='inset 0 2px 4px rgba(0,0,0,0.2)';"
+                            onmouseup="this.style.transform='scale(1)'; this.style.boxShadow='none';"
+                            onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='none';">
                         📋 Copy Raw
                     </button>
                     <button onclick="closeConfigJsonModal()" style="padding: 8px; background: transparent; border: none; color: #94a3b8; cursor: pointer; border-radius: 6px;">
@@ -3506,9 +3514,9 @@
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // CONFIG JSON - Copy to Clipboard
+        // CONFIG JSON - Copy to Clipboard with Visual Feedback
         // ═══════════════════════════════════════════════════════════════════════════
-        async function copyConfigJson(type) {
+        async function copyConfigJson(type, buttonEl) {
             let data;
             let label;
             
@@ -3522,20 +3530,71 @@
             
             if (data) {
                 try {
-                    await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
-                    // Show toast using existing function if available
-                    if (typeof showSaveVerifyToast === 'function') {
-                        showSaveVerifyToast(true, '📋 Copied!', `${label} copied to clipboard`);
-                    } else {
-                        alert(`${label} copied to clipboard!`);
-                    }
+                    const jsonString = JSON.stringify(data, null, 2);
+                    await navigator.clipboard.writeText(jsonString);
+                    
+                    // Calculate stats for feedback
+                    const lines = jsonString.split('\n').length;
+                    const size = (jsonString.length / 1024).toFixed(1);
+                    
+                    // Show inline toast
+                    showConfigCopyToast(true, `✅ ${label} Copied!`, `${lines} lines • ${size} KB`);
+                    
                 } catch (err) {
                     console.error('[CONFIG JSON] Copy failed:', err);
-                    alert('Failed to copy: ' + err.message);
+                    showConfigCopyToast(false, '❌ Copy Failed', err.message);
                 }
             } else {
-                alert('No data available to copy. Please refresh first.');
+                showConfigCopyToast(false, '⚠️ No Data', 'Please click Refresh first to load data.');
             }
+        }
+        
+        // Show toast notification for config copy
+        function showConfigCopyToast(success, title, detail) {
+            // Remove existing toast if any
+            const existing = document.getElementById('config-copy-toast');
+            if (existing) existing.remove();
+            
+            // Create toast element
+            const toast = document.createElement('div');
+            toast.id = 'config-copy-toast';
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                left: 50%;
+                transform: translateX(-50%) translateY(100px);
+                padding: 12px 20px;
+                border-radius: 10px;
+                background: ${success ? '#059669' : '#dc2626'};
+                color: white;
+                font-weight: 600;
+                font-size: 14px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                z-index: 100000;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 4px;
+                transition: transform 0.3s ease-out;
+            `;
+            
+            toast.innerHTML = `
+                <span style="font-size: 15px;">${title}</span>
+                <span style="font-size: 12px; opacity: 0.9;">${detail}</span>
+            `;
+            
+            document.body.appendChild(toast);
+            
+            // Animate in
+            requestAnimationFrame(() => {
+                toast.style.transform = 'translateX(-50%) translateY(0)';
+            });
+            
+            // Remove after 3 seconds
+            setTimeout(() => {
+                toast.style.transform = 'translateX(-50%) translateY(100px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
         }
     </script>
     
