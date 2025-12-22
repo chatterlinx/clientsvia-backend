@@ -461,7 +461,7 @@ function registerRoutes(routes) {
     app.use('/api/company/:companyId', routes.companyOverridesRoutes); // 🎚️ Company Overrides (Scenario/Category disable + Placeholders)
     app.use('/api/company/:companyId', routes.scopeOverridesRoutes); // 🔒 Scope Overrides (GLOBAL vs COMPANY clone-to-override)
     app.use('/api/company/:companyId/scenario-export', routes.scenarioExportRoutes); // 📦 Full Scenario Export (Deep JSON export with all fields)
-    app.use('/api/company/:companyId/control-plane', routes.controlPlaneEffectiveRoutes); // ⚡ Control Plane Effective Config + Lint
+    app.use('/api/company/:companyId/control-plane/effective', routes.controlPlaneEffectiveRoutes); // ⚡ Control Plane Effective Config + Lint
     app.use('/api/company/:companyId/platform-snapshot', routes.platformSnapshotRoutes); // 📄 Platform Snapshot (Enterprise Introspection - Single Source of Truth)
     app.use('/api/company/:companyId/seed-golden', routes.seedGoldenRoutes); // 🟣 Seed Golden Setup (Penguin Air HVAC Reference)
     app.use('/api/company/:companyId/raw', routes.rawCompanyDataRoutes); // 🔍 Raw Company Data (DB Echo for Truth Report)
