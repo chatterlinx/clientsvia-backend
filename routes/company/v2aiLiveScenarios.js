@@ -196,7 +196,15 @@ router.get('/company/:companyId/live-scenarios', async (req, res) => {
                                     isActive: isEnabled,
                                     isEnabledForCompany: isEnabled,  // ✅ Apply per-company control
                                     disabledAt: control?.disabledAt || null,
-                                    disabledBy: control?.disabledBy || null
+                                    disabledBy: control?.disabledBy || null,
+                                    // ═══════════════════════════════════════════════════════════
+                                    // SCOPE LOCK FIELDS (Multi-tenant protection)
+                                    // ═══════════════════════════════════════════════════════════
+                                    scope: scenario.scope || 'GLOBAL',  // GLOBAL = read-only in company context
+                                    ownerCompanyId: scenario.ownerCompanyId?.toString() || null,
+                                    isLocked: (scenario.scope || 'GLOBAL') === 'GLOBAL',  // GLOBAL is always locked
+                                    isOverride: (scenario.scope || 'GLOBAL') === 'COMPANY',
+                                    overridesGlobalScenarioId: scenario.overridesGlobalScenarioId || null
                                 });
                             }
                         }

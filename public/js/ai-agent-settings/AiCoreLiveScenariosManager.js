@@ -368,6 +368,48 @@ class AiCoreLiveScenariosManager {
         const confidenceColor = scenario.avgConfidence >= 0.8 ? '#10b981' : 
                                 scenario.avgConfidence >= 0.6 ? '#f59e0b' : '#ef4444';
         
+        // ═══════════════════════════════════════════════════════════════════
+        // SCOPE LOCK INFO (Multi-tenant protection)
+        // ═══════════════════════════════════════════════════════════════════
+        const scope = scenario.scope || 'GLOBAL';
+        const isLocked = scope === 'GLOBAL'; // GLOBAL = read-only in company context
+        const isOverride = scope === 'COMPANY';
+        const ownerCompanyId = scenario.ownerCompanyId || null;
+        
+        // Scope pill rendering
+        const scopePillHtml = scope === 'GLOBAL' 
+            ? `<span style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 8px;">
+                   🌐 GLOBAL
+               </span>`
+            : `<span style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 8px;">
+                   🏢 OVERRIDE
+               </span>`;
+        
+        // Locked banner for GLOBAL scenarios
+        const lockedBannerHtml = isLocked ? `
+            <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 14px;">🔒</span>
+                    <span style="font-size: 12px; color: #92400e; font-weight: 500;">
+                        GLOBAL shared scenario — editing locked to prevent contamination
+                    </span>
+                </div>
+                <button onclick="aiCoreLiveScenariosManager.cloneScenarioToCompany('${scenario.templateId}', '${scenario.categoryId || ''}', '${scenario.scenarioId}')"
+                        style="background: #f59e0b; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap;">
+                    Clone to Override
+                </button>
+            </div>
+        ` : '';
+        
+        // Override badge for company-owned scenarios
+        const overrideBadgeHtml = isOverride ? `
+            <div style="background: #d1fae5; border: 1px solid #10b981; border-radius: 6px; padding: 6px 10px; margin-bottom: 12px;">
+                <span style="font-size: 12px; color: #065f46; font-weight: 500;">
+                    ✅ Company override — safe to edit
+                </span>
+            </div>
+        ` : '';
+        
         // Construct unique toggle ID
         const toggleId = `toggle-${scenario.templateId}-${scenario.scenarioId}`;
         
@@ -375,9 +417,13 @@ class AiCoreLiveScenariosManager {
             <div style="background: ${isEnabled ? '#f9fafb' : '#fef2f2'}; border: 2px solid ${isEnabled ? '#e5e7eb' : '#fecaca'}; border-radius: 8px; padding: 16px; transition: all 0.2s; ${!isEnabled ? 'opacity: 0.7;' : ''}"
                  onmouseover="this.style.borderColor='${isEnabled ? '#6366f1' : '#ef4444'}'; this.style.boxShadow='0 2px 8px rgba(99,102,241,0.1)'"
                  onmouseout="this.style.borderColor='${isEnabled ? '#e5e7eb' : '#fecaca'}'; this.style.boxShadow='none'">
+                
+                ${lockedBannerHtml}
+                ${overrideBadgeHtml}
+                
                 <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
                     <div style="flex: 1;">
-                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap;">
                             <!-- TOGGLE SWITCH -->
                             <label style="position: relative; display: inline-block; width: 50px; height: 24px; cursor: pointer;">
                                 <input type="checkbox" 
@@ -393,6 +439,9 @@ class AiCoreLiveScenariosManager {
                             <div style="font-size: 16px; font-weight: 600; color: ${isEnabled ? '#1f2937' : '#991b1b'};">
                                 ${this.escapeHtml(scenario.name || scenario.trigger)}
                             </div>
+                            
+                            <!-- SCOPE PILL -->
+                            ${scopePillHtml}
                             
                             ${!isEnabled ? `
                                 <span style="background: #ef4444; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">
@@ -426,7 +475,10 @@ class AiCoreLiveScenariosManager {
                 </div>
                 
                 <div style="padding-top: 12px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280;">
-                    <strong>Note:</strong> Scenario content is read-only. To edit triggers or replies, go to <strong>Global AI Brain → Templates</strong>.
+                    ${isLocked 
+                        ? `<strong>🔒 Read-only:</strong> This is GLOBAL shared content. Click "Clone to Override" to make editable changes for this company only.`
+                        : `<strong>✏️ Editable:</strong> This is a company-specific override. Changes only affect this company.`
+                    }
                 </div>
             </div>
         `;
@@ -818,6 +870,100 @@ class AiCoreLiveScenariosManager {
     async refresh() {
         console.log('🔄 [LIVE SCENARIOS] Refreshing...');
         await this.load();
+    }
+    
+    /**
+     * Clone a GLOBAL scenario to COMPANY override
+     * This creates an editable copy for this company only
+     */
+    async cloneScenarioToCompany(templateId, categoryId, scenarioId) {
+        console.log(`🔀 [LIVE SCENARIOS] Cloning scenario ${scenarioId} to company override...`);
+        
+        // Show confirmation
+        const confirmed = confirm(
+            `Clone this GLOBAL scenario to a COMPANY override?\n\n` +
+            `This will create an editable copy that only affects this company. ` +
+            `The original GLOBAL scenario will remain unchanged for other tenants.`
+        );
+        
+        if (!confirmed) {
+            console.log('🔀 [LIVE SCENARIOS] Clone cancelled by user');
+            return;
+        }
+        
+        try {
+            const url = `/api/company/${this.companyId}/scenarios/${templateId}/${categoryId}/${scenarioId}/clone`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('✅ [LIVE SCENARIOS] Scenario cloned successfully:', data);
+            
+            this.showToast('✅ Scenario cloned! You can now edit it safely.');
+            
+            // Refresh to show new override
+            await this.refresh();
+            
+        } catch (error) {
+            console.error('❌ [LIVE SCENARIOS] Clone failed:', error);
+            alert(`Failed to clone scenario: ${error.message}`);
+        }
+    }
+    
+    /**
+     * Clone a GLOBAL category to COMPANY override (with all scenarios)
+     */
+    async cloneCategoryToCompany(templateId, categoryId) {
+        console.log(`🔀 [LIVE SCENARIOS] Cloning category ${categoryId} to company override...`);
+        
+        const confirmed = confirm(
+            `Clone this GLOBAL category (with all scenarios) to a COMPANY override?\n\n` +
+            `This will create an editable copy of the entire category and all its scenarios ` +
+            `for this company only.`
+        );
+        
+        if (!confirmed) {
+            console.log('🔀 [LIVE SCENARIOS] Clone cancelled by user');
+            return;
+        }
+        
+        try {
+            const url = `/api/company/${this.companyId}/categories/${templateId}/${categoryId}/clone`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+                }
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('✅ [LIVE SCENARIOS] Category cloned successfully:', data);
+            
+            this.showToast(`✅ Category cloned with ${data.data.scenariosCloned} scenarios!`);
+            
+            // Refresh to show new overrides
+            await this.refresh();
+            
+        } catch (error) {
+            console.error('❌ [LIVE SCENARIOS] Clone failed:', error);
+            alert(`Failed to clone category: ${error.message}`);
+        }
     }
     
     /**

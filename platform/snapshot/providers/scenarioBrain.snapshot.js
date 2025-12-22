@@ -10,6 +10,7 @@ const GlobalInstantResponseTemplate = require('../../../models/GlobalInstantResp
 const CompanyScenarioOverride = require('../../../models/CompanyScenarioOverride');
 const CompanyCategoryOverride = require('../../../models/CompanyCategoryOverride');
 const CompanyResponseDefaults = require('../../../models/CompanyResponseDefaults');
+const { getScopeDisplayInfo, isLockedForCompany } = require('../../../middleware/scopeGuard');
 const logger = require('../../../utils/logger');
 
 module.exports.getSnapshot = async function(companyId) {
@@ -115,6 +116,16 @@ module.exports.getSnapshot = async function(companyId) {
         let disabledCategoriesNoDefault = 0;
         let disabledScenariosNoAlt = 0;
         
+        // ═══════════════════════════════════════════════════════════════════
+        // SCOPE LOCK COUNTERS (Multi-tenant contamination prevention)
+        // ═══════════════════════════════════════════════════════════════════
+        let globalCategoriesCount = 0;
+        let companyOverrideCategoriesCount = 0;
+        let globalScenariosCount = 0;
+        let companyOverrideScenariosCount = 0;
+        let lockedCategoriesCount = 0;
+        let lockedScenariosCount = 0;
+        
         for (const template of activeTemplates) {
             const categorySnapshots = [];
             
@@ -124,6 +135,23 @@ module.exports.getSnapshot = async function(companyId) {
                 const categoryOverride = categoryOverrideMap.get(category.id);
                 const categoryEnabled = !categoryOverride || categoryOverride.enabled !== false;
                 const categoryHasDefault = categoryOverride?.disabledDefaultReply?.fullReply || categoryOverride?.useCompanyDefault;
+                
+                // ═══════════════════════════════════════════════════════════
+                // CATEGORY SCOPE LOCK INFO
+                // ═══════════════════════════════════════════════════════════
+                const categoryScope = category.scope || 'GLOBAL';
+                const categoryIsLocked = isLockedForCompany(category, companyId);
+                const categoryScopeInfo = getScopeDisplayInfo(category, companyId);
+                
+                if (categoryScope === 'GLOBAL') {
+                    globalCategoriesCount++;
+                } else if (categoryScope === 'COMPANY') {
+                    companyOverrideCategoriesCount++;
+                }
+                
+                if (categoryIsLocked) {
+                    lockedCategoriesCount++;
+                }
                 
                 if (categoryEnabled) {
                     enabledCategories++;
@@ -146,6 +174,23 @@ module.exports.getSnapshot = async function(companyId) {
                     const hasAlternate = scenarioOverride?.disabledAlternateReply?.fullReply && 
                                         scenarioOverride?.fallbackPreference === 'SCENARIO';
                     
+                    // ═══════════════════════════════════════════════════════
+                    // SCENARIO SCOPE LOCK INFO
+                    // ═══════════════════════════════════════════════════════
+                    const scenarioScope = scenario.scope || 'GLOBAL';
+                    const scenarioIsLocked = isLockedForCompany(scenario, companyId);
+                    const scenarioScopeInfo = getScopeDisplayInfo(scenario, companyId);
+                    
+                    if (scenarioScope === 'GLOBAL') {
+                        globalScenariosCount++;
+                    } else if (scenarioScope === 'COMPANY') {
+                        companyOverrideScenariosCount++;
+                    }
+                    
+                    if (scenarioIsLocked) {
+                        lockedScenariosCount++;
+                    }
+                    
                     if (scenarioEnabled) {
                         enabledScenarios++;
                     } else {
@@ -164,7 +209,15 @@ module.exports.getSnapshot = async function(companyId) {
                         hasAlternateReply: hasAlternate,
                         fallbackPreference: scenarioOverride?.fallbackPreference || 'COMPANY',
                         triggerCount: (scenario.triggers || []).length,
-                        priority: scenario.priority || 0
+                        priority: scenario.priority || 0,
+                        // SCOPE LOCK FIELDS
+                        scope: scenarioScope,
+                        ownerCompanyId: scenario.ownerCompanyId?.toString() || null,
+                        isLocked: scenarioIsLocked,
+                        isOverride: scenarioScopeInfo.isOverride,
+                        overridesGlobalScenarioId: scenario.overridesGlobalScenarioId || null,
+                        canEdit: scenarioScopeInfo.canEdit,
+                        requiresClone: scenarioScopeInfo.requiresClone
                     });
                 }
                 
@@ -175,6 +228,14 @@ module.exports.getSnapshot = async function(companyId) {
                     disabledDefaultReplyConfigured: !!categoryHasDefault,
                     scenariosTotal: scenarioSnapshots.length,
                     scenariosEnabled: scenarioSnapshots.filter(s => s.enabled).length,
+                    // SCOPE LOCK FIELDS
+                    scope: categoryScope,
+                    ownerCompanyId: category.ownerCompanyId?.toString() || null,
+                    isLocked: categoryIsLocked,
+                    isOverride: categoryScopeInfo.isOverride,
+                    overridesGlobalCategoryId: category.overridesGlobalCategoryId || null,
+                    canEdit: categoryScopeInfo.canEdit,
+                    requiresClone: categoryScopeInfo.requiresClone,
                     scenarios: scenarioSnapshots
                 });
             }
@@ -247,6 +308,22 @@ module.exports.getSnapshot = async function(companyId) {
                     disabledWithAlternate,
                     disabledCategoriesNoDefault,
                     disabledScenariosNoAlt
+                },
+                
+                // ═══════════════════════════════════════════════════════════
+                // SCOPE LOCK SUMMARY (Multi-tenant contamination prevention)
+                // ═══════════════════════════════════════════════════════════
+                scopeLocks: {
+                    globalCategoriesCount,
+                    companyOverrideCategoriesCount,
+                    globalScenariosCount,
+                    companyOverrideScenariosCount,
+                    lockedCategoriesCount,
+                    lockedScenariosCount,
+                    // Computed flags
+                    hasCompanyOverrides: companyOverrideCategoriesCount > 0 || companyOverrideScenariosCount > 0,
+                    allGlobal: companyOverrideCategoriesCount === 0 && companyOverrideScenariosCount === 0,
+                    fullyLocked: lockedCategoriesCount === totalCategories && lockedScenariosCount === totalScenarios
                 },
                 
                 companyDefaults: {

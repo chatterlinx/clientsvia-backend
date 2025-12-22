@@ -65,6 +65,65 @@ const scenarioSchema = new Schema({
         // ULID or UUID for stable, collision-free IDs across environments
     },
     
+    // ============================================
+    // 🔒 SCOPE LOCK - GLOBAL vs COMPANY
+    // ============================================
+    // Prevents multi-tenant contamination
+    // GLOBAL = shared read-only, COMPANY = editable override
+    
+    scope: {
+        type: String,
+        enum: ['GLOBAL', 'COMPANY'],
+        default: 'GLOBAL'
+        // GLOBAL: Shared across all tenants (read-only in company context)
+        // COMPANY: Company-specific override (editable)
+    },
+    
+    ownerCompanyId: {
+        type: Schema.Types.ObjectId,
+        ref: 'v2Company',
+        default: null
+        // null for GLOBAL, set to companyId when COMPANY scope
+    },
+    
+    lockMode: {
+        type: String,
+        enum: ['HARD', 'SOFT'],
+        default: 'HARD'
+        // HARD: API blocks all writes in company context
+        // SOFT: Warning only (not recommended)
+    },
+    
+    editPolicy: {
+        allowEditsInCompanyUI: { type: Boolean, default: false },
+        allowEditsInGlobalUI: { type: Boolean, default: true },
+        requireCloneToEdit: { type: Boolean, default: true }
+    },
+    
+    // Override tracking
+    sourceTemplateId: {
+        type: Schema.Types.ObjectId,
+        ref: 'GlobalInstantResponseTemplate',
+        default: null
+        // Original template this was cloned from
+    },
+    
+    sourceScenarioId: {
+        type: String,
+        default: null
+        // Original scenarioId this was cloned from
+    },
+    
+    overridesGlobalScenarioId: {
+        type: String,
+        default: null
+        // Points to GLOBAL scenario being overridden
+    },
+    
+    // Clone audit
+    createdFromCloneAt: { type: Date, default: null },
+    createdFromCloneBy: { type: String, default: null },
+    
     version: {
         type: Number,
         required: true,
@@ -664,6 +723,65 @@ const categorySchema = new Schema({
         required: true,
         trim: true
     },
+    
+    // ============================================
+    // 🔒 SCOPE LOCK - GLOBAL vs COMPANY (Category Level)
+    // ============================================
+    // Prevents multi-tenant contamination
+    // GLOBAL = shared read-only, COMPANY = editable override
+    
+    scope: {
+        type: String,
+        enum: ['GLOBAL', 'COMPANY'],
+        default: 'GLOBAL'
+        // GLOBAL: Shared across all tenants (read-only in company context)
+        // COMPANY: Company-specific override (editable)
+    },
+    
+    ownerCompanyId: {
+        type: Schema.Types.ObjectId,
+        ref: 'v2Company',
+        default: null
+        // null for GLOBAL, set to companyId when COMPANY scope
+    },
+    
+    lockMode: {
+        type: String,
+        enum: ['HARD', 'SOFT'],
+        default: 'HARD'
+        // HARD: API blocks all writes in company context
+        // SOFT: Warning only (not recommended)
+    },
+    
+    editPolicy: {
+        allowEditsInCompanyUI: { type: Boolean, default: false },
+        allowEditsInGlobalUI: { type: Boolean, default: true },
+        requireCloneToEdit: { type: Boolean, default: true }
+    },
+    
+    // Override tracking
+    sourceTemplateId: {
+        type: Schema.Types.ObjectId,
+        ref: 'GlobalInstantResponseTemplate',
+        default: null
+        // Original template this was cloned from
+    },
+    
+    sourceCategoryId: {
+        type: String,
+        default: null
+        // Original categoryId this was cloned from
+    },
+    
+    overridesGlobalCategoryId: {
+        type: String,
+        default: null
+        // Points to GLOBAL category being overridden
+    },
+    
+    // Clone audit
+    createdFromCloneAt: { type: Date, default: null },
+    createdFromCloneBy: { type: String, default: null },
     
     // 🎭 BEHAVIOR: Default AI behavior for scenarios in this category
     // DEPRECATED: Scenarios control their own behavior (more flexible)
