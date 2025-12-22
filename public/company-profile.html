@@ -3341,6 +3341,9 @@
                 return;
             }
             
+            // Get auth token
+            const authToken = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            
             try {
                 // Load effective config
                 const effectiveResponse = await fetch(`/api/company/${companyId}/control-plane/effective`, {
