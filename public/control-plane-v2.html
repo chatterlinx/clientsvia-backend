@@ -5001,10 +5001,42 @@ Loading field report...
           </div>
         </div>
         
-        <!-- REGISTRY TAB -->
+        <!-- REGISTRY TAB (Enhanced with Wiring Map) -->
         <div id="debug-tab-registry" class="debug-tab-content">
+          <!-- UI WIRING MAP TABLE -->
           <div class="debug-section">
-            <div class="debug-section-title">📋 Schema Registry</div>
+            <div class="debug-section-title">🔌 UI Wiring Map</div>
+            <p style="color: #9ca3af; font-size: 12px; margin-bottom: 12px;">
+              Shows every field, its current value, and source. Click field key to copy JSON path.
+            </p>
+            <div style="overflow-x: auto; margin-bottom: 16px;">
+              <table id="wiring-map-table" style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                <thead>
+                  <tr style="background: #334155; color: #e2e8f0;">
+                    <th style="padding: 8px 6px; text-align: left; border: 1px solid #475569;">Panel</th>
+                    <th style="padding: 8px 6px; text-align: left; border: 1px solid #475569;">Field Key</th>
+                    <th style="padding: 8px 6px; text-align: left; border: 1px solid #475569;">UI Type</th>
+                    <th style="padding: 8px 6px; text-align: left; border: 1px solid #475569;">Current Value</th>
+                    <th style="padding: 8px 6px; text-align: left; border: 1px solid #475569;">Source</th>
+                    <th style="padding: 8px 6px; text-align: center; border: 1px solid #475569;">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="wiring-map-body">
+                  <tr><td colspan="6" style="padding: 20px; text-align: center; color: #9ca3af;">Loading wiring map...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <span style="font-size: 10px; color: #22c55e;">● OK</span>
+              <span style="font-size: 10px; color: #f59e0b;">● Default</span>
+              <span style="font-size: 10px; color: #ef4444;">● Missing</span>
+              <span style="font-size: 10px; color: #6b7280;">● Deprecated</span>
+            </div>
+          </div>
+          
+          <!-- RAW JSON -->
+          <div class="debug-section">
+            <div class="debug-section-title">📋 Raw Schema Registry (JSON)</div>
             <div style="margin-bottom: 12px;">
               <button onclick="copyDebugJson('registry')" style="padding: 6px 12px; background: #334155; color: #e2e8f0; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">
                 📋 Copy JSON
@@ -5102,6 +5134,8 @@ Loading field report...
             debugRegistryData = registryData.data;
             document.getElementById('debug-registry-json').textContent = 
               JSON.stringify(registryData.data, null, 2);
+            // Render wiring map table
+            renderWiringMap(registryData.data, debugEffectiveConfig?.effectiveConfig);
           }
         } else {
           document.getElementById('debug-registry-json').textContent = 
@@ -5202,6 +5236,103 @@ Loading field report...
           </div>
         </li>
       `).join('');
+    }
+    
+    /**
+     * Render the UI Wiring Map table
+     * Shows every field, current value, and source
+     */
+    function renderWiringMap(registry, effectiveConfig) {
+      const tbody = document.getElementById('wiring-map-body');
+      
+      if (!registry || !registry.panels) {
+        tbody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; color: #9ca3af;">No registry data available</td></tr>';
+        return;
+      }
+      
+      const rows = [];
+      
+      // Iterate through all panels
+      registry.panels.forEach(panel => {
+        const panelId = panel.id;
+        const panelLabel = panel.label || panelId;
+        
+        // Get the effective config section for this panel
+        const configSection = effectiveConfig?.[panelId] || {};
+        
+        // Iterate through all fields in the panel
+        (panel.fields || []).forEach(field => {
+          const fieldKey = field.key;
+          const fullPath = `${panelId}.${fieldKey}`;
+          
+          // Get current value from effective config
+          let currentValue = configSection[fieldKey];
+          let source = 'default';
+          let status = 'default';
+          
+          // Check if value exists and determine source
+          if (currentValue !== undefined && currentValue !== null) {
+            if (Array.isArray(currentValue)) {
+              currentValue = `Array(${currentValue.length})`;
+            } else if (typeof currentValue === 'object') {
+              currentValue = JSON.stringify(currentValue).substring(0, 40) + '...';
+            } else if (typeof currentValue === 'string' && currentValue.length > 40) {
+              currentValue = currentValue.substring(0, 40) + '...';
+            }
+            source = 'company';
+            status = 'ok';
+          } else if (field.defaultValue !== undefined) {
+            currentValue = String(field.defaultValue);
+            source = 'default';
+            status = 'default';
+          } else {
+            currentValue = '—';
+            source = 'missing';
+            status = 'missing';
+          }
+          
+          // Check for deprecation
+          if (field.deprecated) {
+            status = 'deprecated';
+          }
+          
+          // Status colors
+          const statusColors = {
+            'ok': '#22c55e',
+            'default': '#f59e0b',
+            'missing': '#ef4444',
+            'deprecated': '#6b7280'
+          };
+          
+          const statusIcons = {
+            'ok': '●',
+            'default': '◐',
+            'missing': '○',
+            'deprecated': '✗'
+          };
+          
+          rows.push(`
+            <tr style="border-bottom: 1px solid #334155;">
+              <td style="padding: 6px; border: 1px solid #334155; color: #94a3b8;">${panelLabel}</td>
+              <td style="padding: 6px; border: 1px solid #334155;">
+                <code style="cursor: pointer; color: #38bdf8; font-size: 10px;" onclick="navigator.clipboard.writeText('${fullPath}'); showSnapshotToast('Copied!', '${fullPath}', 'success');">
+                  ${fieldKey}
+                </code>
+              </td>
+              <td style="padding: 6px; border: 1px solid #334155; color: #9ca3af; font-size: 10px;">${field.uiType || 'text'}</td>
+              <td style="padding: 6px; border: 1px solid #334155; color: #e2e8f0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px;" title="${String(currentValue).replace(/"/g, '&quot;')}">${currentValue}</td>
+              <td style="padding: 6px; border: 1px solid #334155; color: #9ca3af; font-size: 10px;">${source}</td>
+              <td style="padding: 6px; border: 1px solid #334155; text-align: center; color: ${statusColors[status]}; font-size: 14px;" title="${status.toUpperCase()}">${statusIcons[status]}</td>
+            </tr>
+          `);
+        });
+      });
+      
+      if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; color: #9ca3af;">No fields found in registry</td></tr>';
+      } else {
+        tbody.innerHTML = rows.join('');
+      }
     }
     
     function copyDebugJson(type) {

@@ -21,8 +21,15 @@ const CompanyResponseDefaults = require('../../models/CompanyResponseDefaults');
 const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const { lintControlPlane, LINT_RULES } = require('../../utils/controlPlaneLinter');
-const { substitutePlaceholders } = require('../../utils/placeholderStandard');
+const { substitutePlaceholders, standardizePlaceholders, normalizeKey } = require('../../utils/placeholderStandard');
 const logger = require('../../utils/logger');
+
+// TTS performance constants
+const TTS_WORDS_PER_MINUTE = 150;
+const TTS_WORDS_PER_SECOND = TTS_WORDS_PER_MINUTE / 60; // 2.5
+const TARGET_GREETING_SECONDS = 2.5;
+const MAX_GREETING_SECONDS = 4.0;
+const RECOMMENDED_MAX_WORDS = Math.floor(TARGET_GREETING_SECONDS * TTS_WORDS_PER_SECOND); // ~6-7 words for 2.5s
 
 router.use(authenticateJWT);
 router.use(requireCompanyAccess);
@@ -59,28 +66,65 @@ router.get('/', async (req, res) => {
         placeholderMap.companyName = company.companyName;
         placeholderMap.companyPhone = company.companyPhone || company.phoneNumber;
         
-        // Extract effective greeting (check multiple locations)
-        const greetingText = 
+        // ═══════════════════════════════════════════════════════════════════════
+        // EXTRACT & STANDARDIZE GREETING (check multiple locations)
+        // ═══════════════════════════════════════════════════════════════════════
+        let greetingText = 
             company.connectionMessages?.voice?.text ||
             company.connectionMessages?.voice?.realtime?.text ||
             company.frontDeskBehavior?.greeting ||
             '';
+        let greetingSource = company.connectionMessages?.voice?.text ? 'connectionMessages.voice.text' :
+                            company.connectionMessages?.voice?.realtime?.text ? 'connectionMessages.voice.realtime.text' :
+                            company.frontDeskBehavior?.greeting ? 'frontDeskBehavior.greeting' : 'none';
         
-        // Substitute placeholders in greeting for preview
-        const greetingPreview = substitutePlaceholders(greetingText, placeholderMap);
+        // STANDARDIZE placeholders on read (runtime protection)
+        const greetingStandardized = standardizePlaceholders(greetingText);
+        const greetingPreview = substitutePlaceholders(greetingStandardized, placeholderMap);
+        const greetingHasLegacyPlaceholders = greetingText !== greetingStandardized;
         
-        // Extract effective config from various locations
+        // ═══════════════════════════════════════════════════════════════════════
+        // RESOLVE BOOKING SLOTS (check multiple sources - fix for 0 slots bug)
+        // ═══════════════════════════════════════════════════════════════════════
+        let resolvedBookingSlots = [];
+        let bookingSlotsSource = 'none';
+        
+        // Primary: frontDeskBehavior.bookingSlots
+        if (company.frontDeskBehavior?.bookingSlots?.length > 0) {
+            resolvedBookingSlots = company.frontDeskBehavior.bookingSlots;
+            bookingSlotsSource = 'frontDeskBehavior.bookingSlots';
+        }
+        // Fallback 1: aiAgentSettings.bookingSlots (legacy)
+        else if (company.aiAgentSettings?.bookingSlots?.length > 0) {
+            resolvedBookingSlots = company.aiAgentSettings.bookingSlots;
+            bookingSlotsSource = 'aiAgentSettings.bookingSlots (legacy)';
+        }
+        // Fallback 2: booking.slots (legacy)
+        else if (company.booking?.slots?.length > 0) {
+            resolvedBookingSlots = company.booking.slots;
+            bookingSlotsSource = 'booking.slots (legacy)';
+        }
+        // Fallback 3: bookingSlots at root (very legacy)
+        else if (company.bookingSlots?.length > 0) {
+            resolvedBookingSlots = company.bookingSlots;
+            bookingSlotsSource = 'bookingSlots (root legacy)';
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // BUILD EFFECTIVE CONFIG
+        // ═══════════════════════════════════════════════════════════════════════
         const effectiveConfig = {
             // ═══════════════════════════════════════════════════════════════════
             // GREETING
             // ═══════════════════════════════════════════════════════════════════
             greeting: {
                 raw: greetingText,
+                standardized: greetingStandardized,
                 preview: greetingPreview,
-                source: company.connectionMessages?.voice?.text ? 'connectionMessages.voice.text' :
-                        company.connectionMessages?.voice?.realtime?.text ? 'connectionMessages.voice.realtime.text' :
-                        company.frontDeskBehavior?.greeting ? 'frontDeskBehavior.greeting' : 'none',
-                configured: !!greetingText
+                source: greetingSource,
+                configured: !!greetingText,
+                hasLegacyPlaceholders: greetingHasLegacyPlaceholders,
+                needsMigration: greetingHasLegacyPlaceholders
             },
             
             // ═══════════════════════════════════════════════════════════════════
@@ -95,13 +139,16 @@ router.get('/', async (req, res) => {
             },
             
             // ═══════════════════════════════════════════════════════════════════
-            // BOOKING
+            // BOOKING (with multi-source resolution)
             // ═══════════════════════════════════════════════════════════════════
             booking: {
-                enabled: company.frontDeskBehavior?.bookingEnabled ?? true,
-                slots: company.frontDeskBehavior?.bookingSlots || [],
-                slotsCount: (company.frontDeskBehavior?.bookingSlots || []).length,
-                slotNames: (company.frontDeskBehavior?.bookingSlots || []).map(s => s.key)
+                enabled: company.frontDeskBehavior?.bookingEnabled ?? company.aiAgentSettings?.bookingEnabled ?? true,
+                slots: resolvedBookingSlots,
+                slotsCount: resolvedBookingSlots.length,
+                slotNames: resolvedBookingSlots.map(s => s.key || s.name || 'unknown'),
+                source: bookingSlotsSource,
+                // Warning flag if enabled but no slots
+                misconfigured: (company.frontDeskBehavior?.bookingEnabled ?? true) && resolvedBookingSlots.length === 0
             },
             
             // ═══════════════════════════════════════════════════════════════════
@@ -159,22 +206,37 @@ router.get('/', async (req, res) => {
         };
         
         // ═══════════════════════════════════════════════════════════════════════
-        // COMPUTED PERFORMANCE METRICS
+        // COMPUTED PERFORMANCE METRICS (with actionable TTS details)
         // ═══════════════════════════════════════════════════════════════════════
         const greetingWords = greetingPreview ? greetingPreview.split(/\s+/).filter(w => w.length > 0).length : 0;
         const greetingChars = greetingPreview ? greetingPreview.length : 0;
+        const greetingEstimatedSeconds = greetingWords / TTS_WORDS_PER_SECOND;
         
-        // TTS estimate: ~150 words per minute for natural speech
-        const ttsWordsPerSecond = 2.5;
-        const greetingEstimatedSeconds = greetingWords / ttsWordsPerSecond;
+        // Calculate recommended words for target duration
+        const recommendedMaxWords = Math.floor(TARGET_GREETING_SECONDS * TTS_WORDS_PER_SECOND);
+        const wordsOverTarget = Math.max(0, greetingWords - recommendedMaxWords);
         
         const computed = {
             performance: {
                 greetingWordCount: greetingWords,
                 greetingCharCount: greetingChars,
                 greetingEstimatedSeconds: Math.round(greetingEstimatedSeconds * 10) / 10,
-                greetingTTSRating: greetingEstimatedSeconds <= 2.5 ? 'GOOD' : 
-                                   greetingEstimatedSeconds <= 4 ? 'ACCEPTABLE' : 'TOO_LONG',
+                greetingTTSRating: greetingEstimatedSeconds <= TARGET_GREETING_SECONDS ? 'GOOD' : 
+                                   greetingEstimatedSeconds <= MAX_GREETING_SECONDS ? 'ACCEPTABLE' : 'TOO_LONG',
+                // Actionable TTS details
+                tts: {
+                    wordsPerMinute: TTS_WORDS_PER_MINUTE,
+                    wordsPerSecond: TTS_WORDS_PER_SECOND,
+                    targetSeconds: TARGET_GREETING_SECONDS,
+                    maxSeconds: MAX_GREETING_SECONDS,
+                    recommendedMaxWords: recommendedMaxWords,
+                    currentWords: greetingWords,
+                    wordsOverTarget: wordsOverTarget,
+                    needsOptimization: greetingEstimatedSeconds > TARGET_GREETING_SECONDS,
+                    suggestion: greetingEstimatedSeconds > TARGET_GREETING_SECONDS 
+                        ? `Remove ${wordsOverTarget} words to hit ${TARGET_GREETING_SECONDS}s target`
+                        : null
+                },
                 bookingSlotsCount: effectiveConfig.booking.slotsCount,
                 forbiddenPhrasesCount: effectiveConfig.vocabulary.forbiddenPhrasesCount,
                 escalationRulesCount: effectiveConfig.escalation.rulesCount

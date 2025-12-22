@@ -191,6 +191,29 @@ const LINT_RULES = {
         }
     },
     
+    PLACEHOLDER_LEGACY_FORMAT: {
+        id: 'PLACEHOLDER_LEGACY_FORMAT',
+        severity: 'error',
+        penalty: 15,
+        description: 'Legacy placeholder formats detected - must use {{camelCase}}',
+        patterns: [
+            /\{[a-z_]+\}/g,        // {companyname}
+            /\$\{[a-zA-Z_]+\}/g,   // ${companyName}
+            /%[a-zA-Z_]+%/g        // %companyname%
+        ],
+        check: (text) => {
+            return !LINT_RULES.PLACEHOLDER_LEGACY_FORMAT.patterns.some(p => p.test(text));
+        },
+        suggestion: (text) => {
+            const found = [];
+            LINT_RULES.PLACEHOLDER_LEGACY_FORMAT.patterns.forEach(p => {
+                const matches = text.match(p);
+                if (matches) found.push(...matches);
+            });
+            return `Legacy placeholders found: ${found.join(', ')}. Use {{camelCase}} format instead.`;
+        }
+    },
+    
     HAS_COMPANY_NAME: {
         id: 'HAS_COMPANY_NAME',
         severity: 'info',
@@ -235,6 +258,19 @@ const LINT_RULES = {
             return !segments.some(s => s.trim().length > 80);
         },
         suggestion: () => 'Break long sentences into shorter ones.'
+    },
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // BOOKING RULES
+    // ─────────────────────────────────────────────────────────────────────────
+    BOOKING_ENABLED_NO_SLOTS: {
+        id: 'BOOKING_ENABLED_NO_SLOTS',
+        severity: 'warning',
+        penalty: 10,
+        description: 'Booking is enabled but no slots are configured',
+        // This is checked at config level, not text level
+        check: () => true, // Always passes text check, handled separately
+        suggestion: () => 'Configure booking slots or disable booking if running discovery-only.'
     }
 };
 
@@ -325,7 +361,7 @@ function lintControlPlane(config, placeholders = {}) {
             totalPenalty += LINT_RULES.HAS_COMPANY_NAME.penalty;
         }
         
-        // Placeholder format check
+        // Placeholder format check (warning for style issues)
         if (!LINT_RULES.PLACEHOLDER_FORMAT.check(greetingText)) {
             issues.push({
                 field: 'greeting',
@@ -334,6 +370,17 @@ function lintControlPlane(config, placeholders = {}) {
                 message: LINT_RULES.PLACEHOLDER_FORMAT.suggestion(greetingText)
             });
             totalPenalty += LINT_RULES.PLACEHOLDER_FORMAT.penalty;
+        }
+        
+        // Legacy placeholder format check (ERROR - must fix)
+        if (!LINT_RULES.PLACEHOLDER_LEGACY_FORMAT.check(greetingText)) {
+            issues.push({
+                field: 'greeting',
+                rule: 'PLACEHOLDER_LEGACY_FORMAT',
+                severity: 'error',
+                message: LINT_RULES.PLACEHOLDER_LEGACY_FORMAT.suggestion(greetingText)
+            });
+            totalPenalty += LINT_RULES.PLACEHOLDER_LEGACY_FORMAT.penalty;
         }
     }
     
@@ -399,8 +446,32 @@ function lintControlPlane(config, placeholders = {}) {
                 });
                 totalPenalty += LINT_RULES.NO_ROBOTIC_PHRASES.penalty;
             }
+            
+            // Check for LEGACY PLACEHOLDER FORMATS (critical - prevents runtime bugs)
+            if (!LINT_RULES.PLACEHOLDER_LEGACY_FORMAT.check(text)) {
+                issues.push({
+                    field: `fallbacks.${key}`,
+                    rule: 'PLACEHOLDER_LEGACY_FORMAT',
+                    severity: 'error',
+                    message: `${key}: ${LINT_RULES.PLACEHOLDER_LEGACY_FORMAT.suggestion(text)}`
+                });
+                totalPenalty += LINT_RULES.PLACEHOLDER_LEGACY_FORMAT.penalty;
+            }
         }
     });
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // BOOKING ENABLED BUT NO SLOTS WARNING
+    // ─────────────────────────────────────────────────────────────────────────
+    if (config.booking?.enabled && (config.booking?.slotsCount === 0 || config.booking?.slots?.length === 0)) {
+        issues.push({
+            field: 'booking',
+            rule: 'BOOKING_ENABLED_NO_SLOTS',
+            severity: 'warning',
+            message: LINT_RULES.BOOKING_ENABLED_NO_SLOTS.suggestion()
+        });
+        totalPenalty += LINT_RULES.BOOKING_ENABLED_NO_SLOTS.penalty;
+    }
     
     // ─────────────────────────────────────────────────────────────────────────
     // CALCULATE SCORE & GRADE

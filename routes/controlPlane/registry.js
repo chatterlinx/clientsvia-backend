@@ -47,7 +47,9 @@ const CONTROL_PLANE_REGISTRY = {
         // PERSONALITY PANEL
         // ═══════════════════════════════════════════════════════════════════
         {
-            panelId: 'personality',
+            id: 'personality',
+            panelId: 'personality', // backward compat
+            label: 'Personality',
             title: 'Personality',
             icon: '🎭',
             description: 'AI agent personality and tone settings',
@@ -111,7 +113,9 @@ const CONTROL_PLANE_REGISTRY = {
         // GREETING PANEL
         // ═══════════════════════════════════════════════════════════════════
         {
+            id: 'greeting',
             panelId: 'greeting',
+            label: 'Greeting',
             title: 'Greeting',
             icon: '👋',
             description: 'Opening message when call connects',
@@ -158,7 +162,9 @@ const CONTROL_PLANE_REGISTRY = {
         // VOCABULARY PANEL
         // ═══════════════════════════════════════════════════════════════════
         {
+            id: 'vocabulary',
             panelId: 'vocabulary',
+            label: 'Vocabulary',
             title: 'Vocabulary',
             icon: '📚',
             description: 'Forbidden phrases and word guardrails',
@@ -189,7 +195,9 @@ const CONTROL_PLANE_REGISTRY = {
         // BOOKING PROMPTS PANEL
         // ═══════════════════════════════════════════════════════════════════
         {
+            id: 'booking',
             panelId: 'bookingPrompts',
+            label: 'Booking',
             title: 'Booking Prompts',
             icon: '📅',
             description: 'Questions asked during booking flow',
@@ -252,7 +260,9 @@ const CONTROL_PLANE_REGISTRY = {
         // EMOTIONS PANEL
         // ═══════════════════════════════════════════════════════════════════
         {
+            id: 'emotions',
             panelId: 'emotions',
+            label: 'Emotions',
             title: 'Emotions',
             icon: '😊',
             description: 'Emotional response handling',
@@ -294,7 +304,9 @@ const CONTROL_PLANE_REGISTRY = {
         // FRUSTRATION PANEL
         // ═══════════════════════════════════════════════════════════════════
         {
+            id: 'frustration',
             panelId: 'frustration',
+            label: 'Frustration',
             title: 'Frustration',
             icon: '😤',
             description: 'Escalation when caller becomes frustrated',
@@ -337,7 +349,9 @@ const CONTROL_PLANE_REGISTRY = {
         // ESCALATION PANEL
         // ═══════════════════════════════════════════════════════════════════
         {
+            id: 'escalation',
             panelId: 'escalation',
+            label: 'Escalation',
             title: 'Escalation',
             icon: '🚨',
             description: 'When to transfer to human',
@@ -375,7 +389,9 @@ const CONTROL_PLANE_REGISTRY = {
         // LOOPS PANEL
         // ═══════════════════════════════════════════════════════════════════
         {
+            id: 'loops',
             panelId: 'loops',
+            label: 'Loops',
             title: 'Loops',
             icon: '🔄',
             description: 'Prevent repetitive responses',
@@ -405,7 +421,9 @@ const CONTROL_PLANE_REGISTRY = {
         // FORBIDDEN PANEL
         // ═══════════════════════════════════════════════════════════════════
         {
+            id: 'policies',
             panelId: 'forbidden',
+            label: 'Forbidden',
             title: 'Forbidden',
             icon: '🚫',
             description: 'Topics and behaviors to avoid',
@@ -439,7 +457,9 @@ const CONTROL_PLANE_REGISTRY = {
         // DETECTION PANEL
         // ═══════════════════════════════════════════════════════════════════
         {
+            id: 'detection',
             panelId: 'detection',
+            label: 'Detection',
             title: 'Detection',
             icon: '🔍',
             description: 'Intent and entity detection settings',
@@ -470,7 +490,9 @@ const CONTROL_PLANE_REGISTRY = {
         // FALLBACKS PANEL
         // ═══════════════════════════════════════════════════════════════════
         {
+            id: 'fallbacks',
             panelId: 'fallbacks',
+            label: 'Fallbacks',
             title: 'Fallbacks',
             icon: '🆘',
             description: 'Default responses when no scenario matches',
@@ -509,7 +531,9 @@ const CONTROL_PLANE_REGISTRY = {
         // MODES PANEL
         // ═══════════════════════════════════════════════════════════════════
         {
+            id: 'modes',
             panelId: 'modes',
+            label: 'Modes',
             title: 'Modes',
             icon: '🔀',
             description: 'Conversation mode settings',
