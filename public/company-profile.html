@@ -1796,9 +1796,11 @@
                             <i class="fas fa-caret-down" style="font-size: 11px; opacity: 0.8;"></i>
                         </button>
                         
-                        <!-- Dropdown Menu -->
-                        <div id="config-copy-dropdown-menu" style="display: none; position: absolute; top: calc(100% + 4px); right: 0; min-width: 220px; background: #1e293b; border: 1px solid #334155; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden;">
+                        <!-- Dropdown Menu (dynamically populated) -->
+                        <div id="config-copy-dropdown-menu" style="display: none; position: absolute; top: calc(100% + 4px); right: 0; min-width: 260px; background: #1e293b; border: 1px solid #334155; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden; max-height: 400px; overflow-y: auto;">
+                            <!-- Static: Copy Effective Config -->
                             <button onclick="copyConfigJson('effective'); closeConfigCopyDropdown();" 
+                                    class="config-dropdown-item"
                                     style="width: 100%; padding: 12px 16px; font-size: 14px; background: transparent; color: #e2e8f0; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; text-align: left; transition: background 0.15s;"
                                     onmouseover="this.style.background='#334155'"
                                     onmouseout="this.style.background='transparent'">
@@ -1808,19 +1810,32 @@
                                     <div style="font-size: 11px; color: #94a3b8;">Computed runtime values</div>
                                 </div>
                             </button>
+                            
+                            <!-- Divider -->
                             <div style="height: 1px; background: #334155;"></div>
-                            <button onclick="copyConfigJson('raw'); closeConfigCopyDropdown();" 
-                                    style="width: 100%; padding: 12px 16px; font-size: 14px; background: transparent; color: #e2e8f0; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; text-align: left; transition: background 0.15s;"
-                                    onmouseover="this.style.background='#334155'"
-                                    onmouseout="this.style.background='transparent'">
-                                <span style="font-size: 16px;">🧾</span>
-                                <div>
-                                    <div style="font-weight: 500;">Copy Raw Company JSON</div>
-                                    <div style="font-size: 11px; color: #94a3b8;">MongoDB document (ground truth)</div>
-                                </div>
-                            </button>
+                            
+                            <!-- Dynamic: Raw Company Items (populated by JS) -->
+                            <div id="raw-company-dropdown-items">
+                                <!-- Will be populated by updateRawCompanyDropdownItems() -->
+                                <button onclick="copyConfigJson('raw'); closeConfigCopyDropdown();" 
+                                        class="config-dropdown-item"
+                                        style="width: 100%; padding: 12px 16px; font-size: 14px; background: transparent; color: #e2e8f0; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; text-align: left; transition: background 0.15s;"
+                                        onmouseover="this.style.background='#334155'"
+                                        onmouseout="this.style.background='transparent'">
+                                    <span style="font-size: 16px;">🧾</span>
+                                    <div>
+                                        <div style="font-weight: 500;">Copy Raw Company JSON</div>
+                                        <div style="font-size: 11px; color: #94a3b8;">MongoDB document (ground truth)</div>
+                                    </div>
+                                </button>
+                            </div>
+                            
+                            <!-- Divider -->
                             <div style="height: 1px; background: #334155;"></div>
+                            
+                            <!-- Static: Copy Lint Results -->
                             <button onclick="copyConfigJson('lint'); closeConfigCopyDropdown();" 
+                                    class="config-dropdown-item"
                                     style="width: 100%; padding: 12px 16px; font-size: 14px; background: transparent; color: #e2e8f0; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; text-align: left; transition: background 0.15s;"
                                     onmouseover="this.style.background='#334155'"
                                     onmouseout="this.style.background='transparent'">
@@ -1828,6 +1843,22 @@
                                 <div>
                                     <div style="font-weight: 500;">Copy Lint Results</div>
                                     <div style="font-size: 11px; color: #94a3b8;">Warnings &amp; errors</div>
+                                </div>
+                            </button>
+                            
+                            <!-- Divider -->
+                            <div style="height: 1px; background: #334155;"></div>
+                            
+                            <!-- Static: Download Raw Company -->
+                            <button onclick="downloadRawCompanyJson(); closeConfigCopyDropdown();" 
+                                    class="config-dropdown-item"
+                                    style="width: 100%; padding: 12px 16px; font-size: 14px; background: transparent; color: #e2e8f0; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; text-align: left; transition: background 0.15s;"
+                                    onmouseover="this.style.background='#334155'"
+                                    onmouseout="this.style.background='transparent'">
+                                <span style="font-size: 16px;">💾</span>
+                                <div>
+                                    <div style="font-weight: 500;">Download Raw Company (.json)</div>
+                                    <div style="font-size: 11px; color: #94a3b8;">Full file download (recommended)</div>
                                 </div>
                             </button>
                         </div>
@@ -3451,10 +3482,19 @@
                         };
                         document.getElementById('config-raw-json').textContent = 
                             JSON.stringify(relevantSections, null, 2);
+                        
+                        // Update dropdown with chunk options (for large JSON)
+                        updateRawCompanyDropdownItems();
+                    } else {
+                        configRawData = null;
+                        updateRawCompanyDropdownItems();
                     }
                 } else {
+                    configRawData = null;
                     document.getElementById('config-raw-json').textContent = 
                         JSON.stringify({ error: 'Failed to load raw company data' }, null, 2);
+                    // Update dropdown to show unavailable state
+                    updateRawCompanyDropdownItems();
                 }
                 
             } catch (error) {
@@ -3576,6 +3616,178 @@
             const dropdown = document.querySelector('.config-copy-dropdown');
             if (dropdown && !dropdown.contains(e.target)) {
                 closeConfigCopyDropdown();
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // RAW COMPANY CHUNK SPLITTING (for large JSON)
+        // ═══════════════════════════════════════════════════════════════════════════
+        const RAW_COMPANY_MAX_CHARS = 28000; // ~28KB per chunk (safe for clipboard)
+        let rawCompanyChunks = []; // Cache chunks after data loads
+        
+        /**
+         * Split text into chunks by character count
+         * IMPORTANT: No headers added - just pure text splits for valid JSON reassembly
+         */
+        function splitTextIntoChunks(text, maxChars = RAW_COMPANY_MAX_CHARS) {
+            const chunks = [];
+            for (let i = 0; i < text.length; i += maxChars) {
+                chunks.push(text.slice(i, i + maxChars));
+            }
+            return chunks;
+        }
+        
+        /**
+         * Build chunks from raw company data
+         */
+        function buildRawCompanyChunks(rawCompanyObj, { pretty = true, maxChars = RAW_COMPANY_MAX_CHARS } = {}) {
+            if (!rawCompanyObj) return [];
+            const text = pretty
+                ? JSON.stringify(rawCompanyObj, null, 2)
+                : JSON.stringify(rawCompanyObj);
+            return splitTextIntoChunks(text, maxChars);
+        }
+        
+        /**
+         * Update the Raw Company dropdown items based on chunk count
+         */
+        function updateRawCompanyDropdownItems() {
+            const container = document.getElementById('raw-company-dropdown-items');
+            if (!container) return;
+            
+            // Build chunks from current raw data
+            rawCompanyChunks = buildRawCompanyChunks(configRawData);
+            const numChunks = rawCompanyChunks.length;
+            
+            // If no data or error, show disabled item
+            if (!configRawData || numChunks === 0) {
+                container.innerHTML = `
+                    <button disabled
+                            style="width: 100%; padding: 12px 16px; font-size: 14px; background: transparent; color: #64748b; border: none; cursor: not-allowed; display: flex; align-items: center; gap: 10px; text-align: left; opacity: 0.6;">
+                        <span style="font-size: 16px;">⚠️</span>
+                        <div>
+                            <div style="font-weight: 500;">Raw Company Unavailable</div>
+                            <div style="font-size: 11px; color: #64748b;">API error - click Refresh</div>
+                        </div>
+                    </button>
+                `;
+                return;
+            }
+            
+            // Calculate total size
+            const totalChars = rawCompanyChunks.reduce((sum, c) => sum + c.length, 0);
+            const totalKB = (totalChars / 1024).toFixed(1);
+            
+            // If single chunk, show simple copy option
+            if (numChunks === 1) {
+                container.innerHTML = `
+                    <button onclick="copyRawCompanyPart(0); closeConfigCopyDropdown();" 
+                            class="config-dropdown-item"
+                            style="width: 100%; padding: 12px 16px; font-size: 14px; background: transparent; color: #e2e8f0; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; text-align: left; transition: background 0.15s;"
+                            onmouseover="this.style.background='#334155'"
+                            onmouseout="this.style.background='transparent'">
+                        <span style="font-size: 16px;">🧾</span>
+                        <div>
+                            <div style="font-weight: 500;">Copy Raw Company JSON</div>
+                            <div style="font-size: 11px; color: #94a3b8;">${totalKB} KB • MongoDB ground truth</div>
+                        </div>
+                    </button>
+                `;
+                return;
+            }
+            
+            // Multiple chunks - show part options
+            let html = `
+                <div style="padding: 8px 16px; font-size: 11px; color: #f59e0b; background: #422006; border-bottom: 1px solid #334155;">
+                    ⚠️ Large JSON (${totalKB} KB) — split into ${numChunks} parts for clipboard
+                </div>
+            `;
+            
+            for (let i = 0; i < numChunks; i++) {
+                const chunkSize = (rawCompanyChunks[i].length / 1024).toFixed(1);
+                html += `
+                    <button onclick="copyRawCompanyPart(${i}); closeConfigCopyDropdown();" 
+                            class="config-dropdown-item"
+                            style="width: 100%; padding: 10px 16px; font-size: 14px; background: transparent; color: #e2e8f0; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; text-align: left; transition: background 0.15s;"
+                            onmouseover="this.style.background='#334155'"
+                            onmouseout="this.style.background='transparent'">
+                        <span style="font-size: 14px; width: 24px; text-align: center;">${i + 1}</span>
+                        <div>
+                            <div style="font-weight: 500;">Copy Part ${i + 1}/${numChunks}</div>
+                            <div style="font-size: 11px; color: #94a3b8;">${chunkSize} KB • Paste in order</div>
+                        </div>
+                    </button>
+                `;
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        /**
+         * Copy a specific part of the raw company JSON
+         */
+        async function copyRawCompanyPart(partIndex) {
+            if (!rawCompanyChunks || rawCompanyChunks.length === 0) {
+                showConfigCopyToast(false, '⚠️ No Data', 'Please click Refresh first to load data.');
+                return;
+            }
+            
+            const chunk = rawCompanyChunks[partIndex];
+            const numChunks = rawCompanyChunks.length;
+            
+            if (!chunk) {
+                showConfigCopyToast(false, '❌ Invalid Part', `Part ${partIndex + 1} not found.`);
+                return;
+            }
+            
+            try {
+                await navigator.clipboard.writeText(chunk);
+                const sizeKB = (chunk.length / 1024).toFixed(1);
+                
+                if (numChunks === 1) {
+                    showConfigCopyToast(true, '🧾 Raw Company Copied!', `${sizeKB} KB • Full JSON`);
+                } else {
+                    showConfigCopyToast(true, `🧾 Part ${partIndex + 1}/${numChunks} Copied!`, `${sizeKB} KB • Paste parts in order to reassemble`);
+                }
+            } catch (err) {
+                console.error('[RAW COMPANY] Copy failed:', err);
+                showConfigCopyToast(false, '❌ Copy Failed', err.message);
+            }
+        }
+        
+        /**
+         * Download Raw Company JSON as file (best for large configs)
+         */
+        function downloadRawCompanyJson() {
+            if (!configRawData) {
+                showConfigCopyToast(false, '⚠️ No Data', 'Please click Refresh first to load data.');
+                return;
+            }
+            
+            try {
+                const text = JSON.stringify(configRawData, null, 2);
+                const blob = new Blob([text], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                // Generate filename with company name if available
+                const companyName = configRawData?.data?.company?.companyName || configRawData?.companyName || 'company';
+                const safeName = companyName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+                const filename = `raw-${safeName}-${new Date().toISOString().slice(0,10)}.json`;
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                
+                URL.revokeObjectURL(url);
+                
+                const sizeKB = (text.length / 1024).toFixed(1);
+                showConfigCopyToast(true, '💾 Download Started!', `${filename} • ${sizeKB} KB`);
+            } catch (err) {
+                console.error('[RAW COMPANY] Download failed:', err);
+                showConfigCopyToast(false, '❌ Download Failed', err.message);
             }
         }
         
