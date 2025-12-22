@@ -1996,20 +1996,40 @@
                         <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">⚡ Click to preview (then Save):</div>
                         <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                             <button onclick="previewGreetingPreset('Thanks for calling {{companyName}} — how can I help?')" 
-                                    style="padding: 8px 12px; font-size: 11px; background: #334155; color: #e2e8f0; border: 1px solid #475569; border-radius: 6px; cursor: pointer; transition: all 0.15s;"
-                                    onmouseover="this.style.background='#475569'" onmouseout="this.style.background='#334155'">
-                                Thanks for calling {{companyName}} — how can I help?
+                                    style="padding: 8px 12px; font-size: 11px; background: #065f46; color: #10b981; border: 2px solid #10b981; border-radius: 6px; cursor: pointer; transition: all 0.15s; position: relative;"
+                                    onmouseover="this.style.background='#047857'" onmouseout="this.style.background='#065f46'"
+                                    title="RECOMMENDED: 8 words, ~2.5s TTS, Penguin Air Gold Standard">
+                                ⭐ Thanks for calling {{companyName}} — how can I help?
+                                <span style="position: absolute; top: -8px; right: -8px; background: #f59e0b; color: #0f172a; font-size: 8px; padding: 2px 4px; border-radius: 4px; font-weight: 700;">BEST</span>
                             </button>
                             <button onclick="previewGreetingPreset('{{companyName}} — how can I help?')" 
                                     style="padding: 8px 12px; font-size: 11px; background: #334155; color: #e2e8f0; border: 1px solid #475569; border-radius: 6px; cursor: pointer; transition: all 0.15s;"
-                                    onmouseover="this.style.background='#475569'" onmouseout="this.style.background='#334155'">
+                                    onmouseover="this.style.background='#475569'" onmouseout="this.style.background='#334155'"
+                                    title="FAST: 5 words, ~2s TTS">
                                 {{companyName}} — how can I help?
                             </button>
                             <button onclick="previewGreetingPreset('Hi — {{companyName}}. How can I help?')" 
                                     style="padding: 8px 12px; font-size: 11px; background: #334155; color: #e2e8f0; border: 1px solid #475569; border-radius: 6px; cursor: pointer; transition: all 0.15s;"
-                                    onmouseover="this.style.background='#475569'" onmouseout="this.style.background='#334155'">
+                                    onmouseover="this.style.background='#475569'" onmouseout="this.style.background='#334155'"
+                                    title="FRIENDLY: 7 words, ~2.5s TTS">
                                 Hi — {{companyName}}. How can I help?
                             </button>
+                        </div>
+                        
+                        <!-- Why This Greeting Tooltip -->
+                        <div style="margin-top: 12px; padding: 10px; background: #0f172a; border-radius: 6px; border: 1px dashed #334155;">
+                            <div style="font-size: 10px; color: #64748b; display: flex; align-items: flex-start; gap: 8px;">
+                                <span>💡</span>
+                                <div>
+                                    <strong style="color: #94a3b8;">Why the recommended greeting?</strong>
+                                    <ul style="margin: 4px 0 0 12px; padding: 0; color: #64748b;">
+                                        <li>8 words = ~2.5s TTS (caller patience threshold)</li>
+                                        <li>{{companyName}} auto-fills from placeholders</li>
+                                        <li>Ends with question = invites caller response</li>
+                                        <li>Penguin Air Gold Standard = proven conversion</li>
+                                    </ul>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     

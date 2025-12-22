@@ -40,7 +40,9 @@ module.exports = {
     // ═══════════════════════════════════════════════════════════════════════
     frontDeskBehavior: {
         greeting: {
-            text: "Thank you for calling {companyname}! This is our AI assistant. How can I help you today?",
+            // OPTIMAL: 8 words, ~2.5s TTS, uses {{companyName}} placeholder
+            // This is the Penguin Air gold standard - DO NOT MAKE LONGER
+            text: "Thanks for calling {{companyName}} — how can I help?",
             enabled: true
         },
         conversationStyle: 'balanced', // confident | balanced | polite
@@ -92,7 +94,7 @@ module.exports = {
         },
         afterHoursReply: {
             quickReply: "We're currently closed.",
-            fullReply: "Thank you for calling {companyname}! Our office is currently closed. Our regular hours are {hours}. For emergencies, please call our 24/7 emergency line at {emergencyphone}. Otherwise, I can take a message and have someone call you back first thing tomorrow."
+            fullReply: "Thank you for calling {{companyName}}! Our office is currently closed. Our regular hours are {{hours}}. For emergencies, please call our 24/7 emergency line at {{emergencyPhone}}. Otherwise, I can take a message and have someone call you back first thing tomorrow."
         },
         strictDisabledBehavior: true
     },
