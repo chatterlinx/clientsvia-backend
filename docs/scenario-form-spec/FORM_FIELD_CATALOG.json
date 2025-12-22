@@ -1,0 +1,1095 @@
+{
+  "_meta": {
+    "schemaVersion": "V22",
+    "generatedAt": "2025-12-22T00:00:00Z",
+    "description": "Complete inventory of all configurable fields in Scenario and Category editors",
+    "totalFields": 87,
+    "totalSections": 8
+  },
+
+  "sections": {
+    "BASIC_INFO": {
+      "displayName": "Basic Info",
+      "description": "Core identity and lifecycle fields",
+      "order": 1
+    },
+    "TRIGGERS_MATCHING": {
+      "displayName": "Triggers & Matching",
+      "description": "Keyword, semantic, and regex matching configuration",
+      "order": 2
+    },
+    "REPLIES_FLOW": {
+      "displayName": "Replies & Flow",
+      "description": "Response content and conversation flow",
+      "order": 3
+    },
+    "ENTITIES_VARIABLES": {
+      "displayName": "Entities & Variables",
+      "description": "Data capture and dynamic variable configuration",
+      "order": 4
+    },
+    "ADVANCED_SETTINGS": {
+      "displayName": "Advanced Settings",
+      "description": "Confidence, priority, timing, and behavioral overrides",
+      "order": 5
+    },
+    "ACTION_HOOKS": {
+      "displayName": "Action Hooks",
+      "description": "External integrations and escalation triggers",
+      "order": 6
+    },
+    "VOICE_TTS": {
+      "displayName": "Voice & TTS",
+      "description": "Voice-specific settings and behavior selection",
+      "order": 7
+    },
+    "CATEGORY_SETTINGS": {
+      "displayName": "Category Settings",
+      "description": "Category-level configuration (applies to all scenarios within)",
+      "order": 8
+    }
+  },
+
+  "scenarioFields": [
+    {
+      "key": "scenarioId",
+      "label": "Scenario ID",
+      "section": "BASIC_INFO",
+      "inputType": "text",
+      "allowedValues": null,
+      "validation": {
+        "required": true,
+        "pattern": "^[a-zA-Z0-9_-]+$",
+        "maxLength": 64
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Unique identifier for scenario lookup and analytics tracking",
+      "requiredForProductionSafe": true
+    },
+    {
+      "key": "name",
+      "label": "Scenario Name",
+      "section": "BASIC_INFO",
+      "inputType": "text",
+      "allowedValues": null,
+      "validation": {
+        "required": true,
+        "minLength": 3,
+        "maxLength": 100
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Display name in UI and logs; used for admin search",
+      "requiredForProductionSafe": true
+    },
+    {
+      "key": "version",
+      "label": "Version",
+      "section": "BASIC_INFO",
+      "inputType": "number",
+      "allowedValues": null,
+      "validation": {
+        "required": true,
+        "min": 1
+      },
+      "defaultValue": 1,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Tracks revisions; incremented on each publish for rollback support",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "status",
+      "label": "Status",
+      "section": "BASIC_INFO",
+      "inputType": "select",
+      "allowedValues": ["draft", "live", "archived"],
+      "validation": {
+        "required": true
+      },
+      "defaultValue": "draft",
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "draft=editing, live=active matching, archived=historical only",
+      "requiredForProductionSafe": true
+    },
+    {
+      "key": "isActive",
+      "label": "Active",
+      "section": "BASIC_INFO",
+      "inputType": "toggle",
+      "allowedValues": [true, false],
+      "validation": {
+        "required": false
+      },
+      "defaultValue": true,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Quick on/off toggle without archiving; false = scenario never matches",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "categories",
+      "label": "Categories",
+      "section": "BASIC_INFO",
+      "inputType": "multiselect",
+      "allowedValues": "dynamic:categoryIds",
+      "validation": {
+        "required": false
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Tags for organization; scenario can belong to multiple categories",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "notes",
+      "label": "Admin Notes",
+      "section": "BASIC_INFO",
+      "inputType": "textarea",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "maxLength": 1000
+      },
+      "defaultValue": "",
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Internal notes for admins; NOT used by AI at runtime",
+      "requiredForProductionSafe": false
+    },
+
+    {
+      "key": "triggers",
+      "label": "Trigger Phrases",
+      "section": "TRIGGERS_MATCHING",
+      "inputType": "textarea",
+      "allowedValues": null,
+      "validation": {
+        "required": true,
+        "minItems": 3,
+        "recommendedItems": "10-20"
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "BM25 keyword matching; more phrases = better recall. CRITICAL for matching.",
+      "requiredForProductionSafe": true
+    },
+    {
+      "key": "negativeTriggers",
+      "label": "Negative Triggers",
+      "section": "TRIGGERS_MATCHING",
+      "inputType": "textarea",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "recommendedForHighCollision": true
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Phrases that PREVENT matching; reduces false positives",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "regexTriggers",
+      "label": "Regex Triggers",
+      "section": "TRIGGERS_MATCHING",
+      "inputType": "textarea",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "isValidRegex": true
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Advanced pattern matching for power users; applied after keyword matching",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "keywords",
+      "label": "Fast-Match Keywords",
+      "section": "TRIGGERS_MATCHING",
+      "inputType": "textarea",
+      "allowedValues": null,
+      "validation": {
+        "required": false
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Tier-1 fast matching before semantic analysis; auto-extracted from triggers",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "negativeKeywords",
+      "label": "Negative Keywords",
+      "section": "TRIGGERS_MATCHING",
+      "inputType": "textarea",
+      "allowedValues": null,
+      "validation": {
+        "required": false
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Keywords that veto matching even if positive keywords match",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "exampleUserPhrases",
+      "label": "Example User Phrases",
+      "section": "TRIGGERS_MATCHING",
+      "inputType": "textarea",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "recommendedItems": "12-18"
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Training data for future ML; documentation of expected user inputs",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "negativeUserPhrases",
+      "label": "Negative User Phrases",
+      "section": "TRIGGERS_MATCHING",
+      "inputType": "textarea",
+      "allowedValues": null,
+      "validation": {
+        "required": false
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Phrases that should NOT trigger this scenario (for ML training)",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "contextWeight",
+      "label": "Context Weight",
+      "section": "TRIGGERS_MATCHING",
+      "inputType": "slider",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "min": 0,
+        "max": 1
+      },
+      "defaultValue": 0.7,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Multiplier on final match score; higher = more important scenario",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "testPhrases",
+      "label": "Test Phrases",
+      "section": "TRIGGERS_MATCHING",
+      "inputType": "textarea",
+      "allowedValues": null,
+      "validation": {
+        "required": false
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Validation test cases for scenario matching verification",
+      "requiredForProductionSafe": false
+    },
+
+    {
+      "key": "quickReplies",
+      "label": "Quick Replies",
+      "section": "REPLIES_FLOW",
+      "inputType": "textarea",
+      "allowedValues": null,
+      "validation": {
+        "required": true,
+        "minItems": 7,
+        "recommendedItems": "7-10"
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Short responses for voice (10-30 words). Multiple variations reduce robotic feel.",
+      "requiredForProductionSafe": true
+    },
+    {
+      "key": "fullReplies",
+      "label": "Full Replies",
+      "section": "REPLIES_FLOW",
+      "inputType": "textarea",
+      "allowedValues": null,
+      "validation": {
+        "required": true,
+        "minItems": 7,
+        "recommendedItems": "7-10"
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Long responses for SMS/chat (50-150 words). Multiple variations reduce robotic feel.",
+      "requiredForProductionSafe": true
+    },
+    {
+      "key": "followUpPrompts",
+      "label": "Follow-Up Prompts",
+      "section": "REPLIES_FLOW",
+      "inputType": "textarea",
+      "allowedValues": null,
+      "validation": {
+        "required": false
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Questions to ask after initial response; drives conversation forward",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "followUpFunnel",
+      "label": "Follow-Up Funnel",
+      "section": "REPLIES_FLOW",
+      "inputType": "text",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "maxLength": 200
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Re-engagement prompt to guide back to call purpose after tangent",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "replySelection",
+      "label": "Reply Selection Mode",
+      "section": "REPLIES_FLOW",
+      "inputType": "select",
+      "allowedValues": ["sequential", "random", "bandit"],
+      "validation": {
+        "required": false
+      },
+      "defaultValue": "bandit",
+      "inheritanceBehavior": "inherits from template",
+      "runtimeEffect": "sequential=rotate, random=random pick, bandit=learn best performers",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "scenarioType",
+      "label": "Scenario Type",
+      "section": "REPLIES_FLOW",
+      "inputType": "select",
+      "allowedValues": ["INFO_FAQ", "ACTION_FLOW", "SYSTEM_ACK", "SMALL_TALK", null],
+      "validation": {
+        "required": false
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "INFO_FAQ=static info, ACTION_FLOW=drives flow, SYSTEM_ACK=internal, SMALL_TALK=rapport",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "replyStrategy",
+      "label": "Reply Strategy",
+      "section": "REPLIES_FLOW",
+      "inputType": "select",
+      "allowedValues": ["AUTO", "FULL_ONLY", "QUICK_ONLY", "QUICK_THEN_FULL", "LLM_WRAP", "LLM_CONTEXT"],
+      "validation": {
+        "required": false
+      },
+      "defaultValue": "AUTO",
+      "inheritanceBehavior": "inherits from template",
+      "runtimeEffect": "AUTO=use global rules, FULL_ONLY=never quick, LLM_WRAP=tone polish",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "followUpMode",
+      "label": "Follow-Up Mode",
+      "section": "REPLIES_FLOW",
+      "inputType": "select",
+      "allowedValues": ["NONE", "ASK_FOLLOWUP_QUESTION", "ASK_IF_BOOK", "TRANSFER"],
+      "validation": {
+        "required": false
+      },
+      "defaultValue": "NONE",
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "NONE=ends, ASK_FOLLOWUP_QUESTION=ask, ASK_IF_BOOK=offer booking, TRANSFER=immediate",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "followUpQuestionText",
+      "label": "Follow-Up Question Text",
+      "section": "REPLIES_FLOW",
+      "inputType": "text",
+      "allowedValues": null,
+      "validation": {
+        "required": "when followUpMode=ASK_FOLLOWUP_QUESTION",
+        "maxLength": 300
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Text to ask if followUpMode=ASK_FOLLOWUP_QUESTION",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "transferTarget",
+      "label": "Transfer Target",
+      "section": "REPLIES_FLOW",
+      "inputType": "text",
+      "allowedValues": null,
+      "validation": {
+        "required": "when followUpMode=TRANSFER",
+        "maxLength": 50
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Queue/extension/phone for transfer if followUpMode=TRANSFER",
+      "requiredForProductionSafe": false
+    },
+
+    {
+      "key": "entityCapture",
+      "label": "Entities to Capture",
+      "section": "ENTITIES_VARIABLES",
+      "inputType": "multiselect",
+      "allowedValues": ["name", "phone_number", "email", "address", "date", "time", "technician", "service_type", "custom"],
+      "validation": {
+        "required": false
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "List of entities to extract from caller speech during this scenario",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "entityValidation",
+      "label": "Entity Validation Rules",
+      "section": "ENTITIES_VARIABLES",
+      "inputType": "json",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "isValidJSON": true
+      },
+      "defaultValue": {},
+      "inheritanceBehavior": "inherits from template",
+      "runtimeEffect": "Per-entity validation rules (regex, normalization, min/max)",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "dynamicVariables",
+      "label": "Dynamic Variable Fallbacks",
+      "section": "ENTITIES_VARIABLES",
+      "inputType": "json",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "isValidJSON": true
+      },
+      "defaultValue": {},
+      "inheritanceBehavior": "inherits from template",
+      "runtimeEffect": "Fallback values when entity is missing (e.g., {technician: 'the team'})",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "qnaPairs",
+      "label": "Q&A Training Pairs",
+      "section": "ENTITIES_VARIABLES",
+      "inputType": "json",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "isValidJSON": true
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Training data for semantic matching; auto-generated from triggers+replies",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "examples",
+      "label": "Conversation Examples",
+      "section": "ENTITIES_VARIABLES",
+      "inputType": "json",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "isValidJSON": true
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Sample conversations showing expected caller/AI flow",
+      "requiredForProductionSafe": false
+    },
+
+    {
+      "key": "minConfidence",
+      "label": "Minimum Confidence",
+      "section": "ADVANCED_SETTINGS",
+      "inputType": "slider",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "min": 0,
+        "max": 1
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "inherits from template (tier1Threshold)",
+      "runtimeEffect": "Scenario-level threshold override; match score must exceed this to fire",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "priority",
+      "label": "Priority",
+      "section": "ADVANCED_SETTINGS",
+      "inputType": "number",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "min": -10,
+        "max": 100
+      },
+      "defaultValue": 0,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Tie-breaker when multiple scenarios match; higher=more priority (emergency=100)",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "cooldownSeconds",
+      "label": "Cooldown (seconds)",
+      "section": "ADVANCED_SETTINGS",
+      "inputType": "number",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "min": 0
+      },
+      "defaultValue": 0,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Prevents scenario from firing again within N seconds (anti-spam)",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "channel",
+      "label": "Channel Restriction",
+      "section": "ADVANCED_SETTINGS",
+      "inputType": "select",
+      "allowedValues": ["voice", "sms", "chat", "any"],
+      "validation": {
+        "required": false
+      },
+      "defaultValue": "any",
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Restrict scenario to specific channels; 'any' matches all",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "language",
+      "label": "Language",
+      "section": "ADVANCED_SETTINGS",
+      "inputType": "select",
+      "allowedValues": ["auto", "en", "es", "fr", "de", "pt", "zh", "ja", "ko"],
+      "validation": {
+        "required": false
+      },
+      "defaultValue": "auto",
+      "inheritanceBehavior": "inherits from template",
+      "runtimeEffect": "'auto'=detect from input, others=language-specific matching",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "preconditions",
+      "label": "Preconditions",
+      "section": "ADVANCED_SETTINGS",
+      "inputType": "json",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "isValidJSON": true
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "State conditions that must be met for scenario to match (e.g., {state: 'collecting_phone'})",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "effects",
+      "label": "Effects (State Changes)",
+      "section": "ADVANCED_SETTINGS",
+      "inputType": "json",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "isValidJSON": true
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "State changes after scenario executes (e.g., {setState: 'confirming'})",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "sensitiveInfoRule",
+      "label": "Sensitive Info Handling",
+      "section": "ADVANCED_SETTINGS",
+      "inputType": "select",
+      "allowedValues": ["platform_default", "custom"],
+      "validation": {
+        "required": false
+      },
+      "defaultValue": "platform_default",
+      "inheritanceBehavior": "inherits from template",
+      "runtimeEffect": "PII masking rule; 'custom' allows per-entity override",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "customMasking",
+      "label": "Custom Masking Rules",
+      "section": "ADVANCED_SETTINGS",
+      "inputType": "json",
+      "allowedValues": null,
+      "validation": {
+        "required": "when sensitiveInfoRule=custom",
+        "isValidJSON": true
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Per-entity masking overrides (e.g., {phone: 'last4', address: 'street_only'})",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "timedFollowUp.enabled",
+      "label": "Timed Follow-Up Enabled",
+      "section": "ADVANCED_SETTINGS",
+      "inputType": "toggle",
+      "allowedValues": [true, false],
+      "validation": {
+        "required": false
+      },
+      "defaultValue": false,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "If true, AI checks in after delaySeconds of hold",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "timedFollowUp.delaySeconds",
+      "label": "Timed Follow-Up Delay",
+      "section": "ADVANCED_SETTINGS",
+      "inputType": "number",
+      "allowedValues": null,
+      "validation": {
+        "required": "when timedFollowUp.enabled=true",
+        "min": 0
+      },
+      "defaultValue": 50,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Seconds to wait before timed follow-up message",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "timedFollowUp.messages",
+      "label": "Timed Follow-Up Messages",
+      "section": "ADVANCED_SETTINGS",
+      "inputType": "textarea",
+      "allowedValues": null,
+      "validation": {
+        "required": "when timedFollowUp.enabled=true"
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Variations of check-in message after timeout",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "timedFollowUp.extensionSeconds",
+      "label": "Extension Seconds",
+      "section": "ADVANCED_SETTINGS",
+      "inputType": "number",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "min": 0
+      },
+      "defaultValue": 30,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Additional time granted if caller requests more",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "silencePolicy.maxConsecutive",
+      "label": "Max Consecutive Silences",
+      "section": "ADVANCED_SETTINGS",
+      "inputType": "number",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "min": 1
+      },
+      "defaultValue": 2,
+      "inheritanceBehavior": "inherits from template",
+      "runtimeEffect": "How many silent turns before taking action",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "silencePolicy.finalWarning",
+      "label": "Silence Final Warning",
+      "section": "ADVANCED_SETTINGS",
+      "inputType": "text",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "maxLength": 200
+      },
+      "defaultValue": "Hello? Did I lose you?",
+      "inheritanceBehavior": "inherits from template",
+      "runtimeEffect": "Message spoken before ending call due to silence",
+      "requiredForProductionSafe": false
+    },
+
+    {
+      "key": "actionHooks",
+      "label": "Action Hooks",
+      "section": "ACTION_HOOKS",
+      "inputType": "multiselect",
+      "allowedValues": "dynamic:globalActionHookIds",
+      "validation": {
+        "required": false
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "References to GlobalActionHook hookIds; triggered when scenario fires",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "handoffPolicy",
+      "label": "Handoff Policy",
+      "section": "ACTION_HOOKS",
+      "inputType": "select",
+      "allowedValues": ["never", "low_confidence", "always_on_keyword"],
+      "validation": {
+        "required": false
+      },
+      "defaultValue": "low_confidence",
+      "inheritanceBehavior": "inherits from template",
+      "runtimeEffect": "When to escalate to human; low_confidence=when match uncertain",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "escalationFlags",
+      "label": "Escalation Flags",
+      "section": "ACTION_HOOKS",
+      "inputType": "multiselect",
+      "allowedValues": ["angry", "confused", "technical_issue", "vip_customer", "urgent", "legal_issue", "complaint"],
+      "validation": {
+        "required": false
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Sentiment/situation flags that trigger human escalation",
+      "requiredForProductionSafe": false
+    },
+
+    {
+      "key": "behavior",
+      "label": "AI Behavior",
+      "section": "VOICE_TTS",
+      "inputType": "select",
+      "allowedValues": "dynamic:globalAIBehaviorTemplateIds",
+      "validation": {
+        "required": false
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "inherits from category, then template",
+      "runtimeEffect": "References GlobalAIBehaviorTemplate; controls tone, pace, emotion",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "toneLevel",
+      "label": "Tone Level (Deprecated)",
+      "section": "VOICE_TTS",
+      "inputType": "slider",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "min": 1,
+        "max": 5
+      },
+      "defaultValue": 2,
+      "inheritanceBehavior": "inherits from template",
+      "runtimeEffect": "DEPRECATED: Use 'behavior' field instead. 1=flat, 5=urgent",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "ttsOverride.pitch",
+      "label": "TTS Pitch Override",
+      "section": "VOICE_TTS",
+      "inputType": "text",
+      "allowedValues": null,
+      "validation": {
+        "required": false
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Voice pitch adjustment (e.g., '+5%', '-10%')",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "ttsOverride.rate",
+      "label": "TTS Rate Override",
+      "section": "VOICE_TTS",
+      "inputType": "text",
+      "allowedValues": null,
+      "validation": {
+        "required": false
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Voice speed adjustment (e.g., '0.95', '1.1', 'fast')",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "ttsOverride.volume",
+      "label": "TTS Volume Override",
+      "section": "VOICE_TTS",
+      "inputType": "text",
+      "allowedValues": null,
+      "validation": {
+        "required": false
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Voice volume adjustment (e.g., 'normal', '+3dB', 'soft')",
+      "requiredForProductionSafe": false
+    },
+
+    {
+      "key": "embeddingVector",
+      "label": "Embedding Vector",
+      "section": "HIDDEN",
+      "inputType": "json",
+      "allowedValues": null,
+      "validation": {
+        "required": false
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Precomputed semantic embedding for Tier-2 cosine similarity matching",
+      "requiredForProductionSafe": false,
+      "_note": "COMPUTED AT RUNTIME - Not user-editable"
+    },
+    {
+      "key": "createdBy",
+      "label": "Created By",
+      "section": "HIDDEN",
+      "inputType": "text",
+      "allowedValues": null,
+      "validation": {
+        "required": false
+      },
+      "defaultValue": "Platform Admin",
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Audit trail - who created the scenario",
+      "requiredForProductionSafe": false,
+      "_note": "AUTO-POPULATED - Not user-editable"
+    },
+    {
+      "key": "updatedBy",
+      "label": "Updated By",
+      "section": "HIDDEN",
+      "inputType": "text",
+      "allowedValues": null,
+      "validation": {
+        "required": false
+      },
+      "defaultValue": "Platform Admin",
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Audit trail - who last modified the scenario",
+      "requiredForProductionSafe": false,
+      "_note": "AUTO-POPULATED - Not user-editable"
+    },
+    {
+      "key": "createdAt",
+      "label": "Created At",
+      "section": "HIDDEN",
+      "inputType": "datetime",
+      "allowedValues": null,
+      "validation": {
+        "required": false
+      },
+      "defaultValue": "now",
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Audit trail - creation timestamp",
+      "requiredForProductionSafe": false,
+      "_note": "AUTO-POPULATED - Immutable"
+    },
+    {
+      "key": "updatedAt",
+      "label": "Updated At",
+      "section": "HIDDEN",
+      "inputType": "datetime",
+      "allowedValues": null,
+      "validation": {
+        "required": false
+      },
+      "defaultValue": "now",
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Audit trail - last modification timestamp",
+      "requiredForProductionSafe": false,
+      "_note": "AUTO-POPULATED - Updated on save"
+    },
+    {
+      "key": "legacyMigrated",
+      "label": "Legacy Migrated",
+      "section": "HIDDEN",
+      "inputType": "toggle",
+      "allowedValues": [true, false],
+      "validation": {
+        "required": false
+      },
+      "defaultValue": false,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Internal flag for legacy data migration",
+      "requiredForProductionSafe": false,
+      "_note": "INTERNAL - Not user-editable"
+    }
+  ],
+
+  "categoryFields": [
+    {
+      "key": "id",
+      "label": "Category ID",
+      "section": "CATEGORY_SETTINGS",
+      "inputType": "text",
+      "allowedValues": null,
+      "validation": {
+        "required": true,
+        "pattern": "^[a-zA-Z0-9_-]+$"
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Unique identifier for category lookup",
+      "requiredForProductionSafe": true
+    },
+    {
+      "key": "name",
+      "label": "Category Name",
+      "section": "CATEGORY_SETTINGS",
+      "inputType": "text",
+      "allowedValues": null,
+      "validation": {
+        "required": true,
+        "minLength": 2,
+        "maxLength": 50
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Display name in UI",
+      "requiredForProductionSafe": true
+    },
+    {
+      "key": "icon",
+      "label": "Icon",
+      "section": "CATEGORY_SETTINGS",
+      "inputType": "text",
+      "allowedValues": null,
+      "validation": {
+        "required": false
+      },
+      "defaultValue": "💬",
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Emoji icon for UI display",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "description",
+      "label": "Description",
+      "section": "CATEGORY_SETTINGS",
+      "inputType": "textarea",
+      "allowedValues": null,
+      "validation": {
+        "required": true,
+        "maxLength": 500
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "Help text describing category purpose",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "behavior",
+      "label": "Default AI Behavior",
+      "section": "CATEGORY_SETTINGS",
+      "inputType": "select",
+      "allowedValues": "dynamic:globalAIBehaviorTemplateIds",
+      "validation": {
+        "required": false
+      },
+      "defaultValue": null,
+      "inheritanceBehavior": "inherits from template",
+      "runtimeEffect": "DEPRECATED: Default behavior for scenarios in this category",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "isActive",
+      "label": "Active",
+      "section": "CATEGORY_SETTINGS",
+      "inputType": "toggle",
+      "allowedValues": [true, false],
+      "validation": {
+        "required": false
+      },
+      "defaultValue": true,
+      "inheritanceBehavior": "none",
+      "runtimeEffect": "If false, all scenarios in category are skipped",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "additionalFillerWords",
+      "label": "Additional Filler Words",
+      "section": "CATEGORY_SETTINGS",
+      "inputType": "textarea",
+      "allowedValues": null,
+      "validation": {
+        "required": false
+      },
+      "defaultValue": [],
+      "inheritanceBehavior": "extends template.fillerWords",
+      "runtimeEffect": "Category-specific fillers added to template fillers for matching",
+      "requiredForProductionSafe": false
+    },
+    {
+      "key": "synonymMap",
+      "label": "Category Synonyms",
+      "section": "CATEGORY_SETTINGS",
+      "inputType": "json",
+      "allowedValues": null,
+      "validation": {
+        "required": false,
+        "isValidJSON": true
+      },
+      "defaultValue": {},
+      "inheritanceBehavior": "extends template.synonymMap",
+      "runtimeEffect": "Category-specific synonyms added to template synonyms for matching",
+      "requiredForProductionSafe": false
+    }
+  ],
+
+  "defects": [
+    {
+      "type": "MISSING_UI",
+      "field": "embeddingVector",
+      "description": "No UI for viewing/regenerating embeddings; must use API directly"
+    },
+    {
+      "type": "MISSING_UI",
+      "field": "qnaPairs",
+      "description": "No UI for editing Q&A pairs; auto-generated only"
+    },
+    {
+      "type": "INCONSISTENT_INHERITANCE",
+      "field": "minConfidence",
+      "description": "null means inherit from template, but UI doesn't clearly indicate this"
+    },
+    {
+      "type": "DEPRECATED_FIELD",
+      "field": "toneLevel",
+      "description": "Still in schema but should be hidden; 'behavior' is the replacement"
+    },
+    {
+      "type": "MISSING_VALIDATION",
+      "field": "regexTriggers",
+      "description": "No client-side regex validation before save"
+    }
+  ]
+}
+

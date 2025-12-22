@@ -1,0 +1,262 @@
+{
+  "_meta": {
+    "schemaVersion": "V22",
+    "generatedAt": "2025-12-22T00:00:00Z",
+    "description": "Complete scenario example with ALL fields populated (including defaults)",
+    "purpose": "Reference for ChatGPT → AI Coder workflow; exact schema to import/export"
+  },
+
+  "scenario": {
+    "scenarioId": "hvac_emergency_no_heat_v2",
+    "name": "Emergency - No Heat",
+    "version": 3,
+    "status": "live",
+    "isActive": true,
+    
+    "categories": ["emergency", "heating", "urgent_service"],
+    "notes": "High-priority emergency scenario for no-heat calls. Priority boosted in winter months. Last reviewed 2025-12-01.",
+
+    "triggers": [
+      "no heat",
+      "heater not working",
+      "furnace not working",
+      "heat won't turn on",
+      "no hot air",
+      "cold in house",
+      "freezing in here",
+      "furnace won't start",
+      "heating system down",
+      "no warm air coming out",
+      "heat pump not working",
+      "radiators are cold",
+      "house is freezing"
+    ],
+    
+    "negativeTriggers": [
+      "no heat in summer",
+      "don't need heat",
+      "cancel heating",
+      "too much heat",
+      "overheating"
+    ],
+    
+    "regexTriggers": [
+      "\\b(no|won't|can't|not)\\s+(get|have)\\s+(heat|warm)",
+      "\\bheat(er|ing)?\\s+(broke|broken|dead|out)"
+    ],
+    
+    "keywords": ["heat", "furnace", "heater", "cold", "freezing", "warm"],
+    "negativeKeywords": ["cancel", "summer", "too much", "overheating"],
+    
+    "exampleUserPhrases": [
+      "hey my heat isn't working",
+      "the furnace stopped working last night",
+      "we have no heat in the house",
+      "it's freezing cold and the heater won't turn on",
+      "my heating system is completely dead",
+      "the radiators aren't getting warm",
+      "I woke up and there's no heat",
+      "our furnace just quit on us",
+      "the heat pump isn't doing anything",
+      "we're all cold because the heater broke",
+      "can someone come out? we have no heat",
+      "this is an emergency, our heat is out"
+    ],
+    
+    "negativeUserPhrases": [
+      "I want to cancel my heating service",
+      "we don't need heat right now",
+      "the house is too hot actually",
+      "can you turn down the heat?"
+    ],
+    
+    "contextWeight": 0.95,
+    
+    "testPhrases": [
+      "my heat isn't working and it's 20 degrees outside",
+      "furnace broke down this morning",
+      "no warm air coming from vents"
+    ],
+
+    "quickReplies": [
+      "I understand you have no heat — that's definitely urgent. Let me get a technician headed your way as quickly as possible.",
+      "No heat is a priority for us. I'm pulling up our emergency schedule right now to get someone out to you.",
+      "I hear you — being without heat is no fun. Let me check our next available emergency appointment.",
+      "That sounds really uncomfortable. We treat no-heat calls as emergencies, so let me see who's available.",
+      "I completely understand the urgency. We'll get someone out there as fast as we can.",
+      "No heat when it's cold out is serious. I'm checking our emergency availability right now.",
+      "Absolutely — we take no-heat calls very seriously. Let me find the fastest option for you."
+    ],
+    
+    "fullReplies": [
+      "I'm so sorry to hear you're dealing with no heat — I know how uncomfortable and even dangerous that can be, especially in cold weather. We treat no-heat situations as top priority emergencies. Let me check our emergency technician schedule right now. In the meantime, if you have space heaters, please use them safely and keep doors to unused rooms closed to concentrate warmth. I'll have an update for you in just a moment.",
+      
+      "That's definitely an urgent situation, and we want to help you as quickly as possible. No-heat calls go straight to the top of our emergency queue because we know how important it is to keep your family warm and safe. I'm pulling up our dispatch system right now to find the fastest available technician. While you wait, try to stay in one area of the home to conserve body heat, and let me know if you have any young children or elderly family members — we'll prioritize accordingly.",
+      
+      "I completely understand how stressful it is to be without heat. This is exactly the kind of emergency we're here for, and our team is trained to respond quickly. I'm checking right now to see which technician can get to you soonest. In many cases, we can have someone there within a few hours. Is there anything else I should know about your situation — like if there are pipes that might be at risk of freezing?",
+      
+      "No heat is always treated as an emergency here at {{companyName}}. I'm checking our schedule right now to dispatch a technician as soon as possible. While I do that, may I get some quick information? What type of heating system do you have — furnace, heat pump, or boiler? And when did you first notice the heat stopped working? This will help our technician come prepared with the right parts.",
+      
+      "I hear you, and I want to get you taken care of right away. A no-heat situation is our highest priority, especially when temperatures are low. Let me look at our emergency dispatch schedule. Our technicians are experienced with all types of heating systems and carry common parts on their trucks, so in many cases they can fix the issue on the first visit. I'll have availability info for you in just a second.",
+      
+      "That sounds really uncomfortable, and I apologize you're dealing with this. We'll get someone out there as quickly as humanly possible. No-heat calls jump to the front of our queue because we know it's not just about comfort — it's about safety too. I'm checking our emergency roster now. Do you happen to know if your thermostat is showing any error codes or if you've checked the circuit breaker?",
+      
+      "Absolutely — no heat is something we take very seriously. Let me pull up our emergency schedule and find the fastest option to get a technician to your door. While I'm doing that, have you noticed any strange sounds or smells from your heating unit? Sometimes that information helps our techs diagnose the issue even faster."
+    ],
+    
+    "followUpPrompts": [
+      "Is there anything else I can help you with while we get this scheduled?",
+      "While we get the technician on the way, is there anything else you'd like to know?",
+      "Do you have any questions about what to expect when the technician arrives?"
+    ],
+    
+    "followUpFunnel": "Alright — let's make sure we get that heat back on for you. What's the best phone number to reach you at?",
+    
+    "replySelection": "bandit",
+    "scenarioType": "ACTION_FLOW",
+    "replyStrategy": "AUTO",
+    "followUpMode": "ASK_IF_BOOK",
+    "followUpQuestionText": "Would you like me to schedule an emergency technician right now?",
+    "transferTarget": null,
+
+    "entityCapture": ["name", "phone_number", "address", "service_type"],
+    
+    "entityValidation": {
+      "phone_number": {
+        "regex": "^\\d{10}$",
+        "normalize": "E.164",
+        "errorMessage": "Please provide a 10-digit phone number"
+      },
+      "address": {
+        "minLength": 10,
+        "requiresZip": true
+      }
+    },
+    
+    "dynamicVariables": {
+      "technician": "our technician",
+      "companyName": "{{companyName}}",
+      "serviceArea": "your area"
+    },
+    
+    "qnaPairs": [
+      {
+        "question": "My heat isn't working",
+        "answer": "I understand you have no heat — that's definitely urgent. Let me get a technician headed your way as quickly as possible.",
+        "confidence": 0.92
+      },
+      {
+        "question": "The furnace stopped working",
+        "answer": "No heat is a priority for us. I'm pulling up our emergency schedule right now to get someone out to you.",
+        "confidence": 0.90
+      }
+    ],
+    
+    "examples": [
+      {
+        "caller": "Hi, our heat isn't working and it's really cold",
+        "ai": "I understand you have no heat — that's definitely urgent. Let me get a technician headed your way as quickly as possible. May I have your name and address?"
+      },
+      {
+        "caller": "The furnace just stopped last night",
+        "ai": "No heat is a priority for us. I'm pulling up our emergency schedule right now. When exactly did you first notice the heat stopped working?"
+      }
+    ],
+
+    "minConfidence": 0.65,
+    "priority": 95,
+    "cooldownSeconds": 0,
+    "channel": "any",
+    "language": "en",
+    
+    "preconditions": null,
+    "effects": {
+      "setState": "emergency_triage",
+      "setFlag": { "isEmergency": true },
+      "increment": { "emergencyCallCount": 1 }
+    },
+    
+    "sensitiveInfoRule": "platform_default",
+    "customMasking": null,
+    
+    "timedFollowUp": {
+      "enabled": false,
+      "delaySeconds": 50,
+      "messages": [
+        "I'm still here — just checking to see if you're ready to schedule that emergency visit.",
+        "Hello? I want to make sure we get your heat fixed as soon as possible."
+      ],
+      "extensionSeconds": 30
+    },
+    
+    "silencePolicy": {
+      "maxConsecutive": 2,
+      "finalWarning": "Hello? I'm still here if you need help with your heating emergency."
+    },
+
+    "actionHooks": ["log_emergency_call", "notify_dispatch_team"],
+    "handoffPolicy": "low_confidence",
+    "escalationFlags": ["urgent", "elderly_resident", "infant_in_home", "medical_equipment"],
+
+    "behavior": "empathetic_urgent",
+    "toneLevel": 4,
+    "ttsOverride": {
+      "pitch": "+2%",
+      "rate": "1.05",
+      "volume": "normal"
+    },
+
+    "embeddingVector": null,
+    "createdBy": "Platform Admin",
+    "updatedBy": "Platform Admin",
+    "createdAt": "2025-01-15T10:30:00Z",
+    "updatedAt": "2025-12-22T00:00:00Z",
+    "legacyMigrated": false
+  },
+
+  "category": {
+    "id": "emergency",
+    "name": "Emergency Services",
+    "icon": "🚨",
+    "description": "High-priority emergency scenarios including no heat, no AC, gas leaks, and water emergencies. These scenarios have boosted priority and trigger immediate dispatch protocols.",
+    "behavior": null,
+    "isActive": true,
+    "additionalFillerWords": ["help", "quick", "fast", "asap", "immediately"],
+    "synonymMap": {
+      "emergency": ["urgent", "critical", "asap", "right away", "immediately"],
+      "technician": ["tech", "guy", "repair person", "service person", "expert"]
+    },
+    "scenarios": []
+  },
+
+  "templateContext": {
+    "templateId": "hvac_trade_knowledge_v2",
+    "templateName": "HVAC Trade Knowledge",
+    "templateType": "hvac",
+    "industryLabel": "HVAC",
+    
+    "fillerWords": [
+      "um", "uh", "like", "you know", "basically", "actually", "so", "well",
+      "okay", "alright", "right", "please", "thanks", "hi", "hey", "hello"
+    ],
+    
+    "synonymMap": {
+      "air conditioner": ["ac", "a/c", "air", "cooling", "cold air", "system"],
+      "furnace": ["heater", "heat", "heating", "hot air", "heating unit"],
+      "thermostat": ["stat", "temperature control", "wall thing", "controller"]
+    },
+    
+    "learningSettings": {
+      "enableLearning": true,
+      "shareWithinIndustry": true,
+      "industryShareThreshold": 0.85,
+      "proposeForGlobal": false,
+      "globalProposeThreshold": 0.90,
+      "minPatternFrequency": 3,
+      "autoApproveIndustry": true,
+      "tier1Threshold": 0.80,
+      "tier2Threshold": 0.60
+    }
+  }
+}
+
