@@ -3,22 +3,77 @@
  * CALL PROTECTION SNAPSHOT PROVIDER
  * ============================================================================
  * Provides: Pre-answer filters (spam, voicemail, abuse detection)
+ * 
+ * DATA SOURCE: CheatSheetVersion (edgeCases) OR frontDeskBehavior.callProtection
+ * 
+ * Note: Call protection is OPTIONAL. If not configured, provider returns 
+ * enabled=false with NOT_CONFIGURED warning (not an error).
  */
 
 const CheatSheetVersion = require('../../../models/cheatsheet/CheatSheetVersion');
+const Company = require('../../../models/v2Company');
 const logger = require('../../../utils/logger');
 
 module.exports.getSnapshot = async function(companyId) {
     const startTime = Date.now();
     
     try {
-        // Get the LIVE cheatsheet version for this company
+        // Try CheatSheetVersion first (primary source)
+        let edgeCases = [];
+        let dataSource = 'none';
+        
         const cheatSheet = await CheatSheetVersion.findOne({ 
             companyId, 
             status: 'live' 
         }).lean();
         
-        const edgeCases = cheatSheet?.config?.edgeCases || [];
+        if (cheatSheet?.config?.edgeCases?.length > 0) {
+            edgeCases = cheatSheet.config.edgeCases;
+            dataSource = 'CheatSheetVersion.edgeCases';
+        } else {
+            // Fallback: Check frontDeskBehavior.callProtection
+            const company = await Company.findById(companyId)
+                .select('frontDeskBehavior.callProtection')
+                .lean();
+            
+            if (company?.frontDeskBehavior?.callProtection?.rules?.length > 0) {
+                // Convert to edge case format
+                edgeCases = company.frontDeskBehavior.callProtection.rules.map(rule => ({
+                    name: rule.name || 'Custom Rule',
+                    type: rule.type || 'custom',
+                    enabled: rule.enabled !== false,
+                    priority: rule.priority || 10,
+                    triggerPatterns: rule.patterns || [],
+                    responseText: rule.response || '',
+                    action: rule.action || 'respond'
+                }));
+                dataSource = 'frontDeskBehavior.callProtection';
+            }
+        }
+        
+        // If still no data, return NOT_CONFIGURED (not an error)
+        if (edgeCases.length === 0) {
+            return {
+                provider: 'callProtection',
+                providerVersion: '1.1',
+                schemaVersion: 'v1',
+                enabled: false,
+                health: 'GREEN',  // NOT_CONFIGURED is not an error
+                warnings: ['NOT_CONFIGURED: No call protection rules defined (optional feature)'],
+                status: 'NOT_CONFIGURED',
+                data: {
+                    dataSource: 'none',
+                    rulesTotal: 0,
+                    rulesEnabled: 0,
+                    rulesInvalid: 0,
+                    ruleNames: [],
+                    byType: {},
+                    invalidRules: [],
+                    rules: []
+                },
+                generatedIn: Date.now() - startTime
+            };
+        }
         const enabledRules = edgeCases.filter(ec => ec.enabled !== false);
         
         // Categorize rules by type
@@ -100,12 +155,14 @@ module.exports.getSnapshot = async function(companyId) {
         
         return {
             provider: 'callProtection',
-            providerVersion: '1.0',
+            providerVersion: '1.1',
             schemaVersion: 'v1',
             enabled: edgeCases.length > 0,
             health,
             warnings,
+            status: edgeCases.length > 0 ? 'CONFIGURED' : 'NOT_CONFIGURED',
             data: {
+                dataSource,
                 rulesTotal: edgeCases.length,
                 rulesEnabled: enabledRules.length,
                 rulesInvalid: invalidEnabledRules.length,

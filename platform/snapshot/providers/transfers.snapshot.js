@@ -3,22 +3,78 @@
  * TRANSFERS SNAPSHOT PROVIDER
  * ============================================================================
  * Provides: Transfer targets, after-hours routing configuration
+ * 
+ * DATA SOURCE: CheatSheetVersion (transferRules) OR frontDeskBehavior.transfers
+ * 
+ * Note: Transfers are OPTIONAL. If not configured, provider returns 
+ * enabled=false with NOT_CONFIGURED status (not an error).
  */
 
 const CheatSheetVersion = require('../../../models/cheatsheet/CheatSheetVersion');
+const Company = require('../../../models/v2Company');
 const logger = require('../../../utils/logger');
 
 module.exports.getSnapshot = async function(companyId) {
     const startTime = Date.now();
     
     try {
-        // Get the LIVE cheatsheet version for this company
+        // Try CheatSheetVersion first (primary source)
+        let transferRules = [];
+        let dataSource = 'none';
+        
         const cheatSheet = await CheatSheetVersion.findOne({ 
             companyId, 
             status: 'live' 
         }).lean();
         
-        const transferRules = cheatSheet?.config?.transferRules || [];
+        if (cheatSheet?.config?.transferRules?.length > 0) {
+            transferRules = cheatSheet.config.transferRules;
+            dataSource = 'CheatSheetVersion.transferRules';
+        } else {
+            // Fallback: Check frontDeskBehavior.transfers
+            const company = await Company.findById(companyId)
+                .select('frontDeskBehavior.transfers')
+                .lean();
+            
+            if (company?.frontDeskBehavior?.transfers?.targets?.length > 0) {
+                // Convert to transfer rule format
+                transferRules = company.frontDeskBehavior.transfers.targets.map(target => ({
+                    contactNameOrQueue: target.name || target.label || 'Unnamed',
+                    label: target.label || target.name || 'Unnamed',
+                    phoneNumber: target.phone || target.phoneNumber || null,
+                    intentTag: target.intentTag || null,
+                    enabled: target.enabled !== false,
+                    priority: target.priority || 10,
+                    afterHoursOnly: target.afterHoursOnly || false,
+                    preTransferScript: target.script || target.preTransferScript || null
+                }));
+                dataSource = 'frontDeskBehavior.transfers';
+            }
+        }
+        
+        // If still no data, return NOT_CONFIGURED (not an error)
+        if (transferRules.length === 0) {
+            return {
+                provider: 'transfers',
+                providerVersion: '1.1',
+                schemaVersion: 'v1',
+                enabled: false,
+                health: 'GREEN',  // NOT_CONFIGURED is not an error
+                warnings: ['NOT_CONFIGURED: No transfer targets defined (optional feature)'],
+                status: 'NOT_CONFIGURED',
+                data: {
+                    dataSource: 'none',
+                    targetsTotal: 0,
+                    targetsEnabled: 0,
+                    afterHoursRouting: false,
+                    afterHoursTargetsCount: 0,
+                    intentTags: [],
+                    targets: []
+                },
+                generatedIn: Date.now() - startTime
+            };
+        }
+        
         const enabledTargets = transferRules.filter(r => r.enabled !== false);
         
         // Check for after-hours routing
@@ -35,16 +91,25 @@ module.exports.getSnapshot = async function(companyId) {
         let health = 'GREEN';
         const warnings = [];
         
-        // Transfers are optional - no warning if empty
+        // Validate enabled targets have phone numbers
+        const enabledWithoutPhone = enabledTargets.filter(r => !r.phoneNumber);
+        if (enabledWithoutPhone.length > 0) {
+            health = 'YELLOW';
+            enabledWithoutPhone.forEach(r => {
+                warnings.push(`Transfer target "${r.label || r.contactNameOrQueue}" enabled but has no phone number`);
+            });
+        }
         
         return {
             provider: 'transfers',
-            providerVersion: '1.0',
+            providerVersion: '1.1',
             schemaVersion: 'v1',
             enabled: transferRules.length > 0,
             health,
             warnings,
+            status: 'CONFIGURED',
             data: {
+                dataSource,
                 targetsTotal: transferRules.length,
                 targetsEnabled: enabledTargets.length,
                 afterHoursRouting: hasAfterHoursRouting,

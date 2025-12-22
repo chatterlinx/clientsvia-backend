@@ -87,7 +87,9 @@ function computeCompleteness(snapshot, scopeOverride = null) {
     logger.info(`[COMPLETENESS] Available providers: ${Object.keys(providers).join(', ')}`);
     
     requiredForScope.forEach(providerKey => {
-        if (!providers[providerKey]) {
+        const provider = providers[providerKey];
+        
+        if (!provider) {
             penalties.push({
                 code: 'MISSING_PROVIDER',
                 severity: 'RED',
@@ -97,16 +99,19 @@ function computeCompleteness(snapshot, scopeOverride = null) {
             score -= PENALTY_CODES.MISSING_PROVIDER.weight;
             hasRedPenalty = true;
             recommendations.push(`Add ${providerKey} snapshot provider`);
-        } else if (providers[providerKey].health === 'RED' && providers[providerKey].enabled) {
+        } else if (provider.health === 'RED' && provider.enabled) {
+            // Only penalize RED health if the provider is enabled and failed
             penalties.push({
                 code: 'PROVIDER_SCHEMA_INVALID',
                 severity: 'RED',
                 weight: PENALTY_CODES.PROVIDER_SCHEMA_INVALID.weight,
-                message: `Provider ${providerKey} is RED: ${providers[providerKey].error || 'health check failed'}`
+                message: `Provider ${providerKey} is RED: ${provider.error || 'health check failed'}`
             });
             score -= PENALTY_CODES.PROVIDER_SCHEMA_INVALID.weight;
             hasRedPenalty = true;
         }
+        // NOTE: NOT_CONFIGURED status with enabled=false and health=GREEN is NOT penalized
+        // Optional features (callProtection, transfers) can be unconfigured without penalty
     });
     
     // ═══════════════════════════════════════════════════════════════════════
