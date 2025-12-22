@@ -3386,8 +3386,8 @@
                         JSON.stringify({ error: 'Failed to load effective config' }, null, 2);
                 }
                 
-                // Load raw company data
-                const rawResponse = await fetch(`/api/company/${companyId}/raw-data/full`, {
+                // Load raw company data (uses the /control-plane/raw endpoint)
+                const rawResponse = await fetch(`/api/company/${companyId}/control-plane/raw`, {
                     headers: { 'Authorization': `Bearer ${authToken}` }
                 });
                 
