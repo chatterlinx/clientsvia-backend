@@ -1256,8 +1256,23 @@
          ═══════════════════════════════════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="data-config">
       <div class="card">
-        <h2>📂 Data & Config</h2>
-        <p class="muted">Manage placeholders, templates, and scenarios. Global data with company-specific overrides.</p>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+          <div>
+            <h2>📂 Data & Config</h2>
+            <p class="muted">Manage placeholders, templates, and scenarios. Global data with company-specific overrides.</p>
+          </div>
+          <!-- Field Report + Golden Autofill Buttons -->
+          <div style="display: flex; gap: 8px;">
+            <button onclick="openFieldReportModal()" 
+                    style="padding: 8px 14px; background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-clipboard-list"></i> Field Report
+            </button>
+            <button onclick="openGoldenAutofillModal()" 
+                    style="padding: 8px 14px; background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); color: #1e293b; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-magic"></i> Golden HVAC Autofill
+            </button>
+          </div>
+        </div>
         
         <!-- Sub-tabs for Data & Config -->
         <div style="display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px;">
@@ -3875,6 +3890,823 @@
       
       btn.innerHTML = '<i class="fas fa-play"></i> Validate';
       btn.disabled = false;
+    }
+  </script>
+  
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       FIELD REPORT MODAL (Schema vs UI Analysis)
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="field-report-modal-overlay" class="snapshot-modal-overlay" onclick="if(event.target === this) closeFieldReportModal()">
+    <div class="snapshot-modal" style="max-width: 1100px; max-height: 95vh; display: flex; flex-direction: column;">
+      
+      <div class="snapshot-modal-header" style="background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);">
+        <div class="snapshot-modal-title">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 600;">📋 Field Report (Schema vs UI)</h2>
+        </div>
+        <div class="snapshot-modal-controls" style="display: flex; gap: 8px;">
+          <button onclick="copyFieldReport()" id="btn-copy-field-report"
+                  style="padding: 8px 16px; background: white; color: #6366f1; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">
+            <i class="fas fa-copy"></i> Copy JSON
+          </button>
+          <button onclick="downloadFieldReport()" 
+                  style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">
+            <i class="fas fa-download"></i> Download
+          </button>
+          <button onclick="closeFieldReportModal()" 
+                  style="padding: 8px 16px; background: transparent; color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; cursor: pointer; font-weight: 500;">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      
+      <div class="snapshot-modal-body" style="padding: 24px; overflow-y: auto; flex: 1;">
+        <!-- Summary Stats -->
+        <div id="field-report-summary" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+          <div style="background: #f0fdf4; border-radius: 8px; padding: 16px; text-align: center;">
+            <div id="fr-total" style="font-size: 32px; font-weight: 700; color: #059669;">--</div>
+            <div style="font-size: 12px; color: #064e3b;">Total Fields</div>
+          </div>
+          <div style="background: #eff6ff; border-radius: 8px; padding: 16px; text-align: center;">
+            <div id="fr-exposed" style="font-size: 32px; font-weight: 700; color: #2563eb;">--</div>
+            <div style="font-size: 12px; color: #1e3a8a;">Exposed in UI</div>
+          </div>
+          <div style="background: #fef3c7; border-radius: 8px; padding: 16px; text-align: center;">
+            <div id="fr-hidden" style="font-size: 32px; font-weight: 700; color: #d97706;">--</div>
+            <div style="font-size: 12px; color: #92400e;">Hidden</div>
+          </div>
+          <div style="background: #fef2f2; border-radius: 8px; padding: 16px; text-align: center;">
+            <div id="fr-deprecated" style="font-size: 32px; font-weight: 700; color: #dc2626;">--</div>
+            <div style="font-size: 12px; color: #7f1d1d;">Deprecated</div>
+          </div>
+        </div>
+        
+        <!-- Report JSON -->
+        <pre id="field-report-json" style="background: #1e293b; color: #e2e8f0; padding: 20px; border-radius: 8px; font-size: 12px; overflow: auto; max-height: 500px; white-space: pre-wrap; word-break: break-word;">
+Loading field report...
+        </pre>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // ============================================================================
+    // FIELD REPORT (Schema vs UI)
+    // ============================================================================
+    let currentFieldReport = null;
+    
+    function openFieldReportModal() {
+      document.getElementById('field-report-modal-overlay').classList.add('active');
+      generateFieldReport();
+    }
+    
+    function closeFieldReportModal() {
+      document.getElementById('field-report-modal-overlay').classList.remove('active');
+    }
+    
+    function generateFieldReport() {
+      // Complete schema field inventory
+      const schemaFields = {
+        // === SCENARIO FIELDS ===
+        scenario: {
+          // IDENTITY
+          'scenarioId': { section: 'Basic Info', exposed: true, selector: '#scenario-id', default: null, deprecated: false },
+          'name': { section: 'Basic Info', exposed: true, selector: '#scenario-name', default: null, deprecated: false },
+          'version': { section: 'Basic Info', exposed: true, selector: '#scenario-version', default: 1, deprecated: false },
+          'status': { section: 'Basic Info', exposed: true, selector: '#scenario-status', default: 'draft', deprecated: false },
+          'isActive': { section: 'Basic Info', exposed: true, selector: '#scenario-active', default: true, deprecated: false },
+          'categories': { section: 'Basic Info', exposed: true, selector: '#scenario-categories', default: [], deprecated: false },
+          'notes': { section: 'Basic Info', exposed: true, selector: '#scenario-notes', default: '', deprecated: false },
+          
+          // TRIGGERS
+          'triggers': { section: 'Triggers & Matching', exposed: true, selector: '#scenario-triggers', default: [], deprecated: false },
+          'negativeTriggers': { section: 'Triggers & Matching', exposed: true, selector: '#negative-triggers', default: [], deprecated: false },
+          'regexTriggers': { section: 'Triggers & Matching', exposed: true, selector: '#regex-triggers', default: [], deprecated: false },
+          'keywords': { section: 'Triggers & Matching', exposed: false, selector: null, default: [], deprecated: false },
+          'negativeKeywords': { section: 'Triggers & Matching', exposed: false, selector: null, default: [], deprecated: false },
+          'exampleUserPhrases': { section: 'Triggers & Matching', exposed: false, selector: null, default: [], deprecated: false },
+          'negativeUserPhrases': { section: 'Triggers & Matching', exposed: false, selector: null, default: [], deprecated: false },
+          'contextWeight': { section: 'Triggers & Matching', exposed: false, selector: null, default: 0.7, deprecated: false },
+          'testPhrases': { section: 'Triggers & Matching', exposed: false, selector: null, default: [], deprecated: false },
+          'embeddingVector': { section: 'Triggers & Matching', exposed: false, selector: null, default: null, deprecated: false, computed: true },
+          
+          // REPLIES
+          'quickReplies': { section: 'Replies & Flow', exposed: true, selector: '#quick-replies', default: [], deprecated: false },
+          'fullReplies': { section: 'Replies & Flow', exposed: true, selector: '#full-replies', default: [], deprecated: false },
+          'followUpPrompts': { section: 'Replies & Flow', exposed: false, selector: null, default: [], deprecated: false },
+          'followUpFunnel': { section: 'Replies & Flow', exposed: false, selector: null, default: null, deprecated: false },
+          'replySelection': { section: 'Replies & Flow', exposed: false, selector: null, default: 'bandit', deprecated: false },
+          'scenarioType': { section: 'Replies & Flow', exposed: false, selector: null, default: null, deprecated: false },
+          'replyStrategy': { section: 'Replies & Flow', exposed: false, selector: null, default: 'AUTO', deprecated: false },
+          'followUpMode': { section: 'Replies & Flow', exposed: false, selector: null, default: 'NONE', deprecated: false },
+          'followUpQuestionText': { section: 'Replies & Flow', exposed: false, selector: null, default: null, deprecated: false },
+          'transferTarget': { section: 'Replies & Flow', exposed: false, selector: null, default: null, deprecated: false },
+          
+          // ENTITIES
+          'entityCapture': { section: 'Entities & Variables', exposed: false, selector: null, default: [], deprecated: false },
+          'entityValidation': { section: 'Entities & Variables', exposed: false, selector: null, default: {}, deprecated: false },
+          'dynamicVariables': { section: 'Entities & Variables', exposed: false, selector: null, default: {}, deprecated: false },
+          'qnaPairs': { section: 'Entities & Variables', exposed: false, selector: null, default: [], deprecated: false, computed: true },
+          'examples': { section: 'Entities & Variables', exposed: false, selector: null, default: [], deprecated: false },
+          
+          // ADVANCED
+          'minConfidence': { section: 'Advanced Settings', exposed: false, selector: null, default: null, deprecated: false },
+          'priority': { section: 'Advanced Settings', exposed: true, selector: '#scenario-priority', default: 0, deprecated: false },
+          'cooldownSeconds': { section: 'Advanced Settings', exposed: false, selector: null, default: 0, deprecated: false },
+          'channel': { section: 'Advanced Settings', exposed: false, selector: null, default: 'any', deprecated: false },
+          'language': { section: 'Advanced Settings', exposed: false, selector: null, default: 'auto', deprecated: false },
+          'preconditions': { section: 'Advanced Settings', exposed: false, selector: null, default: null, deprecated: false },
+          'effects': { section: 'Advanced Settings', exposed: false, selector: null, default: null, deprecated: false },
+          'sensitiveInfoRule': { section: 'Advanced Settings', exposed: false, selector: null, default: 'platform_default', deprecated: false },
+          'customMasking': { section: 'Advanced Settings', exposed: false, selector: null, default: null, deprecated: false },
+          'timedFollowUp.enabled': { section: 'Advanced Settings', exposed: false, selector: null, default: false, deprecated: false },
+          'timedFollowUp.delaySeconds': { section: 'Advanced Settings', exposed: false, selector: null, default: 50, deprecated: false },
+          'timedFollowUp.messages': { section: 'Advanced Settings', exposed: false, selector: null, default: [], deprecated: false },
+          'timedFollowUp.extensionSeconds': { section: 'Advanced Settings', exposed: false, selector: null, default: 30, deprecated: false },
+          'silencePolicy.maxConsecutive': { section: 'Advanced Settings', exposed: false, selector: null, default: 2, deprecated: false },
+          'silencePolicy.finalWarning': { section: 'Advanced Settings', exposed: false, selector: null, default: 'Hello? Did I lose you?', deprecated: false },
+          
+          // HOOKS
+          'actionHooks': { section: 'Action Hooks', exposed: false, selector: null, default: [], deprecated: false },
+          'handoffPolicy': { section: 'Action Hooks', exposed: false, selector: null, default: 'low_confidence', deprecated: false },
+          'escalationFlags': { section: 'Action Hooks', exposed: false, selector: null, default: [], deprecated: false },
+          
+          // VOICE
+          'behavior': { section: 'Voice & TTS', exposed: false, selector: null, default: null, deprecated: false },
+          'toneLevel': { section: 'Voice & TTS', exposed: false, selector: null, default: 2, deprecated: true },
+          'ttsOverride.pitch': { section: 'Voice & TTS', exposed: false, selector: null, default: null, deprecated: false },
+          'ttsOverride.rate': { section: 'Voice & TTS', exposed: false, selector: null, default: null, deprecated: false },
+          'ttsOverride.volume': { section: 'Voice & TTS', exposed: false, selector: null, default: null, deprecated: false },
+          
+          // DEPRECATED
+          'quickReply': { section: 'Deprecated', exposed: false, selector: null, default: null, deprecated: true },
+          'fullReply': { section: 'Deprecated', exposed: false, selector: null, default: null, deprecated: true },
+          'legacyMigrated': { section: 'Deprecated', exposed: false, selector: null, default: false, deprecated: true }
+        },
+        
+        // === CATEGORY FIELDS ===
+        category: {
+          'id': { section: 'Category Settings', exposed: true, selector: '#category-id', default: null, deprecated: false },
+          'name': { section: 'Category Settings', exposed: true, selector: '#category-name', default: null, deprecated: false },
+          'icon': { section: 'Category Settings', exposed: true, selector: '#category-icon', default: '💬', deprecated: false },
+          'description': { section: 'Category Settings', exposed: true, selector: '#category-description', default: null, deprecated: false },
+          'behavior': { section: 'Category Settings', exposed: false, selector: null, default: null, deprecated: true },
+          'isActive': { section: 'Category Settings', exposed: true, selector: '#category-active', default: true, deprecated: false },
+          'additionalFillerWords': { section: 'Category Settings', exposed: false, selector: null, default: [], deprecated: false },
+          'synonymMap': { section: 'Category Settings', exposed: false, selector: null, default: {}, deprecated: false }
+        },
+        
+        // === TEMPLATE CONTEXT ===
+        templateContext: {
+          'fillerWords': { section: 'Template NLP', exposed: false, selector: null, default: '(50+ defaults)', deprecated: false },
+          'synonymMap': { section: 'Template NLP', exposed: false, selector: null, default: '(Map)', deprecated: false },
+          'learningSettings.tier1Threshold': { section: 'Template Learning', exposed: false, selector: null, default: 0.80, deprecated: false },
+          'learningSettings.tier2Threshold': { section: 'Template Learning', exposed: false, selector: null, default: 0.60, deprecated: false },
+          'learningSettings.enableLearning': { section: 'Template Learning', exposed: false, selector: null, default: true, deprecated: false },
+          'learningSettings.shareWithinIndustry': { section: 'Template Learning', exposed: false, selector: null, default: false, deprecated: false },
+          'learningSettings.llmBudgetMonthly': { section: 'Template Learning', exposed: false, selector: null, default: 500, deprecated: false },
+          'aiGatewaySettings.enableTier3': { section: 'Template AI Gateway', exposed: false, selector: null, default: true, deprecated: false },
+          'intelligenceMode': { section: 'Template AI Gateway', exposed: false, selector: null, default: 'MAXIMUM', deprecated: false },
+          'variableDefinitions': { section: 'Template Variables', exposed: false, selector: null, default: [], deprecated: false },
+          'urgencyKeywords': { section: 'Template Keywords', exposed: false, selector: null, default: [], deprecated: false }
+        }
+      };
+      
+      // Calculate counts
+      let total = 0, exposed = 0, hidden = 0, deprecated = 0;
+      const fieldList = [];
+      
+      for (const [section, fields] of Object.entries(schemaFields)) {
+        for (const [path, info] of Object.entries(fields)) {
+          total++;
+          if (info.deprecated) {
+            deprecated++;
+          } else if (info.exposed) {
+            exposed++;
+          } else {
+            hidden++;
+          }
+          
+          fieldList.push({
+            section: section,
+            path: `${section}.${path}`,
+            uiSection: info.section,
+            exposed: info.exposed,
+            selector: info.selector,
+            default: info.default,
+            deprecated: info.deprecated,
+            computed: info.computed || false
+          });
+        }
+      }
+      
+      // Update summary
+      document.getElementById('fr-total').textContent = total;
+      document.getElementById('fr-exposed').textContent = exposed;
+      document.getElementById('fr-hidden').textContent = hidden;
+      document.getElementById('fr-deprecated').textContent = deprecated;
+      
+      // Build report
+      currentFieldReport = {
+        _meta: {
+          reportType: 'FIELD_REPORT_SCHEMA_VS_UI',
+          schemaVersion: 'V22',
+          generatedAt: new Date().toISOString(),
+          companyId: currentCompanyId
+        },
+        counts: {
+          total,
+          exposed,
+          hidden,
+          deprecated
+        },
+        bySection: {
+          scenario: Object.keys(schemaFields.scenario).length,
+          category: Object.keys(schemaFields.category).length,
+          templateContext: Object.keys(schemaFields.templateContext).length
+        },
+        fields: fieldList,
+        
+        // Summary of what's missing
+        missingFromUI: fieldList.filter(f => !f.exposed && !f.deprecated && !f.computed).map(f => ({
+          path: f.path,
+          section: f.uiSection,
+          default: f.default
+        })),
+        
+        // What's exposed
+        exposedInUI: fieldList.filter(f => f.exposed).map(f => ({
+          path: f.path,
+          selector: f.selector
+        }))
+      };
+      
+      document.getElementById('field-report-json').textContent = JSON.stringify(currentFieldReport, null, 2);
+    }
+    
+    function copyFieldReport() {
+      if (!currentFieldReport) return;
+      
+      navigator.clipboard.writeText(JSON.stringify(currentFieldReport, null, 2)).then(() => {
+        const btn = document.getElementById('btn-copy-field-report');
+        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        btn.style.background = '#10b981';
+        btn.style.color = 'white';
+        showToast('✅ Field Report copied to clipboard!', 'success');
+        
+        setTimeout(() => {
+          btn.innerHTML = '<i class="fas fa-copy"></i> Copy JSON';
+          btn.style.background = 'white';
+          btn.style.color = '#6366f1';
+        }, 2000);
+      });
+    }
+    
+    function downloadFieldReport() {
+      if (!currentFieldReport) return;
+      
+      const blob = new Blob([JSON.stringify(currentFieldReport, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `field-report-${currentCompanyId}-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('📥 Field Report downloaded!', 'success');
+    }
+  </script>
+  
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       GOLDEN HVAC AUTOFILL MODAL
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="golden-autofill-modal-overlay" class="snapshot-modal-overlay" onclick="if(event.target === this) closeGoldenAutofillModal()">
+    <div class="snapshot-modal" style="max-width: 1000px; max-height: 95vh; display: flex; flex-direction: column;">
+      
+      <div class="snapshot-modal-header" style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);">
+        <div class="snapshot-modal-title">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 600; color: #1e293b;">✨ Golden HVAC Autofill</h2>
+        </div>
+        <div class="snapshot-modal-controls" style="display: flex; gap: 8px;">
+          <button onclick="closeGoldenAutofillModal()" 
+                  style="padding: 8px 16px; background: rgba(0,0,0,0.1); color: #1e293b; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      
+      <div class="snapshot-modal-body" style="padding: 24px; overflow-y: auto; flex: 1;">
+        
+        <!-- Description -->
+        <div style="background: #fef3c7; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <div style="font-weight: 600; color: #92400e; margin-bottom: 8px;"><i class="fas fa-magic"></i> What This Does:</div>
+          <p style="font-size: 13px; color: #78350f; margin: 0;">
+            Applies best-practice HVAC defaults to all scenarios in the selected template. <strong>No LLM required.</strong>
+            Sets optimal confidence, priority, reply strategy, negative triggers, and more.
+          </p>
+        </div>
+        
+        <!-- Template Selection -->
+        <div style="margin-bottom: 20px;">
+          <label style="font-size: 13px; font-weight: 600; color: #374151; display: block; margin-bottom: 8px;">Select Template:</label>
+          <select id="autofill-template-select" 
+                  style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
+            <option value="">Loading templates...</option>
+          </select>
+        </div>
+        
+        <!-- Golden Defaults Reference -->
+        <div style="background: #f8fafc; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #374151;"><i class="fas fa-list-check"></i> Golden Defaults Applied:</h4>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 12px;">
+            <div>
+              <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">Reply Strategy</div>
+              <ul style="margin: 0; padding-left: 16px; color: #64748b;">
+                <li>replySelection: <code>bandit</code></li>
+                <li>replyStrategy: <code>AUTO</code></li>
+                <li>followUpMode: <code>NONE</code> (unless ACTION_FLOW)</li>
+              </ul>
+            </div>
+            <div>
+              <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">Min Confidence (by type)</div>
+              <ul style="margin: 0; padding-left: 16px; color: #64748b;">
+                <li>Emergency: <code>0.60-0.70</code></li>
+                <li>Normal: <code>0.45-0.60</code></li>
+                <li>Small Talk: <code>0.35-0.45</code></li>
+              </ul>
+            </div>
+            <div>
+              <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">Priority (by type)</div>
+              <ul style="margin: 0; padding-left: 16px; color: #64748b;">
+                <li>Emergency: <code>90-100</code></li>
+                <li>Booking: <code>70-85</code></li>
+                <li>FAQ: <code>40-60</code></li>
+                <li>Small Talk: <code>-5 to 0</code></li>
+              </ul>
+            </div>
+            <div>
+              <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">Context Weight (by type)</div>
+              <ul style="margin: 0; padding-left: 16px; color: #64748b;">
+                <li>Emergency: <code>0.95</code></li>
+                <li>Booking: <code>0.80</code></li>
+                <li>FAQ: <code>0.70</code></li>
+                <li>Small Talk: <code>0.50</code></li>
+              </ul>
+            </div>
+          </div>
+          
+          <div style="margin-top: 12px;">
+            <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">Also Applied:</div>
+            <ul style="margin: 0; padding-left: 16px; color: #64748b; font-size: 12px;">
+              <li>negativeTriggers: Minimum 3 per scenario (auto-generated if missing)</li>
+              <li>quickReplies: Min 7, fullReplies: Min 7 (flagged if below)</li>
+              <li>silencePolicy.maxConsecutive: 2, finalWarning: set</li>
+              <li>handoffPolicy: <code>low_confidence</code> (or <code>always_on_keyword</code> for emergency)</li>
+              <li>actionHooks: Standard hooks by scenarioType</li>
+            </ul>
+          </div>
+        </div>
+        
+        <!-- Preview Area -->
+        <div id="autofill-preview" style="display: none;">
+          <h4 style="margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #374151;"><i class="fas fa-eye"></i> Preview Changes:</h4>
+          <div id="autofill-diff" style="background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; font-size: 12px; max-height: 300px; overflow-y: auto;">
+          </div>
+        </div>
+        
+        <!-- Actions -->
+        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+          <button onclick="previewGoldenAutofill()" id="btn-preview-autofill"
+                  style="padding: 10px 20px; background: #f1f5f9; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">
+            <i class="fas fa-eye"></i> Preview Changes
+          </button>
+          <button onclick="applyGoldenAutofill()" id="btn-apply-autofill"
+                  style="padding: 10px 20px; background: #f59e0b; color: #1e293b; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;" disabled>
+            <i class="fas fa-magic"></i> Apply Golden Defaults
+          </button>
+        </div>
+        
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // ============================================================================
+    // GOLDEN HVAC AUTOFILL
+    // ============================================================================
+    let goldenDefaults = {
+      // Scenario type detection keywords
+      typeKeywords: {
+        emergency: ['emergency', 'urgent', 'no heat', 'no ac', 'no cooling', 'leak', 'gas', 'flood', 'fire'],
+        booking: ['appointment', 'schedule', 'book', 'service', 'visit', 'tune-up', 'maintenance'],
+        faq: ['hours', 'pricing', 'price', 'cost', 'location', 'address', 'warranty', 'payment', 'financing'],
+        smallTalk: ['hello', 'hi', 'thanks', 'thank you', 'goodbye', 'bye', 'how are you', 'great', 'good']
+      },
+      
+      // Golden values by scenario type
+      byType: {
+        emergency: {
+          minConfidence: 0.65,
+          priority: 95,
+          contextWeight: 0.95,
+          handoffPolicy: 'always_on_keyword',
+          followUpMode: 'ASK_IF_BOOK',
+          scenarioType: 'ACTION_FLOW',
+          replyStrategy: 'AUTO',
+          actionHooks: ['log_emergency_call', 'notify_dispatch']
+        },
+        booking: {
+          minConfidence: 0.50,
+          priority: 75,
+          contextWeight: 0.80,
+          handoffPolicy: 'low_confidence',
+          followUpMode: 'ASK_IF_BOOK',
+          scenarioType: 'ACTION_FLOW',
+          replyStrategy: 'AUTO',
+          actionHooks: ['log_booking_intent']
+        },
+        faq: {
+          minConfidence: 0.55,
+          priority: 50,
+          contextWeight: 0.70,
+          handoffPolicy: 'low_confidence',
+          followUpMode: 'NONE',
+          scenarioType: 'INFO_FAQ',
+          replyStrategy: 'AUTO',
+          actionHooks: []
+        },
+        smallTalk: {
+          minConfidence: 0.40,
+          priority: -5,
+          contextWeight: 0.50,
+          handoffPolicy: 'never',
+          followUpMode: 'NONE',
+          scenarioType: 'SMALL_TALK',
+          replyStrategy: 'AUTO',
+          actionHooks: []
+        }
+      },
+      
+      // Default values for all scenarios
+      defaults: {
+        replySelection: 'bandit',
+        silencePolicy: {
+          maxConsecutive: 2,
+          finalWarning: 'Hello? Are you still there? I want to make sure I can help you today.'
+        },
+        timedFollowUp: {
+          enabled: false,
+          delaySeconds: 50,
+          extensionSeconds: 30
+        }
+      }
+    };
+    
+    let autofillPreview = null;
+    
+    function openGoldenAutofillModal() {
+      document.getElementById('golden-autofill-modal-overlay').classList.add('active');
+      loadTemplatesForAutofill();
+    }
+    
+    function closeGoldenAutofillModal() {
+      document.getElementById('golden-autofill-modal-overlay').classList.remove('active');
+      autofillPreview = null;
+      document.getElementById('autofill-preview').style.display = 'none';
+      document.getElementById('btn-apply-autofill').disabled = true;
+    }
+    
+    async function loadTemplatesForAutofill() {
+      const select = document.getElementById('autofill-template-select');
+      select.innerHTML = '<option value="">Loading templates...</option>';
+      
+      try {
+        const response = await fetch('/api/admin/global-instant-responses/published', {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (!response.ok) throw new Error('Failed to load templates');
+        
+        const result = await response.json();
+        const templates = result.data || result.templates || [];
+        
+        select.innerHTML = '<option value="">Select a template...</option>';
+        templates.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t._id;
+          opt.textContent = `${t.name} (${t.stats?.totalScenarios || '?'} scenarios)`;
+          select.appendChild(opt);
+        });
+        
+      } catch (error) {
+        console.error('[AUTOFILL] Failed to load templates:', error);
+        select.innerHTML = '<option value="">Error loading templates</option>';
+      }
+    }
+    
+    function detectScenarioType(scenario) {
+      const name = (scenario.name || '').toLowerCase();
+      const triggers = (scenario.triggers || []).map(t => t.toLowerCase()).join(' ');
+      const combined = name + ' ' + triggers;
+      
+      for (const [type, keywords] of Object.entries(goldenDefaults.typeKeywords)) {
+        for (const kw of keywords) {
+          if (combined.includes(kw)) {
+            return type;
+          }
+        }
+      }
+      
+      return 'faq'; // Default to FAQ if unknown
+    }
+    
+    function generateNegativeTriggers(scenario) {
+      // Smart generation of negative triggers based on scenario name
+      const name = (scenario.name || '').toLowerCase();
+      const negatives = [];
+      
+      // Common negative patterns
+      const baseNegatives = ["cancel", "don't need", "not interested", "stop"];
+      
+      if (name.includes('appointment') || name.includes('book')) {
+        negatives.push("cancel appointment", "don't book", "cancel booking");
+      }
+      if (name.includes('emergency') || name.includes('urgent')) {
+        negatives.push("not an emergency", "not urgent", "can wait");
+      }
+      if (name.includes('heat')) {
+        negatives.push("too much heat", "overheating", "turn down heat");
+      }
+      if (name.includes('cool') || name.includes('ac')) {
+        negatives.push("too cold", "turn off ac", "don't need cooling");
+      }
+      
+      // Ensure at least 3
+      while (negatives.length < 3) {
+        if (negatives.length < baseNegatives.length) {
+          negatives.push(baseNegatives[negatives.length]);
+        } else {
+          break;
+        }
+      }
+      
+      return negatives;
+    }
+    
+    async function previewGoldenAutofill() {
+      const templateId = document.getElementById('autofill-template-select').value;
+      
+      if (!templateId) {
+        showToast('❌ Please select a template', 'error');
+        return;
+      }
+      
+      const btn = document.getElementById('btn-preview-autofill');
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+      btn.disabled = true;
+      
+      try {
+        // Fetch the template
+        const response = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (!response.ok) throw new Error('Failed to load template');
+        
+        const result = await response.json();
+        const template = result.data || result.template;
+        
+        // Generate changes preview
+        const changes = [];
+        let scenarioCount = 0;
+        
+        for (const category of (template.categories || [])) {
+          for (const scenario of (category.scenarios || [])) {
+            scenarioCount++;
+            const type = detectScenarioType(scenario);
+            const golden = goldenDefaults.byType[type];
+            const scenarioChanges = [];
+            
+            // Check what needs to change
+            if (scenario.minConfidence !== golden.minConfidence) {
+              scenarioChanges.push({
+                field: 'minConfidence',
+                from: scenario.minConfidence || 'null',
+                to: golden.minConfidence
+              });
+            }
+            
+            if (scenario.priority !== golden.priority) {
+              scenarioChanges.push({
+                field: 'priority',
+                from: scenario.priority ?? 0,
+                to: golden.priority
+              });
+            }
+            
+            if (scenario.contextWeight !== golden.contextWeight) {
+              scenarioChanges.push({
+                field: 'contextWeight',
+                from: scenario.contextWeight ?? 0.7,
+                to: golden.contextWeight
+              });
+            }
+            
+            if (scenario.replySelection !== goldenDefaults.defaults.replySelection) {
+              scenarioChanges.push({
+                field: 'replySelection',
+                from: scenario.replySelection || 'null',
+                to: goldenDefaults.defaults.replySelection
+              });
+            }
+            
+            if (scenario.scenarioType !== golden.scenarioType) {
+              scenarioChanges.push({
+                field: 'scenarioType',
+                from: scenario.scenarioType || 'null',
+                to: golden.scenarioType
+              });
+            }
+            
+            if (scenario.handoffPolicy !== golden.handoffPolicy) {
+              scenarioChanges.push({
+                field: 'handoffPolicy',
+                from: scenario.handoffPolicy || 'null',
+                to: golden.handoffPolicy
+              });
+            }
+            
+            // Check negative triggers
+            if (!scenario.negativeTriggers || scenario.negativeTriggers.length < 3) {
+              const autoGenerated = generateNegativeTriggers(scenario);
+              scenarioChanges.push({
+                field: 'negativeTriggers',
+                from: `${(scenario.negativeTriggers || []).length} items`,
+                to: `${autoGenerated.length} items (auto-generated)`
+              });
+            }
+            
+            // Check reply counts
+            const qCount = (scenario.quickReplies || []).length;
+            const fCount = (scenario.fullReplies || []).length;
+            if (qCount < 7 || fCount < 7) {
+              scenarioChanges.push({
+                field: 'REPLY_WARNING',
+                from: `quick: ${qCount}, full: ${fCount}`,
+                to: 'Needs 7+ of each (flagged for manual review)'
+              });
+            }
+            
+            if (scenarioChanges.length > 0) {
+              changes.push({
+                categoryId: category.id,
+                categoryName: category.name,
+                scenarioId: scenario.scenarioId || scenario.id,
+                scenarioName: scenario.name,
+                detectedType: type,
+                changes: scenarioChanges
+              });
+            }
+          }
+        }
+        
+        // Store for apply
+        autofillPreview = { templateId, template, changes };
+        
+        // Show preview
+        document.getElementById('autofill-preview').style.display = 'block';
+        
+        let diffHtml = `<div style="color: #10b981; margin-bottom: 12px;">
+          📊 <strong>${scenarioCount} scenarios analyzed</strong> | <strong>${changes.length} scenarios will be updated</strong>
+        </div>`;
+        
+        if (changes.length === 0) {
+          diffHtml += '<div style="color: #64748b;">All scenarios already match golden defaults! ✅</div>';
+        } else {
+          for (const s of changes.slice(0, 10)) { // Show first 10
+            diffHtml += `<div style="margin-bottom: 16px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+              <div style="font-weight: 600; color: #fbbf24; margin-bottom: 8px;">
+                ${s.scenarioName} <span style="font-weight: 400; color: #94a3b8;">(${s.detectedType})</span>
+              </div>`;
+            
+            for (const c of s.changes) {
+              const isWarning = c.field === 'REPLY_WARNING';
+              diffHtml += `<div style="font-size: 11px; margin-left: 12px; color: ${isWarning ? '#f59e0b' : '#94a3b8'};">
+                ${isWarning ? '⚠️' : '•'} ${c.field}: <span style="color: #ef4444;">${c.from}</span> → <span style="color: #10b981;">${c.to}</span>
+              </div>`;
+            }
+            
+            diffHtml += '</div>';
+          }
+          
+          if (changes.length > 10) {
+            diffHtml += `<div style="color: #64748b; text-align: center;">...and ${changes.length - 10} more scenarios</div>`;
+          }
+        }
+        
+        document.getElementById('autofill-diff').innerHTML = diffHtml;
+        document.getElementById('btn-apply-autofill').disabled = changes.length === 0;
+        
+      } catch (error) {
+        console.error('[AUTOFILL] Preview error:', error);
+        showToast('❌ Failed to preview: ' + error.message, 'error');
+      }
+      
+      btn.innerHTML = '<i class="fas fa-eye"></i> Preview Changes';
+      btn.disabled = false;
+    }
+    
+    async function applyGoldenAutofill() {
+      if (!autofillPreview || autofillPreview.changes.length === 0) {
+        showToast('❌ No changes to apply', 'error');
+        return;
+      }
+      
+      const btn = document.getElementById('btn-apply-autofill');
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Applying...';
+      btn.disabled = true;
+      
+      try {
+        const { template, changes } = autofillPreview;
+        
+        // Build patch payload
+        const patches = [];
+        
+        for (const change of changes) {
+          const category = template.categories.find(c => c.id === change.categoryId);
+          if (!category) continue;
+          
+          const scenario = category.scenarios.find(s => (s.scenarioId || s.id) === change.scenarioId);
+          if (!scenario) continue;
+          
+          const type = change.detectedType;
+          const golden = goldenDefaults.byType[type];
+          
+          // Build patch for this scenario
+          const patch = {
+            templateId: autofillPreview.templateId,
+            categoryId: change.categoryId,
+            scenarioId: change.scenarioId,
+            updates: {
+              minConfidence: golden.minConfidence,
+              priority: golden.priority,
+              contextWeight: golden.contextWeight,
+              replySelection: goldenDefaults.defaults.replySelection,
+              replyStrategy: golden.replyStrategy,
+              scenarioType: golden.scenarioType,
+              handoffPolicy: golden.handoffPolicy,
+              followUpMode: golden.followUpMode,
+              silencePolicy: goldenDefaults.defaults.silencePolicy
+            }
+          };
+          
+          // Add negative triggers if needed
+          if (!scenario.negativeTriggers || scenario.negativeTriggers.length < 3) {
+            patch.updates.negativeTriggers = generateNegativeTriggers(scenario);
+          }
+          
+          // Add action hooks
+          if (golden.actionHooks.length > 0) {
+            patch.updates.actionHooks = golden.actionHooks;
+          }
+          
+          patches.push(patch);
+        }
+        
+        // Apply via API
+        const response = await fetch('/api/apply-patch', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            action: 'goldenAutofill',
+            patches,
+            _meta: {
+              appliedAt: new Date().toISOString(),
+              companyId: currentCompanyId,
+              scenariosUpdated: patches.length
+            }
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showToast(`✅ Golden defaults applied to ${patches.length} scenarios!`, 'success');
+          closeGoldenAutofillModal();
+        } else {
+          throw new Error(result.error || 'Unknown error');
+        }
+        
+      } catch (error) {
+        console.error('[AUTOFILL] Apply error:', error);
+        showToast('❌ Failed to apply: ' + error.message, 'error');
+        btn.innerHTML = '<i class="fas fa-magic"></i> Apply Golden Defaults';
+        btn.disabled = false;
+      }
     }
   </script>
   
