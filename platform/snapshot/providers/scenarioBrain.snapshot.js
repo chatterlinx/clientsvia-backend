@@ -10,7 +10,12 @@ const GlobalInstantResponseTemplate = require('../../../models/GlobalInstantResp
 const CompanyScenarioOverride = require('../../../models/CompanyScenarioOverride');
 const CompanyCategoryOverride = require('../../../models/CompanyCategoryOverride');
 const CompanyResponseDefaults = require('../../../models/CompanyResponseDefaults');
-const { getScopeDisplayInfo, isLockedForCompany } = require('../../../middleware/scopeGuard');
+const { 
+    getScopeDisplayInfo, 
+    isLockedForCompany, 
+    getResolutionOrder,
+    getBlockedAttemptsCount 
+} = require('../../../middleware/scopeGuard');
 const logger = require('../../../utils/logger');
 
 module.exports.getSnapshot = async function(companyId) {
@@ -323,7 +328,14 @@ module.exports.getSnapshot = async function(companyId) {
                     // Computed flags
                     hasCompanyOverrides: companyOverrideCategoriesCount > 0 || companyOverrideScenariosCount > 0,
                     allGlobal: companyOverrideCategoriesCount === 0 && companyOverrideScenariosCount === 0,
-                    fullyLocked: lockedCategoriesCount === totalCategories && lockedScenariosCount === totalScenarios
+                    fullyLocked: lockedCategoriesCount === totalCategories && lockedScenariosCount === totalScenarios,
+                    // Resolution order (COMPANY always wins)
+                    resolutionOrder: getResolutionOrder(),
+                    // Audit stats
+                    recentBlockedAttempts: getBlockedAttemptsCount(),
+                    // Enterprise audit info
+                    auditEndpoint: '/api/company/:companyId/audit-log',
+                    contaminationReportEndpoint: '/api/company/:companyId/contamination-report'
                 },
                 
                 companyDefaults: {

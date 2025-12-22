@@ -8,10 +8,70 @@
  * 
  * HARD ENFORCEMENT - Cannot be bypassed via UI/devtools
  * 
+ * ENTERPRISE FEATURES:
+ * - Audit logging for all blocked attempts
+ * - Edit context tracking
+ * - Contamination detection support
+ * 
  * ============================================================================
  */
 
 const mongoose = require('mongoose');
+const logger = require('../utils/logger');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUDIT LOG - Track all scope guard events
+// ═══════════════════════════════════════════════════════════════════════════
+const scopeAuditLog = [];
+const MAX_AUDIT_LOG_SIZE = 1000;
+
+/**
+ * Log a scope guard event for audit trail
+ */
+function logScopeEvent(event) {
+    const entry = {
+        timestamp: new Date().toISOString(),
+        ...event
+    };
+    
+    // Console log for immediate visibility
+    if (event.blocked) {
+        logger.warn(`🛡️ [SCOPE GUARD] BLOCKED: ${event.reason}`, {
+            companyId: event.companyId,
+            docType: event.docType,
+            docId: event.docId,
+            attemptedBy: event.attemptedBy,
+            errorCode: event.errorCode
+        });
+    } else if (event.warning) {
+        logger.info(`⚠️ [SCOPE GUARD] WARNING: ${event.warning}`, {
+            companyId: event.companyId,
+            docType: event.docType
+        });
+    }
+    
+    // Add to in-memory audit log (capped)
+    scopeAuditLog.unshift(entry);
+    if (scopeAuditLog.length > MAX_AUDIT_LOG_SIZE) {
+        scopeAuditLog.pop();
+    }
+    
+    return entry;
+}
+
+/**
+ * Get recent scope audit events
+ */
+function getScopeAuditLog(limit = 100) {
+    return scopeAuditLog.slice(0, limit);
+}
+
+/**
+ * Get blocked attempts count
+ */
+function getBlockedAttemptsCount() {
+    return scopeAuditLog.filter(e => e.blocked).length;
+}
 
 /**
  * Main guard function - used by ALL write routes
@@ -23,7 +83,11 @@ const mongoose = require('mongoose');
  * @param {ObjectId} options.docOwnerCompanyId - Document's owner company
  * @param {boolean} options.isGlobalAdminOverride - Explicit admin override flag
  * @param {string} options.lockMode - HARD or SOFT (default HARD)
- * @returns {Object} { allowed: boolean, reason: string }
+ * @param {string} options.docType - Type of document (category, scenario)
+ * @param {string} options.docId - Document identifier
+ * @param {string} options.attemptedBy - User attempting the write
+ * @param {string} options.editContext - Where edit originated from
+ * @returns {Object} { allowed: boolean, reason: string, auditEntry?: object }
  */
 function assertWriteAllowed({
     companyId,
@@ -31,7 +95,11 @@ function assertWriteAllowed({
     docScope,
     docOwnerCompanyId,
     isGlobalAdminOverride = false,
-    lockMode = 'HARD'
+    lockMode = 'HARD',
+    docType = 'unknown',
+    docId = null,
+    attemptedBy = null,
+    editContext = null
 }) {
     // Default scope for legacy docs without scope field
     const effectiveScope = docScope || 'GLOBAL';
@@ -43,27 +111,66 @@ function assertWriteAllowed({
     if (effectiveScope === 'GLOBAL' && companyId) {
         // Check for superadmin override
         if (userRole === 'superadmin' && isGlobalAdminOverride === true) {
+            const auditEntry = logScopeEvent({
+                action: 'SUPERADMIN_OVERRIDE',
+                allowed: true,
+                warning: 'GLOBAL content modified with superadmin override',
+                companyId,
+                docType,
+                docId,
+                attemptedBy,
+                editContext
+            });
+            
             return {
                 allowed: true,
                 reason: 'Superadmin override allowed',
-                warning: 'GLOBAL content modified with admin override'
+                warning: 'GLOBAL content modified with admin override',
+                auditEntry
             };
         }
         
         // SOFT mode: allow with warning
         if (effectiveLockMode === 'SOFT') {
+            const auditEntry = logScopeEvent({
+                action: 'SOFT_LOCK_ALLOWED',
+                allowed: true,
+                warning: 'Writing to GLOBAL content from company context (SOFT mode)',
+                companyId,
+                docType,
+                docId,
+                attemptedBy,
+                editContext
+            });
+            
             return {
                 allowed: true,
                 reason: 'SOFT lock - write allowed with warning',
-                warning: 'Writing to GLOBAL content from company context (SOFT mode)'
+                warning: 'Writing to GLOBAL content from company context (SOFT mode)',
+                auditEntry
             };
         }
         
         // HARD mode: block
+        const auditEntry = logScopeEvent({
+            action: 'BLOCKED',
+            blocked: true,
+            reason: 'GLOBAL content cannot be edited in company context',
+            errorCode: 'SCOPE_LOCK_GLOBAL_IN_COMPANY',
+            lockReason: 'GLOBAL_SHARED_MULTI_TENANT',
+            companyId,
+            docType,
+            docId,
+            attemptedBy,
+            editContext
+        });
+        
         return {
             allowed: false,
             reason: 'GLOBAL content cannot be edited in company context. Clone to Company Override to edit safely.',
-            errorCode: 'SCOPE_LOCK_GLOBAL_IN_COMPANY'
+            errorCode: 'SCOPE_LOCK_GLOBAL_IN_COMPANY',
+            lockReason: 'GLOBAL_SHARED_MULTI_TENANT',
+            auditEntry
         };
     }
     
@@ -75,10 +182,26 @@ function assertWriteAllowed({
         const companyIdStr = companyId ? companyId.toString() : null;
         
         if (companyIdStr && ownerIdStr !== companyIdStr) {
+            const auditEntry = logScopeEvent({
+                action: 'BLOCKED',
+                blocked: true,
+                reason: 'Company override belongs to different company',
+                errorCode: 'SCOPE_LOCK_WRONG_COMPANY',
+                lockReason: 'COMPANY_OWNED',
+                companyId,
+                ownerCompanyId: ownerIdStr,
+                docType,
+                docId,
+                attemptedBy,
+                editContext
+            });
+            
             return {
                 allowed: false,
                 reason: 'This company override belongs to a different company.',
-                errorCode: 'SCOPE_LOCK_WRONG_COMPANY'
+                errorCode: 'SCOPE_LOCK_WRONG_COMPANY',
+                lockReason: 'COMPANY_OWNED',
+                auditEntry
             };
         }
     }
@@ -202,7 +325,37 @@ function getScopeDisplayInfo(doc, companyId) {
 }
 
 /**
+ * Deep clone helper that preserves all nested objects
+ * Uses Mongoose's toObject() for proper serialization
+ */
+function deepCloneDocument(doc) {
+    if (!doc) return null;
+    
+    // If it's a Mongoose document, convert to plain object first
+    const plainObj = doc.toObject ? doc.toObject() : doc;
+    
+    // Deep clone while preserving types
+    return JSON.parse(JSON.stringify(plainObj, (key, value) => {
+        // Handle special types if needed
+        if (value instanceof Date) {
+            return { __type: 'Date', value: value.toISOString() };
+        }
+        return value;
+    }), (key, value) => {
+        // Restore special types
+        if (value && value.__type === 'Date') {
+            return new Date(value.value);
+        }
+        return value;
+    });
+}
+
+/**
  * Clone a category to company scope
+ * IMPORTANT: This performs a FULL DEEP CLONE of all 30+ scenario fields
+ * Including: triggers, regexTriggers, negativeTriggers, keywords, negativeKeywords,
+ * replySelection, minConfidence, cooldownSeconds, entityCapture, entityValidation,
+ * actionHooks, timedFollowUp, silencePolicy, followUpMode, transferTarget, etc.
  */
 async function cloneCategoryToCompany({
     templateId,
@@ -227,15 +380,29 @@ async function cloneCategoryToCompany({
         throw new Error('Category is already a company override');
     }
     
-    // Create cloned category
-    const clonedCategory = JSON.parse(JSON.stringify(category));
+    // ═══════════════════════════════════════════════════════════════════════
+    // FULL DEEP CLONE - Preserves ALL fields including:
+    // - triggers, regexTriggers, negativeTriggers
+    // - keywords, negativeKeywords
+    // - replySelection, minConfidence, cooldownSeconds
+    // - entityCapture, entityValidation, actionHooks
+    // - timedFollowUp, silencePolicy
+    // - followUpMode, transferTarget
+    // - notes, scenarioType, replyStrategy
+    // - quickReplies, fullReplies (with all variants)
+    // - ttsOverride, voiceSettings
+    // - contextFields, entityCapture
+    // - AND ALL OTHER 30+ FIELDS
+    // ═══════════════════════════════════════════════════════════════════════
+    const clonedCategory = deepCloneDocument(category);
     const now = new Date();
     
-    // Update category scope fields
+    // Update category scope fields (OVERRIDE, not replace)
     clonedCategory.id = `${categoryId}_company_${companyId}`;
     clonedCategory.scope = 'COMPANY';
     clonedCategory.ownerCompanyId = new mongoose.Types.ObjectId(companyId);
     clonedCategory.lockMode = 'HARD';
+    clonedCategory.lockReason = 'COMPANY_OWNED';
     clonedCategory.editPolicy = {
         allowEditsInCompanyUI: true,
         allowEditsInGlobalUI: false,
@@ -246,39 +413,72 @@ async function cloneCategoryToCompany({
     clonedCategory.overridesGlobalCategoryId = categoryId;
     clonedCategory.createdFromCloneAt = now;
     clonedCategory.createdFromCloneBy = clonedBy;
+    clonedCategory.editContext = 'COMPANY_PROFILE';
+    clonedCategory.lastEditedAt = now;
+    clonedCategory.lastEditedBy = clonedBy;
+    clonedCategory.lastEditedFromContext = 'COMPANY_PROFILE';
     
-    // Update all scenarios in category
-    clonedCategory.scenarios = clonedCategory.scenarios.map(scenario => ({
-        ...scenario,
-        scenarioId: `${scenario.scenarioId}_company_${companyId}`,
-        scope: 'COMPANY',
-        ownerCompanyId: new mongoose.Types.ObjectId(companyId),
-        lockMode: 'HARD',
-        editPolicy: {
-            allowEditsInCompanyUI: true,
-            allowEditsInGlobalUI: false,
-            requireCloneToEdit: false
-        },
-        sourceTemplateId: template._id,
-        sourceScenarioId: scenario.scenarioId,
-        overridesGlobalScenarioId: scenario.scenarioId,
-        createdFromCloneAt: now,
-        createdFromCloneBy: clonedBy
-    }));
+    // Count cloned fields for audit
+    const originalFieldCount = Object.keys(category.toObject ? category.toObject() : category).length;
     
-    // Add to template (or store in separate collection)
+    // Update all scenarios in category (FULL DEEP CLONE)
+    clonedCategory.scenarios = (clonedCategory.scenarios || []).map(scenario => {
+        const originalScenarioId = scenario.scenarioId;
+        
+        // Scenario already deep-cloned, just update scope fields
+        return {
+            ...scenario,
+            scenarioId: `${originalScenarioId}_company_${companyId}`,
+            scope: 'COMPANY',
+            ownerCompanyId: new mongoose.Types.ObjectId(companyId),
+            lockMode: 'HARD',
+            lockReason: 'COMPANY_OWNED',
+            editPolicy: {
+                allowEditsInCompanyUI: true,
+                allowEditsInGlobalUI: false,
+                requireCloneToEdit: false
+            },
+            sourceTemplateId: template._id,
+            sourceScenarioId: originalScenarioId,
+            overridesGlobalScenarioId: originalScenarioId,
+            createdFromCloneAt: now,
+            createdFromCloneBy: clonedBy,
+            editContext: 'COMPANY_PROFILE',
+            lastEditedAt: now,
+            lastEditedBy: clonedBy,
+            lastEditedFromContext: 'COMPANY_PROFILE'
+        };
+    });
+    
+    // Add to template
     template.categories.push(clonedCategory);
     await template.save();
+    
+    // Audit log
+    logScopeEvent({
+        action: 'CLONE_CATEGORY',
+        allowed: true,
+        companyId,
+        docType: 'category',
+        docId: categoryId,
+        newDocId: clonedCategory.id,
+        attemptedBy: clonedBy,
+        editContext: 'COMPANY_PROFILE',
+        scenariosCloned: clonedCategory.scenarios.length,
+        fieldsPreserved: originalFieldCount
+    });
     
     return {
         newCategoryId: clonedCategory.id,
         scenarioCount: clonedCategory.scenarios.length,
-        clonedAt: now
+        clonedAt: now,
+        fieldsPreserved: originalFieldCount
     };
 }
 
 /**
  * Clone a single scenario to company scope
+ * FULL DEEP CLONE of all 30+ scenario fields
  */
 async function cloneScenarioToCompany({
     templateId,
@@ -309,14 +509,21 @@ async function cloneScenarioToCompany({
         throw new Error('Scenario is already a company override');
     }
     
-    // Create cloned scenario
-    const clonedScenario = JSON.parse(JSON.stringify(scenario));
+    // ═══════════════════════════════════════════════════════════════════════
+    // FULL DEEP CLONE - ALL 30+ SCENARIO FIELDS
+    // ═══════════════════════════════════════════════════════════════════════
+    const clonedScenario = deepCloneDocument(scenario);
     const now = new Date();
     
+    // Count original fields for audit
+    const originalFieldCount = Object.keys(scenario.toObject ? scenario.toObject() : scenario).length;
+    
+    // Update scope fields (OVERRIDE existing, preserve all other fields)
     clonedScenario.scenarioId = `${scenarioId}_company_${companyId}`;
     clonedScenario.scope = 'COMPANY';
     clonedScenario.ownerCompanyId = new mongoose.Types.ObjectId(companyId);
     clonedScenario.lockMode = 'HARD';
+    clonedScenario.lockReason = 'COMPANY_OWNED';
     clonedScenario.editPolicy = {
         allowEditsInCompanyUI: true,
         allowEditsInGlobalUI: false,
@@ -327,15 +534,91 @@ async function cloneScenarioToCompany({
     clonedScenario.overridesGlobalScenarioId = scenarioId;
     clonedScenario.createdFromCloneAt = now;
     clonedScenario.createdFromCloneBy = clonedBy;
+    clonedScenario.editContext = 'COMPANY_PROFILE';
+    clonedScenario.lastEditedAt = now;
+    clonedScenario.lastEditedBy = clonedBy;
+    clonedScenario.lastEditedFromContext = 'COMPANY_PROFILE';
     
     // Add to category
     category.scenarios.push(clonedScenario);
     await template.save();
     
+    // Audit log
+    logScopeEvent({
+        action: 'CLONE_SCENARIO',
+        allowed: true,
+        companyId,
+        docType: 'scenario',
+        docId: scenarioId,
+        newDocId: clonedScenario.scenarioId,
+        attemptedBy: clonedBy,
+        editContext: 'COMPANY_PROFILE',
+        fieldsPreserved: originalFieldCount
+    });
+    
     return {
         newScenarioId: clonedScenario.scenarioId,
-        clonedAt: now
+        clonedAt: now,
+        fieldsPreserved: originalFieldCount
     };
+}
+
+/**
+ * Get resolution order for scenario matching
+ * COMPANY overrides ALWAYS win over GLOBAL
+ */
+function getResolutionOrder() {
+    return ['COMPANY_OVERRIDE', 'GLOBAL'];
+}
+
+/**
+ * Find effective scenario (COMPANY override takes precedence)
+ * @param {Array} scenarios - All scenarios (both GLOBAL and COMPANY)
+ * @param {String} companyId - Company ID to match overrides
+ * @returns {Map} Map of globalScenarioId → effectiveScenario
+ */
+function resolveEffectiveScenarios(scenarios, companyId) {
+    const effectiveMap = new Map();
+    const companyIdStr = companyId?.toString();
+    
+    // First pass: collect GLOBAL scenarios
+    for (const scenario of scenarios) {
+        const scope = scenario.scope || 'GLOBAL';
+        if (scope === 'GLOBAL') {
+            effectiveMap.set(scenario.scenarioId, {
+                scenario,
+                source: 'GLOBAL',
+                overriddenBy: null
+            });
+        }
+    }
+    
+    // Second pass: COMPANY overrides replace GLOBAL
+    for (const scenario of scenarios) {
+        const scope = scenario.scope || 'GLOBAL';
+        const ownerCompanyId = scenario.ownerCompanyId?.toString();
+        const overridesGlobalId = scenario.overridesGlobalScenarioId;
+        
+        if (scope === 'COMPANY' && ownerCompanyId === companyIdStr) {
+            if (overridesGlobalId && effectiveMap.has(overridesGlobalId)) {
+                // Replace GLOBAL with COMPANY override
+                effectiveMap.set(overridesGlobalId, {
+                    scenario,
+                    source: 'COMPANY_OVERRIDE',
+                    overrides: overridesGlobalId
+                });
+            } else {
+                // Company-only scenario (no GLOBAL equivalent)
+                effectiveMap.set(scenario.scenarioId, {
+                    scenario,
+                    source: 'COMPANY_ONLY',
+                    overriddenBy: null
+                });
+            }
+        }
+    }
+    
+    return effectiveMap;
 }
 
 module.exports = {
@@ -344,6 +627,15 @@ module.exports = {
     isLockedForCompany,
     getScopeDisplayInfo,
     cloneCategoryToCompany,
-    cloneScenarioToCompany
+    cloneScenarioToCompany,
+    // Enterprise audit
+    logScopeEvent,
+    getScopeAuditLog,
+    getBlockedAttemptsCount,
+    // Resolution order
+    getResolutionOrder,
+    resolveEffectiveScenarios,
+    // Helper
+    deepCloneDocument
 };
 

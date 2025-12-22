@@ -323,5 +323,229 @@ router.delete('/overrides/category/:categoryId', async (req, res) => {
     }
 });
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CONTAMINATION REPORT - Enterprise Security Audit
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Scans for illegal/suspicious mutations that indicate multi-tenant contamination:
+ * - GLOBAL docs with non-null ownerCompanyId
+ * - GLOBAL docs edited from COMPANY_PROFILE context
+ * - Any GLOBAL docs where lastEditedByCompanyId exists
+ * - Scope mismatches (scope=GLOBAL but has company-specific fields)
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+/**
+ * GET /api/company/:companyId/contamination-report
+ * Scan for illegal mutations (multi-tenant contamination detection)
+ */
+router.get('/contamination-report', async (req, res) => {
+    try {
+        const startTime = Date.now();
+        
+        // Scan ALL templates (not filtered by company - this is a platform-wide audit)
+        const templates = await GlobalInstantResponseTemplate.find({});
+        
+        const contamination = {
+            critical: [],    // Definite contamination (GLOBAL with ownerCompanyId)
+            warning: [],     // Suspicious patterns
+            info: []         // Notable but not dangerous
+        };
+        
+        let totalCategories = 0;
+        let totalScenarios = 0;
+        
+        for (const template of templates) {
+            for (const category of template.categories || []) {
+                totalCategories++;
+                
+                const scope = category.scope || 'GLOBAL';
+                const ownerCompanyId = category.ownerCompanyId;
+                const editContext = category.editContext;
+                const lastEditedBy = category.lastEditedBy;
+                
+                // ═══════════════════════════════════════════════════════════
+                // CRITICAL: GLOBAL doc with ownerCompanyId set
+                // This should NEVER happen - indicates contamination
+                // ═══════════════════════════════════════════════════════════
+                if (scope === 'GLOBAL' && ownerCompanyId) {
+                    contamination.critical.push({
+                        type: 'GLOBAL_WITH_OWNER',
+                        severity: 'CRITICAL',
+                        docType: 'category',
+                        templateId: template._id.toString(),
+                        templateName: template.name,
+                        categoryId: category.id,
+                        categoryName: category.name,
+                        issue: 'GLOBAL category has ownerCompanyId set',
+                        ownerCompanyId: ownerCompanyId.toString(),
+                        remedy: 'Set ownerCompanyId to null or change scope to COMPANY'
+                    });
+                }
+                
+                // ═══════════════════════════════════════════════════════════
+                // WARNING: GLOBAL doc edited from COMPANY context
+                // This suggests bypass of scope guard
+                // ═══════════════════════════════════════════════════════════
+                if (scope === 'GLOBAL' && editContext === 'COMPANY_PROFILE') {
+                    contamination.warning.push({
+                        type: 'GLOBAL_EDITED_FROM_COMPANY',
+                        severity: 'WARNING',
+                        docType: 'category',
+                        templateId: template._id.toString(),
+                        templateName: template.name,
+                        categoryId: category.id,
+                        categoryName: category.name,
+                        issue: 'GLOBAL category was edited from COMPANY_PROFILE context',
+                        editContext,
+                        lastEditedBy,
+                        remedy: 'Investigate how company UI bypassed scope guard'
+                    });
+                }
+                
+                // Check scenarios
+                for (const scenario of category.scenarios || []) {
+                    totalScenarios++;
+                    
+                    const scenarioScope = scenario.scope || 'GLOBAL';
+                    const scenarioOwner = scenario.ownerCompanyId;
+                    const scenarioEditContext = scenario.editContext;
+                    
+                    // CRITICAL: GLOBAL scenario with ownerCompanyId
+                    if (scenarioScope === 'GLOBAL' && scenarioOwner) {
+                        contamination.critical.push({
+                            type: 'GLOBAL_WITH_OWNER',
+                            severity: 'CRITICAL',
+                            docType: 'scenario',
+                            templateId: template._id.toString(),
+                            templateName: template.name,
+                            categoryId: category.id,
+                            scenarioId: scenario.scenarioId,
+                            scenarioName: scenario.name,
+                            issue: 'GLOBAL scenario has ownerCompanyId set',
+                            ownerCompanyId: scenarioOwner.toString(),
+                            remedy: 'Set ownerCompanyId to null or change scope to COMPANY'
+                        });
+                    }
+                    
+                    // WARNING: GLOBAL scenario edited from COMPANY context
+                    if (scenarioScope === 'GLOBAL' && scenarioEditContext === 'COMPANY_PROFILE') {
+                        contamination.warning.push({
+                            type: 'GLOBAL_EDITED_FROM_COMPANY',
+                            severity: 'WARNING',
+                            docType: 'scenario',
+                            templateId: template._id.toString(),
+                            templateName: template.name,
+                            categoryId: category.id,
+                            scenarioId: scenario.scenarioId,
+                            scenarioName: scenario.name,
+                            issue: 'GLOBAL scenario was edited from COMPANY_PROFILE context',
+                            editContext: scenarioEditContext,
+                            lastEditedBy: scenario.lastEditedBy,
+                            remedy: 'Investigate how company UI bypassed scope guard'
+                        });
+                    }
+                    
+                    // INFO: Blocked edit attempts (shows guard is working)
+                    if (scenario.editBlockCount > 0) {
+                        contamination.info.push({
+                            type: 'BLOCKED_EDITS_RECORDED',
+                            severity: 'INFO',
+                            docType: 'scenario',
+                            scenarioId: scenario.scenarioId,
+                            scenarioName: scenario.name,
+                            issue: `${scenario.editBlockCount} edit attempts were blocked`,
+                            lastBlockedAt: scenario.lastEditAttemptBlockedAt,
+                            lastBlockedBy: scenario.lastEditAttemptBlockedBy,
+                            message: 'Scope guard is working correctly'
+                        });
+                    }
+                }
+            }
+        }
+        
+        // Get audit log stats
+        const { getScopeAuditLog, getBlockedAttemptsCount } = require('../../middleware/scopeGuard');
+        const recentAuditLog = getScopeAuditLog(50);
+        const blockedCount = getBlockedAttemptsCount();
+        
+        // Determine overall health
+        let health = 'GREEN';
+        let healthMessage = 'No contamination detected';
+        
+        if (contamination.critical.length > 0) {
+            health = 'RED';
+            healthMessage = `CRITICAL: ${contamination.critical.length} contamination issues found`;
+        } else if (contamination.warning.length > 0) {
+            health = 'YELLOW';
+            healthMessage = `WARNING: ${contamination.warning.length} suspicious patterns found`;
+        }
+        
+        res.json({
+            success: true,
+            data: {
+                generatedAt: new Date().toISOString(),
+                generatedInMs: Date.now() - startTime,
+                health,
+                healthMessage,
+                summary: {
+                    templatesScanned: templates.length,
+                    categoriesScanned: totalCategories,
+                    scenariosScanned: totalScenarios,
+                    criticalIssues: contamination.critical.length,
+                    warningIssues: contamination.warning.length,
+                    infoItems: contamination.info.length,
+                    recentBlockedAttempts: blockedCount
+                },
+                contamination,
+                recentAuditLog,
+                resolutionOrder: ['COMPANY_OVERRIDE', 'GLOBAL'],
+                recommendation: contamination.critical.length > 0 
+                    ? 'IMMEDIATE ACTION REQUIRED: Fix critical contamination issues'
+                    : contamination.warning.length > 0
+                    ? 'REVIEW RECOMMENDED: Investigate warning patterns'
+                    : 'System is healthy - no action required'
+            }
+        });
+        
+    } catch (error) {
+        console.error('[SCOPE] Contamination report error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/company/:companyId/audit-log
+ * Get scope guard audit log (blocked attempts, warnings, etc.)
+ */
+router.get('/audit-log', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 100;
+        const { getScopeAuditLog, getBlockedAttemptsCount } = require('../../middleware/scopeGuard');
+        
+        const auditLog = getScopeAuditLog(limit);
+        const blockedCount = getBlockedAttemptsCount();
+        
+        res.json({
+            success: true,
+            data: {
+                totalEntries: auditLog.length,
+                blockedAttemptsTotal: blockedCount,
+                entries: auditLog
+            }
+        });
+        
+    } catch (error) {
+        console.error('[SCOPE] Audit log error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;
 

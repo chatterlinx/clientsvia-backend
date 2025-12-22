@@ -124,6 +124,41 @@ const scenarioSchema = new Schema({
     createdFromCloneAt: { type: Date, default: null },
     createdFromCloneBy: { type: String, default: null },
     
+    // ============================================
+    // 🛡️ ENTERPRISE AUDIT - Edit Context & Blocks
+    // ============================================
+    // Tracks where edits originated and blocked attempts
+    
+    editContext: {
+        type: String,
+        enum: ['GLOBAL_BRAIN', 'COMPANY_PROFILE', 'API_DIRECT', 'MIGRATION', 'SYSTEM'],
+        default: null
+        // Where the last edit originated from
+        // GLOBAL_BRAIN: Global AI Brain admin UI
+        // COMPANY_PROFILE: Company-specific UI
+        // API_DIRECT: Direct API call
+        // MIGRATION: System migration script
+        // SYSTEM: Automated system operation
+    },
+    
+    lockReason: {
+        type: String,
+        enum: ['GLOBAL_SHARED_MULTI_TENANT', 'COMPANY_OWNED', 'ARCHIVED', 'PENDING_REVIEW', null],
+        default: null
+        // Human-readable reason for lock state
+    },
+    
+    // Blocked edit attempt tracking (contamination prevention audit)
+    lastEditAttemptBlockedAt: { type: Date, default: null },
+    lastEditAttemptBlockedBy: { type: String, default: null },
+    lastEditAttemptBlockedReason: { type: String, default: null },
+    editBlockCount: { type: Number, default: 0 },
+    
+    // Last edit tracking
+    lastEditedAt: { type: Date, default: null },
+    lastEditedBy: { type: String, default: null },
+    lastEditedFromContext: { type: String, default: null },
+    
     version: {
         type: Number,
         required: true,
@@ -782,6 +817,33 @@ const categorySchema = new Schema({
     // Clone audit
     createdFromCloneAt: { type: Date, default: null },
     createdFromCloneBy: { type: String, default: null },
+    
+    // ============================================
+    // 🛡️ ENTERPRISE AUDIT - Edit Context & Blocks (Category Level)
+    // ============================================
+    
+    editContext: {
+        type: String,
+        enum: ['GLOBAL_BRAIN', 'COMPANY_PROFILE', 'API_DIRECT', 'MIGRATION', 'SYSTEM'],
+        default: null
+    },
+    
+    lockReason: {
+        type: String,
+        enum: ['GLOBAL_SHARED_MULTI_TENANT', 'COMPANY_OWNED', 'ARCHIVED', 'PENDING_REVIEW', null],
+        default: null
+    },
+    
+    // Blocked edit attempt tracking
+    lastEditAttemptBlockedAt: { type: Date, default: null },
+    lastEditAttemptBlockedBy: { type: String, default: null },
+    lastEditAttemptBlockedReason: { type: String, default: null },
+    editBlockCount: { type: Number, default: 0 },
+    
+    // Last edit tracking
+    lastEditedAt: { type: Date, default: null },
+    lastEditedBy: { type: String, default: null },
+    lastEditedFromContext: { type: String, default: null },
     
     // 🎭 BEHAVIOR: Default AI behavior for scenarios in this category
     // DEPRECATED: Scenarios control their own behavior (more flexible)
