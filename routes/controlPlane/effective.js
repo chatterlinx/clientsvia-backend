@@ -5,11 +5,14 @@
  * 
  * PURPOSE: Returns the exact values the runtime uses (after defaults + overrides)
  * 
- * INCLUDES:
- * - Merged final config
- * - Computed performance metrics
- * - Warnings and lint results
- * - Word counts, TTS estimates
+ * CRITICAL: Uses Config Unifier to resolve "two-config reality" bug
+ *           All reads go through canonical keys, legacy is merged automatically
+ * 
+ * CANONICAL KEYS:
+ * - Greeting: connectionMessages.voice.text
+ * - Booking: frontDeskBehavior.bookingEnabled + frontDeskBehavior.bookingSlots
+ * - Personality: frontDeskBehavior.personality.*
+ * - Fallbacks: companyResponseDefaults.*Reply.fullReply
  * 
  * ============================================================================
  */
@@ -20,8 +23,9 @@ const v2Company = require('../../models/v2Company');
 const CompanyResponseDefaults = require('../../models/CompanyResponseDefaults');
 const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
-const { lintControlPlane, LINT_RULES } = require('../../utils/controlPlaneLinter');
-const { substitutePlaceholders, standardizePlaceholders, normalizeKey } = require('../../utils/placeholderStandard');
+const { lintControlPlane } = require('../../utils/controlPlaneLinter');
+const { substitutePlaceholders } = require('../../utils/placeholderStandard');
+const { unifyConfig, migratePlaceholders } = require('../../utils/configUnifier');
 const logger = require('../../utils/logger');
 
 // TTS performance constants
@@ -29,7 +33,6 @@ const TTS_WORDS_PER_MINUTE = 150;
 const TTS_WORDS_PER_SECOND = TTS_WORDS_PER_MINUTE / 60; // 2.5
 const TARGET_GREETING_SECONDS = 2.5;
 const MAX_GREETING_SECONDS = 4.0;
-const RECOMMENDED_MAX_WORDS = Math.floor(TARGET_GREETING_SECONDS * TTS_WORDS_PER_SECOND); // ~6-7 words for 2.5s
 
 router.use(authenticateJWT);
 router.use(requireCompanyAccess);
@@ -37,6 +40,9 @@ router.use(requireCompanyAccess);
 /**
  * GET /api/company/:companyId/control-plane/effective
  * Returns the merged final config used at runtime
+ * 
+ * CRITICAL: This endpoint is the SINGLE SOURCE OF TRUTH
+ * Lint, runtime, and UI should all read from this output
  */
 router.get('/', async (req, res) => {
     const startTime = Date.now();
@@ -57,7 +63,9 @@ router.get('/', async (req, res) => {
             });
         }
         
-        // Build placeholder map for substitution
+        // ═══════════════════════════════════════════════════════════════════════
+        // BUILD PLACEHOLDER MAP
+        // ═══════════════════════════════════════════════════════════════════════
         const placeholderMap = {};
         (placeholdersDoc?.placeholders || []).forEach(p => {
             placeholderMap[p.key] = p.value;
@@ -67,152 +75,27 @@ router.get('/', async (req, res) => {
         placeholderMap.companyPhone = company.companyPhone || company.phoneNumber;
         
         // ═══════════════════════════════════════════════════════════════════════
-        // EXTRACT & STANDARDIZE GREETING (check multiple locations)
+        // USE CONFIG UNIFIER - SINGLE SOURCE OF TRUTH
+        // This resolves the "two-config reality" bug by reading from canonical
+        // keys first, then falling back to legacy keys, then to defaults
         // ═══════════════════════════════════════════════════════════════════════
-        let greetingText = 
-            company.connectionMessages?.voice?.text ||
-            company.connectionMessages?.voice?.realtime?.text ||
-            company.frontDeskBehavior?.greeting ||
-            '';
-        let greetingSource = company.connectionMessages?.voice?.text ? 'connectionMessages.voice.text' :
-                            company.connectionMessages?.voice?.realtime?.text ? 'connectionMessages.voice.realtime.text' :
-                            company.frontDeskBehavior?.greeting ? 'frontDeskBehavior.greeting' : 'none';
-        
-        // STANDARDIZE placeholders on read (runtime protection)
-        const greetingStandardized = standardizePlaceholders(greetingText);
-        const greetingPreview = substitutePlaceholders(greetingStandardized, placeholderMap);
-        const greetingHasLegacyPlaceholders = greetingText !== greetingStandardized;
+        const effectiveConfig = unifyConfig(company, responseDefaults, {
+            seedBookingSlotsIfEmpty: false // Don't auto-seed, show warning instead
+        });
         
         // ═══════════════════════════════════════════════════════════════════════
-        // RESOLVE BOOKING SLOTS (check multiple sources - fix for 0 slots bug)
+        // COMPUTE GREETING PREVIEW (with placeholder substitution)
         // ═══════════════════════════════════════════════════════════════════════
-        let resolvedBookingSlots = [];
-        let bookingSlotsSource = 'none';
-        
-        // Primary: frontDeskBehavior.bookingSlots
-        if (company.frontDeskBehavior?.bookingSlots?.length > 0) {
-            resolvedBookingSlots = company.frontDeskBehavior.bookingSlots;
-            bookingSlotsSource = 'frontDeskBehavior.bookingSlots';
-        }
-        // Fallback 1: aiAgentSettings.bookingSlots (legacy)
-        else if (company.aiAgentSettings?.bookingSlots?.length > 0) {
-            resolvedBookingSlots = company.aiAgentSettings.bookingSlots;
-            bookingSlotsSource = 'aiAgentSettings.bookingSlots (legacy)';
-        }
-        // Fallback 2: booking.slots (legacy)
-        else if (company.booking?.slots?.length > 0) {
-            resolvedBookingSlots = company.booking.slots;
-            bookingSlotsSource = 'booking.slots (legacy)';
-        }
-        // Fallback 3: bookingSlots at root (very legacy)
-        else if (company.bookingSlots?.length > 0) {
-            resolvedBookingSlots = company.bookingSlots;
-            bookingSlotsSource = 'bookingSlots (root legacy)';
-        }
+        const greetingText = effectiveConfig.greeting.standardized || effectiveConfig.greeting.raw;
+        const greetingPreview = substitutePlaceholders(greetingText, placeholderMap);
+        effectiveConfig.greeting.preview = greetingPreview;
         
         // ═══════════════════════════════════════════════════════════════════════
-        // BUILD EFFECTIVE CONFIG
-        // ═══════════════════════════════════════════════════════════════════════
-        const effectiveConfig = {
-            // ═══════════════════════════════════════════════════════════════════
-            // GREETING
-            // ═══════════════════════════════════════════════════════════════════
-            greeting: {
-                raw: greetingText,
-                standardized: greetingStandardized,
-                preview: greetingPreview,
-                source: greetingSource,
-                configured: !!greetingText,
-                hasLegacyPlaceholders: greetingHasLegacyPlaceholders,
-                needsMigration: greetingHasLegacyPlaceholders
-            },
-            
-            // ═══════════════════════════════════════════════════════════════════
-            // PERSONALITY
-            // ═══════════════════════════════════════════════════════════════════
-            personality: {
-                enabled: company.frontDeskBehavior?.personality?.enabled ?? true,
-                professionalismLevel: company.frontDeskBehavior?.personality?.professionalismLevel ?? 7,
-                empathyLevel: company.frontDeskBehavior?.personality?.empathyLevel ?? 8,
-                urgencyDetection: company.frontDeskBehavior?.personality?.urgencyDetection ?? true,
-                conversationStyle: company.frontDeskBehavior?.conversationStyle ?? 'balanced'
-            },
-            
-            // ═══════════════════════════════════════════════════════════════════
-            // BOOKING (with multi-source resolution)
-            // ═══════════════════════════════════════════════════════════════════
-            booking: {
-                enabled: company.frontDeskBehavior?.bookingEnabled ?? company.aiAgentSettings?.bookingEnabled ?? true,
-                slots: resolvedBookingSlots,
-                slotsCount: resolvedBookingSlots.length,
-                slotNames: resolvedBookingSlots.map(s => s.key || s.name || 'unknown'),
-                source: bookingSlotsSource,
-                // Warning flag if enabled but no slots
-                misconfigured: (company.frontDeskBehavior?.bookingEnabled ?? true) && resolvedBookingSlots.length === 0
-            },
-            
-            // ═══════════════════════════════════════════════════════════════════
-            // VOCABULARY & POLICIES
-            // ═══════════════════════════════════════════════════════════════════
-            vocabulary: {
-                forbiddenPhrases: company.frontDeskBehavior?.vocabulary?.forbiddenPhrases || [],
-                forbiddenPhrasesCount: (company.frontDeskBehavior?.vocabulary?.forbiddenPhrases || []).length,
-                preferredTerms: company.frontDeskBehavior?.vocabulary?.preferredTerms || {}
-            },
-            
-            policies: {
-                blockPricing: company.frontDeskBehavior?.policies?.blockPricing ?? true,
-                blockCompetitorMention: company.frontDeskBehavior?.policies?.blockCompetitorMention ?? true,
-                forbiddenTopics: company.frontDeskBehavior?.policies?.forbiddenTopics || []
-            },
-            
-            // ═══════════════════════════════════════════════════════════════════
-            // ESCALATION
-            // ═══════════════════════════════════════════════════════════════════
-            escalation: {
-                rules: company.frontDeskBehavior?.escalation?.rules || [],
-                rulesCount: (company.frontDeskBehavior?.escalation?.rules || []).length,
-                frustrationEnabled: company.frontDeskBehavior?.frustration?.enabled ?? true,
-                frustrationThreshold: company.frontDeskBehavior?.frustration?.threshold ?? 3
-            },
-            
-            // ═══════════════════════════════════════════════════════════════════
-            // FALLBACK RESPONSES
-            // ═══════════════════════════════════════════════════════════════════
-            fallbacks: {
-                notOfferedReply: responseDefaults?.notOfferedReply?.fullReply || '',
-                notOfferedConfigured: !!responseDefaults?.notOfferedReply?.fullReply,
-                unknownIntentReply: responseDefaults?.unknownIntentReply?.fullReply || '',
-                unknownIntentConfigured: !!responseDefaults?.unknownIntentReply?.fullReply,
-                afterHoursReply: responseDefaults?.afterHoursReply?.fullReply || '',
-                afterHoursConfigured: !!responseDefaults?.afterHoursReply?.fullReply
-            },
-            
-            // ═══════════════════════════════════════════════════════════════════
-            // DETECTION
-            // ═══════════════════════════════════════════════════════════════════
-            detection: {
-                minConfidence: company.frontDeskBehavior?.detection?.minConfidence ?? 0.5,
-                fallbackBehavior: company.frontDeskBehavior?.detection?.fallbackBehavior ?? 'ask_clarification'
-            },
-            
-            // ═══════════════════════════════════════════════════════════════════
-            // MODES
-            // ═══════════════════════════════════════════════════════════════════
-            modes: {
-                startMode: company.frontDeskBehavior?.modes?.startMode ?? 'DISCOVERY',
-                autoTransitionToBooking: company.frontDeskBehavior?.modes?.autoTransitionToBooking ?? true
-            }
-        };
-        
-        // ═══════════════════════════════════════════════════════════════════════
-        // COMPUTED PERFORMANCE METRICS (with actionable TTS details)
+        // COMPUTE PERFORMANCE METRICS
         // ═══════════════════════════════════════════════════════════════════════
         const greetingWords = greetingPreview ? greetingPreview.split(/\s+/).filter(w => w.length > 0).length : 0;
         const greetingChars = greetingPreview ? greetingPreview.length : 0;
         const greetingEstimatedSeconds = greetingWords / TTS_WORDS_PER_SECOND;
-        
-        // Calculate recommended words for target duration
         const recommendedMaxWords = Math.floor(TARGET_GREETING_SECONDS * TTS_WORDS_PER_SECOND);
         const wordsOverTarget = Math.max(0, greetingWords - recommendedMaxWords);
         
@@ -223,20 +106,20 @@ router.get('/', async (req, res) => {
                 greetingEstimatedSeconds: Math.round(greetingEstimatedSeconds * 10) / 10,
                 greetingTTSRating: greetingEstimatedSeconds <= TARGET_GREETING_SECONDS ? 'GOOD' : 
                                    greetingEstimatedSeconds <= MAX_GREETING_SECONDS ? 'ACCEPTABLE' : 'TOO_LONG',
-                // Actionable TTS details
                 tts: {
                     wordsPerMinute: TTS_WORDS_PER_MINUTE,
                     wordsPerSecond: TTS_WORDS_PER_SECOND,
                     targetSeconds: TARGET_GREETING_SECONDS,
                     maxSeconds: MAX_GREETING_SECONDS,
-                    recommendedMaxWords: recommendedMaxWords,
+                    recommendedMaxWords,
                     currentWords: greetingWords,
-                    wordsOverTarget: wordsOverTarget,
+                    wordsOverTarget,
                     needsOptimization: greetingEstimatedSeconds > TARGET_GREETING_SECONDS,
                     suggestion: greetingEstimatedSeconds > TARGET_GREETING_SECONDS 
                         ? `Remove ${wordsOverTarget} words to hit ${TARGET_GREETING_SECONDS}s target`
                         : null
                 },
+                // CRITICAL: These MUST read from unified config, not raw company
                 bookingSlotsCount: effectiveConfig.booking.slotsCount,
                 forbiddenPhrasesCount: effectiveConfig.vocabulary.forbiddenPhrasesCount,
                 escalationRulesCount: effectiveConfig.escalation.rulesCount
@@ -254,7 +137,7 @@ router.get('/', async (req, res) => {
         };
         
         // ═══════════════════════════════════════════════════════════════════════
-        // RUN LINTER
+        // RUN LINTER ON UNIFIED CONFIG
         // ═══════════════════════════════════════════════════════════════════════
         const lintResults = lintControlPlane(effectiveConfig, placeholderMap);
         
@@ -263,11 +146,22 @@ router.get('/', async (req, res) => {
         // ═══════════════════════════════════════════════════════════════════════
         const warnings = [];
         
+        // Greeting warnings
         if (!effectiveConfig.greeting.configured) {
             warnings.push({
                 field: 'greeting',
                 severity: 'error',
-                message: 'No greeting configured'
+                message: 'No greeting configured',
+                canonicalKey: 'connectionMessages.voice.text'
+            });
+        }
+        
+        if (effectiveConfig.greeting.hasLegacyPlaceholders) {
+            warnings.push({
+                field: 'greeting',
+                severity: 'warning',
+                message: 'Greeting contains legacy placeholders. Use {{companyName}} format.',
+                canonicalKey: 'connectionMessages.voice.text'
             });
         }
         
@@ -279,19 +173,51 @@ router.get('/', async (req, res) => {
             });
         }
         
+        // Fallback warnings
         if (!effectiveConfig.fallbacks.notOfferedConfigured) {
             warnings.push({
                 field: 'fallbacks.notOfferedReply',
                 severity: 'warning',
-                message: 'No "Not Offered" fallback reply configured'
+                message: 'No "Not Offered" fallback reply configured',
+                canonicalKey: 'companyResponseDefaults.notOfferedReply.fullReply'
             });
         }
         
-        if (effectiveConfig.booking.slotsCount === 0 && effectiveConfig.booking.enabled) {
+        if (effectiveConfig.fallbacks.afterHoursHasLegacyPlaceholders) {
+            warnings.push({
+                field: 'fallbacks.afterHoursReply',
+                severity: 'warning',
+                message: 'After-hours reply contains legacy placeholders. Use {{companyName}} format.',
+                canonicalKey: 'companyResponseDefaults.afterHoursReply.fullReply'
+            });
+        }
+        
+        // Booking warnings
+        if (effectiveConfig.booking.misconfigured) {
+            warnings.push({
+                field: 'booking',
+                severity: 'warning',
+                message: 'Booking is enabled but no slots are configured',
+                canonicalKey: 'frontDeskBehavior.bookingSlots'
+            });
+        }
+        
+        // Source warnings (indicate legacy data)
+        if (effectiveConfig._meta.bookingSlotsSource.includes('legacy')) {
             warnings.push({
                 field: 'booking.slots',
-                severity: 'warning',
-                message: 'Booking is enabled but no slots are configured'
+                severity: 'info',
+                message: `Booking slots read from legacy location: ${effectiveConfig._meta.bookingSlotsSource}`,
+                action: 'Migrate to frontDeskBehavior.bookingSlots'
+            });
+        }
+        
+        if (effectiveConfig._meta.greetingSource.includes('legacy')) {
+            warnings.push({
+                field: 'greeting',
+                severity: 'info',
+                message: `Greeting read from legacy location: ${effectiveConfig._meta.greetingSource}`,
+                action: 'Migrate to connectionMessages.voice.text'
             });
         }
         
@@ -305,6 +231,9 @@ router.get('/', async (req, res) => {
             });
         });
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // RETURN UNIFIED RESPONSE
+        // ═══════════════════════════════════════════════════════════════════════
         res.json({
             success: true,
             data: {
@@ -313,6 +242,8 @@ router.get('/', async (req, res) => {
                 generatedAt: new Date().toISOString(),
                 generatedInMs: Date.now() - startTime,
                 
+                // CRITICAL: This is the SINGLE SOURCE OF TRUTH
+                // All systems (lint, runtime, UI) must read from effectiveConfig
                 effectiveConfig,
                 computed,
                 
@@ -326,11 +257,15 @@ router.get('/', async (req, res) => {
                 warnings,
                 warningsCount: warnings.length,
                 
-                // Debug endpoints
+                // Debug: Show where each value came from
+                _sources: effectiveConfig._meta,
+                
+                // API links
                 _links: {
                     registry: '/api/control-plane/registry',
                     lint: `/api/company/${companyId}/control-plane/lint`,
-                    save: `/api/company/${companyId}`
+                    save: `/api/company/${companyId}`,
+                    migrate: `/api/company/${companyId}/control-plane/migrate`
                 }
             }
         });
@@ -390,7 +325,7 @@ function calculateCompletenessScore(config) {
  * Lint specific text against rules
  */
 router.post('/lint', async (req, res) => {
-    const { text, field, rules } = req.body;
+    const { text, field } = req.body;
     
     if (!text) {
         return res.status(400).json({
@@ -407,5 +342,248 @@ router.post('/lint', async (req, res) => {
     });
 });
 
-module.exports = router;
+/**
+ * POST /api/company/:companyId/control-plane/migrate
+ * Migrate legacy config to canonical keys
+ */
+router.post('/migrate', async (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+        const company = await v2Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                error: 'Company not found'
+            });
+        }
+        
+        const migrations = [];
+        
+        // Migrate greeting
+        const legacyGreeting = company.frontDeskBehavior?.greeting;
+        if (legacyGreeting && !company.connectionMessages?.voice?.text) {
+            if (!company.connectionMessages) company.connectionMessages = {};
+            if (!company.connectionMessages.voice) company.connectionMessages.voice = {};
+            company.connectionMessages.voice.text = migratePlaceholders(legacyGreeting);
+            migrations.push({ field: 'greeting', from: 'frontDeskBehavior.greeting', to: 'connectionMessages.voice.text' });
+        }
+        
+        // Migrate booking slots
+        const legacySources = [
+            { path: 'aiAgentSettings.bookingSlots', get: () => company.aiAgentSettings?.bookingSlots },
+            { path: 'booking.slots', get: () => company.booking?.slots },
+            { path: 'bookingSlots', get: () => company.bookingSlots }
+        ];
+        
+        if (!company.frontDeskBehavior?.bookingSlots?.length) {
+            for (const source of legacySources) {
+                const slots = source.get();
+                if (slots && slots.length > 0) {
+                    if (!company.frontDeskBehavior) company.frontDeskBehavior = {};
+                    company.frontDeskBehavior.bookingSlots = slots;
+                    migrations.push({ field: 'bookingSlots', from: source.path, to: 'frontDeskBehavior.bookingSlots' });
+                    break;
+                }
+            }
+        }
+        
+        // Migrate conversationStyle
+        const rootConversationStyle = company.frontDeskBehavior?.conversationStyle;
+        if (rootConversationStyle && !company.frontDeskBehavior?.personality?.conversationStyle) {
+            if (!company.frontDeskBehavior.personality) company.frontDeskBehavior.personality = {};
+            company.frontDeskBehavior.personality.conversationStyle = rootConversationStyle;
+            migrations.push({ field: 'conversationStyle', from: 'frontDeskBehavior.conversationStyle', to: 'frontDeskBehavior.personality.conversationStyle' });
+        }
+        
+        // Save if there were migrations
+        if (migrations.length > 0) {
+            await company.save();
+        }
+        
+        res.json({
+            success: true,
+            data: {
+                migrationsApplied: migrations.length,
+                migrations
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[CONTROL PLANE MIGRATE] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
 
+/**
+ * POST /api/company/:companyId/control-plane/seed-booking-slots
+ * Seed default HVAC booking slots if empty
+ */
+router.post('/seed-booking-slots', async (req, res) => {
+    const { companyId } = req.params;
+    const { force = false } = req.body;
+    
+    try {
+        const company = await v2Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                error: 'Company not found'
+            });
+        }
+        
+        // Check if slots already exist
+        const existingSlots = company.frontDeskBehavior?.bookingSlots || [];
+        
+        if (existingSlots.length > 0 && !force) {
+            return res.status(400).json({
+                success: false,
+                error: `Company already has ${existingSlots.length} booking slots. Use force=true to overwrite.`,
+                existingSlots: existingSlots.map(s => s.key)
+            });
+        }
+        
+        // Import default slots from configUnifier
+        const { DEFAULT_HVAC_BOOKING_SLOTS } = require('../../utils/configUnifier');
+        
+        // Initialize frontDeskBehavior if needed
+        if (!company.frontDeskBehavior) company.frontDeskBehavior = {};
+        
+        // Set default slots
+        company.frontDeskBehavior.bookingSlots = DEFAULT_HVAC_BOOKING_SLOTS;
+        company.frontDeskBehavior.bookingEnabled = true;
+        
+        await company.save();
+        
+        logger.info(`[CONTROL PLANE] Seeded ${DEFAULT_HVAC_BOOKING_SLOTS.length} booking slots for company ${companyId}`);
+        
+        res.json({
+            success: true,
+            data: {
+                slotsSeeded: DEFAULT_HVAC_BOOKING_SLOTS.length,
+                slotNames: DEFAULT_HVAC_BOOKING_SLOTS.map(s => s.key),
+                message: 'Default HVAC booking slots seeded successfully'
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[CONTROL PLANE SEED SLOTS] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * PATCH /api/company/:companyId/control-plane/save
+ * Save control plane config with auto-placeholder migration
+ */
+router.patch('/save', async (req, res) => {
+    const { companyId } = req.params;
+    const { greeting, fallbacks } = req.body;
+    
+    try {
+        const company = await v2Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                error: 'Company not found'
+            });
+        }
+        
+        const changes = [];
+        
+        // Update greeting with placeholder migration
+        if (greeting !== undefined) {
+            const migratedGreeting = migratePlaceholders(greeting);
+            
+            if (!company.connectionMessages) company.connectionMessages = {};
+            if (!company.connectionMessages.voice) company.connectionMessages.voice = {};
+            company.connectionMessages.voice.text = migratedGreeting;
+            
+            changes.push({
+                field: 'greeting',
+                canonicalKey: 'connectionMessages.voice.text',
+                original: greeting,
+                migrated: migratedGreeting,
+                wasMigrated: greeting !== migratedGreeting
+            });
+        }
+        
+        // Update fallbacks via CompanyResponseDefaults
+        if (fallbacks) {
+            const CompanyResponseDefaults = require('../../models/CompanyResponseDefaults');
+            const defaults = await CompanyResponseDefaults.getOrCreate(companyId);
+            
+            if (fallbacks.notOfferedReply !== undefined) {
+                const migrated = migratePlaceholders(fallbacks.notOfferedReply);
+                defaults.notOfferedReply = { fullReply: migrated };
+                changes.push({
+                    field: 'notOfferedReply',
+                    canonicalKey: 'companyResponseDefaults.notOfferedReply.fullReply',
+                    original: fallbacks.notOfferedReply,
+                    migrated,
+                    wasMigrated: fallbacks.notOfferedReply !== migrated
+                });
+            }
+            
+            if (fallbacks.unknownIntentReply !== undefined) {
+                const migrated = migratePlaceholders(fallbacks.unknownIntentReply);
+                defaults.unknownIntentReply = { fullReply: migrated };
+                changes.push({
+                    field: 'unknownIntentReply',
+                    canonicalKey: 'companyResponseDefaults.unknownIntentReply.fullReply',
+                    original: fallbacks.unknownIntentReply,
+                    migrated,
+                    wasMigrated: fallbacks.unknownIntentReply !== migrated
+                });
+            }
+            
+            if (fallbacks.afterHoursReply !== undefined) {
+                const migrated = migratePlaceholders(fallbacks.afterHoursReply);
+                defaults.afterHoursReply = { fullReply: migrated };
+                changes.push({
+                    field: 'afterHoursReply',
+                    canonicalKey: 'companyResponseDefaults.afterHoursReply.fullReply',
+                    original: fallbacks.afterHoursReply,
+                    migrated,
+                    wasMigrated: fallbacks.afterHoursReply !== migrated
+                });
+            }
+            
+            await defaults.save();
+        }
+        
+        await company.save();
+        
+        // Clear Redis cache
+        const { redisClient } = require('../../db');
+        if (redisClient && redisClient.isOpen) {
+            await redisClient.del(`company:${companyId}`);
+        }
+        
+        logger.info(`[CONTROL PLANE SAVE] Saved ${changes.length} fields for company ${companyId}`);
+        
+        res.json({
+            success: true,
+            data: {
+                changesApplied: changes.length,
+                changes,
+                placeholdersMigrated: changes.filter(c => c.wasMigrated).length
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[CONTROL PLANE SAVE] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+module.exports = router;
