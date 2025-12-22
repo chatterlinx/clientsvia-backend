@@ -1783,20 +1783,56 @@
                         <i class="fas fa-sync-alt" id="config-refresh-icon"></i>
                         Refresh
                     </button>
-                    <button onclick="copyConfigJson('effective', this)" 
-                            style="padding: 6px 12px; font-size: 14px; background-color: #0d9488; color: white; border: none; border-radius: 6px; cursor: pointer; transition: all 0.15s ease;"
-                            onmousedown="this.style.transform='scale(0.95)'; this.style.boxShadow='inset 0 2px 4px rgba(0,0,0,0.2)';"
-                            onmouseup="this.style.transform='scale(1)'; this.style.boxShadow='none';"
-                            onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='none';">
-                        📋 Copy Effective
-                    </button>
-                    <button onclick="copyConfigJson('raw', this)" 
-                            style="padding: 6px 12px; font-size: 14px; background-color: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer; transition: all 0.15s ease;"
-                            onmousedown="this.style.transform='scale(0.95)'; this.style.boxShadow='inset 0 2px 4px rgba(0,0,0,0.2)';"
-                            onmouseup="this.style.transform='scale(1)'; this.style.boxShadow='none';"
-                            onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='none';">
-                        📋 Copy Raw
-                    </button>
+                    
+                    <!-- Dropdown Copy Button -->
+                    <div class="config-copy-dropdown" style="position: relative;">
+                        <button onclick="toggleConfigCopyDropdown()" id="config-copy-btn"
+                                style="padding: 6px 14px; font-size: 14px; background-color: #0d9488; color: white; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.15s ease;"
+                                onmousedown="this.style.transform='scale(0.97)'"
+                                onmouseup="this.style.transform='scale(1)'"
+                                onmouseleave="this.style.transform='scale(1)'">
+                            <i class="fas fa-copy"></i>
+                            Copy Config
+                            <i class="fas fa-caret-down" style="font-size: 11px; opacity: 0.8;"></i>
+                        </button>
+                        
+                        <!-- Dropdown Menu -->
+                        <div id="config-copy-dropdown-menu" style="display: none; position: absolute; top: calc(100% + 4px); right: 0; min-width: 220px; background: #1e293b; border: 1px solid #334155; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); z-index: 1000; overflow: hidden;">
+                            <button onclick="copyConfigJson('effective'); closeConfigCopyDropdown();" 
+                                    style="width: 100%; padding: 12px 16px; font-size: 14px; background: transparent; color: #e2e8f0; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; text-align: left; transition: background 0.15s;"
+                                    onmouseover="this.style.background='#334155'"
+                                    onmouseout="this.style.background='transparent'">
+                                <span style="font-size: 16px;">📋</span>
+                                <div>
+                                    <div style="font-weight: 500;">Copy Effective Config</div>
+                                    <div style="font-size: 11px; color: #94a3b8;">Computed runtime values</div>
+                                </div>
+                            </button>
+                            <div style="height: 1px; background: #334155;"></div>
+                            <button onclick="copyConfigJson('raw'); closeConfigCopyDropdown();" 
+                                    style="width: 100%; padding: 12px 16px; font-size: 14px; background: transparent; color: #e2e8f0; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; text-align: left; transition: background 0.15s;"
+                                    onmouseover="this.style.background='#334155'"
+                                    onmouseout="this.style.background='transparent'">
+                                <span style="font-size: 16px;">🧾</span>
+                                <div>
+                                    <div style="font-weight: 500;">Copy Raw Company JSON</div>
+                                    <div style="font-size: 11px; color: #94a3b8;">MongoDB document (ground truth)</div>
+                                </div>
+                            </button>
+                            <div style="height: 1px; background: #334155;"></div>
+                            <button onclick="copyConfigJson('lint'); closeConfigCopyDropdown();" 
+                                    style="width: 100%; padding: 12px 16px; font-size: 14px; background: transparent; color: #e2e8f0; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; text-align: left; transition: background 0.15s;"
+                                    onmouseover="this.style.background='#334155'"
+                                    onmouseout="this.style.background='transparent'">
+                                <span style="font-size: 16px;">🔍</span>
+                                <div>
+                                    <div style="font-weight: 500;">Copy Lint Results</div>
+                                    <div style="font-size: 11px; color: #94a3b8;">Warnings &amp; errors</div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                    
                     <button onclick="closeConfigJsonModal()" style="padding: 8px; background: transparent; border: none; color: #94a3b8; cursor: pointer; border-radius: 6px;">
                         <i class="fas fa-times"></i>
                     </button>
@@ -3514,18 +3550,59 @@
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
+        // CONFIG COPY DROPDOWN - Toggle & Close
+        // ═══════════════════════════════════════════════════════════════════════════
+        function toggleConfigCopyDropdown() {
+            const menu = document.getElementById('config-copy-dropdown-menu');
+            if (menu) {
+                const isVisible = menu.style.display !== 'none';
+                menu.style.display = isVisible ? 'none' : 'block';
+                
+                // Close on click outside
+                if (!isVisible) {
+                    setTimeout(() => {
+                        document.addEventListener('click', closeConfigCopyDropdownOnClickOutside, { once: true });
+                    }, 10);
+                }
+            }
+        }
+        
+        function closeConfigCopyDropdown() {
+            const menu = document.getElementById('config-copy-dropdown-menu');
+            if (menu) menu.style.display = 'none';
+        }
+        
+        function closeConfigCopyDropdownOnClickOutside(e) {
+            const dropdown = document.querySelector('.config-copy-dropdown');
+            if (dropdown && !dropdown.contains(e.target)) {
+                closeConfigCopyDropdown();
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
         // CONFIG JSON - Copy to Clipboard with Visual Feedback
         // ═══════════════════════════════════════════════════════════════════════════
-        async function copyConfigJson(type, buttonEl) {
+        async function copyConfigJson(type) {
             let data;
             let label;
+            let icon;
             
             if (type === 'effective') {
                 data = configEffectiveData?.effectiveConfig;
                 label = 'Effective Config';
+                icon = '📋';
             } else if (type === 'raw') {
                 data = configRawData;
-                label = 'Raw Company Config';
+                label = 'Raw Company JSON';
+                icon = '🧾';
+            } else if (type === 'lint') {
+                data = {
+                    lint: configEffectiveData?.lint,
+                    computed: configEffectiveData?.computed,
+                    warnings: configEffectiveData?.warnings
+                };
+                label = 'Lint Results';
+                icon = '🔍';
             }
             
             if (data) {
@@ -3538,7 +3615,7 @@
                     const size = (jsonString.length / 1024).toFixed(1);
                     
                     // Show inline toast
-                    showConfigCopyToast(true, `✅ ${label} Copied!`, `${lines} lines • ${size} KB`);
+                    showConfigCopyToast(true, `${icon} ${label} Copied!`, `${lines} lines • ${size} KB`);
                     
                 } catch (err) {
                     console.error('[CONFIG JSON] Copy failed:', err);
