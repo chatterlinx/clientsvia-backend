@@ -43,15 +43,19 @@ router.use(requireCompanyAccess);
  * 
  * CRITICAL: This endpoint is the SINGLE SOURCE OF TRUTH
  * Lint, runtime, and UI should all read from this output
+ * 
+ * AUTO-CONVERGENCE: If legacy sources are detected, writes back to canonical
+ * to prevent perpetual legacy dependency
  */
 router.get('/', async (req, res) => {
     const startTime = Date.now();
     const { companyId } = req.params;
+    const autoConverge = req.query.converge !== 'false'; // Default: converge
     
     try {
-        // Load all relevant data
+        // Load company (NOT lean - we need to potentially save)
         const [company, responseDefaults, placeholdersDoc] = await Promise.all([
-            v2Company.findById(companyId).lean(),
+            v2Company.findById(companyId),
             CompanyResponseDefaults.getOrCreate(companyId),
             CompanyPlaceholders.findOne({ companyId }).lean()
         ]);
@@ -79,9 +83,77 @@ router.get('/', async (req, res) => {
         // This resolves the "two-config reality" bug by reading from canonical
         // keys first, then falling back to legacy keys, then to defaults
         // ═══════════════════════════════════════════════════════════════════════
-        const effectiveConfig = unifyConfig(company, responseDefaults, {
+        const effectiveConfig = unifyConfig(company.toObject(), responseDefaults, {
             seedBookingSlotsIfEmpty: false // Don't auto-seed, show warning instead
         });
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // AUTO-CONVERGENCE: Write back to canonical if using legacy sources
+        // This ensures future reads don't need legacy fallback
+        // ═══════════════════════════════════════════════════════════════════════
+        const convergenceActions = [];
+        
+        if (autoConverge) {
+            // Check if booking slots came from legacy
+            if (effectiveConfig._meta.bookingSlotsSource.includes('legacy')) {
+                if (!company.frontDeskBehavior) company.frontDeskBehavior = {};
+                company.frontDeskBehavior.bookingSlots = effectiveConfig.booking.slots;
+                convergenceActions.push({
+                    field: 'bookingSlots',
+                    from: effectiveConfig._meta.bookingSlotsSource,
+                    to: 'frontDeskBehavior.bookingSlots'
+                });
+            }
+            
+            // Check if greeting came from legacy
+            if (effectiveConfig._meta.greetingSource.includes('legacy')) {
+                if (!company.connectionMessages) company.connectionMessages = {};
+                if (!company.connectionMessages.voice) company.connectionMessages.voice = {};
+                company.connectionMessages.voice.text = effectiveConfig.greeting.standardized;
+                convergenceActions.push({
+                    field: 'greeting',
+                    from: effectiveConfig._meta.greetingSource,
+                    to: 'connectionMessages.voice.text'
+                });
+            }
+            
+            // Check if greeting has legacy placeholders that were standardized
+            if (effectiveConfig.greeting.hasLegacyPlaceholders) {
+                if (!company.connectionMessages) company.connectionMessages = {};
+                if (!company.connectionMessages.voice) company.connectionMessages.voice = {};
+                company.connectionMessages.voice.text = effectiveConfig.greeting.standardized;
+                convergenceActions.push({
+                    field: 'greeting.placeholders',
+                    action: 'standardized',
+                    to: 'connectionMessages.voice.text'
+                });
+            }
+            
+            // Check if conversationStyle needs migration
+            if (effectiveConfig._meta.conversationStyleSource.includes('legacy')) {
+                if (!company.frontDeskBehavior) company.frontDeskBehavior = {};
+                if (!company.frontDeskBehavior.personality) company.frontDeskBehavior.personality = {};
+                company.frontDeskBehavior.personality.conversationStyle = effectiveConfig.personality.conversationStyle;
+                convergenceActions.push({
+                    field: 'conversationStyle',
+                    from: effectiveConfig._meta.conversationStyleSource,
+                    to: 'frontDeskBehavior.personality.conversationStyle'
+                });
+            }
+            
+            // Save if we made convergence changes
+            if (convergenceActions.length > 0) {
+                await company.save();
+                
+                // Clear Redis cache
+                const { redisClient } = require('../../db');
+                if (redisClient && redisClient.isOpen) {
+                    await redisClient.del(`company:${companyId}`);
+                }
+                
+                logger.info(`[CONTROL PLANE] Auto-converged ${convergenceActions.length} fields for company ${companyId}`);
+            }
+        }
         
         // ═══════════════════════════════════════════════════════════════════════
         // COMPUTE GREETING PREVIEW (with placeholder substitution)
@@ -259,6 +331,13 @@ router.get('/', async (req, res) => {
                 
                 // Debug: Show where each value came from
                 _sources: effectiveConfig._meta,
+                
+                // Auto-convergence: fields that were written back to canonical
+                _convergence: {
+                    enabled: autoConverge,
+                    actionsPerformed: convergenceActions.length,
+                    actions: convergenceActions
+                },
                 
                 // API links
                 _links: {
