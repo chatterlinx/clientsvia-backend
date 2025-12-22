@@ -102,6 +102,16 @@
                             <i class="fas fa-sliders-h"></i>
                             <span>Config JSON</span>
                         </button>
+                        
+                        <!-- HMAC Signed Snapshot Button -->
+                        <button onclick="toggleControlPlanePanel()" 
+                                style="background-color: #3b82f6; color: white; padding: 8px 16px; border-radius: 6px; font-weight: 600; display: flex; align-items: center; gap: 8px; border: none; cursor: pointer;"
+                                title="View HMAC signed Control Plane snapshot"
+                                onmouseover="this.style.backgroundColor='#2563eb'"
+                                onmouseout="this.style.backgroundColor='#3b82f6'">
+                            <i class="fas fa-lock"></i>
+                            <span>Signed Snapshot</span>
+                        </button>
                         <!-- Truth Report Button -->
                         <button onclick="openTruthReport()" 
                                 style="background-color: #1e40af; color: white; padding: 8px 16px; border-radius: 6px; font-weight: 600; display: flex; align-items: center; gap: 8px; border: none; cursor: pointer;"
@@ -3046,11 +3056,7 @@
         </div>
     </div>
 
-    <!-- Toggle button for Control Plane Panel (in header area) -->
-    <button id="cv-cp-toggle-btn" onclick="toggleControlPlanePanel()" 
-            style="position:fixed;bottom:20px;right:20px;z-index:9998;padding:12px 16px;border-radius:12px;border:none;background:#3b82f6;color:white;font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 4px 12px rgba(59,130,246,.4);">
-        🔐 Control Plane
-    </button>
+    <!-- Toggle button MOVED to header next to Config JSON button -->
 
     <script>
     (function(){
