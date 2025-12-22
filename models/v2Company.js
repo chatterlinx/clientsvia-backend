@@ -1097,6 +1097,26 @@ const companySchema = new mongoose.Schema({
                 naturalFlowMode: { type: Boolean, default: false },                // Is Natural Flow Mode active?
                 updatedAt: { type: Date, default: Date.now }
             },
+            
+            // -------------------------------------------------------------------
+            // TRANSFER TARGETS - Phone numbers for call escalation
+            // -------------------------------------------------------------------
+            // Used by Call Protection rules (force_transfer action)
+            // and runtime escalation flows
+            transferTargets: [{
+                id: { type: String, required: true, trim: true },  // e.g., "service_advisor", "manager"
+                name: { type: String, trim: true },                 // Display name
+                label: { type: String, trim: true },                // UI label
+                type: { type: String, enum: ['phone', 'queue', 'sip'], default: 'phone' },
+                destination: { type: String, trim: true },          // Phone number or queue ID
+                description: { type: String, trim: true },          // Help text
+                priority: { type: Number, default: 1 },
+                enabled: { type: Boolean, default: true },
+                isDefault: { type: Boolean, default: false },       // Default escalation target
+                afterHoursOnly: { type: Boolean, default: false },  // Only route here after hours
+                whisper: { type: String, trim: true },              // Message to agent before connecting
+                preTransferScript: { type: String, trim: true }     // What to say to caller before transfer
+            }],
             enabled: { 
                 type: Boolean, 
                 default: true 
