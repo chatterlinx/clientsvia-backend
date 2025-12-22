@@ -1836,13 +1836,15 @@
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
                 
-                const snapshot = await response.json();
+                const apiResponse = await response.json();
+                // API returns { success: true, snapshot: { ... } } - extract inner snapshot
+                const snapshot = apiResponse.snapshot || apiResponse;
                 currentTruthSnapshot = snapshot;
                 
                 const fetchTime = Date.now() - startTime;
                 
                 // Update meta panel
-                document.getElementById('truth-company-name').textContent = snapshot.providers?.controlPlane?.data?.companyName || '-';
+                document.getElementById('truth-company-name').textContent = snapshot.meta?.companyName || snapshot.providers?.controlPlane?.data?.companyName || '-';
                 document.getElementById('truth-company-id').textContent = companyId;
                 document.getElementById('truth-generated-at').textContent = snapshot.meta?.generatedAt ? new Date(snapshot.meta.generatedAt).toLocaleString() : '-';
                 document.getElementById('truth-environment').textContent = window.location.hostname.includes('localhost') ? 'Development' : 'Production';
