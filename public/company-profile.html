@@ -3264,23 +3264,21 @@
             }
         }
 
-        // Toggle panel visibility
+        // Toggle panel visibility (button moved to header, no longer floating)
         window.toggleControlPlanePanel = function(){
             const panel = document.getElementById("cv-control-plane-panel");
-            const btn = document.getElementById("cv-cp-toggle-btn");
-            if(panel.style.display === "none"){
+            if (!panel) return;
+            if(panel.style.display === "none" || panel.style.display === ""){
                 panel.style.display = "block";
-                btn.style.display = "none";
             } else {
                 panel.style.display = "none";
-                btn.style.display = "block";
             }
         };
 
         // Close panel handler
         window.closeControlPlanePanel = function(){
-            document.getElementById("cv-control-plane-panel").style.display = "none";
-            document.getElementById("cv-cp-toggle-btn").style.display = "block";
+            const panel = document.getElementById("cv-control-plane-panel");
+            if (panel) panel.style.display = "none";
         };
 
         // ========= INIT =========
