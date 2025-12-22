@@ -175,6 +175,8 @@ async function loadAllRoutes() {
         routes.v2NotesRoutes = await loadRouteWithTimeout('./routes/v2notes', 'v2NotesRoutes');
         // V2: Legacy agentProcessor route deleted - using modern AI Agent Logic processing system
         routes.adminRoutes = await loadRouteWithTimeout('./routes/v2admin', 'adminRoutes');
+        routes.controlPlaneRegistryRoutes = await loadRouteWithTimeout('./routes/controlPlane/registry', 'controlPlaneRegistryRoutes'); // 📋 Control Plane Schema Registry (Self-describing)
+        routes.controlPlaneEffectiveRoutes = await loadRouteWithTimeout('./routes/controlPlane/effective', 'controlPlaneEffectiveRoutes'); // ⚡ Control Plane Effective Config (Runtime values)
         routes.globalInstantResponsesRoutes = await loadRouteWithTimeout('./routes/admin/globalInstantResponses', 'globalInstantResponsesRoutes');
         routes.globalAIBehaviorsRoutes = await loadRouteWithTimeout('./routes/admin/globalAIBehaviors', 'globalAIBehaviorsRoutes');
         routes.llmScenarioAssistantRoutes = await loadRouteWithTimeout('./routes/admin/llmScenarioAssistant', 'llmScenarioAssistantRoutes');
@@ -416,6 +418,7 @@ function registerRoutes(routes) {
     // V2: Legacy /api/agent route removed - using /api/company/:companyId/agent-settings V2 route
     app.use('/api/auth', routes.v2AuthRoutes); // V2: User authentication and JWT token management
     app.use('/api/admin', routes.adminRoutes);
+    app.use('/api/control-plane', routes.controlPlaneRegistryRoutes); // 📋 Control Plane Schema Registry (Self-describing)
     app.use('/api/admin/global-instant-responses', routes.globalInstantResponsesRoutes); // Global AI Brain Management
     app.use('/api/admin/global-behaviors', routes.globalAIBehaviorsRoutes); // Global AI Behavior Templates
     app.use('/api/admin/scenario-assistant', routes.llmScenarioAssistantRoutes); // 🤖 LLM Scenario Assistant (admin drafting tool)
@@ -458,6 +461,7 @@ function registerRoutes(routes) {
     app.use('/api/company/:companyId', routes.companyOverridesRoutes); // 🎚️ Company Overrides (Scenario/Category disable + Placeholders)
     app.use('/api/company/:companyId', routes.scopeOverridesRoutes); // 🔒 Scope Overrides (GLOBAL vs COMPANY clone-to-override)
     app.use('/api/company/:companyId/scenario-export', routes.scenarioExportRoutes); // 📦 Full Scenario Export (Deep JSON export with all fields)
+    app.use('/api/company/:companyId/control-plane', routes.controlPlaneEffectiveRoutes); // ⚡ Control Plane Effective Config + Lint
     app.use('/api/company/:companyId/platform-snapshot', routes.platformSnapshotRoutes); // 📄 Platform Snapshot (Enterprise Introspection - Single Source of Truth)
     app.use('/api/company/:companyId/seed-golden', routes.seedGoldenRoutes); // 🟣 Seed Golden Setup (Penguin Air HVAC Reference)
     app.use('/api/company/:companyId/raw', routes.rawCompanyDataRoutes); // 🔍 Raw Company Data (DB Echo for Truth Report)

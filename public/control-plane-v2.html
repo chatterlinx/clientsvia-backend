@@ -196,6 +196,198 @@
       box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);
     }
     
+    /* Debug Button */
+    .btn-debug {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, #64748b 0%, #94a3b8 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      transition: all 0.2s ease;
+    }
+    .btn-debug:hover {
+      background: linear-gradient(135deg, #475569 0%, #64748b 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(100, 116, 139, 0.3);
+    }
+    
+    /* Debug Drawer Styles */
+    .debug-drawer-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      justify-content: flex-end;
+      z-index: 10000;
+    }
+    .debug-drawer-overlay.open {
+      display: flex;
+    }
+    .debug-drawer {
+      width: 600px;
+      max-width: 90vw;
+      height: 100%;
+      background: #0f172a;
+      color: #e2e8f0;
+      box-shadow: -4px 0 20px rgba(0,0,0,0.3);
+      display: flex;
+      flex-direction: column;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
+    }
+    .debug-drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+      border-bottom: 1px solid #475569;
+    }
+    .debug-drawer-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .debug-drawer-close {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 24px;
+      cursor: pointer;
+      padding: 4px 8px;
+    }
+    .debug-drawer-close:hover {
+      color: #f1f5f9;
+    }
+    .debug-drawer-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    .debug-section {
+      margin-bottom: 24px;
+    }
+    .debug-section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .debug-score-card {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 16px;
+    }
+    .debug-score-circle {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+    .debug-score-circle.green { background: linear-gradient(135deg, #059669 0%, #10b981 100%); }
+    .debug-score-circle.yellow { background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%); }
+    .debug-score-circle.red { background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); }
+    .debug-score-value { font-size: 24px; }
+    .debug-score-grade { font-size: 14px; opacity: 0.9; }
+    .debug-score-details { flex: 1; }
+    .debug-score-details h4 { margin: 0 0 8px 0; font-size: 16px; }
+    .debug-score-details p { margin: 0; font-size: 13px; color: #94a3b8; }
+    .debug-issues-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .debug-issue {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px;
+      background: #1e293b;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .debug-issue-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .debug-issue-icon.error { background: #dc2626; }
+    .debug-issue-icon.warning { background: #d97706; }
+    .debug-issue-icon.info { background: #2563eb; }
+    .debug-issue-content { flex: 1; }
+    .debug-issue-field { font-size: 12px; color: #64748b; margin-bottom: 4px; }
+    .debug-issue-message { font-size: 13px; color: #e2e8f0; }
+    .debug-json-block {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 12px;
+      overflow-x: auto;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 11px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .debug-metric-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #334155;
+    }
+    .debug-metric-row:last-child { border-bottom: none; }
+    .debug-metric-label { color: #94a3b8; font-size: 13px; }
+    .debug-metric-value { color: #e2e8f0; font-size: 13px; font-weight: 600; }
+    .debug-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 8px;
+    }
+    .debug-tab {
+      padding: 8px 16px;
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: 6px 6px 0 0;
+      transition: all 0.2s;
+    }
+    .debug-tab:hover { color: #e2e8f0; background: #1e293b; }
+    .debug-tab.active { color: #e2e8f0; background: #334155; }
+    .debug-tab-content { display: none; }
+    .debug-tab-content.active { display: block; }
+    
     .json-badge-score {
       background: rgba(255,255,255,0.2);
       padding: 2px 8px;
@@ -855,6 +1047,11 @@
       <button id="btn-validator" class="btn-validator" onclick="openValidatorModal()" title="Validate scenario completeness">
         <span>🔍</span>
         <span>Validate</span>
+      </button>
+      <!-- 🔧 DEBUG DRAWER BUTTON (Control Plane Introspection) -->
+      <button id="btn-debug-drawer" class="btn-debug" onclick="openDebugDrawer()" title="View effective config, lint results, and performance metrics">
+        <span>🔧</span>
+        <span>Debug</span>
       </button>
       <!-- 📄 PLATFORM SNAPSHOT BUTTON (Enterprise Introspection) -->
       <button id="btn-platform-json" class="btn-json" onclick="openPlatformSnapshotModal()">
@@ -4706,6 +4903,277 @@ Loading field report...
         showToast('❌ Failed to apply: ' + error.message, 'error');
         btn.innerHTML = '<i class="fas fa-magic"></i> Apply Golden Defaults';
         btn.disabled = false;
+      }
+    }
+  </script>
+  
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       DEBUG DRAWER - Control Plane Introspection
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="debug-drawer-overlay" class="debug-drawer-overlay" onclick="if(event.target === this) closeDebugDrawer()">
+    <div class="debug-drawer">
+      <div class="debug-drawer-header">
+        <h2>🔧 Control Plane Debug</h2>
+        <button class="debug-drawer-close" onclick="closeDebugDrawer()">&times;</button>
+      </div>
+      
+      <div class="debug-drawer-content">
+        <!-- Tabs -->
+        <div class="debug-tabs">
+          <button class="debug-tab active" onclick="switchDebugTab('overview')">Overview</button>
+          <button class="debug-tab" onclick="switchDebugTab('lint')">Lint Results</button>
+          <button class="debug-tab" onclick="switchDebugTab('effective')">Effective Config</button>
+          <button class="debug-tab" onclick="switchDebugTab('registry')">Registry</button>
+        </div>
+        
+        <!-- OVERVIEW TAB -->
+        <div id="debug-tab-overview" class="debug-tab-content active">
+          <div class="debug-section">
+            <div class="debug-section-title">📊 Performance Score</div>
+            <div id="debug-score-card" class="debug-score-card">
+              <div class="debug-score-circle green">
+                <span class="debug-score-value">--</span>
+                <span class="debug-score-grade">--</span>
+              </div>
+              <div class="debug-score-details">
+                <h4>Loading...</h4>
+                <p>Fetching control plane metrics...</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="debug-section">
+            <div class="debug-section-title">📈 Performance Metrics</div>
+            <div id="debug-metrics" style="background: #1e293b; border-radius: 8px; padding: 16px;">
+              <div class="debug-metric-row">
+                <span class="debug-metric-label">Greeting Word Count</span>
+                <span id="metric-greeting-words" class="debug-metric-value">--</span>
+              </div>
+              <div class="debug-metric-row">
+                <span class="debug-metric-label">Greeting TTS Estimate</span>
+                <span id="metric-greeting-tts" class="debug-metric-value">--</span>
+              </div>
+              <div class="debug-metric-row">
+                <span class="debug-metric-label">Booking Slots</span>
+                <span id="metric-booking-slots" class="debug-metric-value">--</span>
+              </div>
+              <div class="debug-metric-row">
+                <span class="debug-metric-label">Forbidden Phrases</span>
+                <span id="metric-forbidden" class="debug-metric-value">--</span>
+              </div>
+              <div class="debug-metric-row">
+                <span class="debug-metric-label">Escalation Rules</span>
+                <span id="metric-escalation" class="debug-metric-value">--</span>
+              </div>
+              <div class="debug-metric-row">
+                <span class="debug-metric-label">Last Fetch</span>
+                <span id="metric-fetch-time" class="debug-metric-value">--</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- LINT TAB -->
+        <div id="debug-tab-lint" class="debug-tab-content">
+          <div class="debug-section">
+            <div class="debug-section-title">🔍 Lint Issues</div>
+            <ul id="debug-issues-list" class="debug-issues-list">
+              <li class="debug-issue">
+                <span class="debug-issue-icon info">?</span>
+                <div class="debug-issue-content">
+                  <div class="debug-issue-message">Loading lint results...</div>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+        
+        <!-- EFFECTIVE CONFIG TAB -->
+        <div id="debug-tab-effective" class="debug-tab-content">
+          <div class="debug-section">
+            <div class="debug-section-title">⚡ Effective Config (Runtime)</div>
+            <div style="margin-bottom: 12px;">
+              <button onclick="copyDebugJson('effective')" style="padding: 6px 12px; background: #334155; color: #e2e8f0; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                📋 Copy JSON
+              </button>
+            </div>
+            <pre id="debug-effective-json" class="debug-json-block">Loading...</pre>
+          </div>
+        </div>
+        
+        <!-- REGISTRY TAB -->
+        <div id="debug-tab-registry" class="debug-tab-content">
+          <div class="debug-section">
+            <div class="debug-section-title">📋 Schema Registry</div>
+            <div style="margin-bottom: 12px;">
+              <button onclick="copyDebugJson('registry')" style="padding: 6px 12px; background: #334155; color: #e2e8f0; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                📋 Copy JSON
+              </button>
+            </div>
+            <pre id="debug-registry-json" class="debug-json-block">Loading...</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DEBUG DRAWER LOGIC
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    let debugEffectiveConfig = null;
+    let debugRegistryData = null;
+    
+    async function openDebugDrawer() {
+      document.getElementById('debug-drawer-overlay').classList.add('open');
+      await loadDebugData();
+    }
+    
+    function closeDebugDrawer() {
+      document.getElementById('debug-drawer-overlay').classList.remove('open');
+    }
+    
+    function switchDebugTab(tabId) {
+      // Update tab buttons
+      document.querySelectorAll('.debug-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.textContent.toLowerCase().includes(tabId.split('-')[0]) || 
+            (tabId === 'overview' && tab.textContent === 'Overview') ||
+            (tabId === 'lint' && tab.textContent === 'Lint Results') ||
+            (tabId === 'effective' && tab.textContent === 'Effective Config') ||
+            (tabId === 'registry' && tab.textContent === 'Registry')) {
+          tab.classList.add('active');
+        }
+      });
+      // Find active tab by onclick
+      document.querySelectorAll('.debug-tab').forEach(tab => {
+        const onclick = tab.getAttribute('onclick');
+        if (onclick && onclick.includes(`'${tabId}'`)) {
+          tab.classList.add('active');
+        } else {
+          tab.classList.remove('active');
+        }
+      });
+      
+      // Update tab content
+      document.querySelectorAll('.debug-tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+      document.getElementById(`debug-tab-${tabId}`).classList.add('active');
+    }
+    
+    async function loadDebugData() {
+      try {
+        // Load effective config
+        const effectiveResponse = await fetch(`/api/company/${currentCompanyId}/control-plane/effective`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const effectiveData = await effectiveResponse.json();
+        
+        if (effectiveData.success) {
+          debugEffectiveConfig = effectiveData.data;
+          renderDebugOverview(effectiveData.data);
+          renderDebugLint(effectiveData.data.lint);
+          document.getElementById('debug-effective-json').textContent = 
+            JSON.stringify(effectiveData.data.effectiveConfig, null, 2);
+        }
+        
+        // Load registry
+        const registryResponse = await fetch('/api/control-plane/registry', {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const registryData = await registryResponse.json();
+        
+        if (registryData.success) {
+          debugRegistryData = registryData.data;
+          document.getElementById('debug-registry-json').textContent = 
+            JSON.stringify(registryData.data, null, 2);
+        }
+        
+      } catch (error) {
+        console.error('[DEBUG DRAWER] Load error:', error);
+        document.getElementById('debug-score-card').innerHTML = `
+          <div style="color: #ef4444; padding: 20px;">❌ Failed to load: ${error.message}</div>
+        `;
+      }
+    }
+    
+    function renderDebugOverview(data) {
+      const { lint, computed, effectiveConfig, generatedInMs } = data;
+      
+      // Score card
+      const scoreClass = lint.score >= 80 ? 'green' : lint.score >= 60 ? 'yellow' : 'red';
+      const issuesSummary = `${lint.summary.errors} errors, ${lint.summary.warnings} warnings, ${lint.summary.info} info`;
+      
+      document.getElementById('debug-score-card').innerHTML = `
+        <div class="debug-score-circle ${scoreClass}">
+          <span class="debug-score-value">${lint.score}</span>
+          <span class="debug-score-grade">${lint.grade}</span>
+        </div>
+        <div class="debug-score-details">
+          <h4>Copy Performance Score</h4>
+          <p>${issuesSummary}</p>
+          <p style="margin-top: 8px; color: ${computed.completeness.score >= 80 ? '#10b981' : '#f59e0b'}">
+            Completeness: ${computed.completeness.score}%
+          </p>
+        </div>
+      `;
+      
+      // Metrics
+      document.getElementById('metric-greeting-words').textContent = 
+        computed.performance.greetingWordCount + ' words';
+      document.getElementById('metric-greeting-tts').textContent = 
+        computed.performance.greetingEstimatedSeconds + 's (' + computed.performance.greetingTTSRating + ')';
+      document.getElementById('metric-booking-slots').textContent = 
+        computed.performance.bookingSlotsCount;
+      document.getElementById('metric-forbidden').textContent = 
+        computed.performance.forbiddenPhrasesCount;
+      document.getElementById('metric-escalation').textContent = 
+        computed.performance.escalationRulesCount;
+      document.getElementById('metric-fetch-time').textContent = 
+        generatedInMs + 'ms';
+    }
+    
+    function renderDebugLint(lint) {
+      const listEl = document.getElementById('debug-issues-list');
+      
+      if (lint.issues.length === 0) {
+        listEl.innerHTML = `
+          <li class="debug-issue" style="background: #064e3b;">
+            <span class="debug-issue-icon" style="background: #10b981;">✓</span>
+            <div class="debug-issue-content">
+              <div class="debug-issue-message">No issues found! Copy quality is excellent.</div>
+            </div>
+          </li>
+        `;
+        return;
+      }
+      
+      listEl.innerHTML = lint.issues.map(issue => `
+        <li class="debug-issue">
+          <span class="debug-issue-icon ${issue.severity}">
+            ${issue.severity === 'error' ? '✕' : issue.severity === 'warning' ? '!' : 'i'}
+          </span>
+          <div class="debug-issue-content">
+            <div class="debug-issue-field">${issue.field} • ${issue.rule}</div>
+            <div class="debug-issue-message">${issue.message}</div>
+          </div>
+        </li>
+      `).join('');
+    }
+    
+    function copyDebugJson(type) {
+      let data;
+      if (type === 'effective') {
+        data = debugEffectiveConfig?.effectiveConfig;
+      } else if (type === 'registry') {
+        data = debugRegistryData;
+      }
+      
+      if (data) {
+        navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+        showToast('📋 JSON copied to clipboard!', 'success');
       }
     }
   </script>
