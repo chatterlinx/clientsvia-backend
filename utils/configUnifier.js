@@ -112,23 +112,53 @@ const DEFAULT_HVAC_BOOKING_SLOTS = [
 // ═══════════════════════════════════════════════════════════════════════════
 
 const PLACEHOLDER_MIGRATION_MAP = {
-    // Case-insensitive legacy → canonical
+    // Case-insensitive legacy → canonical (camelCase)
+    // Company Name
     'companyname': 'companyName',
     'company_name': 'companyName',
     'company-name': 'companyName',
     'COMPANYNAME': 'companyName',
+    'CompanyName': 'companyName',
+    
+    // Business Hours
     'hours': 'businessHours',
     'business_hours': 'businessHours',
     'businesshours': 'businessHours',
+    'BusinessHours': 'businessHours',
+    'BUSINESSHOURS': 'businessHours',
+    
+    // Emergency Phone (CRITICAL: must match runtime placeholder key)
     'emergencyphone': 'emergencyPhone',
     'emergency_phone': 'emergencyPhone',
     'emergency-phone': 'emergencyPhone',
+    'EMERGENCYPHONE': 'emergencyPhone',
+    'EmergencyPhone': 'emergencyPhone',
+    
+    // Company Phone
     'companyphone': 'companyPhone',
     'company_phone': 'companyPhone',
     'phone': 'companyPhone',
+    'CompanyPhone': 'companyPhone',
+    'COMPANYPHONE': 'companyPhone',
+    
+    // Service Area
     'servicearea': 'serviceArea',
-    'service_area': 'serviceArea'
+    'service_area': 'serviceArea',
+    'ServiceArea': 'serviceArea',
+    'SERVICEAREA': 'serviceArea'
 };
+
+// Canonical placeholder keys (the ONLY keys that should exist in DB after migration)
+const CANONICAL_PLACEHOLDER_KEYS = [
+    'companyName',
+    'companyPhone',
+    'businessHours',
+    'emergencyPhone',
+    'serviceArea',
+    'companyAddress',
+    'companyEmail',
+    'companyWebsite'
+];
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPER: Get nested value from object
@@ -208,28 +238,33 @@ function unifyGreeting(company) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function unifyBookingSlots(company, seedIfEmpty = false) {
-    // Canonical: frontDeskBehavior.bookingSlots
-    const canonical = getNestedValue(company, 'frontDeskBehavior.bookingSlots');
+    // CRITICAL FIX: ControlPlane provider reads from aiAgentSettings.frontDeskBehavior.bookingSlots
+    // But some UI writes to root frontDeskBehavior.bookingSlots
+    // We MUST check ALL possible locations in priority order
     
-    // Legacy sources in priority order
-    const legacySources = [
-        { path: 'aiAgentSettings.bookingSlots', name: 'aiAgentSettings' },
+    const possibleSources = [
+        // Most common: aiAgentSettings.frontDeskBehavior.bookingSlots (where most UI writes)
+        { path: 'aiAgentSettings.frontDeskBehavior.bookingSlots', name: 'aiAgentSettings.frontDeskBehavior' },
+        // Root level frontDeskBehavior (some legacy UI)
+        { path: 'frontDeskBehavior.bookingSlots', name: 'frontDeskBehavior' },
+        // Very legacy: aiAgentSettings.bookingSlots (flat)
+        { path: 'aiAgentSettings.bookingSlots', name: 'aiAgentSettings (flat)' },
+        // Very legacy: booking.slots
         { path: 'booking.slots', name: 'booking' },
+        // Very legacy: root level bookingSlots
         { path: 'bookingSlots', name: 'root' }
     ];
     
-    let resolvedSlots = (canonical && canonical.length > 0) ? canonical : null;
-    let source = resolvedSlots ? 'frontDeskBehavior.bookingSlots' : 'none';
+    let resolvedSlots = null;
+    let source = 'none';
     
-    // If canonical is empty, try legacy sources
-    if (!resolvedSlots) {
-        for (const legacy of legacySources) {
-            const legacyValue = getNestedValue(company, legacy.path);
-            if (legacyValue && legacyValue.length > 0) {
-                resolvedSlots = legacyValue;
-                source = `${legacy.path} (legacy)`;
-                break;
-            }
+    // Try each source in priority order
+    for (const src of possibleSources) {
+        const value = getNestedValue(company, src.path);
+        if (value && Array.isArray(value) && value.length > 0) {
+            resolvedSlots = value;
+            source = src.path;
+            break;
         }
     }
     
@@ -244,7 +279,7 @@ function unifyBookingSlots(company, seedIfEmpty = false) {
     return {
         slots,
         slotsCount: slots.length,
-        slotNames: slots.map(s => s.key || s.name || 'unknown'),
+        slotNames: slots.map(s => s.key || s.name || s.id || 'unknown'),
         source,
         isEmpty: slots.length === 0
     };
@@ -277,16 +312,30 @@ function unifyBookingEnabled(company) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function unifyConversationStyle(company) {
-    // Canonical: frontDeskBehavior.personality.conversationStyle
-    const canonical = getNestedValue(company, 'frontDeskBehavior.personality.conversationStyle');
-    if (canonical) {
-        return { style: canonical, source: 'frontDeskBehavior.personality.conversationStyle' };
+    // CRITICAL: Check aiAgentSettings.frontDeskBehavior paths FIRST (where ControlPlane reads)
+    
+    // 1. aiAgentSettings.frontDeskBehavior.personality.conversationStyle
+    const aiAgentNested = getNestedValue(company, 'aiAgentSettings.frontDeskBehavior.personality.conversationStyle');
+    if (aiAgentNested) {
+        return { style: aiAgentNested, source: 'aiAgentSettings.frontDeskBehavior.personality.conversationStyle' };
     }
     
-    // Legacy: frontDeskBehavior.conversationStyle (root level)
-    const legacy = getNestedValue(company, 'frontDeskBehavior.conversationStyle');
-    if (legacy) {
-        return { style: legacy, source: 'frontDeskBehavior.conversationStyle (legacy)' };
+    // 2. aiAgentSettings.frontDeskBehavior.conversationStyle (flat)
+    const aiAgentFlat = getNestedValue(company, 'aiAgentSettings.frontDeskBehavior.conversationStyle');
+    if (aiAgentFlat) {
+        return { style: aiAgentFlat, source: 'aiAgentSettings.frontDeskBehavior.conversationStyle' };
+    }
+    
+    // 3. Root frontDeskBehavior.personality.conversationStyle
+    const rootNested = getNestedValue(company, 'frontDeskBehavior.personality.conversationStyle');
+    if (rootNested) {
+        return { style: rootNested, source: 'frontDeskBehavior.personality.conversationStyle' };
+    }
+    
+    // 4. Root frontDeskBehavior.conversationStyle (legacy)
+    const rootFlat = getNestedValue(company, 'frontDeskBehavior.conversationStyle');
+    if (rootFlat) {
+        return { style: rootFlat, source: 'frontDeskBehavior.conversationStyle (legacy)' };
     }
     
     // Default
@@ -363,12 +412,22 @@ function unifyConfig(company, responseDefaults = {}, options = {}) {
         
         // ═══════════════════════════════════════════════════════════════════
         // UNIFIED PERSONALITY
+        // CRITICAL: Check aiAgentSettings.frontDeskBehavior FIRST (where ControlPlane reads)
+        // then fall back to root frontDeskBehavior
         // ═══════════════════════════════════════════════════════════════════
         personality: {
-            enabled: getNestedValue(company, 'frontDeskBehavior.personality.enabled') ?? true,
-            professionalismLevel: getNestedValue(company, 'frontDeskBehavior.personality.professionalismLevel') ?? 7,
-            empathyLevel: getNestedValue(company, 'frontDeskBehavior.personality.empathyLevel') ?? 8,
-            urgencyDetection: getNestedValue(company, 'frontDeskBehavior.personality.urgencyDetection') ?? true,
+            enabled: getNestedValue(company, 'aiAgentSettings.frontDeskBehavior.personality.enabled') 
+                    ?? getNestedValue(company, 'frontDeskBehavior.personality.enabled') 
+                    ?? true,
+            professionalismLevel: getNestedValue(company, 'aiAgentSettings.frontDeskBehavior.personality.professionalismLevel') 
+                    ?? getNestedValue(company, 'frontDeskBehavior.personality.professionalismLevel') 
+                    ?? 7,
+            empathyLevel: getNestedValue(company, 'aiAgentSettings.frontDeskBehavior.personality.empathyLevel') 
+                    ?? getNestedValue(company, 'frontDeskBehavior.personality.empathyLevel') 
+                    ?? 8,
+            urgencyDetection: getNestedValue(company, 'aiAgentSettings.frontDeskBehavior.personality.urgencyDetection') 
+                    ?? getNestedValue(company, 'frontDeskBehavior.personality.urgencyDetection') 
+                    ?? true,
             conversationStyle: conversationStyle.style,
             conversationStyleSource: conversationStyle.source
         },

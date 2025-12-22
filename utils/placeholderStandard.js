@@ -36,7 +36,10 @@ const LEGACY_FORMATS = [
 
 /**
  * Alias mapping for common placeholders
- * Maps legacy/variant names to standard names
+ * Maps legacy/variant names to standard names (camelCase canonical)
+ * 
+ * CRITICAL: All variant spellings MUST map to camelCase canonical
+ * Runtime substitution uses this map for both keys and values
  */
 const PLACEHOLDER_ALIASES = {
     // Company name variants
@@ -45,6 +48,7 @@ const PLACEHOLDER_ALIASES = {
     'COMPANYNAME': 'companyName',
     'COMPANY_NAME': 'companyName',
     'company': 'companyName',
+    'CompanyName': 'companyName',
     
     // Company phone variants
     'companyphone': 'companyPhone',
@@ -52,11 +56,23 @@ const PLACEHOLDER_ALIASES = {
     'phone': 'companyPhone',
     'phonenumber': 'companyPhone',
     'phone_number': 'companyPhone',
+    'CompanyPhone': 'companyPhone',
+    'COMPANYPHONE': 'companyPhone',
+    
+    // Emergency phone variants (CRITICAL: must match {{emergencyPhone}} in replies)
+    'emergencyphone': 'emergencyPhone',
+    'emergency_phone': 'emergencyPhone',
+    'EmergencyPhone': 'emergencyPhone',
+    'EMERGENCYPHONE': 'emergencyPhone',
+    'emergency-phone': 'emergencyPhone',
+    'afterhoursphone': 'emergencyPhone',
+    'after_hours_phone': 'emergencyPhone',
     
     // Company address variants
     'companyaddress': 'companyAddress',
     'company_address': 'companyAddress',
     'address': 'companyAddress',
+    'CompanyAddress': 'companyAddress',
     
     // Caller name variants
     'callername': 'callerName',
@@ -64,33 +80,43 @@ const PLACEHOLDER_ALIASES = {
     'name': 'callerName',
     'customername': 'callerName',
     'customer_name': 'callerName',
+    'CallerName': 'callerName',
     
     // Service area variants
     'servicearea': 'serviceArea',
     'service_area': 'serviceArea',
+    'ServiceArea': 'serviceArea',
+    'SERVICEAREA': 'serviceArea',
     
     // Hours variants
     'businesshours': 'businessHours',
     'business_hours': 'businessHours',
     'hours': 'businessHours',
+    'BusinessHours': 'businessHours',
+    'BUSINESSHOURS': 'businessHours',
     
     // Website variants
     'website': 'companyWebsite',
     'url': 'companyWebsite',
     'companyurl': 'companyWebsite',
+    'companywebsite': 'companyWebsite',
+    'CompanyWebsite': 'companyWebsite',
     
     // Email variants
     'email': 'companyEmail',
     'companyemail': 'companyEmail',
+    'CompanyEmail': 'companyEmail',
     
     // Appointment variants
     'appointmentdate': 'appointmentDate',
     'appointment_date': 'appointmentDate',
     'date': 'appointmentDate',
+    'AppointmentDate': 'appointmentDate',
     
     'appointmenttime': 'appointmentTime',
     'appointment_time': 'appointmentTime',
-    'time': 'appointmentTime'
+    'time': 'appointmentTime',
+    'AppointmentTime': 'appointmentTime'
 };
 
 /**
@@ -270,21 +296,23 @@ function validatePlaceholders(text) {
 
 /**
  * Get list of all standard placeholders
+ * These are the CANONICAL keys that should be used in all templates and replies
  */
 function getStandardPlaceholders() {
     return [
-        { key: 'companyName', description: 'Company name', example: 'Penguin Air' },
-        { key: 'companyPhone', description: 'Company phone number', example: '555-123-4567' },
-        { key: 'companyAddress', description: 'Company address', example: '123 Main St, Phoenix, AZ' },
-        { key: 'companyEmail', description: 'Company email', example: 'info@company.com' },
-        { key: 'companyWebsite', description: 'Company website', example: 'www.company.com' },
-        { key: 'serviceArea', description: 'Service area/region', example: 'Phoenix metro area' },
-        { key: 'businessHours', description: 'Business hours', example: 'Mon-Fri 8am-5pm' },
-        { key: 'callerName', description: 'Caller name (from call)', example: 'John' },
-        { key: 'appointmentDate', description: 'Appointment date', example: 'Monday, Jan 15' },
-        { key: 'appointmentTime', description: 'Appointment time', example: '2:00 PM' },
-        { key: 'technicianName', description: 'Assigned technician', example: 'Mike' },
-        { key: 'estimatedArrival', description: 'ETA for service', example: '30-45 minutes' }
+        { key: 'companyName', description: 'Company name', example: 'Penguin Air', isCritical: true },
+        { key: 'companyPhone', description: 'Company phone number', example: '555-123-4567', isCritical: true },
+        { key: 'emergencyPhone', description: 'Emergency/after-hours phone', example: '555-999-8888', isCritical: false },
+        { key: 'companyAddress', description: 'Company address', example: '123 Main St, Phoenix, AZ', isCritical: false },
+        { key: 'companyEmail', description: 'Company email', example: 'info@company.com', isCritical: false },
+        { key: 'companyWebsite', description: 'Company website', example: 'www.company.com', isCritical: false },
+        { key: 'serviceArea', description: 'Service area/region', example: 'Phoenix metro area', isCritical: false },
+        { key: 'businessHours', description: 'Business hours', example: 'Mon-Fri 8am-5pm', isCritical: false },
+        { key: 'callerName', description: 'Caller name (from call)', example: 'John', isCritical: false },
+        { key: 'appointmentDate', description: 'Appointment date', example: 'Monday, Jan 15', isCritical: false },
+        { key: 'appointmentTime', description: 'Appointment time', example: '2:00 PM', isCritical: false },
+        { key: 'technicianName', description: 'Assigned technician', example: 'Mike', isCritical: false },
+        { key: 'estimatedArrival', description: 'ETA for service', example: '30-45 minutes', isCritical: false }
     ];
 }
 

@@ -45,13 +45,18 @@ const CANONICAL_PLACEHOLDERS = {
         isCritical: false
     },
     serviceArea: {
-        aliases: ['servicearea', 'service_area'],
+        aliases: ['servicearea', 'service_area', 'ServiceArea'],
         description: 'Service area/region',
         isCritical: false
     },
     businessHours: {
-        aliases: ['businesshours', 'business_hours', 'hours'],
+        aliases: ['businesshours', 'business_hours', 'hours', 'BusinessHours'],
         description: 'Business hours',
+        isCritical: false
+    },
+    emergencyPhone: {
+        aliases: ['emergencyphone', 'emergency_phone', 'emergencyPhone', 'EmergencyPhone', 'EMERGENCYPHONE'],
+        description: 'Emergency/after-hours phone number',
         isCritical: false
     }
 };
