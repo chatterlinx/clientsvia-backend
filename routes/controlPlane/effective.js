@@ -821,6 +821,280 @@ router.patch('/save', async (req, res) => {
 });
 
 /**
+ * ============================================================================
+ * GET /api/company/:companyId/control-plane/effective-greeting
+ * DEBUG ENDPOINT: Show EXACTLY what greeting runtime will speak
+ * ============================================================================
+ * 
+ * This endpoint reads directly from DB and shows:
+ * - Which path was resolved
+ * - The raw stored value
+ * - The rendered value (after placeholder substitution)
+ * 
+ * USE THIS TO DEBUG "greeting not sticking" issues.
+ */
+router.get('/effective-greeting', async (req, res) => {
+    const { companyId } = req.params;
+    const startTime = Date.now();
+    
+    try {
+        const company = await v2Company.findById(companyId).lean();
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                error: 'Company not found'
+            });
+        }
+        
+        // Get placeholders for rendering
+        const Placeholder = require('../../models/Placeholder');
+        const placeholders = await Placeholder.find({ companyId }).lean();
+        const placeholderMap = {};
+        placeholders.forEach(p => {
+            placeholderMap[p.key] = p.value;
+        });
+        placeholderMap.companyName = placeholderMap.companyName || company.companyName || 'Company';
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // READ ALL POSSIBLE GREETING LOCATIONS (SAME ORDER AS SNAPSHOT PROVIDER)
+        // ═══════════════════════════════════════════════════════════════════════════
+        const locations = {
+            'connectionMessages.voice.text': company.connectionMessages?.voice?.text || null,
+            'connectionMessages.voice.realtime.text': company.connectionMessages?.voice?.realtime?.text || null,
+            'frontDeskBehavior.greeting': company.frontDeskBehavior?.greeting || null,
+            'aiAgentSettings.frontDeskBehavior.greeting': company.aiAgentSettings?.frontDeskBehavior?.greeting || null,
+            'aiAgentSettings.greeting': company.aiAgentSettings?.greeting || null,
+            'callFlowEngine.style.greeting': company.callFlowEngine?.style?.greeting || null
+        };
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // RESOLVE GREETING (SAME LOGIC AS controlPlane.snapshot.js)
+        // CANONICAL: connectionMessages.voice.text wins
+        // ═══════════════════════════════════════════════════════════════════════════
+        let resolvedPath = null;
+        let rawValue = null;
+        let source = 'none';
+        
+        if (company.connectionMessages?.voice?.text?.trim().length > 0) {
+            resolvedPath = 'connectionMessages.voice.text';
+            rawValue = company.connectionMessages.voice.text.trim();
+            source = 'connectionMessages.voice (CANONICAL)';
+        } else if (company.connectionMessages?.voice?.realtime?.text?.trim().length > 0) {
+            resolvedPath = 'connectionMessages.voice.realtime.text';
+            rawValue = company.connectionMessages.voice.realtime.text.trim();
+            source = 'connectionMessages.voice.realtime (CANONICAL FALLBACK)';
+        } else if (company.frontDeskBehavior?.greeting?.trim?.().length > 0) {
+            resolvedPath = 'frontDeskBehavior.greeting';
+            rawValue = company.frontDeskBehavior.greeting.trim();
+            source = 'frontDeskBehavior (LEGACY)';
+        } else if (company.aiAgentSettings?.frontDeskBehavior?.greeting?.trim?.().length > 0) {
+            resolvedPath = 'aiAgentSettings.frontDeskBehavior.greeting';
+            rawValue = company.aiAgentSettings.frontDeskBehavior.greeting.trim();
+            source = 'aiAgentSettings.frontDeskBehavior (LEGACY)';
+        }
+        
+        // Render placeholders
+        const { substitutePlaceholders } = require('../../utils/placeholderStandard');
+        const renderedValue = rawValue ? substitutePlaceholders(rawValue, placeholderMap) : null;
+        
+        // Realtime values (separate check)
+        const rawRealtimeValue = company.connectionMessages?.voice?.realtime?.text || null;
+        const renderedRealtimeValue = rawRealtimeValue ? substitutePlaceholders(rawRealtimeValue, placeholderMap) : null;
+        
+        res.json({
+            success: true,
+            companyId,
+            companyName: company.companyName,
+            
+            // RESOLVED GREETING (what runtime uses)
+            source,
+            resolvedPath,
+            rawValue,
+            renderedValue,
+            
+            // Realtime (for TTS fallback)
+            isUsingRealtime: resolvedPath === 'connectionMessages.voice.realtime.text',
+            realtimePath: 'connectionMessages.voice.realtime.text',
+            rawRealtimeValue,
+            renderedRealtimeValue,
+            
+            // ALL LOCATIONS (for debugging)
+            allLocations: locations,
+            
+            // Placeholders used
+            placeholdersAvailable: Object.keys(placeholderMap),
+            
+            // Metadata
+            generatedAt: new Date().toISOString(),
+            generatedInMs: Date.now() - startTime,
+            
+            // DIAGNOSTIC
+            diagnostic: {
+                canonicalHasValue: !!company.connectionMessages?.voice?.text?.trim(),
+                legacyHasValue: !!company.frontDeskBehavior?.greeting?.trim?.(),
+                legacyOverrideRisk: !!company.frontDeskBehavior?.greeting?.trim?.() && !company.connectionMessages?.voice?.text?.trim(),
+                recommendation: !company.connectionMessages?.voice?.text?.trim() 
+                    ? 'SAVE GREETING to connectionMessages.voice.text to fix!' 
+                    : 'Canonical path is set correctly ✓'
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[EFFECTIVE-GREETING] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * ============================================================================
+ * PUT /api/company/:companyId/control-plane/greeting
+ * HARD SAVE: Write greeting to CANONICAL paths only, clear legacy
+ * ============================================================================
+ * 
+ * This endpoint:
+ * 1. Writes ONLY to canonical paths (connectionMessages.voice.text/realtime.text)
+ * 2. CLEARS all legacy paths (frontDeskBehavior.greeting, etc.)
+ * 3. Returns verification of what was written
+ * 
+ * USE THIS when greeting "isn't sticking" - it's a surgical fix.
+ */
+router.put('/greeting', async (req, res) => {
+    const { companyId } = req.params;
+    const { text, realtimeText } = req.body;
+    
+    if (!text) {
+        return res.status(400).json({
+            success: false,
+            error: 'text field is required'
+        });
+    }
+    
+    try {
+        const company = await v2Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                error: 'Company not found'
+            });
+        }
+        
+        const before = {
+            'connectionMessages.voice.text': company.connectionMessages?.voice?.text || null,
+            'connectionMessages.voice.realtime.text': company.connectionMessages?.voice?.realtime?.text || null,
+            'frontDeskBehavior.greeting': company.frontDeskBehavior?.greeting || null,
+            'aiAgentSettings.greeting': company.aiAgentSettings?.greeting || null
+        };
+        
+        // Migrate placeholders
+        const migratedText = migratePlaceholders(text);
+        const migratedRealtimeText = migratePlaceholders(realtimeText || text);
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 1. WRITE TO CANONICAL PATHS ONLY
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (!company.connectionMessages) company.connectionMessages = {};
+        if (!company.connectionMessages.voice) company.connectionMessages.voice = {};
+        if (!company.connectionMessages.voice.realtime) company.connectionMessages.voice.realtime = {};
+        
+        company.connectionMessages.voice.text = migratedText;
+        company.connectionMessages.voice.realtime.text = migratedRealtimeText;
+        
+        const writtenTo = [
+            'connectionMessages.voice.text',
+            'connectionMessages.voice.realtime.text'
+        ];
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 2. CLEAR ALL LEGACY PATHS (CRITICAL - prevents override)
+        // ═══════════════════════════════════════════════════════════════════════════
+        const clearedLegacy = [];
+        
+        if (company.frontDeskBehavior?.greeting) {
+            company.frontDeskBehavior.greeting = null;
+            clearedLegacy.push('frontDeskBehavior.greeting');
+        }
+        
+        if (company.aiAgentSettings?.greeting) {
+            company.aiAgentSettings.greeting = null;
+            clearedLegacy.push('aiAgentSettings.greeting');
+        }
+        
+        if (company.aiAgentSettings?.frontDeskBehavior?.greeting) {
+            company.aiAgentSettings.frontDeskBehavior.greeting = null;
+            clearedLegacy.push('aiAgentSettings.frontDeskBehavior.greeting');
+        }
+        
+        if (company.callFlowEngine?.style?.greeting) {
+            company.callFlowEngine.style.greeting = null;
+            clearedLegacy.push('callFlowEngine.style.greeting');
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 3. SAVE
+        // ═══════════════════════════════════════════════════════════════════════════
+        await company.save();
+        
+        // Clear Redis cache
+        const { redisClient } = require('../../db');
+        if (redisClient && redisClient.isOpen) {
+            await redisClient.del(`company:${companyId}`);
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 4. VERIFY (re-read)
+        // ═══════════════════════════════════════════════════════════════════════════
+        const verified = await v2Company.findById(companyId).lean();
+        
+        const after = {
+            'connectionMessages.voice.text': verified.connectionMessages?.voice?.text || null,
+            'connectionMessages.voice.realtime.text': verified.connectionMessages?.voice?.realtime?.text || null,
+            'frontDeskBehavior.greeting': verified.frontDeskBehavior?.greeting || null,
+            'aiAgentSettings.greeting': verified.aiAgentSettings?.greeting || null
+        };
+        
+        logger.info(`[GREETING HARD SAVE] Company ${companyId}: "${migratedText}"`);
+        
+        res.json({
+            success: true,
+            companyId,
+            
+            // What was requested
+            requested: { text, realtimeText },
+            
+            // What was written (after placeholder migration)
+            written: {
+                text: migratedText,
+                realtimeText: migratedRealtimeText,
+                placeholdersMigrated: text !== migratedText || (realtimeText && realtimeText !== migratedRealtimeText)
+            },
+            
+            // Paths written to
+            writtenTo,
+            
+            // Legacy paths cleared
+            clearedLegacy,
+            
+            // Before/After comparison
+            before,
+            after,
+            
+            // Verification
+            verified: after['connectionMessages.voice.text'] === migratedText
+        });
+        
+    } catch (error) {
+        logger.error('[GREETING HARD SAVE] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
  * POST /api/company/:companyId/control-plane/fix-conflict
  * Auto-fix known config conflicts
  */
