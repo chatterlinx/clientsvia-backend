@@ -40,31 +40,47 @@ const logger = require('../../utils/logger');
 
 /**
  * Middleware that allows access via EITHER:
- * 1. X-Snapshot-Key header matching SNAPSHOT_VERIFY_API_KEY
+ * 1. X-Snapshot-Key header matching SNAPSHOT_VERIFY_API_KEY (or _2 for rotation)
  * 2. Valid JWT token (existing admin auth)
  * 
  * This enables terminal-only verification without browser tokens.
+ * 
+ * KEY ROTATION: Supports two keys simultaneously for zero-downtime rotation:
+ * - SNAPSHOT_VERIFY_API_KEY (primary)
+ * - SNAPSHOT_VERIFY_API_KEY_2 (secondary, for rotation)
  */
 function requireSnapshotAuth(req, res, next) {
-    const snapshotApiKey = process.env.SNAPSHOT_VERIFY_API_KEY;
+    const crypto = require('crypto');
+    
+    // Support key rotation: check both primary and secondary keys
+    const validKeys = [
+        process.env.SNAPSHOT_VERIFY_API_KEY,
+        process.env.SNAPSHOT_VERIFY_API_KEY_2
+    ].filter(k => k && k.length >= 32); // Only valid keys (32+ chars)
     
     // Check for X-Snapshot-Key header first (terminal access)
     const providedKey = req.headers['x-snapshot-key'];
     
-    if (providedKey && snapshotApiKey) {
-        // Constant-time comparison to prevent timing attacks
-        if (providedKey.length === snapshotApiKey.length && 
-            require('crypto').timingSafeEqual(
-                Buffer.from(providedKey),
-                Buffer.from(snapshotApiKey)
-            )) {
-            // Valid API key - grant access
-            logger.info('[PLATFORM SNAPSHOT AUTH] Access granted via X-Snapshot-Key', {
-                companyId: req.params.companyId,
-                ip: req.ip
-            });
-            req.snapshotKeyAuth = true;
-            return next();
+    if (providedKey && validKeys.length > 0) {
+        // Check against all valid keys (constant-time comparison)
+        for (const validKey of validKeys) {
+            if (providedKey.length === validKey.length) {
+                try {
+                    if (crypto.timingSafeEqual(Buffer.from(providedKey), Buffer.from(validKey))) {
+                        // Valid API key - grant access
+                        logger.info('[PLATFORM SNAPSHOT AUTH] Access granted via X-Snapshot-Key', {
+                            companyId: req.params.companyId,
+                            ip: req.ip,
+                            keyIndex: validKeys.indexOf(validKey) + 1
+                        });
+                        req.snapshotKeyAuth = true;
+                        return next();
+                    }
+                } catch (e) {
+                    // timingSafeEqual can throw if buffers differ in length unexpectedly
+                    continue;
+                }
+            }
         }
     }
     
