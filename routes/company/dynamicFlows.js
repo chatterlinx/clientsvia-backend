@@ -140,22 +140,58 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================================================
-// LIST GLOBAL TEMPLATES
+// LIST GLOBAL TEMPLATES (WITH VALIDATION STATUS)
 // ============================================================================
 // GET /api/company/:companyId/dynamic-flows/templates
+//
+// Returns templates with validation status so UI can:
+// - Show "INVALID TEMPLATE" badge (red) if triggers.length === 0
+// - Show "INCOMPLETE" badge (yellow) if actions < required
+// - Disable "Copy to Company" for invalid templates
 
 router.get('/templates', async (req, res) => {
     try {
-        const { tradeType } = req.query;
+        const { tradeType, tradeCategoryId } = req.query;
         
-        logger.info('[DYNAMIC FLOWS API] Templates request', { tradeType });
+        logger.info('[DYNAMIC FLOWS API] Templates request', { tradeType, tradeCategoryId });
         
-        const templates = await DynamicFlow.getTemplates(tradeType);
+        let templates;
+        if (tradeCategoryId) {
+            templates = await DynamicFlow.getTemplatesByTradeCategory(tradeCategoryId);
+        } else {
+            templates = await DynamicFlow.getTemplates(tradeType);
+        }
+        
+        // Add validation status to each template
+        const templatesWithValidation = templates.map(t => {
+            const validation = validateDynamicFlow(t);
+            return {
+                ...t,
+                _validation: {
+                    valid: validation.valid,
+                    errors: validation.errors,
+                    warnings: validation.warnings,
+                    triggerCount: validation.triggerCount,
+                    actionCount: validation.actionCount,
+                    canCopy: validation.valid, // ← UI should check this
+                    status: validation.valid 
+                        ? (validation.warnings.length > 0 ? 'INCOMPLETE' : 'VALID')
+                        : 'INVALID'
+                }
+            };
+        });
+        
+        const validCount = templatesWithValidation.filter(t => t._validation.valid).length;
+        const invalidCount = templatesWithValidation.filter(t => !t._validation.valid).length;
         
         res.json({
             success: true,
-            templates,
-            total: templates.length
+            templates: templatesWithValidation,
+            total: templates.length,
+            summary: {
+                valid: validCount,
+                invalid: invalidCount
+            }
         });
         
     } catch (error) {
@@ -506,6 +542,27 @@ router.post('/from-template', async (req, res) => {
             return res.status(404).json({
                 success: false,
                 error: 'Template not found'
+            });
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // BLOCK COPYING INVALID TEMPLATES
+        // A template with 0 triggers should NEVER be copied
+        // ═══════════════════════════════════════════════════════════════════
+        const templateValidation = validateDynamicFlow(template);
+        if (!templateValidation.valid) {
+            logger.warn('[DYNAMIC FLOWS API] Blocked copy of invalid template', {
+                templateId,
+                flowKey: template.flowKey,
+                errors: templateValidation.errors
+            });
+            return res.status(400).json({
+                success: false,
+                error: 'Cannot copy invalid template. Template must be fixed first.',
+                templateFlowKey: template.flowKey,
+                validationErrors: templateValidation.errors,
+                triggerCount: templateValidation.triggerCount,
+                actionCount: templateValidation.actionCount
             });
         }
         
