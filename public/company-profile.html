@@ -3328,7 +3328,10 @@
         // CONFIG JSON - Load Data
         // ═══════════════════════════════════════════════════════════════════════════
         async function loadConfigJsonData() {
-            const companyId = getCompanyId();
+            // Get companyId from multiple sources (same pattern as other functions)
+            const companyId = window.currentCompanyId || window.companyId || 
+                              new URLSearchParams(window.location.search).get('id') ||
+                              localStorage.getItem('currentCompanyId');
             if (!companyId) {
                 console.error('[CONFIG JSON] No companyId');
                 return;
