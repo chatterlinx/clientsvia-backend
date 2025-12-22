@@ -664,10 +664,11 @@ router.post('/seed-booking-slots', async (req, res) => {
 /**
  * PATCH /api/company/:companyId/control-plane/save
  * Save control plane config with auto-placeholder migration
+ * Writes to MULTIPLE paths for consistency
  */
 router.patch('/save', async (req, res) => {
     const { companyId } = req.params;
-    const { greeting, fallbacks } = req.body;
+    const { greeting, fallbacks, mirrorToRealtime } = req.body;
     
     try {
         const company = await v2Company.findById(companyId);
@@ -679,21 +680,41 @@ router.patch('/save', async (req, res) => {
         }
         
         const changes = [];
+        const writtenTo = []; // Track all paths written
         
         // Update greeting with placeholder migration
+        // WRITES TO MULTIPLE PATHS for consistency
         if (greeting !== undefined) {
             const migratedGreeting = migratePlaceholders(greeting);
             
+            // PRIMARY: connectionMessages.voice.text
             if (!company.connectionMessages) company.connectionMessages = {};
             if (!company.connectionMessages.voice) company.connectionMessages.voice = {};
             company.connectionMessages.voice.text = migratedGreeting;
+            writtenTo.push('connectionMessages.voice.text');
+            
+            // SECONDARY: connectionMessages.voice.realtime.text (for realtime API)
+            if (mirrorToRealtime !== false) {
+                if (!company.connectionMessages.voice.realtime) {
+                    company.connectionMessages.voice.realtime = {};
+                }
+                company.connectionMessages.voice.realtime.text = migratedGreeting;
+                writtenTo.push('connectionMessages.voice.realtime.text');
+            }
+            
+            // OPTIONAL: Mirror to callFlowEngine.style.greeting if it exists
+            if (company.callFlowEngine?.style) {
+                company.callFlowEngine.style.greeting = migratedGreeting;
+                writtenTo.push('callFlowEngine.style.greeting');
+            }
             
             changes.push({
                 field: 'greeting',
                 canonicalKey: 'connectionMessages.voice.text',
                 original: greeting,
                 migrated: migratedGreeting,
-                wasMigrated: greeting !== migratedGreeting
+                wasMigrated: greeting !== migratedGreeting,
+                writtenTo
             });
         }
         
@@ -749,10 +770,11 @@ router.patch('/save', async (req, res) => {
             await redisClient.del(`company:${companyId}`);
         }
         
-        logger.info(`[CONTROL PLANE SAVE] Saved ${changes.length} fields for company ${companyId}`);
+        logger.info(`[CONTROL PLANE SAVE] Saved ${changes.length} fields for company ${companyId}, paths: ${writtenTo.join(', ')}`);
         
         res.json({
             success: true,
+            writtenTo, // All paths that were written to
             data: {
                 changesApplied: changes.length,
                 changes,
@@ -762,6 +784,118 @@ router.patch('/save', async (req, res) => {
         
     } catch (error) {
         logger.error('[CONTROL PLANE SAVE] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/company/:companyId/control-plane/fix-conflict
+ * Auto-fix known config conflicts
+ */
+router.post('/fix-conflict', async (req, res) => {
+    const { companyId } = req.params;
+    const { conflictCode, fixAction } = req.body;
+    
+    try {
+        const company = await v2Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                error: 'Company not found'
+            });
+        }
+        
+        const fixes = [];
+        
+        switch (conflictCode) {
+            case 'BOOKING_ENGINE_CONFLICT':
+                // Fix: Use frontDeskBehavior.bookingSlots as canonical, ignore callFlowEngine
+                if (fixAction === 'fix_booking_conflict') {
+                    // If frontDeskBehavior.bookingSlots is empty but callFlowEngine.bookingFields exists,
+                    // migrate the fields
+                    const callFlowFields = company.callFlowEngine?.bookingFields || [];
+                    const fdSlots = company.aiAgentSettings?.frontDeskBehavior?.bookingSlots || 
+                                   company.frontDeskBehavior?.bookingSlots || [];
+                    
+                    if (fdSlots.length === 0 && callFlowFields.length > 0) {
+                        // Migrate from callFlowEngine to frontDeskBehavior
+                        const migratedSlots = callFlowFields.map(f => ({
+                            key: f.name || f.key || f,
+                            label: f.label || f.name || f,
+                            required: f.required !== false,
+                            type: 'text'
+                        }));
+                        
+                        if (!company.frontDeskBehavior) company.frontDeskBehavior = {};
+                        company.frontDeskBehavior.bookingSlots = migratedSlots;
+                        
+                        // Also update aiAgentSettings for consistency
+                        if (!company.aiAgentSettings) company.aiAgentSettings = {};
+                        if (!company.aiAgentSettings.frontDeskBehavior) company.aiAgentSettings.frontDeskBehavior = {};
+                        company.aiAgentSettings.frontDeskBehavior.bookingSlots = migratedSlots;
+                        
+                        fixes.push(`Migrated ${migratedSlots.length} booking fields to frontDeskBehavior.bookingSlots`);
+                    }
+                    
+                    // Mark callFlowEngine as deprecated source
+                    if (!company._meta) company._meta = {};
+                    company._meta.bookingEngineMode = 'SLOTS';
+                    company._meta.bookingConflictResolved = new Date().toISOString();
+                    
+                    fixes.push('Set booking engine mode to SLOTS');
+                }
+                break;
+                
+            case 'SCENARIOS_BLOCKED':
+                // Fix: Enable scenario auto-responses
+                if (fixAction === 'fix_consent_blocking') {
+                    if (!company.aiAgentSettings) company.aiAgentSettings = {};
+                    if (!company.aiAgentSettings.discoveryConsent) company.aiAgentSettings.discoveryConsent = {};
+                    
+                    company.aiAgentSettings.discoveryConsent.disableScenarioAutoResponses = false;
+                    company.aiAgentSettings.discoveryConsent.forceLLMDiscovery = false;
+                    
+                    fixes.push('Enabled scenario auto-responses');
+                    fixes.push('Disabled forceLLMDiscovery');
+                }
+                break;
+                
+            default:
+                return res.status(400).json({
+                    success: false,
+                    error: `Unknown conflict code: ${conflictCode}`
+                });
+        }
+        
+        if (fixes.length === 0) {
+            return res.json({
+                success: true,
+                message: 'No fixes needed',
+                fixes: []
+            });
+        }
+        
+        await company.save();
+        
+        // Clear Redis cache
+        const { redisClient } = require('../../db');
+        if (redisClient && redisClient.isOpen) {
+            await redisClient.del(`company:${companyId}`);
+        }
+        
+        logger.info(`[CONTROL PLANE FIX] Fixed ${conflictCode} for company ${companyId}: ${fixes.join(', ')}`);
+        
+        res.json({
+            success: true,
+            message: `Fixed ${conflictCode}`,
+            fixes
+        });
+        
+    } catch (error) {
+        logger.error('[CONTROL PLANE FIX] Error:', error);
         res.status(500).json({
             success: false,
             error: error.message

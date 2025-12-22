@@ -1924,7 +1924,7 @@
                 <div id="config-tab-lint" class="config-tab-content" style="padding: 20px; display: none;">
                     
                     <!-- ═══════════════════════════════════════════════════════════════════ -->
-                    <!-- GREETING OPTIMIZER WIDGET -->
+                    <!-- GREETING OPTIMIZER WIDGET (WIRED TO REAL PATHS) -->
                     <!-- ═══════════════════════════════════════════════════════════════════ -->
                     <div id="greeting-optimizer-panel" style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #334155;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -1938,7 +1938,26 @@
                             <div id="greeting-status-badge" style="padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: #065f46; color: #10b981;">OK</div>
                         </div>
                         
-                        <!-- Current Greeting Stats -->
+                        <!-- EFFECTIVE GREETING (What Runtime Actually Uses) -->
+                        <div style="margin-bottom: 12px; padding: 10px; background: #0f172a; border-radius: 8px; border-left: 3px solid #14b8a6;">
+                            <div style="font-size: 10px; color: #14b8a6; font-weight: 600; margin-bottom: 4px;">EFFECTIVE GREETING (what runtime uses):</div>
+                            <div id="greeting-effective-text" style="font-size: 13px; color: #e2e8f0; font-style: italic;">"Loading..."</div>
+                            <div id="greeting-effective-source" style="font-size: 10px; color: #64748b; margin-top: 4px;">Source: --</div>
+                        </div>
+                        
+                        <!-- WRITE TARGETS (Where saves go) -->
+                        <div style="margin-bottom: 12px; padding: 10px; background: #0f172a; border-radius: 8px;">
+                            <div style="font-size: 10px; color: #f59e0b; font-weight: 600; margin-bottom: 6px;">📝 WRITE TARGETS (where saves go):</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                <span style="font-size: 10px; padding: 2px 8px; background: #334155; border-radius: 4px; color: #e2e8f0; font-family: monospace;">connectionMessages.voice.text</span>
+                                <span style="font-size: 10px; padding: 2px 8px; background: #334155; border-radius: 4px; color: #e2e8f0; font-family: monospace;">connectionMessages.voice.realtime.text</span>
+                            </div>
+                            <div id="greeting-mirror-targets" style="margin-top: 6px; font-size: 10px; color: #64748b; display: none;">
+                                Also mirrored to: <span id="greeting-mirror-list"></span>
+                            </div>
+                        </div>
+                        
+                        <!-- Stats Row -->
                         <div style="display: flex; gap: 16px; margin-bottom: 12px; padding: 10px; background: #0f172a; border-radius: 8px;">
                             <div style="text-align: center;">
                                 <div id="greeting-word-count" style="font-size: 24px; font-weight: 700; color: #14b8a6;">--</div>
@@ -1953,20 +1972,40 @@
                             </div>
                         </div>
                         
-                        <!-- One-Click Presets -->
-                        <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">⚡ One-click presets:</div>
+                        <!-- PENDING CHANGE INDICATOR (shows when preset clicked but not saved) -->
+                        <div id="greeting-pending-panel" style="display: none; margin-bottom: 12px; padding: 10px; background: #422006; border-radius: 8px; border: 1px solid #f59e0b;">
+                            <div style="font-size: 10px; color: #fbbf24; font-weight: 600; margin-bottom: 4px;">⚠️ PENDING CHANGE (not saved yet):</div>
+                            <div id="greeting-pending-text" style="font-size: 13px; color: #fef3c7; font-style: italic;">"..."</div>
+                            <div style="margin-top: 8px; display: flex; gap: 8px;">
+                                <button onclick="saveGreetingNow()" 
+                                        style="padding: 6px 12px; font-size: 11px; background: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                    ✓ Save Greeting
+                                </button>
+                                <button onclick="cancelGreetingPending()" 
+                                        style="padding: 6px 12px; font-size: 11px; background: #475569; color: #e2e8f0; border: none; border-radius: 6px; cursor: pointer;">
+                                    ✕ Cancel
+                                </button>
+                                <button onclick="testResolveGreeting()" 
+                                        style="padding: 6px 12px; font-size: 11px; background: #1e40af; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                    🔍 Test Resolve
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- One-Click Presets (preview only, no auto-save) -->
+                        <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">⚡ Click to preview (then Save):</div>
                         <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                            <button onclick="applyGreetingPreset('Thanks for calling {{companyName}} — how can I help?')" 
+                            <button onclick="previewGreetingPreset('Thanks for calling {{companyName}} — how can I help?')" 
                                     style="padding: 8px 12px; font-size: 11px; background: #334155; color: #e2e8f0; border: 1px solid #475569; border-radius: 6px; cursor: pointer; transition: all 0.15s;"
                                     onmouseover="this.style.background='#475569'" onmouseout="this.style.background='#334155'">
                                 Thanks for calling {{companyName}} — how can I help?
                             </button>
-                            <button onclick="applyGreetingPreset('{{companyName}} — how can I help?')" 
+                            <button onclick="previewGreetingPreset('{{companyName}} — how can I help?')" 
                                     style="padding: 8px 12px; font-size: 11px; background: #334155; color: #e2e8f0; border: 1px solid #475569; border-radius: 6px; cursor: pointer; transition: all 0.15s;"
                                     onmouseover="this.style.background='#475569'" onmouseout="this.style.background='#334155'">
                                 {{companyName}} — how can I help?
                             </button>
-                            <button onclick="applyGreetingPreset('Hi — {{companyName}}. How can I help?')" 
+                            <button onclick="previewGreetingPreset('Hi — {{companyName}}. How can I help?')" 
                                     style="padding: 8px 12px; font-size: 11px; background: #334155; color: #e2e8f0; border: 1px solid #475569; border-radius: 6px; cursor: pointer; transition: all 0.15s;"
                                     onmouseover="this.style.background='#475569'" onmouseout="this.style.background='#334155'">
                                 Hi — {{companyName}}. How can I help?
@@ -1975,7 +2014,7 @@
                     </div>
                     
                     <!-- ═══════════════════════════════════════════════════════════════════ -->
-                    <!-- QUICKANSWERS DEDUPER -->
+                    <!-- QUICKANSWERS DEDUPER (WITH ACTIONS) -->
                     <!-- ═══════════════════════════════════════════════════════════════════ -->
                     <div id="quickanswers-deduper-panel" style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, #422006 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #78350f; display: none;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -1986,20 +2025,27 @@
                                     <div style="font-size: 11px; color: #fcd34d;">Same triggers → inconsistent responses</div>
                                 </div>
                             </div>
-                            <div id="qa-duplicates-count" style="padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: #78350f; color: #fbbf24;">0</div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <button onclick="restoreDisabledQuickAnswers()" 
+                                        style="padding: 4px 8px; font-size: 10px; background: transparent; color: #fcd34d; border: 1px solid #78350f; border-radius: 4px; cursor: pointer;"
+                                        title="Restore previously disabled duplicates">
+                                    ↩ Restore Disabled
+                                </button>
+                                <div id="qa-duplicates-count" style="padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: #78350f; color: #fbbf24;">0</div>
+                            </div>
                         </div>
                         
                         <!-- Duplicates List -->
-                        <div id="qa-duplicates-list" style="display: flex; flex-direction: column; gap: 8px;">
-                            <!-- Populated by JS -->
+                        <div id="qa-duplicates-list" style="display: flex; flex-direction: column; gap: 12px;">
+                            <!-- Populated by JS with action buttons -->
                         </div>
                     </div>
                     
                     <!-- ═══════════════════════════════════════════════════════════════════ -->
-                    <!-- CONFIG HEALTH STATUS -->
+                    <!-- CONFIG HEALTH STATUS (WITH CONFLICT DETAILS) -->
                     <!-- ═══════════════════════════════════════════════════════════════════ -->
                     <div id="config-health-panel" style="margin-bottom: 20px; padding: 16px; background: #0f172a; border-radius: 12px; border: 1px solid #334155; display: none;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                             <div style="display: flex; align-items: center; gap: 10px;">
                                 <span id="config-health-icon" style="font-size: 20px;">⚡</span>
                                 <div>
@@ -2008,6 +2054,16 @@
                                 </div>
                             </div>
                             <div id="config-health-badge" style="padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: #065f46; color: #10b981;">OK</div>
+                        </div>
+                        
+                        <!-- CONFLICT DETAILS (populated by JS) -->
+                        <div id="config-conflict-details" style="display: none; margin-top: 12px;">
+                            <!-- Each conflict will be rendered here -->
+                        </div>
+                        
+                        <!-- WARNINGS DETAILS -->
+                        <div id="config-warning-details" style="display: none; margin-top: 12px;">
+                            <!-- Each warning will be rendered here -->
                         </div>
                     </div>
                     
@@ -3654,17 +3710,43 @@
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // GREETING OPTIMIZER - Update Stats
+        // GREETING OPTIMIZER - State
+        // ═══════════════════════════════════════════════════════════════════════════
+        let pendingGreeting = null; // Stores pending greeting text before save
+        let currentEffectiveGreeting = null; // What runtime actually uses
+        let currentGreetingSource = null; // Where it came from
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // GREETING OPTIMIZER - Update Stats (WIRED TO REAL PATHS)
         // ═══════════════════════════════════════════════════════════════════════════
         function updateGreetingOptimizer(config) {
             const greeting = config.greeting?.standardized || config.greeting?.raw || '';
+            const source = config.greeting?.source || config._meta?.greetingSource || 'unknown';
+            
+            // Store for later use
+            currentEffectiveGreeting = greeting;
+            currentGreetingSource = source;
+            
             const words = greeting.split(/\s+/).filter(w => w.length > 0).length;
             const ttsSeconds = (words / 2.5).toFixed(1); // ~2.5 words per second
+            
+            // Update EFFECTIVE GREETING display
+            document.getElementById('greeting-effective-text').textContent = greeting ? `"${greeting}"` : '(No greeting configured)';
+            document.getElementById('greeting-effective-source').textContent = `Source: ${source}`;
             
             // Update stats
             document.getElementById('greeting-word-count').textContent = words;
             document.getElementById('greeting-tts-seconds').textContent = ttsSeconds;
             document.getElementById('greeting-preview').textContent = greeting || '(No greeting configured)';
+            
+            // Check if callFlowEngine.style.greeting exists (for mirroring info)
+            const callFlowGreeting = config._rawPaths?.['callFlowEngine.style.greeting'];
+            if (callFlowGreeting) {
+                document.getElementById('greeting-mirror-targets').style.display = 'block';
+                document.getElementById('greeting-mirror-list').textContent = 'callFlowEngine.style.greeting';
+            } else {
+                document.getElementById('greeting-mirror-targets').style.display = 'none';
+            }
             
             // Update status badge
             const badge = document.getElementById('greeting-status-badge');
@@ -3690,12 +3772,38 @@
                 wordCountEl.style.color = '#ef4444';
                 ttsEl.style.color = '#ef4444';
             }
+            
+            // Clear pending panel if no pending change
+            if (!pendingGreeting) {
+                document.getElementById('greeting-pending-panel').style.display = 'none';
+            }
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // GREETING OPTIMIZER - Apply Preset
+        // GREETING OPTIMIZER - Preview Preset (NO AUTO-SAVE)
         // ═══════════════════════════════════════════════════════════════════════════
-        async function applyGreetingPreset(greetingText) {
+        function previewGreetingPreset(greetingText) {
+            pendingGreeting = greetingText;
+            
+            // Show pending panel
+            const pendingPanel = document.getElementById('greeting-pending-panel');
+            const pendingText = document.getElementById('greeting-pending-text');
+            
+            pendingPanel.style.display = 'block';
+            pendingText.textContent = `"${greetingText}"`;
+            
+            showConfigCopyToast(true, '📝 Preview', 'Click "Save Greeting" to apply');
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // GREETING OPTIMIZER - Save Greeting Now
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function saveGreetingNow() {
+            if (!pendingGreeting) {
+                showConfigCopyToast(false, '⚠️ Nothing to save', 'Select a preset first');
+                return;
+            }
+            
             const companyId = window.currentCompanyId || window.companyId || 
                               new URLSearchParams(window.location.search).get('id') ||
                               localStorage.getItem('currentCompanyId');
@@ -3707,7 +3815,7 @@
             const authToken = localStorage.getItem('adminToken') || localStorage.getItem('token');
             
             try {
-                // Save greeting via Control Plane endpoint
+                // Save greeting via Control Plane endpoint (writes to MULTIPLE paths)
                 const response = await fetch(`/api/company/${companyId}/control-plane/save`, {
                     method: 'PATCH',
                     headers: {
@@ -3715,12 +3823,21 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        greeting: greetingText
+                        greeting: pendingGreeting,
+                        mirrorToRealtime: true // Also write to realtime path
                     })
                 });
                 
                 if (response.ok) {
-                    showConfigCopyToast(true, '✅ Greeting Updated!', greetingText.substring(0, 50) + '...');
+                    const result = await response.json();
+                    const writtenPaths = result.writtenTo || ['connectionMessages.voice.text'];
+                    
+                    showConfigCopyToast(true, '✅ Greeting Saved!', `Written to: ${writtenPaths.join(', ')}`);
+                    
+                    // Clear pending state
+                    pendingGreeting = null;
+                    document.getElementById('greeting-pending-panel').style.display = 'none';
+                    
                     // Refresh to show new lint results
                     await refreshConfigJson();
                 } else {
@@ -3728,20 +3845,79 @@
                     showConfigCopyToast(false, '❌ Save Failed', err.error || 'Unknown error');
                 }
             } catch (err) {
-                console.error('[GREETING] Apply preset failed:', err);
+                console.error('[GREETING] Save failed:', err);
                 showConfigCopyToast(false, '❌ Error', err.message);
             }
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // QUICKANSWERS DEDUPER - Show Duplicates
+        // GREETING OPTIMIZER - Cancel Pending
         // ═══════════════════════════════════════════════════════════════════════════
+        function cancelGreetingPending() {
+            pendingGreeting = null;
+            document.getElementById('greeting-pending-panel').style.display = 'none';
+            showConfigCopyToast(true, '↩ Cancelled', 'Pending change discarded');
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // GREETING OPTIMIZER - Test Resolve (Verify what runtime will use)
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function testResolveGreeting() {
+            const companyId = window.currentCompanyId || window.companyId || 
+                              new URLSearchParams(window.location.search).get('id') ||
+                              localStorage.getItem('currentCompanyId');
+            if (!companyId) {
+                showConfigCopyToast(false, '❌ Error', 'No company ID found');
+                return;
+            }
+            
+            const authToken = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            
+            try {
+                // Fetch fresh effective config
+                const response = await fetch(`/api/company/${companyId}/control-plane/effective`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const effectiveGreeting = data.data?.effectiveConfig?.greeting?.standardized || 
+                                              data.data?.effectiveConfig?.greeting?.raw || '';
+                    const source = data.data?.effectiveConfig?.greeting?.source || 'unknown';
+                    
+                    if (pendingGreeting && effectiveGreeting === pendingGreeting) {
+                        showConfigCopyToast(true, '✅ Verified!', `Effective greeting = "${effectiveGreeting.substring(0, 40)}..." from ${source}`);
+                    } else if (effectiveGreeting) {
+                        showConfigCopyToast(true, '🔍 Current Effective', `"${effectiveGreeting.substring(0, 40)}..." from ${source}`);
+                    } else {
+                        showConfigCopyToast(false, '⚠️ No greeting', 'Effective greeting is empty');
+                    }
+                } else {
+                    showConfigCopyToast(false, '❌ Resolve Failed', 'Could not fetch effective config');
+                }
+            } catch (err) {
+                console.error('[GREETING] Test resolve failed:', err);
+                showConfigCopyToast(false, '❌ Error', err.message);
+            }
+        }
+        
+        // Legacy function - now just calls preview
+        async function applyGreetingPreset(greetingText) {
+            previewGreetingPreset(greetingText);
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // QUICKANSWERS DEDUPER - Show Duplicates (WITH ACTIONS)
+        // ═══════════════════════════════════════════════════════════════════════════
+        let currentQuickAnswerDuplicates = []; // Store for action handlers
+        
         function updateQuickAnswersDeduper(config) {
             const panel = document.getElementById('quickanswers-deduper-panel');
             const listEl = document.getElementById('qa-duplicates-list');
             const countBadge = document.getElementById('qa-duplicates-count');
             
             const duplicates = config.quickAnswers?.duplicates || [];
+            currentQuickAnswerDuplicates = duplicates; // Store for actions
             
             if (duplicates.length === 0) {
                 panel.style.display = 'none';
@@ -3756,36 +3932,198 @@
                     <div style="font-size: 11px; color: #fbbf24; margin-bottom: 8px;">
                         <strong>Triggers:</strong> ${(dup.triggers || []).join(', ')}
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
                         <div style="padding: 8px; background: #1e293b; border-radius: 6px;">
-                            <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px;">First QA:</div>
+                            <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px;">First QA (ID: ${dup.firstId || 'N/A'}):</div>
                             <div style="font-size: 12px; color: #e2e8f0;">"${dup.firstAnswer || 'N/A'}"</div>
+                            <div style="font-size: 9px; color: #64748b; margin-top: 4px;">Priority: ${dup.firstPriority || 'default'} • Created: ${dup.firstCreated || 'N/A'}</div>
                         </div>
                         <div style="padding: 8px; background: #1e293b; border-radius: 6px;">
-                            <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px;">Duplicate QA:</div>
+                            <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px;">Duplicate QA (ID: ${dup.duplicateId || 'N/A'}):</div>
                             <div style="font-size: 12px; color: #e2e8f0;">"${dup.duplicateAnswer || 'N/A'}"</div>
+                            <div style="font-size: 9px; color: #64748b; margin-top: 4px;">Priority: ${dup.duplicatePriority || 'default'} • Created: ${dup.duplicateCreated || 'N/A'}</div>
                         </div>
                     </div>
-                    <div style="margin-top: 8px; font-size: 11px; color: #fcd34d;">
-                        💡 ${dup.recommendation || 'Keep one, disable the other'}
+                    
+                    <!-- ACTION BUTTONS -->
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px; padding-top: 8px; border-top: 1px solid #78350f;">
+                        <button onclick="dedupeAction(${i}, 'keep_newest')" 
+                                style="padding: 6px 10px; font-size: 10px; background: #059669; color: white; border: none; border-radius: 4px; cursor: pointer;"
+                                title="Keep the newest QA, disable the older one">
+                            ✓ Keep Newest
+                        </button>
+                        <button onclick="dedupeAction(${i}, 'keep_highest_priority')" 
+                                style="padding: 6px 10px; font-size: 10px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer;"
+                                title="Keep the QA with highest priority, disable others">
+                            ↑ Keep Highest Priority
+                        </button>
+                        <button onclick="dedupeAction(${i}, 'merge_triggers')" 
+                                style="padding: 6px 10px; font-size: 10px; background: #7c3aed; color: white; border: none; border-radius: 4px; cursor: pointer;"
+                                title="Merge all triggers into one QA and pick the answer">
+                            ⊕ Merge Triggers
+                        </button>
+                        <button onclick="dedupeAction(${i}, 'keep_first')" 
+                                style="padding: 6px 10px; font-size: 10px; background: #475569; color: #e2e8f0; border: none; border-radius: 4px; cursor: pointer;"
+                                title="Keep first, disable duplicate">
+                            Keep First
+                        </button>
+                        <button onclick="dedupeAction(${i}, 'keep_duplicate')" 
+                                style="padding: 6px 10px; font-size: 10px; background: #475569; color: #e2e8f0; border: none; border-radius: 4px; cursor: pointer;"
+                                title="Keep duplicate, disable first">
+                            Keep Duplicate
+                        </button>
                     </div>
                 </div>
             `).join('');
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // CONFIG HEALTH - Show Status
+        // QUICKANSWERS DEDUPER - Execute Action
         // ═══════════════════════════════════════════════════════════════════════════
+        async function dedupeAction(dupIndex, action) {
+            const dup = currentQuickAnswerDuplicates[dupIndex];
+            if (!dup) {
+                showConfigCopyToast(false, '❌ Error', 'Duplicate not found');
+                return;
+            }
+            
+            const companyId = window.currentCompanyId || window.companyId || 
+                              new URLSearchParams(window.location.search).get('id') ||
+                              localStorage.getItem('currentCompanyId');
+            if (!companyId) {
+                showConfigCopyToast(false, '❌ Error', 'No company ID found');
+                return;
+            }
+            
+            const authToken = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            
+            try {
+                const response = await fetch(`/api/company/${companyId}/quickanswers/dedupe`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action,
+                        firstId: dup.firstId,
+                        duplicateId: dup.duplicateId,
+                        triggers: dup.triggers,
+                        reason: 'duplicate_deduper',
+                        timestamp: new Date().toISOString()
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showConfigCopyToast(true, '✅ Dedupe Applied!', result.message || `Action: ${action}`);
+                    // Refresh to show updated state
+                    await refreshConfigJson();
+                } else {
+                    const err = await response.json();
+                    showConfigCopyToast(false, '❌ Dedupe Failed', err.error || 'Unknown error');
+                }
+            } catch (err) {
+                console.error('[DEDUPER] Action failed:', err);
+                showConfigCopyToast(false, '❌ Error', err.message);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // QUICKANSWERS DEDUPER - Restore Disabled
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function restoreDisabledQuickAnswers() {
+            const companyId = window.currentCompanyId || window.companyId || 
+                              new URLSearchParams(window.location.search).get('id') ||
+                              localStorage.getItem('currentCompanyId');
+            if (!companyId) {
+                showConfigCopyToast(false, '❌ Error', 'No company ID found');
+                return;
+            }
+            
+            const authToken = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            
+            try {
+                const response = await fetch(`/api/company/${companyId}/quickanswers/restore-disabled`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        reason: 'duplicate_deduper' // Only restore those disabled by deduper
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showConfigCopyToast(true, '↩ Restored!', result.message || 'Disabled QAs restored');
+                    await refreshConfigJson();
+                } else {
+                    const err = await response.json();
+                    showConfigCopyToast(false, '❌ Restore Failed', err.error || 'Unknown error');
+                }
+            } catch (err) {
+                console.error('[DEDUPER] Restore failed:', err);
+                showConfigCopyToast(false, '❌ Error', err.message);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CONFIG HEALTH - Show Status (WITH CONFLICT DETAILS)
+        // ═══════════════════════════════════════════════════════════════════════════
+        let currentConfigConflicts = []; // Store for action handlers
+        
         function updateConfigHealth(config) {
             const panel = document.getElementById('config-health-panel');
             const iconEl = document.getElementById('config-health-icon');
             const titleEl = document.getElementById('config-health-title');
             const summaryEl = document.getElementById('config-health-summary');
             const badge = document.getElementById('config-health-badge');
+            const conflictDetailsEl = document.getElementById('config-conflict-details');
+            const warningDetailsEl = document.getElementById('config-warning-details');
             
             const health = config._health || {};
-            const conflicts = config._conflicts || [];
-            const warnings = config._warnings || [];
+            const booking = config.booking || {};
+            const discoveryConsent = config.discoveryConsent || {};
+            
+            // Build conflicts list from detected issues
+            const conflicts = [];
+            const warnings = [];
+            
+            // Check for booking engine conflict
+            if (booking.hasConflict) {
+                conflicts.push({
+                    code: 'BOOKING_ENGINE_CONFLICT',
+                    why: 'Two different booking systems are active with different slot definitions',
+                    paths: [
+                        `callFlowEngine.bookingFields (${booking.callFlowCount || 0} fields)`,
+                        `frontDeskBehavior.bookingSlots (${booking.slotsCount || 0} slots)`
+                    ],
+                    recommendation: `Use "${booking.engineMode}" mode exclusively`,
+                    fixAction: 'fix_booking_conflict'
+                });
+            }
+            
+            // Check for scenarios blocked by consent
+            if (discoveryConsent.scenariosBlockedByConsent) {
+                conflicts.push({
+                    code: 'SCENARIOS_BLOCKED',
+                    why: 'Consent settings are preventing scenario auto-responses',
+                    paths: [
+                        `discoveryConsent.disableScenarioAutoResponses = ${discoveryConsent.disableScenarioAutoResponses}`,
+                        `discoveryConsent.forceLLMDiscovery = ${discoveryConsent.forceLLMDiscovery}`
+                    ],
+                    recommendation: discoveryConsent.recommendation || 'Set disableScenarioAutoResponses=false',
+                    fixAction: 'fix_consent_blocking'
+                });
+            }
+            
+            // Add any config-level conflicts/warnings
+            if (config._conflicts) conflicts.push(...config._conflicts);
+            if (config._warnings) warnings.push(...config._warnings);
+            
+            currentConfigConflicts = conflicts; // Store for actions
             
             // Only show if there are issues
             if (conflicts.length === 0 && warnings.length === 0) {
@@ -3795,28 +4133,118 @@
             
             panel.style.display = 'block';
             
-            if (health.status === 'CRITICAL' || conflicts.length > 0) {
+            if (conflicts.length > 0) {
                 iconEl.textContent = '🚨';
                 badge.textContent = 'CRITICAL';
                 badge.style.background = '#7f1d1d';
                 badge.style.color = '#ef4444';
                 panel.style.borderColor = '#ef4444';
                 panel.style.background = 'linear-gradient(135deg, #7f1d1d 0%, #0f172a 100%)';
-            } else if (health.status === 'WARNING' || warnings.length > 0) {
+                titleEl.innerHTML = `Config Health: <span style="color: #ef4444;">${conflicts.length} conflict(s)</span>`;
+            } else if (warnings.length > 0) {
                 iconEl.textContent = '⚠️';
                 badge.textContent = 'WARNING';
                 badge.style.background = '#78350f';
                 badge.style.color = '#fbbf24';
                 panel.style.borderColor = '#f59e0b';
                 panel.style.background = 'linear-gradient(135deg, #422006 0%, #0f172a 100%)';
+                titleEl.innerHTML = `Config Health: <span style="color: #fbbf24;">${warnings.length} warning(s)</span>`;
             }
             
-            summaryEl.textContent = health.summary || `${conflicts.length} conflict(s), ${warnings.length} warning(s)`;
+            summaryEl.textContent = health.summary || `${conflicts.length} conflict(s), ${warnings.length} warning(s) need attention`;
             
-            // Show conflict details
+            // Render CONFLICT DETAILS
             if (conflicts.length > 0) {
-                const conflict = conflicts[0];
-                titleEl.innerHTML = `Config Health: <span style="color: #ef4444;">${conflict.type}</span>`;
+                conflictDetailsEl.style.display = 'block';
+                conflictDetailsEl.innerHTML = conflicts.map((c, i) => `
+                    <div style="padding: 12px; background: #0f172a; border-radius: 8px; border-left: 4px solid #ef4444; margin-bottom: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                            <div style="font-weight: 700; font-size: 12px; color: #ef4444; font-family: monospace;">${c.code}</div>
+                            ${c.fixAction ? `
+                                <button onclick="fixConfigConflict(${i})" 
+                                        style="padding: 4px 8px; font-size: 10px; background: #059669; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                    ⚡ Auto-Fix
+                                </button>
+                            ` : ''}
+                        </div>
+                        
+                        <div style="font-size: 12px; color: #e2e8f0; margin-bottom: 8px;">
+                            <strong>Why:</strong> ${c.why}
+                        </div>
+                        
+                        <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">
+                            <strong>Paths involved:</strong>
+                            <ul style="margin: 4px 0 0 16px; padding: 0;">
+                                ${(c.paths || []).map(p => `<li style="font-family: monospace; color: #f59e0b;">${p}</li>`).join('')}
+                            </ul>
+                        </div>
+                        
+                        <div style="font-size: 11px; padding: 8px; background: #065f46; border-radius: 4px; color: #10b981;">
+                            💡 <strong>Recommended:</strong> ${c.recommendation}
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                conflictDetailsEl.style.display = 'none';
+            }
+            
+            // Render WARNING DETAILS
+            if (warnings.length > 0) {
+                warningDetailsEl.style.display = 'block';
+                warningDetailsEl.innerHTML = warnings.map(w => `
+                    <div style="padding: 10px; background: #0f172a; border-radius: 6px; border-left: 3px solid #f59e0b; margin-bottom: 6px;">
+                        <div style="font-size: 11px; color: #fbbf24;">${w.message || w}</div>
+                    </div>
+                `).join('');
+            } else {
+                warningDetailsEl.style.display = 'none';
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CONFIG HEALTH - Auto-Fix Conflict
+        // ═══════════════════════════════════════════════════════════════════════════
+        async function fixConfigConflict(conflictIndex) {
+            const conflict = currentConfigConflicts[conflictIndex];
+            if (!conflict) {
+                showConfigCopyToast(false, '❌ Error', 'Conflict not found');
+                return;
+            }
+            
+            const companyId = window.currentCompanyId || window.companyId || 
+                              new URLSearchParams(window.location.search).get('id') ||
+                              localStorage.getItem('currentCompanyId');
+            if (!companyId) {
+                showConfigCopyToast(false, '❌ Error', 'No company ID found');
+                return;
+            }
+            
+            const authToken = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            
+            try {
+                const response = await fetch(`/api/company/${companyId}/control-plane/fix-conflict`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        conflictCode: conflict.code,
+                        fixAction: conflict.fixAction
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showConfigCopyToast(true, '✅ Conflict Fixed!', result.message || `Fixed: ${conflict.code}`);
+                    await refreshConfigJson();
+                } else {
+                    const err = await response.json();
+                    showConfigCopyToast(false, '❌ Fix Failed', err.error || 'Unknown error');
+                }
+            } catch (err) {
+                console.error('[CONFIG HEALTH] Fix conflict failed:', err);
+                showConfigCopyToast(false, '❌ Error', err.message);
             }
         }
         
