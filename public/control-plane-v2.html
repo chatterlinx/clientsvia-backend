@@ -5069,74 +5069,115 @@ Loading field report...
         const effectiveResponse = await fetch(`/api/company/${currentCompanyId}/control-plane/effective`, {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
+        
+        if (!effectiveResponse.ok) {
+          throw new Error(`Effective config API returned ${effectiveResponse.status}: ${effectiveResponse.statusText}`);
+        }
+        
         const effectiveData = await effectiveResponse.json();
         
-        if (effectiveData.success) {
+        if (effectiveData.success && effectiveData.data) {
           debugEffectiveConfig = effectiveData.data;
           renderDebugOverview(effectiveData.data);
-          renderDebugLint(effectiveData.data.lint);
+          renderDebugLint(effectiveData.data?.lint);
           document.getElementById('debug-effective-json').textContent = 
-            JSON.stringify(effectiveData.data.effectiveConfig, null, 2);
+            JSON.stringify(effectiveData.data?.effectiveConfig || {}, null, 2);
+        } else {
+          // API returned but with error
+          console.warn('[DEBUG DRAWER] Effective config not available:', effectiveData.error);
+          renderDebugOverview({}); // Render with empty data
+          renderDebugLint(null);
+          document.getElementById('debug-effective-json').textContent = 
+            JSON.stringify({ error: effectiveData.error || 'No data available' }, null, 2);
         }
         
         // Load registry
         const registryResponse = await fetch('/api/control-plane/registry', {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
-        const registryData = await registryResponse.json();
         
-        if (registryData.success) {
-          debugRegistryData = registryData.data;
+        if (registryResponse.ok) {
+          const registryData = await registryResponse.json();
+          if (registryData.success) {
+            debugRegistryData = registryData.data;
+            document.getElementById('debug-registry-json').textContent = 
+              JSON.stringify(registryData.data, null, 2);
+          }
+        } else {
           document.getElementById('debug-registry-json').textContent = 
-            JSON.stringify(registryData.data, null, 2);
+            JSON.stringify({ error: 'Failed to load registry' }, null, 2);
         }
         
       } catch (error) {
         console.error('[DEBUG DRAWER] Load error:', error);
         document.getElementById('debug-score-card').innerHTML = `
-          <div style="color: #ef4444; padding: 20px;">❌ Failed to load: ${error.message}</div>
+          <div style="color: #ef4444; padding: 20px;">
+            ❌ Failed to load: ${error.message}<br>
+            <small style="color: #9ca3af;">Check console for details. The /control-plane/effective endpoint may not be deployed yet.</small>
+          </div>
         `;
+        // Still try to show empty state
+        renderDebugOverview({});
+        renderDebugLint(null);
       }
     }
     
     function renderDebugOverview(data) {
-      const { lint, computed, effectiveConfig, generatedInMs } = data;
+      // Add null checks for all nested properties
+      const lint = data?.lint || { score: 0, grade: 'N/A', summary: { errors: 0, warnings: 0, info: 0 }, issues: [] };
+      const computed = data?.computed || { performance: {}, completeness: { score: 0 } };
+      const generatedInMs = data?.generatedInMs || 0;
       
       // Score card
       const scoreClass = lint.score >= 80 ? 'green' : lint.score >= 60 ? 'yellow' : 'red';
-      const issuesSummary = `${lint.summary.errors} errors, ${lint.summary.warnings} warnings, ${lint.summary.info} info`;
+      const summary = lint.summary || { errors: 0, warnings: 0, info: 0 };
+      const issuesSummary = `${summary.errors || 0} errors, ${summary.warnings || 0} warnings, ${summary.info || 0} info`;
       
       document.getElementById('debug-score-card').innerHTML = `
         <div class="debug-score-circle ${scoreClass}">
-          <span class="debug-score-value">${lint.score}</span>
-          <span class="debug-score-grade">${lint.grade}</span>
+          <span class="debug-score-value">${lint.score || 0}</span>
+          <span class="debug-score-grade">${lint.grade || 'N/A'}</span>
         </div>
         <div class="debug-score-details">
           <h4>Copy Performance Score</h4>
           <p>${issuesSummary}</p>
-          <p style="margin-top: 8px; color: ${computed.completeness.score >= 80 ? '#10b981' : '#f59e0b'}">
-            Completeness: ${computed.completeness.score}%
+          <p style="margin-top: 8px; color: ${(computed?.completeness?.score || 0) >= 80 ? '#10b981' : '#f59e0b'}">
+            Completeness: ${computed?.completeness?.score || 0}%
           </p>
         </div>
       `;
       
-      // Metrics
+      // Metrics - with null checks
+      const perf = computed?.performance || {};
       document.getElementById('metric-greeting-words').textContent = 
-        computed.performance.greetingWordCount + ' words';
+        (perf.greetingWordCount ?? '--') + ' words';
       document.getElementById('metric-greeting-tts').textContent = 
-        computed.performance.greetingEstimatedSeconds + 's (' + computed.performance.greetingTTSRating + ')';
+        (perf.greetingEstimatedSeconds ?? '--') + 's (' + (perf.greetingTTSRating || 'N/A') + ')';
       document.getElementById('metric-booking-slots').textContent = 
-        computed.performance.bookingSlotsCount;
+        perf.bookingSlotsCount ?? '--';
       document.getElementById('metric-forbidden').textContent = 
-        computed.performance.forbiddenPhrasesCount;
+        perf.forbiddenPhrasesCount ?? '--';
       document.getElementById('metric-escalation').textContent = 
-        computed.performance.escalationRulesCount;
+        perf.escalationRulesCount ?? '--';
       document.getElementById('metric-fetch-time').textContent = 
-        generatedInMs + 'ms';
+        (generatedInMs || '--') + 'ms';
     }
     
     function renderDebugLint(lint) {
       const listEl = document.getElementById('debug-issues-list');
+      
+      // Handle null/undefined lint
+      if (!lint || !lint.issues) {
+        listEl.innerHTML = `
+          <li class="debug-issue" style="background: #1e293b;">
+            <span class="debug-issue-icon" style="background: #64748b;">?</span>
+            <div class="debug-issue-content">
+              <div class="debug-issue-message">Lint data not available. The effective config endpoint may not be deployed yet.</div>
+            </div>
+          </li>
+        `;
+        return;
+      }
       
       if (lint.issues.length === 0) {
         listEl.innerHTML = `
@@ -5152,12 +5193,12 @@ Loading field report...
       
       listEl.innerHTML = lint.issues.map(issue => `
         <li class="debug-issue">
-          <span class="debug-issue-icon ${issue.severity}">
+          <span class="debug-issue-icon ${issue.severity || 'info'}">
             ${issue.severity === 'error' ? '✕' : issue.severity === 'warning' ? '!' : 'i'}
           </span>
           <div class="debug-issue-content">
-            <div class="debug-issue-field">${issue.field} • ${issue.rule}</div>
-            <div class="debug-issue-message">${issue.message}</div>
+            <div class="debug-issue-field">${issue.field || 'unknown'} • ${issue.rule || 'unknown'}</div>
+            <div class="debug-issue-message">${issue.message || 'No message'}</div>
           </div>
         </li>
       `).join('');
