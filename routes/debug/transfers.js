@@ -115,16 +115,26 @@ router.put('/', async (req, res) => {
             updatedTargets = [...existingTargets, newTarget];
         }
         
-        // Write to DB
-        await v2Company.updateOne(
-            { _id: new mongoose.Types.ObjectId(companyId) },
+        // Write to DB - ensure nested path exists
+        const updateResult = await v2Company.findByIdAndUpdate(
+            companyId,
             {
                 $set: {
                     'aiAgentSettings.transferTargets': updatedTargets,
                     updatedAt: new Date()
                 }
-            }
+            },
+            { new: true, upsert: false }
         );
+        
+        if (!updateResult) {
+            return res.status(500).json({ ok: false, error: 'Update failed - document not modified' });
+        }
+        
+        logger.info(`[DEBUG TRANSFERS] Update result for ${companyId}:`, {
+            aiAgentSettings: updateResult.aiAgentSettings ? 'exists' : 'missing',
+            transferTargets: updateResult.aiAgentSettings?.transferTargets?.length || 0
+        });
         
         // Clear Redis cache
         try {
