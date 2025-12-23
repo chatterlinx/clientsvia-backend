@@ -1491,6 +1491,9 @@
           <button class="data-config-subtab" data-subtab="execution-map" style="padding: 10px 20px; border: none; background: #f1f5f9; color: #64748b; border-radius: 8px 8px 0 0; font-weight: 600; cursor: pointer;">
             <i class="fas fa-project-diagram"></i> Execution Map
           </button>
+          <button class="data-config-subtab" data-subtab="qa-dashboard" style="padding: 10px 20px; border: none; background: #f1f5f9; color: #64748b; border-radius: 8px 8px 0 0; font-weight: 600; cursor: pointer;">
+            <i class="fas fa-chart-bar"></i> QA Dashboard
+          </button>
         </div>
         
         <!-- PLACEHOLDERS (V2 - Replaces Variables) -->
@@ -1771,6 +1774,120 @@
               <i class="fas fa-exclamation-triangle" style="color: #f59e0b;"></i> Issues & Recommendations
             </h4>
             <div id="execution-map-issues-list">
+            </div>
+          </div>
+        </div>
+        
+        <!-- QA DASHBOARD (Category Quality Report) -->
+        <div id="data-config-qa-dashboard" class="data-config-content" style="display: none;">
+          <div style="margin-bottom: 20px;">
+            <h3 style="font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px;">
+              <span>📊</span> Category QA Dashboard
+            </h3>
+            <p style="font-size: 13px; color: #64748b; margin-top: 4px;">
+              Quality metrics for all scenarios. Fix the worst first, lock the best.
+            </p>
+          </div>
+          
+          <!-- Template Selector -->
+          <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 12px;">
+            <label style="font-weight: 600; color: #334155;">Template:</label>
+            <select id="qa-template-select" onchange="loadQADashboard()" style="padding: 10px 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; min-width: 300px;">
+              <option value="">Loading templates...</option>
+            </select>
+            <button onclick="loadQADashboard()" class="btn btn-secondary" style="padding: 8px 16px;">
+              <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+            <button onclick="runGoldenAutofillDryRun()" class="btn btn-primary" style="padding: 8px 16px;">
+              <i class="fas fa-magic"></i> Golden Autofill (Dry Run)
+            </button>
+          </div>
+          
+          <!-- Summary Cards -->
+          <div id="qa-summary" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px;">
+            <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); border-radius: 12px; padding: 20px; color: white;">
+              <div style="font-size: 32px; font-weight: 700;" id="qa-total-scenarios">--</div>
+              <div style="font-size: 13px; opacity: 0.9;">Total Scenarios</div>
+            </div>
+            <div style="background: linear-gradient(135deg, #22c55e 0%, #15803d 100%); border-radius: 12px; padding: 20px; color: white;">
+              <div style="font-size: 32px; font-weight: 700;" id="qa-avg-score">--</div>
+              <div style="font-size: 13px; opacity: 0.9;">Avg Quality Score</div>
+            </div>
+            <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 12px; padding: 20px; color: white;">
+              <div style="font-size: 32px; font-weight: 700;" id="qa-needs-work">--</div>
+              <div style="font-size: 13px; opacity: 0.9;">Needs Work</div>
+            </div>
+            <div style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); border-radius: 12px; padding: 20px; color: white;">
+              <div style="font-size: 32px; font-weight: 700;" id="qa-locked">--</div>
+              <div style="font-size: 13px; opacity: 0.9;">Locked (Tuned)</div>
+            </div>
+            <div style="background: linear-gradient(135deg, #ec4899 0%, #be185d 100%); border-radius: 12px; padding: 20px; color: white;">
+              <div style="font-size: 32px; font-weight: 700;" id="qa-categories">--</div>
+              <div style="font-size: 13px; opacity: 0.9;">Categories</div>
+            </div>
+          </div>
+          
+          <!-- Grade Distribution -->
+          <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+            <h4 style="font-size: 14px; font-weight: 600; margin: 0 0 16px 0; color: #334155;">Grade Distribution</h4>
+            <div id="qa-grades" style="display: flex; gap: 12px;">
+              <div style="flex: 1; text-align: center; padding: 12px; background: #dcfce7; border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: 700; color: #15803d;" id="qa-grade-a">0</div>
+                <div style="font-size: 12px; color: #166534;">Grade A</div>
+              </div>
+              <div style="flex: 1; text-align: center; padding: 12px; background: #d1fae5; border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: 700; color: #059669;" id="qa-grade-b">0</div>
+                <div style="font-size: 12px; color: #047857;">Grade B</div>
+              </div>
+              <div style="flex: 1; text-align: center; padding: 12px; background: #fef3c7; border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: 700; color: #d97706;" id="qa-grade-c">0</div>
+                <div style="font-size: 12px; color: #b45309;">Grade C</div>
+              </div>
+              <div style="flex: 1; text-align: center; padding: 12px; background: #fed7aa; border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: 700; color: #ea580c;" id="qa-grade-d">0</div>
+                <div style="font-size: 12px; color: #c2410c;">Grade D</div>
+              </div>
+              <div style="flex: 1; text-align: center; padding: 12px; background: #fecaca; border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: 700; color: #dc2626;" id="qa-grade-f">0</div>
+                <div style="font-size: 12px; color: #b91c1c;">Grade F</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Fix Queue (Priority) -->
+          <div style="margin-bottom: 24px;">
+            <h4 style="font-size: 16px; font-weight: 600; margin: 0 0 16px 0; color: #334155;">
+              <i class="fas fa-wrench" style="color: #f59e0b;"></i> Fix Queue (Worst First)
+            </h4>
+            <div id="qa-fix-queue" style="display: grid; gap: 12px;">
+              <div style="text-align: center; padding: 40px; color: #94a3b8;">
+                Select a template to see the fix queue
+              </div>
+            </div>
+          </div>
+          
+          <!-- Category List with Expandable Scenarios -->
+          <div style="margin-bottom: 24px;">
+            <h4 style="font-size: 16px; font-weight: 600; margin: 0 0 16px 0; color: #334155;">
+              <i class="fas fa-folder-open" style="color: #3b82f6;"></i> All Categories
+            </h4>
+            <div id="qa-categories-list" style="display: grid; gap: 12px;">
+              <div style="text-align: center; padding: 40px; color: #94a3b8;">
+                Select a template to see categories
+              </div>
+            </div>
+          </div>
+          
+          <!-- Minimum Requirements Reference -->
+          <div style="background: #f1f5f9; border-radius: 12px; padding: 16px; margin-top: 20px;">
+            <h5 style="font-size: 14px; font-weight: 600; margin: 0 0 12px 0; color: #334155;">
+              <i class="fas fa-info-circle" style="color: #3b82f6;"></i> Golden Minimum Requirements
+            </h5>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; font-size: 13px;">
+              <div><strong>Triggers:</strong> ≥8</div>
+              <div><strong>Negatives:</strong> ≥3</div>
+              <div><strong>Quick Replies:</strong> ≥7</div>
+              <div><strong>Full Replies:</strong> ≥3</div>
             </div>
           </div>
         </div>
@@ -2471,6 +2588,8 @@
         await loadBlueprintTab();
       } else if (subtab === 'execution-map') {
         await loadExecutionMap();
+      } else if (subtab === 'qa-dashboard') {
+        await initQADashboard();
       }
     }
     
@@ -2910,6 +3029,422 @@
       navigator.clipboard.writeText(jsonStr).then(() => {
         showSnapshotToast(`Execution map copied (${jsonStr.length} bytes)`, 'success');
       });
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // QA DASHBOARD
+    // Category Quality Report + Golden Autofill
+    // ═══════════════════════════════════════════════════════════════════════════
+    let currentQAReport = null;
+    let qaSelectedTemplateId = null;
+    
+    async function initQADashboard() {
+      console.log('📊 [QA DASHBOARD] Initializing...');
+      
+      // Load templates into selector
+      const select = document.getElementById('qa-template-select');
+      
+      try {
+        const response = await fetch('/api/admin/global-instant-responses', {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const templates = data.templates || data || [];
+          
+          select.innerHTML = '<option value="">Select a template...</option>' +
+            templates.map(t => `<option value="${t._id}">${t.name || t.templateName} (${t.categories?.length || 0} categories)</option>`).join('');
+          
+          // Auto-select first if only one
+          if (templates.length === 1) {
+            select.value = templates[0]._id;
+            await loadQADashboard();
+          }
+        }
+      } catch (error) {
+        console.error('[QA DASHBOARD] Failed to load templates:', error);
+        select.innerHTML = '<option value="">Error loading templates</option>';
+      }
+    }
+    
+    async function loadQADashboard() {
+      const templateId = document.getElementById('qa-template-select').value;
+      
+      if (!templateId) {
+        console.log('[QA DASHBOARD] No template selected');
+        return;
+      }
+      
+      qaSelectedTemplateId = templateId;
+      console.log(`📊 [QA DASHBOARD] Loading quality report for template ${templateId}`);
+      
+      try {
+        const response = await fetch(`/api/trade-knowledge/templates/${templateId}/quality-report`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        currentQAReport = data;
+        
+        renderQADashboard(data);
+        
+      } catch (error) {
+        console.error('[QA DASHBOARD] Error:', error);
+        showSnapshotToast('Failed to load quality report', 'error');
+      }
+    }
+    
+    function renderQADashboard(report) {
+      // Summary cards
+      document.getElementById('qa-total-scenarios').textContent = report.summary.totalScenarios;
+      document.getElementById('qa-avg-score').textContent = report.summary.averageScore + '%';
+      document.getElementById('qa-needs-work').textContent = report.summary.scenariosNeedingWork;
+      document.getElementById('qa-locked').textContent = report.summary.lockedScenarios;
+      document.getElementById('qa-categories').textContent = report.summary.totalCategories;
+      
+      // Grades
+      const byGrade = report.categories.reduce((acc, cat) => {
+        cat.scenarios.forEach(s => {
+          acc[s.quality.grade] = (acc[s.quality.grade] || 0) + 1;
+        });
+        return acc;
+      }, { A: 0, B: 0, C: 0, D: 0, F: 0 });
+      
+      document.getElementById('qa-grade-a').textContent = byGrade.A || 0;
+      document.getElementById('qa-grade-b').textContent = byGrade.B || 0;
+      document.getElementById('qa-grade-c').textContent = byGrade.C || 0;
+      document.getElementById('qa-grade-d').textContent = byGrade.D || 0;
+      document.getElementById('qa-grade-f').textContent = byGrade.F || 0;
+      
+      // Fix Queue
+      const fixQueueDiv = document.getElementById('qa-fix-queue');
+      if (report.fixQueue.length === 0) {
+        fixQueueDiv.innerHTML = `
+          <div style="text-align: center; padding: 20px; color: #22c55e; background: #dcfce7; border-radius: 8px;">
+            <i class="fas fa-check-circle" style="font-size: 24px;"></i>
+            <p style="margin: 8px 0 0 0; font-weight: 600;">All categories meet quality standards!</p>
+          </div>
+        `;
+      } else {
+        fixQueueDiv.innerHTML = report.fixQueue.slice(0, 5).map((cat, i) => `
+          <div style="background: ${cat.grade === 'F' ? '#fef2f2' : '#fffbeb'}; border: 1px solid ${cat.grade === 'F' ? '#fecaca' : '#fed7aa'}; border-radius: 8px; padding: 16px; display: flex; align-items: center; gap: 16px;">
+            <div style="width: 40px; height: 40px; background: ${cat.grade === 'F' ? '#dc2626' : '#f59e0b'}; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px;">
+              ${i + 1}
+            </div>
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #1e293b;">${cat.categoryName}</div>
+              <div style="font-size: 13px; color: #64748b;">
+                Grade ${cat.grade} • Score ${cat.averageScore}% • ${cat.scenariosToFix} scenario(s) need work
+              </div>
+            </div>
+            <button onclick="expandCategory('${cat.categoryId}')" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">
+              <i class="fas fa-eye"></i> View
+            </button>
+          </div>
+        `).join('');
+      }
+      
+      // Categories list
+      const categoriesDiv = document.getElementById('qa-categories-list');
+      categoriesDiv.innerHTML = report.categories.map(cat => `
+        <div class="qa-category-card" data-category-id="${cat.categoryId}" style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+          <div onclick="toggleCategoryExpand('${cat.categoryId}')" style="padding: 16px; cursor: pointer; display: flex; align-items: center; gap: 12px; background: ${cat.grade === 'A' || cat.grade === 'B' ? '#f0fdf4' : cat.grade === 'C' ? '#fefce8' : '#fef2f2'};">
+            <div style="width: 40px; height: 40px; background: ${getGradeColor(cat.grade)}; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700;">
+              ${cat.grade}
+            </div>
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #1e293b;">${cat.categoryName}</div>
+              <div style="font-size: 13px; color: #64748b;">
+                ${cat.scenarioCount} scenarios • Score ${cat.averageScore}% • ${cat.needsWorkCount} need work • ${cat.lockedCount} locked
+              </div>
+            </div>
+            <i class="fas fa-chevron-down qa-expand-icon" style="color: #94a3b8; transition: transform 0.2s;"></i>
+          </div>
+          <div class="qa-category-scenarios" style="display: none; border-top: 1px solid #e2e8f0; padding: 16px; background: #f8fafc;">
+            ${cat.scenarios.map(s => renderScenarioRow(s, cat.categoryId)).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    function renderScenarioRow(scenario, categoryId) {
+      const gradeColor = getGradeColor(scenario.quality.grade);
+      const issues = scenario.quality.issues || [];
+      
+      return `
+        <div style="padding: 12px; margin-bottom: 8px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: flex-start; gap: 12px;">
+          <div style="min-width: 32px; height: 32px; background: ${gradeColor}; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 12px;">
+            ${scenario.quality.grade}
+          </div>
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+              <span style="font-weight: 600; color: #1e293b;">${scenario.name}</span>
+              ${scenario.isLocked ? '<span style="background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">🔒 LOCKED</span>' : ''}
+              <span style="background: ${getTypeColor(scenario.scenarioType)}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">${scenario.scenarioType}</span>
+            </div>
+            <div style="font-size: 12px; color: #64748b; display: flex; gap: 16px; flex-wrap: wrap;">
+              <span>📝 ${scenario.counts.triggerCount} triggers</span>
+              <span>🚫 ${scenario.counts.negativeCount} negatives</span>
+              <span>⚡ ${scenario.counts.quickCount} quick</span>
+              <span>📄 ${scenario.counts.fullCount} full</span>
+              <span>🎯 P${scenario.priority}</span>
+              <span>📊 ${(scenario.minConfidence * 100).toFixed(0)}%</span>
+            </div>
+            ${issues.length > 0 ? `
+              <div style="margin-top: 8px; padding: 8px; background: #fef3c7; border-radius: 6px;">
+                <span style="font-size: 12px; color: #92400e; font-weight: 600;">Issues:</span>
+                <span style="font-size: 12px; color: #92400e;">${issues.join(' • ')}</span>
+              </div>
+            ` : ''}
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <button onclick="toggleScenarioLock('${scenario.scenarioId}', ${!scenario.isLocked})" 
+                    style="padding: 4px 8px; border: none; background: ${scenario.isLocked ? '#fee2e2' : '#e0f2fe'}; color: ${scenario.isLocked ? '#dc2626' : '#0369a1'}; border-radius: 4px; cursor: pointer; font-size: 11px;">
+              ${scenario.isLocked ? '🔓 Unlock' : '🔒 Lock'}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    
+    function getGradeColor(grade) {
+      const colors = { A: '#22c55e', B: '#84cc16', C: '#eab308', D: '#f97316', F: '#ef4444' };
+      return colors[grade] || '#94a3b8';
+    }
+    
+    function getTypeColor(type) {
+      const colors = {
+        EMERGENCY: '#dc2626',
+        BOOKING: '#2563eb',
+        FAQ: '#7c3aed',
+        SMALL_TALK: '#64748b',
+        SYSTEM: '#0891b2',
+        TRANSFER: '#ea580c',
+        UNKNOWN: '#9ca3af'
+      };
+      return colors[type] || '#9ca3af';
+    }
+    
+    function toggleCategoryExpand(categoryId) {
+      const card = document.querySelector(`.qa-category-card[data-category-id="${categoryId}"]`);
+      if (!card) return;
+      
+      const scenariosDiv = card.querySelector('.qa-category-scenarios');
+      const icon = card.querySelector('.qa-expand-icon');
+      
+      if (scenariosDiv.style.display === 'none') {
+        scenariosDiv.style.display = 'block';
+        icon.style.transform = 'rotate(180deg)';
+      } else {
+        scenariosDiv.style.display = 'none';
+        icon.style.transform = 'rotate(0deg)';
+      }
+    }
+    
+    function expandCategory(categoryId) {
+      // Expand this category and scroll to it
+      const cards = document.querySelectorAll('.qa-category-card');
+      cards.forEach(card => {
+        const scenarios = card.querySelector('.qa-category-scenarios');
+        const icon = card.querySelector('.qa-expand-icon');
+        if (card.dataset.categoryId === categoryId) {
+          scenarios.style.display = 'block';
+          icon.style.transform = 'rotate(180deg)';
+          card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+          scenarios.style.display = 'none';
+          icon.style.transform = 'rotate(0deg)';
+        }
+      });
+    }
+    
+    async function toggleScenarioLock(scenarioId, lock) {
+      if (!qaSelectedTemplateId) return;
+      
+      try {
+        const response = await fetch(`/api/trade-knowledge/templates/${qaSelectedTemplateId}/scenarios/${scenarioId}/lock`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ locked: lock })
+        });
+        
+        if (response.ok) {
+          showSnapshotToast(lock ? 'Scenario locked (protected from autofill)' : 'Scenario unlocked', 'success');
+          await loadQADashboard(); // Refresh
+        } else {
+          throw new Error('Failed to update lock');
+        }
+      } catch (error) {
+        showSnapshotToast('Failed to update scenario lock', 'error');
+      }
+    }
+    
+    async function runGoldenAutofillDryRun() {
+      if (!qaSelectedTemplateId) {
+        showSnapshotToast('Select a template first', 'warning');
+        return;
+      }
+      
+      console.log(`🎯 [GOLDEN AUTOFILL] Dry run for template ${qaSelectedTemplateId}`);
+      
+      try {
+        const response = await fetch(`/api/trade-knowledge/templates/${qaSelectedTemplateId}/golden-autofill`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ mode: 'dry_run' })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        showGoldenAutofillPreview(data);
+        
+      } catch (error) {
+        console.error('[GOLDEN AUTOFILL] Error:', error);
+        showSnapshotToast('Failed to run autofill preview', 'error');
+      }
+    }
+    
+    function showGoldenAutofillPreview(data) {
+      // Create modal for preview
+      const modal = document.createElement('div');
+      modal.id = 'golden-autofill-preview-modal';
+      modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+      
+      const content = document.createElement('div');
+      content.style.cssText = 'background: white; border-radius: 16px; max-width: 900px; width: 95%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;';
+      
+      content.innerHTML = `
+        <div style="padding: 20px 24px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <h3 style="margin: 0; font-size: 18px; font-weight: 600;">🎯 Golden Autofill Preview</h3>
+            <p style="margin: 4px 0 0 0; font-size: 13px; color: #64748b;">Template: ${data.templateName} • Version ${data.goldenVersion}</p>
+          </div>
+          <button onclick="closeGoldenAutofillPreview()" style="padding: 8px; border: none; background: none; cursor: pointer; font-size: 20px;">&times;</button>
+        </div>
+        
+        <div style="padding: 20px 24px; overflow-y: auto; flex: 1;">
+          <!-- Summary -->
+          <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px;">
+            <div style="background: #f0f9ff; border-radius: 8px; padding: 16px; text-align: center;">
+              <div style="font-size: 24px; font-weight: 700; color: #0369a1;">${data.summary.totalScenarios}</div>
+              <div style="font-size: 12px; color: #0c4a6e;">Total</div>
+            </div>
+            <div style="background: #f0fdf4; border-radius: 8px; padding: 16px; text-align: center;">
+              <div style="font-size: 24px; font-weight: 700; color: #15803d;">${data.summary.toUpdate}</div>
+              <div style="font-size: 12px; color: #166534;">Will Update</div>
+            </div>
+            <div style="background: #f8fafc; border-radius: 8px; padding: 16px; text-align: center;">
+              <div style="font-size: 24px; font-weight: 700; color: #64748b;">${data.summary.alreadyCompliant}</div>
+              <div style="font-size: 12px; color: #475569;">Already OK</div>
+            </div>
+            <div style="background: #fef3c7; border-radius: 8px; padding: 16px; text-align: center;">
+              <div style="font-size: 24px; font-weight: 700; color: #d97706;">${data.summary.locked}</div>
+              <div style="font-size: 12px; color: #92400e;">Locked (Skip)</div>
+            </div>
+            <div style="background: #fef2f2; border-radius: 8px; padding: 16px; text-align: center;">
+              <div style="font-size: 24px; font-weight: 700; color: #dc2626;">${data.summary.withQualityIssues}</div>
+              <div style="font-size: 12px; color: #991b1b;">Need Manual</div>
+            </div>
+          </div>
+          
+          <!-- Changes Preview -->
+          <h4 style="font-size: 14px; font-weight: 600; margin: 0 0 12px 0; color: #334155;">Changes to Apply (${data.willUpdate?.length || 0} scenarios)</h4>
+          <div style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 16px;">
+            ${(data.willUpdate || []).map(s => `
+              <div style="padding: 12px; border-bottom: 1px solid #f1f5f9;">
+                <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">${s.scenarioName}</div>
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">${s.categoryName} • Type: ${s.type}</div>
+                <div style="background: #f8fafc; padding: 8px; border-radius: 4px;">
+                  ${s.changes.map(c => `
+                    <div style="font-size: 12px; margin-bottom: 4px;">
+                      <strong>${c.field}:</strong> 
+                      <span style="color: #dc2626; text-decoration: line-through;">${JSON.stringify(c.before)}</span> → 
+                      <span style="color: #22c55e;">${JSON.stringify(c.after)}</span>
+                      <span style="color: #94a3b8; font-style: italic;"> (${c.reason})</span>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            `).join('') || '<div style="padding: 20px; text-align: center; color: #94a3b8;">No changes needed</div>'}
+          </div>
+          
+          <!-- Quality Issues -->
+          ${data.qualityIssues?.length > 0 ? `
+            <h4 style="font-size: 14px; font-weight: 600; margin: 0 0 12px 0; color: #f59e0b;">⚠️ Manual Attention Needed (${data.qualityIssues.length})</h4>
+            <div style="max-height: 200px; overflow-y: auto; border: 1px solid #fed7aa; border-radius: 8px; background: #fffbeb;">
+              ${data.qualityIssues.map(s => `
+                <div style="padding: 12px; border-bottom: 1px solid #fed7aa;">
+                  <div style="font-weight: 600; color: #92400e;">${s.scenarioName} (Grade ${s.grade})</div>
+                  <div style="font-size: 12px; color: #b45309;">${s.issues.join(' • ')}</div>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+        
+        <div style="padding: 16px 24px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 12px; background: #f8fafc;">
+          <button onclick="closeGoldenAutofillPreview()" class="btn btn-secondary">Cancel</button>
+          <button onclick="applyGoldenAutofill()" class="btn btn-primary" ${data.summary.toUpdate === 0 ? 'disabled' : ''}>
+            <i class="fas fa-check"></i> Apply ${data.summary.toUpdate} Changes
+          </button>
+        </div>
+      `;
+      
+      modal.appendChild(content);
+      document.body.appendChild(modal);
+    }
+    
+    function closeGoldenAutofillPreview() {
+      const modal = document.getElementById('golden-autofill-preview-modal');
+      if (modal) modal.remove();
+    }
+    
+    async function applyGoldenAutofill() {
+      if (!qaSelectedTemplateId) return;
+      
+      closeGoldenAutofillPreview();
+      
+      try {
+        const response = await fetch(`/api/trade-knowledge/templates/${qaSelectedTemplateId}/golden-autofill`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ mode: 'apply' })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          showSnapshotToast(`Golden Autofill applied: ${data.results.updated} updated, ${data.results.locked} locked, ${data.results.failed} failed`, 'success');
+          await loadQADashboard(); // Refresh
+        } else {
+          throw new Error(data.error || 'Apply failed');
+        }
+        
+      } catch (error) {
+        console.error('[GOLDEN AUTOFILL] Apply error:', error);
+        showSnapshotToast('Failed to apply golden autofill', 'error');
+      }
     }
     
     async function loadPlaceholders() {
