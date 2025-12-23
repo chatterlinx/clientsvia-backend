@@ -3051,10 +3051,29 @@
         
         if (response.ok) {
           const data = await response.json();
-          const templates = data.templates || data || [];
+          console.log('[QA DASHBOARD] API response structure:', typeof data, Array.isArray(data) ? 'array' : Object.keys(data || {}));
+          
+          // Handle various response formats
+          let templates = [];
+          if (Array.isArray(data)) {
+            templates = data;
+          } else if (data && Array.isArray(data.templates)) {
+            templates = data.templates;
+          } else if (data && Array.isArray(data.data)) {
+            templates = data.data;
+          } else if (data && data.success && Array.isArray(data.templates)) {
+            templates = data.templates;
+          }
+          
+          console.log('[QA DASHBOARD] Extracted templates:', templates.length);
+          
+          if (templates.length === 0) {
+            select.innerHTML = '<option value="">No templates found</option>';
+            return;
+          }
           
           select.innerHTML = '<option value="">Select a template...</option>' +
-            templates.map(t => `<option value="${t._id}">${t.name || t.templateName} (${t.categories?.length || 0} categories)</option>`).join('');
+            templates.map(t => `<option value="${t._id}">${t.name || t.templateName} (${(t.categories || []).length} categories)</option>`).join('');
           
           // Auto-select first if only one
           if (templates.length === 1) {
@@ -5400,7 +5419,7 @@ Loading field report...
         btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
         btn.style.background = '#10b981';
         btn.style.color = 'white';
-        showToast('✅ Field Report copied to clipboard!', 'success');
+        showSnapshotToast('✅ Field Report copied to clipboard!', 'success');
         
         setTimeout(() => {
           btn.innerHTML = '<i class="fas fa-copy"></i> Copy JSON';
@@ -5422,7 +5441,7 @@ Loading field report...
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      showToast('📥 Field Report downloaded!', 'success');
+      showSnapshotToast('📥 Field Report downloaded!', 'success');
     }
   </script>
   
