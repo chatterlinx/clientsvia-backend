@@ -6455,13 +6455,16 @@ Loading field report...
           </p>
         </div>
         
-        <!-- Template Selection -->
+        <!-- Template Selection (Auto-Detected from Company Settings) -->
         <div style="margin-bottom: 20px;">
-          <label style="font-size: 13px; font-weight: 600; color: #374151; display: block; margin-bottom: 8px;">Select Template:</label>
-          <select id="autofill-template-select" 
-                  style="width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white; color: #1e293b;">
-            <option value="">Loading templates...</option>
-          </select>
+          <label style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">Working on Company's Active Template:</label>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <select id="autofill-template-select" 
+                    style="flex: 1; padding: 10px 12px; border: 2px solid #10b981; border-radius: 6px; font-size: 14px; background: #ecfdf5; color: #047857; font-weight: 600;">
+              <option value="">Loading...</option>
+            </select>
+            <div id="autofill-template-info" style="font-size: 12px; color: #94a3b8;"></div>
+          </div>
         </div>
         
         <!-- Golden Defaults Reference -->
@@ -6628,29 +6631,47 @@ Loading field report...
     
     async function loadTemplatesForAutofill() {
       const select = document.getElementById('autofill-template-select');
-      select.innerHTML = '<option value="">Loading templates...</option>';
+      const infoDiv = document.getElementById('autofill-template-info');
+      select.innerHTML = '<option value="">Loading...</option>';
       
       try {
-        const response = await fetch('/api/admin/global-instant-responses/published', {
+        // Get company's active template from Runtime Truth (single source of truth)
+        const runtimeResponse = await fetch(`/api/company/${currentCompanyId}/runtime-truth`, {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
         
-        if (!response.ok) throw new Error('Failed to load templates');
+        if (!runtimeResponse.ok) throw new Error('Failed to load company config');
         
-        const result = await response.json();
-        const templates = result.data || result.templates || [];
+        const runtimeResult = await runtimeResponse.json();
+        const activeTemplates = runtimeResult.data?.scenarioBrain?.activeTemplates || [];
         
-        select.innerHTML = '<option value="">Select a template...</option>';
-        templates.forEach(t => {
-          const opt = document.createElement('option');
-          opt.value = t._id;
-          opt.textContent = `${t.name} (${t.stats?.totalScenarios || '?'} scenarios)`;
-          select.appendChild(opt);
-        });
+        if (activeTemplates.length === 0) {
+          select.innerHTML = '<option value="">No template selected for this company</option>';
+          if (infoDiv) {
+            infoDiv.innerHTML = '<span style="color: #fbbf24;">⚠️ Go to Templates tab to select a template first</span>';
+          }
+          return;
+        }
+        
+        // Auto-select the primary template
+        const primaryTemplate = activeTemplates[0];
+        const totals = runtimeResult.data?.scenarioBrain?.totals || {};
+        
+        select.innerHTML = `<option value="${primaryTemplate.id}" selected>${primaryTemplate.name} (${totals.scenarios || 0} scenarios)</option>`;
+        
+        // Update info display
+        if (infoDiv) {
+          infoDiv.innerHTML = `<span style="color: #4ade80;">✅ Auto-selected: ${primaryTemplate.name}</span>`;
+        }
+        
+        console.log(`[AUTOFILL] Auto-selected primary template: ${primaryTemplate.name} (${primaryTemplate.id})`);
         
       } catch (error) {
         console.error('[AUTOFILL] Failed to load templates:', error);
         select.innerHTML = '<option value="">Error loading templates</option>';
+        if (infoDiv) {
+          infoDiv.innerHTML = `<span style="color: #f87171;">❌ ${error.message}</span>`;
+        }
       }
     }
     
