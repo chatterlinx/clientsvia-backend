@@ -165,6 +165,10 @@ router.get('/', async (req, res) => {
                     
                     const scenarioId = scenario.scenarioId || scenario._id?.toString() || `sc_${scenario.name.replace(/\s+/g, '_').toLowerCase()}`;
                     
+                    // Determine actionType (explicit or detected)
+                    const explicitActionType = scenario.actionType || null;
+                    const detectedAction = detectScenarioAction(scenario);
+                    
                     scenarios.push({
                         id: scenarioId,
                         name: scenario.name,
@@ -174,8 +178,9 @@ router.get('/', async (req, res) => {
                         templateName: template.name,
                         
                         // Scope info for patch routing
-                        scope: 'GLOBAL',
-                        editable: false, // Must clone to override
+                        scope: scenario.scope || 'GLOBAL',
+                        ownerCompanyId: scenario.ownerCompanyId?.toString() || null,
+                        editable: (scenario.scope || 'GLOBAL') === 'COMPANY', // Only company overrides are editable
                         
                         // Matching
                         triggers: triggers.slice(0, 5), // First 5 for preview
@@ -185,24 +190,45 @@ router.get('/', async (req, res) => {
                         minConfidence: scenario.minConfidence || scenario.contextWeight || 0.7,
                         priority: scenario.priority || 0,
                         
-                        // Type & Action (PATCHABLE via company override)
+                        // Classification (PATCHABLE via company override)
                         scenarioType: scenario.scenarioType || 'UNKNOWN',
                         status: scenario.status || 'live',
                         
                         // Replies
                         quickReplyCount: (scenario.quickReplies || []).length,
                         fullReplyCount: (scenario.fullReplies || []).length,
+                        replyPolicy: scenario.replyPolicy || 'ROTATE_PER_CALLER',
                         
-                        // Wiring - What happens when this matches? (PATCHABLE)
+                        // 🔗 WIRING - What happens when this matches? (PATCHABLE)
                         wiring: {
-                            action: detectScenarioAction(scenario),
-                            flowId: scenario.flowId || null,
+                            // Explicit actionType from schema (new field)
+                            actionType: explicitActionType,
+                            // Detected action (backward compat)
+                            detectedAction: detectedAction,
+                            // Effective action (explicit wins if set)
+                            effectiveAction: explicitActionType || detectedAction,
+                            
+                            // Flow wiring
+                            flowId: scenario.flowId?.toString() || null,
+                            stopRouting: scenario.stopRouting || false,
+                            
+                            // Transfer wiring
                             transferTarget: scenario.transferTarget || null,
-                            bookingIntent: scenario.bookingIntent || false,
                             handoffPolicy: scenario.handoffPolicy || 'low_confidence',
+                            
+                            // Booking wiring
+                            bookingIntent: scenario.bookingIntent || false,
+                            requiredSlots: scenario.requiredSlots || [],
+                            
+                            // Legacy support
                             actionHooks: scenario.actionHooks || [],
                             followUpMode: scenario.followUpMode || 'NONE'
                         },
+                        
+                        // Wiring validation state
+                        wiringValidated: scenario.wiringValidated || false,
+                        wiringValidatedAt: scenario.wiringValidatedAt || null,
+                        wiringIssues: scenario.wiringIssues || [],
                         
                         // Quality
                         quality: {
@@ -308,26 +334,68 @@ router.get('/', async (req, res) => {
         };
         
         // ═══════════════════════════════════════════════════════════════════════
-        // BUILD WIRING MAP - The Critical Link
+        // BUILD WIRING MAP - The Critical Link (Scenario → Action → Flow → Booking)
         // ═══════════════════════════════════════════════════════════════════════
+        
+        // Count scenarios by effective action type
+        const actionTypeCounts = {
+            'REPLY_ONLY': scenarios.filter(s => s.wiring.effectiveAction === 'REPLY_ONLY').length,
+            'START_FLOW': scenarios.filter(s => s.wiring.effectiveAction === 'START_FLOW').length,
+            'REQUIRE_BOOKING': scenarios.filter(s => s.wiring.effectiveAction === 'REQUIRE_BOOKING' || s.wiring.effectiveAction === 'START_BOOKING').length,
+            'TRANSFER': scenarios.filter(s => s.wiring.effectiveAction === 'TRANSFER').length,
+            'SMS_FOLLOWUP': scenarios.filter(s => s.wiring.effectiveAction === 'SMS_FOLLOWUP').length,
+            'ESCALATE_OR_BOOK': scenarios.filter(s => s.wiring.effectiveAction === 'ESCALATE_OR_BOOK').length,
+            'REPLY_THEN_ASK': scenarios.filter(s => s.wiring.effectiveAction === 'REPLY_THEN_ASK').length
+        };
+        
         const wiringMap = {
+            // Map scenarioType → default action + priority (runtime uses this if no explicit actionType)
             scenarioTypeToAction: {
-                'EMERGENCY': { action: 'ESCALATE_OR_BOOK', priority: 'HIGH' },
-                'BOOKING': { action: 'START_BOOKING', priority: 'MEDIUM' },
-                'FAQ': { action: 'REPLY_ONLY', priority: 'LOW' },
-                'TROUBLESHOOT': { action: 'REPLY_THEN_OFFER_BOOK', priority: 'MEDIUM' },
-                'TRANSFER': { action: 'TRANSFER', priority: 'HIGH' },
-                'SMALL_TALK': { action: 'REPLY_ONLY', priority: 'LOW' },
-                'UNKNOWN': { action: 'REPLY_AND_ASK', priority: 'MEDIUM' }
+                'EMERGENCY': { defaultAction: 'ESCALATE_OR_BOOK', stopRouting: true, priority: 100 },
+                'BOOKING': { defaultAction: 'REQUIRE_BOOKING', stopRouting: false, priority: 75 },
+                'TROUBLESHOOT': { defaultAction: 'REPLY_ONLY', stopRouting: false, priority: 50 },
+                'FAQ': { defaultAction: 'REPLY_ONLY', stopRouting: false, priority: 40 },
+                'BILLING': { defaultAction: 'REPLY_ONLY', stopRouting: false, priority: 50 },
+                'TRANSFER': { defaultAction: 'TRANSFER', stopRouting: true, priority: 85 },
+                'SMALL_TALK': { defaultAction: 'REPLY_ONLY', stopRouting: false, priority: 10 },
+                'SYSTEM': { defaultAction: 'REPLY_ONLY', stopRouting: false, priority: 30 },
+                'UNKNOWN': { defaultAction: 'REPLY_ONLY', stopRouting: false, priority: 20 }
             },
+            
+            // Allowed actionType enum values
+            allowedActionTypes: ['REPLY_ONLY', 'START_FLOW', 'REQUIRE_BOOKING', 'TRANSFER', 'SMS_FOLLOWUP'],
+            
+            // Current distribution of scenarios by effective action
+            actionTypeCounts,
             
             // What percentage of scenarios are properly wired?
             coverage: {
                 totalScenarios: scenarios.length,
                 withScenarioType: scenarios.filter(s => s.scenarioType !== 'UNKNOWN').length,
+                withExplicitActionType: scenarios.filter(s => s.wiring.actionType).length,
                 withTransferTarget: scenarios.filter(s => s.wiring.transferTarget).length,
                 withFlowId: scenarios.filter(s => s.wiring.flowId).length,
-                withBookingIntent: scenarios.filter(s => s.wiring.bookingIntent).length
+                withBookingIntent: scenarios.filter(s => s.wiring.bookingIntent).length,
+                withRequiredSlots: scenarios.filter(s => s.wiring.requiredSlots && s.wiring.requiredSlots.length > 0).length,
+                withStopRouting: scenarios.filter(s => s.wiring.stopRouting).length,
+                validated: scenarios.filter(s => s.wiringValidated).length
+            },
+            
+            // Wiring health summary
+            health: {
+                scenariosWithoutType: scenarios.filter(s => s.scenarioType === 'UNKNOWN').length,
+                startFlowMissingFlowId: scenarios.filter(s => 
+                    (s.wiring.actionType === 'START_FLOW' || s.wiring.effectiveAction === 'START_FLOW') && 
+                    !s.wiring.flowId
+                ).length,
+                transferMissingTarget: scenarios.filter(s => 
+                    (s.wiring.actionType === 'TRANSFER' || s.wiring.effectiveAction === 'TRANSFER') && 
+                    !s.wiring.transferTarget
+                ).length,
+                bookingMissingSlots: scenarios.filter(s => 
+                    s.wiring.bookingIntent && 
+                    (!s.wiring.requiredSlots || s.wiring.requiredSlots.length === 0)
+                ).length
             }
         };
         
@@ -500,22 +568,44 @@ router.get('/', async (req, res) => {
 
 /**
  * Detect what action a scenario should trigger based on its configuration
+ * 
+ * PRIORITY ORDER (highest to lowest):
+ * 1. Explicit actionType field (if set)
+ * 2. Explicit flowId → START_FLOW
+ * 3. Explicit transferTarget → TRANSFER
+ * 4. Explicit bookingIntent → REQUIRE_BOOKING
+ * 5. scenarioType inference (EMERGENCY → ESCALATE_OR_BOOK, BOOKING → REQUIRE_BOOKING)
+ * 6. followUpMode inference
+ * 7. Default → REPLY_ONLY
  */
 function detectScenarioAction(scenario) {
+    // If actionType is explicitly set, use it (but we return detected for backward compat)
+    // The caller should check scenario.actionType separately
+    
     // Explicit flowId → START_FLOW
     if (scenario.flowId) return 'START_FLOW';
     
-    // Transfer target → TRANSFER
+    // Explicit transfer target → TRANSFER
     if (scenario.transferTarget) return 'TRANSFER';
     
-    // Booking intent → START_BOOKING
-    if (scenario.bookingIntent) return 'START_BOOKING';
+    // Explicit booking intent → REQUIRE_BOOKING
+    if (scenario.bookingIntent) return 'REQUIRE_BOOKING';
     
-    // Emergency type → ESCALATE_OR_BOOK
-    if (scenario.scenarioType === 'EMERGENCY') return 'ESCALATE_OR_BOOK';
+    // Scenario type inference
+    switch (scenario.scenarioType) {
+        case 'EMERGENCY':
+            return 'ESCALATE_OR_BOOK';
+        case 'BOOKING':
+            return 'REQUIRE_BOOKING';
+        case 'TRANSFER':
+            return 'TRANSFER';
+        // FAQ, TROUBLESHOOT, BILLING, SMALL_TALK, SYSTEM → REPLY_ONLY (default)
+    }
     
     // Follow-up mode → REPLY_THEN_ASK
-    if (scenario.followUpMode && scenario.followUpMode !== 'NONE') return 'REPLY_THEN_ASK';
+    if (scenario.followUpMode && scenario.followUpMode !== 'NONE') {
+        return 'REPLY_THEN_ASK';
+    }
     
     // Default → REPLY_ONLY
     return 'REPLY_ONLY';
@@ -523,37 +613,76 @@ function detectScenarioAction(scenario) {
 
 /**
  * Calculate quality score for a scenario (0-100)
+ * 
+ * SCORING BREAKDOWN:
+ * - Triggers: 8 minimum → -5 per missing (max -40)
+ * - Negatives: 3 minimum → -5 per missing (max -15)
+ * - Quick replies: 7 minimum → -3 per missing (max -21)
+ * - Full replies: 3 minimum → -3 per missing (max -9)
+ * - Scenario type: -10 if UNKNOWN
+ * - Wiring: -15 for critical wiring issues
  */
 function calculateScenarioQuality(scenario) {
     let score = 100;
     
-    // Triggers
+    // Triggers (8 minimum)
     const triggers = scenario.triggers || [];
     if (triggers.length < 8) score -= (8 - triggers.length) * 5;
     
-    // Negatives
+    // Negatives (3 minimum)
     const negatives = scenario.negativeTriggers || [];
     if (negatives.length < 3) score -= (3 - negatives.length) * 5;
     
-    // Quick replies
+    // Quick replies (7 minimum for variety)
     const quick = scenario.quickReplies || [];
     if (quick.length < 7) score -= (7 - quick.length) * 3;
     
-    // Full replies
+    // Full replies (3 minimum)
     const full = scenario.fullReplies || [];
     if (full.length < 3) score -= (3 - full.length) * 3;
     
-    // Scenario type
+    // Scenario type (must be classified)
     if (!scenario.scenarioType || scenario.scenarioType === 'UNKNOWN') score -= 10;
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // WIRING QUALITY (Critical for scenarios to actually DO something)
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    const actionType = scenario.actionType || detectScenarioAction(scenario);
+    
+    // START_FLOW without flowId → Critical error
+    if (actionType === 'START_FLOW' && !scenario.flowId) {
+        score -= 15;
+    }
+    
+    // TRANSFER without transferTarget → Critical error
+    if (actionType === 'TRANSFER' && !scenario.transferTarget) {
+        score -= 15;
+    }
+    
+    // REQUIRE_BOOKING without slots → Warning
+    if ((actionType === 'REQUIRE_BOOKING' || scenario.bookingIntent) && 
+        (!scenario.requiredSlots || scenario.requiredSlots.length === 0)) {
+        score -= 5;
+    }
+    
+    // EMERGENCY without stopRouting → Warning (should stop other scenarios)
+    if (scenario.scenarioType === 'EMERGENCY' && !scenario.stopRouting) {
+        score -= 5;
+    }
     
     return Math.max(0, score);
 }
 
 /**
- * Get list of issues for a scenario
+ * Get list of issues for a scenario (content + wiring)
  */
 function getScenarioIssues(scenario) {
     const issues = [];
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // CONTENT ISSUES
+    // ═══════════════════════════════════════════════════════════════════════
     
     const triggers = scenario.triggers || [];
     if (triggers.length < 8) issues.push(`triggers: ${triggers.length}/8`);
@@ -564,8 +693,47 @@ function getScenarioIssues(scenario) {
     const quick = scenario.quickReplies || [];
     if (quick.length < 7) issues.push(`quickReplies: ${quick.length}/7`);
     
+    const full = scenario.fullReplies || [];
+    if (full.length < 3) issues.push(`fullReplies: ${full.length}/3`);
+    
     if (!scenario.scenarioType || scenario.scenarioType === 'UNKNOWN') {
         issues.push('scenarioType: UNKNOWN');
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // WIRING ISSUES (Critical - prevents scenario from working)
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    const actionType = scenario.actionType || detectScenarioAction(scenario);
+    
+    // START_FLOW requires flowId
+    if (actionType === 'START_FLOW' && !scenario.flowId) {
+        issues.push('WIRING: START_FLOW requires flowId');
+    }
+    
+    // TRANSFER requires transferTarget
+    if (actionType === 'TRANSFER' && !scenario.transferTarget) {
+        issues.push('WIRING: TRANSFER requires transferTarget');
+    }
+    
+    // REQUIRE_BOOKING should have requiredSlots
+    if ((actionType === 'REQUIRE_BOOKING' || scenario.bookingIntent) && 
+        (!scenario.requiredSlots || scenario.requiredSlots.length === 0)) {
+        issues.push('WIRING: booking intent without requiredSlots');
+    }
+    
+    // EMERGENCY should stop other scenarios from firing
+    if (scenario.scenarioType === 'EMERGENCY' && !scenario.stopRouting) {
+        issues.push('WIRING: EMERGENCY should have stopRouting=true');
+    }
+    
+    // Include any explicit wiring issues from validation
+    if (scenario.wiringIssues && scenario.wiringIssues.length > 0) {
+        scenario.wiringIssues.forEach(issue => {
+            if (!issues.includes(issue)) {
+                issues.push(issue);
+            }
+        });
     }
     
     return issues;

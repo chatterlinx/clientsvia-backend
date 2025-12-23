@@ -358,21 +358,12 @@ const scenarioSchema = new Schema({
     },
     
     // ============================================
-    // PHASE 2: SCENARIO SEMANTICS & REPLY STRATEGY
+    // PHASE 2: REPLY STRATEGY (scenarioType moved below)
     // ============================================
     // Used by Response Engine to intelligently select replies
     // based on scenario type, reply strategy, and channel
-    
-    scenarioType: {
-        type: String,
-        enum: ['INFO_FAQ', 'ACTION_FLOW', 'SYSTEM_ACK', 'SMALL_TALK'],
-        default: null
-        // null = inferred at runtime from content
-        // INFO_FAQ: static info (hours, pricing, address, services, policies)
-        // ACTION_FLOW: starts/drives a flow (booking, estimates, transfers)
-        // SYSTEM_ACK: internal confirmations ("Got it, one moment")
-        // SMALL_TALK: chit-chat, rapport, jokes
-    },
+    // NOTE: scenarioType is defined in the WIRING section below (lines ~494)
+    //       to avoid duplicate field definitions
     
     replyStrategy: {
         type: String,
@@ -493,7 +484,7 @@ const scenarioSchema = new Schema({
     
     scenarioType: {
         type: String,
-        enum: ['EMERGENCY', 'BOOKING', 'FAQ', 'SMALL_TALK', 'SYSTEM', 'TRANSFER', 'UNKNOWN'],
+        enum: ['EMERGENCY', 'BOOKING', 'FAQ', 'SMALL_TALK', 'SYSTEM', 'TRANSFER', 'TROUBLESHOOT', 'BILLING', 'UNKNOWN'],
         default: 'UNKNOWN'
         // EMERGENCY: Critical issues (gas leak, no heat, flooding) - priority 90-100
         // BOOKING: Scheduling/appointment intents - priority 70-85
@@ -501,8 +492,119 @@ const scenarioSchema = new Schema({
         // SMALL_TALK: Casual conversation (greetings, thanks, goodbye) - priority -5 to 10
         // SYSTEM: Internal acks, confirmations - priority 20-40
         // TRANSFER: Human escalation requests - priority 80-90
+        // TROUBLESHOOT: Diagnostic/problem-solving scenarios - priority 50-70
+        // BILLING: Payment, invoice, account questions - priority 40-60
         // UNKNOWN: Not yet classified (autofill will guess)
     },
+    
+    // ============================================
+    // 🔗 WIRING FIELDS - SCENARIO → ACTION → FLOW
+    // ============================================
+    // This is what makes scenarios ACTUALLY DO SOMETHING
+    // Without these, scenarios only talk - they don't act
+    
+    actionType: {
+        type: String,
+        enum: ['REPLY_ONLY', 'START_FLOW', 'REQUIRE_BOOKING', 'TRANSFER', 'SMS_FOLLOWUP'],
+        default: 'REPLY_ONLY'
+        // REPLY_ONLY: Just respond with quickReply/fullReply (FAQ, small talk)
+        // START_FLOW: Start a Dynamic Flow (flowId REQUIRED)
+        // REQUIRE_BOOKING: Lock into booking collection mode (bookingIntent auto-true)
+        // TRANSFER: Immediately transfer to transferTarget
+        // SMS_FOLLOWUP: Send SMS follow-up, continue call
+    },
+    
+    flowId: {
+        type: Schema.Types.ObjectId,
+        ref: 'DynamicFlow',
+        default: null
+        // REQUIRED if actionType = 'START_FLOW'
+        // Points to the Dynamic Flow to execute
+        // Runtime validates this exists before allowing START_FLOW
+    },
+    
+    bookingIntent: {
+        type: Boolean,
+        default: false
+        // true = This scenario means "caller wants to book"
+        // When true, runtime activates booking slot collection
+        // Auto-set to true if actionType = 'REQUIRE_BOOKING'
+    },
+    
+    requiredSlots: [{
+        type: String,
+        trim: true
+        // Slots to collect if bookingIntent = true
+        // Example: ['firstName', 'lastName', 'phone', 'address', 'serviceType']
+        // Runtime checks these against company's configured booking slots
+        // If company doesn't have a slot, it's skipped with warning
+    }],
+    
+    stopRouting: {
+        type: Boolean,
+        default: false
+        // true = After this scenario fires, no other scenarios evaluate
+        // Use for high-priority matches like EMERGENCY or TRANSFER
+        // Prevents lower-priority scenarios from interfering
+    },
+    
+    // ============================================
+    // 🎭 REPLY BUNDLE SYSTEM (DETERMINISTIC VARIETY)
+    // ============================================
+    // Replaces random selection with intelligent rotation
+    // Goal: 7-10 replies per scenario, never sound robotic
+    
+    replyBundles: {
+        short: [{
+            text: { type: String, required: true, trim: true },
+            weight: { type: Number, default: 1, min: 0.1, max: 10 },
+            toneTags: [{ type: String, trim: true }]
+            // toneTags: ['empathetic', 'urgent', 'friendly', 'professional']
+            // Used to match caller mood (future enhancement)
+        }],
+        long: [{
+            text: { type: String, required: true, trim: true },
+            weight: { type: Number, default: 1, min: 0.1, max: 10 },
+            toneTags: [{ type: String, trim: true }]
+        }]
+    },
+    
+    replyPolicy: {
+        type: String,
+        enum: ['ROTATE_PER_CALLER', 'ROTATE_PER_SESSION', 'WEIGHTED_RANDOM', 'SEQUENTIAL'],
+        default: 'ROTATE_PER_CALLER'
+        // ROTATE_PER_CALLER: Each caller gets next reply in rotation (deterministic variety)
+        // ROTATE_PER_SESSION: Rotate within single call session
+        // WEIGHTED_RANDOM: Use weights for probability (current behavior)
+        // SEQUENTIAL: Always reply 1, then 2, then 3... (for testing)
+    },
+    
+    // ============================================
+    // 🧠 WIRING VALIDATION STATE (Runtime Checks)
+    // ============================================
+    // Set by validation endpoint, used by Runtime Truth
+    
+    wiringValidated: {
+        type: Boolean,
+        default: false
+        // Set to true when scenario passes all wiring checks:
+        // - actionType + required fields match
+        // - flowId exists if START_FLOW
+        // - transferTarget exists if TRANSFER
+        // - bookingSlots exist if REQUIRE_BOOKING
+    },
+    
+    wiringValidatedAt: {
+        type: Date,
+        default: null
+    },
+    
+    wiringIssues: [{
+        type: String,
+        trim: true
+        // Validation errors found during last check
+        // Example: ['flowId required for START_FLOW', 'transferTarget not found']
+    }],
     
     // ============================================
     // AUTOFILL PROTECTION - TUNING LOCK

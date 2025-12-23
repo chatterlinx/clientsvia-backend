@@ -152,52 +152,127 @@ const ALLOWED_PATHS = {
 // ============================================================================
 // SCENARIO WIRING PATHS - For company overrides of global scenarios
 // ============================================================================
+// These paths create company-specific overrides for global scenarios.
+// The original global scenario remains unchanged; the override is stored in
+// v2Company.scenarioOverrides[scenarioId] and merged at runtime.
+// ============================================================================
 const SCENARIO_WIRING_PATHS = {
+    // ═══════════════════════════════════════════════════════════════════════
+    // CLASSIFICATION (Determines default behavior)
+    // ═══════════════════════════════════════════════════════════════════════
     'scenarioBrain.scenarios.*.scenarioType': {
         type: 'enum',
-        values: ['EMERGENCY', 'BOOKING', 'FAQ', 'TROUBLESHOOT', 'TRANSFER', 'SMALL_TALK', 'UNKNOWN'],
+        values: ['EMERGENCY', 'BOOKING', 'FAQ', 'TROUBLESHOOT', 'BILLING', 'TRANSFER', 'SMALL_TALK', 'SYSTEM', 'UNKNOWN'],
         scope: 'companyOverride',
-        note: 'Creates a company override for global scenario'
+        note: 'Classification determines default action if actionType not set'
     },
-    'scenarioBrain.scenarios.*.wiring.action': {
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // WIRING: ACTION TYPE (What happens when scenario matches)
+    // ═══════════════════════════════════════════════════════════════════════
+    'scenarioBrain.scenarios.*.wiring.actionType': {
         type: 'enum',
-        values: ['REPLY_ONLY', 'START_FLOW', 'START_BOOKING', 'TRANSFER', 'ESCALATE_OR_BOOK', 'REPLY_THEN_ASK', 'REPLY_THEN_OFFER_BOOK', 'REPLY_AND_ASK'],
-        scope: 'companyOverride'
+        values: ['REPLY_ONLY', 'START_FLOW', 'REQUIRE_BOOKING', 'TRANSFER', 'SMS_FOLLOWUP'],
+        scope: 'companyOverride',
+        note: 'Explicit action type (overrides scenarioType inference)'
     },
+    'scenarioBrain.scenarios.*.wiring.effectiveAction': {
+        type: 'enum',
+        values: ['REPLY_ONLY', 'START_FLOW', 'REQUIRE_BOOKING', 'TRANSFER', 'SMS_FOLLOWUP', 'ESCALATE_OR_BOOK', 'REPLY_THEN_ASK'],
+        scope: 'companyOverride',
+        note: 'Runtime-determined action (read-only)'
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // WIRING: FLOW (For START_FLOW action)
+    // ═══════════════════════════════════════════════════════════════════════
     'scenarioBrain.scenarios.*.wiring.flowId': {
         type: 'string',
         scope: 'companyOverride',
-        conditionalRequiredIf: { 'wiring.action': 'START_FLOW' }
+        note: 'Dynamic Flow ID to start (REQUIRED if actionType=START_FLOW)',
+        conditionalRequiredIf: { 'wiring.actionType': 'START_FLOW' }
     },
-    'scenarioBrain.scenarios.*.wiring.transferTarget': {
-        type: 'string',
-        scope: 'companyOverride'
+    'scenarioBrain.scenarios.*.wiring.stopRouting': {
+        type: 'boolean',
+        scope: 'companyOverride',
+        note: 'If true, no other scenarios evaluate after this one fires (use for EMERGENCY, TRANSFER)'
     },
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // WIRING: BOOKING (For REQUIRE_BOOKING action or bookingIntent)
+    // ═══════════════════════════════════════════════════════════════════════
     'scenarioBrain.scenarios.*.wiring.bookingIntent': {
         type: 'boolean',
-        scope: 'companyOverride'
+        scope: 'companyOverride',
+        note: 'If true, runtime activates booking collection'
+    },
+    'scenarioBrain.scenarios.*.wiring.requiredSlots': {
+        type: 'array',
+        scope: 'companyOverride',
+        note: 'Booking slots to collect (e.g., firstName, phone, address)'
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // WIRING: TRANSFER (For TRANSFER action)
+    // ═══════════════════════════════════════════════════════════════════════
+    'scenarioBrain.scenarios.*.wiring.transferTarget': {
+        type: 'string',
+        scope: 'companyOverride',
+        note: 'Transfer target ID or phone (REQUIRED if actionType=TRANSFER)'
     },
     'scenarioBrain.scenarios.*.wiring.handoffPolicy': {
         type: 'enum',
-        values: ['low_confidence', 'emergency', 'user_request', 'always', 'never'],
-        scope: 'companyOverride'
+        values: ['never', 'low_confidence', 'always_on_keyword', 'emergency_only'],
+        scope: 'companyOverride',
+        note: 'When to escalate to human'
     },
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // WIRING: FOLLOW-UP (Legacy support)
+    // ═══════════════════════════════════════════════════════════════════════
+    'scenarioBrain.scenarios.*.wiring.followUpMode': {
+        type: 'enum',
+        values: ['NONE', 'ASK_FOLLOWUP_QUESTION', 'ASK_IF_BOOK', 'TRANSFER'],
+        scope: 'companyOverride',
+        note: 'What to do after initial response'
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // MATCHING (Confidence & Priority)
+    // ═══════════════════════════════════════════════════════════════════════
     'scenarioBrain.scenarios.*.priority': {
         type: 'number',
-        min: 0,
+        min: -10,
         max: 100,
-        scope: 'companyOverride'
+        scope: 'companyOverride',
+        note: 'Tie-breaker for equal confidence matches (higher = more priority)'
     },
     'scenarioBrain.scenarios.*.minConfidence': {
         type: 'number',
         min: 0,
         max: 1,
-        scope: 'companyOverride'
+        scope: 'companyOverride',
+        note: 'Per-scenario confidence threshold override'
     },
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // REPLY CONTROL (Anti-robotic)
+    // ═══════════════════════════════════════════════════════════════════════
+    'scenarioBrain.scenarios.*.replyPolicy': {
+        type: 'enum',
+        values: ['ROTATE_PER_CALLER', 'ROTATE_PER_SESSION', 'WEIGHTED_RANDOM', 'SEQUENTIAL'],
+        scope: 'companyOverride',
+        note: 'How to select from multiple reply variants'
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // STATUS (Enable/Disable)
+    // ═══════════════════════════════════════════════════════════════════════
     'scenarioBrain.scenarios.*.status': {
         type: 'enum',
         values: ['live', 'draft', 'disabled', 'archived'],
-        scope: 'companyOverride'
+        scope: 'companyOverride',
+        note: 'Scenario status (only live scenarios are matched)'
     }
 };
 

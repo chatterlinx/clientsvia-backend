@@ -152,6 +152,7 @@ async function loadAllRoutes() {
         routes.companyOverridesRoutes = await loadRouteWithTimeout('./routes/company/companyOverrides', 'companyOverridesRoutes'); // 🎚️ Company Overrides (Scenario/Category disable + Placeholders)
         routes.scopeOverridesRoutes = await loadRouteWithTimeout('./routes/company/scopeOverrides', 'scopeOverridesRoutes'); // 🔒 Scope Overrides (GLOBAL vs COMPANY clone-to-override)
         routes.scenarioExportRoutes = await loadRouteWithTimeout('./routes/company/scenarioExport', 'scenarioExportRoutes'); // 📦 Full Scenario Export (Deep JSON export with all fields)
+        routes.scenarioImportRoutes = await loadRouteWithTimeout('./routes/company/scenarioImport', 'scenarioImportRoutes'); // 📥 Scenario Import (Bulk import to company override layer)
         routes.platformSnapshotRoutes = await loadRouteWithTimeout('./routes/company/platformSnapshot', 'platformSnapshotRoutes'); // 📄 Platform Snapshot (Enterprise Introspection - Single Source of Truth)
         routes.seedGoldenRoutes = await loadRouteWithTimeout('./routes/company/seedGolden', 'seedGoldenRoutes'); // 🟣 Seed Golden Setup (Penguin Air HVAC Reference)
         routes.rawCompanyDataRoutes = await loadRouteWithTimeout('./routes/company/rawCompanyData', 'rawCompanyDataRoutes'); // 🔍 Raw Company Data (DB Echo for Truth Report)
@@ -473,6 +474,7 @@ function registerRoutes(routes) {
     app.use('/api/company/:companyId', routes.companyOverridesRoutes); // 🎚️ Company Overrides (Scenario/Category disable + Placeholders)
     app.use('/api/company/:companyId', routes.scopeOverridesRoutes); // 🔒 Scope Overrides (GLOBAL vs COMPANY clone-to-override)
     app.use('/api/company/:companyId/scenario-export', routes.scenarioExportRoutes); // 📦 Full Scenario Export (Deep JSON export with all fields)
+    app.use('/api/company/:companyId/scenarios/import', routes.scenarioImportRoutes); // 📥 Scenario Import (Bulk import to company override layer)
     app.use('/api/company/:companyId/control-plane', routes.controlPlaneEffectiveRoutes); // ⚡ Control Plane: /effective, /raw, /migrate, /save
     app.use('/api/company/:companyId/platform-snapshot', routes.platformSnapshotRoutes); // 📄 Platform Snapshot (Enterprise Introspection - Single Source of Truth)
     app.use('/api/company/:companyId/seed-golden', routes.seedGoldenRoutes); // 🟣 Seed Golden Setup (Penguin Air HVAC Reference)
