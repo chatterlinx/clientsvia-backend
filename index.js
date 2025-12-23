@@ -157,6 +157,7 @@ async function loadAllRoutes() {
         routes.rawCompanyDataRoutes = await loadRouteWithTimeout('./routes/company/rawCompanyData', 'rawCompanyDataRoutes'); // 🔍 Raw Company Data (DB Echo for Truth Report)
         routes.debugGreetingRoutes = await loadRouteWithTimeout('./routes/debug/greeting', 'debugGreetingRoutes'); // 🐛 Debug Greeting (Raw DB values + Force Write)
         routes.debugTransfersRoutes = await loadRouteWithTimeout('./routes/debug/transfers', 'debugTransfersRoutes'); // 🐛 Debug Transfers (Add/Update + Read-back)
+        routes.debugTemplatesRoutes = await loadRouteWithTimeout('./routes/company/debugTemplates', 'debugTemplatesRoutes'); // 🐛 Debug Templates (Company Template Wiring Verification)
         routes.companyQuickAnswersRoutes = await loadRouteWithTimeout('./routes/company/quickAnswers', 'companyQuickAnswersRoutes'); // ❓ QuickAnswers Dedupe + Management (company-scoped)
         routes.blueprintRoutes = await loadRouteWithTimeout('./routes/company/blueprint', 'blueprintRoutes'); // 🎨 Blueprint Generator (Enterprise Scenario Configuration)
         routes.executionMapRoutes = await loadRouteWithTimeout('./routes/company/executionMap', 'executionMapRoutes'); // 🗺️ Execution Map (Call Flow Visualization)
@@ -474,6 +475,7 @@ function registerRoutes(routes) {
     app.use('/api/company/:companyId/raw', routes.rawCompanyDataRoutes); // 🔍 Raw Company Data (DB Echo for Truth Report)
     app.use('/api/company/:companyId/debug/greeting', routes.debugGreetingRoutes); // 🐛 Debug Greeting (Raw DB values + Force Write)
     app.use('/api/company/:companyId/debug/transfers', routes.debugTransfersRoutes); // 🐛 Debug Transfers (Add/Update + Read-back)
+    app.use('/api/company/:companyId/debug/templates', routes.debugTemplatesRoutes); // 🐛 Debug Templates (Company Template Wiring)
     app.use('/api/company/:companyId/quickanswers', routes.companyQuickAnswersRoutes); // ❓ QuickAnswers Dedupe + Management
     app.use('/api/company/:companyId/blueprint', routes.blueprintRoutes); // 🎨 Blueprint Generator (Enterprise Scenario Configuration)
     app.use('/api/company/:companyId/execution-map', routes.executionMapRoutes); // 🗺️ Execution Map (Call Flow Visualization)
