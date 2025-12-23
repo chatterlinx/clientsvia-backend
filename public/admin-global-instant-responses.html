@@ -5664,9 +5664,21 @@ Just checking in..."></textarea>
 
             <!-- FIXED FOOTER -->
             <div style="background: #f8f9fa; padding: 12px 32px; display: flex; align-items: center; justify-content: space-between; border-top: 2px solid #e9ecef; flex-shrink: 0;">
-                <button type="button" onclick="closeScenarioModal()" style="background: white; color: #6c757d; border: 2px solid #dee2e6; padding: 10px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.3s;">
-                    <i class="fas fa-times mr-2"></i>Cancel
-                </button>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button type="button" onclick="closeScenarioModal()" style="background: white; color: #6c757d; border: 2px solid #dee2e6; padding: 10px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.3s;">
+                        <i class="fas fa-times mr-2"></i>Cancel
+                    </button>
+                    
+                    <!-- JSON Import/Export - Power User Access to ALL 77 Fields -->
+                    <div style="display: flex; gap: 8px; margin-left: 16px; padding-left: 16px; border-left: 2px solid #dee2e6;">
+                        <button type="button" onclick="exportScenarioJson()" style="background: #059669; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;" title="Export scenario as JSON (all fields)">
+                            <i class="fas fa-download"></i> Export JSON
+                        </button>
+                        <button type="button" onclick="openImportScenarioModal()" style="background: #7c3aed; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;" title="Import scenario from JSON (all fields)">
+                            <i class="fas fa-upload"></i> Import JSON
+                        </button>
+                    </div>
+                </div>
                 <div style="display: flex; gap: 10px;">
                     <button type="button" onclick="saveScenarioAsDraft()" style="background: #ffc107; color: #000; border: none; padding: 10px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: all 0.3s; box-shadow: 0 2px 8px rgba(255,193,7,0.3);">
                         <i class="fas fa-save mr-2"></i>Save as Draft
@@ -14085,6 +14097,319 @@ Continue?`;
             document.getElementById('scenario-form').reset();
             currentScenarioData = null;
         }
+
+        // =====================================================================
+        // 📥📤 SCENARIO JSON IMPORT/EXPORT - Access to ALL 77 Fields
+        // =====================================================================
+        
+        /**
+         * Export current scenario form data as JSON
+         */
+        function exportScenarioJson() {
+            console.log('📤 [EXPORT JSON] Collecting all scenario fields...');
+            
+            const scenarioJson = collectFullScenarioData();
+            
+            const jsonStr = JSON.stringify(scenarioJson, null, 2);
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(jsonStr).then(() => {
+                alert(`✅ Scenario JSON copied to clipboard!\n\n${Object.keys(scenarioJson).length} fields exported.\n\nPaste this into ChatGPT or your editor to modify, then import back.`);
+            }).catch(err => {
+                // Fallback: show in a modal
+                showJsonExportModal(jsonStr);
+            });
+        }
+        
+        /**
+         * Collect ALL scenario data from the form (77+ fields)
+         */
+        function collectFullScenarioData() {
+            const scenario = {
+                // META
+                _exportedAt: new Date().toISOString(),
+                _schemaVersion: 'V22',
+                
+                // BASIC INFO
+                name: document.getElementById('scenario-name')?.value?.trim() || '',
+                status: document.getElementById('scenario-status')?.value || 'draft',
+                priority: parseInt(document.getElementById('scenario-priority')?.value) || 0,
+                scenarioType: document.getElementById('scenario-type')?.value || '',
+                channel: document.getElementById('scenario-channel')?.value || 'any',
+                language: document.getElementById('scenario-language')?.value || 'auto',
+                behaviorId: document.getElementById('scenario-behavior')?.value || '',
+                
+                // TRIGGERS & MATCHING
+                triggers: (document.getElementById('scenario-triggers')?.value || '').split('\n').filter(t => t.trim()),
+                negativeTriggers: (document.getElementById('scenario-negative-triggers')?.value || '').split('\n').filter(t => t.trim()),
+                regexTriggers: (document.getElementById('scenario-regex-triggers')?.value || '').split('\n').filter(t => t.trim()),
+                minConfidence: parseFloat(document.getElementById('scenario-context-weight')?.value) || 0.7,
+                
+                // REPLIES & FLOW
+                quickReplies: (document.getElementById('scenario-quick-replies')?.value || '').split('\n').filter(r => r.trim()),
+                fullReplies: (document.getElementById('scenario-full-replies')?.value || '').split('\n').filter(r => r.trim()),
+                followUpFunnel: (document.getElementById('scenario-followup-funnel')?.value || '').split('\n').filter(f => f.trim()),
+                replySelection: document.getElementById('scenario-reply-selection')?.value || 'random',
+                replyStrategy: document.getElementById('scenario-reply-strategy')?.value || 'AUTO',
+                
+                // FOLLOW-UP BEHAVIOR
+                followUpMode: document.getElementById('scenario-followup-mode')?.value || 'NONE',
+                followUpQuestionText: document.getElementById('scenario-followup-question')?.value?.trim() || '',
+                transferTarget: document.getElementById('scenario-followup-transfer-target')?.value?.trim() || '',
+                
+                // ADVANCED SETTINGS
+                cooldown: parseInt(document.getElementById('scenario-cooldown')?.value) || 0,
+                handoffPolicy: document.getElementById('scenario-handoff-policy')?.value || 'low_confidence',
+                actionHooks: (document.getElementById('scenario-action-hooks')?.value || '').split(',').map(h => h.trim()).filter(h => h),
+                
+                // TIMED FOLLOW-UP
+                timedFollowUp: {
+                    enabled: document.getElementById('scenario-timed-enabled')?.checked || false,
+                    delay: parseInt(document.getElementById('scenario-timed-delay')?.value) || 50,
+                    extension: parseInt(document.getElementById('scenario-timed-extension')?.value) || 30,
+                    messages: (document.getElementById('scenario-timed-messages')?.value || '').split('\n').filter(m => m.trim())
+                },
+                
+                // SILENCE POLICY
+                silencePolicy: {
+                    maxConsecutiveSilence: parseInt(document.getElementById('scenario-silence-max')?.value) || 2,
+                    finalWarning: document.getElementById('scenario-silence-warning')?.value || 'Hello? Did I lose you?'
+                },
+                
+                // TTS OVERRIDE
+                ttsOverride: {
+                    pitch: document.getElementById('scenario-tts-pitch')?.value || '',
+                    rate: document.getElementById('scenario-tts-rate')?.value || '',
+                    volume: document.getElementById('scenario-tts-volume')?.value || ''
+                },
+                
+                // ENTITY CAPTURE
+                entityCapture: (document.getElementById('scenario-entity-capture')?.value || '').split('\n').filter(e => e.trim()),
+                
+                // STATE MACHINE
+                preconditions: tryParseJson(document.getElementById('scenario-preconditions')?.value),
+                effects: tryParseJson(document.getElementById('scenario-effects')?.value),
+                
+                // AI ENHANCE FIELDS (TAB 6)
+                keywords: collectChipValues('keywords-display'),
+                negativeKeywords: collectChipValues('negative-keywords-display'),
+                escalationFlags: collectChipValues('escalation-flags-display'),
+                
+                // ORIGINAL DATA (if editing)
+                _originalScenarioId: currentScenarioData?.scenarioId || currentScenarioData?._id || null,
+                _categoryId: currentCategoryId || null,
+                _templateId: currentTemplateId || null
+            };
+            
+            console.log('📤 [EXPORT JSON] Collected:', Object.keys(scenario).length, 'fields');
+            return scenario;
+        }
+        
+        /**
+         * Try to parse JSON, return object or empty object on failure
+         */
+        function tryParseJson(str) {
+            if (!str?.trim()) return {};
+            try {
+                return JSON.parse(str);
+            } catch (e) {
+                return {};
+            }
+        }
+        
+        /**
+         * Collect chip/tag values from a container
+         */
+        function collectChipValues(containerId) {
+            const container = document.getElementById(containerId);
+            if (!container) return [];
+            
+            const chips = container.querySelectorAll('[data-keyword], [data-flag]');
+            const values = [];
+            chips.forEach(chip => {
+                const value = chip.getAttribute('data-keyword') || chip.getAttribute('data-flag');
+                if (value) values.push(value);
+            });
+            return values;
+        }
+        
+        /**
+         * Show export modal with JSON (fallback if clipboard fails)
+         */
+        function showJsonExportModal(jsonStr) {
+            const modal = document.createElement('div');
+            modal.id = 'json-export-modal';
+            modal.innerHTML = `
+                <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 20000; display: flex; align-items: center; justify-content: center;">
+                    <div style="background: white; border-radius: 16px; width: 90%; max-width: 800px; max-height: 90vh; display: flex; flex-direction: column;">
+                        <div style="padding: 16px 24px; background: #059669; color: white; border-radius: 16px 16px 0 0; display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="margin: 0; font-size: 18px; font-weight: 700;">📤 Scenario JSON Export</h3>
+                            <button onclick="document.getElementById('json-export-modal').remove()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
+                        </div>
+                        <div style="padding: 20px; flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+                            <p style="margin: 0 0 12px 0; color: #6b7280;">Copy this JSON to edit in ChatGPT or your editor:</p>
+                            <textarea readonly style="flex: 1; width: 100%; font-family: monospace; font-size: 12px; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; resize: none;">${jsonStr.replace(/</g, '&lt;')}</textarea>
+                        </div>
+                        <div style="padding: 16px 24px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 12px;">
+                            <button onclick="navigator.clipboard.writeText(document.querySelector('#json-export-modal textarea').value);alert('Copied!')" style="padding: 10px 20px; background: #059669; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                                <i class="fas fa-copy mr-2"></i>Copy to Clipboard
+                            </button>
+                            <button onclick="document.getElementById('json-export-modal').remove()" style="padding: 10px 20px; background: #e5e7eb; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">Close</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        /**
+         * Open import scenario JSON modal
+         */
+        function openImportScenarioModal() {
+            const modal = document.createElement('div');
+            modal.id = 'json-import-modal';
+            modal.innerHTML = `
+                <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 20000; display: flex; align-items: center; justify-content: center;">
+                    <div style="background: white; border-radius: 16px; width: 90%; max-width: 800px; max-height: 90vh; display: flex; flex-direction: column;">
+                        <div style="padding: 16px 24px; background: #7c3aed; color: white; border-radius: 16px 16px 0 0; display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="margin: 0; font-size: 18px; font-weight: 700;">📥 Import Scenario JSON</h3>
+                            <button onclick="document.getElementById('json-import-modal').remove()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
+                        </div>
+                        <div style="padding: 20px; flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+                            <p style="margin: 0 0 8px 0; color: #6b7280;">Paste scenario JSON from ChatGPT or your editor:</p>
+                            <p style="margin: 0 0 12px 0; color: #f59e0b; font-size: 13px;"><i class="fas fa-exclamation-triangle mr-1"></i>This will overwrite the current form fields!</p>
+                            <textarea id="import-json-textarea" placeholder='{"name": "...", "triggers": [...], ...}' style="flex: 1; width: 100%; font-family: monospace; font-size: 12px; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; resize: none; min-height: 300px;"></textarea>
+                        </div>
+                        <div style="padding: 16px 24px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 12px;">
+                            <button onclick="document.getElementById('json-import-modal').remove()" style="padding: 10px 20px; background: #e5e7eb; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">Cancel</button>
+                            <button onclick="importScenarioJson()" style="padding: 10px 20px; background: #7c3aed; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                                <i class="fas fa-upload mr-2"></i>Import & Apply to Form
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        /**
+         * Import JSON and populate form fields
+         */
+        function importScenarioJson() {
+            const textarea = document.getElementById('import-json-textarea');
+            const jsonStr = textarea?.value?.trim();
+            
+            if (!jsonStr) {
+                alert('Please paste JSON data first.');
+                return;
+            }
+            
+            let data;
+            try {
+                data = JSON.parse(jsonStr);
+            } catch (e) {
+                alert('Invalid JSON! Please check the format.\n\nError: ' + e.message);
+                return;
+            }
+            
+            console.log('📥 [IMPORT JSON] Applying', Object.keys(data).length, 'fields...');
+            
+            // Apply to form fields
+            applyScenarioDataToForm(data);
+            
+            // Close modal
+            document.getElementById('json-import-modal').remove();
+            
+            alert(`✅ Imported! ${Object.keys(data).length} fields applied to form.\n\nReview the tabs and click "Save" when ready.`);
+        }
+        
+        /**
+         * Apply scenario data object to form fields
+         */
+        function applyScenarioDataToForm(data) {
+            // BASIC INFO
+            if (data.name !== undefined) setFieldValue('scenario-name', data.name);
+            if (data.status !== undefined) setFieldValue('scenario-status', data.status);
+            if (data.priority !== undefined) setFieldValue('scenario-priority', data.priority);
+            if (data.scenarioType !== undefined) setFieldValue('scenario-type', data.scenarioType);
+            if (data.channel !== undefined) setFieldValue('scenario-channel', data.channel);
+            if (data.language !== undefined) setFieldValue('scenario-language', data.language);
+            if (data.behaviorId !== undefined) setFieldValue('scenario-behavior', data.behaviorId);
+            
+            // TRIGGERS & MATCHING
+            if (data.triggers !== undefined) setFieldValue('scenario-triggers', Array.isArray(data.triggers) ? data.triggers.join('\n') : data.triggers);
+            if (data.negativeTriggers !== undefined) setFieldValue('scenario-negative-triggers', Array.isArray(data.negativeTriggers) ? data.negativeTriggers.join('\n') : data.negativeTriggers);
+            if (data.regexTriggers !== undefined) setFieldValue('scenario-regex-triggers', Array.isArray(data.regexTriggers) ? data.regexTriggers.join('\n') : data.regexTriggers);
+            if (data.minConfidence !== undefined) {
+                setFieldValue('scenario-context-weight', data.minConfidence);
+                const display = document.getElementById('confidence-value');
+                if (display) display.textContent = Math.round(data.minConfidence * 100) + '%';
+            }
+            
+            // REPLIES & FLOW
+            if (data.quickReplies !== undefined) setFieldValue('scenario-quick-replies', Array.isArray(data.quickReplies) ? data.quickReplies.join('\n') : data.quickReplies);
+            if (data.fullReplies !== undefined) setFieldValue('scenario-full-replies', Array.isArray(data.fullReplies) ? data.fullReplies.join('\n') : data.fullReplies);
+            if (data.followUpFunnel !== undefined) setFieldValue('scenario-followup-funnel', Array.isArray(data.followUpFunnel) ? data.followUpFunnel.join('\n') : data.followUpFunnel);
+            if (data.replySelection !== undefined) setFieldValue('scenario-reply-selection', data.replySelection);
+            if (data.replyStrategy !== undefined) setFieldValue('scenario-reply-strategy', data.replyStrategy);
+            
+            // FOLLOW-UP BEHAVIOR
+            if (data.followUpMode !== undefined) setFieldValue('scenario-followup-mode', data.followUpMode);
+            if (data.followUpQuestionText !== undefined) setFieldValue('scenario-followup-question', data.followUpQuestionText);
+            if (data.transferTarget !== undefined) setFieldValue('scenario-followup-transfer-target', data.transferTarget);
+            
+            // ADVANCED SETTINGS
+            if (data.cooldown !== undefined) setFieldValue('scenario-cooldown', data.cooldown);
+            if (data.handoffPolicy !== undefined) setFieldValue('scenario-handoff-policy', data.handoffPolicy);
+            if (data.actionHooks !== undefined) setFieldValue('scenario-action-hooks', Array.isArray(data.actionHooks) ? data.actionHooks.join(', ') : data.actionHooks);
+            
+            // TIMED FOLLOW-UP
+            if (data.timedFollowUp) {
+                if (data.timedFollowUp.enabled !== undefined) {
+                    const checkbox = document.getElementById('scenario-timed-enabled');
+                    if (checkbox) checkbox.checked = data.timedFollowUp.enabled;
+                }
+                if (data.timedFollowUp.delay !== undefined) setFieldValue('scenario-timed-delay', data.timedFollowUp.delay);
+                if (data.timedFollowUp.extension !== undefined) setFieldValue('scenario-timed-extension', data.timedFollowUp.extension);
+                if (data.timedFollowUp.messages !== undefined) setFieldValue('scenario-timed-messages', Array.isArray(data.timedFollowUp.messages) ? data.timedFollowUp.messages.join('\n') : data.timedFollowUp.messages);
+            }
+            
+            // SILENCE POLICY
+            if (data.silencePolicy) {
+                if (data.silencePolicy.maxConsecutiveSilence !== undefined) setFieldValue('scenario-silence-max', data.silencePolicy.maxConsecutiveSilence);
+                if (data.silencePolicy.finalWarning !== undefined) setFieldValue('scenario-silence-warning', data.silencePolicy.finalWarning);
+            }
+            
+            // TTS OVERRIDE
+            if (data.ttsOverride) {
+                if (data.ttsOverride.pitch !== undefined) setFieldValue('scenario-tts-pitch', data.ttsOverride.pitch);
+                if (data.ttsOverride.rate !== undefined) setFieldValue('scenario-tts-rate', data.ttsOverride.rate);
+                if (data.ttsOverride.volume !== undefined) setFieldValue('scenario-tts-volume', data.ttsOverride.volume);
+            }
+            
+            // ENTITY CAPTURE
+            if (data.entityCapture !== undefined) setFieldValue('scenario-entity-capture', Array.isArray(data.entityCapture) ? data.entityCapture.join('\n') : data.entityCapture);
+            
+            // STATE MACHINE
+            if (data.preconditions !== undefined) setFieldValue('scenario-preconditions', typeof data.preconditions === 'object' ? JSON.stringify(data.preconditions, null, 2) : data.preconditions);
+            if (data.effects !== undefined) setFieldValue('scenario-effects', typeof data.effects === 'object' ? JSON.stringify(data.effects, null, 2) : data.effects);
+            
+            console.log('📥 [IMPORT JSON] Form fields populated!');
+        }
+        
+        /**
+         * Helper to set form field value safely
+         */
+        function setFieldValue(elementId, value) {
+            const el = document.getElementById(elementId);
+            if (el) {
+                el.value = value;
+            } else {
+                console.warn(`[IMPORT JSON] Field not found: ${elementId}`);
+            }
+        }
+        
+        // =====================================================================
 
         /**
          * Save scenario as DRAFT
