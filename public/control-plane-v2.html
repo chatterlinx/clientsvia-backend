@@ -1799,15 +1799,23 @@
             </p>
           </div>
           
-          <!-- Template Selector -->
-          <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 12px;">
-            <label style="font-weight: 600; color: #334155;">Template:</label>
-            <select id="qa-template-select" onchange="loadQADashboard()" style="padding: 10px 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; min-width: 300px; background: white; color: #1e293b;">
-              <option value="">Loading templates...</option>
-            </select>
-            <button onclick="loadQADashboard()" class="btn btn-secondary" style="padding: 8px 16px;">
-              <i class="fas fa-sync-alt"></i> Refresh
-            </button>
+          <!-- Active Template Display (Auto-detected from company settings) -->
+          <div id="qa-active-template-info" style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border: 2px solid #10b981; border-radius: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <div style="font-size: 11px; color: #065f46; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Working on Company's Active Template</div>
+                <div id="qa-template-name" style="font-size: 18px; font-weight: 700; color: #047857; margin-top: 4px;">Loading...</div>
+                <div id="qa-template-stats" style="font-size: 12px; color: #059669; margin-top: 2px;">-- categories · -- scenarios · -- triggers</div>
+              </div>
+              <button onclick="loadQADashboard()" style="padding: 10px 16px; background: #10b981; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                <i class="fas fa-sync-alt"></i> Refresh
+              </button>
+            </div>
+          </div>
+          <!-- Hidden select for backwards compatibility -->
+          <select id="qa-template-select" style="display: none;">
+            <option value="">Loading...</option>
+          </select>
             <button onclick="runGoldenAutofillDryRun()" class="btn btn-primary" style="padding: 8px 16px;">
               <i class="fas fa-magic"></i> Golden Autofill (Dry Run)
             </button>
@@ -1871,7 +1879,7 @@
             </h4>
             <div id="qa-fix-queue" style="display: grid; gap: 12px;">
               <div style="text-align: center; padding: 40px; color: #94a3b8;">
-                Select a template to see the fix queue
+                <i class="fas fa-spinner fa-spin"></i> Loading scenarios...
               </div>
             </div>
           </div>
@@ -1883,7 +1891,7 @@
             </h4>
             <div id="qa-categories-list" style="display: grid; gap: 12px;">
               <div style="text-align: center; padding: 40px; color: #94a3b8;">
-                Select a template to see categories
+                <i class="fas fa-spinner fa-spin"></i> Loading categories...
               </div>
             </div>
           </div>
@@ -3049,51 +3057,62 @@
     let qaSelectedTemplateId = null;
     
     async function initQADashboard() {
-      console.log('📊 [QA DASHBOARD] Initializing...');
+      console.log('📊 [QA DASHBOARD] Initializing - Auto-detecting company active template...');
       
-      // Load templates into selector
       const select = document.getElementById('qa-template-select');
+      const nameEl = document.getElementById('qa-template-name');
+      const statsEl = document.getElementById('qa-template-stats');
+      const infoBox = document.getElementById('qa-active-template-info');
       
       try {
-        const response = await fetch('/api/admin/global-instant-responses', {
+        // Get the company's active template from Runtime Truth (single source of truth)
+        const runtimeResponse = await fetch(`/api/company/${currentCompanyId}/runtime-truth`, {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
         
-        if (response.ok) {
-          const data = await response.json();
-          console.log('[QA DASHBOARD] API response structure:', typeof data, Array.isArray(data) ? 'array' : Object.keys(data || {}));
-          
-          // Handle various response formats
-          let templates = [];
-          if (Array.isArray(data)) {
-            templates = data;
-          } else if (data && Array.isArray(data.templates)) {
-            templates = data.templates;
-          } else if (data && Array.isArray(data.data)) {
-            templates = data.data;
-          } else if (data && data.success && Array.isArray(data.templates)) {
-            templates = data.templates;
-          }
-          
-          console.log('[QA DASHBOARD] Extracted templates:', templates.length);
-          
-          if (templates.length === 0) {
-            select.innerHTML = '<option value="">No templates found</option>';
-            return;
-          }
-          
-          select.innerHTML = '<option value="">Select a template...</option>' +
-            templates.map(t => `<option value="${t._id}">${t.name || t.templateName} (${(t.categories || []).length} categories)</option>`).join('');
-          
-          // Auto-select first if only one
-          if (templates.length === 1) {
-            select.value = templates[0]._id;
-            await loadQADashboard();
-          }
+        if (!runtimeResponse.ok) {
+          throw new Error(`Runtime Truth HTTP ${runtimeResponse.status}`);
         }
+        
+        const runtimeResult = await runtimeResponse.json();
+        const activeTemplates = runtimeResult.data?.scenarioBrain?.activeTemplates || [];
+        
+        console.log('[QA DASHBOARD] Active templates from Runtime Truth:', activeTemplates);
+        
+        if (activeTemplates.length === 0) {
+          nameEl.textContent = 'No template selected';
+          statsEl.textContent = 'Go to Templates tab to activate a template';
+          infoBox.style.background = 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)';
+          infoBox.style.borderColor = '#f59e0b';
+          nameEl.style.color = '#92400e';
+          return;
+        }
+        
+        // Use the first (primary) active template
+        const primaryTemplate = activeTemplates[0];
+        const templateId = primaryTemplate.id;
+        
+        // Update hidden select for backwards compatibility
+        select.innerHTML = `<option value="${templateId}" selected>${primaryTemplate.name}</option>`;
+        select.value = templateId;
+        
+        // Update display
+        nameEl.textContent = primaryTemplate.name;
+        const totals = runtimeResult.data?.scenarioBrain?.totals || {};
+        statsEl.textContent = `${totals.categories || 0} categories · ${totals.scenarios || 0} scenarios · ${totals.triggers || 0} triggers`;
+        
+        console.log(`[QA DASHBOARD] Auto-selected primary template: ${primaryTemplate.name} (${templateId})`);
+        
+        // Now load the QA Dashboard for this template
+        await loadQADashboard();
+        
       } catch (error) {
-        console.error('[QA DASHBOARD] Failed to load templates:', error);
-        select.innerHTML = '<option value="">Error loading templates</option>';
+        console.error('[QA DASHBOARD] Init error:', error);
+        nameEl.textContent = 'Error loading template';
+        statsEl.textContent = error.message;
+        infoBox.style.background = 'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)';
+        infoBox.style.borderColor = '#ef4444';
+        nameEl.style.color = '#991b1b';
       }
     }
     
@@ -3318,7 +3337,7 @@
     
     async function runGoldenAutofillDryRun() {
       if (!qaSelectedTemplateId) {
-        showSnapshotToast('Select a template first', 'warning');
+        showSnapshotToast('No active template found. Go to Templates tab to activate one.', 'warning');
         return;
       }
       
