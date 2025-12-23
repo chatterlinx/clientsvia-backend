@@ -43,8 +43,20 @@ module.exports.getSnapshot = async function(companyId) {
         const tradeKey = company.tradeKey || company.industryType || 'universal';
         
         // ═══════════════════════════════════════════════════════════════════
-        // TEMPLATE INVENTORY (December 2025 Directive)
-        // Shows ALL templates in DB, not just active, for debugging "missing templates"
+        // COMPANY'S SELECTED TEMPLATES (SOURCE OF TRUTH)
+        // ═══════════════════════════════════════════════════════════════════
+        // December 2025 FIX: Must read from company.aiAgentSettings.templateReferences
+        // NOT from GlobalInstantResponseTemplate.find({ isActive: true })
+        // This matches what the UI (Data & Config → Templates) shows
+        // ═══════════════════════════════════════════════════════════════════
+        
+        const templateReferences = company.aiAgentSettings?.templateReferences || [];
+        const enabledTemplateRefs = templateReferences.filter(ref => ref.enabled !== false);
+        
+        logger.info(`[SCENARIO BRAIN SNAPSHOT] Company has ${templateReferences.length} template reference(s), ${enabledTemplateRefs.length} enabled`);
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // TEMPLATE INVENTORY (for debugging + auditability)
         // ═══════════════════════════════════════════════════════════════════
         const allTemplates = await GlobalInstantResponseTemplate.find({}).lean();
         
@@ -58,7 +70,7 @@ module.exports.getSnapshot = async function(companyId) {
                 published: 0,
                 unpublished: 0
             },
-            activeForCompany: [],
+            companySelectedTemplates: [], // What company has in templateReferences
             visibleForCompany: [] // Universal OR matching tradeKey
         };
         
@@ -89,11 +101,43 @@ module.exports.getSnapshot = async function(companyId) {
             }
         }
         
-        // Load active templates (for scenario processing)
-        const activeTemplates = await GlobalInstantResponseTemplate.find({
-            isActive: true,
-            isPublished: true
-        }).lean();
+        // ═══════════════════════════════════════════════════════════════════
+        // LOAD COMPANY'S SELECTED TEMPLATES (NOT all active templates!)
+        // ═══════════════════════════════════════════════════════════════════
+        const activeTemplates = [];
+        
+        for (const ref of enabledTemplateRefs) {
+            const template = await GlobalInstantResponseTemplate.findById(ref.templateId).lean();
+            
+            if (!template) {
+                logger.warn(`[SCENARIO BRAIN SNAPSHOT] Template ${ref.templateId} not found in DB (referenced by company)`);
+                continue;
+            }
+            
+            activeTemplates.push(template);
+            
+            // Add to inventory for tracking
+            const catCount = (template.categories || []).length;
+            const scenCount = (template.categories || []).flatMap(c => c.scenarios || []).length;
+            const trigCount = (template.categories || []).flatMap(c => c.scenarios || []).reduce((sum, s) => sum + (s.triggers?.length || 0), 0);
+            
+            templateInventory.companySelectedTemplates.push({
+                id: template._id.toString(),
+                name: template.name,
+                templateType: template.templateType || 'universal',
+                isActive: template.isActive,
+                isPublished: template.isPublished,
+                priority: ref.priority || 1,
+                enabledInCompany: ref.enabled !== false,
+                stats: {
+                    categories: catCount,
+                    scenarios: scenCount,
+                    triggers: trigCount
+                }
+            });
+        }
+        
+        logger.info(`[SCENARIO BRAIN SNAPSHOT] Loaded ${activeTemplates.length} template(s) from company's templateReferences`);
         
         // Load company overrides (use getOrCreate for defaults to ensure document exists)
         const [scenarioOverrides, categoryOverrides, companyDefaults] = await Promise.all([
