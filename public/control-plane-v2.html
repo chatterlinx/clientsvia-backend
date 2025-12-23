@@ -4513,21 +4513,21 @@
           btn.style.background = '#22c55e';
           
           // Show toast
-          showToast(`✅ ${result.summary?.copied || 0} templates copied to company. ${result.summary?.skipped || 0} already existed.`, 'success');
+          showSnapshotToast(`✅ ${result.summary?.copied || 0} templates copied to company. ${result.summary?.skipped || 0} already existed.`, 'success');
           
           // Refresh badge
           setTimeout(loadSnapshotBadge, 500);
         } else {
           btn.innerHTML = `<i class="fas fa-times"></i> Failed`;
           btn.style.background = '#dc2626';
-          showToast(`❌ Copy failed: ${result.error}`, 'error');
+          showSnapshotToast(`❌ Copy failed: ${result.error}`, 'error');
         }
         
       } catch (error) {
         console.error('[COPY TEMPLATES] Error:', error);
         btn.innerHTML = `<i class="fas fa-times"></i> Error`;
         btn.style.background = '#dc2626';
-        showToast(`❌ Copy failed: ${error.message}`, 'error');
+        showSnapshotToast(`❌ Copy failed: ${error.message}`, 'error');
       }
     }
     
@@ -4752,7 +4752,7 @@
           btn.innerHTML = '<i class="fas fa-check"></i> Loaded!';
           btn.style.background = '#059669';
           
-          showToast('✅ Export loaded - ' + (currentExportData.scenarios?.length || 0) + ' scenarios', 'success');
+          showSnapshotToast('✅ Export loaded - ' + (currentExportData.scenarios?.length || 0) + ' scenarios', 'success');
         } else {
           throw new Error(result.error);
         }
@@ -4761,7 +4761,7 @@
         console.error('[EXPORT] Error:', error);
         btn.innerHTML = '<i class="fas fa-times"></i> Error';
         btn.style.background = '#dc2626';
-        showToast('❌ Export failed: ' + error.message, 'error');
+        showSnapshotToast('❌ Export failed: ' + error.message, 'error');
       }
       
       setTimeout(() => {
@@ -4776,9 +4776,9 @@
       
       try {
         await navigator.clipboard.writeText(JSON.stringify(currentExportData, null, 2));
-        showToast('✅ Copied to clipboard! Paste into ChatGPT.', 'success');
+        showSnapshotToast('✅ Copied to clipboard! Paste into ChatGPT.', 'success');
       } catch (error) {
-        showToast('❌ Copy failed: ' + error.message, 'error');
+        showSnapshotToast('❌ Copy failed: ' + error.message, 'error');
       }
     }
   </script>
@@ -4874,7 +4874,7 @@
       const patchInput = document.getElementById('patch-json-input').value.trim();
       
       if (!patchInput) {
-        showToast('❌ Please paste a JSON patch first', 'error');
+        showSnapshotToast('❌ Please paste a JSON patch first', 'error');
         return;
       }
       
@@ -4882,7 +4882,7 @@
       try {
         patch = JSON.parse(patchInput);
       } catch (e) {
-        showToast('❌ Invalid JSON: ' + e.message, 'error');
+        showSnapshotToast('❌ Invalid JSON: ' + e.message, 'error');
         return;
       }
       
@@ -4916,14 +4916,14 @@
           // Enable apply button
           document.getElementById('btn-apply-patch-confirm').disabled = false;
           
-          showToast('✅ Patch validated - ready to apply', 'success');
+          showSnapshotToast('✅ Patch validated - ready to apply', 'success');
         } else {
           throw new Error(result.error + (result.validationErrors ? ': ' + result.validationErrors.join(', ') : ''));
         }
         
       } catch (error) {
         console.error('[PATCH] Preview error:', error);
-        showToast('❌ Validation failed: ' + error.message, 'error');
+        showSnapshotToast('❌ Validation failed: ' + error.message, 'error');
         document.getElementById('patch-preview').style.display = 'none';
         document.getElementById('btn-apply-patch-confirm').disabled = true;
       }
@@ -4939,7 +4939,7 @@
       try {
         patch = JSON.parse(patchInput);
       } catch (e) {
-        showToast('❌ Invalid JSON: ' + e.message, 'error');
+        showSnapshotToast('❌ Invalid JSON: ' + e.message, 'error');
         return;
       }
       
@@ -4970,7 +4970,7 @@
         if (result.success) {
           btn.innerHTML = '<i class="fas fa-check"></i> Applied!';
           btn.style.background = '#059669';
-          showToast('✅ Patch applied successfully!', 'success');
+          showSnapshotToast('✅ Patch applied successfully!', 'success');
           
           // Refresh snapshot badge
           setTimeout(loadSnapshotBadge, 500);
@@ -4982,7 +4982,7 @@
         console.error('[PATCH] Apply error:', error);
         btn.innerHTML = '<i class="fas fa-times"></i> Failed';
         btn.style.background = '#dc2626';
-        showToast('❌ Apply failed: ' + error.message, 'error');
+        showSnapshotToast('❌ Apply failed: ' + error.message, 'error');
       }
       
       setTimeout(() => {
@@ -5054,7 +5054,7 @@
       const templateId = document.getElementById('validator-template-id').value.trim();
       
       if (!templateId) {
-        showToast('❌ Please enter a template ID', 'error');
+        showSnapshotToast('❌ Please enter a template ID', 'error');
         return;
       }
       
@@ -5146,14 +5146,14 @@
             `;
           }
           
-          showToast(`Validation complete: ${summary.errorCount} errors, ${summary.warningCount} warnings`, summary.errorCount > 0 ? 'error' : 'success');
+          showSnapshotToast(`Validation complete: ${summary.errorCount} errors, ${summary.warningCount} warnings`, summary.errorCount > 0 ? 'error' : 'success');
         } else {
           throw new Error(result.error);
         }
         
       } catch (error) {
         console.error('[VALIDATION] Error:', error);
-        showToast('❌ Validation failed: ' + error.message, 'error');
+        showSnapshotToast('❌ Validation failed: ' + error.message, 'error');
       }
       
       btn.innerHTML = '<i class="fas fa-play"></i> Validate';
@@ -5730,7 +5730,7 @@ Loading field report...
       const templateId = document.getElementById('autofill-template-select').value;
       
       if (!templateId) {
-        showToast('❌ Please select a template', 'error');
+        showSnapshotToast('❌ Please select a template', 'error');
         return;
       }
       
@@ -5821,7 +5821,7 @@ Loading field report...
         
       } catch (error) {
         console.error('[AUTOFILL] Preview error:', error);
-        showToast('❌ API Error: ' + error.message, 'error');
+        showSnapshotToast('❌ API Error: ' + error.message, 'error');
         document.getElementById('autofill-preview').style.display = 'block';
         document.getElementById('autofill-diff').innerHTML = `
           <div style="color: #f87171; padding: 20px; text-align: center;">
@@ -5840,7 +5840,7 @@ Loading field report...
       const textarea = document.getElementById('autofill-json-output');
       if (textarea) {
         navigator.clipboard.writeText(textarea.value).then(() => {
-          showToast('✅ JSON copied to clipboard', 'success');
+          showSnapshotToast('✅ JSON copied to clipboard', 'success');
         });
       }
     }
@@ -5848,13 +5848,13 @@ Loading field report...
     // Apply Golden Autofill using the REAL backend API (Dec 2025 Fix)
     async function applyGoldenAutofillFromModal() {
       if (!autofillPreview || !autofillPreview.templateId) {
-        showToast('❌ No preview loaded. Click Preview first.', 'error');
+        showSnapshotToast('❌ No preview loaded. Click Preview first.', 'error');
         return;
       }
       
       const toUpdate = autofillPreview.data?.summary?.toUpdate || 0;
       if (toUpdate === 0) {
-        showToast('❌ No changes to apply', 'error');
+        showSnapshotToast('❌ No changes to apply', 'error');
         return;
       }
       
@@ -5890,7 +5890,7 @@ Loading field report...
             textarea.value = JSON.stringify(data, null, 2);
           }
           
-          showToast(`✅ Applied: ${data.results?.updated || 0} updated, ${data.results?.locked || 0} locked, ${data.results?.failed || 0} failed`, 'success');
+          showSnapshotToast(`✅ Applied: ${data.results?.updated || 0} updated, ${data.results?.locked || 0} locked, ${data.results?.failed || 0} failed`, 'success');
           
           // Update the visual summary
           document.getElementById('autofill-diff').innerHTML = `
@@ -5916,7 +5916,7 @@ Loading field report...
         
       } catch (error) {
         console.error('[AUTOFILL] Apply error:', error);
-        showToast('❌ API Error: ' + error.message, 'error');
+        showSnapshotToast('❌ API Error: ' + error.message, 'error');
       }
       
       btn.innerHTML = '<i class="fas fa-magic"></i> Apply Golden Defaults';
