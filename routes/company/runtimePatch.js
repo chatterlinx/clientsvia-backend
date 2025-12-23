@@ -70,6 +70,32 @@ const ALLOWED_PATHS = {
         scope: 'companyOverride',
         storage: 'v2Company.frontDeskBehavior.booking.enabled'
     },
+    'controlPlane.booking.consent.required': {
+        type: 'boolean',
+        scope: 'companyOverride',
+        storage: 'v2Company.aiAgentSettings.discoveryConsent.enabled'
+    },
+    'controlPlane.booking.consent.phrase': {
+        type: 'string',
+        maxLength: 300,
+        scope: 'companyOverride',
+        storage: 'v2Company.aiAgentSettings.discoveryConsent.consentPhrase'
+    },
+    'controlPlane.booking.confirmName': {
+        type: 'boolean',
+        scope: 'companyOverride',
+        storage: 'v2Company.frontDeskBehavior.booking.confirmName'
+    },
+    'controlPlane.booking.confirmAddress': {
+        type: 'boolean',
+        scope: 'companyOverride',
+        storage: 'v2Company.frontDeskBehavior.booking.confirmAddress'
+    },
+    'controlPlane.booking.confirmPhone': {
+        type: 'boolean',
+        scope: 'companyOverride',
+        storage: 'v2Company.frontDeskBehavior.booking.confirmPhone'
+    },
     
     // Dynamic Flow paths
     'dynamicFlows.flows.*.enabled': {

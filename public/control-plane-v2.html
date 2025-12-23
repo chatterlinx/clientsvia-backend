@@ -5230,14 +5230,15 @@ Loading field report...
        RUNTIME TRUTH MODAL - THE Single JSON That Shows Everything
        ═══════════════════════════════════════════════════════════════════════════ -->
   <div id="runtime-truth-modal-overlay" class="snapshot-modal-overlay">
-    <div class="snapshot-modal" style="max-width: 1000px;">
+    <div class="snapshot-modal" style="max-width: 1200px;">
       <div class="snapshot-modal-header" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
         <div class="snapshot-modal-title">
           <h2 style="margin: 0; font-size: 18px; font-weight: 600;">🎯 Runtime Truth - What Actually Runs</h2>
           <p style="margin: 4px 0 0; font-size: 12px; opacity: 0.9;">If it's not in this JSON, it doesn't exist at runtime</p>
         </div>
-        <div class="snapshot-modal-controls" style="display: flex; gap: 8px;">
+        <div class="snapshot-modal-controls" style="display: flex; gap: 8px; align-items: center;">
           <span id="runtime-truth-status" style="padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;"></span>
+          <span id="runtime-truth-version" style="color: rgba(255,255,255,0.7); font-size: 10px; font-family: monospace;"></span>
           <button id="btn-copy-runtime-truth" onclick="copyRuntimeTruth()" style="padding: 8px 16px; background: white; color: #059669; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
             <i class="fas fa-copy"></i> Copy JSON
           </button>
@@ -5247,34 +5248,189 @@ Loading field report...
         </div>
       </div>
       
-      <div class="snapshot-modal-body" style="padding: 20px; max-height: 75vh; overflow-y: auto;">
-        <!-- Summary Cards -->
-        <div id="runtime-truth-summary" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 20px;"></div>
+      <!-- Tab Navigation -->
+      <div style="background: #1e293b; padding: 0 20px; display: flex; gap: 0; border-bottom: 2px solid #334155;">
+        <button onclick="switchRuntimeTruthTab('overview')" id="rt-tab-overview" class="rt-tab active" style="padding: 12px 20px; background: transparent; border: none; color: white; font-weight: 600; font-size: 13px; cursor: pointer; border-bottom: 3px solid #10b981; margin-bottom: -2px;">
+          📊 Overview
+        </button>
+        <button onclick="switchRuntimeTruthTab('wiring')" id="rt-tab-wiring" class="rt-tab" style="padding: 12px 20px; background: transparent; border: none; color: #94a3b8; font-weight: 600; font-size: 13px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">
+          🔌 Scenario Wiring
+        </button>
+        <button onclick="switchRuntimeTruthTab('booking')" id="rt-tab-booking" class="rt-tab" style="padding: 12px 20px; background: transparent; border: none; color: #94a3b8; font-weight: 600; font-size: 13px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">
+          📅 Booking
+        </button>
+        <button onclick="switchRuntimeTruthTab('json')" id="rt-tab-json" class="rt-tab" style="padding: 12px 20px; background: transparent; border: none; color: #94a3b8; font-weight: 600; font-size: 13px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">
+          { } JSON
+        </button>
+      </div>
+      
+      <div class="snapshot-modal-body" style="padding: 20px; max-height: 70vh; overflow-y: auto;">
         
-        <!-- Issues Panel -->
-        <div id="runtime-truth-issues" style="margin-bottom: 20px;"></div>
-        
-        <!-- Dynamic Flow Toggle Panel -->
-        <div id="runtime-truth-flows" style="background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <h4 style="margin: 0; color: #f1f5f9; font-size: 14px; display: flex; align-items: center; gap: 8px;">
-              <span>⚡</span> Dynamic Flows (Toggle ON/OFF)
-            </h4>
-            <span id="flows-enabled-count" style="color: #94a3b8; font-size: 12px;"></span>
+        <!-- ═══════════════════════════════════════════════════════════════════════
+             TAB: OVERVIEW
+             ═══════════════════════════════════════════════════════════════════════ -->
+        <div id="rt-content-overview" class="rt-tab-content">
+          <!-- Last Write Stamp -->
+          <div id="runtime-truth-last-write" style="background: #0f172a; border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; display: flex; gap: 24px; font-size: 11px; color: #64748b;">
+            <span><strong>Version:</strong> <code id="rt-version-display" style="color: #22d3ee;">--</code></span>
+            <span><strong>Generated:</strong> <span id="rt-generated-at">--</span></span>
+            <span><strong>Last Patch:</strong> <span id="rt-last-patch">Never</span></span>
           </div>
-          <div id="flows-toggle-list" style="display: flex; flex-direction: column; gap: 8px;">
-            <!-- Flow toggles will be rendered here -->
+          
+          <!-- Summary Cards -->
+          <div id="runtime-truth-summary" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 20px;"></div>
+          
+          <!-- Issues Panel -->
+          <div id="runtime-truth-issues" style="margin-bottom: 20px;"></div>
+          
+          <!-- Dynamic Flow Toggle Panel -->
+          <div id="runtime-truth-flows" style="background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h4 style="margin: 0; color: #f1f5f9; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                <span>⚡</span> Dynamic Flows (Toggle ON/OFF)
+              </h4>
+              <span id="flows-enabled-count" style="color: #94a3b8; font-size: 12px;"></span>
+            </div>
+            <div id="flows-toggle-list" style="display: flex; flex-direction: column; gap: 8px;">
+              <!-- Flow toggles will be rendered here -->
+            </div>
           </div>
         </div>
         
-        <!-- JSON Output -->
-        <div style="background: #0f172a; border-radius: 12px; overflow: hidden;">
-          <div style="padding: 12px 16px; background: #1e293b; display: flex; justify-content: space-between; align-items: center;">
-            <span style="color: #94a3b8; font-weight: 600; font-size: 14px;">📋 Complete Runtime JSON</span>
-            <span id="runtime-truth-size" style="color: #64748b; font-size: 12px;"></span>
+        <!-- ═══════════════════════════════════════════════════════════════════════
+             TAB: SCENARIO WIRING
+             ═══════════════════════════════════════════════════════════════════════ -->
+        <div id="rt-content-wiring" class="rt-tab-content" style="display: none;">
+          <!-- Bulk Actions -->
+          <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;">
+            <button onclick="fixUnknownScenarioTypes()" style="padding: 10px 16px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-magic"></i> Fix UNKNOWN Types
+            </button>
+            <button onclick="wireSelectedToFlow()" style="padding: 10px 16px; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-link"></i> Wire Selected to Flow
+            </button>
+            <select id="bulk-flow-select" style="padding: 10px 12px; border: 1px solid #334155; border-radius: 8px; background: #1e293b; color: #f1f5f9; font-size: 12px;">
+              <option value="">-- Select Flow --</option>
+            </select>
+            <span id="wiring-selected-count" style="color: #94a3b8; font-size: 12px; margin-left: auto;">0 selected</span>
           </div>
-          <pre id="runtime-truth-json" style="margin: 0; padding: 16px; color: #22d3ee; font-size: 11px; line-height: 1.5; overflow-x: auto; max-height: 400px; overflow-y: auto;"></pre>
+          
+          <!-- Wiring Table -->
+          <div style="background: #0f172a; border-radius: 12px; overflow: hidden;">
+            <div style="overflow-x: auto;">
+              <table id="scenario-wiring-table" style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                <thead>
+                  <tr style="background: #1e293b;">
+                    <th style="padding: 12px 8px; text-align: left; color: #94a3b8; font-weight: 600; border-bottom: 1px solid #334155;">
+                      <input type="checkbox" id="select-all-scenarios" onchange="toggleAllScenarios(this.checked)" style="accent-color: #10b981;">
+                    </th>
+                    <th style="padding: 12px 8px; text-align: left; color: #94a3b8; font-weight: 600; border-bottom: 1px solid #334155;">Scenario</th>
+                    <th style="padding: 12px 8px; text-align: left; color: #94a3b8; font-weight: 600; border-bottom: 1px solid #334155;">Type</th>
+                    <th style="padding: 12px 8px; text-align: left; color: #94a3b8; font-weight: 600; border-bottom: 1px solid #334155;">Action</th>
+                    <th style="padding: 12px 8px; text-align: left; color: #94a3b8; font-weight: 600; border-bottom: 1px solid #334155;">Flow ID</th>
+                    <th style="padding: 12px 8px; text-align: center; color: #94a3b8; font-weight: 600; border-bottom: 1px solid #334155;">Book?</th>
+                    <th style="padding: 12px 8px; text-align: left; color: #94a3b8; font-weight: 600; border-bottom: 1px solid #334155;">Transfer</th>
+                    <th style="padding: 12px 8px; text-align: center; color: #94a3b8; font-weight: 600; border-bottom: 1px solid #334155;">Priority</th>
+                    <th style="padding: 12px 8px; text-align: left; color: #94a3b8; font-weight: 600; border-bottom: 1px solid #334155;">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="scenario-wiring-body">
+                  <!-- Scenarios will be rendered here -->
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
+        
+        <!-- ═══════════════════════════════════════════════════════════════════════
+             TAB: BOOKING
+             ═══════════════════════════════════════════════════════════════════════ -->
+        <div id="rt-content-booking" class="rt-tab-content" style="display: none;">
+          <!-- Master Toggle -->
+          <div style="background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h4 style="margin: 0 0 4px 0; color: #f1f5f9; font-size: 16px;">📅 Booking System</h4>
+                <p style="margin: 0; color: #94a3b8; font-size: 12px;">Enable to collect appointment details from callers</p>
+              </div>
+              <label style="position: relative; display: inline-block; width: 60px; height: 32px;">
+                <input type="checkbox" id="booking-enabled-toggle" onchange="toggleBookingEnabled(this.checked)" style="opacity: 0; width: 0; height: 0;">
+                <span id="booking-toggle-track" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #475569; transition: 0.3s; border-radius: 32px;">
+                  <span id="booking-toggle-thumb" style="position: absolute; content: ''; height: 26px; width: 26px; left: 3px; bottom: 3px; background: white; transition: 0.3s; border-radius: 50%;"></span>
+                </span>
+              </label>
+            </div>
+          </div>
+          
+          <!-- Required Fields -->
+          <div style="background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <h4 style="margin: 0 0 16px 0; color: #f1f5f9; font-size: 14px;">📝 Required Fields</h4>
+            <div id="booking-fields-list" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+              <!-- Fields will be rendered here -->
+            </div>
+          </div>
+          
+          <!-- Time Windows -->
+          <div style="background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <h4 style="margin: 0; color: #f1f5f9; font-size: 14px;">⏰ Time Windows</h4>
+              <button onclick="addTimeWindow()" style="padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 6px; font-size: 11px; cursor: pointer;">
+                <i class="fas fa-plus"></i> Add Window
+              </button>
+            </div>
+            <div id="booking-time-windows" style="display: flex; flex-wrap: wrap; gap: 8px;">
+              <!-- Time windows will be rendered here -->
+            </div>
+          </div>
+          
+          <!-- Consent Rules -->
+          <div style="background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+            <h4 style="margin: 0 0 16px 0; color: #f1f5f9; font-size: 14px;">✅ Consent & Confirmation</h4>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <label style="display: flex; align-items: center; gap: 12px; color: #f1f5f9; font-size: 13px;">
+                <input type="checkbox" id="consent-sms" onchange="updateConsentSetting('smsConsent', this.checked)" style="accent-color: #10b981; width: 18px; height: 18px;">
+                SMS Text Consent Required
+              </label>
+              <label style="display: flex; align-items: center; gap: 12px; color: #f1f5f9; font-size: 13px;">
+                <input type="checkbox" id="consent-confirm-name" onchange="updateConsentSetting('confirmName', this.checked)" style="accent-color: #10b981; width: 18px; height: 18px;">
+                Confirm Name (repeat back first + last)
+              </label>
+              <label style="display: flex; align-items: center; gap: 12px; color: #f1f5f9; font-size: 13px;">
+                <input type="checkbox" id="consent-confirm-address" onchange="updateConsentSetting('confirmAddress', this.checked)" style="accent-color: #10b981; width: 18px; height: 18px;">
+                Confirm Address (street/city/unit)
+              </label>
+              <label style="display: flex; align-items: center; gap: 12px; color: #f1f5f9; font-size: 13px;">
+                <input type="checkbox" id="consent-confirm-phone" onchange="updateConsentSetting('confirmPhone', this.checked)" style="accent-color: #10b981; width: 18px; height: 18px;">
+                Confirm Phone (repeat back number)
+              </label>
+            </div>
+            <div style="margin-top: 16px;">
+              <label style="display: block; color: #94a3b8; font-size: 12px; margin-bottom: 8px;">Consent Script (read to caller)</label>
+              <textarea id="consent-script" onchange="updateConsentScript(this.value)" style="width: 100%; height: 80px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px; color: #f1f5f9; font-size: 12px; resize: vertical;" placeholder="I'll send you a text confirmation. Is that okay?"></textarea>
+            </div>
+          </div>
+          
+          <!-- Booking Health -->
+          <div id="booking-health-panel" style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 12px; padding: 16px; display: none;">
+            <h4 style="margin: 0 0 8px 0; color: #92400e; font-size: 14px;">⚠️ Booking Configuration Issues</h4>
+            <ul id="booking-health-issues" style="margin: 0; padding-left: 20px; color: #92400e; font-size: 13px;">
+            </ul>
+          </div>
+        </div>
+        
+        <!-- ═══════════════════════════════════════════════════════════════════════
+             TAB: JSON
+             ═══════════════════════════════════════════════════════════════════════ -->
+        <div id="rt-content-json" class="rt-tab-content" style="display: none;">
+          <div style="background: #0f172a; border-radius: 12px; overflow: hidden;">
+            <div style="padding: 12px 16px; background: #1e293b; display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: #94a3b8; font-weight: 600; font-size: 14px;">📋 Complete Runtime JSON</span>
+              <span id="runtime-truth-size" style="color: #64748b; font-size: 12px;"></span>
+            </div>
+            <pre id="runtime-truth-json" style="margin: 0; padding: 16px; color: #22d3ee; font-size: 11px; line-height: 1.5; overflow-x: auto; max-height: 500px; overflow-y: auto;"></pre>
+          </div>
+        </div>
+        
       </div>
     </div>
   </div>
@@ -5284,6 +5440,20 @@ Loading field report...
     // RUNTIME TRUTH - THE Single Source of All Runtime Behavior
     // ============================================================================
     let currentRuntimeTruth = null;
+    let selectedScenarios = new Set();
+    let lastPatchTimestamp = null;
+    
+    // Enums for dropdowns
+    const SCENARIO_TYPES = ['FAQ', 'TROUBLESHOOT', 'BOOKING', 'EMERGENCY', 'TRANSFER', 'SMALL_TALK', 'UNKNOWN'];
+    const SCENARIO_ACTIONS = ['REPLY_ONLY', 'START_FLOW', 'ESCALATE_OR_BOOK', 'TRANSFER', 'REPLY_THEN_ASK', 'REPLY_THEN_OFFER_BOOK'];
+    const BOOKING_FIELDS = [
+      { key: 'firstName', label: 'First Name', required: true },
+      { key: 'lastName', label: 'Last Name', required: true },
+      { key: 'phone', label: 'Phone Number', required: true },
+      { key: 'address', label: 'Address', required: false },
+      { key: 'problemSummary', label: 'Problem Description', required: false },
+      { key: 'timeWindow', label: 'Preferred Time', required: false }
+    ];
     
     async function openRuntimeTruthModal() {
       document.getElementById('runtime-truth-modal-overlay').classList.add('active');
@@ -5292,6 +5462,36 @@ Loading field report...
     
     function closeRuntimeTruthModal() {
       document.getElementById('runtime-truth-modal-overlay').classList.remove('active');
+    }
+    
+    // Tab switching
+    function switchRuntimeTruthTab(tabName) {
+      // Update tab buttons
+      document.querySelectorAll('.rt-tab').forEach(tab => {
+        tab.style.color = '#94a3b8';
+        tab.style.borderBottomColor = 'transparent';
+      });
+      const activeTab = document.getElementById(`rt-tab-${tabName}`);
+      if (activeTab) {
+        activeTab.style.color = 'white';
+        activeTab.style.borderBottomColor = '#10b981';
+      }
+      
+      // Update content
+      document.querySelectorAll('.rt-tab-content').forEach(content => {
+        content.style.display = 'none';
+      });
+      const activeContent = document.getElementById(`rt-content-${tabName}`);
+      if (activeContent) {
+        activeContent.style.display = 'block';
+      }
+      
+      // Load tab-specific content
+      if (tabName === 'wiring' && currentRuntimeTruth) {
+        renderScenarioWiringTable();
+      } else if (tabName === 'booking' && currentRuntimeTruth) {
+        renderBookingPanel();
+      }
     }
     
     async function loadRuntimeTruth() {
@@ -5321,6 +5521,13 @@ Loading field report...
         }
         
         currentRuntimeTruth = result.data;
+        
+        // Display version info
+        const meta = result.data._meta || {};
+        document.getElementById('runtime-truth-version').textContent = meta.version || '';
+        document.getElementById('rt-version-display').textContent = meta.version || '--';
+        document.getElementById('rt-generated-at').textContent = meta.generatedAt ? new Date(meta.generatedAt).toLocaleString() : '--';
+        document.getElementById('rt-last-patch').textContent = lastPatchTimestamp ? new Date(lastPatchTimestamp).toLocaleString() : 'Never';
         
         // Status badge
         const health = result.data.health;
@@ -5508,6 +5715,7 @@ Loading field report...
         const result = await response.json();
         
         if (result.success && result.appliedCount > 0) {
+          lastPatchTimestamp = new Date().toISOString();
           showSnapshotToast(`Flow ${enabled ? 'enabled' : 'disabled'} successfully!`, 'success');
           // Reload runtime truth to refresh the view
           await loadRuntimeTruth();
@@ -5524,6 +5732,425 @@ Loading field report...
       } finally {
         toggleEl.disabled = false;
       }
+    }
+    
+    // ============================================================================
+    // SCENARIO WIRING PANEL
+    // ============================================================================
+    
+    function renderScenarioWiringTable() {
+      const tbody = document.getElementById('scenario-wiring-body');
+      const flowSelect = document.getElementById('bulk-flow-select');
+      
+      if (!currentRuntimeTruth) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: #94a3b8;">Loading...</td></tr>';
+        return;
+      }
+      
+      const scenarios = currentRuntimeTruth.scenarioBrain?.scenarios || [];
+      const flows = currentRuntimeTruth.dynamicFlows?.flows || [];
+      const bookingEnabled = currentRuntimeTruth.controlPlane?.booking?.enabled;
+      
+      // Populate flow dropdown
+      flowSelect.innerHTML = '<option value="">-- Select Flow --</option>' + 
+        flows.filter(f => f.enabled).map(f => `<option value="${f.id}">${f.name || f.flowKey}</option>`).join('');
+      
+      if (scenarios.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: #94a3b8;">No scenarios found. Enable a template first.</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = scenarios.map(s => {
+        const hasIssues = [];
+        if (s.scenarioType === 'UNKNOWN') hasIssues.push('UNKNOWN TYPE');
+        if (s.wiring.action === 'START_FLOW' && !s.wiring.flowId) hasIssues.push('Missing flowId');
+        if (s.wiring.action === 'TRANSFER' && !s.wiring.transferTarget) hasIssues.push('Missing target');
+        if (s.wiring.bookingIntent && !bookingEnabled) hasIssues.push('Booking disabled');
+        
+        const rowBg = hasIssues.length > 0 ? '#1c1917' : '#0f172a';
+        const isSelected = selectedScenarios.has(s.id);
+        
+        return `
+          <tr style="background: ${rowBg}; ${isSelected ? 'outline: 2px solid #10b981;' : ''}">
+            <td style="padding: 10px 8px; border-bottom: 1px solid #1e293b;">
+              <input type="checkbox" ${isSelected ? 'checked' : ''} 
+                     onchange="toggleScenarioSelection('${s.id}', this.checked)"
+                     style="accent-color: #10b981;">
+            </td>
+            <td style="padding: 10px 8px; border-bottom: 1px solid #1e293b;">
+              <div style="color: #f1f5f9; font-weight: 500; font-size: 12px;">${s.name}</div>
+              <div style="color: #64748b; font-size: 10px;">${s.categoryName}</div>
+            </td>
+            <td style="padding: 10px 8px; border-bottom: 1px solid #1e293b;">
+              <select onchange="updateScenarioField('${s.id}', 'scenarioType', this.value)" 
+                      style="padding: 6px 8px; background: ${s.scenarioType === 'UNKNOWN' ? '#7f1d1d' : '#1e293b'}; border: 1px solid #334155; border-radius: 4px; color: #f1f5f9; font-size: 11px; width: 100%;">
+                ${SCENARIO_TYPES.map(t => `<option value="${t}" ${s.scenarioType === t ? 'selected' : ''}>${t}</option>`).join('')}
+              </select>
+            </td>
+            <td style="padding: 10px 8px; border-bottom: 1px solid #1e293b;">
+              <select onchange="updateScenarioField('${s.id}', 'wiring.action', this.value)" 
+                      style="padding: 6px 8px; background: #1e293b; border: 1px solid #334155; border-radius: 4px; color: #f1f5f9; font-size: 11px; width: 100%;">
+                ${SCENARIO_ACTIONS.map(a => `<option value="${a}" ${s.wiring.action === a ? 'selected' : ''}>${a}</option>`).join('')}
+              </select>
+            </td>
+            <td style="padding: 10px 8px; border-bottom: 1px solid #1e293b;">
+              <select onchange="updateScenarioField('${s.id}', 'wiring.flowId', this.value)" 
+                      style="padding: 6px 8px; background: ${s.wiring.action === 'START_FLOW' && !s.wiring.flowId ? '#7f1d1d' : '#1e293b'}; border: 1px solid #334155; border-radius: 4px; color: #f1f5f9; font-size: 11px; width: 100%;">
+                <option value="">None</option>
+                ${flows.map(f => `<option value="${f.id}" ${s.wiring.flowId === f.id ? 'selected' : ''}>${f.name || f.flowKey}</option>`).join('')}
+              </select>
+            </td>
+            <td style="padding: 10px 8px; border-bottom: 1px solid #1e293b; text-align: center;">
+              <input type="checkbox" ${s.wiring.bookingIntent ? 'checked' : ''} 
+                     onchange="updateScenarioField('${s.id}', 'wiring.bookingIntent', this.checked)"
+                     style="accent-color: #10b981;">
+            </td>
+            <td style="padding: 10px 8px; border-bottom: 1px solid #1e293b;">
+              <input type="text" value="${s.wiring.transferTarget || ''}" 
+                     onchange="updateScenarioField('${s.id}', 'wiring.transferTarget', this.value)"
+                     placeholder="None"
+                     style="padding: 6px 8px; background: #1e293b; border: 1px solid #334155; border-radius: 4px; color: #f1f5f9; font-size: 11px; width: 80px;">
+            </td>
+            <td style="padding: 10px 8px; border-bottom: 1px solid #1e293b; text-align: center;">
+              <input type="number" value="${s.priority}" min="0" max="100"
+                     onchange="updateScenarioField('${s.id}', 'priority', parseInt(this.value))"
+                     style="padding: 6px 4px; background: #1e293b; border: 1px solid #334155; border-radius: 4px; color: #f1f5f9; font-size: 11px; width: 50px; text-align: center;">
+            </td>
+            <td style="padding: 10px 8px; border-bottom: 1px solid #1e293b;">
+              ${hasIssues.length > 0 ? hasIssues.map(i => `<span style="display: inline-block; background: #7f1d1d; color: #fecaca; padding: 2px 6px; border-radius: 4px; font-size: 9px; margin: 1px;">${i}</span>`).join('') : '<span style="color: #10b981; font-size: 11px;">✓ OK</span>'}
+            </td>
+          </tr>
+        `;
+      }).join('');
+      
+      updateSelectedCount();
+    }
+    
+    function toggleScenarioSelection(scenarioId, selected) {
+      if (selected) {
+        selectedScenarios.add(scenarioId);
+      } else {
+        selectedScenarios.delete(scenarioId);
+      }
+      updateSelectedCount();
+    }
+    
+    function toggleAllScenarios(selected) {
+      const scenarios = currentRuntimeTruth?.scenarioBrain?.scenarios || [];
+      selectedScenarios.clear();
+      if (selected) {
+        scenarios.forEach(s => selectedScenarios.add(s.id));
+      }
+      renderScenarioWiringTable();
+    }
+    
+    function updateSelectedCount() {
+      document.getElementById('wiring-selected-count').textContent = `${selectedScenarios.size} selected`;
+    }
+    
+    async function updateScenarioField(scenarioId, field, value) {
+      console.log(`[WIRING] ${scenarioId}.${field} = ${value}`);
+      
+      try {
+        const response = await fetch(`/api/company/${currentCompanyId}/runtime-patch`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            companyId: currentCompanyId,
+            scope: 'companyOverride',
+            expectedVersion: currentRuntimeTruth?._meta?.version,
+            patches: [
+              { op: 'replace', path: `/scenarioBrain/scenarios/${scenarioId}/${field}`, value }
+            ]
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.appliedCount > 0) {
+          lastPatchTimestamp = new Date().toISOString();
+          showSnapshotToast(`Updated ${field}`, 'success');
+          await loadRuntimeTruth();
+          renderScenarioWiringTable();
+        } else {
+          showSnapshotToast(`Failed: ${result.errors?.[0]?.message || 'Unknown error'}`, 'error');
+        }
+      } catch (error) {
+        console.error('[WIRING] Error:', error);
+        showSnapshotToast(`Error: ${error.message}`, 'error');
+      }
+    }
+    
+    async function fixUnknownScenarioTypes() {
+      const scenarios = currentRuntimeTruth?.scenarioBrain?.scenarios || [];
+      const unknowns = scenarios.filter(s => s.scenarioType === 'UNKNOWN');
+      
+      if (unknowns.length === 0) {
+        showSnapshotToast('No UNKNOWN scenarios to fix', 'info');
+        return;
+      }
+      
+      // Deterministic rules to assign types
+      const patches = unknowns.map(s => {
+        const name = (s.name || '').toLowerCase();
+        const cat = (s.categoryName || '').toLowerCase();
+        
+        let type = 'FAQ'; // Default
+        
+        // Emergency detection
+        if (name.includes('leak') || name.includes('emergency') || name.includes('gas') || 
+            name.includes('burning') || name.includes('smoke') || name.includes('fire') ||
+            cat.includes('emergency') || cat.includes('leak')) {
+          type = 'EMERGENCY';
+        }
+        // Troubleshoot detection
+        else if (name.includes('not cool') || name.includes('not heat') || name.includes('no cool') || 
+                 name.includes('no heat') || name.includes('broken') || name.includes('noise') ||
+                 name.includes('not working') || name.includes('issue') || name.includes('problem') ||
+                 cat.includes('troubleshoot') || cat.includes('repair') || cat.includes('failure')) {
+          type = 'TROUBLESHOOT';
+        }
+        // Booking detection
+        else if (name.includes('schedule') || name.includes('appointment') || name.includes('book') ||
+                 cat.includes('booking') || cat.includes('schedule')) {
+          type = 'BOOKING';
+        }
+        // Transfer detection
+        else if (name.includes('transfer') || name.includes('speak to') || name.includes('manager') ||
+                 cat.includes('transfer')) {
+          type = 'TRANSFER';
+        }
+        // Small talk detection
+        else if (name.includes('greeting') || name.includes('hello') || name.includes('thank') ||
+                 cat.includes('small talk') || cat.includes('greeting')) {
+          type = 'SMALL_TALK';
+        }
+        
+        return { op: 'replace', path: `/scenarioBrain/scenarios/${s.id}/scenarioType`, value: type };
+      });
+      
+      if (patches.length === 0) return;
+      
+      try {
+        const response = await fetch(`/api/company/${currentCompanyId}/runtime-patch`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            companyId: currentCompanyId,
+            scope: 'companyOverride',
+            patches
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          lastPatchTimestamp = new Date().toISOString();
+          showSnapshotToast(`Fixed ${result.appliedCount} scenario types`, 'success');
+          await loadRuntimeTruth();
+          renderScenarioWiringTable();
+        } else {
+          showSnapshotToast(`Failed: ${result.errors?.[0]?.message || 'Unknown error'}`, 'error');
+        }
+      } catch (error) {
+        showSnapshotToast(`Error: ${error.message}`, 'error');
+      }
+    }
+    
+    async function wireSelectedToFlow() {
+      const flowId = document.getElementById('bulk-flow-select').value;
+      
+      if (!flowId) {
+        showSnapshotToast('Select a flow first', 'warning');
+        return;
+      }
+      
+      if (selectedScenarios.size === 0) {
+        showSnapshotToast('Select scenarios first', 'warning');
+        return;
+      }
+      
+      const patches = [];
+      selectedScenarios.forEach(scenarioId => {
+        patches.push({ op: 'replace', path: `/scenarioBrain/scenarios/${scenarioId}/wiring.action`, value: 'START_FLOW' });
+        patches.push({ op: 'replace', path: `/scenarioBrain/scenarios/${scenarioId}/wiring.flowId`, value: flowId });
+      });
+      
+      try {
+        const response = await fetch(`/api/company/${currentCompanyId}/runtime-patch`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            companyId: currentCompanyId,
+            scope: 'companyOverride',
+            patches
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          lastPatchTimestamp = new Date().toISOString();
+          showSnapshotToast(`Wired ${selectedScenarios.size} scenarios to flow`, 'success');
+          selectedScenarios.clear();
+          await loadRuntimeTruth();
+          renderScenarioWiringTable();
+        } else {
+          showSnapshotToast(`Failed: ${result.errors?.[0]?.message || 'Unknown error'}`, 'error');
+        }
+      } catch (error) {
+        showSnapshotToast(`Error: ${error.message}`, 'error');
+      }
+    }
+    
+    // ============================================================================
+    // BOOKING PANEL
+    // ============================================================================
+    
+    function renderBookingPanel() {
+      if (!currentRuntimeTruth) return;
+      
+      const booking = currentRuntimeTruth.controlPlane?.booking || {};
+      const consent = booking.consent || {};
+      
+      // Master toggle
+      const toggle = document.getElementById('booking-enabled-toggle');
+      const track = document.getElementById('booking-toggle-track');
+      const thumb = document.getElementById('booking-toggle-thumb');
+      
+      toggle.checked = booking.enabled;
+      track.style.background = booking.enabled ? '#10b981' : '#475569';
+      thumb.style.left = booking.enabled ? '31px' : '3px';
+      
+      // Required fields
+      const fieldsEl = document.getElementById('booking-fields-list');
+      const currentSlots = booking.slots || [];
+      const currentSlotKeys = currentSlots.map(s => s.key);
+      
+      fieldsEl.innerHTML = BOOKING_FIELDS.map(field => {
+        const isEnabled = currentSlotKeys.includes(field.key);
+        return `
+          <label style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: ${isEnabled ? '#064e3b' : '#0f172a'}; border: 1px solid ${isEnabled ? '#10b981' : '#334155'}; border-radius: 8px; cursor: pointer;">
+            <input type="checkbox" ${isEnabled ? 'checked' : ''} 
+                   onchange="toggleBookingField('${field.key}', '${field.label}', this.checked)"
+                   style="accent-color: #10b981; width: 16px; height: 16px;">
+            <div>
+              <div style="color: #f1f5f9; font-size: 13px; font-weight: 500;">${field.label}</div>
+              <div style="color: #64748b; font-size: 10px;">${field.required ? 'Recommended' : 'Optional'}</div>
+            </div>
+          </label>
+        `;
+      }).join('');
+      
+      // Time windows
+      const windowsEl = document.getElementById('booking-time-windows');
+      const windows = booking.timeWindows || [];
+      
+      windowsEl.innerHTML = windows.map((w, i) => `
+        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px;">
+          <span style="color: #f1f5f9; font-size: 12px;">${w}</span>
+          <button onclick="removeTimeWindow(${i})" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 2px;">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      `).join('') || '<span style="color: #64748b; font-size: 12px;">No time windows configured</span>';
+      
+      // Consent checkboxes
+      document.getElementById('consent-sms').checked = consent.required || false;
+      document.getElementById('consent-script').value = consent.phrase || '';
+      
+      // Booking health
+      const healthPanel = document.getElementById('booking-health-panel');
+      const healthIssues = document.getElementById('booking-health-issues');
+      const issues = [];
+      
+      if (booking.enabled && windows.length === 0) {
+        issues.push('Booking enabled but no time windows configured');
+      }
+      if (booking.enabled && currentSlots.length === 0) {
+        issues.push('Booking enabled but no required fields configured');
+      }
+      
+      if (issues.length > 0) {
+        healthPanel.style.display = 'block';
+        healthIssues.innerHTML = issues.map(i => `<li>${i}</li>`).join('');
+      } else {
+        healthPanel.style.display = 'none';
+      }
+    }
+    
+    async function toggleBookingEnabled(enabled) {
+      const track = document.getElementById('booking-toggle-track');
+      const thumb = document.getElementById('booking-toggle-thumb');
+      
+      try {
+        const response = await fetch(`/api/company/${currentCompanyId}/runtime-patch`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            companyId: currentCompanyId,
+            scope: 'companyOverride',
+            patches: [
+              { op: 'replace', path: '/controlPlane/booking/enabled', value: enabled }
+            ]
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          lastPatchTimestamp = new Date().toISOString();
+          track.style.background = enabled ? '#10b981' : '#475569';
+          thumb.style.left = enabled ? '31px' : '3px';
+          showSnapshotToast(`Booking ${enabled ? 'enabled' : 'disabled'}`, 'success');
+          await loadRuntimeTruth();
+          renderBookingPanel();
+        } else {
+          showSnapshotToast(`Failed: ${result.errors?.[0]?.message || 'Unknown error'}`, 'error');
+          document.getElementById('booking-enabled-toggle').checked = !enabled;
+        }
+      } catch (error) {
+        showSnapshotToast(`Error: ${error.message}`, 'error');
+        document.getElementById('booking-enabled-toggle').checked = !enabled;
+      }
+    }
+    
+    async function toggleBookingField(key, label, enabled) {
+      // Note: This would need a proper backend endpoint to add/remove booking slots
+      // For now, show a message that this feature needs backend support
+      showSnapshotToast(`Booking field toggle requires backend update. Use Patch Import to modify slots.`, 'info');
+    }
+    
+    function addTimeWindow() {
+      const newWindow = prompt('Enter time window (e.g., "8:00 AM - 10:00 AM"):');
+      if (newWindow && newWindow.trim()) {
+        showSnapshotToast(`Time window add requires backend update. Use Patch Import.`, 'info');
+      }
+    }
+    
+    function removeTimeWindow(index) {
+      showSnapshotToast(`Time window remove requires backend update. Use Patch Import.`, 'info');
+    }
+    
+    async function updateConsentSetting(setting, value) {
+      // These would need proper patch paths to be added to the allowlist
+      showSnapshotToast(`Consent setting requires backend update. Use Patch Import.`, 'info');
+    }
+    
+    function updateConsentScript(value) {
+      showSnapshotToast(`Consent script requires backend update. Use Patch Import.`, 'info');
     }
   </script>
   
