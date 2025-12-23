@@ -55,9 +55,14 @@ router.get('/effective', async (req, res) => {
     const autoConverge = req.query.converge !== 'false'; // Default: converge
     
     try {
-        // Load company (NOT lean - we need to potentially save)
+        // Load company
+        // Use lean() for read-only performance unless we need to converge
+        const useLean = !autoConverge || req.query.readonly === 'true';
+        
         const [company, responseDefaults, placeholdersDoc] = await Promise.all([
-            v2Company.findById(companyId),
+            useLean 
+                ? v2Company.findById(companyId).lean()
+                : v2Company.findById(companyId),
             CompanyResponseDefaults.getOrCreate(companyId),
             CompanyPlaceholders.findOne({ companyId }).lean()
         ]);
@@ -68,6 +73,9 @@ router.get('/effective', async (req, res) => {
                 error: 'Company not found'
             });
         }
+        
+        // For lean queries, we can't save, so skip convergence
+        const canConverge = autoConverge && !useLean && typeof company.save === 'function';
         
         // ═══════════════════════════════════════════════════════════════════════
         // BUILD PLACEHOLDER MAP
@@ -85,7 +93,11 @@ router.get('/effective', async (req, res) => {
         // This resolves the "two-config reality" bug by reading from canonical
         // keys first, then falling back to legacy keys, then to defaults
         // ═══════════════════════════════════════════════════════════════════════
-        const effectiveConfig = unifyConfig(company.toObject(), responseDefaults, {
+        // For lean queries, company is already a plain object
+        // For non-lean, we need to convert to object
+        const companyObj = useLean ? company : company.toObject();
+        
+        const effectiveConfig = unifyConfig(companyObj, responseDefaults, {
             seedBookingSlotsIfEmpty: false // Don't auto-seed, show warning instead
         });
         
@@ -95,7 +107,7 @@ router.get('/effective', async (req, res) => {
         // ═══════════════════════════════════════════════════════════════════════
         const convergenceActions = [];
         
-        if (autoConverge) {
+        if (canConverge) {
             // Check if booking slots came from legacy
             if (effectiveConfig._meta.bookingSlotsSource.includes('legacy')) {
                 if (!company.frontDeskBehavior) company.frontDeskBehavior = {};
