@@ -5254,6 +5254,19 @@ Loading field report...
         <!-- Issues Panel -->
         <div id="runtime-truth-issues" style="margin-bottom: 20px;"></div>
         
+        <!-- Dynamic Flow Toggle Panel -->
+        <div id="runtime-truth-flows" style="background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h4 style="margin: 0; color: #f1f5f9; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+              <span>⚡</span> Dynamic Flows (Toggle ON/OFF)
+            </h4>
+            <span id="flows-enabled-count" style="color: #94a3b8; font-size: 12px;"></span>
+          </div>
+          <div id="flows-toggle-list" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Flow toggles will be rendered here -->
+          </div>
+        </div>
+        
         <!-- JSON Output -->
         <div style="background: #0f172a; border-radius: 12px; overflow: hidden;">
           <div style="padding: 12px 16px; background: #1e293b; display: flex; justify-content: space-between; align-items: center;">
@@ -5373,6 +5386,9 @@ Loading field report...
           `;
         }
         
+        // Render Dynamic Flow Toggles
+        renderFlowToggles(result.data.dynamicFlows);
+        
         // JSON output
         const jsonStr = JSON.stringify(result.data, null, 2);
         jsonEl.textContent = jsonStr;
@@ -5408,6 +5424,106 @@ Loading field report...
           btn.style.color = '#059669';
         }, 2000);
       });
+    }
+    
+    // ============================================================================
+    // DYNAMIC FLOW TOGGLE CONTROLS
+    // ============================================================================
+    
+    function renderFlowToggles(dynamicFlows) {
+      const listEl = document.getElementById('flows-toggle-list');
+      const countEl = document.getElementById('flows-enabled-count');
+      
+      const flows = dynamicFlows?.flows || [];
+      const enabledCount = flows.filter(f => f.enabled).length;
+      
+      countEl.textContent = `${enabledCount}/${flows.length} enabled`;
+      
+      if (flows.length === 0) {
+        listEl.innerHTML = `
+          <div style="text-align: center; padding: 20px; color: #94a3b8;">
+            <i class="fas fa-info-circle" style="font-size: 24px; margin-bottom: 8px; display: block;"></i>
+            No dynamic flows configured. Create flows in the Dynamic Flow tab.
+          </div>
+        `;
+        return;
+      }
+      
+      listEl.innerHTML = flows.map(flow => `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: ${flow.enabled ? '#064e3b' : '#1e293b'}; border: 1px solid ${flow.enabled ? '#10b981' : '#334155'}; border-radius: 8px; transition: all 0.2s;">
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: ${flow.enabled ? '#34d399' : '#94a3b8'}; font-weight: 600; font-size: 14px;">
+                ${flow.enabled ? '✓' : '○'} ${flow.name || flow.flowKey}
+              </span>
+              <span style="background: ${flow.enabled ? '#10b981' : '#475569'}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;">
+                ${flow.enabled ? 'ENABLED' : 'DISABLED'}
+              </span>
+              <span style="color: #64748b; font-size: 11px;">
+                Priority: ${flow.priority} | Triggers: ${flow.triggers?.reduce((sum, t) => sum + (t.phraseCount || 0), 0) || 0}
+              </span>
+            </div>
+            <div style="color: #64748b; font-size: 11px; margin-top: 4px;">
+              flowKey: <code style="background: #0f172a; padding: 2px 6px; border-radius: 4px; color: #22d3ee;">${flow.flowKey}</code>
+              | ID: <code style="background: #0f172a; padding: 2px 6px; border-radius: 4px; color: #a5b4fc;">${flow.id}</code>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <label class="flow-toggle-switch" style="position: relative; display: inline-block; width: 50px; height: 26px;">
+              <input type="checkbox" ${flow.enabled ? 'checked' : ''} 
+                     onchange="toggleFlowEnabled('${flow.id}', this.checked)"
+                     style="opacity: 0; width: 0; height: 0;">
+              <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: ${flow.enabled ? '#10b981' : '#475569'}; transition: 0.3s; border-radius: 26px;">
+                <span style="position: absolute; content: ''; height: 20px; width: 20px; left: ${flow.enabled ? '26px' : '3px'}; bottom: 3px; background: white; transition: 0.3s; border-radius: 50%;"></span>
+              </span>
+            </label>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    async function toggleFlowEnabled(flowId, enabled) {
+      console.log(`[FLOW TOGGLE] ${flowId} → ${enabled}`);
+      
+      const toggleEl = event.target;
+      toggleEl.disabled = true;
+      
+      try {
+        // Use the patch endpoint to toggle flow
+        const response = await fetch(`/api/company/${currentCompanyId}/runtime-patch`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            companyId: currentCompanyId,
+            scope: 'companyOverride',
+            patches: [
+              { op: 'replace', path: `/dynamicFlows/flows/${flowId}/enabled`, value: enabled }
+            ]
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.appliedCount > 0) {
+          showSnapshotToast(`Flow ${enabled ? 'enabled' : 'disabled'} successfully!`, 'success');
+          // Reload runtime truth to refresh the view
+          await loadRuntimeTruth();
+        } else {
+          showSnapshotToast(`Failed to toggle flow: ${result.errors?.[0]?.message || 'Unknown error'}`, 'error');
+          // Revert the checkbox
+          toggleEl.checked = !enabled;
+        }
+        
+      } catch (error) {
+        console.error('[FLOW TOGGLE] Error:', error);
+        showSnapshotToast(`Error: ${error.message}`, 'error');
+        toggleEl.checked = !enabled;
+      } finally {
+        toggleEl.disabled = false;
+      }
     }
   </script>
   
