@@ -144,16 +144,29 @@ router.get('/effective', async (req, res) => {
             }
             
             // Save if we made convergence changes
+            // WRAPPED IN TRY-CATCH: Don't let validation errors break the entire endpoint
             if (convergenceActions.length > 0) {
-                await company.save();
-                
-                // Clear Redis cache
-                const { redisClient } = require('../../db');
-                if (redisClient && redisClient.isOpen) {
-                    await redisClient.del(`company:${companyId}`);
+                try {
+                    await company.save();
+                    
+                    // Clear Redis cache
+                    const { redisClient } = require('../../db');
+                    if (redisClient && redisClient.isOpen) {
+                        await redisClient.del(`company:${companyId}`);
+                    }
+                    
+                    logger.info(`[CONTROL PLANE] Auto-converged ${convergenceActions.length} fields for company ${companyId}`);
+                } catch (saveError) {
+                    // Log the error but DON'T fail the entire request
+                    // The company document might have legacy data that fails validation
+                    logger.warn(`[CONTROL PLANE] Auto-convergence save failed for ${companyId}: ${saveError.message}`);
+                    logger.warn(`[CONTROL PLANE] Effective config will still be returned, but convergence was not persisted`);
+                    convergenceActions.push({
+                        field: '_CONVERGENCE_FAILED',
+                        error: saveError.message.substring(0, 500),
+                        note: 'Document has legacy data that fails current schema validation. Fix manually.'
+                    });
                 }
-                
-                logger.info(`[CONTROL PLANE] Auto-converged ${convergenceActions.length} fields for company ${companyId}`);
             }
         }
         
