@@ -46,7 +46,7 @@ try {
 
 // Models
 const v2Company = require('../../models/v2Company');
-const GlobalInstantResponseTemplate = require('../../models/aiCore/GlobalInstantResponseTemplate');
+const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MIDDLEWARE
