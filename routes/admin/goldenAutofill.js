@@ -86,7 +86,7 @@ const GOLDEN_DEFAULTS = {
             'Are you still there?',
             'Just checking in...',
             "I'm still here if you need me.",
-            'Take your time—let me know when you're ready.'
+            'Take your time - let me know when you are ready.'
         ]
     }
 };
