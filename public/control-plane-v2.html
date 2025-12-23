@@ -1458,8 +1458,13 @@
             <h2>📂 Data & Config</h2>
             <p class="muted">Manage placeholders, templates, and scenarios. Global data with company-specific overrides.</p>
           </div>
-          <!-- Field Report + Golden Autofill Buttons -->
+          <!-- Field Report + Runtime Truth + Golden Autofill Buttons -->
           <div style="display: flex; gap: 8px;">
+            <button onclick="openRuntimeTruthModal()" 
+                    style="padding: 8px 14px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;"
+                    title="THE single JSON that shows exactly what runs at runtime">
+              <i class="fas fa-bolt"></i> Runtime Truth
+            </button>
             <button onclick="openFieldReportModal()" 
                     style="padding: 8px 14px; background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;">
               <i class="fas fa-clipboard-list"></i> Field Report
@@ -5215,6 +5220,191 @@ Loading field report...
       </div>
     </div>
   </div>
+  
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       RUNTIME TRUTH MODAL - THE Single JSON That Shows Everything
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="runtime-truth-modal-overlay" class="snapshot-modal-overlay">
+    <div class="snapshot-modal" style="max-width: 1000px;">
+      <div class="snapshot-modal-header" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+        <div class="snapshot-modal-title">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 600;">🎯 Runtime Truth - What Actually Runs</h2>
+          <p style="margin: 4px 0 0; font-size: 12px; opacity: 0.9;">If it's not in this JSON, it doesn't exist at runtime</p>
+        </div>
+        <div class="snapshot-modal-controls" style="display: flex; gap: 8px;">
+          <span id="runtime-truth-status" style="padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;"></span>
+          <button id="btn-copy-runtime-truth" onclick="copyRuntimeTruth()" style="padding: 8px 16px; background: white; color: #059669; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+            <i class="fas fa-copy"></i> Copy JSON
+          </button>
+          <button onclick="closeRuntimeTruthModal()" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 6px; cursor: pointer;">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      
+      <div class="snapshot-modal-body" style="padding: 20px; max-height: 75vh; overflow-y: auto;">
+        <!-- Summary Cards -->
+        <div id="runtime-truth-summary" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 20px;"></div>
+        
+        <!-- Issues Panel -->
+        <div id="runtime-truth-issues" style="margin-bottom: 20px;"></div>
+        
+        <!-- JSON Output -->
+        <div style="background: #0f172a; border-radius: 12px; overflow: hidden;">
+          <div style="padding: 12px 16px; background: #1e293b; display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #94a3b8; font-weight: 600; font-size: 14px;">📋 Complete Runtime JSON</span>
+            <span id="runtime-truth-size" style="color: #64748b; font-size: 12px;"></span>
+          </div>
+          <pre id="runtime-truth-json" style="margin: 0; padding: 16px; color: #22d3ee; font-size: 11px; line-height: 1.5; overflow-x: auto; max-height: 400px; overflow-y: auto;"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // ============================================================================
+    // RUNTIME TRUTH - THE Single Source of All Runtime Behavior
+    // ============================================================================
+    let currentRuntimeTruth = null;
+    
+    async function openRuntimeTruthModal() {
+      document.getElementById('runtime-truth-modal-overlay').classList.add('active');
+      await loadRuntimeTruth();
+    }
+    
+    function closeRuntimeTruthModal() {
+      document.getElementById('runtime-truth-modal-overlay').classList.remove('active');
+    }
+    
+    async function loadRuntimeTruth() {
+      const summaryEl = document.getElementById('runtime-truth-summary');
+      const issuesEl = document.getElementById('runtime-truth-issues');
+      const jsonEl = document.getElementById('runtime-truth-json');
+      const statusEl = document.getElementById('runtime-truth-status');
+      const sizeEl = document.getElementById('runtime-truth-size');
+      
+      summaryEl.innerHTML = '<div style="grid-column: span 6; text-align: center; color: #94a3b8;"><i class="fas fa-spinner fa-spin"></i> Loading runtime truth...</div>';
+      issuesEl.innerHTML = '';
+      jsonEl.textContent = '';
+      
+      try {
+        const response = await fetch(`/api/company/${currentCompanyId}/runtime-truth`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to load');
+        }
+        
+        currentRuntimeTruth = result.data;
+        
+        // Status badge
+        const health = result.data.health;
+        const statusColors = {
+          GREEN: { bg: '#10b981', text: 'white' },
+          YELLOW: { bg: '#f59e0b', text: '#1e293b' },
+          RED: { bg: '#ef4444', text: 'white' }
+        };
+        const statusColor = statusColors[health.status] || statusColors.RED;
+        statusEl.style.background = statusColor.bg;
+        statusEl.style.color = statusColor.text;
+        statusEl.textContent = `${health.status} - ${health.criticalCount} errors, ${health.warningCount} warnings`;
+        
+        // Summary cards
+        const sb = result.data.scenarioBrain;
+        const df = result.data.dynamicFlows;
+        const cp = result.data.controlPlane;
+        
+        summaryEl.innerHTML = `
+          <div style="background: #1e293b; padding: 14px; border-radius: 10px; text-align: center;">
+            <div style="font-size: 28px; font-weight: 700; color: #60a5fa;">${sb.totals.templates}</div>
+            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Templates</div>
+          </div>
+          <div style="background: #1e293b; padding: 14px; border-radius: 10px; text-align: center;">
+            <div style="font-size: 28px; font-weight: 700; color: #34d399;">${sb.totals.scenarios}</div>
+            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Scenarios</div>
+          </div>
+          <div style="background: #1e293b; padding: 14px; border-radius: 10px; text-align: center;">
+            <div style="font-size: 28px; font-weight: 700; color: #fbbf24;">${sb.totals.triggers}</div>
+            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Triggers</div>
+          </div>
+          <div style="background: #1e293b; padding: 14px; border-radius: 10px; text-align: center;">
+            <div style="font-size: 28px; font-weight: 700; color: ${df.enabled ? '#34d399' : '#ef4444'};">${df.count}</div>
+            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Flows ${df.enabled ? '✓' : '⚠️'}</div>
+          </div>
+          <div style="background: #1e293b; padding: 14px; border-radius: 10px; text-align: center;">
+            <div style="font-size: 28px; font-weight: 700; color: ${cp.greeting.configured ? '#34d399' : '#ef4444'};">${cp.greeting.configured ? '✓' : '✗'}</div>
+            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Greeting</div>
+          </div>
+          <div style="background: #1e293b; padding: 14px; border-radius: 10px; text-align: center;">
+            <div style="font-size: 28px; font-weight: 700; color: ${cp.booking.slotsCount > 0 ? '#34d399' : '#f59e0b'};">${cp.booking.slotsCount}</div>
+            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Booking Slots</div>
+          </div>
+        `;
+        
+        // Issues panel
+        if (health.issues.length > 0) {
+          issuesEl.innerHTML = `
+            <div style="background: ${health.status === 'RED' ? '#fef2f2' : '#fffbeb'}; border: 1px solid ${health.status === 'RED' ? '#ef4444' : '#f59e0b'}; border-radius: 10px; padding: 16px;">
+              <h4 style="margin: 0 0 12px 0; color: ${health.status === 'RED' ? '#991b1b' : '#92400e'}; font-size: 14px;">
+                ${health.status === 'RED' ? '🚨' : '⚠️'} ${health.issues.length} Issue(s) Detected
+              </h4>
+              <ul style="margin: 0; padding-left: 20px; color: ${health.status === 'RED' ? '#991b1b' : '#92400e'}; font-size: 13px;">
+                ${health.issues.map(i => `<li><strong>[${i.area}]</strong> ${i.message}</li>`).join('')}
+              </ul>
+            </div>
+          `;
+        } else {
+          issuesEl.innerHTML = `
+            <div style="background: #ecfdf5; border: 1px solid #10b981; border-radius: 10px; padding: 16px;">
+              <span style="color: #065f46; font-size: 14px;">✅ No issues - runtime is fully configured</span>
+            </div>
+          `;
+        }
+        
+        // JSON output
+        const jsonStr = JSON.stringify(result.data, null, 2);
+        jsonEl.textContent = jsonStr;
+        sizeEl.textContent = `${(jsonStr.length / 1024).toFixed(1)} KB | ${result.data._meta.generationTimeMs}ms`;
+        
+      } catch (error) {
+        console.error('[RUNTIME TRUTH] Error:', error);
+        summaryEl.innerHTML = `<div style="grid-column: span 6; text-align: center; color: #ef4444;"><i class="fas fa-exclamation-triangle"></i> Failed to load: ${error.message}</div>`;
+        statusEl.textContent = 'ERROR';
+        statusEl.style.background = '#ef4444';
+        statusEl.style.color = 'white';
+      }
+    }
+    
+    function copyRuntimeTruth() {
+      if (!currentRuntimeTruth) {
+        showSnapshotToast('No data to copy', 'error');
+        return;
+      }
+      
+      const jsonStr = JSON.stringify(currentRuntimeTruth, null, 2);
+      navigator.clipboard.writeText(jsonStr).then(() => {
+        const btn = document.getElementById('btn-copy-runtime-truth');
+        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        btn.style.background = '#059669';
+        btn.style.color = 'white';
+        
+        showSnapshotToast(`Runtime Truth copied! ${(jsonStr.length / 1024).toFixed(1)} KB`, 'success');
+        
+        setTimeout(() => {
+          btn.innerHTML = '<i class="fas fa-copy"></i> Copy JSON';
+          btn.style.background = 'white';
+          btn.style.color = '#059669';
+        }, 2000);
+      });
+    }
+  </script>
   
   <script>
     // ============================================================================
