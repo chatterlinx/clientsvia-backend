@@ -2776,21 +2776,21 @@
       const infoBox = document.getElementById('qa-active-template-info');
       
       try {
-        // Get the company's active template from Runtime Truth (single source of truth)
-        const runtimeResponse = await fetch(`/api/company/${currentCompanyId}/runtime-truth`, {
+        // Use the SAME endpoint as Templates tab - /configuration/templates
+        // This ensures consistency with what the Templates UI shows
+        const response = await fetch(`/api/company/${currentCompanyId}/configuration/templates`, {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
         
-        if (!runtimeResponse.ok) {
-          throw new Error(`Runtime Truth HTTP ${runtimeResponse.status}`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
         }
         
-        const runtimeResult = await runtimeResponse.json();
-        const activeTemplates = runtimeResult.data?.scenarioBrain?.activeTemplates || [];
+        const templates = await response.json();
         
-        console.log('[QA DASHBOARD] Active templates from Runtime Truth:', activeTemplates);
+        console.log('[QA DASHBOARD] Active templates from configuration/templates:', templates);
         
-        if (activeTemplates.length === 0) {
+        if (!templates || templates.length === 0) {
           nameEl.textContent = 'No template selected';
           statsEl.textContent = 'Go to Templates tab to activate a template';
           infoBox.style.background = 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)';
@@ -2799,9 +2799,10 @@
           return;
         }
         
-        // Use the first (primary) active template
-        const primaryTemplate = activeTemplates[0];
-        const templateId = primaryTemplate.id;
+        // Use the first (primary) active template - sort by priority
+        const sortedTemplates = templates.sort((a, b) => (a.priority || 99) - (b.priority || 99));
+        const primaryTemplate = sortedTemplates[0];
+        const templateId = primaryTemplate.templateId || primaryTemplate._id;
         
         // Update hidden select for backwards compatibility
         select.innerHTML = `<option value="${templateId}" selected>${primaryTemplate.name}</option>`;
@@ -2809,8 +2810,11 @@
         
         // Update display
         nameEl.textContent = primaryTemplate.name;
-        const totals = runtimeResult.data?.scenarioBrain?.totals || {};
-        statsEl.textContent = `${totals.categories || 0} categories · ${totals.scenarios || 0} scenarios · ${totals.triggers || 0} triggers`;
+        const stats = primaryTemplate.stats || {};
+        statsEl.textContent = `${stats.categories || 0} categories · ${stats.scenarios || 0} scenarios · ${stats.triggers || 0} triggers`;
+        
+        // Set qaSelectedTemplateId for other functions
+        qaSelectedTemplateId = templateId;
         
         console.log(`[QA DASHBOARD] Auto-selected primary template: ${primaryTemplate.name} (${templateId})`);
         
@@ -6635,17 +6639,17 @@ Loading field report...
       select.innerHTML = '<option value="">Loading...</option>';
       
       try {
-        // Get company's active template from Runtime Truth (single source of truth)
-        const runtimeResponse = await fetch(`/api/company/${currentCompanyId}/runtime-truth`, {
+        // Use the SAME endpoint as Templates tab - /configuration/templates
+        // This ensures consistency with what the Templates UI shows
+        const response = await fetch(`/api/company/${currentCompanyId}/configuration/templates`, {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
         
-        if (!runtimeResponse.ok) throw new Error('Failed to load company config');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
-        const runtimeResult = await runtimeResponse.json();
-        const activeTemplates = runtimeResult.data?.scenarioBrain?.activeTemplates || [];
+        const templates = await response.json();
         
-        if (activeTemplates.length === 0) {
+        if (!templates || templates.length === 0) {
           select.innerHTML = '<option value="">No template selected for this company</option>';
           if (infoDiv) {
             infoDiv.innerHTML = '<span style="color: #fbbf24;">⚠️ Go to Templates tab to select a template first</span>';
@@ -6653,18 +6657,20 @@ Loading field report...
           return;
         }
         
-        // Auto-select the primary template
-        const primaryTemplate = activeTemplates[0];
-        const totals = runtimeResult.data?.scenarioBrain?.totals || {};
+        // Sort by priority and use first (primary) template
+        const sortedTemplates = templates.sort((a, b) => (a.priority || 99) - (b.priority || 99));
+        const primaryTemplate = sortedTemplates[0];
+        const templateId = primaryTemplate.templateId || primaryTemplate._id;
+        const stats = primaryTemplate.stats || {};
         
-        select.innerHTML = `<option value="${primaryTemplate.id}" selected>${primaryTemplate.name} (${totals.scenarios || 0} scenarios)</option>`;
+        select.innerHTML = `<option value="${templateId}" selected>${primaryTemplate.name} (${stats.scenarios || 0} scenarios)</option>`;
         
         // Update info display
         if (infoDiv) {
           infoDiv.innerHTML = `<span style="color: #4ade80;">✅ Auto-selected: ${primaryTemplate.name}</span>`;
         }
         
-        console.log(`[AUTOFILL] Auto-selected primary template: ${primaryTemplate.name} (${primaryTemplate.id})`);
+        console.log(`[AUTOFILL] Auto-selected primary template: ${primaryTemplate.name} (${templateId})`);
         
       } catch (error) {
         console.error('[AUTOFILL] Failed to load templates:', error);
