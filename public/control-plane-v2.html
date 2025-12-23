@@ -1485,6 +1485,12 @@
           <button class="data-config-subtab" data-subtab="scenarios" style="padding: 10px 20px; border: none; background: #f1f5f9; color: #64748b; border-radius: 8px 8px 0 0; font-weight: 600; cursor: pointer;">
             <i class="fas fa-theater-masks"></i> Scenarios
           </button>
+          <button class="data-config-subtab" data-subtab="blueprint" style="padding: 10px 20px; border: none; background: #f1f5f9; color: #64748b; border-radius: 8px 8px 0 0; font-weight: 600; cursor: pointer;">
+            <i class="fas fa-magic"></i> Blueprint
+          </button>
+          <button class="data-config-subtab" data-subtab="execution-map" style="padding: 10px 20px; border: none; background: #f1f5f9; color: #64748b; border-radius: 8px 8px 0 0; font-weight: 600; cursor: pointer;">
+            <i class="fas fa-project-diagram"></i> Execution Map
+          </button>
         </div>
         
         <!-- PLACEHOLDERS (V2 - Replaces Variables) -->
@@ -1659,7 +1665,116 @@
               Loading scenarios...
             </div>
           </div>
+        </div>
+
+        <!-- BLUEPRINT (AI-Generated Scenario Configuration) -->
+        <div id="data-config-blueprint" class="data-config-content" style="display: none;">
+          <div style="margin-bottom: 20px;">
+            <h3 style="font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px;">
+              <span>🎨</span> Blueprint Generator
+            </h3>
+            <p style="font-size: 13px; color: #64748b; margin-top: 4px;">
+              Enterprise-grade scenario configuration. Generate complete, validated configs based on your trade.
+            </p>
           </div>
+          
+          <!-- Trade Selection -->
+          <div style="background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%); border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #a78bfa;">
+            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+              <div>
+                <label style="display: block; font-size: 14px; font-weight: 600; color: #5b21b6; margin-bottom: 8px;">
+                  Trade Category
+                </label>
+                <select id="blueprint-trade-select" style="padding: 10px 16px; border-radius: 8px; border: 2px solid #a78bfa; background: white; font-size: 14px; min-width: 200px; cursor: pointer;">
+                  <option value="hvac">🔧 HVAC</option>
+                  <option value="dental">🦷 Dental</option>
+                  <option value="plumbing">🚿 Plumbing</option>
+                  <option value="universal">🌐 Universal</option>
+                </select>
+              </div>
+              <div style="flex: 1;"></div>
+              <button onclick="generateBlueprint()" class="btn btn-primary" style="padding: 10px 20px;">
+                <i class="fas fa-magic"></i> Generate Blueprint
+              </button>
+            </div>
+          </div>
+          
+          <!-- Blueprint Results -->
+          <div id="blueprint-results" style="display: none;">
+            <!-- Summary Card -->
+            <div id="blueprint-summary" style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #10b981;">
+            </div>
+            
+            <!-- Categories List -->
+            <div id="blueprint-categories-list">
+            </div>
+            
+            <!-- Actions -->
+            <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 12px;">
+              <button onclick="previewBlueprintChanges()" class="btn btn-secondary">
+                <i class="fas fa-eye"></i> Preview Changes
+              </button>
+              <button onclick="applyBlueprint()" class="btn btn-primary">
+                <i class="fas fa-check"></i> Apply Blueprint
+              </button>
+            </div>
+          </div>
+          
+          <!-- Empty State -->
+          <div id="blueprint-empty" style="text-align: center; padding: 60px 20px; color: #64748b;">
+            <i class="fas fa-magic" style="font-size: 48px; margin-bottom: 16px; display: block; opacity: 0.5;"></i>
+            <h4 style="margin: 0 0 8px 0; color: #334155;">No Blueprint Generated</h4>
+            <p style="margin: 0; font-size: 14px;">Select a trade and click "Generate Blueprint" to create an optimized scenario configuration.</p>
+          </div>
+        </div>
+
+        <!-- EXECUTION MAP (Call Flow Visualization) -->
+        <div id="data-config-execution-map" class="data-config-content" style="display: none;">
+          <div style="margin-bottom: 20px;">
+            <h3 style="font-size: 18px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px;">
+              <span>🗺️</span> Call Execution Map
+            </h3>
+            <p style="font-size: 13px; color: #64748b; margin-top: 4px;">
+              Complete visualization of how calls flow through all systems. Every stage, every connection.
+            </p>
+          </div>
+          
+          <!-- Health Status Banner -->
+          <div id="execution-map-health" style="background: #f1f5f9; border-radius: 12px; padding: 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px;">
+            <div id="execution-map-health-badge" style="width: 48px; height: 48px; border-radius: 12px; background: #22c55e; display: flex; align-items: center; justify-content: center;">
+              <i class="fas fa-check" style="color: white; font-size: 20px;"></i>
+            </div>
+            <div>
+              <h4 id="execution-map-health-title" style="margin: 0; font-size: 16px; font-weight: 600;">Loading...</h4>
+              <p id="execution-map-health-message" style="margin: 4px 0 0 0; font-size: 13px; color: #64748b;">Analyzing system configuration...</p>
+            </div>
+            <div style="flex: 1;"></div>
+            <button onclick="refreshExecutionMap()" class="btn btn-secondary" style="padding: 8px 16px;">
+              <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+            <button onclick="exportExecutionMap()" class="btn btn-secondary" style="padding: 8px 16px;">
+              <i class="fas fa-download"></i> Export JSON
+            </button>
+          </div>
+          
+          <!-- Execution Flow Diagram -->
+          <div id="execution-map-diagram" style="background: #1e293b; border-radius: 12px; padding: 24px; color: white;">
+            <div style="text-align: center; padding: 40px; color: #94a3b8;">
+              <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px; display: block;"></i>
+              Loading execution map...
+            </div>
+          </div>
+          
+          <!-- Issues Panel -->
+          <div id="execution-map-issues" style="margin-top: 20px; display: none;">
+            <h4 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">
+              <i class="fas fa-exclamation-triangle" style="color: #f59e0b;"></i> Issues & Recommendations
+            </h4>
+            <div id="execution-map-issues-list">
+            </div>
+          </div>
+        </div>
+        
         </div>
       </div>
 
@@ -2352,6 +2467,10 @@
         await loadTemplatesWithOriginalManager();
       } else if (subtab === 'scenarios') {
         await loadScenariosWithOriginalManager();
+      } else if (subtab === 'blueprint') {
+        await loadBlueprintTab();
+      } else if (subtab === 'execution-map') {
+        await loadExecutionMap();
       }
     }
     
@@ -2393,6 +2512,404 @@
       }
       
       await aiCoreLiveScenariosManager.load();
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BLUEPRINT GENERATOR
+    // Enterprise-grade scenario configuration
+    // ═══════════════════════════════════════════════════════════════════════════
+    let currentBlueprint = null;
+    
+    async function loadBlueprintTab() {
+      console.log('🎨 [BLUEPRINT] Loading Blueprint tab...');
+      
+      // Load supported trades
+      try {
+        const tradesResponse = await fetch(`/api/company/${currentCompanyId}/blueprint/trades`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (tradesResponse.ok) {
+          const data = await tradesResponse.json();
+          
+          if (data.success && data.trades) {
+            const select = document.getElementById('blueprint-trade-select');
+            select.innerHTML = data.trades.map(trade => 
+              `<option value="${trade.key}" ${data.currentCompanyTrade === trade.key ? 'selected' : ''}>
+                ${trade.key === 'hvac' ? '🔧' : trade.key === 'dental' ? '🦷' : trade.key === 'plumbing' ? '🚿' : '🌐'} ${trade.name}
+              </option>`
+            ).join('');
+          }
+        }
+      } catch (error) {
+        console.error('[BLUEPRINT] Error loading trades:', error);
+      }
+    }
+    
+    async function generateBlueprint() {
+      const trade = document.getElementById('blueprint-trade-select').value;
+      
+      console.log(`🎨 [BLUEPRINT] Generating blueprint for trade: ${trade}`);
+      
+      // Show loading
+      document.getElementById('blueprint-empty').style.display = 'none';
+      document.getElementById('blueprint-results').style.display = 'none';
+      
+      const resultsDiv = document.getElementById('blueprint-results');
+      resultsDiv.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: #64748b;">
+          <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px; display: block;"></i>
+          Generating blueprint...
+        </div>
+      `;
+      resultsDiv.style.display = 'block';
+      
+      try {
+        const response = await fetch(`/api/company/${currentCompanyId}/blueprint/generate?trade=${trade}&includeReasoning=true`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        const blueprint = await response.json();
+        
+        if (!blueprint.success) {
+          resultsDiv.innerHTML = `
+            <div style="background: #fef2f2; border: 1px solid #ef4444; border-radius: 12px; padding: 20px; color: #991b1b;">
+              <h4 style="margin: 0 0 8px 0;"><i class="fas fa-exclamation-circle"></i> Blueprint Generation Failed</h4>
+              <p style="margin: 0;">${blueprint.error || 'Unknown error'}</p>
+            </div>
+          `;
+          return;
+        }
+        
+        currentBlueprint = blueprint;
+        renderBlueprint(blueprint);
+        
+      } catch (error) {
+        console.error('[BLUEPRINT] Generation error:', error);
+        resultsDiv.innerHTML = `
+          <div style="background: #fef2f2; border: 1px solid #ef4444; border-radius: 12px; padding: 20px; color: #991b1b;">
+            <h4 style="margin: 0 0 8px 0;"><i class="fas fa-exclamation-circle"></i> Error</h4>
+            <p style="margin: 0;">${error.message}</p>
+          </div>
+        `;
+      }
+    }
+    
+    function renderBlueprint(blueprint) {
+      const resultsDiv = document.getElementById('blueprint-results');
+      
+      // Summary card
+      const summaryHtml = `
+        <div style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #10b981;">
+          <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+            <div style="background: white; border-radius: 8px; padding: 12px 20px; text-align: center;">
+              <div style="font-size: 28px; font-weight: 700; color: #059669;">${blueprint.summary.categoriesTotal}</div>
+              <div style="font-size: 12px; color: #065f46; text-transform: uppercase;">Categories</div>
+            </div>
+            <div style="background: white; border-radius: 8px; padding: 12px 20px; text-align: center;">
+              <div style="font-size: 28px; font-weight: 700; color: #059669;">${blueprint.summary.scenariosTotal}</div>
+              <div style="font-size: 12px; color: #065f46; text-transform: uppercase;">Scenarios</div>
+            </div>
+            <div style="flex: 1;"></div>
+            <div style="background: ${blueprint.validation.valid ? '#dcfce7' : '#fef3c7'}; border-radius: 8px; padding: 8px 16px;">
+              <span style="font-weight: 600; color: ${blueprint.validation.valid ? '#166534' : '#92400e'};">
+                ${blueprint.validation.valid ? '✅ Ready to Apply' : '⚠️ Has Warnings'}
+              </span>
+            </div>
+          </div>
+          ${blueprint.validation.warnings?.length > 0 ? `
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #86efac;">
+              <span style="font-size: 12px; color: #166534;">
+                <i class="fas fa-info-circle"></i> ${blueprint.validation.warnings.length} validation warning(s)
+              </span>
+            </div>
+          ` : ''}
+        </div>
+      `;
+      
+      // Categories list
+      let categoriesHtml = '';
+      for (const category of blueprint.details || []) {
+        categoriesHtml += `
+          <div style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+              <span style="font-size: 24px;">${category.icon || '📁'}</span>
+              <div style="flex: 1;">
+                <h4 style="margin: 0; font-size: 16px; font-weight: 600;">${category.name}</h4>
+                <p style="margin: 4px 0 0 0; font-size: 13px; color: #64748b;">${category.description || ''}</p>
+              </div>
+              <span style="background: #e0f2fe; color: #0369a1; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600;">
+                ${category.scenarios.length} scenarios
+              </span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+              ${category.scenarios.slice(0, 5).map(s => `
+                <span style="background: #f1f5f9; padding: 4px 10px; border-radius: 6px; font-size: 12px; color: #475569;">
+                  ${s.name}
+                </span>
+              `).join('')}
+              ${category.scenarios.length > 5 ? `
+                <span style="background: #f1f5f9; padding: 4px 10px; border-radius: 6px; font-size: 12px; color: #64748b;">
+                  +${category.scenarios.length - 5} more
+                </span>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }
+      
+      resultsDiv.innerHTML = summaryHtml + `
+        <h4 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Categories</h4>
+        ${categoriesHtml}
+        <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 12px;">
+          <button onclick="previewBlueprintChanges()" class="btn btn-secondary">
+            <i class="fas fa-eye"></i> Preview Changes
+          </button>
+          <button onclick="applyBlueprint()" class="btn btn-primary">
+            <i class="fas fa-check"></i> Apply Blueprint
+          </button>
+        </div>
+      `;
+      
+      resultsDiv.style.display = 'block';
+      document.getElementById('blueprint-empty').style.display = 'none';
+    }
+    
+    async function previewBlueprintChanges() {
+      if (!currentBlueprint) {
+        showSnapshotToast('No blueprint generated yet', 'warning');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/company/${currentCompanyId}/blueprint/apply/preview`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            trade: currentBlueprint.meta.tradeKey
+          })
+        });
+        
+        const preview = await response.json();
+        
+        if (preview.success) {
+          showSnapshotToast(`Preview: ${preview.summary.creating} new, ${preview.summary.updating} updates`, 'success');
+        } else {
+          showSnapshotToast(preview.error || 'Preview failed', 'error');
+        }
+      } catch (error) {
+        showSnapshotToast(error.message, 'error');
+      }
+    }
+    
+    async function applyBlueprint() {
+      if (!currentBlueprint) {
+        showSnapshotToast('No blueprint generated yet', 'warning');
+        return;
+      }
+      
+      if (!confirm('This will update your scenario configuration. Continue?')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/company/${currentCompanyId}/blueprint/apply`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            trade: currentBlueprint.meta.tradeKey,
+            mode: 'merge'
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showSnapshotToast(`Applied: ${result.summary.created} created, ${result.summary.updated} updated`, 'success');
+        } else {
+          showSnapshotToast(result.error || 'Apply failed', 'error');
+        }
+      } catch (error) {
+        showSnapshotToast(error.message, 'error');
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EXECUTION MAP
+    // Call flow visualization
+    // ═══════════════════════════════════════════════════════════════════════════
+    let currentExecutionMap = null;
+    
+    async function loadExecutionMap() {
+      console.log('🗺️ [EXECUTION MAP] Loading execution map...');
+      await refreshExecutionMap();
+    }
+    
+    async function refreshExecutionMap() {
+      const diagramDiv = document.getElementById('execution-map-diagram');
+      const healthDiv = document.getElementById('execution-map-health');
+      const issuesDiv = document.getElementById('execution-map-issues');
+      
+      diagramDiv.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: #94a3b8;">
+          <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px; display: block;"></i>
+          Loading execution map...
+        </div>
+      `;
+      
+      try {
+        const response = await fetch(`/api/company/${currentCompanyId}/execution-map`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        const executionMap = await response.json();
+        
+        if (!executionMap.success) {
+          diagramDiv.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #f87171;">
+              <i class="fas fa-exclamation-triangle" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
+              <p>Failed to load execution map: ${executionMap.error || 'Unknown error'}</p>
+            </div>
+          `;
+          return;
+        }
+        
+        currentExecutionMap = executionMap;
+        renderExecutionMap(executionMap);
+        
+      } catch (error) {
+        console.error('[EXECUTION MAP] Error:', error);
+        diagramDiv.innerHTML = `
+          <div style="text-align: center; padding: 40px; color: #f87171;">
+            <i class="fas fa-exclamation-triangle" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
+            <p>Error: ${error.message}</p>
+          </div>
+        `;
+      }
+    }
+    
+    function renderExecutionMap(executionMap) {
+      // Update health badge
+      const healthBadge = document.getElementById('execution-map-health-badge');
+      const healthTitle = document.getElementById('execution-map-health-title');
+      const healthMessage = document.getElementById('execution-map-health-message');
+      
+      const healthColors = {
+        GREEN: { bg: '#22c55e', icon: 'check' },
+        YELLOW: { bg: '#f59e0b', icon: 'exclamation' },
+        RED: { bg: '#ef4444', icon: 'times' }
+      };
+      
+      const healthConfig = healthColors[executionMap.health.status] || healthColors.YELLOW;
+      healthBadge.style.background = healthConfig.bg;
+      healthBadge.innerHTML = `<i class="fas fa-${healthConfig.icon}" style="color: white; font-size: 20px;"></i>`;
+      healthTitle.textContent = `${executionMap.health.status} - ${executionMap.summary.coverage} Coverage`;
+      healthMessage.textContent = executionMap.health.message;
+      
+      // Render flow diagram
+      const diagramDiv = document.getElementById('execution-map-diagram');
+      let stagesHtml = '';
+      
+      for (const stage of executionMap.stages) {
+        const statusColors = {
+          active: '#22c55e',
+          warning: '#f59e0b',
+          error: '#ef4444',
+          disabled: '#64748b',
+          unknown: '#94a3b8'
+        };
+        
+        const statusColor = statusColors[stage.status] || statusColors.unknown;
+        
+        stagesHtml += `
+          <div style="display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px;">
+            <div style="min-width: 48px; height: 48px; border-radius: 12px; background: ${statusColor}; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+              ${stage.icon}
+            </div>
+            <div style="flex: 1;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <h5 style="margin: 0; font-size: 16px; font-weight: 600;">${stage.name}</h5>
+                <span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: ${statusColor}; color: white; text-transform: uppercase;">
+                  ${stage.status}
+                </span>
+              </div>
+              <p style="margin: 0 0 8px 0; font-size: 13px; color: #94a3b8;">${stage.description}</p>
+              ${stage.actions?.length > 0 ? `
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                  ${stage.actions.slice(0, 3).map(a => `
+                    <span style="background: rgba(255,255,255,0.1); padding: 3px 8px; border-radius: 4px; font-size: 11px; color: #cbd5e1;">
+                      ${a.trigger} → ${a.action}
+                    </span>
+                  `).join('')}
+                </div>
+              ` : ''}
+              ${stage.warnings?.length > 0 ? `
+                <div style="margin-top: 8px;">
+                  ${stage.warnings.map(w => `
+                    <div style="font-size: 12px; color: #fbbf24; display: flex; align-items: center; gap: 6px;">
+                      <i class="fas fa-exclamation-triangle"></i> ${w}
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
+            </div>
+          </div>
+          ${stage.order < executionMap.stages.length ? `
+            <div style="margin-left: 24px; height: 20px; border-left: 2px dashed #475569;"></div>
+          ` : ''}
+        `;
+      }
+      
+      diagramDiv.innerHTML = stagesHtml;
+      
+      // Render issues
+      const issuesDiv = document.getElementById('execution-map-issues');
+      const issuesList = document.getElementById('execution-map-issues-list');
+      
+      const allIssues = [
+        ...executionMap.issues.critical.map(i => ({ ...i, severity: 'critical' })),
+        ...executionMap.issues.warnings.map(i => ({ ...i, severity: 'warning' })),
+        ...executionMap.issues.info.map(i => ({ ...i, severity: 'info' }))
+      ];
+      
+      if (allIssues.length > 0) {
+        issuesDiv.style.display = 'block';
+        issuesList.innerHTML = allIssues.map(issue => `
+          <div style="background: ${issue.severity === 'critical' ? '#fef2f2' : issue.severity === 'warning' ? '#fffbeb' : '#f0f9ff'}; 
+                      border: 1px solid ${issue.severity === 'critical' ? '#ef4444' : issue.severity === 'warning' ? '#f59e0b' : '#0ea5e9'}; 
+                      border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+            <div style="font-weight: 600; color: ${issue.severity === 'critical' ? '#991b1b' : issue.severity === 'warning' ? '#92400e' : '#0369a1'};">
+              ${issue.severity === 'critical' ? '🔴' : issue.severity === 'warning' ? '🟡' : '🔵'} 
+              ${issue.stage}: ${issue.message}
+            </div>
+            ${issue.recommendation ? `
+              <div style="font-size: 13px; color: #64748b; margin-top: 4px;">
+                💡 ${issue.recommendation}
+              </div>
+            ` : ''}
+          </div>
+        `).join('');
+      } else {
+        issuesDiv.style.display = 'none';
+      }
+    }
+    
+    function exportExecutionMap() {
+      if (!currentExecutionMap) {
+        showSnapshotToast('No execution map loaded', 'warning');
+        return;
+      }
+      
+      const jsonStr = JSON.stringify(currentExecutionMap, null, 2);
+      navigator.clipboard.writeText(jsonStr).then(() => {
+        showSnapshotToast(`Execution map copied (${jsonStr.length} bytes)`, 'success');
+      });
     }
     
     async function loadPlaceholders() {
