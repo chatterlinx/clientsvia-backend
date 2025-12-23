@@ -5530,7 +5530,7 @@ Loading field report...
                   style="padding: 10px 20px; background: #f1f5f9; color: #374151; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">
             <i class="fas fa-eye"></i> Preview Changes
           </button>
-          <button onclick="applyGoldenAutofill()" id="btn-apply-autofill"
+          <button onclick="applyGoldenAutofillFromModal()" id="btn-apply-autofill"
                   style="padding: 10px 20px; background: #f59e0b; color: #1e293b; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;" disabled>
             <i class="fas fa-magic"></i> Apply Golden Defaults
           </button>
@@ -5703,6 +5703,10 @@ Loading field report...
       return negatives;
     }
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GOLDEN AUTOFILL - NOW USES REAL API (Dec 2025 Fix)
+    // ═══════════════════════════════════════════════════════════════════════════
+    
     async function previewGoldenAutofill() {
       const templateId = document.getElementById('autofill-template-select').value;
       
@@ -5712,250 +5716,192 @@ Loading field report...
       }
       
       const btn = document.getElementById('btn-preview-autofill');
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calling API...';
       btn.disabled = true;
       
+      console.log(`🎯 [GOLDEN AUTOFILL] Calling dry_run API for template: ${templateId}`);
+      
       try {
-        // Fetch the template
-        const response = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
-          headers: { 'Authorization': `Bearer ${authToken}` }
+        // Call the REAL backend API - dry_run mode
+        const response = await fetch(`/api/trade-knowledge/templates/${templateId}/golden-autofill`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ mode: 'dry_run' })
         });
         
-        if (!response.ok) throw new Error('Failed to load template');
-        
-        const result = await response.json();
-        const template = result.data || result.template;
-        
-        // Generate changes preview
-        const changes = [];
-        let scenarioCount = 0;
-        
-        for (const category of (template.categories || [])) {
-          for (const scenario of (category.scenarios || [])) {
-            scenarioCount++;
-            const type = detectScenarioType(scenario);
-            const golden = goldenDefaults.byType[type];
-            const scenarioChanges = [];
-            
-            // Check what needs to change
-            if (scenario.minConfidence !== golden.minConfidence) {
-              scenarioChanges.push({
-                field: 'minConfidence',
-                from: scenario.minConfidence || 'null',
-                to: golden.minConfidence
-              });
-            }
-            
-            if (scenario.priority !== golden.priority) {
-              scenarioChanges.push({
-                field: 'priority',
-                from: scenario.priority ?? 0,
-                to: golden.priority
-              });
-            }
-            
-            if (scenario.contextWeight !== golden.contextWeight) {
-              scenarioChanges.push({
-                field: 'contextWeight',
-                from: scenario.contextWeight ?? 0.7,
-                to: golden.contextWeight
-              });
-            }
-            
-            if (scenario.replySelection !== goldenDefaults.defaults.replySelection) {
-              scenarioChanges.push({
-                field: 'replySelection',
-                from: scenario.replySelection || 'null',
-                to: goldenDefaults.defaults.replySelection
-              });
-            }
-            
-            if (scenario.scenarioType !== golden.scenarioType) {
-              scenarioChanges.push({
-                field: 'scenarioType',
-                from: scenario.scenarioType || 'null',
-                to: golden.scenarioType
-              });
-            }
-            
-            if (scenario.handoffPolicy !== golden.handoffPolicy) {
-              scenarioChanges.push({
-                field: 'handoffPolicy',
-                from: scenario.handoffPolicy || 'null',
-                to: golden.handoffPolicy
-              });
-            }
-            
-            // Check negative triggers
-            if (!scenario.negativeTriggers || scenario.negativeTriggers.length < 3) {
-              const autoGenerated = generateNegativeTriggers(scenario);
-              scenarioChanges.push({
-                field: 'negativeTriggers',
-                from: `${(scenario.negativeTriggers || []).length} items`,
-                to: `${autoGenerated.length} items (auto-generated)`
-              });
-            }
-            
-            // Check reply counts
-            const qCount = (scenario.quickReplies || []).length;
-            const fCount = (scenario.fullReplies || []).length;
-            if (qCount < 7 || fCount < 7) {
-              scenarioChanges.push({
-                field: 'REPLY_WARNING',
-                from: `quick: ${qCount}, full: ${fCount}`,
-                to: 'Needs 7+ of each (flagged for manual review)'
-              });
-            }
-            
-            if (scenarioChanges.length > 0) {
-              changes.push({
-                categoryId: category.id,
-                categoryName: category.name,
-                scenarioId: scenario.scenarioId || scenario.id,
-                scenarioName: scenario.name,
-                detectedType: type,
-                changes: scenarioChanges
-              });
-            }
-          }
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
         
-        // Store for apply
-        autofillPreview = { templateId, template, changes };
+        const data = await response.json();
+        console.log('[GOLDEN AUTOFILL] API Response:', data);
         
-        // Show preview
+        // Store for apply
+        autofillPreview = { templateId, data };
+        
+        // Show preview with REAL JSON
         document.getElementById('autofill-preview').style.display = 'block';
         
-        let diffHtml = `<div style="color: #10b981; margin-bottom: 12px;">
-          📊 <strong>${scenarioCount} scenarios analyzed</strong> | <strong>${changes.length} scenarios will be updated</strong>
-        </div>`;
-        
-        if (changes.length === 0) {
-          diffHtml += '<div style="color: #64748b;">All scenarios already match golden defaults! ✅</div>';
-        } else {
-          for (const s of changes.slice(0, 10)) { // Show first 10
-            diffHtml += `<div style="margin-bottom: 16px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 6px;">
-              <div style="font-weight: 600; color: #fbbf24; margin-bottom: 8px;">
-                ${s.scenarioName} <span style="font-weight: 400; color: #94a3b8;">(${s.detectedType})</span>
-              </div>`;
-            
-            for (const c of s.changes) {
-              const isWarning = c.field === 'REPLY_WARNING';
-              diffHtml += `<div style="font-size: 11px; margin-left: 12px; color: ${isWarning ? '#f59e0b' : '#94a3b8'};">
-                ${isWarning ? '⚠️' : '•'} ${c.field}: <span style="color: #ef4444;">${c.from}</span> → <span style="color: #10b981;">${c.to}</span>
-              </div>`;
-            }
-            
-            diffHtml += '</div>';
-          }
+        // Build visual summary
+        let diffHtml = `
+          <div style="margin-bottom: 16px;">
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 16px;">
+              <div style="background: #1e3a5f; padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 24px; font-weight: 700; color: #60a5fa;">${data.summary?.totalScenarios || 0}</div>
+                <div style="font-size: 11px; color: #93c5fd;">Total</div>
+              </div>
+              <div style="background: #14532d; padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 24px; font-weight: 700; color: #4ade80;">${data.summary?.toUpdate || 0}</div>
+                <div style="font-size: 11px; color: #86efac;">Will Update</div>
+              </div>
+              <div style="background: #1e293b; padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 24px; font-weight: 700; color: #94a3b8;">${data.summary?.alreadyCompliant || 0}</div>
+                <div style="font-size: 11px; color: #cbd5e1;">OK</div>
+              </div>
+              <div style="background: #713f12; padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 24px; font-weight: 700; color: #fbbf24;">${data.summary?.locked || 0}</div>
+                <div style="font-size: 11px; color: #fde68a;">Locked</div>
+              </div>
+              <div style="background: #7f1d1d; padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 24px; font-weight: 700; color: #f87171;">${data.summary?.withQualityIssues || 0}</div>
+                <div style="font-size: 11px; color: #fca5a5;">Issues</div>
+              </div>
+            </div>
+          </div>
           
-          if (changes.length > 10) {
-            diffHtml += `<div style="color: #64748b; text-align: center;">...and ${changes.length - 10} more scenarios</div>`;
+          <div style="margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <strong style="color: #f1f5f9;">📋 Full API Response (JSON)</strong>
+              <button onclick="copyAutofillJson()" style="padding: 4px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                <i class="fas fa-copy"></i> Copy JSON
+              </button>
+            </div>
+            <textarea id="autofill-json-output" readonly style="width: 100%; height: 300px; background: #0f172a; color: #22d3ee; border: 1px solid #334155; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 11px; resize: vertical;">${JSON.stringify(data, null, 2)}</textarea>
+          </div>
+        `;
+        
+        // Show sample changes
+        if (data.willUpdate && data.willUpdate.length > 0) {
+          diffHtml += `<div style="margin-top: 16px;"><strong style="color: #4ade80;">Sample Changes (first 5):</strong></div>`;
+          for (const s of data.willUpdate.slice(0, 5)) {
+            diffHtml += `<div style="margin: 8px 0; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 4px;">
+              <div style="font-weight: 600; color: #fbbf24;">${s.scenarioName} <span style="color: #64748b;">(${s.type})</span></div>
+              <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">
+                ${(s.changes || []).map(c => `${c.field}: ${JSON.stringify(c.before)} → ${JSON.stringify(c.after)}`).join(' | ')}
+              </div>
+            </div>`;
           }
         }
         
         document.getElementById('autofill-diff').innerHTML = diffHtml;
-        document.getElementById('btn-apply-autofill').disabled = changes.length === 0;
+        document.getElementById('btn-apply-autofill').disabled = (data.summary?.toUpdate || 0) === 0;
         
       } catch (error) {
         console.error('[AUTOFILL] Preview error:', error);
-        showToast('❌ Failed to preview: ' + error.message, 'error');
+        showToast('❌ API Error: ' + error.message, 'error');
+        document.getElementById('autofill-preview').style.display = 'block';
+        document.getElementById('autofill-diff').innerHTML = `
+          <div style="color: #f87171; padding: 20px; text-align: center;">
+            <i class="fas fa-exclamation-triangle" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
+            <strong>API Call Failed</strong><br>
+            ${error.message}
+          </div>
+        `;
       }
       
       btn.innerHTML = '<i class="fas fa-eye"></i> Preview Changes';
       btn.disabled = false;
     }
     
-    async function applyGoldenAutofill() {
-      if (!autofillPreview || autofillPreview.changes.length === 0) {
+    function copyAutofillJson() {
+      const textarea = document.getElementById('autofill-json-output');
+      if (textarea) {
+        navigator.clipboard.writeText(textarea.value).then(() => {
+          showToast('✅ JSON copied to clipboard', 'success');
+        });
+      }
+    }
+    
+    // Apply Golden Autofill using the REAL backend API (Dec 2025 Fix)
+    async function applyGoldenAutofillFromModal() {
+      if (!autofillPreview || !autofillPreview.templateId) {
+        showToast('❌ No preview loaded. Click Preview first.', 'error');
+        return;
+      }
+      
+      const toUpdate = autofillPreview.data?.summary?.toUpdate || 0;
+      if (toUpdate === 0) {
         showToast('❌ No changes to apply', 'error');
         return;
       }
       
       const btn = document.getElementById('btn-apply-autofill');
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Applying...';
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Applying via API...';
       btn.disabled = true;
       
+      console.log(`🎯 [GOLDEN AUTOFILL] Calling APPLY API for template: ${autofillPreview.templateId}`);
+      
       try {
-        const { template, changes } = autofillPreview;
-        
-        // Build patch payload
-        const patches = [];
-        
-        for (const change of changes) {
-          const category = template.categories.find(c => c.id === change.categoryId);
-          if (!category) continue;
-          
-          const scenario = category.scenarios.find(s => (s.scenarioId || s.id) === change.scenarioId);
-          if (!scenario) continue;
-          
-          const type = change.detectedType;
-          const golden = goldenDefaults.byType[type];
-          
-          // Build patch for this scenario
-          const patch = {
-            templateId: autofillPreview.templateId,
-            categoryId: change.categoryId,
-            scenarioId: change.scenarioId,
-            updates: {
-              minConfidence: golden.minConfidence,
-              priority: golden.priority,
-              contextWeight: golden.contextWeight,
-              replySelection: goldenDefaults.defaults.replySelection,
-              replyStrategy: golden.replyStrategy,
-              scenarioType: golden.scenarioType,
-              handoffPolicy: golden.handoffPolicy,
-              followUpMode: golden.followUpMode,
-              silencePolicy: goldenDefaults.defaults.silencePolicy
-            }
-          };
-          
-          // Add negative triggers if needed
-          if (!scenario.negativeTriggers || scenario.negativeTriggers.length < 3) {
-            patch.updates.negativeTriggers = generateNegativeTriggers(scenario);
-          }
-          
-          // Add action hooks
-          if (golden.actionHooks.length > 0) {
-            patch.updates.actionHooks = golden.actionHooks;
-          }
-          
-          patches.push(patch);
-        }
-        
-        // Apply via API
-        const response = await fetch('/api/apply-patch', {
+        // Call the REAL backend API - apply mode
+        const response = await fetch(`/api/trade-knowledge/templates/${autofillPreview.templateId}/golden-autofill`, {
           method: 'POST',
-          headers: {
+          headers: { 
             'Authorization': `Bearer ${authToken}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            action: 'goldenAutofill',
-            patches,
-            _meta: {
-              appliedAt: new Date().toISOString(),
-              companyId: currentCompanyId,
-              scenariosUpdated: patches.length
-            }
-          })
+          body: JSON.stringify({ mode: 'apply' })
         });
         
-        const result = await response.json();
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
         
-        if (result.success) {
-          showToast(`✅ Golden defaults applied to ${patches.length} scenarios!`, 'success');
-          closeGoldenAutofillModal();
+        const data = await response.json();
+        console.log('[GOLDEN AUTOFILL] Apply Response:', data);
+        
+        if (data.success) {
+          // Update the JSON textarea with the apply result
+          const textarea = document.getElementById('autofill-json-output');
+          if (textarea) {
+            textarea.value = JSON.stringify(data, null, 2);
+          }
+          
+          showToast(`✅ Applied: ${data.results?.updated || 0} updated, ${data.results?.locked || 0} locked, ${data.results?.failed || 0} failed`, 'success');
+          
+          // Update the visual summary
+          document.getElementById('autofill-diff').innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+              <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
+              <div style="font-size: 18px; font-weight: 600; color: #4ade80; margin-bottom: 8px;">Golden Autofill Applied!</div>
+              <div style="color: #94a3b8;">
+                ${data.results?.updated || 0} scenarios updated | 
+                ${data.results?.locked || 0} locked (skipped) | 
+                ${data.results?.failed || 0} failed
+              </div>
+              <div style="margin-top: 16px;">
+                <button onclick="copyAutofillJson()" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                  <i class="fas fa-copy"></i> Copy Result JSON
+                </button>
+              </div>
+            </div>
+          `;
+          
         } else {
-          throw new Error(result.error || 'Unknown error');
+          throw new Error(data.error || 'Apply failed');
         }
         
       } catch (error) {
         console.error('[AUTOFILL] Apply error:', error);
-        showToast('❌ Failed to apply: ' + error.message, 'error');
-        btn.innerHTML = '<i class="fas fa-magic"></i> Apply Golden Defaults';
-        btn.disabled = false;
+        showToast('❌ API Error: ' + error.message, 'error');
       }
+      
+      btn.innerHTML = '<i class="fas fa-magic"></i> Apply Golden Defaults';
+      btn.disabled = false;
     }
   </script>
   
