@@ -1423,6 +1423,24 @@ const globalInstantResponseTemplateSchema = new Schema({
         default: 'Platform Admin'
     },
     
+    // ============================================
+    // ✨ GOLDEN AUTOFILL AUDIT STAMP
+    // ============================================
+    lastGoldenAutofillAt: {
+        type: Date,
+        default: null
+    },
+    lastGoldenAutofillBy: {
+        type: String,
+        trim: true,
+        default: null
+    },
+    lastGoldenAutofillVersion: {
+        type: String,
+        trim: true,
+        default: null
+    },
+    
     // Change log
     changeLog: [{
         changes: { type: String, trim: true },
