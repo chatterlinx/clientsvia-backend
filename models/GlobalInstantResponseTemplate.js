@@ -487,6 +487,60 @@ const scenarioSchema = new Schema({
     },
     
     // ============================================
+    // SCENARIO TYPE - EXPLICIT CLASSIFICATION
+    // ============================================
+    // Makes autofill defaults deterministic (no guessing from priority/confidence)
+    
+    scenarioType: {
+        type: String,
+        enum: ['EMERGENCY', 'BOOKING', 'FAQ', 'SMALL_TALK', 'SYSTEM', 'TRANSFER', 'UNKNOWN'],
+        default: 'UNKNOWN'
+        // EMERGENCY: Critical issues (gas leak, no heat, flooding) - priority 90-100
+        // BOOKING: Scheduling/appointment intents - priority 70-85
+        // FAQ: Informational questions (pricing, warranty, hours) - priority 40-60
+        // SMALL_TALK: Casual conversation (greetings, thanks, goodbye) - priority -5 to 10
+        // SYSTEM: Internal acks, confirmations - priority 20-40
+        // TRANSFER: Human escalation requests - priority 80-90
+        // UNKNOWN: Not yet classified (autofill will guess)
+    },
+    
+    // ============================================
+    // AUTOFILL PROTECTION - TUNING LOCK
+    // ============================================
+    // Prevents "Golden Autofill" from overwriting manually tuned scenarios
+    
+    autofillLock: {
+        type: Boolean,
+        default: false
+        // true = Golden Autofill will SKIP this scenario
+        // Set to true after manual tuning to protect customizations
+    },
+    
+    lastAutofillAt: {
+        type: Date,
+        default: null
+        // When Golden Autofill last modified this scenario
+    },
+    
+    lastAutofillVersion: {
+        type: String,
+        default: null
+        // Which version of Golden Defaults was applied
+    },
+    
+    lastManualTuneAt: {
+        type: Date,
+        default: null
+        // When a human last manually edited this scenario
+    },
+    
+    lastManualTuneBy: {
+        type: String,
+        default: null
+        // Who manually edited (email/username)
+    },
+    
+    // ============================================
     // SENSITIVE DATA & SAFETY
     // ============================================
     
