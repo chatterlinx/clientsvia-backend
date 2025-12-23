@@ -32,6 +32,7 @@ const DynamicFlow = require('../../models/DynamicFlow');
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const { unifyConfig } = require('../../utils/configUnifier');
 const { substitutePlaceholders } = require('../../utils/placeholderStandard');
+const { validateScenarioQuality, QUALITY_REQUIREMENTS } = require('../../utils/scenarioEnforcement');
 const logger = require('../../utils/logger');
 
 // ============================================================================
@@ -230,11 +231,36 @@ router.get('/', async (req, res) => {
                         wiringValidatedAt: scenario.wiringValidatedAt || null,
                         wiringIssues: scenario.wiringIssues || [],
                         
-                        // Quality
+                        // Quality (local calculation)
                         quality: {
                             score: calculateScenarioQuality(scenario),
                             issues: getScenarioIssues(scenario)
-                        }
+                        },
+                        
+                        // ═══════════════════════════════════════════════════════════════
+                        // 🛡️ ENTERPRISE ENFORCEMENT (December 2025 - NO EXCEPTIONS)
+                        // If enterpriseReady === false, scenario WILL NOT MATCH at runtime
+                        // ═══════════════════════════════════════════════════════════════
+                        enforcement: (() => {
+                            const validation = validateScenarioQuality(scenario);
+                            return {
+                                enterpriseReady: validation.enterpriseReady,
+                                grade: validation.grade,
+                                status: validation.status,
+                                willMatch: validation.enterpriseReady, // Only enterprise-ready scenarios match
+                                issues: validation.issues,
+                                warnings: validation.warnings,
+                                checks: {
+                                    triggers: validation.checks.triggers?.pass,
+                                    negatives: validation.checks.negativeTriggers?.pass,
+                                    quickReplies: validation.checks.quickReplies?.pass,
+                                    fullReplies: validation.checks.fullReplies?.pass,
+                                    scenarioType: validation.checks.scenarioType?.pass,
+                                    wiring: validation.checks.wiring?.pass,
+                                    enums: validation.checks.enums?.pass
+                                }
+                            };
+                        })()
                     });
                 });
             });
@@ -378,7 +404,35 @@ router.get('/', async (req, res) => {
                 withBookingIntent: scenarios.filter(s => s.wiring.bookingIntent).length,
                 withRequiredSlots: scenarios.filter(s => s.wiring.requiredSlots && s.wiring.requiredSlots.length > 0).length,
                 withStopRouting: scenarios.filter(s => s.wiring.stopRouting).length,
-                validated: scenarios.filter(s => s.wiringValidated).length
+                validated: scenarios.filter(s => s.wiringValidated).length,
+                
+                // Enterprise enforcement stats
+                enterpriseReady: scenarios.filter(s => s.enforcement?.enterpriseReady).length,
+                notEnterpriseReady: scenarios.filter(s => !s.enforcement?.enterpriseReady).length,
+                willMatchAtRuntime: scenarios.filter(s => s.enforcement?.willMatch).length
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
+            // 🛡️ ENTERPRISE ENFORCEMENT SUMMARY
+            // ═══════════════════════════════════════════════════════════════
+            enforcement: {
+                enabled: true, // Always enforced - NO EXCEPTIONS
+                rule: 'A scenario cannot be enabled unless enterpriseReady === true',
+                totalScenarios: scenarios.length,
+                enterpriseReadyCount: scenarios.filter(s => s.enforcement?.enterpriseReady).length,
+                percentReady: scenarios.length > 0 
+                    ? Math.round(scenarios.filter(s => s.enforcement?.enterpriseReady).length / scenarios.length * 100)
+                    : 0,
+                qualityRequirements: QUALITY_REQUIREMENTS,
+                rejectedScenarios: scenarios
+                    .filter(s => !s.enforcement?.enterpriseReady)
+                    .slice(0, 10)
+                    .map(s => ({
+                        id: s.id,
+                        name: s.name,
+                        grade: s.enforcement?.grade,
+                        issues: s.enforcement?.issues?.slice(0, 3)
+                    }))
             },
             
             // Wiring health summary

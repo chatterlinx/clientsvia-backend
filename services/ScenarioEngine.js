@@ -32,6 +32,13 @@ const logger = require('../utils/logger');
 const CompanyScenarioOverride = require('../models/CompanyScenarioOverride');
 const CompanyCategoryOverride = require('../models/CompanyCategoryOverride');
 
+// Enterprise Enforcement (December 2025 - NO EXCEPTIONS)
+const { 
+    filterEnterpriseReadyScenarios, 
+    validateScenarioQuality,
+    QUALITY_REQUIREMENTS 
+} = require('../utils/scenarioEnforcement');
+
 class ScenarioEngine {
   constructor() {
     this.config = {
@@ -39,6 +46,13 @@ class ScenarioEngine {
       defaultTier2Threshold: 0.60,
       enableTradeFiltering: true,
       enableCompanyToggles: true, // December 2025: Company override models created
+      
+      // ═══════════════════════════════════════════════════════════════════════
+      // ENTERPRISE ENFORCEMENT (December 2025 - NO EXCEPTIONS)
+      // A scenario cannot be matched unless enterpriseReady === true
+      // ═══════════════════════════════════════════════════════════════════════
+      enforceEnterpriseReady: true,
+      qualityRequirements: QUALITY_REQUIREMENTS
     };
   }
 
@@ -164,6 +178,60 @@ class ScenarioEngine {
       }
 
       // ═══════════════════════════════════════════════════════════════
+      // 4B. ENTERPRISE ENFORCEMENT (NO EXCEPTIONS)
+      // Filter out non-enterprise-ready scenarios from matching pool
+      // ═══════════════════════════════════════════════════════════════
+      let enterpriseStats = { total: 0, filtered: 0, rejected: [] };
+      
+      if (this.config.enforceEnterpriseReady) {
+        // Count and validate all scenarios in template
+        let totalScenarios = 0;
+        let readyScenarios = 0;
+        const rejected = [];
+        
+        for (const category of template.categories || []) {
+          const originalCount = (category.scenarios || []).length;
+          totalScenarios += originalCount;
+          
+          // Validate and filter scenarios in-place
+          const validScenarios = [];
+          for (const scenario of category.scenarios || []) {
+            const validation = validateScenarioQuality(scenario);
+            
+            if (validation.enterpriseReady) {
+              validScenarios.push(scenario);
+              readyScenarios++;
+            } else {
+              rejected.push({
+                scenarioId: scenario.scenarioId,
+                name: scenario.name,
+                grade: validation.grade,
+                issues: validation.issues.slice(0, 3)
+              });
+            }
+          }
+          
+          // Replace with filtered list
+          category.scenarios = validScenarios;
+        }
+        
+        enterpriseStats = {
+          total: totalScenarios,
+          filtered: readyScenarios,
+          rejected: rejected.slice(0, 10) // Top 10 rejected for logging
+        };
+        
+        if (rejected.length > 0) {
+          logger.warn(`[SCENARIO ENGINE] Enterprise enforcement filtered ${rejected.length}/${totalScenarios} scenarios`, {
+            companyId,
+            rejected: enterpriseStats.rejected
+          });
+        } else {
+          logger.info(`[SCENARIO ENGINE] All ${totalScenarios} scenarios are enterprise-ready`);
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════
       // 5. ROUTE THROUGH 3-TIER CASCADE
       // ═══════════════════════════════════════════════════════════════
       const routingResult = await IntelligentRouter.route({
@@ -273,13 +341,23 @@ class ScenarioEngine {
       }
 
       result.performance.totalTime = Date.now() - startTime;
+      
+      // Add enterprise enforcement stats to result
+      result.enforcement = {
+        enabled: this.config.enforceEnterpriseReady,
+        totalScenarios: enterpriseStats.total,
+        enterpriseReadyCount: enterpriseStats.filtered,
+        rejectedCount: enterpriseStats.total - enterpriseStats.filtered,
+        rejectedSample: enterpriseStats.rejected
+      };
 
       logger.info('✅ [SCENARIO ENGINE] Selection complete', {
         selected: result.selected,
         tier: result.tier,
         scenarioId: result.scenario?.scenarioId,
         confidence: result.confidence,
-        totalTime: `${result.performance.totalTime}ms`
+        totalTime: `${result.performance.totalTime}ms`,
+        enforcement: `${enterpriseStats.filtered}/${enterpriseStats.total} scenarios available`
       });
 
       return result;
@@ -343,16 +421,24 @@ class ScenarioEngine {
       // Load company scenario overrides (for disable status)
       const overridesMap = await CompanyScenarioOverride.getOverridesMap(companyId);
       
-      // Extract all scenarios and check override status
+      // Extract all scenarios and check override status + enterprise-ready
       const allScenarios = [];
       let enabledCount = 0;
       let disabledCount = 0;
+      let notEnterpriseReadyCount = 0;
       
       for (const category of template.categories || []) {
         for (const scenario of category.scenarios || []) {
           if (scenario.isActive && scenario.status === 'live') {
             const override = overridesMap.get(scenario.scenarioId);
-            const isEnabled = !override || override.enabled !== false;
+            const isToggledEnabled = !override || override.enabled !== false;
+            
+            // Check enterprise-ready status
+            const validation = validateScenarioQuality(scenario);
+            const isEnterpriseReady = validation.enterpriseReady;
+            
+            // Only truly enabled if toggled on AND enterprise-ready
+            const isEnabled = isToggledEnabled && isEnterpriseReady;
             
             allScenarios.push({
               scenarioId: scenario.scenarioId,
@@ -362,12 +448,17 @@ class ScenarioEngine {
               priority: scenario.priority || 0,
               triggersCount: scenario.triggers?.length || 0,
               isEnabled,
+              isEnterpriseReady,
+              enterpriseGrade: validation.grade,
+              enterpriseIssues: validation.issues.slice(0, 3),
               hasOverride: !!override,
               overrideType: override ? override.fallbackPreference : null
             });
             
             if (isEnabled) {
               enabledCount++;
+            } else if (!isEnterpriseReady) {
+              notEnterpriseReadyCount++;
             } else {
               disabledCount++;
             }
@@ -379,8 +470,13 @@ class ScenarioEngine {
         count: allScenarios.length,
         enabledCount,
         disabledCount,
+        notEnterpriseReadyCount,
         scenarios: allScenarios,
-        tradeKey: effectiveTradeKey
+        tradeKey: effectiveTradeKey,
+        enforcement: {
+          enabled: this.config.enforceEnterpriseReady,
+          qualityRequirements: this.config.qualityRequirements
+        }
       };
 
     } catch (error) {
