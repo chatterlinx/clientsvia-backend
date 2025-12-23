@@ -5280,29 +5280,34 @@ Loading field report...
         const df = result.data.dynamicFlows;
         const cp = result.data.controlPlane;
         
+        // Safe access with defaults
+        const totals = sb?.totals || { templates: 0, scenarios: 0, triggers: 0 };
+        const greetingConfigured = cp?.greeting?.configured || false;
+        const bookingSlots = cp?.booking?.slotsCount || 0;
+        
         summaryEl.innerHTML = `
           <div style="background: #1e293b; padding: 14px; border-radius: 10px; text-align: center;">
-            <div style="font-size: 28px; font-weight: 700; color: #60a5fa;">${sb.totals.templates}</div>
+            <div style="font-size: 28px; font-weight: 700; color: #60a5fa;">${totals.templates}</div>
             <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Templates</div>
           </div>
           <div style="background: #1e293b; padding: 14px; border-radius: 10px; text-align: center;">
-            <div style="font-size: 28px; font-weight: 700; color: #34d399;">${sb.totals.scenarios}</div>
+            <div style="font-size: 28px; font-weight: 700; color: #34d399;">${totals.scenarios}</div>
             <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Scenarios</div>
           </div>
           <div style="background: #1e293b; padding: 14px; border-radius: 10px; text-align: center;">
-            <div style="font-size: 28px; font-weight: 700; color: #fbbf24;">${sb.totals.triggers}</div>
+            <div style="font-size: 28px; font-weight: 700; color: #fbbf24;">${totals.triggers}</div>
             <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Triggers</div>
           </div>
           <div style="background: #1e293b; padding: 14px; border-radius: 10px; text-align: center;">
-            <div style="font-size: 28px; font-weight: 700; color: ${df.enabled ? '#34d399' : '#ef4444'};">${df.count}</div>
-            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Flows ${df.enabled ? '✓' : '⚠️'}</div>
+            <div style="font-size: 28px; font-weight: 700; color: ${df?.enabled ? '#34d399' : '#ef4444'};">${df?.enabledCount || 0}/${df?.totalCount || 0}</div>
+            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Flows ${df?.enabled ? '✓' : '⚠️'}</div>
           </div>
           <div style="background: #1e293b; padding: 14px; border-radius: 10px; text-align: center;">
-            <div style="font-size: 28px; font-weight: 700; color: ${cp.greeting.configured ? '#34d399' : '#ef4444'};">${cp.greeting.configured ? '✓' : '✗'}</div>
+            <div style="font-size: 28px; font-weight: 700; color: ${greetingConfigured ? '#34d399' : '#ef4444'};">${greetingConfigured ? '✓' : '✗'}</div>
             <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Greeting</div>
           </div>
           <div style="background: #1e293b; padding: 14px; border-radius: 10px; text-align: center;">
-            <div style="font-size: 28px; font-weight: 700; color: ${cp.booking.slotsCount > 0 ? '#34d399' : '#f59e0b'};">${cp.booking.slotsCount}</div>
+            <div style="font-size: 28px; font-weight: 700; color: ${bookingSlots > 0 ? '#34d399' : '#f59e0b'};">${bookingSlots}</div>
             <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Booking Slots</div>
           </div>
         `;

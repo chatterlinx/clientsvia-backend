@@ -134,9 +134,10 @@ router.get('/', async (req, res) => {
             .filter(ref => ref.enabled)
             .map(ref => ref.templateId);
         
+        // NOTE: Removed isActive filter to match /configuration/templates behavior
+        // The templateReferences.enabled flag is sufficient for filtering
         const templates = await GlobalInstantResponseTemplate.find({
-            _id: { $in: activeTemplateIds },
-            isActive: true
+            _id: { $in: activeTemplateIds }
         }).lean();
         
         // Flatten scenarios with category info - include ALL IDs
