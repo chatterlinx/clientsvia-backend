@@ -179,6 +179,339 @@ function calculateGrade(triggerCount, negativeCount, quickCount, fullCount, scen
     return 'F';
 }
 
+/**
+ * Detect trigger collisions between scenarios
+ */
+function detectCollisions(scenarios) {
+    const triggerMap = new Map();
+    const collisions = [];
+    
+    scenarios.forEach(scenario => {
+        const triggers = scenario.triggers || [];
+        triggers.forEach(trigger => {
+            const normalized = String(trigger).toLowerCase().trim();
+            if (!triggerMap.has(normalized)) {
+                triggerMap.set(normalized, []);
+            }
+            triggerMap.get(normalized).push({
+                scenarioId: scenario.scenarioId,
+                name: scenario.name,
+                scenarioType: scenario.scenarioType,
+                priority: scenario.priority || 0
+            });
+        });
+    });
+    
+    // Find collisions (trigger used by multiple scenarios)
+    triggerMap.forEach((scenariosList, trigger) => {
+        if (scenariosList.length > 1) {
+            // Determine severity based on scenario types
+            const hasEmergency = scenariosList.some(s => s.scenarioType === 'EMERGENCY');
+            const hasTransfer = scenariosList.some(s => s.scenarioType === 'TRANSFER');
+            const highPriorityConflict = scenariosList.some(s => s.priority > 80);
+            
+            collisions.push({
+                trigger,
+                scenarios: scenariosList.map(s => ({
+                    scenarioId: s.scenarioId,
+                    name: s.name,
+                    scenarioType: s.scenarioType,
+                    priority: s.priority
+                })),
+                severity: (hasEmergency || hasTransfer || highPriorityConflict) ? 'ERROR' : 'WARNING',
+                resolution: 'Add negative triggers to disambiguate or adjust priorities'
+            });
+        }
+    });
+    
+    return collisions;
+}
+
+/**
+ * Generate computed report block for a scenario
+ * This is the PROOF that the scenario is set right
+ */
+function generateScenarioReport(scenario, context) {
+    const issues = [];
+    const warnings = [];
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // A) Will it match the right calls?
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    const triggers = scenario.triggers || [];
+    const negativeTriggers = scenario.negativeTriggers || [];
+    const keywords = scenario.keywords || [];
+    const negativeKeywords = scenario.negativeKeywords || [];
+    
+    const triggersCheck = {
+        count: triggers.length,
+        min: QUALITY_REQUIREMENTS.minTriggers,
+        pass: triggers.length >= QUALITY_REQUIREMENTS.minTriggers,
+        shortTriggers: triggers.filter(t => typeof t === 'string' && t.length < 3).length
+    };
+    if (!triggersCheck.pass) {
+        issues.push(`triggers: ${triggers.length}/${QUALITY_REQUIREMENTS.minTriggers}`);
+    }
+    if (triggersCheck.shortTriggers > 0) {
+        warnings.push(`${triggersCheck.shortTriggers} very short triggers may cause false positives`);
+    }
+    
+    const negativesCheck = {
+        count: negativeTriggers.length,
+        min: QUALITY_REQUIREMENTS.minNegativeTriggers,
+        pass: negativeTriggers.length >= QUALITY_REQUIREMENTS.minNegativeTriggers
+    };
+    if (!negativesCheck.pass) {
+        issues.push(`negatives: ${negativeTriggers.length}/${QUALITY_REQUIREMENTS.minNegativeTriggers}`);
+    }
+    
+    const keywordsCheck = {
+        positiveCount: keywords.length,
+        negativeCount: negativeKeywords.length,
+        hasBoth: keywords.length > 0 && negativeKeywords.length > 0,
+        pass: keywords.length >= 3 || triggers.length >= 5 // Keywords optional if triggers are strong
+    };
+    
+    const confidenceCheck = {
+        value: scenario.minConfidence,
+        isSet: scenario.minConfidence !== null && scenario.minConfidence !== undefined,
+        pass: true // Always passes, but shows if explicitly set
+    };
+    
+    const priorityCheck = {
+        value: scenario.priority ?? 0,
+        isSet: scenario.priority !== null && scenario.priority !== undefined,
+        pass: true // Always passes, but shows if explicitly set
+    };
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // B) Will it sound human, not robotic?
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    const quickReplies = scenario.quickReplies || [];
+    const fullReplies = scenario.fullReplies || [];
+    
+    const quickRepliesCheck = {
+        count: quickReplies.length,
+        min: QUALITY_REQUIREMENTS.minQuickReplies,
+        pass: quickReplies.length >= QUALITY_REQUIREMENTS.minQuickReplies,
+        avgLength: quickReplies.length > 0 
+            ? Math.round(quickReplies.reduce((sum, r) => sum + (typeof r === 'string' ? r.length : (r.text || '').length), 0) / quickReplies.length)
+            : 0
+    };
+    if (!quickRepliesCheck.pass) {
+        issues.push(`quickReplies: ${quickReplies.length}/${QUALITY_REQUIREMENTS.minQuickReplies}`);
+    }
+    
+    const fullRepliesCheck = {
+        count: fullReplies.length,
+        min: QUALITY_REQUIREMENTS.minFullReplies,
+        pass: fullReplies.length >= QUALITY_REQUIREMENTS.minFullReplies,
+        avgLength: fullReplies.length > 0 
+            ? Math.round(fullReplies.reduce((sum, r) => sum + (typeof r === 'string' ? r.length : (r.text || '').length), 0) / fullReplies.length)
+            : 0
+    };
+    if (!fullRepliesCheck.pass) {
+        issues.push(`fullReplies: ${fullReplies.length}/${QUALITY_REQUIREMENTS.minFullReplies}`);
+    }
+    
+    const replyPolicyCheck = {
+        selection: scenario.replySelection || 'bandit',
+        policy: scenario.replyPolicy || 'ROTATE_PER_CALLER',
+        strategy: scenario.replyStrategy || 'AUTO',
+        pass: true // Informational
+    };
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // C) Will it do the right action when matched?
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    const scenarioType = scenario.scenarioType || 'UNKNOWN';
+    const actionType = scenario.actionType || null;
+    const handoffPolicy = scenario.handoffPolicy || 'low_confidence';
+    const transferTarget = scenario.transferTarget || null;
+    const followUpMode = scenario.followUpMode || 'NONE';
+    const stopRouting = scenario.stopRouting || false;
+    const flowId = scenario.flowId || null;
+    const bookingIntent = scenario.bookingIntent || false;
+    
+    // Wiring validation
+    const wiringIssues = [];
+    
+    // START_FLOW requires flowId
+    if (actionType === 'START_FLOW' && !flowId) {
+        wiringIssues.push('START_FLOW requires flowId');
+    }
+    
+    // TRANSFER requires transferTarget
+    if (actionType === 'TRANSFER' && !transferTarget) {
+        wiringIssues.push('TRANSFER requires transferTarget');
+    }
+    
+    // Validate flowId exists
+    if (flowId && context.flowIds && !context.flowIds.includes(flowId.toString())) {
+        wiringIssues.push(`flowId ${flowId} not found`);
+    }
+    
+    // EMERGENCY/TRANSFER should have stopRouting
+    if ((scenarioType === 'EMERGENCY' || scenarioType === 'TRANSFER') && !stopRouting) {
+        warnings.push(`${scenarioType} should have stopRouting=true`);
+    }
+    
+    // BOOKING should have bookingIntent or REQUIRE_BOOKING
+    if (scenarioType === 'BOOKING' && !bookingIntent && actionType !== 'REQUIRE_BOOKING') {
+        warnings.push('BOOKING scenario without bookingIntent or REQUIRE_BOOKING action');
+    }
+    
+    const wiringCheck = {
+        scenarioType,
+        scenarioTypeValid: scenarioType !== 'UNKNOWN',
+        actionType: actionType || 'inferred',
+        handoffPolicy,
+        transferTarget,
+        transferTargetOk: actionType !== 'TRANSFER' || !!transferTarget,
+        followUpMode,
+        stopRouting,
+        flowId,
+        bookingIntent,
+        issues: wiringIssues,
+        pass: wiringIssues.length === 0
+    };
+    
+    if (!wiringCheck.scenarioTypeValid) {
+        issues.push('scenarioType is UNKNOWN');
+    }
+    wiringIssues.forEach(w => issues.push(w));
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // D) Does it pass the enterprise checklist?
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    // Enum validation
+    const invalidEnums = [];
+    if (scenarioType && !['EMERGENCY', 'BOOKING', 'FAQ', 'TROUBLESHOOT', 'BILLING', 'TRANSFER', 'SMALL_TALK', 'SYSTEM', 'UNKNOWN'].includes(scenarioType)) {
+        invalidEnums.push(`scenarioType: ${scenarioType}`);
+    }
+    if (actionType && !['REPLY_ONLY', 'START_FLOW', 'REQUIRE_BOOKING', 'TRANSFER', 'SMS_FOLLOWUP'].includes(actionType)) {
+        invalidEnums.push(`actionType: ${actionType}`);
+    }
+    if (handoffPolicy && !['never', 'low_confidence', 'always_on_keyword', 'emergency_only'].includes(handoffPolicy)) {
+        invalidEnums.push(`handoffPolicy: ${handoffPolicy}`);
+    }
+    
+    const enumsCheck = {
+        invalid: invalidEnums,
+        pass: invalidEnums.length === 0
+    };
+    invalidEnums.forEach(e => issues.push(`Invalid enum: ${e}`));
+    
+    // Placeholder validation
+    const allText = [
+        ...quickReplies.map(r => typeof r === 'string' ? r : r.text || ''),
+        ...fullReplies.map(r => typeof r === 'string' ? r : r.text || '')
+    ].join(' ');
+    const placeholderMatches = allText.match(/\{\{(\w+)\}\}/g) || [];
+    const usedPlaceholders = [...new Set(placeholderMatches.map(m => m.replace(/\{\{|\}\}/g, '')))];
+    const missingPlaceholders = usedPlaceholders.filter(ph => 
+        context.placeholderKeys && 
+        !context.placeholderKeys.includes(ph) && 
+        !['companyName', 'companyPhone'].includes(ph)
+    );
+    
+    const placeholdersCheck = {
+        used: usedPlaceholders,
+        missing: missingPlaceholders,
+        pass: missingPlaceholders.length === 0
+    };
+    if (missingPlaceholders.length > 0) {
+        warnings.push(`Missing placeholders: ${missingPlaceholders.join(', ')}`);
+    }
+    
+    // Missing fields check (vs schemaMirror)
+    const missingFields = [];
+    SCENARIO_SCHEMA_FIELDS.forEach(field => {
+        // Check if field is completely missing (not just null)
+        if (scenario[field] === undefined) {
+            missingFields.push(field);
+        }
+    });
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // Calculate overall grade and status
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    const allChecks = [
+        triggersCheck.pass,
+        negativesCheck.pass,
+        quickRepliesCheck.pass,
+        fullRepliesCheck.pass,
+        wiringCheck.pass,
+        enumsCheck.pass,
+        placeholdersCheck.pass
+    ];
+    
+    const passCount = allChecks.filter(c => c).length;
+    const failCount = allChecks.length - passCount;
+    
+    // Calculate score
+    let score = 100;
+    if (!triggersCheck.pass) score -= 15;
+    if (!negativesCheck.pass) score -= 10;
+    if (!quickRepliesCheck.pass) score -= 15;
+    if (!fullRepliesCheck.pass) score -= 15;
+    if (!wiringCheck.pass) score -= 20;
+    if (!wiringCheck.scenarioTypeValid) score -= 10;
+    if (!enumsCheck.pass) score -= 15;
+    score -= warnings.length * 2;
+    score = Math.max(0, Math.min(100, score));
+    
+    // Grade
+    let grade;
+    if (score >= 90) grade = 'A';
+    else if (score >= 80) grade = 'B';
+    else if (score >= 65) grade = 'C';
+    else if (score >= 50) grade = 'D';
+    else grade = 'F';
+    
+    // Status
+    let status;
+    if (failCount === 0 && warnings.length <= 1) status = 'GREEN';
+    else if (failCount <= 2 && issues.length <= 3) status = 'YELLOW';
+    else status = 'RED';
+    
+    return {
+        grade,
+        score,
+        status,
+        passCount,
+        failCount,
+        
+        checks: {
+            triggers: triggersCheck,
+            negatives: negativesCheck,
+            keywords: keywordsCheck,
+            confidence: confidenceCheck,
+            priority: priorityCheck,
+            quickReplies: quickRepliesCheck,
+            fullReplies: fullRepliesCheck,
+            replyPolicy: replyPolicyCheck,
+            wiring: wiringCheck,
+            enums: enumsCheck,
+            placeholders: placeholdersCheck
+        },
+        
+        issues,
+        warnings,
+        missingFields,
+        
+        enterpriseReady: status === 'GREEN' && missingFields.length < 10
+    };
+}
+
+const DynamicFlow = require('../../models/DynamicFlow');
+const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
+
 // Security middleware
 router.use(authenticateJWT);
 router.use(requireCompanyAccess);
@@ -202,10 +535,12 @@ router.get('/', async (req, res) => {
     try {
         logger.info(`📦 [SCENARIO EXPORT] Starting export for company ${companyId}`);
         
-        // Load company for context
-        const company = await v2Company.findById(companyId)
-            .select('companyName tradeKey industryType')
-            .lean();
+        // Load company and context data in parallel
+        const [company, placeholdersDoc, dynamicFlows] = await Promise.all([
+            v2Company.findById(companyId).select('companyName tradeKey industryType').lean(),
+            CompanyPlaceholders.findOne({ companyId }).lean(),
+            DynamicFlow.find({ companyId }).lean()
+        ]);
         
         if (!company) {
             return res.status(404).json({
@@ -213,6 +548,13 @@ router.get('/', async (req, res) => {
                 error: 'Company not found'
             });
         }
+        
+        // Build validation context
+        const validationContext = {
+            companyId,
+            flowIds: dynamicFlows.map(f => f._id.toString()),
+            placeholderKeys: (placeholdersDoc?.placeholders || []).map(p => p.key)
+        };
         
         // Build query
         const query = {};
@@ -243,6 +585,7 @@ router.get('/', async (req, res) => {
         const exportedTemplates = [];
         let totalCategories = 0;
         let totalScenarios = 0;
+        const allScenariosForCollision = [];
         
         for (const template of templates) {
             const templateExport = {
@@ -347,25 +690,17 @@ router.get('/', async (req, res) => {
                     totalScenarios++;
                     const scenarioScopeInfo = getScopeDisplayInfo(scenario, companyId);
                     
-                    // Calculate quality metrics
-                    const triggers = scenario.triggers || [];
-                    const negativeTriggers = scenario.negativeTriggers || [];
-                    const quickReplies = scenario.quickReplies || [];
-                    const fullReplies = scenario.fullReplies || [];
-                    const keywords = scenario.keywords || [];
+                    // Generate COMPUTED REPORT (the PROOF)
+                    const report = generateScenarioReport(scenario, validationContext);
                     
-                    const qualityMetrics = {
-                        triggerCount: triggers.length,
-                        negativeTriggerCount: negativeTriggers.length,
-                        quickReplyCount: quickReplies.length,
-                        fullReplyCount: fullReplies.length,
-                        keywordCount: keywords.length,
-                        meetsMinTriggers: triggers.length >= QUALITY_REQUIREMENTS.minTriggers,
-                        meetsMinNegatives: negativeTriggers.length >= QUALITY_REQUIREMENTS.minNegativeTriggers,
-                        meetsMinQuickReplies: quickReplies.length >= QUALITY_REQUIREMENTS.minQuickReplies,
-                        meetsMinFullReplies: fullReplies.length >= QUALITY_REQUIREMENTS.minFullReplies,
-                        grade: calculateGrade(triggers.length, negativeTriggers.length, quickReplies.length, fullReplies.length, scenario.scenarioType)
-                    };
+                    // Track for collision detection
+                    allScenariosForCollision.push({
+                        scenarioId: scenario.scenarioId,
+                        name: scenario.name,
+                        triggers: scenario.triggers || [],
+                        scenarioType: scenario.scenarioType,
+                        priority: scenario.priority || 0
+                    });
                     
                     const scenarioExport = {
                         // ═══════════════════════════════════════════════════
@@ -548,9 +883,14 @@ router.get('/', async (req, res) => {
                         legacyMigrated: scenario.legacyMigrated || false,
                         
                         // ═══════════════════════════════════════════════════
-                        // COMPUTED QUALITY METRICS
+                        // 📊 COMPUTED REPORT (THE PROOF)
+                        // This block proves the scenario is set right
                         // ═══════════════════════════════════════════════════
-                        _qualityMetrics: qualityMetrics,
+                        report: report,
+                        
+                        // ═══════════════════════════════════════════════════
+                        // SCOPE INFO
+                        // ═══════════════════════════════════════════════════
                         _scopeInfo: scenarioScopeInfo
                     };
                     
@@ -563,26 +903,39 @@ router.get('/', async (req, res) => {
             exportedTemplates.push(templateExport);
         }
         
-        // Calculate quality distribution
+        // Calculate quality distribution from reports
         const allScenarios = exportedTemplates.flatMap(t => 
             t.categories.flatMap(c => c.scenarios)
         );
+        
         const gradeDistribution = {
-            A: allScenarios.filter(s => s._qualityMetrics.grade === 'A').length,
-            B: allScenarios.filter(s => s._qualityMetrics.grade === 'B').length,
-            C: allScenarios.filter(s => s._qualityMetrics.grade === 'C').length,
-            D: allScenarios.filter(s => s._qualityMetrics.grade === 'D').length,
-            F: allScenarios.filter(s => s._qualityMetrics.grade === 'F').length
+            A: allScenarios.filter(s => s.report?.grade === 'A').length,
+            B: allScenarios.filter(s => s.report?.grade === 'B').length,
+            C: allScenarios.filter(s => s.report?.grade === 'C').length,
+            D: allScenarios.filter(s => s.report?.grade === 'D').length,
+            F: allScenarios.filter(s => s.report?.grade === 'F').length
+        };
+        
+        const statusDistribution = {
+            GREEN: allScenarios.filter(s => s.report?.status === 'GREEN').length,
+            YELLOW: allScenarios.filter(s => s.report?.status === 'YELLOW').length,
+            RED: allScenarios.filter(s => s.report?.status === 'RED').length
         };
         
         const qualitySummary = {
-            meetsTriggers: allScenarios.filter(s => s._qualityMetrics.meetsMinTriggers).length,
-            meetsNegatives: allScenarios.filter(s => s._qualityMetrics.meetsMinNegatives).length,
-            meetsQuickReplies: allScenarios.filter(s => s._qualityMetrics.meetsMinQuickReplies).length,
-            meetsFullReplies: allScenarios.filter(s => s._qualityMetrics.meetsMinFullReplies).length,
-            hasScenarioType: allScenarios.filter(s => s.scenarioType && s.scenarioType !== 'UNKNOWN').length,
-            hasWiring: allScenarios.filter(s => s.actionType || s.flowId || s.transferTarget || s.bookingIntent).length
+            meetsTriggers: allScenarios.filter(s => s.report?.checks?.triggers?.pass).length,
+            meetsNegatives: allScenarios.filter(s => s.report?.checks?.negatives?.pass).length,
+            meetsQuickReplies: allScenarios.filter(s => s.report?.checks?.quickReplies?.pass).length,
+            meetsFullReplies: allScenarios.filter(s => s.report?.checks?.fullReplies?.pass).length,
+            hasValidScenarioType: allScenarios.filter(s => s.report?.checks?.wiring?.scenarioTypeValid).length,
+            hasValidWiring: allScenarios.filter(s => s.report?.checks?.wiring?.pass).length,
+            enterpriseReady: allScenarios.filter(s => s.report?.enterpriseReady).length
         };
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // COLLISION DETECTION
+        // ═══════════════════════════════════════════════════════════════════════
+        const collisions = detectCollisions(allScenariosForCollision);
         
         // Build response
         const response = {
@@ -640,16 +993,62 @@ router.get('/', async (req, res) => {
                 },
                 
                 // ═══════════════════════════════════════════════════════════
+                // OVERALL HEALTH - Quick answer: is this template production-ready?
+                // ═══════════════════════════════════════════════════════════
+                health: statusDistribution.RED > 0 ? 'RED' 
+                    : statusDistribution.YELLOW > totalScenarios * 0.2 ? 'YELLOW' 
+                    : 'GREEN',
+                healthMessage: statusDistribution.RED > 0 
+                    ? `${statusDistribution.RED} scenarios have critical issues`
+                    : statusDistribution.YELLOW > 0 
+                    ? `${statusDistribution.YELLOW} scenarios need attention`
+                    : 'All scenarios meet quality requirements',
+                
+                // ═══════════════════════════════════════════════════════════
                 // QUALITY SUMMARY - How many scenarios meet requirements
                 // ═══════════════════════════════════════════════════════════
                 qualitySummary: {
                     gradeDistribution,
+                    statusDistribution,
                     compliance: qualitySummary,
                     totalScenarios,
                     percentMeetingTriggers: totalScenarios > 0 ? Math.round(qualitySummary.meetsTriggers / totalScenarios * 100) : 0,
                     percentMeetingReplies: totalScenarios > 0 ? Math.round(Math.min(qualitySummary.meetsQuickReplies, qualitySummary.meetsFullReplies) / totalScenarios * 100) : 0,
-                    percentWithWiring: totalScenarios > 0 ? Math.round(qualitySummary.hasWiring / totalScenarios * 100) : 0
+                    percentWithValidWiring: totalScenarios > 0 ? Math.round(qualitySummary.hasValidWiring / totalScenarios * 100) : 0,
+                    percentEnterpriseReady: totalScenarios > 0 ? Math.round(qualitySummary.enterpriseReady / totalScenarios * 100) : 0
                 },
+                
+                // ═══════════════════════════════════════════════════════════
+                // COLLISIONS - Shared triggers between scenarios
+                // ═══════════════════════════════════════════════════════════
+                collisions: {
+                    count: collisions.length,
+                    errors: collisions.filter(c => c.severity === 'ERROR').length,
+                    warnings: collisions.filter(c => c.severity === 'WARNING').length,
+                    items: collisions.slice(0, 20) // Top 20 collisions
+                },
+                
+                // ═══════════════════════════════════════════════════════════
+                // TOP ISSUES - Quick view of what needs fixing
+                // ═══════════════════════════════════════════════════════════
+                topIssues: allScenarios
+                    .filter(s => s.report?.status !== 'GREEN')
+                    .sort((a, b) => {
+                        // Sort by status (RED first), then by issue count
+                        const statusOrder = { RED: 0, YELLOW: 1, GREEN: 2 };
+                        const statusDiff = statusOrder[a.report?.status || 'GREEN'] - statusOrder[b.report?.status || 'GREEN'];
+                        if (statusDiff !== 0) return statusDiff;
+                        return (b.report?.issues?.length || 0) - (a.report?.issues?.length || 0);
+                    })
+                    .slice(0, 10)
+                    .map(s => ({
+                        scenarioId: s.scenarioId,
+                        name: s.name,
+                        grade: s.report?.grade,
+                        status: s.report?.status,
+                        issues: s.report?.issues?.slice(0, 5),
+                        warnings: s.report?.warnings?.slice(0, 3)
+                    })),
                 
                 // ═══════════════════════════════════════════════════════════
                 // FULL TEMPLATE DATA
