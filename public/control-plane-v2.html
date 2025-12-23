@@ -1478,6 +1478,10 @@
                     style="padding: 8px 14px; background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); color: #1e293b; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;">
               <i class="fas fa-magic"></i> Golden HVAC Autofill
             </button>
+            <button onclick="exportFullScenarioJSON()" 
+                    style="padding: 8px 14px; background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%); color: #0e4156; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;">
+              <i class="fas fa-file-export"></i> Export Scenarios
+            </button>
           </div>
         </div>
         
@@ -6625,6 +6629,249 @@ Loading field report...
     };
     
     let autofillPreview = null;
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FULL SCENARIO EXPORT - All 30+ fields per scenario in one JSON
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function exportFullScenarioJSON() {
+      console.log('📋 [EXPORT] Starting full scenario export...');
+      
+      try {
+        // First get the company's active template
+        const templatesResponse = await fetch(`/api/company/${currentCompanyId}/configuration/templates`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (!templatesResponse.ok) throw new Error('Failed to load templates');
+        
+        const templates = await templatesResponse.json();
+        if (!templates || templates.length === 0) {
+          showSnapshotToast('❌ No active template found. Go to Templates tab first.', 'error');
+          return;
+        }
+        
+        const templateId = templates[0].templateId || templates[0]._id;
+        console.log(`📋 [EXPORT] Fetching full export for template: ${templateId}`);
+        
+        // Fetch the RAW template with ALL fields
+        const exportResponse = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (!exportResponse.ok) throw new Error(`Export failed: HTTP ${exportResponse.status}`);
+        
+        const templateData = await exportResponse.json();
+        
+        // Build a comprehensive export with ALL scenario fields
+        const fullExport = {
+          _exportInfo: {
+            exportedAt: new Date().toISOString(),
+            companyId: currentCompanyId,
+            templateId: templateId,
+            templateName: templateData.name || templates[0].name,
+            version: templateData.version || 'v1.0.0',
+            description: 'Complete scenario export with all 30+ advanced fields per scenario'
+          },
+          summary: {
+            totalCategories: (templateData.categories || []).length,
+            totalScenarios: (templateData.categories || []).reduce((sum, c) => sum + (c.scenarios || []).length, 0),
+            totalTriggers: (templateData.categories || []).reduce((sum, c) => 
+              sum + (c.scenarios || []).reduce((s2, sc) => s2 + (sc.triggers || []).length, 0), 0)
+          },
+          categories: (templateData.categories || []).map(cat => ({
+            // Category metadata
+            _categoryId: cat.id || cat._id,
+            _categoryName: cat.name,
+            _categoryDescription: cat.description || '',
+            _scenarioCount: (cat.scenarios || []).length,
+            
+            // All scenarios with ALL fields
+            scenarios: (cat.scenarios || []).map(sc => ({
+              // ═══════════════════════════════════════════════════════
+              // IDENTIFICATION
+              // ═══════════════════════════════════════════════════════
+              scenarioId: sc.scenarioId || sc._id,
+              name: sc.name,
+              categoryId: cat.id || cat._id,
+              categoryName: cat.name,
+              status: sc.status || 'live',
+              
+              // ═══════════════════════════════════════════════════════
+              // CLASSIFICATION & PRIORITY
+              // ═══════════════════════════════════════════════════════
+              scenarioType: sc.scenarioType || 'UNKNOWN',
+              priority: sc.priority ?? 5,
+              minConfidence: sc.minConfidence ?? 0.5,
+              contextWeight: sc.contextWeight ?? 0.7,
+              
+              // ═══════════════════════════════════════════════════════
+              // TRIGGERS (Full arrays)
+              // ═══════════════════════════════════════════════════════
+              triggers: sc.triggers || [],
+              negativeTriggers: sc.negativeTriggers || [],
+              keywords: sc.keywords || [],
+              negativeKeywords: sc.negativeKeywords || [],
+              exampleUserPhrases: sc.exampleUserPhrases || [],
+              negativeUserPhrases: sc.negativeUserPhrases || [],
+              testPhrases: sc.testPhrases || [],
+              
+              // ═══════════════════════════════════════════════════════
+              // REPLIES (Full arrays)
+              // ═══════════════════════════════════════════════════════
+              quickReplies: sc.quickReplies || [],
+              fullReplies: sc.fullReplies || [],
+              
+              // ═══════════════════════════════════════════════════════
+              // REPLY STRATEGY
+              // ═══════════════════════════════════════════════════════
+              replySelection: sc.replySelection || 'random',
+              replyStrategy: sc.replyStrategy || 'AUTO',
+              followUpMode: sc.followUpMode || 'NONE',
+              followUpQuestionText: sc.followUpQuestionText || '',
+              followUpPrompts: sc.followUpPrompts || [],
+              
+              // ═══════════════════════════════════════════════════════
+              // HANDOFF & TRANSFER
+              // ═══════════════════════════════════════════════════════
+              handoffPolicy: sc.handoffPolicy || 'low_confidence',
+              transferTarget: sc.transferTarget || null,
+              escalationFlags: sc.escalationFlags || [],
+              
+              // ═══════════════════════════════════════════════════════
+              // ACTION HOOKS
+              // ═══════════════════════════════════════════════════════
+              actionHooks: sc.actionHooks || [],
+              preconditions: sc.preconditions || [],
+              effects: sc.effects || [],
+              
+              // ═══════════════════════════════════════════════════════
+              // SILENCE & FOLLOW-UP
+              // ═══════════════════════════════════════════════════════
+              silencePolicy: sc.silencePolicy || null,
+              timedFollowUp: sc.timedFollowUp || null,
+              
+              // ═══════════════════════════════════════════════════════
+              // FLAGS & LOCKS
+              // ═══════════════════════════════════════════════════════
+              autofillLock: sc.autofillLock || false,
+              bookingIntent: sc.bookingIntent || false,
+              requiresConsent: sc.requiresConsent || false,
+              
+              // ═══════════════════════════════════════════════════════
+              // AUDIT TRAIL
+              // ═══════════════════════════════════════════════════════
+              lastAutofillAt: sc.lastAutofillAt || null,
+              lastAutofillVersion: sc.lastAutofillVersion || null,
+              lastManualTuneAt: sc.lastManualTuneAt || null,
+              updatedAt: sc.updatedAt || null,
+              updatedBy: sc.updatedBy || null,
+              
+              // ═══════════════════════════════════════════════════════
+              // COUNTS (For quick reference)
+              // ═══════════════════════════════════════════════════════
+              _counts: {
+                triggers: (sc.triggers || []).length,
+                negativeTriggers: (sc.negativeTriggers || []).length,
+                quickReplies: (sc.quickReplies || []).length,
+                fullReplies: (sc.fullReplies || []).length,
+                actionHooks: (sc.actionHooks || []).length
+              }
+            }))
+          }))
+        };
+        
+        // Show in modal with copy options
+        showFullExportModal(fullExport);
+        
+      } catch (error) {
+        console.error('[EXPORT] Error:', error);
+        showSnapshotToast('❌ Export failed: ' + error.message, 'error');
+      }
+    }
+    
+    function showFullExportModal(exportData) {
+      const jsonStr = JSON.stringify(exportData, null, 2);
+      const lines = jsonStr.split('\n').length;
+      const size = (jsonStr.length / 1024).toFixed(1);
+      
+      // Create modal
+      const modal = document.createElement('div');
+      modal.id = 'full-export-modal';
+      modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+      modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+      
+      modal.innerHTML = `
+        <div style="background: #1e293b; border-radius: 16px; max-width: 95vw; width: 1200px; max-height: 95vh; display: flex; flex-direction: column; overflow: hidden;">
+          <!-- Header -->
+          <div style="background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%); padding: 20px; display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <h2 style="margin: 0; color: #0e4156; font-size: 18px; font-weight: 700;">📋 Full Scenario Export</h2>
+              <div style="color: #155e75; font-size: 13px; margin-top: 4px;">
+                ${exportData.summary.totalCategories} categories · ${exportData.summary.totalScenarios} scenarios · ${exportData.summary.totalTriggers} triggers
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button onclick="copyFullExport()" style="padding: 8px 16px; background: white; color: #0e4156; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                <i class="fas fa-copy"></i> Copy JSON
+              </button>
+              <button onclick="downloadFullExport()" style="padding: 8px 16px; background: #0e4156; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                <i class="fas fa-download"></i> Download
+              </button>
+              <button onclick="this.closest('#full-export-modal').remove()" style="padding: 8px 12px; background: rgba(0,0,0,0.2); color: white; border: none; border-radius: 6px; cursor: pointer;">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Stats Bar -->
+          <div style="background: #0f172a; padding: 12px 20px; display: flex; gap: 24px; border-bottom: 1px solid #334155;">
+            <div style="color: #94a3b8; font-size: 12px;"><strong style="color: #22d3ee;">Template:</strong> ${exportData._exportInfo.templateName}</div>
+            <div style="color: #94a3b8; font-size: 12px;"><strong style="color: #22d3ee;">Size:</strong> ${size} KB</div>
+            <div style="color: #94a3b8; font-size: 12px;"><strong style="color: #22d3ee;">Lines:</strong> ${lines.toLocaleString()}</div>
+            <div style="color: #94a3b8; font-size: 12px;"><strong style="color: #22d3ee;">Fields per scenario:</strong> ~35</div>
+          </div>
+          
+          <!-- JSON Content -->
+          <div style="flex: 1; overflow: auto; padding: 20px;">
+            <textarea id="full-export-json" readonly style="width: 100%; height: 100%; min-height: 500px; background: #0f172a; color: #22d3ee; border: 1px solid #334155; border-radius: 8px; padding: 16px; font-family: 'Monaco', 'Menlo', monospace; font-size: 12px; resize: none;">${jsonStr}</textarea>
+          </div>
+          
+          <!-- Field Reference -->
+          <div style="background: #0f172a; padding: 12px 20px; border-top: 1px solid #334155; font-size: 11px; color: #64748b;">
+            <strong style="color: #94a3b8;">Fields included:</strong> 
+            scenarioType, priority, minConfidence, contextWeight, triggers[], negativeTriggers[], keywords[], 
+            quickReplies[], fullReplies[], replySelection, replyStrategy, followUpMode, handoffPolicy, transferTarget, 
+            actionHooks[], preconditions[], effects[], silencePolicy, timedFollowUp, autofillLock, bookingIntent, and more...
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      // Store for copy/download
+      window._fullExportData = exportData;
+    }
+    
+    function copyFullExport() {
+      if (!window._fullExportData) return;
+      const jsonStr = JSON.stringify(window._fullExportData, null, 2);
+      navigator.clipboard.writeText(jsonStr).then(() => {
+        showSnapshotToast(`✅ Copied ${window._fullExportData.summary.totalScenarios} scenarios (${(jsonStr.length/1024).toFixed(1)} KB)`, 'success');
+      });
+    }
+    
+    function downloadFullExport() {
+      if (!window._fullExportData) return;
+      const jsonStr = JSON.stringify(window._fullExportData, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `scenarios-export-${window._fullExportData._exportInfo.templateName.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showSnapshotToast('✅ Downloaded!', 'success');
+    }
     
     function openGoldenAutofillModal() {
       document.getElementById('golden-autofill-modal-overlay').classList.add('active');
