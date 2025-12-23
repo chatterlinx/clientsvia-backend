@@ -1458,12 +1458,17 @@
             <h2>📂 Data & Config</h2>
             <p class="muted">Manage placeholders, templates, and scenarios. Global data with company-specific overrides.</p>
           </div>
-          <!-- Field Report + Runtime Truth + Golden Autofill Buttons -->
+          <!-- Field Report + Runtime Truth + Patch Import + Golden Autofill Buttons -->
           <div style="display: flex; gap: 8px;">
             <button onclick="openRuntimeTruthModal()" 
                     style="padding: 8px 14px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;"
                     title="THE single JSON that shows exactly what runs at runtime">
               <i class="fas fa-bolt"></i> Runtime Truth
+            </button>
+            <button onclick="openPatchImportModal()" 
+                    style="padding: 8px 14px; background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;"
+                    title="Paste JSON patches to update configuration">
+              <i class="fas fa-file-import"></i> Patch Import
             </button>
             <button onclick="openFieldReportModal()" 
                     style="padding: 8px 14px; background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;">
@@ -5403,6 +5408,319 @@ Loading field report...
           btn.style.color = '#059669';
         }, 2000);
       });
+    }
+  </script>
+  
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       PATCH IMPORT MODAL - Safe JSON Patch Import
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="patch-import-modal-overlay" class="snapshot-modal-overlay">
+    <div class="snapshot-modal" style="max-width: 900px;">
+      <div class="snapshot-modal-header" style="background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);">
+        <div class="snapshot-modal-title">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 600;">📝 Patch Import - Apply Changes via JSON</h2>
+          <p style="margin: 4px 0 0; font-size: 12px; opacity: 0.9;">Safe, validated patches with allowlisted paths only</p>
+        </div>
+        <div class="snapshot-modal-controls" style="display: flex; gap: 8px;">
+          <button onclick="loadPatchSchema()" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+            <i class="fas fa-info-circle"></i> View Schema
+          </button>
+          <button onclick="generatePatchSkeleton()" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+            <i class="fas fa-file-code"></i> Generate Skeleton
+          </button>
+          <button onclick="closePatchImportModal()" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 6px; cursor: pointer;">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      
+      <div class="snapshot-modal-body" style="padding: 20px; max-height: 75vh; overflow-y: auto;">
+        <!-- Instructions -->
+        <div style="background: #fdf4ff; border: 1px solid #ec4899; border-radius: 10px; padding: 16px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 8px 0; color: #831843; font-size: 14px;">📋 How to Use</h4>
+          <ol style="margin: 0; padding-left: 20px; color: #9d174d; font-size: 13px;">
+            <li>Paste a JSON patch payload below (RFC 6902 format)</li>
+            <li>Click "Validate" to check for errors before applying</li>
+            <li>Click "Apply" to make the changes (or uncheck "Dry Run")</li>
+            <li>Click "Refresh Runtime Truth" to verify changes</li>
+          </ol>
+        </div>
+        
+        <!-- Patch Input -->
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-weight: 600; color: #1e293b; margin-bottom: 8px;">
+            Patch Payload (JSON)
+          </label>
+          <textarea id="patch-input" 
+                    style="width: 100%; height: 200px; font-family: monospace; font-size: 12px; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; background: #f8fafc; color: #334155; resize: vertical;"
+                    placeholder='{
+  "companyId": "{{companyId}}",
+  "scope": "companyOverride",
+  "patches": [
+    { "op": "replace", "path": "/controlPlane/greeting/text", "value": "Thanks for calling!" },
+    { "op": "replace", "path": "/dynamicFlows/flows/{{flowId}}/enabled", "value": true }
+  ]
+}'></textarea>
+        </div>
+        
+        <!-- Controls -->
+        <div style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center;">
+          <label style="display: flex; align-items: center; gap: 6px; color: #64748b; font-size: 13px;">
+            <input type="checkbox" id="patch-dry-run" checked style="accent-color: #ec4899;">
+            Dry Run (validate only)
+          </label>
+          <button onclick="validatePatch()" 
+                  style="padding: 10px 20px; background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+            <i class="fas fa-check-circle"></i> Validate
+          </button>
+          <button onclick="applyPatch()" 
+                  style="padding: 10px 20px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+            <i class="fas fa-play"></i> Apply
+          </button>
+          <button onclick="openRuntimeTruthModal()" 
+                  style="padding: 10px 20px; background: white; color: #10b981; border: 2px solid #10b981; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+            <i class="fas fa-sync-alt"></i> Refresh Runtime Truth
+          </button>
+        </div>
+        
+        <!-- Results Panel -->
+        <div id="patch-results" style="display: none;">
+          <div style="background: #0f172a; border-radius: 12px; overflow: hidden;">
+            <div id="patch-results-header" style="padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: #94a3b8; font-weight: 600; font-size: 14px;">📊 Results</span>
+              <span id="patch-results-status" style="padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;"></span>
+            </div>
+            <pre id="patch-results-json" style="margin: 0; padding: 16px; color: #22d3ee; font-size: 11px; line-height: 1.5; overflow-x: auto; max-height: 300px; overflow-y: auto;"></pre>
+          </div>
+        </div>
+        
+        <!-- Schema Panel (hidden by default) -->
+        <div id="patch-schema-panel" style="display: none; margin-top: 20px;">
+          <div style="background: #0f172a; border-radius: 12px; overflow: hidden;">
+            <div style="padding: 12px 16px; background: #1e293b; display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: #94a3b8; font-weight: 600; font-size: 14px;">📋 Allowlisted Paths (Schema)</span>
+              <button onclick="document.getElementById('patch-schema-panel').style.display='none'" 
+                      style="background: transparent; border: none; color: #94a3b8; cursor: pointer;">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <pre id="patch-schema-json" style="margin: 0; padding: 16px; color: #a5f3fc; font-size: 11px; line-height: 1.5; overflow-x: auto; max-height: 400px; overflow-y: auto;"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // ============================================================================
+    // PATCH IMPORT - Safe JSON Patch Import
+    // ============================================================================
+    
+    function openPatchImportModal() {
+      document.getElementById('patch-import-modal-overlay').classList.add('active');
+      // Pre-fill with company ID
+      const textarea = document.getElementById('patch-input');
+      if (!textarea.value || textarea.value.includes('{{companyId}}')) {
+        textarea.value = JSON.stringify({
+          companyId: currentCompanyId,
+          scope: "companyOverride",
+          patches: [
+            { op: "replace", path: "/controlPlane/greeting/text", value: "Thanks for calling {{companyName}}!" }
+          ]
+        }, null, 2);
+      }
+    }
+    
+    function closePatchImportModal() {
+      document.getElementById('patch-import-modal-overlay').classList.remove('active');
+    }
+    
+    async function loadPatchSchema() {
+      const schemaPanel = document.getElementById('patch-schema-panel');
+      const schemaJson = document.getElementById('patch-schema-json');
+      
+      schemaPanel.style.display = 'block';
+      schemaJson.textContent = 'Loading schema...';
+      
+      try {
+        const response = await fetch(`/api/company/${currentCompanyId}/runtime-patch/schema`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        const result = await response.json();
+        schemaJson.textContent = JSON.stringify(result, null, 2);
+      } catch (error) {
+        schemaJson.textContent = `Error: ${error.message}`;
+      }
+    }
+    
+    function generatePatchSkeleton() {
+      if (!currentRuntimeTruth) {
+        showSnapshotToast('Load Runtime Truth first to generate skeleton', 'warning');
+        openRuntimeTruthModal();
+        return;
+      }
+      
+      // Build a patch skeleton with common changes
+      const skeleton = {
+        companyId: currentCompanyId,
+        scope: "companyOverride",
+        expectedVersion: currentRuntimeTruth._meta?.version,
+        patches: []
+      };
+      
+      // Add greeting if not configured
+      if (!currentRuntimeTruth.controlPlane?.greeting?.configured) {
+        skeleton.patches.push({
+          op: "replace",
+          path: "/controlPlane/greeting/text",
+          value: "Thanks for calling {{companyName}} — how can I help?"
+        });
+      }
+      
+      // Add flow enable if none enabled
+      if (currentRuntimeTruth.dynamicFlows?.flows?.length > 0 && !currentRuntimeTruth.dynamicFlows?.enabled) {
+        const firstFlow = currentRuntimeTruth.dynamicFlows.flows[0];
+        skeleton.patches.push({
+          op: "replace",
+          path: `/dynamicFlows/flows/${firstFlow.id}/enabled`,
+          value: true
+        });
+      }
+      
+      // Add scenarioType fixes for UNKNOWN scenarios
+      const unknownScenarios = (currentRuntimeTruth.scenarioBrain?.scenarios || [])
+        .filter(s => s.scenarioType === 'UNKNOWN')
+        .slice(0, 5); // First 5
+        
+      unknownScenarios.forEach(s => {
+        // Guess type from category name
+        let type = 'FAQ';
+        const catName = (s.categoryName || '').toLowerCase();
+        if (catName.includes('emergency') || catName.includes('leak') || catName.includes('no cool') || catName.includes('no heat')) {
+          type = 'EMERGENCY';
+        } else if (catName.includes('book') || catName.includes('schedule') || catName.includes('appointment')) {
+          type = 'BOOKING';
+        } else if (catName.includes('transfer') || catName.includes('speak')) {
+          type = 'TRANSFER';
+        }
+        
+        skeleton.patches.push({
+          op: "replace",
+          path: `/scenarioBrain/scenarios/${s.id}/scenarioType`,
+          value: type
+        });
+      });
+      
+      // Populate textarea
+      document.getElementById('patch-input').value = JSON.stringify(skeleton, null, 2);
+      showSnapshotToast(`Generated ${skeleton.patches.length} patch suggestions`, 'success');
+    }
+    
+    async function validatePatch() {
+      const textarea = document.getElementById('patch-input');
+      const resultsPanel = document.getElementById('patch-results');
+      const resultsJson = document.getElementById('patch-results-json');
+      const resultsStatus = document.getElementById('patch-results-status');
+      const resultsHeader = document.getElementById('patch-results-header');
+      
+      resultsPanel.style.display = 'block';
+      resultsJson.textContent = 'Validating...';
+      
+      try {
+        const payload = JSON.parse(textarea.value);
+        
+        const response = await fetch(`/api/company/${currentCompanyId}/runtime-patch?dryRun=1`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          resultsStatus.textContent = `✓ Valid (${result.validCount}/${result.patchCount} patches)`;
+          resultsStatus.style.background = '#10b981';
+          resultsStatus.style.color = 'white';
+          resultsHeader.style.background = '#065f46';
+        } else {
+          resultsStatus.textContent = `✗ Errors (${result.errors?.length || 0})`;
+          resultsStatus.style.background = '#ef4444';
+          resultsStatus.style.color = 'white';
+          resultsHeader.style.background = '#7f1d1d';
+        }
+        
+        resultsJson.textContent = JSON.stringify(result, null, 2);
+        
+      } catch (error) {
+        resultsStatus.textContent = 'Parse Error';
+        resultsStatus.style.background = '#ef4444';
+        resultsStatus.style.color = 'white';
+        resultsHeader.style.background = '#7f1d1d';
+        resultsJson.textContent = `JSON Parse Error: ${error.message}\n\nMake sure your JSON is valid.`;
+      }
+    }
+    
+    async function applyPatch() {
+      const textarea = document.getElementById('patch-input');
+      const dryRun = document.getElementById('patch-dry-run').checked;
+      const resultsPanel = document.getElementById('patch-results');
+      const resultsJson = document.getElementById('patch-results-json');
+      const resultsStatus = document.getElementById('patch-results-status');
+      const resultsHeader = document.getElementById('patch-results-header');
+      
+      if (dryRun) {
+        return validatePatch(); // Just validate if dry run is checked
+      }
+      
+      resultsPanel.style.display = 'block';
+      resultsJson.textContent = 'Applying patches...';
+      
+      try {
+        const payload = JSON.parse(textarea.value);
+        
+        const response = await fetch(`/api/company/${currentCompanyId}/runtime-patch`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.appliedCount > 0) {
+          resultsStatus.textContent = `✓ Applied ${result.appliedCount}/${result.patchCount}`;
+          resultsStatus.style.background = '#10b981';
+          resultsStatus.style.color = 'white';
+          resultsHeader.style.background = '#065f46';
+          
+          showSnapshotToast(`Applied ${result.appliedCount} patches successfully!`, 'success');
+        } else if (result.errors?.length > 0) {
+          resultsStatus.textContent = `✗ Failed (${result.errors.length} errors)`;
+          resultsStatus.style.background = '#ef4444';
+          resultsStatus.style.color = 'white';
+          resultsHeader.style.background = '#7f1d1d';
+        } else {
+          resultsStatus.textContent = `⚠ No changes made`;
+          resultsStatus.style.background = '#f59e0b';
+          resultsStatus.style.color = '#1e293b';
+          resultsHeader.style.background = '#78350f';
+        }
+        
+        resultsJson.textContent = JSON.stringify(result, null, 2);
+        
+      } catch (error) {
+        resultsStatus.textContent = 'Error';
+        resultsStatus.style.background = '#ef4444';
+        resultsStatus.style.color = 'white';
+        resultsHeader.style.background = '#7f1d1d';
+        resultsJson.textContent = `Error: ${error.message}`;
+      }
     }
   </script>
   
