@@ -37,8 +37,9 @@ function hasLegacyPlaceholderFormat(text) {
     const standardPattern = /\{\{[a-zA-Z_][a-zA-Z0-9_]*\}\}/g;
     
     // Legacy formats: {word} (single brace), ${word}, %word%
+    // CRITICAL: Single-brace uses negative lookbehind/lookahead to NOT match {{x}}
     const legacyPatterns = [
-        /(?<!\{)\{([a-zA-Z_][a-zA-Z0-9_]*)\}(?!\})/g,  // {x} but not {{x}}
+        /(?<!\{)\{([a-zA-Z_][a-zA-Z0-9_]*)\}(?!\})/g,  // {x} but NOT {{x}}
         /\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g,              // ${x}
         /%([a-zA-Z_][a-zA-Z0-9_]*)%/g                   // %x%
     ];

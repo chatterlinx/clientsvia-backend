@@ -27,11 +27,15 @@ const PLACEHOLDER_REGEX = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
 
 /**
  * Legacy format regexes for backward compatibility
+ * 
+ * CRITICAL: The single-brace regex MUST use negative lookbehind/lookahead
+ * to avoid matching the inner braces of {{placeholder}} which would
+ * incorrectly convert it to {{{placeholder}}}
  */
 const LEGACY_FORMATS = [
-    /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g,           // {placeholder}
-    /\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g,         // ${placeholder}
-    /%([a-zA-Z_][a-zA-Z0-9_]*)%/g              // %placeholder%
+    /(?<!\{)\{([a-zA-Z_][a-zA-Z0-9_]*)\}(?!\})/g,  // {placeholder} but NOT {{placeholder}}
+    /\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g,              // ${placeholder}
+    /%([a-zA-Z_][a-zA-Z0-9_]*)%/g                   // %placeholder%
 ];
 
 /**
