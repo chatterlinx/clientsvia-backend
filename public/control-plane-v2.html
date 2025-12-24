@@ -4644,7 +4644,7 @@
       btn.disabled = true;
       
       try {
-        const response = await fetch('/api/apply-patch', {
+        const response = await fetch('/api/export/apply-patch', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -4706,7 +4706,7 @@
       btn.disabled = true;
       
       try {
-        const response = await fetch('/api/apply-patch', {
+        const response = await fetch('/api/export/apply-patch', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -4816,7 +4816,7 @@
       btn.disabled = true;
       
       try {
-        const response = await fetch(`/api/validate/template/${templateId}`, {
+        const response = await fetch(`/api/export/validate/template/${templateId}`, {
           headers: {
             'Authorization': `Bearer ${authToken}`
           }

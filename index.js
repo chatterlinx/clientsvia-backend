@@ -518,7 +518,7 @@ function registerRoutes(routes) {
     app.use('/api/admin', routes.globalIntelligenceRoutes); // ADMIN: Global Production Intelligence API (platform-wide 3-tier defaults, inheritance system)
     app.use('/api/admin/suggestions', routes.enterpriseSuggestionsRoutes); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost projections)
     app.use('/api/admin/dynamic-flow-templates', routes.seedDynamicFlowTemplatesRoutes); // ADMIN: Seed/Fix Golden Dynamic Flow Templates
-    app.use('/api', routes.jsonExportImportRoutes); // ADMIN: JSON Export/Import/Patch (ChatGPT workflow)
+    app.use('/api/export', routes.jsonExportImportRoutes); // ADMIN: JSON Export/Import/Patch (ChatGPT workflow)
     // healthRoutes moved to top of routes (before auth-protected routes) for public access
     // llm0TraceRoutes REMOVED Dec 2025 - nuked
     app.use('/api/admin/frontline-script', routes.frontlineScriptBuilderRoutes); // Frontline Script Builder: LLM-powered script generation
