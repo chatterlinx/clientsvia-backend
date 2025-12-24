@@ -1458,39 +1458,57 @@
             <h2>📂 Data & Config</h2>
             <p class="muted">Manage placeholders, templates, and scenarios. Global data with company-specific overrides.</p>
           </div>
-          <!-- Field Report + Runtime Truth + Patch Import + Golden Autofill Buttons -->
+          <!-- CONSOLIDATED BUTTONS: Runtime Truth + Patch Import + Scenario Browser + Debug Tools -->
           <div style="display: flex; gap: 8px;">
+            <!-- CORE: Runtime Truth -->
             <button onclick="openRuntimeTruthModal()" 
                     style="padding: 8px 14px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;"
                     title="THE single JSON that shows exactly what runs at runtime">
               <i class="fas fa-bolt"></i> Runtime Truth
             </button>
+            
+            <!-- CORE: Patch Import -->
             <button onclick="openPatchImportModal()" 
                     style="padding: 8px 14px; background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;"
                     title="Paste JSON patches to update configuration">
               <i class="fas fa-file-import"></i> Patch Import
             </button>
-            <button onclick="openFieldReportModal()" 
-                    style="padding: 8px 14px; background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;">
-              <i class="fas fa-clipboard-list"></i> Field Report
-            </button>
-            <button onclick="openGoldenAutofillModal()" 
-                    style="padding: 8px 14px; background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); color: #1e293b; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;">
-              <i class="fas fa-magic"></i> Golden HVAC Autofill
-            </button>
-            <button onclick="exportFullScenarioJSON()" 
-                    style="padding: 8px 14px; background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%); color: #0e4156; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;">
-              <i class="fas fa-file-export"></i> Export Scenarios
-            </button>
+            
+            <!-- CORE: Scenario Browser (includes RAW/AUDIT/Export/Report) -->
             <button onclick="openScenarioBrowserModal()" 
                     style="padding: 8px 14px; background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;"
-                    title="Browse scenarios with tree view - RAW or AUDIT mode">
+                    title="Browse scenarios with tree view - RAW or AUDIT tabs, includes export and enterprise report">
               <i class="fas fa-folder-tree"></i> Scenario Browser
             </button>
-            <button onclick="openScenarioReportModal()" 
-                    style="padding: 8px 14px; background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;"
-                    title="ENTERPRISE ENFORCEMENT: See which scenarios will actually match">
-              <i class="fas fa-shield-alt"></i> Scenario Report
+            
+            <!-- DEBUG/TOOLS: Dropdown -->
+            <div style="position: relative;">
+              <button onclick="toggleDebugToolsDropdown()" 
+                      style="padding: 8px 14px; background: linear-gradient(135deg, #475569 0%, #64748b 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;">
+                <i class="fas fa-tools"></i> Debug ▾
+              </button>
+              <div id="debug-tools-dropdown" style="display: none; position: absolute; top: 100%; right: 0; margin-top: 4px; background: #1e293b; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); min-width: 200px; z-index: 1000;">
+                <button onclick="openFieldReportModal(); toggleDebugToolsDropdown();" 
+                        style="width: 100%; padding: 10px 12px; background: transparent; color: #e2e8f0; border: none; text-align: left; cursor: pointer; font-size: 11px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #334155;">
+                  <i class="fas fa-clipboard-list" style="color: #818cf8;"></i> Field Report (Schema vs UI)
+                </button>
+                <button onclick="exportFullScenarioJSON(); toggleDebugToolsDropdown();" 
+                        style="width: 100%; padding: 10px 12px; background: transparent; color: #e2e8f0; border: none; text-align: left; cursor: pointer; font-size: 11px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #334155;">
+                  <i class="fas fa-file-export" style="color: #22d3ee;"></i> Export Full Scenario JSON
+                </button>
+                <button onclick="openScenarioReportModal(); toggleDebugToolsDropdown();" 
+                        style="width: 100%; padding: 10px 12px; background: transparent; color: #e2e8f0; border: none; text-align: left; cursor: pointer; font-size: 11px; display: flex; align-items: center; gap: 8px;">
+                  <i class="fas fa-shield-alt" style="color: #ef4444;"></i> Scenario Report (Legacy)
+                </button>
+              </div>
+            </div>
+            
+            <!-- DISABLED: Golden HVAC Autofill (until confirmed safe) -->
+            <button disabled
+                    style="padding: 8px 14px; background: #334155; color: #64748b; border: none; border-radius: 6px; cursor: not-allowed; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px; opacity: 0.6;"
+                    title="DISABLED: Pending safety review - must confirm company-scoped overrides only">
+              <i class="fas fa-magic"></i> Golden Autofill
+              <span style="font-size: 9px; background: #f59e0b; color: black; padding: 1px 4px; border-radius: 3px; margin-left: 4px;">REVIEW</span>
             </button>
           </div>
         </div>
@@ -6045,44 +6063,63 @@ Loading field report...
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════════════════════
-       SCENARIO BROWSER MODAL - Tree View with RAW/AUDIT modes
-       Engineer Request: Categories tree + JSON viewer + search
+       SCENARIO BROWSER MODAL - Enterprise Separated RAW vs AUDIT
+       TABS: RAW = pure stored data | AUDIT = computed proof blocks
        ═══════════════════════════════════════════════════════════════════════════ -->
   <div id="scenario-browser-modal-overlay" class="snapshot-modal-overlay">
-    <div class="snapshot-modal" style="max-width: 1600px; height: 85vh;">
-      <div class="snapshot-modal-header" style="background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);">
-        <div class="snapshot-modal-title">
-          <h2 style="margin: 0; font-size: 18px; font-weight: 600;">📂 Scenario Browser</h2>
-          <p style="margin: 4px 0 0; font-size: 12px; opacity: 0.9;">Browse categories and scenarios with tree navigation</p>
-        </div>
-        <div class="snapshot-modal-controls" style="display: flex; gap: 8px; align-items: center;">
-          <!-- Mode Toggle -->
-          <div style="display: flex; background: rgba(255,255,255,0.2); border-radius: 6px; padding: 2px;">
-            <button id="sb-mode-raw" onclick="setScenarioBrowserMode('raw')" 
-                    style="padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; background: white; color: #7c3aed;">
-              RAW
-            </button>
-            <button id="sb-mode-audit" onclick="setScenarioBrowserMode('audit')" 
-                    style="padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; background: transparent; color: white;">
-              AUDIT
+    <div class="snapshot-modal" style="max-width: 1600px; height: 90vh;">
+      <!-- HEADER with TABS -->
+      <div style="background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);">
+        <div class="snapshot-modal-header" style="background: transparent; padding-bottom: 0;">
+          <div class="snapshot-modal-title">
+            <h2 style="margin: 0; font-size: 18px; font-weight: 600;">📂 Scenario Browser</h2>
+            <p style="margin: 4px 0 0; font-size: 12px; opacity: 0.9;">Enterprise-separated RAW/AUDIT data sources</p>
+          </div>
+          <div class="snapshot-modal-controls" style="display: flex; gap: 8px; align-items: center;">
+            <!-- Export Dropdown -->
+            <div style="position: relative;">
+              <button onclick="toggleSBExportDropdown()" 
+                      style="padding: 6px 12px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">
+                <i class="fas fa-file-export"></i> Export ▾
+              </button>
+              <div id="sb-export-dropdown" style="display: none; position: absolute; top: 100%; right: 0; margin-top: 4px; background: #1e293b; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); min-width: 180px; z-index: 1000;">
+                <button onclick="exportAllScenariosRAW()" style="width: 100%; padding: 10px 12px; background: transparent; color: #e2e8f0; border: none; text-align: left; cursor: pointer; font-size: 11px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #334155;">
+                  <i class="fas fa-database" style="color: #22c55e;"></i> Export All (RAW)
+                </button>
+                <button onclick="exportAllScenariosAUDIT()" style="width: 100%; padding: 10px 12px; background: transparent; color: #e2e8f0; border: none; text-align: left; cursor: pointer; font-size: 11px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #334155;">
+                  <i class="fas fa-shield-alt" style="color: #f59e0b;"></i> Export All (AUDIT)
+                </button>
+                <button onclick="copySelectedScenario()" style="width: 100%; padding: 10px 12px; background: transparent; color: #e2e8f0; border: none; text-align: left; cursor: pointer; font-size: 11px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #334155;">
+                  <i class="fas fa-copy" style="color: #06b6d4;"></i> Copy Selected
+                </button>
+                <button onclick="downloadSelectedScenario()" style="width: 100%; padding: 10px 12px; background: transparent; color: #e2e8f0; border: none; text-align: left; cursor: pointer; font-size: 11px; display: flex; align-items: center; gap: 8px;">
+                  <i class="fas fa-download" style="color: #a78bfa;"></i> Download Selected
+                </button>
+              </div>
+            </div>
+            <button onclick="closeScenarioBrowserModal()" 
+                    style="padding: 6px 12px; background: rgba(255,255,255,0.3); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">
+              ✕ Close
             </button>
           </div>
-          <button onclick="copySelectedScenario()" 
-                  style="padding: 6px 12px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">
-            <i class="fas fa-copy"></i> Copy
+        </div>
+        
+        <!-- TABS -->
+        <div style="display: flex; padding: 0 16px;">
+          <button id="sb-tab-raw" onclick="switchScenarioBrowserTab('raw')" 
+                  style="padding: 10px 20px; background: white; color: #7c3aed; border: none; border-radius: 8px 8px 0 0; cursor: pointer; font-size: 12px; font-weight: 700; margin-right: 4px;">
+            <i class="fas fa-database"></i> RAW
+            <span style="font-size: 9px; opacity: 0.7; display: block;">Pure stored data</span>
           </button>
-          <button onclick="downloadSelectedScenario()" 
-                  style="padding: 6px 12px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">
-            <i class="fas fa-download"></i> Download
-          </button>
-          <button onclick="closeScenarioBrowserModal()" 
-                  style="padding: 6px 12px; background: rgba(255,255,255,0.3); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">
-            ✕ Close
+          <button id="sb-tab-audit" onclick="switchScenarioBrowserTab('audit')" 
+                  style="padding: 10px 20px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 8px 8px 0 0; cursor: pointer; font-size: 12px; font-weight: 600;">
+            <i class="fas fa-shield-alt"></i> AUDIT
+            <span style="font-size: 9px; opacity: 0.7; display: block;">Computed proof blocks</span>
           </button>
         </div>
       </div>
       
-      <div class="snapshot-modal-body" style="padding: 0; display: flex; height: calc(100% - 60px);">
+      <div class="snapshot-modal-body" style="padding: 0; display: flex; height: calc(100% - 100px);">
         <!-- LEFT PANEL: Categories Tree -->
         <div id="sb-left-panel" style="width: 320px; border-right: 1px solid #334155; display: flex; flex-direction: column; background: #1e293b;">
           <!-- Search Box -->
@@ -6095,16 +6132,30 @@ Loading field report...
             </div>
           </div>
           
-          <!-- Stats Bar -->
-          <div id="sb-stats" style="padding: 8px 12px; background: #0f172a; border-bottom: 1px solid #334155; display: flex; gap: 12px; font-size: 11px;">
-            <span style="color: #22d3ee;"><strong id="sb-cat-count">0</strong> categories</span>
-            <span style="color: #a78bfa;"><strong id="sb-scenario-count">0</strong> scenarios</span>
-            <span style="color: #fbbf24;"><strong id="sb-trigger-count">0</strong> triggers</span>
+          <!-- Stats Bar (shows different info for RAW vs AUDIT) -->
+          <div id="sb-stats" style="padding: 8px 12px; background: #0f172a; border-bottom: 1px solid #334155;">
+            <div style="display: flex; gap: 12px; font-size: 11px;">
+              <span style="color: #22d3ee;"><strong id="sb-cat-count">0</strong> categories</span>
+              <span style="color: #a78bfa;"><strong id="sb-scenario-count">0</strong> scenarios</span>
+              <span style="color: #fbbf24;"><strong id="sb-trigger-count">0</strong> triggers</span>
+            </div>
+            <!-- AUDIT-only health summary -->
+            <div id="sb-audit-health" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid #334155;">
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <span id="sb-health-badge" style="padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;">-</span>
+                <span id="sb-health-msg" style="font-size: 10px; color: #94a3b8;">-</span>
+              </div>
+              <div style="display: flex; gap: 8px; margin-top: 6px; font-size: 10px;">
+                <span style="color: #22c55e;"><strong id="sb-ready-count">0</strong> ready</span>
+                <span style="color: #f87171;"><strong id="sb-not-ready-count">0</strong> not ready</span>
+                <span style="color: #f59e0b;"><strong id="sb-collision-count">0</strong> collisions</span>
+              </div>
+            </div>
           </div>
           
           <!-- Categories List -->
           <div id="sb-categories-list" style="flex: 1; overflow-y: auto; padding: 8px;">
-            <div style="color: #64748b; text-align: center; padding: 20px;">Loading categories...</div>
+            <div style="color: #64748b; text-align: center; padding: 20px;">Select a tab to load data...</div>
           </div>
         </div>
         
@@ -6121,22 +6172,46 @@ Loading field report...
             </div>
           </div>
           
+          <!-- AUDIT-only: Quick Report -->
+          <div id="sb-audit-report" style="display: none; padding: 12px 16px; border-bottom: 1px solid #334155; background: #1e293b;">
+            <div style="display: flex; gap: 16px; align-items: center;">
+              <div>
+                <span style="font-size: 10px; color: #64748b;">Grade:</span>
+                <span id="sb-scenario-grade" style="font-size: 18px; font-weight: 700; margin-left: 4px; color: #fbbf24;">-</span>
+              </div>
+              <div>
+                <span style="font-size: 10px; color: #64748b;">Score:</span>
+                <span id="sb-scenario-score" style="font-size: 14px; font-weight: 600; margin-left: 4px; color: #e2e8f0;">-</span>
+              </div>
+              <div>
+                <span style="font-size: 10px; color: #64748b;">Enterprise Ready:</span>
+                <span id="sb-scenario-ready" style="font-size: 11px; font-weight: 600; margin-left: 4px;">-</span>
+              </div>
+              <div id="sb-scenario-issues" style="flex: 1; font-size: 10px; color: #f87171;"></div>
+            </div>
+          </div>
+          
           <!-- Find in JSON -->
           <div style="padding: 8px 16px; border-bottom: 1px solid #334155; background: #1e293b;">
             <input type="text" id="sb-find-in-json" placeholder="Find in JSON..." 
                    oninput="highlightInJson(this.value)"
                    style="width: 300px; padding: 6px 10px; background: #0f172a; border: 1px solid #475569; border-radius: 4px; color: #e2e8f0; font-size: 11px;">
             <span id="sb-find-count" style="margin-left: 8px; font-size: 11px; color: #64748b;"></span>
+            <span id="sb-mode-indicator" style="margin-left: 16px; padding: 2px 8px; background: #22c55e; color: black; border-radius: 4px; font-size: 9px; font-weight: 700;">RAW</span>
           </div>
           
           <!-- JSON Viewer -->
           <div style="flex: 1; overflow: auto; padding: 16px;">
             <pre id="sb-json-viewer" style="margin: 0; font-family: 'SF Mono', Monaco, monospace; font-size: 11px; color: #e2e8f0; white-space: pre-wrap;">
 {
-  "info": "Select a scenario from the left panel to view its JSON",
-  "modes": {
-    "RAW": "Exact stored data - no computed fields",
-    "AUDIT": "Includes validation report + collisions + health grade"
+  "info": "Select a tab (RAW or AUDIT) to load scenarios",
+  "RAW": {
+    "endpoint": "/api/company/:companyId/scenarios-raw",
+    "description": "Pure stored data - NO computed fields"
+  },
+  "AUDIT": {
+    "endpoint": "/api/company/:companyId/scenarios-audit",
+    "description": "Includes _stats, _auditReport, _collisions"
   }
 }
             </pre>
@@ -6148,9 +6223,12 @@ Loading field report...
   
   <script>
     // ═══════════════════════════════════════════════════════════════════════════
-    // SCENARIO BROWSER - Tree View with RAW/AUDIT modes
+    // SCENARIO BROWSER - Enterprise Separated RAW vs AUDIT
+    // HARD RULE: RAW and AUDIT use SEPARATE API endpoints. No leakage.
     // ═══════════════════════════════════════════════════════════════════════════
     let scenarioBrowserData = null;
+    let scenarioBrowserRawData = null;
+    let scenarioBrowserAuditData = null;
     let scenarioBrowserMode = 'raw'; // 'raw' or 'audit'
     let selectedCategoryId = null;
     let selectedScenarioId = null;
@@ -6158,84 +6236,143 @@ Loading field report...
     
     async function openScenarioBrowserModal() {
       document.getElementById('scenario-browser-modal-overlay').classList.add('active');
-      await loadScenarioBrowserData();
+      // Auto-load RAW tab on open
+      await switchScenarioBrowserTab('raw');
     }
     
     function closeScenarioBrowserModal() {
       document.getElementById('scenario-browser-modal-overlay').classList.remove('active');
+      document.getElementById('sb-export-dropdown').style.display = 'none';
     }
     
-    function setScenarioBrowserMode(mode) {
+    function toggleSBExportDropdown() {
+      const dropdown = document.getElementById('sb-export-dropdown');
+      dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    }
+    
+    function toggleDebugToolsDropdown() {
+      const dropdown = document.getElementById('debug-tools-dropdown');
+      dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    }
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function(e) {
+      // Scenario Browser export dropdown
+      if (!e.target.closest('#sb-export-dropdown') && !e.target.closest('[onclick="toggleSBExportDropdown()"]')) {
+        const dropdown = document.getElementById('sb-export-dropdown');
+        if (dropdown) dropdown.style.display = 'none';
+      }
+      // Debug tools dropdown
+      if (!e.target.closest('#debug-tools-dropdown') && !e.target.closest('[onclick="toggleDebugToolsDropdown()"]')) {
+        const dropdown = document.getElementById('debug-tools-dropdown');
+        if (dropdown) dropdown.style.display = 'none';
+      }
+    });
+    
+    async function switchScenarioBrowserTab(mode) {
       scenarioBrowserMode = mode;
       
-      // Update button styles
-      const rawBtn = document.getElementById('sb-mode-raw');
-      const auditBtn = document.getElementById('sb-mode-audit');
+      // Update tab styles
+      const rawTab = document.getElementById('sb-tab-raw');
+      const auditTab = document.getElementById('sb-tab-audit');
+      const modeIndicator = document.getElementById('sb-mode-indicator');
+      const auditHealthSection = document.getElementById('sb-audit-health');
+      const auditReportSection = document.getElementById('sb-audit-report');
       
       if (mode === 'raw') {
-        rawBtn.style.background = 'white';
-        rawBtn.style.color = '#7c3aed';
-        auditBtn.style.background = 'transparent';
-        auditBtn.style.color = 'white';
+        rawTab.style.background = 'white';
+        rawTab.style.color = '#7c3aed';
+        auditTab.style.background = 'rgba(255,255,255,0.2)';
+        auditTab.style.color = 'white';
+        modeIndicator.textContent = 'RAW';
+        modeIndicator.style.background = '#22c55e';
+        auditHealthSection.style.display = 'none';
+        auditReportSection.style.display = 'none';
       } else {
-        auditBtn.style.background = 'white';
-        auditBtn.style.color = '#7c3aed';
-        rawBtn.style.background = 'transparent';
-        rawBtn.style.color = 'white';
+        auditTab.style.background = 'white';
+        auditTab.style.color = '#7c3aed';
+        rawTab.style.background = 'rgba(255,255,255,0.2)';
+        rawTab.style.color = 'white';
+        modeIndicator.textContent = 'AUDIT';
+        modeIndicator.style.background = '#f59e0b';
+        auditHealthSection.style.display = 'block';
+        auditReportSection.style.display = 'flex';
       }
       
-      // Re-render selected scenario if any
-      if (selectedScenarioData) {
-        renderScenarioJson(selectedScenarioData);
-      }
+      // Load data from the CORRECT endpoint (separate sources!)
+      await loadScenarioBrowserData(mode);
     }
     
-    async function loadScenarioBrowserData() {
+    async function loadScenarioBrowserData(mode) {
       const categoriesList = document.getElementById('sb-categories-list');
-      categoriesList.innerHTML = '<div style="color: #64748b; text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+      categoriesList.innerHTML = '<div style="color: #64748b; text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Loading ' + mode.toUpperCase() + ' data...</div>';
       
       try {
-        // Get active template
-        const configResponse = await fetch(`/api/company/${currentCompanyId}/configuration/templates`, {
-          headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        const configResult = await configResponse.json();
+        // Use SEPARATE endpoints based on mode (HARD RULE: no shared serializer)
+        const endpoint = mode === 'raw' 
+          ? `/api/company/${currentCompanyId}/scenarios-raw`
+          : `/api/company/${currentCompanyId}/scenarios-audit`;
         
-        let templateId = null;
-        if (configResult.success && configResult.templates) {
-          const activeRef = configResult.templates.find(t => t.enabled);
-          if (activeRef) templateId = activeRef.templateId;
-        }
+        console.log(`[SCENARIO BROWSER] Loading ${mode.toUpperCase()} from: ${endpoint}`);
         
-        if (!templateId) {
-          categoriesList.innerHTML = '<div style="color: #f87171; text-align: center; padding: 20px;">No active template found</div>';
-          return;
-        }
-        
-        // Load full export with all scenario data
-        const response = await fetch(`/api/export/company/${currentCompanyId}`, {
+        const response = await fetch(endpoint, {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
         const result = await response.json();
         
-        if (!result.success || !result.export) {
-          categoriesList.innerHTML = '<div style="color: #f87171; text-align: center; padding: 20px;">Failed to load scenarios</div>';
+        if (!result.success || !result.data) {
+          categoriesList.innerHTML = `<div style="color: #f87171; text-align: center; padding: 20px;">Failed to load ${mode.toUpperCase()} data</div>`;
           return;
         }
         
-        scenarioBrowserData = result.export;
+        // Store in the correct cache
+        if (mode === 'raw') {
+          scenarioBrowserRawData = result.data;
+        } else {
+          scenarioBrowserAuditData = result.data;
+        }
+        scenarioBrowserData = result.data;
         
         // Update stats
         const categories = scenarioBrowserData.categories || [];
-        const scenarios = scenarioBrowserData.scenarios || [];
-        const totalTriggers = scenarios.reduce((sum, s) => sum + (s.triggers?.length || 0), 0);
+        const totalScenarios = scenarioBrowserData._totalScenarios || categories.reduce((sum, c) => sum + (c.scenarios?.length || 0), 0);
+        const totalTriggers = scenarioBrowserData._totalTriggers || categories.reduce((sum, c) => 
+          sum + c.scenarios?.reduce((s, sc) => s + (sc.triggers?.length || 0), 0) || 0, 0);
         
         document.getElementById('sb-cat-count').textContent = categories.length;
-        document.getElementById('sb-scenario-count').textContent = scenarios.length;
+        document.getElementById('sb-scenario-count').textContent = totalScenarios;
         document.getElementById('sb-trigger-count').textContent = totalTriggers;
+        
+        // Update AUDIT-specific health summary
+        if (mode === 'audit' && scenarioBrowserData._summary) {
+          const summary = scenarioBrowserData._summary;
+          
+          // Health badge
+          const healthBadge = document.getElementById('sb-health-badge');
+          healthBadge.textContent = summary.health || 'UNKNOWN';
+          healthBadge.style.background = summary.health === 'GREEN' ? '#22c55e' : summary.health === 'YELLOW' ? '#f59e0b' : '#ef4444';
+          healthBadge.style.color = summary.health === 'YELLOW' ? 'black' : 'white';
+          
+          document.getElementById('sb-health-msg').textContent = summary.healthMessage || '';
+          document.getElementById('sb-ready-count').textContent = summary.totalEnterpriseReady || 0;
+          document.getElementById('sb-not-ready-count').textContent = (summary.totalScenarios || 0) - (summary.totalEnterpriseReady || 0);
+          document.getElementById('sb-collision-count').textContent = summary.totalCollisions || 0;
+        }
         
         // Render categories tree
         renderCategoriesTree(categories);
+        
+        // Clear selected scenario
+        selectedScenarioData = null;
+        document.getElementById('sb-scenario-name').textContent = 'Select a scenario';
+        document.getElementById('sb-scenario-meta').textContent = 'Click a category then a scenario to view';
+        document.getElementById('sb-scenario-badges').innerHTML = '';
+        document.getElementById('sb-json-viewer').textContent = JSON.stringify({
+          mode: mode.toUpperCase(),
+          endpoint: mode === 'raw' ? '/scenarios-raw' : '/scenarios-audit',
+          dataSource: mode === 'raw' ? 'Pure stored fields (NO computed)' : 'Includes _stats, _auditReport, _collisions',
+          loaded: scenarioBrowserData.categories?.length + ' categories'
+        }, null, 2);
         
       } catch (error) {
         console.error('[SCENARIO BROWSER] Error:', error);
@@ -6363,13 +6500,14 @@ Loading field report...
       
       const statusColor = scenario.status === 'live' ? '#22c55e' : '#fbbf24';
       const typeLabel = scenario.scenarioType || 'UNKNOWN';
-      const typeColor = typeLabel === 'UNKNOWN' ? '#f87171' : '#a78bfa';
+      const typeColor = typeLabel === 'UNKNOWN' || typeLabel === '' ? '#f87171' : '#a78bfa';
+      const triggerCount = scenario.triggers?.length || scenario._stats?.triggerCount || 0;
       
       document.getElementById('sb-scenario-meta').innerHTML = `
         <span style="color: ${statusColor};">● ${scenario.status || 'draft'}</span>
-        <span style="margin-left: 8px;">Type: <span style="color: ${typeColor}; font-weight: 600;">${typeLabel}</span></span>
+        <span style="margin-left: 8px;">Type: <span style="color: ${typeColor}; font-weight: 600;">${typeLabel || 'UNKNOWN'}</span></span>
         <span style="margin-left: 8px;">Priority: ${scenario.priority || 0}</span>
-        <span style="margin-left: 8px;">Triggers: ${scenario.triggers?.length || 0}</span>
+        <span style="margin-left: 8px;">Triggers: ${triggerCount}</span>
       `;
       
       // Build badges
@@ -6388,25 +6526,32 @@ Loading field report...
       }
       document.getElementById('sb-scenario-badges').innerHTML = badges;
       
-      // Render JSON based on mode
-      let jsonData;
-      
-      if (scenarioBrowserMode === 'raw') {
-        // RAW mode: Remove computed fields
-        jsonData = { ...scenario };
-        delete jsonData._stats;
-        delete jsonData._exportedAt;
-        delete jsonData._schemaVersion;
-      } else {
-        // AUDIT mode: Include validation report
-        jsonData = {
-          ...scenario,
-          _auditReport: generateAuditReport(scenario)
-        };
+      // AUDIT mode: Update quick report from backend data (NOT client-side generated)
+      if (scenarioBrowserMode === 'audit' && scenario._auditReport) {
+        const report = scenario._auditReport;
+        
+        // Grade
+        const gradeEl = document.getElementById('sb-scenario-grade');
+        gradeEl.textContent = report.grade || '-';
+        gradeEl.style.color = report.grade === 'A' ? '#22c55e' : report.grade === 'B' ? '#84cc16' : report.grade === 'C' ? '#fbbf24' : report.grade === 'D' ? '#f97316' : '#ef4444';
+        
+        // Score
+        document.getElementById('sb-scenario-score').textContent = (report.score || 0) + '%';
+        
+        // Enterprise Ready
+        const readyEl = document.getElementById('sb-scenario-ready');
+        readyEl.textContent = report.enterpriseReady ? '✅ YES' : '❌ NO';
+        readyEl.style.color = report.enterpriseReady ? '#22c55e' : '#ef4444';
+        
+        // Issues
+        const issues = [...(report.issues || []), ...(report.warnings || [])];
+        document.getElementById('sb-scenario-issues').textContent = issues.length > 0 ? issues.slice(0, 3).join(' | ') : '';
       }
       
+      // Render JSON - RAW mode already has pure data, AUDIT mode already has computed blocks
+      // NO client-side generation - data comes from separate endpoints
       const jsonViewer = document.getElementById('sb-json-viewer');
-      jsonViewer.textContent = JSON.stringify(jsonData, null, 2);
+      jsonViewer.textContent = JSON.stringify(scenario, null, 2);
     }
     
     function generateAuditReport(scenario) {
@@ -6570,24 +6715,14 @@ Loading field report...
         return;
       }
       
-      let jsonData;
-      if (scenarioBrowserMode === 'raw') {
-        jsonData = { ...selectedScenarioData };
-        delete jsonData._stats;
-        delete jsonData._exportedAt;
-        delete jsonData._schemaVersion;
-      } else {
-        jsonData = {
-          ...selectedScenarioData,
-          _auditReport: generateAuditReport(selectedScenarioData)
-        };
-      }
-      
-      navigator.clipboard.writeText(JSON.stringify(jsonData, null, 2)).then(() => {
+      // Data already comes from correct endpoint (RAW or AUDIT) - no client-side manipulation needed
+      navigator.clipboard.writeText(JSON.stringify(selectedScenarioData, null, 2)).then(() => {
         showSnapshotToast(`✅ Copied ${selectedScenarioData.name} (${scenarioBrowserMode.toUpperCase()} mode)`, 'success');
       }).catch(err => {
         showSnapshotToast('❌ Copy failed: ' + err.message, 'error');
       });
+      
+      document.getElementById('sb-export-dropdown').style.display = 'none';
     }
     
     function downloadSelectedScenario() {
@@ -6596,21 +6731,9 @@ Loading field report...
         return;
       }
       
-      let jsonData;
-      if (scenarioBrowserMode === 'raw') {
-        jsonData = { ...selectedScenarioData };
-        delete jsonData._stats;
-        delete jsonData._exportedAt;
-        delete jsonData._schemaVersion;
-      } else {
-        jsonData = {
-          ...selectedScenarioData,
-          _auditReport: generateAuditReport(selectedScenarioData)
-        };
-      }
-      
+      // Data already comes from correct endpoint - no client-side manipulation needed
       const filename = `${selectedScenarioData.name?.replace(/\s+/g, '-').toLowerCase() || 'scenario'}-${scenarioBrowserMode}.json`;
-      const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(selectedScenarioData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       
       const a = document.createElement('a');
@@ -6622,6 +6745,74 @@ Loading field report...
       URL.revokeObjectURL(url);
       
       showSnapshotToast(`✅ Downloaded ${filename}`, 'success');
+      document.getElementById('sb-export-dropdown').style.display = 'none';
+    }
+    
+    // Export ALL scenarios (RAW)
+    async function exportAllScenariosRAW() {
+      if (!scenarioBrowserRawData) {
+        // Load RAW data if not cached
+        const response = await fetch(`/api/company/${currentCompanyId}/scenarios-raw`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const result = await response.json();
+        if (result.success) scenarioBrowserRawData = result.data;
+      }
+      
+      if (!scenarioBrowserRawData) {
+        showSnapshotToast('⚠️ Failed to load RAW data', 'warning');
+        return;
+      }
+      
+      const filename = `${scenarioBrowserRawData.companyName?.replace(/\s+/g, '-').toLowerCase() || 'company'}-scenarios-raw.json`;
+      const blob = new Blob([JSON.stringify(scenarioBrowserRawData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      const size = (JSON.stringify(scenarioBrowserRawData).length / 1024).toFixed(1);
+      showSnapshotToast(`✅ Downloaded RAW export (${size} KB)`, 'success');
+      document.getElementById('sb-export-dropdown').style.display = 'none';
+    }
+    
+    // Export ALL scenarios (AUDIT)
+    async function exportAllScenariosAUDIT() {
+      if (!scenarioBrowserAuditData) {
+        // Load AUDIT data if not cached
+        const response = await fetch(`/api/company/${currentCompanyId}/scenarios-audit`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const result = await response.json();
+        if (result.success) scenarioBrowserAuditData = result.data;
+      }
+      
+      if (!scenarioBrowserAuditData) {
+        showSnapshotToast('⚠️ Failed to load AUDIT data', 'warning');
+        return;
+      }
+      
+      const filename = `${scenarioBrowserAuditData.companyName?.replace(/\s+/g, '-').toLowerCase() || 'company'}-scenarios-audit.json`;
+      const blob = new Blob([JSON.stringify(scenarioBrowserAuditData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      const size = (JSON.stringify(scenarioBrowserAuditData).length / 1024).toFixed(1);
+      const summary = scenarioBrowserAuditData._summary || {};
+      showSnapshotToast(`✅ Downloaded AUDIT export (${size} KB, ${summary.health || 'UNKNOWN'} health)`, 'success');
+      document.getElementById('sb-export-dropdown').style.display = 'none';
     }
   </script>
   
