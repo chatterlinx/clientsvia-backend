@@ -4428,6 +4428,10 @@
                   style="padding: 10px 20px; background: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px;" disabled>
             <i class="fas fa-copy"></i> Copy JSON
           </button>
+          <button onclick="downloadExportAsJson()" id="btn-download-export"
+                  style="padding: 10px 20px; background: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px;" disabled>
+            <i class="fas fa-file-download"></i> Download .json
+          </button>
         </div>
         
         <div id="export-stats" style="display: none; background: #f1f5f9; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
@@ -4502,8 +4506,9 @@
           // Show JSON
           document.getElementById('export-json-output').value = JSON.stringify(currentExportData, null, 2);
           
-          // Enable copy button
+          // Enable copy and download buttons
           document.getElementById('btn-copy-export').disabled = false;
+          document.getElementById('btn-download-export').disabled = false;
           
           btn.innerHTML = '<i class="fas fa-check"></i> Loaded!';
           btn.style.background = '#059669';
@@ -4535,6 +4540,39 @@
         showSnapshotToast('✅ Copied to clipboard! Paste into ChatGPT.', 'success');
       } catch (error) {
         showSnapshotToast('❌ Copy failed: ' + error.message, 'error');
+      }
+    }
+    
+    function downloadExportAsJson() {
+      if (!currentExportData) return;
+      
+      try {
+        // Create filename with company name and timestamp
+        const companyName = currentExportData.company?.companyName || 'export';
+        const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        const filename = `${companyName.replace(/\s+/g, '-').toLowerCase()}-config-${timestamp}.json`;
+        
+        // Create blob and download link
+        const jsonString = JSON.stringify(currentExportData, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        // Trigger download
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        // Calculate file size
+        const sizeKB = (jsonString.length / 1024).toFixed(1);
+        const scenarioCount = currentExportData.scenarios?.length || 0;
+        
+        showSnapshotToast(`✅ Downloaded ${filename} (${sizeKB} KB, ${scenarioCount} scenarios)`, 'success');
+      } catch (error) {
+        showSnapshotToast('❌ Download failed: ' + error.message, 'error');
       }
     }
   </script>
