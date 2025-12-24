@@ -14197,8 +14197,8 @@ Continue?`;
                 
                 // ORIGINAL DATA (if editing)
                 _originalScenarioId: currentScenarioData?.scenarioId || currentScenarioData?._id || null,
-                _categoryId: currentCategoryId || null,
-                _templateId: currentTemplateId || null
+                _categoryId: currentScenarioData?.categoryId || null,
+                _templateId: activeTemplateId || window.activeTemplateId || null
             };
             
             console.log('📤 [EXPORT JSON] Collected:', Object.keys(scenario).length, 'fields');
