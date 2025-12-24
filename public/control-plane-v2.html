@@ -6458,6 +6458,8 @@ Loading field report...
     }
     
     function selectScenario(scenarioId, categoryId) {
+      console.log('[SCENARIO BROWSER] selectScenario called:', { scenarioId, categoryId });
+      
       // Highlight selected scenario
       document.querySelectorAll('.sb-scenario-item').forEach(el => {
         el.style.background = '#1e293b';
@@ -6473,29 +6475,62 @@ Loading field report...
       selectedScenarioId = scenarioId;
       
       // Find scenario data
+      console.log('[SCENARIO BROWSER] Looking for category:', categoryId, 'in data:', scenarioBrowserData?.categories?.length, 'categories');
       const category = scenarioBrowserData.categories?.find(c => c.categoryId === categoryId);
+      console.log('[SCENARIO BROWSER] Found category:', category ? category.name : 'NOT FOUND');
+      
       let scenario = category?.scenarios?.find(s => s.scenarioId === scenarioId);
+      console.log('[SCENARIO BROWSER] Found scenario in category:', scenario ? scenario.name : 'NOT FOUND');
       
       if (!scenario) {
+        console.log('[SCENARIO BROWSER] Trying fallback search in top-level scenarios array...');
         scenario = scenarioBrowserData.scenarios?.find(s => s.scenarioId === scenarioId);
+        console.log('[SCENARIO BROWSER] Fallback result:', scenario ? scenario.name : 'NOT FOUND');
       }
       
       if (scenario) {
+        console.log('[SCENARIO BROWSER] Rendering scenario:', scenario.name);
         selectedScenarioData = scenario;
         renderScenarioJson(scenario);
+      } else {
+        console.error('[SCENARIO BROWSER] ERROR: Could not find scenario!', { scenarioId, categoryId });
+        document.getElementById('sb-scenario-name').textContent = 'Scenario not found';
+        document.getElementById('sb-scenario-meta').textContent = 'Error: Could not find scenario data';
+        document.getElementById('sb-json-viewer').textContent = JSON.stringify({
+          error: 'Scenario not found',
+          searchedFor: { scenarioId, categoryId },
+          availableCategories: scenarioBrowserData?.categories?.map(c => ({ id: c.categoryId, name: c.name })) || []
+        }, null, 2);
       }
     }
     
     function renderScenarioJson(scenario) {
+      console.log('[SCENARIO BROWSER] renderScenarioJson called for:', scenario?.name || 'UNKNOWN');
+      
       // Update header
-      document.getElementById('sb-scenario-name').textContent = scenario.name || 'Unnamed';
+      const nameEl = document.getElementById('sb-scenario-name');
+      const metaEl = document.getElementById('sb-scenario-meta');
+      const jsonViewer = document.getElementById('sb-json-viewer');
+      
+      console.log('[SCENARIO BROWSER] Elements found:', {
+        nameEl: !!nameEl,
+        metaEl: !!metaEl,
+        jsonViewer: !!jsonViewer
+      });
+      
+      if (!nameEl || !metaEl || !jsonViewer) {
+        console.error('[SCENARIO BROWSER] ERROR: Required DOM elements not found!');
+        return;
+      }
+      
+      nameEl.textContent = scenario.name || 'Unnamed';
       
       const statusColor = scenario.status === 'live' ? '#22c55e' : '#fbbf24';
       const typeLabel = scenario.scenarioType || 'UNKNOWN';
       const typeColor = typeLabel === 'UNKNOWN' || typeLabel === '' ? '#f87171' : '#a78bfa';
       const triggerCount = scenario.triggers?.length || scenario._stats?.triggerCount || 0;
       
-      document.getElementById('sb-scenario-meta').innerHTML = `
+      metaEl.innerHTML = `
         <span style="color: ${statusColor};">● ${scenario.status || 'draft'}</span>
         <span style="margin-left: 8px;">Type: <span style="color: ${typeColor}; font-weight: 600;">${typeLabel || 'UNKNOWN'}</span></span>
         <span style="margin-left: 8px;">Priority: ${scenario.priority || 0}</span>
@@ -6542,8 +6577,9 @@ Loading field report...
       
       // Render JSON - RAW mode already has pure data, AUDIT mode already has computed blocks
       // NO client-side generation - data comes from separate endpoints
-      const jsonViewer = document.getElementById('sb-json-viewer');
+      console.log('[SCENARIO BROWSER] Setting JSON viewer content, scenario keys:', Object.keys(scenario));
       jsonViewer.textContent = JSON.stringify(scenario, null, 2);
+      console.log('[SCENARIO BROWSER] renderScenarioJson complete');
     }
     
     function generateAuditReport(scenario) {
