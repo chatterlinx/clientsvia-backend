@@ -10,24 +10,36 @@
  * ============================================================================
  */
 
+console.log('📸 [SYSTEM SNAPSHOT] Route file loading...');
+
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 
-// Models
-const Company = require('../../models/v2Company');
-const DynamicFlow = require('../../models/DynamicFlow');
-const ConversationSession = require('../../models/ConversationSession');
-const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+// Models - with defensive loading
+let Company, DynamicFlow, ConversationSession, GlobalInstantResponseTemplate;
+let CompanyScenarioOverride, CompanyCategoryOverride, CompanyResponseDefaults, CompanyPlaceholders;
+let ScenarioEngine;
 
-// NEW: Company Override Models (Disabled Scenario Handling)
-const CompanyScenarioOverride = require('../../models/CompanyScenarioOverride');
-const CompanyCategoryOverride = require('../../models/CompanyCategoryOverride');
-const CompanyResponseDefaults = require('../../models/CompanyResponseDefaults');
-const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
-
-// Services
-const ScenarioEngine = require('../../services/ScenarioEngine');
+try {
+  Company = require('../../models/v2Company');
+  DynamicFlow = require('../../models/DynamicFlow');
+  ConversationSession = require('../../models/ConversationSession');
+  GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+  
+  // Company Override Models (Disabled Scenario Handling)
+  CompanyScenarioOverride = require('../../models/CompanyScenarioOverride');
+  CompanyCategoryOverride = require('../../models/CompanyCategoryOverride');
+  CompanyResponseDefaults = require('../../models/CompanyResponseDefaults');
+  CompanyPlaceholders = require('../../models/CompanyPlaceholders');
+  
+  // Services
+  ScenarioEngine = require('../../services/ScenarioEngine');
+  
+  console.log('📸 [SYSTEM SNAPSHOT] All models loaded successfully');
+} catch (err) {
+  console.error('📸 [SYSTEM SNAPSHOT] ERROR loading models:', err.message);
+}
 
 /**
  * ============================================================================
@@ -474,5 +486,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-module.exports = router;
+console.log('📸 [SYSTEM SNAPSHOT] Route registered at GET /');
 
+module.exports = router;
