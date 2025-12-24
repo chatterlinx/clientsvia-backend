@@ -1482,6 +1482,11 @@
                     style="padding: 8px 14px; background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%); color: #0e4156; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;">
               <i class="fas fa-file-export"></i> Export Scenarios
             </button>
+            <button onclick="openScenarioBrowserModal()" 
+                    style="padding: 8px 14px; background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;"
+                    title="Browse scenarios with tree view - RAW or AUDIT mode">
+              <i class="fas fa-folder-tree"></i> Scenario Browser
+            </button>
             <button onclick="openScenarioReportModal()" 
                     style="padding: 8px 14px; background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;"
                     title="ENTERPRISE ENFORCEMENT: See which scenarios will actually match">
@@ -6038,6 +6043,587 @@ Loading field report...
       </div>
     </div>
   </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       SCENARIO BROWSER MODAL - Tree View with RAW/AUDIT modes
+       Engineer Request: Categories tree + JSON viewer + search
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="scenario-browser-modal-overlay" class="snapshot-modal-overlay">
+    <div class="snapshot-modal" style="max-width: 1600px; height: 85vh;">
+      <div class="snapshot-modal-header" style="background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);">
+        <div class="snapshot-modal-title">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 600;">📂 Scenario Browser</h2>
+          <p style="margin: 4px 0 0; font-size: 12px; opacity: 0.9;">Browse categories and scenarios with tree navigation</p>
+        </div>
+        <div class="snapshot-modal-controls" style="display: flex; gap: 8px; align-items: center;">
+          <!-- Mode Toggle -->
+          <div style="display: flex; background: rgba(255,255,255,0.2); border-radius: 6px; padding: 2px;">
+            <button id="sb-mode-raw" onclick="setScenarioBrowserMode('raw')" 
+                    style="padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; background: white; color: #7c3aed;">
+              RAW
+            </button>
+            <button id="sb-mode-audit" onclick="setScenarioBrowserMode('audit')" 
+                    style="padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; background: transparent; color: white;">
+              AUDIT
+            </button>
+          </div>
+          <button onclick="copySelectedScenario()" 
+                  style="padding: 6px 12px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">
+            <i class="fas fa-copy"></i> Copy
+          </button>
+          <button onclick="downloadSelectedScenario()" 
+                  style="padding: 6px 12px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">
+            <i class="fas fa-download"></i> Download
+          </button>
+          <button onclick="closeScenarioBrowserModal()" 
+                  style="padding: 6px 12px; background: rgba(255,255,255,0.3); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">
+            ✕ Close
+          </button>
+        </div>
+      </div>
+      
+      <div class="snapshot-modal-body" style="padding: 0; display: flex; height: calc(100% - 60px);">
+        <!-- LEFT PANEL: Categories Tree -->
+        <div id="sb-left-panel" style="width: 320px; border-right: 1px solid #334155; display: flex; flex-direction: column; background: #1e293b;">
+          <!-- Search Box -->
+          <div style="padding: 12px; border-bottom: 1px solid #334155;">
+            <input type="text" id="sb-search" placeholder="Search scenarios..." 
+                   oninput="filterScenarioBrowser(this.value)"
+                   style="width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #e2e8f0; font-size: 12px;">
+            <div style="margin-top: 8px; font-size: 10px; color: #64748b;">
+              Search by: name, scenarioId, actionType, flowId, triggers...
+            </div>
+          </div>
+          
+          <!-- Stats Bar -->
+          <div id="sb-stats" style="padding: 8px 12px; background: #0f172a; border-bottom: 1px solid #334155; display: flex; gap: 12px; font-size: 11px;">
+            <span style="color: #22d3ee;"><strong id="sb-cat-count">0</strong> categories</span>
+            <span style="color: #a78bfa;"><strong id="sb-scenario-count">0</strong> scenarios</span>
+            <span style="color: #fbbf24;"><strong id="sb-trigger-count">0</strong> triggers</span>
+          </div>
+          
+          <!-- Categories List -->
+          <div id="sb-categories-list" style="flex: 1; overflow-y: auto; padding: 8px;">
+            <div style="color: #64748b; text-align: center; padding: 20px;">Loading categories...</div>
+          </div>
+        </div>
+        
+        <!-- RIGHT PANEL: Scenario JSON Viewer -->
+        <div id="sb-right-panel" style="flex: 1; display: flex; flex-direction: column; background: #0f172a;">
+          <!-- Scenario Header -->
+          <div id="sb-scenario-header" style="padding: 12px 16px; border-bottom: 1px solid #334155; background: #1e293b;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div id="sb-scenario-name" style="font-size: 14px; font-weight: 600; color: #e2e8f0;">Select a scenario</div>
+                <div id="sb-scenario-meta" style="font-size: 11px; color: #64748b; margin-top: 4px;">Click a category then a scenario to view</div>
+              </div>
+              <div id="sb-scenario-badges" style="display: flex; gap: 6px;"></div>
+            </div>
+          </div>
+          
+          <!-- Find in JSON -->
+          <div style="padding: 8px 16px; border-bottom: 1px solid #334155; background: #1e293b;">
+            <input type="text" id="sb-find-in-json" placeholder="Find in JSON..." 
+                   oninput="highlightInJson(this.value)"
+                   style="width: 300px; padding: 6px 10px; background: #0f172a; border: 1px solid #475569; border-radius: 4px; color: #e2e8f0; font-size: 11px;">
+            <span id="sb-find-count" style="margin-left: 8px; font-size: 11px; color: #64748b;"></span>
+          </div>
+          
+          <!-- JSON Viewer -->
+          <div style="flex: 1; overflow: auto; padding: 16px;">
+            <pre id="sb-json-viewer" style="margin: 0; font-family: 'SF Mono', Monaco, monospace; font-size: 11px; color: #e2e8f0; white-space: pre-wrap;">
+{
+  "info": "Select a scenario from the left panel to view its JSON",
+  "modes": {
+    "RAW": "Exact stored data - no computed fields",
+    "AUDIT": "Includes validation report + collisions + health grade"
+  }
+}
+            </pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SCENARIO BROWSER - Tree View with RAW/AUDIT modes
+    // ═══════════════════════════════════════════════════════════════════════════
+    let scenarioBrowserData = null;
+    let scenarioBrowserMode = 'raw'; // 'raw' or 'audit'
+    let selectedCategoryId = null;
+    let selectedScenarioId = null;
+    let selectedScenarioData = null;
+    
+    async function openScenarioBrowserModal() {
+      document.getElementById('scenario-browser-modal-overlay').classList.add('active');
+      await loadScenarioBrowserData();
+    }
+    
+    function closeScenarioBrowserModal() {
+      document.getElementById('scenario-browser-modal-overlay').classList.remove('active');
+    }
+    
+    function setScenarioBrowserMode(mode) {
+      scenarioBrowserMode = mode;
+      
+      // Update button styles
+      const rawBtn = document.getElementById('sb-mode-raw');
+      const auditBtn = document.getElementById('sb-mode-audit');
+      
+      if (mode === 'raw') {
+        rawBtn.style.background = 'white';
+        rawBtn.style.color = '#7c3aed';
+        auditBtn.style.background = 'transparent';
+        auditBtn.style.color = 'white';
+      } else {
+        auditBtn.style.background = 'white';
+        auditBtn.style.color = '#7c3aed';
+        rawBtn.style.background = 'transparent';
+        rawBtn.style.color = 'white';
+      }
+      
+      // Re-render selected scenario if any
+      if (selectedScenarioData) {
+        renderScenarioJson(selectedScenarioData);
+      }
+    }
+    
+    async function loadScenarioBrowserData() {
+      const categoriesList = document.getElementById('sb-categories-list');
+      categoriesList.innerHTML = '<div style="color: #64748b; text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+      
+      try {
+        // Get active template
+        const configResponse = await fetch(`/api/company/${currentCompanyId}/configuration/templates`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const configResult = await configResponse.json();
+        
+        let templateId = null;
+        if (configResult.success && configResult.templates) {
+          const activeRef = configResult.templates.find(t => t.enabled);
+          if (activeRef) templateId = activeRef.templateId;
+        }
+        
+        if (!templateId) {
+          categoriesList.innerHTML = '<div style="color: #f87171; text-align: center; padding: 20px;">No active template found</div>';
+          return;
+        }
+        
+        // Load full export with all scenario data
+        const response = await fetch(`/api/export/company/${currentCompanyId}`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const result = await response.json();
+        
+        if (!result.success || !result.export) {
+          categoriesList.innerHTML = '<div style="color: #f87171; text-align: center; padding: 20px;">Failed to load scenarios</div>';
+          return;
+        }
+        
+        scenarioBrowserData = result.export;
+        
+        // Update stats
+        const categories = scenarioBrowserData.categories || [];
+        const scenarios = scenarioBrowserData.scenarios || [];
+        const totalTriggers = scenarios.reduce((sum, s) => sum + (s.triggers?.length || 0), 0);
+        
+        document.getElementById('sb-cat-count').textContent = categories.length;
+        document.getElementById('sb-scenario-count').textContent = scenarios.length;
+        document.getElementById('sb-trigger-count').textContent = totalTriggers;
+        
+        // Render categories tree
+        renderCategoriesTree(categories);
+        
+      } catch (error) {
+        console.error('[SCENARIO BROWSER] Error:', error);
+        categoriesList.innerHTML = `<div style="color: #f87171; text-align: center; padding: 20px;">Error: ${error.message}</div>`;
+      }
+    }
+    
+    function renderCategoriesTree(categories) {
+      const container = document.getElementById('sb-categories-list');
+      
+      if (!categories || categories.length === 0) {
+        container.innerHTML = '<div style="color: #64748b; text-align: center; padding: 20px;">No categories found</div>';
+        return;
+      }
+      
+      let html = '';
+      categories.forEach(cat => {
+        const scenarioCount = cat.scenarios?.length || cat._stats?.scenarioCount || 0;
+        const triggerCount = cat._stats?.totalTriggers || 0;
+        
+        html += `
+          <div class="sb-category-item" data-category-id="${cat.categoryId}" onclick="selectCategory('${cat.categoryId}')"
+               style="padding: 10px 12px; margin-bottom: 4px; background: #334155; border-radius: 6px; cursor: pointer; transition: all 0.15s;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="font-weight: 600; font-size: 12px; color: #e2e8f0;">${cat.icon || '📁'} ${cat.name}</div>
+              <div style="font-size: 10px; color: #94a3b8;">${scenarioCount}</div>
+            </div>
+            <div style="font-size: 10px; color: #64748b; margin-top: 4px;">
+              ${triggerCount} triggers
+            </div>
+          </div>
+          <div id="sb-scenarios-${cat.categoryId}" class="sb-scenarios-container" style="display: none; margin-left: 12px; margin-bottom: 8px;"></div>
+        `;
+      });
+      
+      container.innerHTML = html;
+    }
+    
+    function selectCategory(categoryId) {
+      // Highlight selected category
+      document.querySelectorAll('.sb-category-item').forEach(el => {
+        el.style.background = '#334155';
+        el.style.borderLeft = 'none';
+      });
+      
+      const selectedEl = document.querySelector(`.sb-category-item[data-category-id="${categoryId}"]`);
+      if (selectedEl) {
+        selectedEl.style.background = '#475569';
+        selectedEl.style.borderLeft = '3px solid #a78bfa';
+      }
+      
+      selectedCategoryId = categoryId;
+      
+      // Toggle scenarios list
+      document.querySelectorAll('.sb-scenarios-container').forEach(el => {
+        el.style.display = 'none';
+      });
+      
+      const scenariosContainer = document.getElementById(`sb-scenarios-${categoryId}`);
+      if (scenariosContainer) {
+        scenariosContainer.style.display = 'block';
+        
+        // Find scenarios for this category
+        const category = scenarioBrowserData.categories?.find(c => c.categoryId === categoryId);
+        const scenarios = category?.scenarios || scenarioBrowserData.scenarios?.filter(s => s.categoryId === categoryId) || [];
+        
+        if (scenarios.length === 0) {
+          scenariosContainer.innerHTML = '<div style="color: #64748b; font-size: 11px; padding: 8px;">No scenarios in this category</div>';
+        } else {
+          let html = '';
+          scenarios.forEach(s => {
+            const statusColor = s.status === 'live' ? '#22c55e' : s.status === 'draft' ? '#fbbf24' : '#64748b';
+            const typeLabel = s.scenarioType || 'UNKNOWN';
+            const triggerCount = s.triggers?.length || s._stats?.triggerCount || 0;
+            
+            html += `
+              <div class="sb-scenario-item" data-scenario-id="${s.scenarioId}" onclick="selectScenario('${s.scenarioId}', '${categoryId}')"
+                   style="padding: 8px 10px; margin-bottom: 2px; background: #1e293b; border-radius: 4px; cursor: pointer; transition: all 0.15s; border-left: 2px solid transparent;">
+                <div style="font-size: 11px; font-weight: 500; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${s.name}</div>
+                <div style="display: flex; gap: 8px; margin-top: 4px; font-size: 9px;">
+                  <span style="color: ${statusColor};">● ${s.status || 'draft'}</span>
+                  <span style="color: #a78bfa;">${typeLabel}</span>
+                  <span style="color: #64748b;">${triggerCount} triggers</span>
+                </div>
+              </div>
+            `;
+          });
+          scenariosContainer.innerHTML = html;
+        }
+      }
+    }
+    
+    function selectScenario(scenarioId, categoryId) {
+      // Highlight selected scenario
+      document.querySelectorAll('.sb-scenario-item').forEach(el => {
+        el.style.background = '#1e293b';
+        el.style.borderLeftColor = 'transparent';
+      });
+      
+      const selectedEl = document.querySelector(`.sb-scenario-item[data-scenario-id="${scenarioId}"]`);
+      if (selectedEl) {
+        selectedEl.style.background = '#334155';
+        selectedEl.style.borderLeftColor = '#a78bfa';
+      }
+      
+      selectedScenarioId = scenarioId;
+      
+      // Find scenario data
+      const category = scenarioBrowserData.categories?.find(c => c.categoryId === categoryId);
+      let scenario = category?.scenarios?.find(s => s.scenarioId === scenarioId);
+      
+      if (!scenario) {
+        scenario = scenarioBrowserData.scenarios?.find(s => s.scenarioId === scenarioId);
+      }
+      
+      if (scenario) {
+        selectedScenarioData = scenario;
+        renderScenarioJson(scenario);
+      }
+    }
+    
+    function renderScenarioJson(scenario) {
+      // Update header
+      document.getElementById('sb-scenario-name').textContent = scenario.name || 'Unnamed';
+      
+      const statusColor = scenario.status === 'live' ? '#22c55e' : '#fbbf24';
+      const typeLabel = scenario.scenarioType || 'UNKNOWN';
+      const typeColor = typeLabel === 'UNKNOWN' ? '#f87171' : '#a78bfa';
+      
+      document.getElementById('sb-scenario-meta').innerHTML = `
+        <span style="color: ${statusColor};">● ${scenario.status || 'draft'}</span>
+        <span style="margin-left: 8px;">Type: <span style="color: ${typeColor}; font-weight: 600;">${typeLabel}</span></span>
+        <span style="margin-left: 8px;">Priority: ${scenario.priority || 0}</span>
+        <span style="margin-left: 8px;">Triggers: ${scenario.triggers?.length || 0}</span>
+      `;
+      
+      // Build badges
+      let badges = '';
+      if (scenario.transferTarget) {
+        badges += '<span style="background: #f59e0b; color: black; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 600;">TRANSFER</span>';
+      }
+      if (scenario.actionHooks?.length > 0) {
+        badges += '<span style="background: #06b6d4; color: black; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; margin-left: 4px;">HOOKS</span>';
+      }
+      if (scenario.flowId) {
+        badges += '<span style="background: #8b5cf6; color: white; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; margin-left: 4px;">FLOW</span>';
+      }
+      if (scenario.bookingIntent) {
+        badges += '<span style="background: #22c55e; color: black; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; margin-left: 4px;">BOOKING</span>';
+      }
+      document.getElementById('sb-scenario-badges').innerHTML = badges;
+      
+      // Render JSON based on mode
+      let jsonData;
+      
+      if (scenarioBrowserMode === 'raw') {
+        // RAW mode: Remove computed fields
+        jsonData = { ...scenario };
+        delete jsonData._stats;
+        delete jsonData._exportedAt;
+        delete jsonData._schemaVersion;
+      } else {
+        // AUDIT mode: Include validation report
+        jsonData = {
+          ...scenario,
+          _auditReport: generateAuditReport(scenario)
+        };
+      }
+      
+      const jsonViewer = document.getElementById('sb-json-viewer');
+      jsonViewer.textContent = JSON.stringify(jsonData, null, 2);
+    }
+    
+    function generateAuditReport(scenario) {
+      const report = {
+        generatedAt: new Date().toISOString(),
+        mode: 'AUDIT',
+        checks: {},
+        issues: [],
+        warnings: [],
+        grade: 'F',
+        score: 0
+      };
+      
+      let score = 100;
+      
+      // Check triggers
+      const triggerCount = scenario.triggers?.length || 0;
+      report.checks.triggers = { count: triggerCount, required: 8, pass: triggerCount >= 8 };
+      if (triggerCount < 8) {
+        report.issues.push(`Triggers: ${triggerCount}/8 required`);
+        score -= (8 - triggerCount) * 5;
+      }
+      
+      // Check negative triggers
+      const negCount = scenario.negativeTriggers?.length || 0;
+      report.checks.negativeTriggers = { count: negCount, required: 3, pass: negCount >= 3 };
+      if (negCount < 3) {
+        report.warnings.push(`Negative triggers: ${negCount}/3 recommended`);
+        score -= (3 - negCount) * 3;
+      }
+      
+      // Check quick replies
+      const quickCount = scenario.quickReplies?.length || 0;
+      report.checks.quickReplies = { count: quickCount, required: 7, pass: quickCount >= 7 };
+      if (quickCount < 7) {
+        report.issues.push(`Quick replies: ${quickCount}/7 required`);
+        score -= (7 - quickCount) * 3;
+      }
+      
+      // Check full replies
+      const fullCount = scenario.fullReplies?.length || 0;
+      report.checks.fullReplies = { count: fullCount, required: 7, pass: fullCount >= 7 };
+      if (fullCount < 7) {
+        report.warnings.push(`Full replies: ${fullCount}/7 recommended`);
+        score -= (7 - fullCount) * 2;
+      }
+      
+      // Check scenarioType
+      const hasType = scenario.scenarioType && scenario.scenarioType !== 'UNKNOWN' && scenario.scenarioType !== '';
+      report.checks.scenarioType = { value: scenario.scenarioType || 'UNKNOWN', valid: hasType };
+      if (!hasType) {
+        report.issues.push('scenarioType is UNKNOWN or empty');
+        score -= 10;
+      }
+      
+      // Check wiring
+      const hasWiring = !!(scenario.actionType && scenario.actionType !== 'REPLY_ONLY') || 
+                        !!(scenario.flowId) || 
+                        !!(scenario.transferTarget) || 
+                        !!(scenario.bookingIntent);
+      report.checks.wiring = { 
+        actionType: scenario.actionType || 'REPLY_ONLY',
+        flowId: scenario.flowId || null,
+        transferTarget: scenario.transferTarget || null,
+        bookingIntent: scenario.bookingIntent || false,
+        hasExplicitWiring: hasWiring
+      };
+      
+      // Calculate grade
+      score = Math.max(0, score);
+      report.score = score;
+      
+      if (score >= 90) report.grade = 'A';
+      else if (score >= 80) report.grade = 'B';
+      else if (score >= 70) report.grade = 'C';
+      else if (score >= 60) report.grade = 'D';
+      else report.grade = 'F';
+      
+      report.enterpriseReady = report.grade !== 'F' && report.issues.length === 0;
+      
+      return report;
+    }
+    
+    function filterScenarioBrowser(query) {
+      if (!scenarioBrowserData) return;
+      
+      const q = query.toLowerCase().trim();
+      
+      // If empty, show all
+      if (!q) {
+        renderCategoriesTree(scenarioBrowserData.categories);
+        return;
+      }
+      
+      // Filter categories that have matching scenarios
+      const filteredCategories = [];
+      
+      for (const cat of scenarioBrowserData.categories || []) {
+        const matchingScenarios = (cat.scenarios || []).filter(s => {
+          return (
+            s.name?.toLowerCase().includes(q) ||
+            s.scenarioId?.toLowerCase().includes(q) ||
+            s.actionType?.toLowerCase().includes(q) ||
+            s.flowId?.toLowerCase().includes(q) ||
+            s.scenarioType?.toLowerCase().includes(q) ||
+            s.transferTarget?.toLowerCase().includes(q) ||
+            (s.triggers || []).some(t => t.toLowerCase().includes(q)) ||
+            (s.actionHooks || []).some(h => (typeof h === 'string' ? h : JSON.stringify(h)).toLowerCase().includes(q))
+          );
+        });
+        
+        if (matchingScenarios.length > 0 || cat.name.toLowerCase().includes(q)) {
+          filteredCategories.push({
+            ...cat,
+            scenarios: matchingScenarios.length > 0 ? matchingScenarios : cat.scenarios,
+            _stats: {
+              ...cat._stats,
+              scenarioCount: matchingScenarios.length > 0 ? matchingScenarios.length : (cat._stats?.scenarioCount || cat.scenarios?.length || 0)
+            }
+          });
+        }
+      }
+      
+      // Update counts
+      const totalScenarios = filteredCategories.reduce((sum, c) => sum + (c.scenarios?.length || 0), 0);
+      document.getElementById('sb-cat-count').textContent = filteredCategories.length;
+      document.getElementById('sb-scenario-count').textContent = totalScenarios;
+      
+      renderCategoriesTree(filteredCategories);
+    }
+    
+    function highlightInJson(query) {
+      const jsonViewer = document.getElementById('sb-json-viewer');
+      const findCountEl = document.getElementById('sb-find-count');
+      
+      if (!selectedScenarioData || !query) {
+        // Reset to normal
+        renderScenarioJson(selectedScenarioData);
+        findCountEl.textContent = '';
+        return;
+      }
+      
+      const text = jsonViewer.textContent;
+      const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      const matches = text.match(regex);
+      
+      if (matches) {
+        const highlighted = text.replace(regex, '<mark style="background: #fbbf24; color: black; padding: 0 2px;">$1</mark>');
+        jsonViewer.innerHTML = highlighted;
+        findCountEl.textContent = `${matches.length} found`;
+        findCountEl.style.color = '#22c55e';
+      } else {
+        findCountEl.textContent = 'No matches';
+        findCountEl.style.color = '#f87171';
+      }
+    }
+    
+    function copySelectedScenario() {
+      if (!selectedScenarioData) {
+        showSnapshotToast('⚠️ Select a scenario first', 'warning');
+        return;
+      }
+      
+      let jsonData;
+      if (scenarioBrowserMode === 'raw') {
+        jsonData = { ...selectedScenarioData };
+        delete jsonData._stats;
+        delete jsonData._exportedAt;
+        delete jsonData._schemaVersion;
+      } else {
+        jsonData = {
+          ...selectedScenarioData,
+          _auditReport: generateAuditReport(selectedScenarioData)
+        };
+      }
+      
+      navigator.clipboard.writeText(JSON.stringify(jsonData, null, 2)).then(() => {
+        showSnapshotToast(`✅ Copied ${selectedScenarioData.name} (${scenarioBrowserMode.toUpperCase()} mode)`, 'success');
+      }).catch(err => {
+        showSnapshotToast('❌ Copy failed: ' + err.message, 'error');
+      });
+    }
+    
+    function downloadSelectedScenario() {
+      if (!selectedScenarioData) {
+        showSnapshotToast('⚠️ Select a scenario first', 'warning');
+        return;
+      }
+      
+      let jsonData;
+      if (scenarioBrowserMode === 'raw') {
+        jsonData = { ...selectedScenarioData };
+        delete jsonData._stats;
+        delete jsonData._exportedAt;
+        delete jsonData._schemaVersion;
+      } else {
+        jsonData = {
+          ...selectedScenarioData,
+          _auditReport: generateAuditReport(selectedScenarioData)
+        };
+      }
+      
+      const filename = `${selectedScenarioData.name?.replace(/\s+/g, '-').toLowerCase() || 'scenario'}-${scenarioBrowserMode}.json`;
+      const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showSnapshotToast(`✅ Downloaded ${filename}`, 'success');
+    }
+  </script>
   
   <script>
     let currentScenarioReport = null;
