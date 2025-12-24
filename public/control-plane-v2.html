@@ -1399,6 +1399,9 @@
             <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; text-align: center;">
               <div style="font-size: 20px; font-weight: 700; color: var(--accent-orange);" id="stat-flows">—</div>
               <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Flows</div>
+              <button id="btn-create-booking-flow" onclick="createBookingFlow()" style="display: none; margin-top: 8px; padding: 6px 12px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;">
+                <i class="fas fa-plus"></i> Create Booking Flow
+              </button>
             </div>
             <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; text-align: center;">
               <div style="font-size: 20px; font-weight: 700; color: var(--accent-blue);" id="stat-transfers">—</div>
@@ -3743,7 +3746,15 @@
               flowTreeStatus.innerHTML = '<i class="fas fa-circle" style="color: var(--accent-orange);"></i><span>No Flows</span>';
               flowTreeStatus.style.background = 'rgba(249, 115, 22, 0.2)';
               flowTreeStatus.style.color = 'var(--accent-orange)';
+              
+              // Show "Create Booking Flow" button when no flows exist
+              showCreateFlowButton(true);
             }
+          }
+          
+          // Hide the button if flows exist
+          if (rt.dynamicFlows?.enabledCount > 0) {
+            showCreateFlowButton(false);
           }
           
           console.log('✅ [RUNTIME TRUTH] Loaded:', {
@@ -3772,6 +3783,53 @@
     function toggleRuntimeTruthDropdown() {
       const dropdown = document.getElementById('runtime-truth-dropdown');
       dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    }
+    
+    function showCreateFlowButton(show) {
+      const btn = document.getElementById('btn-create-booking-flow');
+      if (btn) {
+        btn.style.display = show ? 'inline-block' : 'none';
+      }
+    }
+    
+    async function createBookingFlow() {
+      const btn = document.getElementById('btn-create-booking-flow');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+      }
+      
+      try {
+        const response = await fetch(`/api/company/${currentCompanyId}/seed-golden/quick-booking-flow`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showSnapshotToast('Booking Flow Created!', `${result.flowKey} is now enabled with ${result.triggerCount} triggers`, 'success');
+          
+          // Refresh the Runtime Truth to show the new flow
+          await refreshSystemSnapshot();
+          
+          // Hide the button
+          showCreateFlowButton(false);
+        } else {
+          throw new Error(result.error || 'Failed to create flow');
+        }
+      } catch (error) {
+        console.error('[CREATE BOOKING FLOW] Error:', error);
+        showSnapshotToast('Error', error.message, 'error');
+        
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-plus"></i> Create Booking Flow';
+        }
+      }
     }
     
     // Close dropdown when clicking outside

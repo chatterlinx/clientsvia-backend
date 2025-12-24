@@ -341,6 +341,166 @@ router.post('/copy-templates', authenticateJWT, async (req, res) => {
 });
 
 /**
+ * POST /api/company/:companyId/seed-golden/quick-booking-flow
+ * 
+ * QUICK ACTION: Creates a working booking flow for the company.
+ * This is a "one-click" solution for Step 2 of the build order.
+ * 
+ * Does NOT require templates to exist - creates flow directly.
+ */
+router.post('/quick-booking-flow', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    const startTime = Date.now();
+    
+    logger.info('[QUICK BOOKING FLOW] Creating for company:', companyId);
+    
+    try {
+        // Check if booking_intent flow already exists
+        const existingFlow = await DynamicFlow.findOne({
+            companyId,
+            flowKey: 'booking_intent',
+            isTemplate: false
+        });
+        
+        if (existingFlow) {
+            // If it exists but is disabled, enable it
+            if (!existingFlow.enabled) {
+                existingFlow.enabled = true;
+                await existingFlow.save();
+                return res.json({
+                    success: true,
+                    message: 'Booking flow already existed - now enabled!',
+                    flowId: existingFlow._id.toString(),
+                    flowKey: 'booking_intent',
+                    enabled: true,
+                    duration: Date.now() - startTime
+                });
+            }
+            
+            return res.json({
+                success: true,
+                message: 'Booking flow already exists and is enabled',
+                flowId: existingFlow._id.toString(),
+                flowKey: 'booking_intent',
+                enabled: existingFlow.enabled,
+                duration: Date.now() - startTime
+            });
+        }
+        
+        // Create the booking flow directly
+        const bookingFlow = new DynamicFlow({
+            companyId,
+            flowKey: 'booking_intent',
+            name: 'Booking Intent Detection',
+            description: 'Detects when caller wants to schedule service and transitions to booking mode',
+            priority: 50,
+            enabled: true,
+            isTemplate: false,
+            
+            // Triggers - must have phrases for flow to be valid
+            triggers: [{
+                type: 'phrase',
+                config: {
+                    phrases: [
+                        'schedule',
+                        'appointment',
+                        'book',
+                        'come out',
+                        'send someone',
+                        'need service',
+                        'need repair',
+                        'can you fix',
+                        'available',
+                        'when can you come',
+                        'schedule a technician',
+                        'get someone out here',
+                        'make an appointment',
+                        'set up service'
+                    ],
+                    fuzzy: true,
+                    minConfidence: 0.6
+                },
+                priority: 50,
+                description: 'Detects booking/appointment intent'
+            }],
+            
+            // Actions
+            actions: [
+                {
+                    timing: 'on_activate',
+                    type: 'set_flag',
+                    config: {
+                        flagName: 'wantsBooking',
+                        flagValue: true,
+                        alsoWriteToCallLedgerFacts: true
+                    },
+                    description: 'Mark booking intent'
+                },
+                {
+                    timing: 'on_activate',
+                    type: 'append_ledger',
+                    config: {
+                        type: 'EVENT',
+                        key: 'BOOKING_INTENT',
+                        note: 'Caller wants to schedule service'
+                    },
+                    description: 'Log booking intent to ledger'
+                },
+                {
+                    timing: 'on_activate',
+                    type: 'ack_once',
+                    config: {
+                        text: "I'd be happy to help you schedule service!"
+                    },
+                    description: 'Acknowledge booking request'
+                },
+                {
+                    timing: 'on_complete',
+                    type: 'transition_mode',
+                    config: {
+                        targetMode: 'BOOKING',
+                        setBookingLocked: true
+                    },
+                    description: 'Transition to booking mode'
+                }
+            ],
+            
+            settings: {
+                allowConcurrent: false
+            }
+        });
+        
+        await bookingFlow.save();
+        
+        logger.info('[QUICK BOOKING FLOW] Created successfully:', {
+            flowId: bookingFlow._id,
+            flowKey: bookingFlow.flowKey,
+            triggerCount: bookingFlow.triggers.length,
+            actionCount: bookingFlow.actions.length
+        });
+        
+        res.json({
+            success: true,
+            message: 'Booking flow created and enabled!',
+            flowId: bookingFlow._id.toString(),
+            flowKey: 'booking_intent',
+            name: bookingFlow.name,
+            enabled: true,
+            triggerCount: bookingFlow.triggers[0].config.phrases.length,
+            actionCount: bookingFlow.actions.length,
+            duration: Date.now() - startTime
+        });
+        
+    } catch (error) {
+        logger.error('[QUICK BOOKING FLOW] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
  * GET /api/company/:companyId/seed-golden/templates
  * 
  * List available templates for a trade category
