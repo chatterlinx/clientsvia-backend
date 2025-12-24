@@ -1482,6 +1482,11 @@
                     style="padding: 8px 14px; background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%); color: #0e4156; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;">
               <i class="fas fa-file-export"></i> Export Scenarios
             </button>
+            <button onclick="openScenarioReportModal()" 
+                    style="padding: 8px 14px; background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;"
+                    title="ENTERPRISE ENFORCEMENT: See which scenarios will actually match">
+              <i class="fas fa-shield-alt"></i> Scenario Report
+            </button>
           </div>
         </div>
         
@@ -5894,6 +5899,273 @@ Loading field report...
     
     function updateConsentScript(value) {
       showSnapshotToast(`Consent script requires backend update. Use Patch Import.`, 'info');
+    }
+  </script>
+  
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       SCENARIO REPORT MODAL - Enterprise Enforcement Proof
+       Shows which scenarios are enterprise-ready and will actually match
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="scenario-report-modal-overlay" class="snapshot-modal-overlay">
+    <div class="snapshot-modal" style="max-width: 1400px;">
+      <div class="snapshot-modal-header" style="background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);">
+        <div class="snapshot-modal-title">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 600;">🛡️ Scenario Report - Enterprise Enforcement</h2>
+          <p style="margin: 4px 0 0; font-size: 12px; opacity: 0.9;">Only enterpriseReady === true scenarios will match at runtime. NO EXCEPTIONS.</p>
+        </div>
+        <div class="snapshot-modal-controls" style="display: flex; gap: 8px; align-items: center;">
+          <span id="scenario-report-health" style="padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700;"></span>
+          <button id="btn-copy-scenario-report" onclick="copyScenarioReport()" style="padding: 8px 16px; background: white; color: #dc2626; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+            <i class="fas fa-copy"></i> Copy Full JSON
+          </button>
+          <button onclick="closeScenarioReportModal()" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 6px; cursor: pointer;">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      
+      <div class="snapshot-modal-body" style="padding: 20px; max-height: 75vh; overflow-y: auto; background: #0f172a;">
+        <!-- Summary Stats -->
+        <div id="scenario-report-summary" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px;">
+          <div style="background: #1e293b; padding: 20px; border-radius: 12px; text-align: center;">
+            <div style="font-size: 32px; font-weight: 700; color: #60a5fa;" id="sr-total">--</div>
+            <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">Total Scenarios</div>
+          </div>
+          <div style="background: #1e293b; padding: 20px; border-radius: 12px; text-align: center; border: 2px solid #10b981;">
+            <div style="font-size: 32px; font-weight: 700; color: #10b981;" id="sr-ready">--</div>
+            <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">✅ Enterprise Ready</div>
+          </div>
+          <div style="background: #1e293b; padding: 20px; border-radius: 12px; text-align: center; border: 2px solid #ef4444;">
+            <div style="font-size: 32px; font-weight: 700; color: #ef4444;" id="sr-not-ready">--</div>
+            <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">❌ Will NOT Match</div>
+          </div>
+          <div style="background: #1e293b; padding: 20px; border-radius: 12px; text-align: center;">
+            <div style="font-size: 32px; font-weight: 700; color: #fbbf24;" id="sr-percent">--</div>
+            <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">% Ready</div>
+          </div>
+          <div style="background: #1e293b; padding: 20px; border-radius: 12px; text-align: center;">
+            <div style="font-size: 32px; font-weight: 700; color: #a78bfa;" id="sr-collisions">--</div>
+            <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">Collisions</div>
+          </div>
+        </div>
+        
+        <!-- Grade Distribution -->
+        <div style="background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+          <h4 style="margin: 0 0 12px 0; color: #f1f5f9; font-size: 14px;">📊 Grade Distribution</h4>
+          <div id="scenario-report-grades" style="display: flex; gap: 16px; align-items: flex-end;"></div>
+        </div>
+        
+        <!-- Quality Requirements -->
+        <div style="background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+          <h4 style="margin: 0 0 12px 0; color: #f1f5f9; font-size: 14px;">📋 Quality Requirements (Non-Negotiable)</h4>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+            <div style="background: #0f172a; padding: 12px; border-radius: 8px; text-align: center;">
+              <div style="font-size: 24px; font-weight: 700; color: #60a5fa;">8+</div>
+              <div style="font-size: 11px; color: #94a3b8;">Triggers</div>
+            </div>
+            <div style="background: #0f172a; padding: 12px; border-radius: 8px; text-align: center;">
+              <div style="font-size: 24px; font-weight: 700; color: #60a5fa;">3+</div>
+              <div style="font-size: 11px; color: #94a3b8;">Negative Triggers</div>
+            </div>
+            <div style="background: #0f172a; padding: 12px; border-radius: 8px; text-align: center;">
+              <div style="font-size: 24px; font-weight: 700; color: #60a5fa;">7+</div>
+              <div style="font-size: 11px; color: #94a3b8;">Quick Replies</div>
+            </div>
+            <div style="background: #0f172a; padding: 12px; border-radius: 8px; text-align: center;">
+              <div style="font-size: 24px; font-weight: 700; color: #60a5fa;">7+</div>
+              <div style="font-size: 11px; color: #94a3b8;">Full Replies</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Top Issues -->
+        <div style="background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+          <h4 style="margin: 0 0 12px 0; color: #f1f5f9; font-size: 14px;">🚨 Top Issues (Fix These First)</h4>
+          <div id="scenario-report-issues" style="display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto;"></div>
+        </div>
+        
+        <!-- Full JSON -->
+        <div style="background: #1e293b; border-radius: 12px; padding: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h4 style="margin: 0; color: #f1f5f9; font-size: 14px;">{ } Full Report JSON</h4>
+            <button onclick="copyScenarioReport()" style="padding: 6px 12px; background: #0f172a; color: #94a3b8; border: 1px solid #334155; border-radius: 6px; font-size: 11px; cursor: pointer;">
+              <i class="fas fa-copy"></i> Copy
+            </button>
+          </div>
+          <pre id="scenario-report-json" style="background: #0f172a; padding: 16px; border-radius: 8px; overflow: auto; max-height: 400px; font-size: 11px; color: #e2e8f0; white-space: pre-wrap; margin: 0;"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    let currentScenarioReport = null;
+    
+    async function openScenarioReportModal() {
+      document.getElementById('scenario-report-modal-overlay').classList.add('active');
+      await loadScenarioReport();
+    }
+    
+    function closeScenarioReportModal() {
+      document.getElementById('scenario-report-modal-overlay').classList.remove('active');
+    }
+    
+    async function loadScenarioReport() {
+      const summaryEls = {
+        total: document.getElementById('sr-total'),
+        ready: document.getElementById('sr-ready'),
+        notReady: document.getElementById('sr-not-ready'),
+        percent: document.getElementById('sr-percent'),
+        collisions: document.getElementById('sr-collisions')
+      };
+      const gradesEl = document.getElementById('scenario-report-grades');
+      const issuesEl = document.getElementById('scenario-report-issues');
+      const jsonEl = document.getElementById('scenario-report-json');
+      const healthEl = document.getElementById('scenario-report-health');
+      
+      // Show loading
+      summaryEls.total.textContent = '...';
+      summaryEls.ready.textContent = '...';
+      summaryEls.notReady.textContent = '...';
+      summaryEls.percent.textContent = '...';
+      summaryEls.collisions.textContent = '...';
+      gradesEl.innerHTML = '<div style="color: #94a3b8;">Loading...</div>';
+      issuesEl.innerHTML = '<div style="color: #94a3b8;">Loading...</div>';
+      jsonEl.textContent = 'Loading...';
+      
+      try {
+        // Get the selected template ID from the company config
+        const configResponse = await fetch(`/api/company/${currentCompanyId}/configuration/templates`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const configResult = await configResponse.json();
+        
+        let templateId = null;
+        if (configResult.success && configResult.data?.templateReferences?.length > 0) {
+          const primaryTemplate = configResult.data.templateReferences.find(t => t.enabled);
+          if (primaryTemplate) {
+            templateId = primaryTemplate.templateId;
+          }
+        }
+        
+        // Load scenario export
+        const url = templateId 
+          ? `/api/company/${currentCompanyId}/scenario-export?templateId=${templateId}`
+          : `/api/company/${currentCompanyId}/scenario-export`;
+          
+        const response = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to load scenario report');
+        }
+        
+        currentScenarioReport = result.data;
+        
+        // Extract data
+        const qs = result.data.qualitySummary || {};
+        const gradesDist = qs.gradeDistribution || {};
+        const statusDist = qs.statusDistribution || {};
+        const collisions = result.data.collisions || {};
+        const topIssues = result.data.topIssues || [];
+        const total = qs.totalScenarios || 0;
+        const enterpriseReady = qs.compliance?.enterpriseReady || 0;
+        const notReady = total - enterpriseReady;
+        const percentReady = qs.percentEnterpriseReady || 0;
+        
+        // Update summary
+        summaryEls.total.textContent = total;
+        summaryEls.ready.textContent = enterpriseReady;
+        summaryEls.notReady.textContent = notReady;
+        summaryEls.percent.textContent = `${percentReady}%`;
+        summaryEls.collisions.textContent = collisions.count || 0;
+        
+        // Health badge
+        const health = result.data.health || 'RED';
+        const healthColors = {
+          GREEN: { bg: '#10b981', text: 'white', label: 'GREEN - Production Ready' },
+          YELLOW: { bg: '#f59e0b', text: '#1e293b', label: 'YELLOW - Needs Work' },
+          RED: { bg: '#ef4444', text: 'white', label: 'RED - Critical Issues' }
+        };
+        const hc = healthColors[health] || healthColors.RED;
+        healthEl.style.background = hc.bg;
+        healthEl.style.color = hc.text;
+        healthEl.textContent = hc.label;
+        
+        // Grade distribution bars
+        const maxGrade = Math.max(gradesDist.A || 0, gradesDist.B || 0, gradesDist.C || 0, gradesDist.D || 0, gradesDist.F || 0, 1);
+        const gradeColors = { A: '#10b981', B: '#34d399', C: '#fbbf24', D: '#f97316', F: '#ef4444' };
+        gradesEl.innerHTML = ['A', 'B', 'C', 'D', 'F'].map(g => {
+          const count = gradesDist[g] || 0;
+          const height = Math.max(20, (count / maxGrade) * 100);
+          return `
+            <div style="flex: 1; text-align: center;">
+              <div style="background: ${gradeColors[g]}; height: ${height}px; border-radius: 4px 4px 0 0; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 4px;">
+                <span style="color: white; font-weight: 700; font-size: 14px;">${count}</span>
+              </div>
+              <div style="background: #0f172a; padding: 6px; border-radius: 0 0 4px 4px;">
+                <span style="color: ${gradeColors[g]}; font-weight: 700; font-size: 16px;">${g}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+        
+        // Top issues
+        if (topIssues.length === 0) {
+          issuesEl.innerHTML = '<div style="color: #10b981; padding: 12px; background: #0f172a; border-radius: 8px;">✅ No issues - all scenarios meet requirements</div>';
+        } else {
+          issuesEl.innerHTML = topIssues.map(issue => {
+            const gradeColor = gradeColors[issue.grade] || '#ef4444';
+            return `
+              <div style="background: #0f172a; padding: 12px; border-radius: 8px; border-left: 4px solid ${gradeColor};">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <strong style="color: #f1f5f9; font-size: 13px;">${issue.name || 'Unknown'}</strong>
+                  <span style="background: ${gradeColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">Grade ${issue.grade}</span>
+                </div>
+                <div style="color: #94a3b8; font-size: 11px; display: flex; flex-wrap: wrap; gap: 8px;">
+                  ${(issue.issues || []).map(i => `<span style="background: #1e293b; padding: 2px 6px; border-radius: 4px;">${i}</span>`).join('')}
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+        
+        // Full JSON
+        jsonEl.textContent = JSON.stringify(result.data, null, 2);
+        
+      } catch (error) {
+        console.error('Failed to load scenario report:', error);
+        healthEl.style.background = '#ef4444';
+        healthEl.style.color = 'white';
+        healthEl.textContent = 'ERROR';
+        issuesEl.innerHTML = `<div style="color: #ef4444; padding: 12px; background: #0f172a; border-radius: 8px;">❌ ${error.message}</div>`;
+        jsonEl.textContent = `Error: ${error.message}`;
+      }
+    }
+    
+    function copyScenarioReport() {
+      if (!currentScenarioReport) {
+        showSnapshotToast('Load report first', 'warning');
+        return;
+      }
+      
+      const jsonStr = JSON.stringify(currentScenarioReport, null, 2);
+      navigator.clipboard.writeText(jsonStr).then(() => {
+        const qs = currentScenarioReport.qualitySummary || {};
+        showSnapshotToast(
+          `Scenario Report copied! ${qs.totalScenarios || 0} scenarios, ${(jsonStr.length / 1024).toFixed(1)} KB`,
+          'success'
+        );
+      }).catch(err => {
+        showSnapshotToast('Failed to copy: ' + err.message, 'error');
+      });
     }
   </script>
   
