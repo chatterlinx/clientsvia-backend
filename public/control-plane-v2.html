@@ -2990,6 +2990,10 @@
             ` : ''}
           </div>
           <div style="display: flex; flex-direction: column; gap: 4px;">
+            <button onclick="openScenarioInBrowser('${scenario.scenarioId}', '${categoryId}')" 
+                    style="padding: 4px 8px; border: none; background: #dbeafe; color: #1d4ed8; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">
+              ✏️ Edit
+            </button>
             <button onclick="toggleScenarioLock('${scenario.scenarioId}', ${!scenario.isLocked})" 
                     style="padding: 4px 8px; border: none; background: ${scenario.isLocked ? '#fee2e2' : '#e0f2fe'}; color: ${scenario.isLocked ? '#dc2626' : '#0369a1'}; border-radius: 4px; cursor: pointer; font-size: 11px;">
               ${scenario.isLocked ? '🔓 Unlock' : '🔒 Lock'}
@@ -3048,6 +3052,30 @@
           icon.style.transform = 'rotate(0deg)';
         }
       });
+    }
+    
+    async function openScenarioInBrowser(scenarioId, categoryId) {
+      console.log('[QA DASHBOARD] Opening scenario in browser:', { scenarioId, categoryId });
+      
+      // Open the Scenario Browser modal
+      await openScenarioBrowserModal();
+      
+      // Wait a moment for data to load, then select the category and scenario
+      setTimeout(() => {
+        // First select the category to expand it
+        selectCategory(categoryId);
+        
+        // Then select the specific scenario
+        setTimeout(() => {
+          selectScenario(scenarioId, categoryId);
+          
+          // Scroll the scenario into view in the left panel
+          const scenarioEl = document.querySelector(`.sb-scenario-item[data-scenario-id="${scenarioId}"]`);
+          if (scenarioEl) {
+            scenarioEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 300);
+      }, 500);
     }
     
     async function toggleScenarioLock(scenarioId, lock) {
