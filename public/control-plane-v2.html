@@ -1509,10 +1509,10 @@
               </div>
             </div>
             
-            <!-- DISABLED: Golden HVAC Autofill (until confirmed safe) -->
-            <button disabled
-                    style="padding: 8px 14px; background: #334155; color: #64748b; border: none; border-radius: 6px; cursor: not-allowed; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px; opacity: 0.6;"
-                    title="DISABLED: Pending safety review - must confirm company-scoped overrides only">
+            <!-- Golden Autofill - Classifies all scenarios with scenarioType -->
+            <button onclick="runGoldenAutofill()"
+                    style="padding: 8px 14px; background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); color: #1e293b; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;"
+                    title="STEP 4: Classify all scenarios with scenarioType">
               <i class="fas fa-magic"></i> Golden Autofill
               <span style="font-size: 9px; background: #f59e0b; color: black; padding: 1px 4px; border-radius: 3px; margin-left: 4px;">REVIEW</span>
             </button>
@@ -3113,6 +3113,93 @@
         }
       } catch (error) {
         showSnapshotToast('Failed to update scenario lock', 'error');
+      }
+    }
+    
+    async function runGoldenAutofill() {
+      // Find the active template ID for this company
+      if (!qaSelectedTemplateId && currentCompanyId) {
+        // Try to detect active template
+        try {
+          const response = await fetch(`/api/company/${currentCompanyId}/configuration/templates`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+          });
+          const data = await response.json();
+          if (data.success && data.activeTemplates?.length > 0) {
+            qaSelectedTemplateId = data.activeTemplates[0].templateId;
+          }
+        } catch (e) {
+          console.log('Could not auto-detect template');
+        }
+      }
+      
+      if (!qaSelectedTemplateId) {
+        showSnapshotToast('No Template', 'Go to Data & Config tab to see active template', 'warning');
+        return;
+      }
+      
+      // Show confirmation
+      if (!confirm('Run Golden Autofill to classify all scenarios?\\n\\nThis will:\\n- Auto-detect scenarioType (BOOKING, FAQ, EMERGENCY, etc.)\\n- Set priority and minConfidence based on type\\n- Respect locked scenarios (autofillLock=true)\\n\\nContinue?')) {
+        return;
+      }
+      
+      showSnapshotToast('Running...', 'Classifying scenarios...', 'info');
+      
+      try {
+        // First do dry run to show preview
+        const dryRunResponse = await fetch(`/api/trade-knowledge/templates/${qaSelectedTemplateId}/golden-autofill`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ mode: 'dry_run' })
+        });
+        
+        const dryRunData = await dryRunResponse.json();
+        
+        if (!dryRunData.success) {
+          throw new Error(dryRunData.error || 'Dry run failed');
+        }
+        
+        // Show preview count
+        const willUpdate = dryRunData.summary?.scenariosWithChanges || 0;
+        const unknownFixed = dryRunData.scenarioUpdates?.filter(s => s.updates?.scenarioType?.from === 'UNKNOWN').length || 0;
+        
+        if (willUpdate === 0) {
+          showSnapshotToast('No Changes', 'All scenarios already classified', 'info');
+          return;
+        }
+        
+        // Confirm apply
+        if (!confirm(`Found ${willUpdate} scenarios to update (${unknownFixed} UNKNOWN will be classified).\\n\\nApply changes now?`)) {
+          return;
+        }
+        
+        // Apply the changes
+        const applyResponse = await fetch(`/api/trade-knowledge/templates/${qaSelectedTemplateId}/golden-autofill`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ mode: 'apply' })
+        });
+        
+        const applyData = await applyResponse.json();
+        
+        if (!applyData.success) {
+          throw new Error(applyData.error || 'Apply failed');
+        }
+        
+        showSnapshotToast('Success!', `Updated ${applyData.summary?.scenariosUpdated || 0} scenarios`, 'success');
+        
+        // Refresh Runtime Truth to see changes
+        await refreshSystemSnapshot();
+        
+      } catch (error) {
+        console.error('[GOLDEN AUTOFILL] Error:', error);
+        showSnapshotToast('Error', error.message, 'error');
       }
     }
     
