@@ -3652,7 +3652,7 @@
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // SYSTEM SNAPSHOT - Single Source of Truth
+    // RUNTIME TRUTH - Single Source of Truth (Fixed Dec 2025 - uses /runtime-truth not /system-snapshot)
     // ═══════════════════════════════════════════════════════════════════════════
     let currentSnapshot = null;
     
@@ -3668,76 +3668,86 @@
       try {
         // Show loading state
         if (refreshIcon) refreshIcon.classList.add('fa-spin');
-        jsonDisplay.textContent = '{\n  "loading": true,\n  "message": "Generating system snapshot..."\n}';
+        jsonDisplay.textContent = '{\n  "loading": true,\n  "message": "Loading Runtime Truth..."\n}';
         
-        const response = await fetch(`/api/company/${currentCompanyId}/system-snapshot`, {
+        // FIXED: Use /runtime-truth endpoint (the one that actually works)
+        const response = await fetch(`/api/company/${currentCompanyId}/runtime-truth`, {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
         
         if (!response.ok) {
-          throw new Error(`Failed to fetch snapshot: ${response.status}`);
+          throw new Error(`Failed to fetch runtime truth: ${response.status}`);
         }
         
-          const data = await response.json();
+        const result = await response.json();
         
-        if (data.success && data.snapshot) {
-          currentSnapshot = data.snapshot;
+        if (result.success && result.data) {
+          const rt = result.data; // Runtime Truth format
+          currentSnapshot = rt;
           
           // Update display
-          jsonDisplay.textContent = JSON.stringify(data.snapshot, null, 2);
+          jsonDisplay.textContent = JSON.stringify(rt, null, 2);
           
-          // Update stats
-          document.getElementById('stat-flows').textContent = data.snapshot.dynamicFlows?.length || 0;
-          document.getElementById('stat-transfers').textContent = data.snapshot.transferTargets?.length || 0;
-          document.getElementById('stat-contacts').textContent = data.snapshot.companyContacts?.length || 0;
+          // Update stats (map from Runtime Truth format)
+          document.getElementById('stat-flows').textContent = rt.dynamicFlows?.flows?.length || rt.dynamicFlows?.totalCount || 0;
+          document.getElementById('stat-transfers').textContent = rt.controlPlane?.booking?.slotsCount || 0;
+          document.getElementById('stat-contacts').textContent = rt.scenarioBrain?.totals?.scenarios || 0;
           
           // Update timestamp
-          document.getElementById('snapshot-timestamp').textContent = new Date(data.snapshot.timestamp).toLocaleTimeString();
-          document.getElementById('snapshot-generation-time').textContent = data.snapshot.generatedIn;
+          document.getElementById('snapshot-timestamp').textContent = new Date(rt._meta?.generatedAt || new Date()).toLocaleTimeString();
+          document.getElementById('snapshot-generation-time').textContent = (rt._meta?.generationTimeMs || 0) + 'ms';
           
-          // Update mode indicator
+          // Update mode indicator based on health status
           const modeIcon = document.getElementById('snapshot-mode-icon');
           const modeText = document.getElementById('snapshot-mode-text');
           const statusDiv = document.getElementById('snapshot-status');
           
-          if (data.snapshot.mode === 'LIVE') {
+          const healthStatus = rt.health?.status || 'UNKNOWN';
+          if (healthStatus === 'GREEN') {
             modeIcon.textContent = '🟢';
-            modeText.textContent = 'LIVE CALL';
+            modeText.textContent = 'HEALTHY';
             statusDiv.style.background = 'rgba(16, 185, 129, 0.2)';
             statusDiv.style.color = 'var(--accent-green)';
-        } else {
+          } else if (healthStatus === 'YELLOW') {
             modeIcon.textContent = '🟡';
-            modeText.textContent = 'IDLE';
+            modeText.textContent = 'WARNINGS';
             statusDiv.style.background = 'rgba(249, 115, 22, 0.2)';
             statusDiv.style.color = 'var(--accent-orange)';
+          } else {
+            modeIcon.textContent = '🔴';
+            modeText.textContent = 'ISSUES';
+            statusDiv.style.background = 'rgba(239, 68, 68, 0.2)';
+            statusDiv.style.color = 'var(--accent-red)';
           }
           
           // Update Flow Tree status
           const flowTreeStatus = document.getElementById('flow-tree-status');
           if (flowTreeStatus) {
-            if (data.snapshot.mode === 'LIVE') {
-              flowTreeStatus.innerHTML = '<i class="fas fa-circle" style="color: var(--accent-green);"></i><span>Live Call</span>';
+            const enabledFlows = rt.dynamicFlows?.enabledCount || 0;
+            if (enabledFlows > 0) {
+              flowTreeStatus.innerHTML = `<i class="fas fa-circle" style="color: var(--accent-green);"></i><span>${enabledFlows} Flows Active</span>`;
               flowTreeStatus.style.background = 'rgba(16, 185, 129, 0.2)';
               flowTreeStatus.style.color = 'var(--accent-green)';
             } else {
-              flowTreeStatus.innerHTML = '<i class="fas fa-circle"></i><span>Ready</span>';
-              flowTreeStatus.style.background = 'rgba(16, 185, 129, 0.2)';
-              flowTreeStatus.style.color = 'var(--accent-green)';
+              flowTreeStatus.innerHTML = '<i class="fas fa-circle" style="color: var(--accent-orange);"></i><span>No Flows</span>';
+              flowTreeStatus.style.background = 'rgba(249, 115, 22, 0.2)';
+              flowTreeStatus.style.color = 'var(--accent-orange)';
             }
           }
           
-          console.log('✅ [SNAPSHOT] System snapshot loaded:', {
-            mode: data.snapshot.mode,
-            flows: data.snapshot.dynamicFlows?.length,
-            generatedIn: data.snapshot.generatedIn
+          console.log('✅ [RUNTIME TRUTH] Loaded:', {
+            health: rt.health?.status,
+            scenarios: rt.scenarioBrain?.totals?.scenarios,
+            flows: rt.dynamicFlows?.totalCount,
+            generatedIn: rt._meta?.generationTimeMs + 'ms'
           });
           
         } else {
-          throw new Error(data.error || 'Unknown error');
+          throw new Error(result.error || 'Unknown error');
         }
         
       } catch (error) {
-        console.error('❌ [SNAPSHOT] Error:', error);
+        console.error('❌ [RUNTIME TRUTH] Error:', error);
         jsonDisplay.textContent = JSON.stringify({
           error: true,
           message: error.message,
