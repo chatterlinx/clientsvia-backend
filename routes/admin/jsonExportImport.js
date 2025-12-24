@@ -214,47 +214,70 @@ router.get('/company/:companyId', async (req, res) => {
         
         logger.info('[JSON EXPORT] Company export request', { companyId });
         
-        // Fetch all data in parallel
-        const [
-            company,
-            dynamicFlows,
-            scenarioOverrides,
-            categoryOverrides,
-            responseDefaults,
-            placeholders,
-            templates
-        ] = await Promise.all([
-            Company.findById(companyId).lean(),
-            DynamicFlow.find({ companyId: new mongoose.Types.ObjectId(companyId) }).lean(),
-            CompanyScenarioOverride.find({ companyId: new mongoose.Types.ObjectId(companyId) }).lean(),
-            CompanyCategoryOverride.find({ companyId: new mongoose.Types.ObjectId(companyId) }).lean(),
-            CompanyResponseDefaults.findOne({ companyId: new mongoose.Types.ObjectId(companyId) }).lean(),
-            CompanyPlaceholders.findOne({ companyId: new mongoose.Types.ObjectId(companyId) }).lean(),
-            GlobalInstantResponseTemplate.find({ status: 'published' }).lean()
-        ]);
+        // Fetch company first to get template references
+        const company = await Company.findById(companyId).lean();
         
         if (!company) {
             return res.status(404).json({ success: false, error: 'Company not found' });
         }
         
-        // Find active templates for this company
-        const scenarioControls = company.aiAgentSettings?.scenarioControls || [];
-        const activeTemplateIds = [...new Set(scenarioControls.map(sc => sc.templateId).filter(Boolean))];
-        const activeTemplates = templates.filter(t => 
-            activeTemplateIds.includes(t._id.toString())
-        );
+        // Get active template IDs from company's templateReferences (the correct field)
+        const templateRefs = company.aiAgentSettings?.templateReferences || [];
+        const activeTemplateIds = templateRefs
+            .filter(ref => ref.enabled)
+            .map(ref => ref.templateId?.toString())
+            .filter(Boolean);
+        
+        logger.info('[JSON EXPORT] Template references found', { 
+            companyId, 
+            templateRefCount: templateRefs.length,
+            activeTemplateIds 
+        });
+        
+        // Fetch all data in parallel
+        const [
+            dynamicFlows,
+            scenarioOverrides,
+            categoryOverrides,
+            responseDefaults,
+            placeholders,
+            activeTemplates
+        ] = await Promise.all([
+            DynamicFlow.find({ companyId: new mongoose.Types.ObjectId(companyId) }).lean(),
+            CompanyScenarioOverride.find({ companyId: new mongoose.Types.ObjectId(companyId) }).lean(),
+            CompanyCategoryOverride.find({ companyId: new mongoose.Types.ObjectId(companyId) }).lean(),
+            CompanyResponseDefaults.findOne({ companyId: new mongoose.Types.ObjectId(companyId) }).lean(),
+            CompanyPlaceholders.findOne({ companyId: new mongoose.Types.ObjectId(companyId) }).lean(),
+            // Load templates by the IDs referenced by the company
+            GlobalInstantResponseTemplate.find({ 
+                _id: { $in: activeTemplateIds.map(id => new mongoose.Types.ObjectId(id)) }
+            }).lean()
+        ]);
         
         // Build categories/scenarios from active templates
         const categoriesExport = [];
         const scenariosExport = [];
+        let totalTriggers = 0;
         
         for (const template of activeTemplates) {
             for (const category of (template.categories || [])) {
-                const catExport = buildCategoryExport(category, template._id.toString(), template.templateName);
+                const catExport = buildCategoryExport(category, template._id.toString(), template.name);
                 categoriesExport.push(catExport);
                 scenariosExport.push(...catExport.scenarios);
+                // Count triggers
+                for (const scenario of (category.scenarios || [])) {
+                    totalTriggers += (scenario.triggers || []).length;
+                }
             }
         }
+        
+        logger.info('[JSON EXPORT] Export data assembled', {
+            companyId,
+            templatesCount: activeTemplates.length,
+            categoriesCount: categoriesExport.length,
+            scenariosCount: scenariosExport.length,
+            totalTriggers
+        });
         
         // Build export object
         const exportObj = {
@@ -272,9 +295,18 @@ router.get('/company/:companyId', async (req, res) => {
                 environment: process.env.NODE_ENV || 'development'
             },
             
+            // Summary counts for UI
+            summary: {
+                templatesCount: activeTemplates.length,
+                categoriesCount: categoriesExport.length,
+                scenariosCount: scenariosExport.length,
+                totalTriggers: totalTriggers,
+                dynamicFlowsCount: dynamicFlows.length
+            },
+            
             activeTemplates: activeTemplates.map(t => ({
                 templateId: t._id.toString(),
-                templateName: t.templateName,
+                templateName: t.name, // Use 'name' not 'templateName'
                 templateType: t.templateType,
                 categoryCount: (t.categories || []).length,
                 totalScenarios: (t.categories || []).reduce((sum, c) => sum + (c.scenarios || []).length, 0)

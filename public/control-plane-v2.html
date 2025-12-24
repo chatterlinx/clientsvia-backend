@@ -4489,12 +4489,15 @@
         if (result.success) {
           currentExportData = result.export;
           
-          // Update stats
+          // Update stats (prefer summary object if available)
           document.getElementById('export-stats').style.display = 'block';
-          document.getElementById('stat-categories').textContent = currentExportData.categories?.length || 0;
-          document.getElementById('stat-scenarios').textContent = currentExportData.scenarios?.length || 0;
-          document.getElementById('stat-triggers').textContent = (currentExportData.scenarios || []).reduce((sum, s) => sum + (s.triggers?.length || 0), 0);
-          document.getElementById('stat-flows').textContent = currentExportData.dynamicFlows?.length || 0;
+          const summary = currentExportData.summary || {};
+          document.getElementById('stat-categories').textContent = summary.categoriesCount ?? currentExportData.categories?.length ?? 0;
+          document.getElementById('stat-scenarios').textContent = summary.scenariosCount ?? currentExportData.scenarios?.length ?? 0;
+          document.getElementById('stat-triggers').textContent = summary.totalTriggers ?? (currentExportData.scenarios || []).reduce((sum, s) => sum + (s.triggers?.length || 0), 0);
+          document.getElementById('stat-flows').textContent = summary.dynamicFlowsCount ?? currentExportData.dynamicFlows?.length ?? 0;
+          
+          console.log('[EXPORT] Summary:', summary);
           
           // Show JSON
           document.getElementById('export-json-output').value = JSON.stringify(currentExportData, null, 2);
