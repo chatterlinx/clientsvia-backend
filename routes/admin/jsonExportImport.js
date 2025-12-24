@@ -46,82 +46,232 @@ const EXPORT_SCHEMA_VERSION = '1.0.0';
 router.use(authenticateJWT);
 
 // ============================================================================
-// HELPER: Build scenario export object
+// HELPER: Build scenario export object - FULL SCHEMA V22
 // ============================================================================
-function buildScenarioExport(scenario, categoryId, categoryName) {
+function buildScenarioExport(scenario, categoryId, categoryName, templateId) {
     return {
-        // Identity
-        scenarioId: scenario.id || scenario._id?.toString(),
+        // ═══════════════════════════════════════════════════════════════════
+        // EXPORT METADATA
+        // ═══════════════════════════════════════════════════════════════════
+        _exportedAt: new Date().toISOString(),
+        _schemaVersion: 'V22',
+        _originalScenarioId: scenario.scenarioId || scenario.id || scenario._id?.toString(),
+        _categoryId: categoryId,
+        _templateId: templateId,
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // IDENTITY & LIFECYCLE
+        // ═══════════════════════════════════════════════════════════════════
+        scenarioId: scenario.scenarioId || scenario.id || scenario._id?.toString(),
         name: scenario.name,
         version: scenario.version || 1,
         status: scenario.status || 'draft',
+        isActive: scenario.isActive !== false,
         
-        // Category reference
-        categoryId: categoryId,
-        categoryName: categoryName,
+        // ═══════════════════════════════════════════════════════════════════
+        // CLASSIFICATION
+        // ═══════════════════════════════════════════════════════════════════
+        scenarioType: scenario.scenarioType || '',
+        priority: scenario.priority ?? 50,
+        behaviorId: scenario.behaviorId || scenario.behavior || '',
         
-        // Triggers (THE BRAIN)
+        // ═══════════════════════════════════════════════════════════════════
+        // CHANNEL & LANGUAGE
+        // ═══════════════════════════════════════════════════════════════════
+        channel: scenario.channel || 'any',
+        language: scenario.language || 'auto',
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // TRIGGERS (THE MATCHING BRAIN)
+        // ═══════════════════════════════════════════════════════════════════
         triggers: scenario.triggers || [],
         negativeTriggers: scenario.negativeTriggers || [],
         regexTriggers: scenario.regexTriggers || [],
+        keywords: scenario.keywords || [],
+        negativeKeywords: scenario.negativeKeywords || [],
         
-        // Matching config
+        // ═══════════════════════════════════════════════════════════════════
+        // MATCHING CONFIDENCE
+        // ═══════════════════════════════════════════════════════════════════
         minConfidence: scenario.minConfidence ?? 0.7,
-        priority: scenario.priority ?? 50,
+        contextWeight: scenario.contextWeight ?? 0.8,
         
-        // Channel/Language
-        channel: scenario.channel || 'all',
-        language: scenario.language || 'en',
-        
-        // Replies (NEED 7-10 each for variety)
+        // ═══════════════════════════════════════════════════════════════════
+        // REPLIES (NEED 7-10 FOR VARIETY)
+        // ═══════════════════════════════════════════════════════════════════
         quickReplies: scenario.quickReplies || scenario.responses || [],
         fullReplies: scenario.fullReplies || [],
         
-        // Reply strategy
-        replySelectionStrategy: scenario.replySelectionStrategy || 'random',
+        // ═══════════════════════════════════════════════════════════════════
+        // REPLY STRATEGY & FLOW
+        // ═══════════════════════════════════════════════════════════════════
+        replySelection: scenario.replySelection || 'random',
         replyStrategy: scenario.replyStrategy || 'AUTO',
-        followUpFunnel: scenario.followUpFunnel || null,
+        replyPolicy: scenario.replyPolicy || 'ROTATE_PER_CALLER',
+        followUpFunnel: scenario.followUpFunnel || [],
+        followUpMode: scenario.followUpMode || 'NONE',
+        followUpQuestionText: scenario.followUpQuestionText || '',
+        followUpPrompts: scenario.followUpPrompts || [],
         
-        // Type/Behavior
-        scenarioType: scenario.scenarioType || 'general',
-        behavior: scenario.behavior || null,
+        // ═══════════════════════════════════════════════════════════════════
+        // TRANSFER & HANDOFF
+        // ═══════════════════════════════════════════════════════════════════
+        transferTarget: scenario.transferTarget || '',
+        handoffPolicy: scenario.handoffPolicy || 'low_confidence',
         
-        // Entities/Variables
-        entities: scenario.entities || [],
-        variables: scenario.variables || [],
+        // ═══════════════════════════════════════════════════════════════════
+        // WIRING (ACTION ON MATCH)
+        // ═══════════════════════════════════════════════════════════════════
+        actionType: scenario.actionType || 'REPLY_ONLY',
+        flowId: scenario.flowId?.toString() || '',
+        bookingIntent: scenario.bookingIntent || false,
+        requiredSlots: scenario.requiredSlots || [],
+        stopRouting: scenario.stopRouting || false,
         
-        // Inheritance
-        inheritedConfig: {
-            synonymsInherited: scenario.inheritedConfig?.synonymsInherited ?? true,
-            fillersInherited: scenario.inheritedConfig?.fillersInherited ?? true,
-            templateSource: scenario.inheritedConfig?.templateSource || null
+        // ═══════════════════════════════════════════════════════════════════
+        // ACTION HOOKS & ESCALATION
+        // ═══════════════════════════════════════════════════════════════════
+        actionHooks: scenario.actionHooks || [],
+        escalationFlags: scenario.escalationFlags || [],
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // TIMING & SILENCE HANDLING
+        // ═══════════════════════════════════════════════════════════════════
+        cooldown: scenario.cooldown || scenario.cooldownSeconds || 0,
+        timedFollowUp: scenario.timedFollowUp || {
+            enabled: false,
+            delay: 30,
+            extension: 15,
+            messages: []
+        },
+        silencePolicy: scenario.silencePolicy || {
+            maxConsecutiveSilence: 2,
+            finalWarning: ''
         },
         
-        // Metadata
-        enabled: scenario.enabled !== false,
+        // ═══════════════════════════════════════════════════════════════════
+        // TTS OVERRIDES (VOICE SETTINGS)
+        // ═══════════════════════════════════════════════════════════════════
+        ttsOverride: scenario.ttsOverride || {
+            pitch: '',
+            rate: '',
+            volume: ''
+        },
+        voiceSettings: scenario.voiceSettings || {},
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // ENTITY CAPTURE & VALIDATION
+        // ═══════════════════════════════════════════════════════════════════
+        entityCapture: scenario.entityCapture || [],
+        entityValidation: scenario.entityValidation || {},
+        contextFields: scenario.contextFields || [],
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // PRECONDITIONS & EFFECTS (STATE MACHINE)
+        // ═══════════════════════════════════════════════════════════════════
+        preconditions: scenario.preconditions || {},
+        effects: scenario.effects || {},
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // SCOPE LOCK (GLOBAL vs COMPANY)
+        // ═══════════════════════════════════════════════════════════════════
+        scope: scenario.scope || 'GLOBAL',
+        ownerCompanyId: scenario.ownerCompanyId?.toString() || null,
+        lockMode: scenario.lockMode || 'HARD',
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // METADATA & AUDIT
+        // ═══════════════════════════════════════════════════════════════════
+        tags: scenario.tags || [],
+        notes: scenario.notes || '',
         createdAt: scenario.createdAt,
-        updatedAt: scenario.updatedAt
+        updatedAt: scenario.updatedAt,
+        createdBy: scenario.createdBy || null,
+        updatedBy: scenario.updatedBy || null,
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // QUALITY STATS (COMPUTED)
+        // ═══════════════════════════════════════════════════════════════════
+        _stats: {
+            triggerCount: (scenario.triggers || []).length,
+            negativeTriggerCount: (scenario.negativeTriggers || []).length,
+            keywordCount: (scenario.keywords || []).length,
+            quickReplyCount: (scenario.quickReplies || scenario.responses || []).length,
+            fullReplyCount: (scenario.fullReplies || []).length,
+            hasFollowUp: (scenario.followUpMode && scenario.followUpMode !== 'NONE'),
+            hasTransfer: !!(scenario.transferTarget),
+            hasActionHooks: (scenario.actionHooks || []).length > 0,
+            hasTimedFollowUp: !!(scenario.timedFollowUp?.enabled)
+        },
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // CATEGORY REFERENCE
+        // ═══════════════════════════════════════════════════════════════════
+        categoryId: categoryId,
+        categoryName: categoryName
     };
 }
 
 // ============================================================================
-// HELPER: Build category export object
+// HELPER: Build category export object - FULL SCHEMA V22
 // ============================================================================
 function buildCategoryExport(category, templateId, templateName) {
+    const categoryId = category.id || category._id?.toString();
     const scenarios = (category.scenarios || []).map(s => 
-        buildScenarioExport(s, category.id || category._id?.toString(), category.name)
+        buildScenarioExport(s, categoryId, category.name, templateId)
     );
     
+    // Count triggers across all scenarios
+    const totalTriggers = scenarios.reduce((sum, s) => sum + (s.triggers?.length || 0), 0);
+    
     return {
-        categoryId: category.id || category._id?.toString(),
+        // ═══════════════════════════════════════════════════════════════════
+        // IDENTITY
+        // ═══════════════════════════════════════════════════════════════════
+        categoryId: categoryId,
         name: category.name,
+        icon: category.icon || '',
         description: category.description || '',
+        behavior: category.behavior || '',
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // TEMPLATE REFERENCE
+        // ═══════════════════════════════════════════════════════════════════
         templateId: templateId,
         templateName: templateName,
-        scenarioCount: scenarios.length,
-        scenarios: scenarios,
-        enabled: category.enabled !== false,
-        priority: category.priority ?? 50
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // STATUS
+        // ═══════════════════════════════════════════════════════════════════
+        isActive: category.isActive !== false,
+        priority: category.priority ?? 50,
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // SCOPE LOCK
+        // ═══════════════════════════════════════════════════════════════════
+        scope: category.scope || 'GLOBAL',
+        ownerCompanyId: category.ownerCompanyId?.toString() || null,
+        lockMode: category.lockMode || 'HARD',
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // CATEGORY-LEVEL NLP EXTENSIONS
+        // ═══════════════════════════════════════════════════════════════════
+        additionalFillerWords: category.additionalFillerWords || [],
+        synonymMap: category.synonymMap || {},
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // STATS
+        // ═══════════════════════════════════════════════════════════════════
+        _stats: {
+            scenarioCount: scenarios.length,
+            totalTriggers: totalTriggers,
+            activeScenarios: scenarios.filter(s => s.isActive).length
+        },
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // SCENARIOS (FULL EXPORT)
+        // ═══════════════════════════════════════════════════════════════════
+        scenarios: scenarios
     };
 }
 
