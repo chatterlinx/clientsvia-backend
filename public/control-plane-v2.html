@@ -3162,17 +3162,31 @@
           throw new Error(dryRunData.error || 'Dry run failed');
         }
         
-        // Show preview count
-        const willUpdate = dryRunData.summary?.scenariosWithChanges || 0;
-        const unknownFixed = dryRunData.scenarioUpdates?.filter(s => s.updates?.scenarioType?.from === 'UNKNOWN').length || 0;
+        // Show preview count - backend uses 'toUpdate' not 'scenariosWithChanges'
+        const willUpdate = dryRunData.summary?.toUpdate || 0;
+        const unknownCount = dryRunData.byType?.UNKNOWN || 0;
+        const totalScenarios = dryRunData.summary?.totalScenarios || 0;
+        
+        console.log('[GOLDEN AUTOFILL] Dry run result:', {
+          willUpdate,
+          unknownCount,
+          totalScenarios,
+          byType: dryRunData.byType,
+          summary: dryRunData.summary
+        });
         
         if (willUpdate === 0) {
-          showSnapshotToast('No Changes', 'All scenarios already classified', 'info');
+          showSnapshotToast('No Changes', `All ${totalScenarios} scenarios already compliant`, 'info');
           return;
         }
         
-        // Confirm apply
-        if (!confirm(`Found ${willUpdate} scenarios to update (${unknownFixed} UNKNOWN will be classified).\\n\\nApply changes now?`)) {
+        // Confirm apply - show what types were detected
+        const typeBreakdown = Object.entries(dryRunData.byType || {})
+          .filter(([k, v]) => v > 0)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(', ');
+        
+        if (!confirm(`Found ${willUpdate} scenarios to update.\\n\\nType breakdown: ${typeBreakdown}\\n\\nApply changes now?`)) {
           return;
         }
         
@@ -3192,7 +3206,14 @@
           throw new Error(applyData.error || 'Apply failed');
         }
         
-        showSnapshotToast('Success!', `Updated ${applyData.summary?.scenariosUpdated || 0} scenarios`, 'success');
+        // Backend uses 'applied' array and 'summary.applied' count
+        const appliedCount = applyData.summary?.applied || applyData.applied?.length || 0;
+        const typeBreakdown = Object.entries(applyData.byType || {})
+          .filter(([k, v]) => v > 0 && k !== 'UNKNOWN')
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(', ');
+        
+        showSnapshotToast('Success!', `Updated ${appliedCount} scenarios. Types: ${typeBreakdown || 'classified'}`, 'success');
         
         // Refresh Runtime Truth to see changes
         await refreshSystemSnapshot();
