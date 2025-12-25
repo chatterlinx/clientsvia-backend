@@ -3208,12 +3208,12 @@
         
         // Backend uses 'applied' array and 'summary.applied' count
         const appliedCount = applyData.summary?.applied || applyData.applied?.length || 0;
-        const typeBreakdown = Object.entries(applyData.byType || {})
+        const appliedTypeBreakdown = Object.entries(applyData.byType || {})
           .filter(([k, v]) => v > 0 && k !== 'UNKNOWN')
           .map(([k, v]) => `${k}: ${v}`)
           .join(', ');
         
-        showSnapshotToast('Success!', `Updated ${appliedCount} scenarios. Types: ${typeBreakdown || 'classified'}`, 'success');
+        showSnapshotToast('Success!', `Updated ${appliedCount} scenarios. Types: ${appliedTypeBreakdown || 'classified'}`, 'success');
         
         // Refresh Runtime Truth to see changes
         await refreshSystemSnapshot();
