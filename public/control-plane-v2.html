@@ -3119,22 +3119,26 @@
     async function runGoldenAutofill() {
       // Find the active template ID for this company
       if (!qaSelectedTemplateId && currentCompanyId) {
-        // Try to detect active template
+        // Try to detect active template - API returns array directly
         try {
           const response = await fetch(`/api/company/${currentCompanyId}/configuration/templates`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
           });
-          const data = await response.json();
-          if (data.success && data.activeTemplates?.length > 0) {
-            qaSelectedTemplateId = data.activeTemplates[0].templateId;
+          const templates = await response.json();
+          console.log('[GOLDEN AUTOFILL] Templates detected:', templates);
+          
+          // API returns array directly, each item has templateId
+          if (Array.isArray(templates) && templates.length > 0) {
+            qaSelectedTemplateId = templates[0].templateId;
+            console.log('[GOLDEN AUTOFILL] Using template:', qaSelectedTemplateId);
           }
         } catch (e) {
-          console.log('Could not auto-detect template');
+          console.log('[GOLDEN AUTOFILL] Could not auto-detect template:', e);
         }
       }
       
       if (!qaSelectedTemplateId) {
-        showSnapshotToast('No Template', 'Go to Data & Config tab to see active template', 'warning');
+        showSnapshotToast('No Template', 'Go to QA Dashboard tab first to load template', 'warning');
         return;
       }
       
