@@ -782,6 +782,64 @@ class AITestConsole {
     }
     
     /**
+     * Copy FULL diagnostic JSON for troubleshooting (includes everything)
+     */
+    copyFullDiagnostic() {
+        const lastEntry = this.debugLog[this.debugLog.length - 1];
+        const diagnostic = {
+            _timestamp: new Date().toISOString(),
+            _purpose: 'FULL DIAGNOSTIC FOR TROUBLESHOOTING',
+            
+            session: {
+                sessionId: this.testSessionId,
+                companyId: this.companyId,
+                totalTurns: this.debugLog.length,
+                knownSlots: this.knownSlots
+            },
+            
+            liveInspector: {
+                mode: lastEntry?.debug?.v22BlackBox?.mode || lastEntry?.mode || 'UNKNOWN',
+                activeFlow: lastEntry?.dynamicFlow || null,
+                bookingConfig: lastEntry?.bookingConfig || lastEntry?.debug?.bookingConfig || null,
+                slotDiagnostics: lastEntry?.slotDiagnostics || lastEntry?.debug?.slotDiagnostics || null
+            },
+            
+            lastTurn: lastEntry ? {
+                turn: lastEntry.turn,
+                userMessage: lastEntry.userMessage,
+                aiResponse: lastEntry.aiResponse,
+                source: lastEntry.source,
+                mode: lastEntry.mode,
+                latencyMs: lastEntry.latencyMs,
+                tokens: lastEntry.tokens
+            } : null,
+            
+            // Full debug from last turn (all the details)
+            fullDebug: lastEntry?.debug || this.lastDebug || null,
+            
+            // All turns summary
+            allTurns: this.debugLog.map(e => ({
+                turn: e.turn,
+                user: e.userMessage?.substring(0, 50),
+                ai: e.aiResponse?.substring(0, 50),
+                source: e.source,
+                mode: e.mode
+            }))
+        };
+        
+        const json = JSON.stringify(diagnostic, null, 2);
+        navigator.clipboard.writeText(json).then(() => {
+            alert('✅ Full diagnostic copied to clipboard!\n\nPaste it to share for troubleshooting.');
+        }).catch(err => {
+            console.error('Copy failed:', err);
+            // Fallback: show in console
+            console.log('=== FULL DIAGNOSTIC ===');
+            console.log(json);
+            alert('Could not copy to clipboard. Check browser console for the diagnostic.');
+        });
+    }
+    
+    /**
      * Copy full debug log to clipboard for sharing
      */
     copyDebug() {
@@ -1260,8 +1318,11 @@ ${separator}`;
                 <!-- Running Debug Log -->
                 <div style="background: #0d1117; border: 1px solid #f0883e; border-radius: 8px; overflow: hidden;">
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #161b22; border-bottom: 1px solid #30363d;">
-                        <h4 style="margin: 0; color: #f0883e; font-size: 12px;">🔧 DEBUG LOG (All Turns)</h4>
-                        <button onclick="window.aiTestConsole.copyDebug()" style="background: #238636; border: none; color: white; padding: 4px 10px; border-radius: 4px; font-size: 10px; cursor: pointer; font-weight: bold;">📋 Copy All</button>
+                        <h4 style="margin: 0; color: #f0883e; font-size: 12px;">🔧 DEBUG LOG</h4>
+                        <div style="display: flex; gap: 6px;">
+                            <button onclick="window.aiTestConsole.copyFullDiagnostic()" style="background: #8b5cf6; border: none; color: white; padding: 4px 10px; border-radius: 4px; font-size: 10px; cursor: pointer; font-weight: bold;">🔍 Full Diagnostic</button>
+                            <button onclick="window.aiTestConsole.copyDebug()" style="background: #238636; border: none; color: white; padding: 4px 10px; border-radius: 4px; font-size: 10px; cursor: pointer; font-weight: bold;">📋 Copy Log</button>
+                        </div>
                     </div>
                     <div style="max-height: 250px; overflow-y: auto; padding: 8px 12px; font-family: monospace;">
                         ${debugLogHtml}
