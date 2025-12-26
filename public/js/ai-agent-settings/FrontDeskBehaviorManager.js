@@ -985,14 +985,21 @@ Sean → Shawn, Shaun"
                     
                     <!-- Auto-Scan Preview (only shown for auto_scan) -->
                     <div id="fdb-auto-scan-section" style="margin-bottom: 12px; display: ${this.config.nameSpellingVariants?.source === 'auto_scan' ? 'block' : 'none'};">
-                        <label style="display: block; font-size: 11px; color: #3fb950; margin-bottom: 4px;">
-                            🔍 Auto-detected variant pairs from your ${(this.config.commonFirstNames || []).length} names:
-                        </label>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <label style="font-size: 11px; color: #3fb950;">
+                                🔍 Variant pairs from your ${(this.config.commonFirstNames || []).length} names:
+                            </label>
+                            <button onclick="window.frontDeskManager.computeAutoVariants()" 
+                                id="fdb-compute-variants-btn"
+                                style="padding: 6px 12px; background: #238636; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">
+                                🔄 Scan Names
+                            </button>
+                        </div>
                         <div id="fdb-auto-scan-preview" style="padding: 12px; background: #0d1117; border: 1px solid #238636; border-radius: 6px; max-height: 200px; overflow-y: auto;">
-                            ${this.renderAutoScanPreview()}
+                            ${this.renderAutoScanPreviewStatic()}
                         </div>
                         <p style="color: #6e7681; font-size: 0.7rem; margin: 4px 0 0 0;">
-                            These pairs were automatically found by scanning your Common First Names list for 1-character differences.
+                            Click "Scan Names" to detect variant pairs. Only runs when you click (not on every tab switch).
                         </p>
                     </div>
                     
@@ -1332,11 +1339,12 @@ Sean → Shawn, Shaun`;
         }
         if (autoScanSection) {
             autoScanSection.style.display = source === 'auto_scan' ? 'block' : 'none';
-            // Refresh preview when switching to auto-scan
+            // PERF FIX: Don't auto-compute! Just show cached or placeholder
+            // User must click "Scan Names" button to compute
             if (source === 'auto_scan') {
                 const previewDiv = document.getElementById('fdb-auto-scan-preview');
                 if (previewDiv) {
-                    previewDiv.innerHTML = this.renderAutoScanPreview();
+                    previewDiv.innerHTML = this.renderAutoScanPreviewStatic();
                 }
             }
         }
@@ -1467,32 +1475,83 @@ Sean → Shawn, Shaun`;
         console.log('[FRONT DESK] 🗑️ Auto-variants cache cleared');
     }
     
-    renderAutoScanPreview() {
-        // PERFORMANCE FIX: Don't compute if section is hidden
-        const isAutoScanMode = this.config.nameSpellingVariants?.source === 'auto_scan';
-        if (!isAutoScanMode) {
-            // Return placeholder - will be computed when user switches to auto_scan
-            return '<p style="color: #8b949e; margin: 0; font-style: italic;">Switch to auto-scan mode to see detected variants...</p>';
+    // STATIC preview - only shows cached results, NEVER computes
+    renderAutoScanPreviewStatic() {
+        // Check if we have cached results
+        if (this._autoVariantsCache && this._autoVariantsCache.length > 0) {
+            const variants = this._autoVariantsCache;
+            return `
+                <p style="color: #3fb950; margin: 0 0 8px 0; font-weight: 600;">Found ${variants.length} variant pair(s):</p>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    ${variants.map(v => `
+                        <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #21262d; border: 1px solid #238636; border-radius: 16px; font-size: 0.8rem; color: #c9d1d9;">
+                            <strong>${v.name1}</strong> <span style="color: #8b949e;">(${v.letter1})</span>
+                            ↔
+                            <strong>${v.name2}</strong> <span style="color: #8b949e;">(${v.letter2})</span>
+                        </span>
+                    `).join('')}
+                </div>
+            `;
         }
         
-        const variants = this.findAutoVariants();
-        
-        if (variants.length === 0) {
-            return '<p style="color: #8b949e; margin: 0; font-style: italic;">No 1-character variant pairs found in your name list. Add more names below, or use the curated list.</p>';
-        }
-        
+        // No cached results - show placeholder with instruction
+        const nameCount = (this.config.commonFirstNames || []).length;
         return `
-            <p style="color: #3fb950; margin: 0 0 8px 0; font-weight: 600;">Found ${variants.length} variant pair(s):</p>
-            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                ${variants.map(v => `
-                    <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #21262d; border: 1px solid #238636; border-radius: 16px; font-size: 0.8rem; color: #c9d1d9;">
-                        <strong>${v.name1}</strong> <span style="color: #8b949e;">(${v.letter1})</span>
-                        ↔
-                        <strong>${v.name2}</strong> <span style="color: #8b949e;">(${v.letter2})</span>
-                    </span>
-                `).join('')}
-            </div>
+            <p style="color: #8b949e; margin: 0; font-style: italic;">
+                Click "Scan Names" to detect spelling variants from your ${nameCount} names.
+                <br><span style="font-size: 0.7rem; color: #6e7681;">This only runs when you click, not automatically.</span>
+            </p>
         `;
+    }
+    
+    // Manual button click - compute variants with progress
+    computeAutoVariants() {
+        const btn = document.getElementById('fdb-compute-variants-btn');
+        const preview = document.getElementById('fdb-auto-scan-preview');
+        
+        if (!btn || !preview) return;
+        
+        // Show loading state
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Scanning...';
+        preview.innerHTML = '<p style="color: #f0883e; margin: 0;">Computing variants... This may take a moment for large name lists.</p>';
+        
+        // Use setTimeout to let UI update before heavy computation
+        setTimeout(() => {
+            const startTime = performance.now();
+            const variants = this.findAutoVariants(true); // force recalculate
+            const elapsed = performance.now() - startTime;
+            
+            console.log(`[FRONT DESK] ✅ Auto-variants computed: ${variants.length} pairs in ${elapsed.toFixed(1)}ms`);
+            
+            // Update preview with results
+            if (variants.length === 0) {
+                preview.innerHTML = '<p style="color: #8b949e; margin: 0; font-style: italic;">No 1-character variant pairs found. Try adding more names or use the curated list.</p>';
+            } else {
+                preview.innerHTML = `
+                    <p style="color: #3fb950; margin: 0 0 8px 0; font-weight: 600;">Found ${variants.length} variant pair(s) in ${elapsed.toFixed(0)}ms:</p>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        ${variants.map(v => `
+                            <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #21262d; border: 1px solid #238636; border-radius: 16px; font-size: 0.8rem; color: #c9d1d9;">
+                                <strong>${v.name1}</strong> <span style="color: #8b949e;">(${v.letter1})</span>
+                                ↔
+                                <strong>${v.name2}</strong> <span style="color: #8b949e;">(${v.letter2})</span>
+                            </span>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            // Reset button
+            btn.disabled = false;
+            btn.innerHTML = '🔄 Scan Names';
+        }, 50); // Small delay for UI to update
+    }
+    
+    // DEPRECATED: Old render function - kept for compatibility but should not be called during render
+    renderAutoScanPreview() {
+        console.warn('[FRONT DESK] ⚠️ renderAutoScanPreview() called - this should not happen during tab render!');
+        return this.renderAutoScanPreviewStatic();
     }
     
     addCommonFirstName() {
