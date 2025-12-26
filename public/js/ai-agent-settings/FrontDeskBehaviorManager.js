@@ -485,8 +485,13 @@ class FrontDeskBehaviorManager {
 
     // Save config to API
     async save() {
+        const saveStartTime = performance.now();
+        console.log('[FRONT DESK BEHAVIOR] 💾 SAVE CHECKPOINT 1: Starting save operation...');
+        
         try {
-            console.log('[FRONT DESK BEHAVIOR] Saving config...');
+            // CHECKPOINT 2: Prepare payload
+            const prepareStart = performance.now();
+            
             // Log booking slots specifically to debug askMissingNamePart
             if (this.config.bookingSlots) {
                 const nameSlot = this.config.bookingSlots.find(s => s.id === 'name');
@@ -514,6 +519,11 @@ class FrontDeskBehaviorManager {
                 hasBookingOutcome: !!this.config.bookingOutcome
             });
             
+            const payloadSize = JSON.stringify(this.config).length;
+            console.log(`[FRONT DESK BEHAVIOR] 💾 SAVE CHECKPOINT 2: Payload prepared in ${(performance.now() - prepareStart).toFixed(1)}ms (${(payloadSize / 1024).toFixed(1)}KB)`);
+            
+            // CHECKPOINT 3: Make API call
+            const apiStart = performance.now();
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
             
             const response = await fetch(`/api/admin/front-desk-behavior/${this.companyId}`, {
@@ -525,13 +535,36 @@ class FrontDeskBehaviorManager {
                 body: JSON.stringify(this.config)
             });
             
-            if (!response.ok) throw new Error('Failed to save');
+            const apiTime = performance.now() - apiStart;
+            console.log(`[FRONT DESK BEHAVIOR] 💾 SAVE CHECKPOINT 3: API call completed in ${apiTime.toFixed(1)}ms`);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`[FRONT DESK BEHAVIOR] ❌ SAVE CHECKPOINT 3 FAILED: HTTP ${response.status}`, errorText);
+                throw new Error(`Failed to save (HTTP ${response.status}): ${errorText}`);
+            }
+            
+            // CHECKPOINT 4: Process response
+            const processStart = performance.now();
+            const responseData = await response.json();
+            console.log(`[FRONT DESK BEHAVIOR] 💾 SAVE CHECKPOINT 4: Response processed in ${(performance.now() - processStart).toFixed(1)}ms`);
             
             this.isDirty = false;
+            
+            // FINAL CHECKPOINT
+            const totalTime = performance.now() - saveStartTime;
+            if (totalTime > 500) {
+                console.warn(`[FRONT DESK BEHAVIOR] ⚠️ SLOW SAVE: Total time ${totalTime.toFixed(1)}ms (>500ms threshold)`);
+                console.warn(`[FRONT DESK BEHAVIOR] ⚠️ Breakdown: API=${apiTime.toFixed(1)}ms, Payload=${(payloadSize/1024).toFixed(1)}KB`);
+            } else {
+                console.log(`[FRONT DESK BEHAVIOR] ✅ SAVE COMPLETE: Total time ${totalTime.toFixed(1)}ms`);
+            }
+            
             this.showNotification('✅ Front Desk Behavior saved!', 'success');
             return true;
         } catch (error) {
-            console.error('[FRONT DESK BEHAVIOR] Save error:', error);
+            console.error('[FRONT DESK BEHAVIOR] ❌ SAVE ERROR:', error);
+            console.error('[FRONT DESK BEHAVIOR] ❌ Save failed after', (performance.now() - saveStartTime).toFixed(1), 'ms');
             this.showNotification('❌ Save failed: ' + error.message, 'error');
             throw error;
         }
@@ -5934,13 +5967,21 @@ Sean → Shawn, Shaun`;
     }
 
     switchTab(tabId, container) {
+        const startTime = performance.now();
+        console.log(`[FRONT DESK] 🔄 CHECKPOINT: switchTab START - tab: ${tabId}`);
+        
+        // CHECKPOINT 1: Update tab visual state
+        const tabUpdateStart = performance.now();
         container.querySelectorAll('.fdb-tab').forEach(tab => {
             const isActive = tab.dataset.tab === tabId;
             tab.style.background = isActive ? '#21262d' : 'transparent';
             tab.style.color = isActive ? '#58a6ff' : '#8b949e';
             tab.style.border = isActive ? '1px solid #30363d' : '1px solid transparent';
         });
+        console.log(`[FRONT DESK] ⏱️ CHECKPOINT 1: Tab styles updated in ${(performance.now() - tabUpdateStart).toFixed(1)}ms`);
 
+        // CHECKPOINT 2: Render tab content
+        const renderStart = performance.now();
         const content = container.querySelector('#fdb-tab-content');
         switch (tabId) {
             case 'personality': content.innerHTML = this.renderPersonalityTab(); break;
@@ -5962,8 +6003,53 @@ Sean → Shawn, Shaun`;
             case 'modes': content.innerHTML = this.renderModesTab(); break;
             case 'test': content.innerHTML = this.renderTestTab(); break;
         }
+        console.log(`[FRONT DESK] ⏱️ CHECKPOINT 2: Tab '${tabId}' rendered in ${(performance.now() - renderStart).toFixed(1)}ms`);
 
-        this.attachEventListeners(container.closest('.front-desk-behavior-panel')?.parentElement || container);
+        // CHECKPOINT 3: Attach event listeners (only to the new content, not entire container)
+        const listenersStart = performance.now();
+        this.attachTabSpecificListeners(tabId, content);
+        console.log(`[FRONT DESK] ⏱️ CHECKPOINT 3: Event listeners attached in ${(performance.now() - listenersStart).toFixed(1)}ms`);
+        
+        const totalTime = performance.now() - startTime;
+        if (totalTime > 100) {
+            console.warn(`[FRONT DESK] ⚠️ SLOW TAB SWITCH: ${tabId} took ${totalTime.toFixed(1)}ms (>100ms threshold)`);
+        } else {
+            console.log(`[FRONT DESK] ✅ CHECKPOINT COMPLETE: switchTab finished in ${totalTime.toFixed(1)}ms`);
+        }
+    }
+    
+    // NEW: Attach only tab-specific listeners instead of ALL listeners
+    attachTabSpecificListeners(tabId, content) {
+        // Only attach listeners for the current tab's content
+        switch (tabId) {
+            case 'booking':
+                // Booking slot drag handles, delete buttons, etc.
+                content.querySelectorAll('.booking-slot-delete')?.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const slotId = e.target.closest('[data-slot-id]')?.dataset.slotId;
+                        if (slotId) this.removeBookingSlot(slotId);
+                    });
+                });
+                break;
+            case 'frustration':
+            case 'escalation':
+            case 'forbidden':
+                // Trigger add/remove buttons
+                const type = tabId;
+                const addBtn = content.querySelector(`#fdb-add-${type}`);
+                const input = content.querySelector(`#fdb-new-${type}`);
+                if (addBtn && input) {
+                    addBtn.addEventListener('click', () => this.addTrigger(type, input.value, content));
+                    input.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') this.addTrigger(type, input.value, content);
+                    });
+                }
+                break;
+            case 'test':
+                content.querySelector('#fdb-test-btn')?.addEventListener('click', () => this.testPhrase(content));
+                break;
+            // Other tabs don't need special listeners or use delegated events
+        }
     }
 
     addTrigger(type, value, container) {
