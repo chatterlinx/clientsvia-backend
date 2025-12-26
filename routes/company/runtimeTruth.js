@@ -280,14 +280,17 @@ router.get('/', async (req, res) => {
             scope: flow.scope || 'COMPANY',
             editable: (flow.scope || 'COMPANY') === 'COMPANY',
             
-            // Entry conditions
-            triggers: (flow.triggers || []).map(t => ({
-                type: t.type || 'phrase',
-                phrases: (t.phrases || []).slice(0, 5),
-                phraseCount: (t.phrases || []).length,
-                matchMode: t.matchMode || 'contains',
-                minConfidence: t.minConfidence || 0.7
-            })),
+            // Entry conditions - phrases are in t.config.phrases per schema
+            triggers: (flow.triggers || []).map(t => {
+                const phrases = t.config?.phrases || t.phrases || [];
+                return {
+                    type: t.type || 'phrase',
+                    phrases: phrases.slice(0, 5),
+                    phraseCount: phrases.length,
+                    matchMode: t.config?.matchMode || t.matchMode || 'contains',
+                    minConfidence: t.config?.minConfidence || t.minConfidence || 0.7
+                };
+            }),
             
             // Actions
             actions: (flow.actions || []).map(a => ({
