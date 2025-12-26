@@ -2256,6 +2256,7 @@ async function processTurn({
         const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company);
         
         // 🔍 DIAGNOSTIC: Log booking config to debug NOT_CONFIGURED issue
+        const rawBookingSlots = company?.aiAgentSettings?.frontDeskBehavior?.bookingSlots || [];
         log('📋 BOOKING CONFIG DIAGNOSTIC', {
             source: bookingConfig.source,
             isConfigured: bookingConfig.isConfigured,
@@ -2263,7 +2264,19 @@ async function processTurn({
             slotIds: bookingConfig.slots?.map(s => s.slotId) || [],
             companyHasFrontDesk: !!company?.aiAgentSettings?.frontDeskBehavior,
             companyHasBookingSlots: !!company?.aiAgentSettings?.frontDeskBehavior?.bookingSlots,
-            rawBookingSlotsLength: company?.aiAgentSettings?.frontDeskBehavior?.bookingSlots?.length || 0
+            rawBookingSlotsLength: rawBookingSlots.length,
+            // 🔍 V42: Show what fields each raw slot has to debug normalization rejection
+            rawSlotSample: rawBookingSlots.slice(0, 3).map(s => ({
+                hasId: !!s?.id,
+                idValue: s?.id,
+                hasSlotId: !!s?.slotId,
+                slotIdValue: s?.slotId,
+                hasKey: !!s?.key,
+                keyValue: s?.key,
+                hasQuestion: !!s?.question,
+                questionPreview: s?.question?.substring?.(0, 30),
+                allKeys: s ? Object.keys(s) : []
+            }))
         });
         const nameSlotConfig = bookingConfig.slots.find(s => s.slotId === 'name' || s.id === 'name');
         const askMissingNamePart = nameSlotConfig?.askMissingNamePart === true;
