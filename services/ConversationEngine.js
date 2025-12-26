@@ -3176,20 +3176,83 @@ async function processTurn({
                     const nameToConfirm = currentSlots.partialName || nameMeta.first || currentSlots.name;
                     
                     if (nameToConfirm && !nameToConfirm.includes(' ')) {
-                        // Single name from discovery - need to confirm AND potentially ask for last name
-                        nameMeta.lastConfirmed = true; // Mark that we've asked for confirmation
+                        // ═══════════════════════════════════════════════════════════════════
+                        // V45: CHECK SPELLING VARIANT FIRST before confirming
+                        // If Mark/Marc variant exists, ask about spelling BEFORE asking last name
+                        // ═══════════════════════════════════════════════════════════════════
+                        const spellingConfigV45 = company.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants || {};
+                        const spellingEnabledV45 = spellingConfigV45.enabled === true;
+                        const shouldCheckSpellingV45 = spellingEnabledV45 && 
+                                                       !nameMeta.askedSpellingVariant && 
+                                                       (nameMeta.spellingAsksCount || 0) < (spellingConfigV45.maxAsksPerCall || 1);
                         
-                        // Use UI-configured confirmPrompt which should include "may I have your last name"
-                        // Example: "Got it, {value}. and may I have your last name?"
-                        const confirmText = confirmBackTemplate.replace('{value}', nameToConfirm);
-                        finalReply = confirmText;
-                        nextSlotId = 'name';
-                        
-                        log('📝 V36: Confirming discovery name + asking for last name', {
+                        log('📝 V45: Spelling variant check in discovery path', {
                             nameToConfirm,
-                            confirmBackTemplate,
-                            askFullName
+                            spellingEnabledV45,
+                            shouldCheckSpellingV45,
+                            askedSpellingVariant: nameMeta.askedSpellingVariant,
+                            hasPrecomputedMap: !!(spellingConfigV45.precomputedVariantMap),
+                            source: spellingConfigV45.source
                         });
+                        
+                        if (shouldCheckSpellingV45) {
+                            const commonFirstNamesV45 = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+                            const variantV45 = findSpellingVariant(nameToConfirm, spellingConfigV45, commonFirstNamesV45);
+                            
+                            log('📝 V45: Spelling variant result', {
+                                name: nameToConfirm,
+                                variantFound: !!(variantV45 && variantV45.hasVariant),
+                                variant: variantV45 ? { optionA: variantV45.optionA, optionB: variantV45.optionB } : null
+                            });
+                            
+                            if (variantV45 && variantV45.hasVariant) {
+                                // ASK SPELLING VARIANT FIRST - don't ask for last name yet
+                                nameMeta.askedSpellingVariant = true;
+                                nameMeta.spellingAsksCount = (nameMeta.spellingAsksCount || 0) + 1;
+                                nameMeta.pendingSpellingVariant = variantV45;
+                                
+                                const scriptV45 = spellingConfigV45.script || 'Just to confirm — {optionA} with a {letterA} or {optionB} with a {letterB}?';
+                                finalReply = scriptV45
+                                    .replace('{optionA}', variantV45.optionA)
+                                    .replace('{optionB}', variantV45.optionB)
+                                    .replace('{letterA}', variantV45.letterA)
+                                    .replace('{letterB}', variantV45.letterB);
+                                nextSlotId = 'name';
+                                // DON'T set lastConfirmed yet - we're asking about spelling first
+                                
+                                log('📝 V45 SPELLING VARIANT: Asking about variant (discovery path)', {
+                                    name: nameToConfirm,
+                                    optionA: variantV45.optionA,
+                                    optionB: variantV45.optionB,
+                                    script: finalReply
+                                });
+                            } else {
+                                // No variant found - proceed with normal confirm
+                                nameMeta.lastConfirmed = true;
+                                nameMeta.askedSpellingVariant = true; // Mark as checked
+                                const confirmText = confirmBackTemplate.replace('{value}', nameToConfirm);
+                                finalReply = confirmText;
+                                nextSlotId = 'name';
+                                
+                                log('📝 V45: No spelling variant, confirming discovery name + asking for last name', {
+                                    nameToConfirm,
+                                    confirmBackTemplate,
+                                    askFullName
+                                });
+                            }
+                        } else {
+                            // Spelling variants disabled or already checked - proceed with normal confirm
+                            nameMeta.lastConfirmed = true;
+                            const confirmText = confirmBackTemplate.replace('{value}', nameToConfirm);
+                            finalReply = confirmText;
+                            nextSlotId = 'name';
+                            
+                            log('📝 V36: Confirming discovery name + asking for last name', {
+                                nameToConfirm,
+                                confirmBackTemplate,
+                                askFullName
+                            });
+                        }
                     }
                 }
                 // If we have discovery name but confirmBack is OFF, still ask for last name if needed
