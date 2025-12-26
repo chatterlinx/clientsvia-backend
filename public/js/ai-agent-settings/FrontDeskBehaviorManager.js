@@ -2517,11 +2517,14 @@ Sean → Shawn, Shaun`;
             btn.innerHTML = '⏳ Loading...';
             btn.disabled = true;
             
+            // Get token from correct storage key (same as other API calls)
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+            
             const response = await fetch(`/api/company/${this.companyId}/seed-golden/booking-slots`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    'Authorization': `Bearer ${token}`
                 }
             });
             
