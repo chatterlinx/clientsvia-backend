@@ -545,7 +545,9 @@ class AITestConsole {
                     slotDiagnostics: debug.slotDiagnostics,  // Slot extraction details
                     llmBrain: debug.llmBrain,  // 🧠 LLM decision details
                     dynamicFlow: debug.dynamicFlow,  // 🧠 V41: Dynamic Flow Engine trace
-                    timestamp: new Date().toISOString()
+                    timestamp: new Date().toISOString(),
+                    // 🎯 LIVE SESSION INSPECTOR: Store FULL debug for inspector access
+                    debug: debug  // Full debug object for Live Session Inspector
                 });
                 
                 console.log('[AI Test] Response received:', {
@@ -945,10 +947,100 @@ ${separator}`;
 
     /**
      * Update the analysis panel with current session data
+     * NOW INCLUDES: Live Session Inspector (slots, mode, flow, trace)
      */
     updateAnalysis(metadata = null) {
         const content = document.getElementById('report-content');
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // LIVE SESSION INSPECTOR - The "call slot boxes" view
+        // ═══════════════════════════════════════════════════════════════════════
+        const lastDebugEntry = this.debugLog.length > 0 ? this.debugLog[this.debugLog.length - 1] : null;
+        const lastDebug = lastDebugEntry?.debug || {};
+        
+        // Extract key runtime state
+        const currentMode = lastDebug?.v22BlackBox?.mode || lastDebug?.v22?.mode || lastDebugEntry?.mode || 'DISCOVERY';
+        const activeFlow = lastDebug?.dynamicFlow || null;
+        const stageInfo = lastDebug?.stageInfo || {};
+        const slotDiagnostics = lastDebug?.slotDiagnostics || {};
+        const bookingConfig = lastDebugEntry?.bookingConfig || lastDebug?.bookingConfig || {};
+        
+        // Get configured booking slots (from config) vs collected values
+        const configuredSlots = (bookingConfig?.slots || []);
+        const collectedSlots = slotDiagnostics?.slotsAfterMerge || this.knownSlots || {};
+        
+        // Build slot boxes UI - shows each configured slot with fill status
+        const slotBoxesHtml = configuredSlots.length > 0 
+            ? configuredSlots.map(slot => {
+                const slotId = slot.id || slot.slotId;
+                const value = collectedSlots[slotId];
+                const isFilled = value !== undefined && value !== null && value !== '';
+                const isRequired = slot.required !== false;
+                
+                return `
+                    <div style="background: ${isFilled ? '#0d2818' : '#1a1a1a'}; border: 1px solid ${isFilled ? '#238636' : isRequired ? '#f0883e' : '#30363d'}; border-radius: 6px; padding: 8px; min-width: 100px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span style="color: ${isFilled ? '#3fb950' : '#8b949e'}; font-size: 10px; font-weight: 600; text-transform: uppercase;">${slotId}</span>
+                            <span style="font-size: 12px;">${isFilled ? '✅' : isRequired ? '⏳' : '○'}</span>
+                        </div>
+                        <div style="color: ${isFilled ? '#e6edf3' : '#6e7681'}; font-size: 12px; min-height: 18px; word-break: break-word;">
+                            ${isFilled ? value : '—'}
+                        </div>
+                        ${slot.confirmBack ? `<div style="color: #58a6ff; font-size: 9px; margin-top: 2px;">🔁 Confirm</div>` : ''}
+                    </div>
+                `;
+            }).join('')
+            : `
+                <div style="text-align: center; color: #6e7681; padding: 12px; grid-column: 1 / -1;">
+                    <div style="font-size: 24px; margin-bottom: 4px;">📋</div>
+                    <div>No booking slots configured</div>
+                    <div style="font-size: 10px; color: #8b949e; margin-top: 4px;">Go to Front Desk → Booking Prompts to set up</div>
+                </div>
+            `;
+        
+        // Build active flow status
+        const flowStatus = activeFlow && (activeFlow.flowsActivated?.length > 0 || activeFlow.triggersFired?.length > 0) 
+            ? `
+                <div style="background: #1a2d1a; border: 1px solid #238636; border-radius: 6px; padding: 8px;">
+                    <div style="color: #3fb950; font-size: 10px; font-weight: 600; margin-bottom: 4px;">🌊 ACTIVE FLOW</div>
+                    ${activeFlow.flowsActivated?.length > 0 
+                        ? activeFlow.flowsActivated.map(f => `
+                            <div style="color: #e6edf3; font-size: 11px;">• ${f.flowKey || f.key || f} ${f.step ? `(step: ${f.step})` : ''}</div>
+                        `).join('')
+                        : '<div style="color: #8b949e; font-size: 11px;">No flow currently active</div>'
+                    }
+                    ${activeFlow.triggersFired?.length > 0 
+                        ? `<div style="color: #f0883e; font-size: 10px; margin-top: 4px;">Triggers fired: ${activeFlow.triggersFired.map(t => t.key || t).join(', ')}</div>`
+                        : ''
+                    }
+                </div>
+            `
+            : `
+                <div style="background: #1a1a1a; border: 1px solid #30363d; border-radius: 6px; padding: 8px;">
+                    <div style="color: #6e7681; font-size: 10px; font-weight: 600; margin-bottom: 4px;">🌊 ACTIVE FLOW</div>
+                    <div style="color: #6e7681; font-size: 11px;">None active</div>
+                </div>
+            `;
+        
+        // Build decision trace (why the agent did what it did)
+        const lastEntry = this.debugLog[this.debugLog.length - 1];
+        const decisionTrace = lastEntry ? `
+            <div style="background: #1c1c3a; border: 1px solid #8957e5; border-radius: 6px; padding: 8px;">
+                <div style="color: #a78bfa; font-size: 10px; font-weight: 600; margin-bottom: 6px;">🎯 DECISION TRACE</div>
+                <div style="display: grid; grid-template-columns: 100px 1fr; gap: 4px; font-size: 11px;">
+                    <span style="color: #6e7681;">Source:</span>
+                    <span style="color: #e6edf3;">${lastEntry.source || '—'}</span>
+                    
+                    <span style="color: #6e7681;">Prompt from:</span>
+                    <span style="color: #e6edf3;">${bookingConfig?.source || 'unknown'}</span>
+                    
+                    <span style="color: #6e7681;">Action:</span>
+                    <span style="color: #e6edf3;">${lastDebug?.stateMachine?.action || lastEntry.llmBrain?.engineAction?.normalizedSlot ? 'COLLECT_SLOT' : 'REPLY'}</span>
+                </div>
+            </div>
+        ` : '';
+        
+        // Legacy slot display for backward compat
         const slotsCollected = Object.entries(this.knownSlots)
             .filter(([k, v]) => v)
             .map(([k, v]) => `<span style="background: #238636; padding: 2px 8px; border-radius: 4px; font-size: 11px;">${k}: ${v}</span>`)
@@ -1090,6 +1182,49 @@ ${separator}`;
         content.innerHTML = `
             <div style="display: flex; flex-direction: column; gap: 12px;">
                 
+                <!-- ═══════════════════════════════════════════════════════════════════════
+                     🎯 LIVE SESSION INSPECTOR - Real-time call state (what you asked for!)
+                     ═══════════════════════════════════════════════════════════════════════ -->
+                <div style="background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); border: 2px solid #8b5cf6; border-radius: 10px; overflow: hidden;">
+                    <div style="background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: white; font-weight: 700; font-size: 13px;">📡 LIVE SESSION INSPECTOR</span>
+                        <span style="color: white; font-size: 10px; opacity: 0.8;">Updates every turn</span>
+                    </div>
+                    
+                    <div style="padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+                        
+                        <!-- Session + Mode Row -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <div style="background: #161b22; border-radius: 6px; padding: 8px;">
+                                <div style="color: #8b949e; font-size: 9px; margin-bottom: 2px;">SESSION</div>
+                                <div style="color: #e6edf3; font-size: 11px; font-family: monospace;">${this.testSessionId.substring(0, 18)}...</div>
+                            </div>
+                            <div style="background: ${currentMode === 'BOOKING' ? '#0d2818' : currentMode === 'COMPLETE' ? '#1a2d1a' : '#1a1a1a'}; border: 1px solid ${currentMode === 'BOOKING' ? '#238636' : currentMode === 'COMPLETE' ? '#3fb950' : '#30363d'}; border-radius: 6px; padding: 8px;">
+                                <div style="color: #8b949e; font-size: 9px; margin-bottom: 2px;">MODE</div>
+                                <div style="color: ${currentMode === 'BOOKING' ? '#3fb950' : currentMode === 'COMPLETE' ? '#58a6ff' : '#f0883e'}; font-size: 14px; font-weight: 700;">${currentMode}</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Active Flow Status -->
+                        ${flowStatus}
+                        
+                        <!-- SLOT BOXES - The "call slot boxes" you wanted -->
+                        <div>
+                            <div style="color: #8b949e; font-size: 10px; margin-bottom: 6px; display: flex; justify-content: space-between;">
+                                <span>📦 BOOKING SLOTS</span>
+                                <span>${Object.values(collectedSlots).filter(v => v).length}/${configuredSlots.length} filled</span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 6px;">
+                                ${slotBoxesHtml}
+                            </div>
+                        </div>
+                        
+                        <!-- Decision Trace -->
+                        ${decisionTrace}
+                        
+                    </div>
+                </div>
+                
                 <!-- 🔧 ENGINE VERSION - Verify deployment -->
                 <div style="background: #0d2818; border: 1px solid #238636; border-radius: 6px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center;">
                     <span style="color: #3fb950; font-size: 11px;">🔧 ENGINE:</span>
@@ -1122,37 +1257,13 @@ ${separator}`;
                     </div>
                 </div>
                 
-                <!-- Session Header -->
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #161b22; border-radius: 6px;">
-                    <div>
-                        <span style="color: #8b949e; font-size: 10px;">SESSION</span>
-                        <div style="color: #c9d1d9; font-size: 11px; font-family: monospace;">${this.testSessionId.substring(0, 20)}</div>
-                    </div>
-                    <div style="text-align: right;">
-                        <span style="color: #58a6ff; font-size: 18px; font-weight: bold;">${this.debugLog.length}</span>
-                        <div style="color: #8b949e; font-size: 10px;">turns</div>
-                    </div>
-                </div>
-                
-                <!-- Slots Summary -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <div style="background: #161b22; border-radius: 6px; padding: 8px;">
-                        <div style="color: #3fb950; font-size: 10px; margin-bottom: 4px;">✓ COLLECTED</div>
-                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">${slotsCollected}</div>
-                    </div>
-                    <div style="background: #161b22; border-radius: 6px; padding: 8px;">
-                        <div style="color: #f0883e; font-size: 10px; margin-bottom: 4px;">⏳ NEED</div>
-                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">${slotsMissing}</div>
-                    </div>
-                </div>
-                
                 <!-- Running Debug Log -->
                 <div style="background: #0d1117; border: 1px solid #f0883e; border-radius: 8px; overflow: hidden;">
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #161b22; border-bottom: 1px solid #30363d;">
                         <h4 style="margin: 0; color: #f0883e; font-size: 12px;">🔧 DEBUG LOG (All Turns)</h4>
                         <button onclick="window.aiTestConsole.copyDebug()" style="background: #238636; border: none; color: white; padding: 4px 10px; border-radius: 4px; font-size: 10px; cursor: pointer; font-weight: bold;">📋 Copy All</button>
                     </div>
-                    <div style="max-height: 300px; overflow-y: auto; padding: 8px 12px; font-family: monospace;">
+                    <div style="max-height: 250px; overflow-y: auto; padding: 8px 12px; font-family: monospace;">
                         ${debugLogHtml}
                     </div>
                 </div>
