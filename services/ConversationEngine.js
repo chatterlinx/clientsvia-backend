@@ -3036,15 +3036,22 @@ async function processTurn({
                 const needsConfirmBack = confirmBackEnabled && hasName && !nameConfirmed && !nameMeta?.lastConfirmed;
                 const needsLastName = askFullNameEnabled && hasName && !hasFullName && !nameMeta?.last;
                 
+                // V43: Check if spelling variant check is needed
+                const spellingConfig = company.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants || {};
+                const spellingEnabled = spellingConfig.enabled === true;
+                const needsSpellingVariantCheck = spellingEnabled && hasName && !nameMeta?.askedSpellingVariant && !nameMeta?.spellingVariantAnswer;
+                
                 if (hasName && (session.booking.activeSlotType === 'name' || session.booking.activeSlot === 'name')) {
-                    if (needsConfirmBack || needsLastName) {
-                        // DON'T skip - we need to confirm or get last name
+                    if (needsConfirmBack || needsLastName || needsSpellingVariantCheck) {
+                        // DON'T skip - we need to confirm, get last name, or check spelling variant
                         log('📝 V36: Name from discovery needs processing', {
                             name: currentSlots.name || currentSlots.partialName,
                             needsConfirmBack,
                             needsLastName,
+                            needsSpellingVariantCheck,
                             confirmBackEnabled,
-                            askFullNameEnabled
+                            askFullNameEnabled,
+                            spellingEnabled
                         });
                         
                         // If we have a partial name from discovery and need to confirm/get last name,
@@ -3064,7 +3071,10 @@ async function processTurn({
                             confirmBackEnabled,
                             nameConfirmed,
                             askFullNameEnabled,
-                            hasFullName
+                            hasFullName,
+                            spellingEnabled,
+                            spellingVariantAsked: !!nameMeta?.askedSpellingVariant,
+                            spellingVariantAnswered: !!nameMeta?.spellingVariantAnswer
                         });
                         // V42: Use slotTypeMap to get actual phone slot ID
                         session.booking.activeSlot = getSlotIdByType('phone');
