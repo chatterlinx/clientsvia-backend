@@ -2254,6 +2254,17 @@ async function processTurn({
         
         // Get booking config for askMissingNamePart setting
         const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company);
+        
+        // 🔍 DIAGNOSTIC: Log booking config to debug NOT_CONFIGURED issue
+        log('📋 BOOKING CONFIG DIAGNOSTIC', {
+            source: bookingConfig.source,
+            isConfigured: bookingConfig.isConfigured,
+            slotCount: bookingConfig.slots?.length || 0,
+            slotIds: bookingConfig.slots?.map(s => s.slotId) || [],
+            companyHasFrontDesk: !!company?.aiAgentSettings?.frontDeskBehavior,
+            companyHasBookingSlots: !!company?.aiAgentSettings?.frontDeskBehavior?.bookingSlots,
+            rawBookingSlotsLength: company?.aiAgentSettings?.frontDeskBehavior?.bookingSlots?.length || 0
+        });
         const nameSlotConfig = bookingConfig.slots.find(s => s.slotId === 'name' || s.id === 'name');
         const askMissingNamePart = nameSlotConfig?.askMissingNamePart === true;
         
