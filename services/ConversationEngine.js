@@ -4558,46 +4558,42 @@ async function processTurn({
                             extractedThisTurn
                         }
                     };
-                } else {
+                } else if (bookingSlotsSafe.length === 0) {
                     // ═══════════════════════════════════════════════════════════════
                     // GUARDRAIL: BLOCK FAKE BOOKING WHEN NO SLOTS CONFIGURED
                     // ═══════════════════════════════════════════════════════════════
                     // If bookingSlotsSafe is empty, we can't finalize - the config is broken
                     // This prevents "You're all set!" when booking prompts aren't wired
                     // ═══════════════════════════════════════════════════════════════
-                    if (bookingSlotsSafe.length === 0) {
-                        log('🚫 BOOKING_BLOCKED_NOT_CONFIGURED: Cannot finalize booking - no slots configured', {
-                            bookingEnabled: true,
-                            effectiveSlotCount: 0,
-                            source: bookingConfigSafe.source
-                        });
-                        
-                        // Return a safe response that doesn't fake success
-                        aiResult = {
-                            reply: "I'd be happy to help schedule that! Let me get a few details from you. May I have your name?",
-                            conversationMode: 'booking',
-                            intent: 'collect_info',
-                            nextGoal: 'COLLECT_NAME',
-                            signals: { 
-                                wantsBooking: true,
-                                consentGiven: true,
-                                bookingBlocked: true,
-                                bookingBlockedReason: 'NOT_CONFIGURED'
-                            },
-                            latencyMs: Date.now() - aiStartTime,
-                            tokensUsed: 0,
-                            fromStateMachine: true,
-                            mode: 'BOOKING',
-                            debug: {
-                                source: 'BOOKING_BLOCKED_NOT_CONFIGURED',
-                                effectiveSlotCount: 0,
-                                configSource: bookingConfigSafe.source
-                            }
-                        };
-                        // Don't finalize - stay in booking mode
-                        break;
-                    }
+                    log('🚫 BOOKING_BLOCKED_NOT_CONFIGURED: Cannot finalize booking - no slots configured', {
+                        bookingEnabled: true,
+                        effectiveSlotCount: 0,
+                        source: bookingConfigSafe.source
+                    });
                     
+                    // Return a safe response that doesn't fake success
+                    aiResult = {
+                        reply: "I'd be happy to help schedule that! Let me get a few details from you. May I have your name?",
+                        conversationMode: 'booking',
+                        intent: 'collect_info',
+                        nextGoal: 'COLLECT_NAME',
+                        signals: { 
+                            wantsBooking: true,
+                            consentGiven: true,
+                            bookingBlocked: true,
+                            bookingBlockedReason: 'NOT_CONFIGURED'
+                        },
+                        latencyMs: Date.now() - aiStartTime,
+                        tokensUsed: 0,
+                        fromStateMachine: true,
+                        mode: 'BOOKING',
+                        debug: {
+                            source: 'BOOKING_BLOCKED_NOT_CONFIGURED',
+                            effectiveSlotCount: 0,
+                            configSource: bookingConfigSafe.source
+                        }
+                    };
+                } else {
                     // ═══════════════════════════════════════════════════════════════
                     // ALL REQUIRED SLOTS COLLECTED - FINALIZE BOOKING
                     // ═══════════════════════════════════════════════════════════════
