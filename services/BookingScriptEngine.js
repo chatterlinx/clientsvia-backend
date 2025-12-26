@@ -80,7 +80,18 @@ function getSlotId(slot) {
  */
 function normalizeSlot(slot, index) {
     const slotId = getSlotId(slot);
+    
+    // 🔍 DIAGNOSTIC: Log why slots are being rejected
     if (!slotId || !slot.question) {
+        logger.warn('[BOOKING ENGINE] ⚠️ SLOT REJECTED - missing required field', {
+            index,
+            hasSlotId: !!slotId,
+            slotIdValue: slotId,
+            hasQuestion: !!slot.question,
+            questionValue: slot.question?.substring?.(0, 50),
+            rawSlotKeys: slot ? Object.keys(slot) : [],
+            rawSlot: JSON.stringify(slot).substring(0, 200)
+        });
         return null; // Invalid slot
     }
     
@@ -138,10 +149,26 @@ function normalizeBookingSlots(rawSlots = []) {
         return [];
     }
     
-    return rawSlots
+    // 🔍 DIAGNOSTIC: Log raw slots before normalization
+    logger.info('[BOOKING ENGINE] 📋 NORMALIZING SLOTS', {
+        rawCount: rawSlots.length,
+        firstSlotKeys: rawSlots[0] ? Object.keys(rawSlots[0]) : [],
+        firstSlotSample: rawSlots[0] ? JSON.stringify(rawSlots[0]).substring(0, 300) : null
+    });
+    
+    const normalized = rawSlots
         .map((slot, idx) => normalizeSlot(slot, idx))
         .filter(slot => slot !== null)
         .sort((a, b) => a.order - b.order);
+    
+    // 🔍 DIAGNOSTIC: Log result
+    logger.info('[BOOKING ENGINE] 📋 NORMALIZATION RESULT', {
+        inputCount: rawSlots.length,
+        outputCount: normalized.length,
+        rejectedCount: rawSlots.length - normalized.length
+    });
+    
+    return normalized;
 }
 
 /**
