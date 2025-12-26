@@ -2246,10 +2246,13 @@ Sean → Shawn, Shaun`;
     
     // Handle slot type change - re-render type-specific options
     onSlotTypeChange(index, newType) {
-        const slot = this.collectBookingSlots()[index];
+        // PERF FIX: Use config as source of truth
+        const slots = this.config.bookingSlots || [];
+        const slot = slots[index];
         if (!slot) return;
         
         slot.type = newType;
+        this.isDirty = true;
         
         // Update the type options container
         const optionsContainer = document.querySelector(`.slot-type-options[data-index="${index}"]`);
@@ -2395,7 +2398,13 @@ Sean → Shawn, Shaun`;
     }
     
     addBookingSlot() {
-        const slots = this.collectBookingSlots();
+        const startTime = performance.now();
+        
+        // PERF FIX: Sync any pending DOM changes to config first
+        this.syncBookingSlotsFromDOM();
+        
+        // Use config as source of truth (no DOM reads)
+        const slots = this.config.bookingSlots || this.getDefaultBookingSlots();
         const newId = `custom_${Date.now()}`;
         slots.push({
             id: newId,
@@ -2403,15 +2412,18 @@ Sean → Shawn, Shaun`;
             question: '',
             required: false,
             order: slots.length,
-            type: 'text',  // Start with text, user can change to any type
+            type: 'text',
             confirmBack: false,
             confirmPrompt: "Just to confirm, {value}?"
         });
         
         // Update config and re-render
         this.config.bookingSlots = slots;
+        this.isDirty = true;
         document.getElementById('booking-slots-container').innerHTML = 
             slots.map((slot, idx) => this.renderBookingSlot(slot, idx, slots.length)).join('');
+        
+        console.log(`[FRONT DESK] ⏱️ addBookingSlot completed in ${(performance.now() - startTime).toFixed(1)}ms`);
         
         // Focus the new slot's label input
         setTimeout(() => {
@@ -2425,12 +2437,12 @@ Sean → Shawn, Shaun`;
     
     removeSlot(index) {
         const startTime = performance.now();
-        console.log(`[FRONT DESK] 🗑️ CHECKPOINT: removeSlot START - index: ${index}`);
         
-        // CHECKPOINT 1: Collect current slots
-        const collectStart = performance.now();
-        const slots = this.collectBookingSlots();
-        console.log(`[FRONT DESK] ⏱️ removeSlot CHECKPOINT 1: collectBookingSlots in ${(performance.now() - collectStart).toFixed(1)}ms`);
+        // PERF FIX: Sync any pending DOM changes to config first (lightweight)
+        this.syncBookingSlotsFromDOM();
+        
+        // Use config as source of truth (no heavy DOM reads)
+        const slots = this.config.bookingSlots || [];
         
         if (slots.length <= 1) {
             alert('You must have at least one booking slot.');
@@ -2438,39 +2450,37 @@ Sean → Shawn, Shaun`;
         }
         
         const slot = slots[index];
-        
-        // CHECKPOINT 2: User confirmation (this blocks main thread)
-        const confirmStart = performance.now();
-        if (!confirm(`Delete "${slot.label}" slot?`)) {
-            console.log(`[FRONT DESK] ⏱️ removeSlot: User cancelled after ${(performance.now() - confirmStart).toFixed(1)}ms`);
+        if (!slot) {
+            console.error(`[FRONT DESK] ❌ removeSlot: Invalid index ${index}`);
             return;
         }
-        console.log(`[FRONT DESK] ⏱️ removeSlot CHECKPOINT 2: User confirmed in ${(performance.now() - confirmStart).toFixed(1)}ms`);
         
-        // CHECKPOINT 3: Update data
-        const updateStart = performance.now();
+        // User confirmation (this blocks main thread - that's expected)
+        if (!confirm(`Delete "${slot.label}" slot?`)) {
+            return;
+        }
+        
+        // Update data
         slots.splice(index, 1);
         slots.forEach((s, i) => s.order = i);
         this.config.bookingSlots = slots;
         this.isDirty = true;
-        console.log(`[FRONT DESK] ⏱️ removeSlot CHECKPOINT 3: Data updated in ${(performance.now() - updateStart).toFixed(1)}ms`);
         
-        // CHECKPOINT 4: Re-render slots only (not full tab)
-        const renderStart = performance.now();
+        // Re-render slots only (not full tab)
         document.getElementById('booking-slots-container').innerHTML = 
             slots.map((slot, idx) => this.renderBookingSlot(slot, idx, slots.length)).join('');
-        console.log(`[FRONT DESK] ⏱️ removeSlot CHECKPOINT 4: Re-render in ${(performance.now() - renderStart).toFixed(1)}ms`);
         
-        const totalTime = performance.now() - startTime;
-        if (totalTime > 200) {
-            console.warn(`[FRONT DESK] ⚠️ SLOW DELETE: removeSlot took ${totalTime.toFixed(1)}ms (>200ms threshold)`);
-        } else {
-            console.log(`[FRONT DESK] ✅ removeSlot COMPLETE in ${totalTime.toFixed(1)}ms`);
-        }
+        console.log(`[FRONT DESK] ✅ removeSlot completed in ${(performance.now() - startTime).toFixed(1)}ms (excluding confirm dialog)`);
     }
     
     moveSlot(index, direction) {
-        const slots = this.collectBookingSlots();
+        const startTime = performance.now();
+        
+        // PERF FIX: Sync any pending DOM changes to config first
+        this.syncBookingSlotsFromDOM();
+        
+        // Use config as source of truth
+        const slots = this.config.bookingSlots || [];
         const newIndex = index + direction;
         
         if (newIndex < 0 || newIndex >= slots.length) return;
@@ -2482,8 +2492,11 @@ Sean → Shawn, Shaun`;
         slots.forEach((s, i) => s.order = i);
         
         this.config.bookingSlots = slots;
+        this.isDirty = true;
         document.getElementById('booking-slots-container').innerHTML = 
             slots.map((slot, idx) => this.renderBookingSlot(slot, idx, slots.length)).join('');
+        
+        console.log(`[FRONT DESK] ⏱️ moveSlot completed in ${(performance.now() - startTime).toFixed(1)}ms`);
     }
     
     collectBookingSlots() {
@@ -2640,6 +2653,41 @@ Sean → Shawn, Shaun`;
         });
         
         return slots.length > 0 ? slots : this.getDefaultBookingSlots();
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PERF FIX: Lightweight sync from DOM to config (only core fields)
+    // Called before add/remove/move operations to capture any user edits
+    // ═══════════════════════════════════════════════════════════════════════════
+    syncBookingSlotsFromDOM() {
+        const startTime = performance.now();
+        const slots = this.config.bookingSlots || [];
+        const slotElements = document.querySelectorAll('.booking-slot');
+        
+        if (slotElements.length === 0) {
+            // No DOM yet (first render) - nothing to sync
+            return;
+        }
+        
+        slotElements.forEach((el, index) => {
+            if (!slots[index]) return; // Safety check
+            
+            // Only sync the user-editable core fields (fast)
+            const labelEl = el.querySelector('.slot-label');
+            const questionEl = el.querySelector('.slot-question');
+            const typeEl = el.querySelector('.slot-type');
+            const requiredEl = el.querySelector('.slot-required');
+            
+            if (labelEl) slots[index].label = labelEl.value?.trim() || slots[index].label;
+            if (questionEl) slots[index].question = questionEl.value?.trim() || slots[index].question;
+            if (typeEl) slots[index].type = typeEl.value || slots[index].type;
+            if (requiredEl) slots[index].required = requiredEl.checked;
+        });
+        
+        const elapsed = performance.now() - startTime;
+        if (elapsed > 5) {
+            console.log(`[FRONT DESK] ⏱️ syncBookingSlotsFromDOM: ${elapsed.toFixed(1)}ms for ${slotElements.length} slots`);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
