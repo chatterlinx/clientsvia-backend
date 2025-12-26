@@ -3299,8 +3299,9 @@ async function processTurn({
                     nextSlotId = 'name';
                 }
                 // Check if name slot is already complete
-                else if (hasFullName || hasBothParts) {
-                    // Name is complete, move to next slot
+                // V44: BUT don't skip if spelling variant check is still needed!
+                else if ((hasFullName || hasBothParts) && !needsSpellingVariantCheck) {
+                    // Name is complete AND no spelling variant check needed, move to next slot
                     if (hasBothParts && !currentSlots.name) {
                         // Build full name safely (no undefined)
                         const firstName = nameMeta.first || '';
@@ -3309,6 +3310,64 @@ async function processTurn({
                     }
                     session.booking.activeSlot = getSlotIdByType('phone'); session.booking.activeSlotType = 'phone';
                     log('📝 NAME COMPLETE, moving to phone', { name: currentSlots.name });
+                }
+                // V44: Name parts exist but spelling variant check is still needed
+                else if ((hasFullName || hasBothParts) && needsSpellingVariantCheck) {
+                    const nameToCheck = nameMeta.first || currentSlots.partialName || currentSlots.name?.split(' ')[0];
+                    
+                    log('📝 V44: Name exists but spelling variant check needed', {
+                        nameToCheck,
+                        nameMeta,
+                        needsSpellingVariantCheck
+                    });
+                    
+                    // V44: Actually RUN the spelling variant check here
+                    const spellingConfigV44 = company.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants || {};
+                    const commonFirstNamesV44 = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+                    const variantV44 = findSpellingVariant(nameToCheck, spellingConfigV44, commonFirstNamesV44);
+                    
+                    log('📝 V44 SPELLING VARIANT CHECK RESULT', {
+                        nameToCheck,
+                        variantFound: !!(variantV44 && variantV44.hasVariant),
+                        variant: variantV44 ? { optionA: variantV44.optionA, optionB: variantV44.optionB } : null,
+                        hasPrecomputedMap: !!(spellingConfigV44.precomputedVariantMap),
+                        source: spellingConfigV44.source
+                    });
+                    
+                    if (variantV44 && variantV44.hasVariant) {
+                        // Ask about spelling variant
+                        nameMeta.askedSpellingVariant = true;
+                        nameMeta.spellingAsksCount = (nameMeta.spellingAsksCount || 0) + 1;
+                        nameMeta.pendingSpellingVariant = variantV44;
+                        
+                        const scriptV44 = spellingConfigV44.script || 'Just to confirm — {optionA} with a {letterA} or {optionB} with a {letterB}?';
+                        finalReply = scriptV44
+                            .replace('{optionA}', variantV44.optionA)
+                            .replace('{optionB}', variantV44.optionB)
+                            .replace('{letterA}', variantV44.letterA)
+                            .replace('{letterB}', variantV44.letterB);
+                        nextSlotId = 'name'; // Still on name
+                        
+                        log('📝 V44 SPELLING VARIANT: Asking about variant', {
+                            name: nameToCheck,
+                            optionA: variantV44.optionA,
+                            optionB: variantV44.optionB,
+                            script: finalReply
+                        });
+                    } else {
+                        // No variant found or couldn't check - mark as done and move to phone
+                        nameMeta.askedSpellingVariant = true; // Mark as checked (even if no variant)
+                        
+                        if (!currentSlots.name) {
+                            const firstName = nameMeta.first || '';
+                            const lastName = nameMeta.last || '';
+                            currentSlots.name = `${firstName} ${lastName}`.trim();
+                        }
+                        
+                        session.booking.activeSlot = getSlotIdByType('phone'); 
+                        session.booking.activeSlotType = 'phone';
+                        log('📝 V44: No spelling variant, moving to phone', { name: currentSlots.name });
+                    }
                 }
             // ═══════════════════════════════════════════════════════════════════
                 // V33 FIX: Handle missing name part (last name after first, or vice versa)
@@ -3486,9 +3545,29 @@ async function processTurn({
                                                     spellingAsksThisCall < maxSpellingAsks &&
                                                     nameMeta.assumedSingleTokenAs === 'first';
                         
+                        // V44 DEBUG: Log spelling variant check decision
+                        log('📝 V44 SPELLING VARIANT CHECK', {
+                            shouldCheckSpelling,
+                            spellingEnabled,
+                            askedSpellingVariant: nameMeta.askedSpellingVariant,
+                            spellingAsksThisCall,
+                            maxSpellingAsks,
+                            assumedSingleTokenAs: nameMeta.assumedSingleTokenAs,
+                            hasPrecomputedMap: !!(spellingConfig.precomputedVariantMap),
+                            precomputedMapKeys: spellingConfig.precomputedVariantMap ? Object.keys(spellingConfig.precomputedVariantMap).slice(0, 10) : [],
+                            source: spellingConfig.source
+                        });
+                        
                         if (shouldCheckSpelling) {
                             const commonFirstNames = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
                             const variant = findSpellingVariant(extractedName, spellingConfig, commonFirstNames);
+                            
+                            // V44 DEBUG: Log variant result
+                            log('📝 V44 SPELLING VARIANT RESULT', {
+                                name: extractedName,
+                                variantFound: !!(variant && variant.hasVariant),
+                                variant: variant ? { optionA: variant.optionA, optionB: variant.optionB } : null
+                            });
                             
                             if (variant && variant.hasVariant) {
                                 // Ask about spelling variant
