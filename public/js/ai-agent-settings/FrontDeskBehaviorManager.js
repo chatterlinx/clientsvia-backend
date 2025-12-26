@@ -1402,9 +1402,20 @@ Sean → Shawn, Shaun`;
     }
     
     // Auto-scan common first names for 1-character variants
-    findAutoVariants() {
+    // PERFORMANCE FIX: Cache results to avoid O(n²) calculation on every render
+    findAutoVariants(forceRecalc = false) {
         const names = this.config.commonFirstNames || [];
         if (names.length === 0) return [];
+        
+        // Use cache if available and names haven't changed
+        const cacheKey = names.length + '_' + (names[0] || '') + '_' + (names[names.length - 1] || '');
+        if (!forceRecalc && this._autoVariantsCache && this._autoVariantsCacheKey === cacheKey) {
+            console.log(`[FRONT DESK] ⚡ PERF: Using cached auto-variants (${this._autoVariantsCache.length} pairs)`);
+            return this._autoVariantsCache;
+        }
+        
+        const startTime = performance.now();
+        console.log(`[FRONT DESK] 🔄 PERF: Computing auto-variants for ${names.length} names (${names.length * (names.length - 1) / 2} comparisons)...`);
         
         const variants = [];
         const processed = new Set();
@@ -1433,10 +1444,37 @@ Sean → Shawn, Shaun`;
             }
         }
         
-        return variants.sort((a, b) => a.name1.localeCompare(b.name1));
+        const result = variants.sort((a, b) => a.name1.localeCompare(b.name1));
+        
+        // Cache the result
+        this._autoVariantsCache = result;
+        this._autoVariantsCacheKey = cacheKey;
+        
+        const elapsed = performance.now() - startTime;
+        if (elapsed > 50) {
+            console.warn(`[FRONT DESK] ⚠️ SLOW PERF: Auto-variants took ${elapsed.toFixed(1)}ms for ${names.length} names`);
+        } else {
+            console.log(`[FRONT DESK] ✅ PERF: Auto-variants computed in ${elapsed.toFixed(1)}ms (found ${result.length} pairs)`);
+        }
+        
+        return result;
+    }
+    
+    // Clear variant cache when names change
+    invalidateAutoVariantsCache() {
+        this._autoVariantsCache = null;
+        this._autoVariantsCacheKey = null;
+        console.log('[FRONT DESK] 🗑️ Auto-variants cache cleared');
     }
     
     renderAutoScanPreview() {
+        // PERFORMANCE FIX: Don't compute if section is hidden
+        const isAutoScanMode = this.config.nameSpellingVariants?.source === 'auto_scan';
+        if (!isAutoScanMode) {
+            // Return placeholder - will be computed when user switches to auto_scan
+            return '<p style="color: #8b949e; margin: 0; font-style: italic;">Switch to auto-scan mode to see detected variants...</p>';
+        }
+        
         const variants = this.findAutoVariants();
         
         if (variants.length === 0) {
@@ -2386,22 +2424,49 @@ Sean → Shawn, Shaun`;
     }
     
     removeSlot(index) {
+        const startTime = performance.now();
+        console.log(`[FRONT DESK] 🗑️ CHECKPOINT: removeSlot START - index: ${index}`);
+        
+        // CHECKPOINT 1: Collect current slots
+        const collectStart = performance.now();
         const slots = this.collectBookingSlots();
+        console.log(`[FRONT DESK] ⏱️ removeSlot CHECKPOINT 1: collectBookingSlots in ${(performance.now() - collectStart).toFixed(1)}ms`);
+        
         if (slots.length <= 1) {
             alert('You must have at least one booking slot.');
             return;
         }
         
         const slot = slots[index];
-        if (!confirm(`Delete "${slot.label}" slot?`)) return;
         
+        // CHECKPOINT 2: User confirmation (this blocks main thread)
+        const confirmStart = performance.now();
+        if (!confirm(`Delete "${slot.label}" slot?`)) {
+            console.log(`[FRONT DESK] ⏱️ removeSlot: User cancelled after ${(performance.now() - confirmStart).toFixed(1)}ms`);
+            return;
+        }
+        console.log(`[FRONT DESK] ⏱️ removeSlot CHECKPOINT 2: User confirmed in ${(performance.now() - confirmStart).toFixed(1)}ms`);
+        
+        // CHECKPOINT 3: Update data
+        const updateStart = performance.now();
         slots.splice(index, 1);
-        // Re-index order
         slots.forEach((s, i) => s.order = i);
-        
         this.config.bookingSlots = slots;
+        this.isDirty = true;
+        console.log(`[FRONT DESK] ⏱️ removeSlot CHECKPOINT 3: Data updated in ${(performance.now() - updateStart).toFixed(1)}ms`);
+        
+        // CHECKPOINT 4: Re-render slots only (not full tab)
+        const renderStart = performance.now();
         document.getElementById('booking-slots-container').innerHTML = 
             slots.map((slot, idx) => this.renderBookingSlot(slot, idx, slots.length)).join('');
+        console.log(`[FRONT DESK] ⏱️ removeSlot CHECKPOINT 4: Re-render in ${(performance.now() - renderStart).toFixed(1)}ms`);
+        
+        const totalTime = performance.now() - startTime;
+        if (totalTime > 200) {
+            console.warn(`[FRONT DESK] ⚠️ SLOW DELETE: removeSlot took ${totalTime.toFixed(1)}ms (>200ms threshold)`);
+        } else {
+            console.log(`[FRONT DESK] ✅ removeSlot COMPLETE in ${totalTime.toFixed(1)}ms`);
+        }
     }
     
     moveSlot(index, direction) {
