@@ -3853,16 +3853,16 @@
       modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 10000; display: flex; align-items: center; justify-content: center;';
       modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
       
-      modal.innerHTML = \`
+      modal.innerHTML = `
         <div style="background: #0f172a; border: 1px solid #334155; border-radius: 16px; width: 90%; max-width: 600px; max-height: 80vh; display: flex; flex-direction: column; overflow: hidden;">
           
           <!-- Header -->
           <div style="padding: 20px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);">
             <div style="display: flex; align-items: center; gap: 12px;">
-              <span style="font-size: 24px;">\${healthEmoji}</span>
+              <span style="font-size: 24px;">${healthEmoji}</span>
               <div>
-                <h2 style="margin: 0; color: #f8fafc; font-size: 18px;">System Status: \${healthStatus}</h2>
-                <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 13px;">\${warnings.length} warning(s) found</p>
+                <h2 style="margin: 0; color: #f8fafc; font-size: 18px;">System Status: ${healthStatus}</h2>
+                <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 13px;">${warnings.length} warning(s) found</p>
               </div>
             </div>
             <button onclick="this.closest('#warnings-popup-overlay').remove()" style="background: none; border: none; color: #94a3b8; font-size: 24px; cursor: pointer; padding: 4px 8px;">×</button>
@@ -3870,7 +3870,7 @@
           
           <!-- Warnings List -->
           <div style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px;">
-            \${warningsHtml}
+            ${warningsHtml}
           </div>
           
           <!-- Tip Section -->
@@ -3891,7 +3891,7 @@
             </div>
           </div>
         </div>
-      \`;
+      `;
       
       document.body.appendChild(modal);
     }
