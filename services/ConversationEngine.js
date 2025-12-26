@@ -653,6 +653,10 @@ function stripFillerWords(userText, company, template) {
 // V31: NAME SPELLING VARIANT HELPER
 // Checks if a name has common spelling variants (Mark/Marc, Brian/Bryan)
 // Returns { hasVariant, optionA, optionB, letterA, letterB } or null
+//
+// CRITICAL PERF FIX: Runtime should NEVER do O(n²) auto-scan!
+// - Precomputed variants are stored in config.precomputedVariantMap (from Admin UI)
+// - Runtime only does O(1) map lookup
 // ═══════════════════════════════════════════════════════════════════════════
 function findSpellingVariant(name, config, commonFirstNames = []) {
     if (!name || !config?.enabled) return null;
@@ -661,7 +665,7 @@ function findSpellingVariant(name, config, commonFirstNames = []) {
     const mode = config.mode || '1_char_only';
     const source = config.source || 'curated_list';
     
-    // Get variant groups based on source
+    // Get variant groups - RUNTIME ONLY READS, NEVER COMPUTES
     let variantGroups = {};
     
     if (source === 'curated_list') {
@@ -679,23 +683,30 @@ function findSpellingVariant(name, config, commonFirstNames = []) {
                     : [variants.toLowerCase()];
             });
         }
-    } else if (source === 'auto_scan_common_first_names') {
-        // Auto-scan common first names for 1-char variants
-        const names = commonFirstNames.map(n => n.toLowerCase());
-        for (let i = 0; i < names.length; i++) {
-            for (let j = i + 1; j < names.length; j++) {
-                if (levenshteinDistance(names[i], names[j]) === 1) {
-                    // Add both directions
-                    if (!variantGroups[names[i]]) variantGroups[names[i]] = [];
-                    if (!variantGroups[names[j]]) variantGroups[names[j]] = [];
-                    if (!variantGroups[names[i]].includes(names[j])) variantGroups[names[i]].push(names[j]);
-                    if (!variantGroups[names[j]].includes(names[i])) variantGroups[names[j]].push(names[i]);
-                }
-            }
+    } else if (source === 'auto_scan' || source === 'auto_scan_common_first_names') {
+        // ═══════════════════════════════════════════════════════════════════
+        // CRITICAL PERF FIX: Use PRECOMPUTED map from Admin UI
+        // The O(n²) scan was computed when admin clicked "Scan Names" and saved
+        // Runtime just reads the cached result - O(1) lookup!
+        // ═══════════════════════════════════════════════════════════════════
+        if (config.precomputedVariantMap && typeof config.precomputedVariantMap === 'object') {
+            // Use precomputed map - instant O(1) lookup
+            Object.entries(config.precomputedVariantMap).forEach(([key, variants]) => {
+                variantGroups[key.toLowerCase()] = Array.isArray(variants)
+                    ? variants.map(v => v.toLowerCase())
+                    : [variants.toLowerCase()];
+            });
+        } else {
+            // No precomputed map - admin hasn't run "Scan Names" yet
+            // Fall back to empty (don't ask about variants)
+            // Log warning for debugging
+            console.warn('[SPELLING VARIANT] ⚠️ auto_scan mode but no precomputedVariantMap! Admin should click "Scan Names" in UI.');
+            // DO NOT compute O(n²) at runtime - that blocks the call!
+            return null;
         }
     }
     
-    // Check if the name has variants
+    // Check if the name has variants - O(1) lookup
     const variants = variantGroups[nameLower];
     if (!variants || variants.length === 0) return null;
     

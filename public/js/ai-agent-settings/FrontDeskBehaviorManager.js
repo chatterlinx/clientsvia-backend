@@ -1505,6 +1505,7 @@ Sean → Shawn, Shaun`;
     }
     
     // Manual button click - compute variants with progress
+    // IMPORTANT: This also builds the precomputedVariantMap for runtime use
     computeAutoVariants() {
         const btn = document.getElementById('fdb-compute-variants-btn');
         const preview = document.getElementById('fdb-auto-scan-preview');
@@ -1524,12 +1525,41 @@ Sean → Shawn, Shaun`;
             
             console.log(`[FRONT DESK] ✅ Auto-variants computed: ${variants.length} pairs in ${elapsed.toFixed(1)}ms`);
             
+            // ═══════════════════════════════════════════════════════════════════
+            // CRITICAL: Build precomputedVariantMap for RUNTIME use
+            // This map is saved to DB and used by ConversationEngine at runtime
+            // Runtime does O(1) lookup instead of O(n²) computation
+            // ═══════════════════════════════════════════════════════════════════
+            const precomputedMap = {};
+            variants.forEach(v => {
+                const key1 = v.name1.toLowerCase();
+                const key2 = v.name2.toLowerCase();
+                if (!precomputedMap[key1]) precomputedMap[key1] = [];
+                if (!precomputedMap[key2]) precomputedMap[key2] = [];
+                if (!precomputedMap[key1].includes(key2)) precomputedMap[key1].push(key2);
+                if (!precomputedMap[key2].includes(key1)) precomputedMap[key2].push(key1);
+            });
+            
+            // Store in config for saving
+            if (!this.config.nameSpellingVariants) this.config.nameSpellingVariants = {};
+            this.config.nameSpellingVariants.precomputedVariantMap = precomputedMap;
+            this.config.nameSpellingVariants.precomputedAt = new Date().toISOString();
+            this.config.nameSpellingVariants.precomputedFromCount = (this.config.commonFirstNames || []).length;
+            this.isDirty = true;
+            
+            console.log(`[FRONT DESK] 📦 Precomputed variant map stored for runtime:`, {
+                mapKeys: Object.keys(precomputedMap).length,
+                pairs: variants.length,
+                willSaveOnSave: true
+            });
+            
             // Update preview with results
             if (variants.length === 0) {
                 preview.innerHTML = '<p style="color: #8b949e; margin: 0; font-style: italic;">No 1-character variant pairs found. Try adding more names or use the curated list.</p>';
             } else {
                 preview.innerHTML = `
                     <p style="color: #3fb950; margin: 0 0 8px 0; font-weight: 600;">Found ${variants.length} variant pair(s) in ${elapsed.toFixed(0)}ms:</p>
+                    <p style="color: #f0883e; font-size: 0.7rem; margin: 0 0 8px 0;">⚡ Click SAVE to enable these for live calls</p>
                     <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                         ${variants.map(v => `
                             <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #21262d; border: 1px solid #238636; border-radius: 16px; font-size: 0.8rem; color: #c9d1d9;">
