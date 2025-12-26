@@ -5308,9 +5308,7 @@ Loading field report...
         <button onclick="switchRuntimeTruthTab('wiring')" id="rt-tab-wiring" class="rt-tab" style="padding: 12px 20px; background: transparent; border: none; color: #94a3b8; font-weight: 600; font-size: 13px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">
           🔌 Scenario Wiring
         </button>
-        <button onclick="switchRuntimeTruthTab('booking')" id="rt-tab-booking" class="rt-tab" style="padding: 12px 20px; background: transparent; border: none; color: #94a3b8; font-weight: 600; font-size: 13px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">
-          📅 Booking
-        </button>
+        <!-- REMOVED: Booking tab - Front Desk Booking Prompts is the single source of truth -->
         <button onclick="switchRuntimeTruthTab('json')" id="rt-tab-json" class="rt-tab" style="padding: 12px 20px; background: transparent; border: none; color: #94a3b8; font-weight: 600; font-size: 13px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;">
           { } JSON
         </button>
@@ -5395,80 +5393,9 @@ Loading field report...
         </div>
         
         <!-- ═══════════════════════════════════════════════════════════════════════
-             TAB: BOOKING
+             REMOVED: BOOKING TAB
+             Single Source of Truth: Front Desk → Booking Prompts
              ═══════════════════════════════════════════════════════════════════════ -->
-        <div id="rt-content-booking" class="rt-tab-content" style="display: none;">
-          <!-- Master Toggle -->
-          <div style="background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <h4 style="margin: 0 0 4px 0; color: #f1f5f9; font-size: 16px;">📅 Booking System</h4>
-                <p style="margin: 0; color: #94a3b8; font-size: 12px;">Enable to collect appointment details from callers</p>
-              </div>
-              <label style="position: relative; display: inline-block; width: 60px; height: 32px;">
-                <input type="checkbox" id="booking-enabled-toggle" onchange="toggleBookingEnabled(this.checked)" style="opacity: 0; width: 0; height: 0;">
-                <span id="booking-toggle-track" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #475569; transition: 0.3s; border-radius: 32px;">
-                  <span id="booking-toggle-thumb" style="position: absolute; content: ''; height: 26px; width: 26px; left: 3px; bottom: 3px; background: white; transition: 0.3s; border-radius: 50%;"></span>
-                </span>
-              </label>
-            </div>
-          </div>
-          
-          <!-- Required Fields -->
-          <div style="background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-            <h4 style="margin: 0 0 16px 0; color: #f1f5f9; font-size: 14px;">📝 Required Fields</h4>
-            <div id="booking-fields-list" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
-              <!-- Fields will be rendered here -->
-            </div>
-          </div>
-          
-          <!-- Time Windows -->
-          <div style="background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-              <h4 style="margin: 0; color: #f1f5f9; font-size: 14px;">⏰ Time Windows</h4>
-              <button onclick="addTimeWindow()" style="padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 6px; font-size: 11px; cursor: pointer;">
-                <i class="fas fa-plus"></i> Add Window
-              </button>
-            </div>
-            <div id="booking-time-windows" style="display: flex; flex-wrap: wrap; gap: 8px;">
-              <!-- Time windows will be rendered here -->
-            </div>
-          </div>
-          
-          <!-- Consent Rules -->
-          <div style="background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-            <h4 style="margin: 0 0 16px 0; color: #f1f5f9; font-size: 14px;">✅ Consent & Confirmation</h4>
-            <div style="display: flex; flex-direction: column; gap: 12px;">
-              <label style="display: flex; align-items: center; gap: 12px; color: #f1f5f9; font-size: 13px;">
-                <input type="checkbox" id="consent-sms" onchange="updateConsentSetting('smsConsent', this.checked)" style="accent-color: #10b981; width: 18px; height: 18px;">
-                SMS Text Consent Required
-              </label>
-              <label style="display: flex; align-items: center; gap: 12px; color: #f1f5f9; font-size: 13px;">
-                <input type="checkbox" id="consent-confirm-name" onchange="updateConsentSetting('confirmName', this.checked)" style="accent-color: #10b981; width: 18px; height: 18px;">
-                Confirm Name (repeat back first + last)
-              </label>
-              <label style="display: flex; align-items: center; gap: 12px; color: #f1f5f9; font-size: 13px;">
-                <input type="checkbox" id="consent-confirm-address" onchange="updateConsentSetting('confirmAddress', this.checked)" style="accent-color: #10b981; width: 18px; height: 18px;">
-                Confirm Address (street/city/unit)
-              </label>
-              <label style="display: flex; align-items: center; gap: 12px; color: #f1f5f9; font-size: 13px;">
-                <input type="checkbox" id="consent-confirm-phone" onchange="updateConsentSetting('confirmPhone', this.checked)" style="accent-color: #10b981; width: 18px; height: 18px;">
-                Confirm Phone (repeat back number)
-              </label>
-            </div>
-            <div style="margin-top: 16px;">
-              <label style="display: block; color: #94a3b8; font-size: 12px; margin-bottom: 8px;">Consent Script (read to caller)</label>
-              <textarea id="consent-script" onchange="updateConsentScript(this.value)" style="width: 100%; height: 80px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px; color: #f1f5f9; font-size: 12px; resize: vertical;" placeholder="I'll send you a text confirmation. Is that okay?"></textarea>
-            </div>
-          </div>
-          
-          <!-- Booking Health -->
-          <div id="booking-health-panel" style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 12px; padding: 16px; display: none;">
-            <h4 style="margin: 0 0 8px 0; color: #92400e; font-size: 14px;">⚠️ Booking Configuration Issues</h4>
-            <ul id="booking-health-issues" style="margin: 0; padding-left: 20px; color: #92400e; font-size: 13px;">
-            </ul>
-          </div>
-        </div>
         
         <!-- ═══════════════════════════════════════════════════════════════════════
              TAB: JSON
@@ -5541,9 +5468,8 @@ Loading field report...
       // Load tab-specific content
       if (tabName === 'wiring' && currentRuntimeTruth) {
         renderScenarioWiringTable();
-      } else if (tabName === 'booking' && currentRuntimeTruth) {
-        renderBookingPanel();
       }
+      // REMOVED: booking tab - Front Desk Booking Prompts is the single source of truth
     }
     
     async function loadRuntimeTruth() {
