@@ -1350,7 +1350,7 @@
               <h2>System Snapshot</h2>
             </div>
             <div style="display: flex; align-items: center; gap: 12px;">
-              <div id="snapshot-status" style="display: flex; align-items: center; gap: 8px; padding: 6px 14px; background: rgba(16, 185, 129, 0.2); border-radius: 20px; color: var(--accent-green); font-weight: 600; font-size: 13px;">
+              <div id="snapshot-status" onclick="showWarningsPopup()" style="display: flex; align-items: center; gap: 8px; padding: 6px 14px; background: rgba(16, 185, 129, 0.2); border-radius: 20px; color: var(--accent-green); font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s;" title="Click to view warnings">
                 <span id="snapshot-mode-icon">🟡</span>
                 <span id="snapshot-mode-text">IDLE</span>
           </div>
@@ -3781,6 +3781,120 @@
     // RUNTIME TRUTH - Single Source of Truth (Fixed Dec 2025 - uses /runtime-truth not /system-snapshot)
     // ═══════════════════════════════════════════════════════════════════════════
     let currentSnapshot = null;
+    let currentWarnings = []; // Store warnings for popup display
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // WARNINGS POPUP - Shows system warnings with troubleshooting tips
+    // ═══════════════════════════════════════════════════════════════════════════
+    function showWarningsPopup() {
+      if (!currentSnapshot) {
+        showSnapshotToast('No Data', 'Click Refresh to load Runtime Truth first', 'error');
+        return;
+      }
+      
+      // Collect warnings from various sources in Runtime Truth
+      const warnings = [];
+      const rt = currentSnapshot;
+      
+      // Health-level warnings
+      if (rt.health?.warnings) {
+        warnings.push(...rt.health.warnings.map(w => ({ source: 'Health', message: w })));
+      }
+      
+      // Scenario Brain warnings
+      if (rt.scenarioBrain?.warnings) {
+        warnings.push(...rt.scenarioBrain.warnings.map(w => ({ source: 'Scenarios', message: w })));
+      }
+      
+      // Dynamic Flow warnings
+      if (rt.dynamicFlows?.warnings) {
+        warnings.push(...rt.dynamicFlows.warnings.map(w => ({ source: 'Flows', message: w })));
+      }
+      
+      // Control Plane warnings
+      if (rt.controlPlane?.warnings) {
+        warnings.push(...rt.controlPlane.warnings.map(w => ({ source: 'Control Plane', message: w })));
+      }
+      
+      // Check for common issues
+      const scenarioStats = rt.scenarioBrain?.totals || {};
+      if (scenarioStats.unknownType > 0) {
+        warnings.push({ source: 'Scenarios', message: `${scenarioStats.unknownType} scenarios have UNKNOWN type - run Golden Autofill to classify` });
+      }
+      if (scenarioStats.notEnterpriseReady > 0) {
+        warnings.push({ source: 'Scenarios', message: `${scenarioStats.notEnterpriseReady} scenarios are not enterprise-ready` });
+      }
+      
+      // Check flows
+      if (rt.dynamicFlows?.enabledCount === 0 && rt.dynamicFlows?.totalCount > 0) {
+        warnings.push({ source: 'Flows', message: 'All dynamic flows are disabled' });
+      }
+      
+      const healthStatus = rt.health?.status || 'UNKNOWN';
+      const healthColor = healthStatus === 'GREEN' ? '#10b981' : healthStatus === 'YELLOW' ? '#f59e0b' : '#ef4444';
+      const healthEmoji = healthStatus === 'GREEN' ? '🟢' : healthStatus === 'YELLOW' ? '🟡' : '🔴';
+      
+      // Build popup HTML
+      const warningsHtml = warnings.length > 0 
+        ? warnings.map((w, i) => `
+            <div style="display: flex; gap: 12px; padding: 12px; background: #1e293b; border-radius: 8px; border-left: 3px solid #f59e0b;">
+              <span style="color: #f59e0b; font-weight: 700; min-width: 20px;">${i + 1}.</span>
+              <div>
+                <span style="color: #94a3b8; font-size: 11px; text-transform: uppercase;">[${w.source}]</span>
+                <div style="color: #e2e8f0; margin-top: 2px;">${w.message}</div>
+              </div>
+            </div>
+          `).join('')
+        : '<div style="text-align: center; color: #10b981; padding: 20px;"><span style="font-size: 32px;">✓</span><p style="margin-top: 8px;">No warnings - system is healthy!</p></div>';
+      
+      // Create modal
+      const modal = document.createElement('div');
+      modal.id = 'warnings-popup-overlay';
+      modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+      modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+      
+      modal.innerHTML = \`
+        <div style="background: #0f172a; border: 1px solid #334155; border-radius: 16px; width: 90%; max-width: 600px; max-height: 80vh; display: flex; flex-direction: column; overflow: hidden;">
+          
+          <!-- Header -->
+          <div style="padding: 20px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span style="font-size: 24px;">\${healthEmoji}</span>
+              <div>
+                <h2 style="margin: 0; color: #f8fafc; font-size: 18px;">System Status: \${healthStatus}</h2>
+                <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 13px;">\${warnings.length} warning(s) found</p>
+              </div>
+            </div>
+            <button onclick="this.closest('#warnings-popup-overlay').remove()" style="background: none; border: none; color: #94a3b8; font-size: 24px; cursor: pointer; padding: 4px 8px;">×</button>
+          </div>
+          
+          <!-- Warnings List -->
+          <div style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+            \${warningsHtml}
+          </div>
+          
+          <!-- Tip Section -->
+          <div style="padding: 16px; border-top: 1px solid #334155; background: #1e293b;">
+            <div style="display: flex; gap: 12px; align-items: flex-start;">
+              <span style="font-size: 24px;">💡</span>
+              <div>
+                <div style="color: #fbbf24; font-weight: 600; font-size: 13px; margin-bottom: 6px;">Troubleshooting Tip</div>
+                <div style="color: #94a3b8; font-size: 12px; line-height: 1.5;">
+                  The warnings are embedded in the Runtime Truth JSON. To see full details:
+                  <ol style="margin: 8px 0 0 0; padding-left: 20px;">
+                    <li>Click <strong>"Runtime Truth"</strong> dropdown → <strong>"Download .json"</strong></li>
+                    <li>Search for <code style="background: #334155; padding: 2px 6px; border-radius: 4px;">"warnings"</code> in the file</li>
+                    <li>Or look for <code style="background: #334155; padding: 2px 6px; border-radius: 4px;">"health": "YELLOW"</code> sections</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      \`;
+      
+      document.body.appendChild(modal);
+    }
     
     async function refreshSystemSnapshot() {
       if (!currentCompanyId) {
