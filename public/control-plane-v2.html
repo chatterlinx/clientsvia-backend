@@ -5412,6 +5412,9 @@ Loading field report...
           <button id="btn-copy-runtime-truth" onclick="copyRuntimeTruth()" style="padding: 8px 16px; background: white; color: #059669; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
             <i class="fas fa-copy"></i> Copy JSON
           </button>
+          <button onclick="downloadRuntimeTruthJson()" style="padding: 8px 16px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+            <i class="fas fa-download"></i> Download .json
+          </button>
           <button onclick="closeRuntimeTruthModal()" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 6px; cursor: pointer;">
             <i class="fas fa-times"></i>
           </button>
@@ -5732,6 +5735,31 @@ Loading field report...
           btn.style.color = '#059669';
         }, 2000);
       });
+    }
+    
+    function downloadRuntimeTruthJson() {
+      if (!currentRuntimeTruth) {
+        showSnapshotToast('No data to download', 'error');
+        return;
+      }
+      
+      const jsonStr = JSON.stringify(currentRuntimeTruth, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const companyName = currentRuntimeTruth._meta?.companyName || 'company';
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const filename = `runtime-truth_${companyName.replace(/\s+/g, '-')}_${timestamp}.json`;
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showSnapshotToast(`Downloaded: ${filename} (${(jsonStr.length / 1024).toFixed(1)} KB)`, 'success');
     }
     
     // ============================================================================
