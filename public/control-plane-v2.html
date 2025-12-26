@@ -3796,14 +3796,26 @@
       const warnings = [];
       const rt = currentSnapshot;
       
-      // Health-level warnings
-      if (rt.health?.warnings) {
-        warnings.push(...rt.health.warnings.map(w => ({ source: 'Health', message: w })));
+      // FIXED: Health issues are the PRIMARY source (this is what causes YELLOW status)
+      if (rt.health?.issues && Array.isArray(rt.health.issues)) {
+        rt.health.issues.forEach(issue => {
+          warnings.push({
+            source: issue.severity === 'ERROR' ? '🔴 ERROR' : '⚠️ WARNING',
+            message: issue.message || issue.issue || JSON.stringify(issue),
+            fix: issue.fix || null
+          });
+        });
       }
       
-      // Scenario Brain warnings
-      if (rt.scenarioBrain?.warnings) {
-        warnings.push(...rt.scenarioBrain.warnings.map(w => ({ source: 'Scenarios', message: w })));
+      // Scenario Brain wiring health
+      if (rt.scenarioBrain?.health) {
+        const sh = rt.scenarioBrain.health;
+        if (sh.scenariosWithoutType > 0) {
+          warnings.push({ source: 'Scenarios', message: `${sh.scenariosWithoutType} scenarios have UNKNOWN type - run Golden Autofill to classify` });
+        }
+        if (sh.startFlowMissingFlowId > 0) {
+          warnings.push({ source: 'Scenarios', message: `${sh.startFlowMissingFlowId} scenarios have START_FLOW action but no flowId wired` });
+        }
       }
       
       // Dynamic Flow warnings
@@ -3816,16 +3828,7 @@
         warnings.push(...rt.controlPlane.warnings.map(w => ({ source: 'Control Plane', message: w })));
       }
       
-      // Check for common issues
-      const scenarioStats = rt.scenarioBrain?.totals || {};
-      if (scenarioStats.unknownType > 0) {
-        warnings.push({ source: 'Scenarios', message: `${scenarioStats.unknownType} scenarios have UNKNOWN type - run Golden Autofill to classify` });
-      }
-      if (scenarioStats.notEnterpriseReady > 0) {
-        warnings.push({ source: 'Scenarios', message: `${scenarioStats.notEnterpriseReady} scenarios are not enterprise-ready` });
-      }
-      
-      // Check flows
+      // Check if flows are all disabled
       if (rt.dynamicFlows?.enabledCount === 0 && rt.dynamicFlows?.totalCount > 0) {
         warnings.push({ source: 'Flows', message: 'All dynamic flows are disabled' });
       }
@@ -3837,11 +3840,12 @@
       // Build popup HTML
       const warningsHtml = warnings.length > 0 
         ? warnings.map((w, i) => `
-            <div style="display: flex; gap: 12px; padding: 12px; background: #1e293b; border-radius: 8px; border-left: 3px solid #f59e0b;">
-              <span style="color: #f59e0b; font-weight: 700; min-width: 20px;">${i + 1}.</span>
-              <div>
+            <div style="display: flex; gap: 12px; padding: 12px; background: #1e293b; border-radius: 8px; border-left: 3px solid ${w.source.includes('ERROR') ? '#ef4444' : '#f59e0b'};">
+              <span style="color: ${w.source.includes('ERROR') ? '#ef4444' : '#f59e0b'}; font-weight: 700; min-width: 20px;">${i + 1}.</span>
+              <div style="flex: 1;">
                 <span style="color: #94a3b8; font-size: 11px; text-transform: uppercase;">[${w.source}]</span>
                 <div style="color: #e2e8f0; margin-top: 2px;">${w.message}</div>
+                ${w.fix ? `<div style="color: #3fb950; font-size: 11px; margin-top: 4px;">💡 Fix: ${w.fix}</div>` : ''}
               </div>
             </div>
           `).join('')
