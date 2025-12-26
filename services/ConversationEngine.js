@@ -331,8 +331,9 @@ function isSlotComplete(slotId, currentSlots, session, slotConfig) {
     const slotMeta = session?.booking?.meta?.[slotId] || {};
     const value = currentSlots?.[slotId] || currentSlots?.[slotConfig?.type] || '';
     
-    // Special handling for name slot
-    if (slotId === 'name') {
+    // Special handling for name slot - check by TYPE not by slotId
+    // The Type dropdown (name, phone, address, etc.) determines behavior
+    if (slotConfig?.type === 'name' || slotId === 'name') {
         const nameMeta = session?.booking?.meta?.name || {};
         return isNameSlotComplete(currentSlots, nameMeta, slotConfig);
     }
@@ -2278,7 +2279,8 @@ async function processTurn({
                 allKeys: s ? Object.keys(s) : []
             }))
         });
-        const nameSlotConfig = bookingConfig.slots.find(s => s.slotId === 'name' || s.id === 'name');
+        // Find name slot by TYPE (not by slotId) - Type dropdown determines behavior
+        const nameSlotConfig = bookingConfig.slots.find(s => s.type === 'name' || s.slotId === 'name' || s.id === 'name');
         const askMissingNamePart = nameSlotConfig?.askMissingNamePart === true;
         
         // Extract name
@@ -2301,7 +2303,8 @@ async function processTurn({
                 
             // V32: Pass expectingName flag - true if we're in BOOKING mode and asking for name
             // V36: Pass custom stop words from company config (UI-controlled)
-            const expectingName = session.mode === 'BOOKING' && session.booking?.activeSlot === 'name';
+            // Check activeSlotType (the TYPE, not the custom ID) to see if we're asking for name
+            const expectingName = session.mode === 'BOOKING' && (session.booking?.activeSlotType === 'name' || session.booking?.activeSlot === 'name');
             const customStopWords = company?.aiAgentSettings?.nameStopWords?.custom || [];
             const stopWordsEnabled = company?.aiAgentSettings?.nameStopWords?.enabled !== false;
             let extractedName = SlotExtractors.extractName(userText, { 
@@ -2315,7 +2318,7 @@ async function processTurn({
             // When we're in BOOKING mode and actively asking for name, be more aggressive
             // "yes it's Mark" / "Mark" / "yes, Mark" should all work
             // ═══════════════════════════════════════════════════════════════════
-            if (!extractedName && session.mode === 'BOOKING' && session.booking?.activeSlot === 'name') {
+            if (!extractedName && session.mode === 'BOOKING' && (session.booking?.activeSlotType === 'name' || session.booking?.activeSlot === 'name')) {
                 log('🔍 V29: Context-aware name extraction (activeSlot=name)');
                 
                 // Try to extract a capitalized word from short responses
@@ -2979,13 +2982,37 @@ async function processTurn({
                     'currentSlots.name': currentSlots.name
                 });
                 
-                // Track active slot for deterministic flow
-                session.booking.activeSlot = session.booking.activeSlot || 'name';
+                // ═══════════════════════════════════════════════════════════════════════════
+                // V42 FIX: Build slot type map - maps TYPE to actual slot ID
+                // This allows slots with custom IDs (custom_xxx) to work properly
+                // The Type dropdown determines behavior, not the Slot ID
+                // ═══════════════════════════════════════════════════════════════════════════
+                if (!session.booking.slotTypeMap) {
+                    session.booking.slotTypeMap = {};
+                    for (const slot of bookingSlotsSafe) {
+                        const slotId = slot.slotId || slot.id;
+                        const slotType = slot.type || 'text';
+                        // Store the first slot of each type (in order)
+                        if (!session.booking.slotTypeMap[slotType] && slotId) {
+                            session.booking.slotTypeMap[slotType] = slotId;
+                        }
+                    }
+                    log('📋 V42: Built slot type map', session.booking.slotTypeMap);
+                }
+                
+                // Helper to get actual slot ID from type
+                const getSlotIdByType = (type) => session.booking.slotTypeMap[type] || type;
                 
                 // Get name slot config for special handling
-                const nameSlotConfig = bookingSlotsSafe.find(s => 
-                    (s.slotId || s.id || s.type) === 'name'
-                );
+                // CRITICAL: Find by TYPE first (UI sets type dropdown), then fall back to ID
+                const nameSlotConfig = bookingSlotsSafe.find(s => s.type === 'name') || 
+                                       bookingSlotsSafe.find(s => (s.slotId || s.id) === 'name');
+                
+                // Track active slot for deterministic flow
+                // Use the ACTUAL slot ID (could be custom_xxx), not hardcoded 'name'
+                const nameSlotId = getSlotIdByType('name');
+                session.booking.activeSlot = session.booking.activeSlot || nameSlotId;
+                session.booking.activeSlotType = session.booking.activeSlotType || 'name';
                 
                 // ═══════════════════════════════════════════════════════════════════
                 // V36 FIX: PROMPT AS LAW - Even if name was captured in discovery,
@@ -3009,7 +3036,7 @@ async function processTurn({
                 const needsConfirmBack = confirmBackEnabled && hasName && !nameConfirmed && !nameMeta?.lastConfirmed;
                 const needsLastName = askFullNameEnabled && hasName && !hasFullName && !nameMeta?.last;
                 
-                if (hasName && session.booking.activeSlot === 'name') {
+                if (hasName && (session.booking.activeSlotType === 'name' || session.booking.activeSlot === 'name')) {
                     if (needsConfirmBack || needsLastName) {
                         // DON'T skip - we need to confirm or get last name
                         log('📝 V36: Name from discovery needs processing', {
@@ -3039,7 +3066,9 @@ async function processTurn({
                             askFullNameEnabled,
                             hasFullName
                         });
-                        session.booking.activeSlot = 'phone';
+                        // V42: Use slotTypeMap to get actual phone slot ID
+                        session.booking.activeSlot = getSlotIdByType('phone');
+                        session.booking.activeSlotType = 'phone';
                     }
                 }
                 
@@ -3131,7 +3160,7 @@ async function processTurn({
                 // If we have a name from discovery but haven't confirmed it yet,
                 // ASK the confirmBack question NOW (first turn of booking mode)
                 // ═══════════════════════════════════════════════════════════════════
-                const discoveryNameNeedsProcessing = hasPartialName && !hasFullName && !nameMeta.lastConfirmed && session.booking.activeSlot === 'name';
+                const discoveryNameNeedsProcessing = hasPartialName && !hasFullName && !nameMeta.lastConfirmed && (session.booking.activeSlotType === 'name' || session.booking.activeSlot === 'name');
                 
                 if (discoveryNameNeedsProcessing && confirmBackEnabled) {
                     const nameToConfirm = currentSlots.partialName || nameMeta.first || currentSlots.name;
@@ -3199,7 +3228,7 @@ async function processTurn({
                 });
                 
                 // Handle "YES" to name confirmBack - need to check if we should ask for last name
-                if (userSaysYesForName && nameMeta.lastConfirmed && !nameMeta.askedMissingPartOnce && askFullName && session.booking.activeSlot === 'name') {
+                if (userSaysYesForName && nameMeta.lastConfirmed && !nameMeta.askedMissingPartOnce && askFullName && (session.booking.activeSlotType === 'name' || session.booking.activeSlot === 'name')) {
                     // User confirmed partial name, now ask for missing part
                     nameMeta.askedMissingPartOnce = true;
                     
@@ -3228,11 +3257,11 @@ async function processTurn({
                     });
                 }
                 // Handle "YES" to name confirmBack when askFullName is OFF - accept and move on
-                else if (userSaysYesForName && nameMeta.lastConfirmed && !askFullName && session.booking.activeSlot === 'name') {
+                else if (userSaysYesForName && nameMeta.lastConfirmed && !askFullName && (session.booking.activeSlotType === 'name' || session.booking.activeSlot === 'name')) {
                     // Accept partial name as complete
                     const partialName = currentSlots.partialName || nameMeta.first || nameMeta.last;
                     currentSlots.name = partialName;
-                    session.booking.activeSlot = 'phone';
+                    session.booking.activeSlot = getSlotIdByType('phone'); session.booking.activeSlotType = 'phone';
                     
                     const displayName = nameMeta.first || partialName;
                     finalReply = `Got it, ${displayName}. `;
@@ -3268,7 +3297,7 @@ async function processTurn({
                         const lastName = nameMeta.last || '';
                         currentSlots.name = `${firstName} ${lastName}`.trim();
                     }
-                    session.booking.activeSlot = 'phone';
+                    session.booking.activeSlot = getSlotIdByType('phone'); session.booking.activeSlotType = 'phone';
                     log('📝 NAME COMPLETE, moving to phone', { name: currentSlots.name });
                 }
             // ═══════════════════════════════════════════════════════════════════
@@ -3276,7 +3305,7 @@ async function processTurn({
                 // When we've asked for last name and user says "Walter" or "the last name is Walter"
                 // Extract the actual name, not just the first word
             // ═══════════════════════════════════════════════════════════════════
-                else if (session.booking.activeSlot === 'name' && nameMeta.askedMissingPartOnce && !hasBothParts) {
+                else if ((session.booking.activeSlotType === 'name' || session.booking.activeSlot === 'name') && nameMeta.askedMissingPartOnce && !hasBothParts) {
                     // We asked for the missing part - extract name from various phrasings
                     let extractedNamePart = null;
                     
@@ -3339,7 +3368,7 @@ async function processTurn({
                         const firstName = nameMeta.first || '';
                         const lastName = nameMeta.last || '';
                         currentSlots.name = `${firstName} ${lastName}`.trim();
-                        session.booking.activeSlot = 'phone';
+                        session.booking.activeSlot = getSlotIdByType('phone'); session.booking.activeSlotType = 'phone';
                         
                         // 🎯 DISPLAY NAME: Always use first name for personalization
                         const displayName = nameMeta.first || currentSlots.name.split(' ')[0] || currentSlots.name;
@@ -3361,7 +3390,7 @@ async function processTurn({
                     }
                 }
                 // Check if we're in the middle of name collection
-                else if (session.booking.activeSlot === 'name' && hasPartialName) {
+                else if ((session.booking.activeSlotType === 'name' || session.booking.activeSlot === 'name') && hasPartialName) {
                     const extractedName = extractedThisTurn.name || currentSlots.partialName;
                     const hasSpace = extractedName && extractedName.includes(' ');
                     
@@ -3371,7 +3400,7 @@ async function processTurn({
                         nameMeta.first = parts[0];
                         nameMeta.last = parts.slice(1).join(' ');
                         currentSlots.name = extractedName;
-                        session.booking.activeSlot = 'phone';
+                        session.booking.activeSlot = getSlotIdByType('phone'); session.booking.activeSlotType = 'phone';
                         
                         // Confirm and move to phone
                         finalReply = `Got it, ${nameMeta.first}. `;
@@ -3532,7 +3561,7 @@ async function processTurn({
                         } else {
                             // Accept as complete
                             currentSlots.name = chosenName;
-                            session.booking.activeSlot = 'phone';
+                            session.booking.activeSlot = getSlotIdByType('phone'); session.booking.activeSlotType = 'phone';
                             finalReply = `Got it, ${chosenName}. `;
                             nextSlotId = null;
                         }
@@ -3550,7 +3579,7 @@ async function processTurn({
                             // Build full name
                             const firstName = nameMeta.first || currentSlots.partialName || '';
                             currentSlots.name = `${firstName} ${extractedName}`.trim();
-                            session.booking.activeSlot = 'phone';
+                            session.booking.activeSlot = getSlotIdByType('phone'); session.booking.activeSlotType = 'phone';
                             
                             finalReply = `Perfect, ${firstName}. `;
                             nextSlotId = null; // Move to phone
@@ -3593,7 +3622,7 @@ async function processTurn({
                         const firstName = nameMeta.first || '';
                         const lastName = nameMeta.last || '';
                         currentSlots.name = `${firstName} ${lastName}`.trim();
-                        session.booking.activeSlot = 'phone';
+                        session.booking.activeSlot = getSlotIdByType('phone'); session.booking.activeSlotType = 'phone';
                         
                         // 🎯 DISPLAY NAME: Always use first name for personalization
                         // Never say "Perfect, Walter" when we have "Mark Walter"

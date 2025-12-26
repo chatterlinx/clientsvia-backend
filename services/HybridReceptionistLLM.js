@@ -917,7 +917,7 @@ RULES:
         for (const slotId of slotIds) {
             if (knownSlots[slotId]) {
                 collected.push(`${slotId}:${knownSlots[slotId]}`);
-            } else if (slotId === 'name' && knownSlots.partialName) {
+            } else if ((slot.type === 'name' || slotId === 'name') && knownSlots.partialName) {
                 // If we have a partial name, treat it as collected (don't re-ask)
                 collected.push(`name:${knownSlots.partialName} (partial - accept as complete)`);
             } else {

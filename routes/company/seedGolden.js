@@ -639,33 +639,28 @@ router.post('/booking-slots', authenticateJWT, async (req, res) => {
         };
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // UPDATE COMPANY DOCUMENT
+        // UPDATE COMPANY DOCUMENT - Use $set to avoid full validation issues
         // ═══════════════════════════════════════════════════════════════════════════
         
-        // Ensure aiAgentSettings exists
-        if (!company.aiAgentSettings) {
-            company.aiAgentSettings = {};
-        }
-        if (!company.aiAgentSettings.frontDeskBehavior) {
-            company.aiAgentSettings.frontDeskBehavior = {};
-        }
-        
-        // Set the golden booking configuration
-        company.aiAgentSettings.frontDeskBehavior.bookingEnabled = true;
-        company.aiAgentSettings.frontDeskBehavior.bookingSlots = goldenBookingSlots;
-        company.aiAgentSettings.frontDeskBehavior.nameSpellingVariants = goldenNameSpellingVariants;
-        
-        // Also set booking templates
-        company.aiAgentSettings.frontDeskBehavior.bookingTemplates = {
+        const bookingTemplates = {
             confirmTemplate: 'Perfect, {name}! I have you scheduled for {time} at {address}. We\'ll send a confirmation to {phone}.',
             completeTemplate: 'You\'re all set! Is there anything else I can help you with?',
             offerAsap: true,
             asapPhrase: 'as soon as possible'
         };
         
-        // Mark as modified and save
-        company.markModified('aiAgentSettings');
-        await company.save();
+        // Use updateOne with $set to avoid triggering validation on unrelated fields
+        await Company.updateOne(
+            { _id: companyId },
+            {
+                $set: {
+                    'aiAgentSettings.frontDeskBehavior.bookingEnabled': true,
+                    'aiAgentSettings.frontDeskBehavior.bookingSlots': goldenBookingSlots,
+                    'aiAgentSettings.frontDeskBehavior.nameSpellingVariants': goldenNameSpellingVariants,
+                    'aiAgentSettings.frontDeskBehavior.bookingTemplates': bookingTemplates
+                }
+            }
+        );
         
         logger.info('[GOLDEN BOOKING SLOTS] Seeded for company', {
             companyId,
