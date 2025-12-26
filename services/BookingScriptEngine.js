@@ -69,10 +69,11 @@ const DEFAULT_BOOKING_SLOTS = [
 ];
 
 /**
- * Normalize slot ID - handles both 'id' and 'slotId' field names
+ * Normalize slot ID - handles 'slotId', 'id', and 'key' field names
+ * Priority: slotId > id > key (key is the new UI schema)
  */
 function getSlotId(slot) {
-    return slot.slotId || slot.id || null;
+    return slot.slotId || slot.id || slot.key || null;
 }
 
 /**
