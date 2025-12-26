@@ -4577,6 +4577,8 @@ async function processTurn({
                     // ═══════════════════════════════════════════════════════════════
                     // If bookingSlotsSafe is empty, we can't finalize - the config is broken
                     // This prevents "You're all set!" when booking prompts aren't wired
+                    // CRITICAL: Do NOT hardcode any questions here - just acknowledge and hold
+                    // The real fix is to configure booking slots in the UI
                     // ═══════════════════════════════════════════════════════════════
                     log('🚫 BOOKING_BLOCKED_NOT_CONFIGURED: Cannot finalize booking - no slots configured', {
                         bookingEnabled: true,
@@ -4584,12 +4586,13 @@ async function processTurn({
                         source: bookingConfigSafe.source
                     });
                     
-                    // Return a safe response that doesn't fake success
+                    // SAFE RESPONSE: Acknowledge but don't ask for anything specific (no hardcoded prompts!)
+                    // This is a system error state - booking slots aren't wired correctly
                     aiResult = {
-                        reply: "I'd be happy to help schedule that! Let me get a few details from you. May I have your name?",
-                        conversationMode: 'booking',
-                        intent: 'collect_info',
-                        nextGoal: 'COLLECT_NAME',
+                        reply: "Got it, I have your information. Let me check on availability and someone from our team will follow up with you shortly to confirm the appointment.",
+                        conversationMode: 'complete',
+                        intent: 'booking_config_error_fallback',
+                        nextGoal: 'END_CALL_GRACEFULLY',
                         signals: { 
                             wantsBooking: true,
                             consentGiven: true,
@@ -4599,13 +4602,18 @@ async function processTurn({
                         latencyMs: Date.now() - aiStartTime,
                         tokensUsed: 0,
                         fromStateMachine: true,
-                        mode: 'BOOKING',
+                        mode: 'COMPLETE',
                         debug: {
                             source: 'BOOKING_BLOCKED_NOT_CONFIGURED',
                             effectiveSlotCount: 0,
-                            configSource: bookingConfigSafe.source
+                            configSource: bookingConfigSafe.source,
+                            note: 'Admin must configure booking slots in Front Desk > Booking Prompts'
                         }
                     };
+                    
+                    // Set mode to COMPLETE so we don't loop
+                    session.mode = 'COMPLETE';
+                    session.markModified('mode');
                 } else {
                     // ═══════════════════════════════════════════════════════════════
                     // ALL REQUIRED SLOTS COLLECTED - FINALIZE BOOKING
