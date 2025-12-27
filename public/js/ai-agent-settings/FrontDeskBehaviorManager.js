@@ -2089,20 +2089,34 @@ Sean → Shawn, Shaun`;
         // Name type options
         if (type === 'name' || slot.id === 'name') {
             return `
-                <div style="display: flex; align-items: center; gap: 16px; padding: 10px 12px; background: #1a2233; border-radius: 4px; border: 1px solid #58a6ff40; flex-wrap: wrap;">
-                    <span style="font-size: 11px; color: #58a6ff; font-weight: 600;">👤 Name Options:</span>
-                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Require BOTH first AND last name. If OFF, single name is accepted.">
-                        <input type="checkbox" class="slot-askFullName" data-index="${index}" ${slot.askFullName === true ? 'checked' : ''} style="accent-color: #58a6ff;">
-                        <span style="font-size: 12px; color: #c9d1d9;">Require full name (first + last)</span>
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="When referring to caller later, use first name only">
-                        <input type="checkbox" class="slot-useFirstNameOnly" data-index="${index}" ${slot.useFirstNameOnly !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
-                        <span style="font-size: 12px; color: #c9d1d9;">Call by first name</span>
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="If caller gives only first or last name, politely ask once for the other part">
-                        <input type="checkbox" class="slot-askMissingNamePart" data-index="${index}" ${slot.askMissingNamePart ? 'checked' : ''} style="accent-color: #58a6ff;">
-                        <span style="font-size: 12px; color: #c9d1d9;">Ask once for missing part</span>
-                    </label>
+                <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: #1a2233; border-radius: 4px; border: 1px solid #58a6ff40;">
+                    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                        <span style="font-size: 11px; color: #58a6ff; font-weight: 600;">👤 Name Options:</span>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Require BOTH first AND last name. If OFF, single name is accepted.">
+                            <input type="checkbox" class="slot-askFullName" data-index="${index}" ${slot.askFullName === true ? 'checked' : ''} style="accent-color: #58a6ff;">
+                            <span style="font-size: 12px; color: #c9d1d9;">Require full name (first + last)</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="When referring to caller later, use first name only">
+                            <input type="checkbox" class="slot-useFirstNameOnly" data-index="${index}" ${slot.useFirstNameOnly !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
+                            <span style="font-size: 12px; color: #c9d1d9;">Call by first name</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="If caller gives only first or last name, politely ask once for the other part">
+                            <input type="checkbox" class="slot-askMissingNamePart" data-index="${index}" ${slot.askMissingNamePart ? 'checked' : ''} style="accent-color: #58a6ff;">
+                            <span style="font-size: 12px; color: #c9d1d9;">Ask once for missing part</span>
+                        </label>
+                    </div>
+                    <!-- V46: Spelling Variant Check - creates a sub-requirement -->
+                    <div style="display: flex; align-items: center; gap: 16px; padding-top: 8px; border-top: 1px solid #30363d; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Check for spelling variants (Mark/Marc, Brian/Bryan) and confirm with caller. Uses your 908 common first names list.">
+                            <input type="checkbox" class="slot-confirmSpelling" data-index="${index}" ${slot.confirmSpelling === true ? 'checked' : ''} style="accent-color: #f0883e;">
+                            <span style="font-size: 12px; color: ${slot.confirmSpelling ? '#f0883e' : '#c9d1d9'}; font-weight: ${slot.confirmSpelling ? '600' : 'normal'};">
+                                ✏️ Confirm spelling variants (Mark/Marc)
+                            </span>
+                        </label>
+                        <span style="font-size: 10px; color: #8b949e; font-style: italic;">
+                            Uses Name Spelling Variants config above
+                        </span>
+                    </div>
                 </div>
             `;
         }
@@ -2727,6 +2741,10 @@ Sean → Shawn, Shaun`;
             }
             if (el.querySelector('.slot-askMissingNamePart')) {
                 slotData.askMissingNamePart = getChecked('.slot-askMissingNamePart');
+            }
+            // V46: Confirm spelling variants - creates a slot requirement
+            if (el.querySelector('.slot-confirmSpelling')) {
+                slotData.confirmSpelling = getChecked('.slot-confirmSpelling');
             }
             
             // PHONE options

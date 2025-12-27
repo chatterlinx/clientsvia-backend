@@ -3177,17 +3177,25 @@ async function processTurn({
                     
                     if (nameToConfirm && !nameToConfirm.includes(' ')) {
                         // ═══════════════════════════════════════════════════════════════════
-                        // V45: CHECK SPELLING VARIANT FIRST before confirming
-                        // If Mark/Marc variant exists, ask about spelling BEFORE asking last name
+                        // V46: CHECK SPELLING VARIANT - reads from SLOT config first
+                        // nameSlotConfig.confirmSpelling = TRUE enables the check
+                        // Falls back to global nameSpellingVariants.enabled if not set on slot
                         // ═══════════════════════════════════════════════════════════════════
                         const spellingConfigV45 = company.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants || {};
-                        const spellingEnabledV45 = spellingConfigV45.enabled === true;
+                        
+                        // V46: Check slot-level setting FIRST, then fall back to global
+                        const slotLevelSpellingEnabled = nameSlotConfig?.confirmSpelling === true;
+                        const globalSpellingEnabled = spellingConfigV45.enabled === true;
+                        const spellingEnabledV45 = slotLevelSpellingEnabled || globalSpellingEnabled;
+                        
                         const shouldCheckSpellingV45 = spellingEnabledV45 && 
                                                        !nameMeta.askedSpellingVariant && 
                                                        (nameMeta.spellingAsksCount || 0) < (spellingConfigV45.maxAsksPerCall || 1);
                         
-                        log('📝 V45: Spelling variant check in discovery path', {
+                        log('📝 V46: Spelling variant check in discovery path', {
                             nameToConfirm,
+                            slotLevelSpellingEnabled,
+                            globalSpellingEnabled,
                             spellingEnabledV45,
                             shouldCheckSpellingV45,
                             askedSpellingVariant: nameMeta.askedSpellingVariant,
