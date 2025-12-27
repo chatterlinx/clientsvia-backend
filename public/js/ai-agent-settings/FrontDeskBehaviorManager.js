@@ -7479,7 +7479,7 @@ Sean → Shawn, Shaun`;
     async executeLoadGoldenSlots() {
         try {
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const response = await fetch(`/api/company/${this.companyId}/seed-golden/call-slots`, {
+            const response = await fetch(`/api/company/${this.companyId}/seed-golden/slot-library`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
