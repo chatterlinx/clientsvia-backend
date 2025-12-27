@@ -3268,20 +3268,25 @@ async function processTurn({
                     const nameToUse = currentSlots.partialName || nameMeta.first || currentSlots.name;
                     
                     if (nameToUse && !nameToUse.includes(' ')) {
-                        // V36 PROMPT AS LAW: Use UI template if it asks for last name, otherwise use generic
+                        // V47: Use UI-configured last name question - NOT hardcoded
+                        const lastNameQuestion = nameSlotConfig?.lastNameQuestion || "And what's your last name?";
+                        const lastNameQuestionFormatted = lastNameQuestion.replace('{firstName}', nameToUse);
+                        
+                        // V36 PROMPT AS LAW: Use UI template if it asks for last name, otherwise use configured lastNameQuestion
                         const templateAsksForLastName = confirmBackTemplate.toLowerCase().includes('last name');
                         if (templateAsksForLastName) {
                             finalReply = confirmBackTemplate.replace('{value}', nameToUse);
                         } else {
-                            finalReply = `Got it, ${nameToUse}. And what's your last name?`;
+                            finalReply = `Got it, ${nameToUse}. ${lastNameQuestionFormatted}`;
                         }
                         nextSlotId = 'name';
                         nameMeta.askedMissingPartOnce = true;
                         nameMeta.lastConfirmed = true; // Mark that we've asked
                         
-                        log('📝 V36: Discovery name - asking for last name (no confirmBack)', {
+                        log('📝 V47: Discovery name - asking for last name (UI configured)', {
                             nameToUse,
                             askFullName,
+                            lastNameQuestion,
                             templateAsksForLastName
                         });
                     }
@@ -3317,24 +3322,29 @@ async function processTurn({
                     // Since they already confirmed, just ask for the missing part directly
                     const firstName = nameMeta.first || currentSlots.partialName || '';
                     
+                    // V47: Use UI-configured questions - NOT hardcoded
+                    const lastNameQ = nameSlotConfig?.lastNameQuestion || "And what's your last name?";
+                    const firstNameQ = nameSlotConfig?.firstNameQuestion || "And what's your first name?";
+                    
                     if (nameMeta.assumedSingleTokenAs === 'last') {
                         // We have last name, need first
                         finalReply = firstName 
-                            ? `Perfect, ${firstName}. And what's your first name?`
-                            : "And what's your first name?";
+                            ? `Perfect, ${firstName}. ${firstNameQ.replace('{firstName}', firstName)}`
+                            : firstNameQ;
                     } else {
                         // We have first name, need last - they already confirmed, so just ask
                         finalReply = firstName 
-                            ? `Perfect, ${firstName}. And what's your last name?`
-                            : "And what's your last name?";
+                            ? `Perfect, ${firstName}. ${lastNameQ.replace('{firstName}', firstName)}`
+                            : lastNameQ;
                     }
                     nextSlotId = 'name'; // Still on name
                     
-                    log('📝 NAME: User confirmed partial, asking for missing part (V36)', {
+                    log('📝 V47: User confirmed partial, asking for missing part (UI configured)', {
                         assumedAs: nameMeta.assumedSingleTokenAs,
                         first: nameMeta.first,
                         last: nameMeta.last,
-                        askingFor: nameMeta.assumedSingleTokenAs === 'last' ? 'first' : 'last'
+                        askingFor: nameMeta.assumedSingleTokenAs === 'last' ? 'first' : 'last',
+                        questionUsed: nameMeta.assumedSingleTokenAs === 'last' ? firstNameQ : lastNameQ
                     });
                 }
                 // Handle "YES" to name confirmBack when askFullName is OFF - accept and move on
@@ -3715,8 +3725,9 @@ async function processTurn({
                         // Now proceed to ask for last name or move on
                         if (askFullName) {
                             nameMeta.askedMissingPartOnce = true;
-                            // V36: Personalized ask for last name
-                            finalReply = `Got it, ${chosenName}. What's your last name?`;
+                            // V47: Use UI-configured last name question
+                            const lastNameQSpelling = nameSlotConfig?.lastNameQuestion || "What's your last name?";
+                            finalReply = `Got it, ${chosenName}. ${lastNameQSpelling.replace('{firstName}', chosenName)}`;
                             nextSlotId = 'name';
                         } else {
                             // Accept as complete
@@ -3751,22 +3762,28 @@ async function processTurn({
                             });
                         } else {
                             // confirmPrompt didn't ask for last name, so ask now
-                            // V36 PROMPT AS LAW: Use consistent "Got it" style
+                            // V47: Use UI-configured questions - NOT hardcoded
                             nameMeta.askedMissingPartOnce = true;
                             
                             const firstName = nameMeta.first || currentSlots.partialName || '';
+                            const lastNameQMissing = nameSlotConfig?.lastNameQuestion || "And what's your last name?";
+                            const firstNameQMissing = nameSlotConfig?.firstNameQuestion || "And what's your first name?";
+                            
                             if (nameMeta.assumedSingleTokenAs === 'last') {
                                 finalReply = firstName 
-                                    ? `Got it, ${firstName}. And what's your first name?`
-                                    : "And what's your first name?";
+                                    ? `Got it, ${firstName}. ${firstNameQMissing.replace('{firstName}', firstName)}`
+                                    : firstNameQMissing;
                             } else {
                                 finalReply = firstName 
-                                    ? `Got it, ${firstName}. And what's your last name?`
-                                    : "And what's your last name?";
+                                    ? `Got it, ${firstName}. ${lastNameQMissing.replace('{firstName}', firstName)}`
+                                    : lastNameQMissing;
                             }
                             nextSlotId = 'name'; // Still on name
                             
-                            log('📝 NAME: Asking for missing part (confirmPrompt did not ask)');
+                            log('📝 V47: Asking for missing part (UI configured)', {
+                                askingFor: nameMeta.assumedSingleTokenAs === 'last' ? 'first' : 'last',
+                                questionUsed: nameMeta.assumedSingleTokenAs === 'last' ? firstNameQMissing : lastNameQMissing
+                            });
                         }
                     } else if (nameMeta.askedMissingPartOnce) {
                         // User provided the missing part

@@ -2105,6 +2105,19 @@ Sean → Shawn, Shaun`;
                             <span style="font-size: 12px; color: #c9d1d9;">Ask once for missing part</span>
                         </label>
                     </div>
+                    
+                    <!-- V47: Last Name Question - UI configurable, not hardcoded -->
+                    <div style="display: ${slot.askFullName === true ? 'flex' : 'none'}; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid #30363d;" id="lastNameQuestionSection-${index}">
+                        <label style="font-size: 11px; color: #58a6ff; font-weight: 600;">
+                            📝 Last Name Question (when asking for missing last name):
+                        </label>
+                        <input type="text" class="slot-lastNameQuestion" data-index="${index}" 
+                            value="${slot.lastNameQuestion || 'And what\\'s your last name?'}" 
+                            placeholder="And what's your last name?"
+                            style="width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
+                        <span style="font-size: 10px; color: #8b949e;">Use {firstName} to include caller's first name, e.g. "Got it, {firstName}. And what's your last name?"</span>
+                    </div>
+                    
                     <!-- V46: Spelling Variant Check - creates a sub-requirement -->
                     <div style="display: flex; align-items: center; gap: 16px; padding-top: 8px; border-top: 1px solid #30363d; flex-wrap: wrap;">
                         <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Check for spelling variants (Mark/Marc, Brian/Bryan) and confirm with caller. Uses your 908 common first names list.">
@@ -2745,6 +2758,10 @@ Sean → Shawn, Shaun`;
             // V46: Confirm spelling variants - creates a slot requirement
             if (el.querySelector('.slot-confirmSpelling')) {
                 slotData.confirmSpelling = getChecked('.slot-confirmSpelling');
+            }
+            // V47: Last name question - UI configurable, not hardcoded
+            if (el.querySelector('.slot-lastNameQuestion')) {
+                slotData.lastNameQuestion = getVal('.slot-lastNameQuestion') || "And what's your last name?";
             }
             
             // PHONE options
