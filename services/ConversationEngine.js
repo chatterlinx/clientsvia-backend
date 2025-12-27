@@ -355,14 +355,16 @@ function buildStateSummaryForLLM(currentSlots, bookingSlots, session) {
     
     for (const slot of bookingSlots) {
         const slotId = slot.slotId || slot.id || slot.type;
-        const value = currentSlots[slotId];
+        // V48 FIX: Check both slotId AND type for slot values
+        // Data is stored under TYPE key (name, phone, address) not custom slot IDs
+        const value = currentSlots[slotId] || currentSlots[slot.type];
         const isComplete = isSlotComplete(slotId, currentSlots, session, slot);
         
         if (isComplete && value) {
-            const displayValue = slotId === 'phone' ? value : value.substring(0, 30);
-            collected.push(`${slotId}="${displayValue}" (complete)`);
+            const displayValue = slotId === 'phone' || slot.type === 'phone' ? value : (value.substring ? value.substring(0, 30) : String(value));
+            collected.push(`${slot.type || slotId}="${displayValue}" (complete)`);
         } else if (slot.required) {
-            missing.push(slotId);
+            missing.push(slot.type || slotId);
         }
     }
     
@@ -1397,8 +1399,21 @@ const SlotExtractors = {
         // Check for street type
         if (!streetTypes.test(text)) return null;
         
-        // V34 FIX: Check for ZIP code (indicates complete address)
-        const hasZip = /\b\d{5}(-\d{4})?\b/.test(text);
+        // V48 FIX: Check for ZIP code (but NOT street numbers!)
+        // A street number like "12155" should not be detected as a ZIP code
+        const words = text.split(/\s+/);
+        const firstWord = words[0] || '';
+        const zipMatches = text.match(/\b(\d{5})(-\d{4})?\b/g) || [];
+        let hasZip = false;
+        for (const zipMatch of zipMatches) {
+            const zipDigits = zipMatch.replace(/-\d{4}$/, '');
+            // If this 5-digit number is the first word, it's likely a street number
+            if (firstWord === zipDigits) {
+                continue; // Skip - street number, not ZIP
+            }
+            hasZip = true;
+            break;
+        }
         
         // V34 FIX: Check for state (indicates complete address)
         const statePattern = /\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b/i;
@@ -4132,14 +4147,41 @@ async function processTurn({
                     const addressConfirmBack = addressSlotConfig?.confirmBack === true || addressSlotConfig?.confirmBack === 'true';
                     const addressConfirmPrompt = addressSlotConfig?.confirmPrompt || "Just to confirm, that's {value}, correct?";
                     
-                    // V34 FIX: Better "complete address" detection
+                    // V48 FIX: Better "complete address" detection
                     // An address is COMPLETE if it has:
-                    // - A ZIP code (5 digits), OR
+                    // - A ZIP code (5 digits NOT at the start - that's a street number), OR
                     // - A state name/abbreviation, OR
                     // - 5+ words (likely has city/state)
-                    const hasZip = /\b\d{5}(-\d{4})?\b/.test(extractedThisTurn.address);
+                    
+                    // V48: Don't match 5-digit street numbers as ZIP codes
+                    // ZIP codes appear AFTER the street address, not at the beginning
+                    // Pattern: Match 5 digits that are NOT followed by a street type word
+                    const addressWords = extractedThisTurn.address.split(/\s+/);
+                    const firstWord = addressWords[0] || '';
+                    const streetTypePattern = /^(street|st|avenue|ave|road|rd|drive|dr|lane|ln|court|ct|boulevard|blvd|way|place|pl|circle|cir|parkway|pkwy|highway|hwy|terrace|ter|trail|trl|loop|alley|aly|path|crossing|xing|square|sq|plaza|plz|commons|point|pt|ridge|run|pass|grove|park|estates|meadow|meadows|valley|hills|heights|view|vista|landing|springs|creek|glen|cove|bay|beach|shore|pointe)$/i;
+                    
+                    // V48: A 5-digit number is a ZIP if:
+                    // - It's NOT the first word (street numbers come first)
+                    // - OR it comes after a state abbreviation
+                    const zipMatches = extractedThisTurn.address.match(/\b(\d{5})(-\d{4})?\b/g) || [];
+                    let hasZip = false;
+                    for (const zipMatch of zipMatches) {
+                        const zipDigits = zipMatch.replace(/-\d{4}$/, '');
+                        // If this 5-digit number is the first word, it's a street number, not a ZIP
+                        if (firstWord === zipDigits) {
+                            continue; // Skip - this is likely a street number
+                        }
+                        // Check if the word AFTER the zip match is NOT a street type (ZIPs don't have street types after them)
+                        const afterZipIndex = extractedThisTurn.address.indexOf(zipMatch) + zipMatch.length;
+                        const afterZip = extractedThisTurn.address.substring(afterZipIndex).trim().split(/\s+/)[0] || '';
+                        if (!streetTypePattern.test(afterZip)) {
+                            hasZip = true;
+                            break;
+                        }
+                    }
+                    
                     const hasState = /\b(florida|fl|california|ca|texas|tx|new york|ny|georgia|ga|ohio|oh|michigan|mi|arizona|az|colorado|co|illinois|il|alabama|alaska|arkansas|connecticut|delaware|hawaii|idaho|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|north carolina|north dakota|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|al|ak|ar|ct|de|hi|id|in|ia|ks|ky|la|me|md|ma|mn|ms|mo|mt|ne|nv|nh|nj|nm|nc|nd|ok|or|pa|ri|sc|sd|tn|ut|vt|va|wa|wv|wi|wy)\b/i.test(extractedThisTurn.address);
-                    const wordCount = extractedThisTurn.address.split(/\s+/).length;
+                    const wordCount = addressWords.length;
                     const isCompleteAddress = hasZip || hasState || wordCount >= 5;
                     
                     // Only consider partial if it's truly incomplete
@@ -4640,12 +4682,13 @@ async function processTurn({
                     
                     const nextMissingSlotSafe = bookingSlotsSafe.find(slot => {
                         const slotId = slot.slotId || slot.id || slot.type;
+                        const slotType = slot.type;
                         
-                        // V34: ANTI-REPEAT GUARDRAIL
-                        // If user just provided this slot value THIS TURN, don't ask again
-                        if (extractedThisTurn[slotId]) {
-                            log(`🚫 V34 ANTI-REPEAT: Slot ${slotId} was just extracted, skipping`, {
-                                value: extractedThisTurn[slotId]
+                        // V48: ANTI-REPEAT GUARDRAIL - check BOTH slotId AND type
+                        // Data may be stored under type key (name, phone) not custom slot IDs
+                        if (extractedThisTurn[slotId] || extractedThisTurn[slotType]) {
+                            log(`🚫 V48 ANTI-REPEAT: Slot ${slotType || slotId} was just extracted, skipping`, {
+                                value: extractedThisTurn[slotId] || extractedThisTurn[slotType]
                             });
                             return false; // Not eligible
                         }
@@ -4653,8 +4696,12 @@ async function processTurn({
                         // V34: Use helper function for completion check
                         const isComplete = isSlotComplete(slotId, currentSlots, session, slot);
                         
-                        log(`🔍 V34: Slot ${slotId} check:`, {
-                            value: currentSlots[slotId]?.substring?.(0, 20) || currentSlots[slotId],
+                        // V48: Log the correct value (check both keys)
+                        const slotValue = currentSlots[slotId] || currentSlots[slotType];
+                        log(`🔍 V48: Slot ${slotType || slotId} check:`, {
+                            slotId,
+                            slotType,
+                            value: slotValue?.substring?.(0, 20) || slotValue,
                             isComplete,
                             required: slot.required,
                             eligible: slot.required && !isComplete

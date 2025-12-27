@@ -1960,7 +1960,23 @@ const companySchema = new mongoose.Schema({
                         ['Steven', ['Stephen']],
                         ['Sean', ['Shawn', 'Shaun']]
                     ])
-                }
+                },
+                
+                // V48: PRECOMPUTED VARIANT MAP (for runtime O(1) lookup)
+                // Built by Admin UI "Scan Names" button from commonFirstNames list
+                // Format: { "mark": ["marc"], "marc": ["mark"], ... }
+                // Runtime uses this for instant lookup instead of O(n²) computation
+                precomputedVariantMap: {
+                    type: Map,
+                    of: [String],
+                    default: null
+                },
+                
+                // Timestamp when precomputed map was last generated
+                precomputedAt: { type: Date, default: null },
+                
+                // Number of names that were scanned to build the map
+                precomputedFromCount: { type: Number, default: 0 }
             },
             
             // ═══════════════════════════════════════════════════════════════
