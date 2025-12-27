@@ -1223,4 +1223,198 @@ async function copyPlaceholders(sourceId, targetId) {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// V49: SLOT LIBRARY SEED - Bulletproof booking slots
+// ═══════════════════════════════════════════════════════════════════════════
+router.post('/slot-library', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    const startTime = Date.now();
+
+    try {
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ success: false, message: 'Company not found' });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // GOLDEN SLOT LIBRARY - Production-grade slot definitions
+        // ═══════════════════════════════════════════════════════════════════
+        const goldenSlotLibrary = [
+            {
+                id: 'customerName',
+                label: 'Customer Name',
+                type: 'name',
+                question: 'May I have your name, please?',
+                required: true,
+                confirmBack: true,
+                confirmPrompt: 'Got it, {value}. Did I get that right?',
+                validation: 'none',
+                order: 1,
+                typeOptions: {
+                    askFullName: true,
+                    confirmSpelling: true,
+                    lastNameQuestion: "And what's your last name?"
+                }
+            },
+            {
+                id: 'phoneNumber',
+                label: 'Phone Number',
+                type: 'phone',
+                question: "What's the best phone number to reach you?",
+                required: true,
+                confirmBack: true,
+                confirmPrompt: 'Let me read that back: {value}. Is that correct?',
+                validation: 'phone',
+                order: 2,
+                typeOptions: {
+                    offerCallerId: true
+                }
+            },
+            {
+                id: 'serviceAddress',
+                label: 'Service Address',
+                type: 'address',
+                question: "What's the address for the service?",
+                required: true,
+                confirmBack: true,
+                confirmPrompt: 'Just to confirm, the address is {value}?',
+                validation: 'address',
+                order: 3,
+                typeOptions: {
+                    requireCityStateZip: true,
+                    useGoogleValidation: false,
+                    askForUnit: 'smart'
+                }
+            },
+            {
+                id: 'preferredTime',
+                label: 'Preferred Time',
+                type: 'datetime',
+                question: "When would be a good time for the technician to come out?",
+                required: true,
+                confirmBack: false,
+                validation: 'none',
+                order: 4,
+                typeOptions: {
+                    offerAsap: true,
+                    offerMorningAfternoon: true
+                }
+            },
+            // Commercial/membership slots
+            {
+                id: 'companyName',
+                label: 'Company Name',
+                type: 'string',
+                question: "What's the name of your company?",
+                required: false,
+                confirmBack: true,
+                confirmPrompt: 'Got it, {value}.',
+                validation: 'none',
+                order: 0
+            },
+            {
+                id: 'memberId',
+                label: 'Member ID',
+                type: 'string',
+                question: "May I have your member ID?",
+                required: false,
+                confirmBack: true,
+                confirmPrompt: 'Let me verify that - {value}?',
+                validation: 'alphanumeric',
+                order: 0
+            },
+            {
+                id: 'email',
+                label: 'Email Address',
+                type: 'email',
+                question: "What's the best email to send the confirmation to?",
+                required: false,
+                confirmBack: true,
+                confirmPrompt: "I'll send that to {value}. Is that correct?",
+                validation: 'email',
+                order: 5
+            }
+        ];
+
+        // ═══════════════════════════════════════════════════════════════════
+        // GOLDEN SLOT GROUPS - Conditional slot activation
+        // ═══════════════════════════════════════════════════════════════════
+        const goldenSlotGroups = [
+            {
+                id: 'default_residential',
+                name: 'Default Residential',
+                description: 'Standard booking for residential customers',
+                when: {},  // Empty = default, always matches if no other group matches
+                slots: ['customerName', 'phoneNumber', 'serviceAddress', 'preferredTime'],
+                isDefault: true,
+                order: 100
+            },
+            {
+                id: 'commercial_basic',
+                name: 'Commercial Account',
+                description: 'Commercial customers need company name',
+                when: { accountType: 'commercial' },
+                slots: ['companyName', 'customerName', 'phoneNumber', 'serviceAddress', 'preferredTime'],
+                isDefault: false,
+                order: 10
+            },
+            {
+                id: 'member_booking',
+                name: 'Membership Booking',
+                description: 'Members need to provide member ID',
+                when: { membership: true },
+                slots: ['memberId', 'customerName', 'phoneNumber', 'serviceAddress', 'preferredTime'],
+                isDefault: false,
+                order: 5
+            },
+            {
+                id: 'commercial_member',
+                name: 'Commercial Member',
+                description: 'Commercial accounts with membership',
+                when: { accountType: 'commercial', membership: true },
+                slots: ['companyName', 'memberId', 'customerName', 'phoneNumber', 'serviceAddress', 'preferredTime'],
+                isDefault: false,
+                order: 1
+            }
+        ];
+
+        // Update company with golden slot config
+        if (!company.aiAgentSettings) company.aiAgentSettings = {};
+        if (!company.aiAgentSettings.frontDeskBehavior) company.aiAgentSettings.frontDeskBehavior = {};
+        
+        company.aiAgentSettings.frontDeskBehavior.slotLibrary = goldenSlotLibrary;
+        company.aiAgentSettings.frontDeskBehavior.slotGroups = goldenSlotGroups;
+        
+        company.markModified('aiAgentSettings.frontDeskBehavior.slotLibrary');
+        company.markModified('aiAgentSettings.frontDeskBehavior.slotGroups');
+
+        await company.save();
+
+        logger.info('[SEED GOLDEN SLOT LIBRARY] ✅ Success', {
+            companyId,
+            slotLibraryCount: goldenSlotLibrary.length,
+            slotGroupsCount: goldenSlotGroups.length,
+            duration: Date.now() - startTime
+        });
+
+        res.json({
+            success: true,
+            message: 'Golden slot library loaded successfully',
+            slotLibrary: {
+                count: goldenSlotLibrary.length,
+                slots: goldenSlotLibrary.map(s => ({ id: s.id, type: s.type, required: s.required }))
+            },
+            slotGroups: {
+                count: goldenSlotGroups.length,
+                groups: goldenSlotGroups.map(g => ({ id: g.id, slots: g.slots.length, isDefault: g.isDefault }))
+            },
+            duration: Date.now() - startTime
+        });
+
+    } catch (error) {
+        logger.error('[SEED GOLDEN SLOT LIBRARY] Error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;

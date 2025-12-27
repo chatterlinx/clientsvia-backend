@@ -46,6 +46,7 @@ const ConversationStateMachine = require('./ConversationStateMachine');
 const LLMDiscoveryEngine = require('./LLMDiscoveryEngine');
 const AddressValidationService = require('./AddressValidationService');
 const DynamicFlowEngine = require('./DynamicFlowEngine');
+const CallSlotInitializer = require('../runtime/CallSlotInitializer');
 const logger = require('../utils/logger');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2019,6 +2020,33 @@ async function processTurn({
         });
         
         // ═══════════════════════════════════════════════════════════════════
+        // 🆕 CHECKPOINT 4.5: INITIALIZE CALL SLOTS (V49 Architecture)
+        // ═══════════════════════════════════════════════════════════════════
+        // This runs ONCE per session, BEFORE booking begins.
+        // After this, session.callSlots is FROZEN for the entire call.
+        // ALL booking questions come from here - no hardcoded questions!
+        // ═══════════════════════════════════════════════════════════════════
+        const callSlotResult = CallSlotInitializer.initializeCallSlots({
+            companyConfig: company.aiAgentSettings?.frontDeskBehavior,
+            sessionContext: {
+                // Pass context that might affect slot selection
+                accountType: session.customerContext?.accountType || 'residential',
+                membership: session.customerContext?.membership || false,
+                channel: normalizedChannel,
+                isNewCustomer: !customer
+            },
+            existingSession: session
+        });
+        
+        log('CHECKPOINT 4.5: ✅ Call slots initialized', {
+            initialized: callSlotResult.diagnostics?.initialized,
+            wasAlreadyInitialized: callSlotResult.diagnostics?.wasAlreadyInitialized,
+            activeSlotGroups: callSlotResult.activeSlotGroups,
+            slotsCreated: callSlotResult.diagnostics?.totalSlotsCreated,
+            slotIds: callSlotResult.diagnostics?.slotIds
+        });
+        
+        // ═══════════════════════════════════════════════════════════════════
         // 🆕 PHASE 1: INITIALIZE STATE + LOCKS (Deterministic Control Layer)
         // ═══════════════════════════════════════════════════════════════════
         // These locks prevent the "goldfish memory" problem:
@@ -2734,6 +2762,9 @@ async function processTurn({
             // 4. Never re-asks the same slot
             // ═══════════════════════════════════════════════════════════════════
             log('CHECKPOINT 9b: 📋 BOOKING MODE (deterministic - no state machine)');
+            
+            // V49: Flag for callSlots guardrail to continue booking instead of finalizing
+            let shouldContinueBooking = false;
             
             // ═══════════════════════════════════════════════════════════════════
             // STRICT INTERRUPT DETECTION (from brainstorming doc)
@@ -4882,6 +4913,43 @@ async function processTurn({
                     // ═══════════════════════════════════════════════════════════════
                     log('✅ BOOKING COMPLETE: All required slots collected - finalizing');
                     
+                    // ═══════════════════════════════════════════════════════════════
+                    // V49 GUARDRAIL: Check callSlots completion before finalizing
+                    // ═══════════════════════════════════════════════════════════════
+                    if (session.callSlots && Object.keys(session.callSlots).length > 0) {
+                        const callSlotCompletion = CallSlotInitializer.areAllSlotsComplete(session.callSlots);
+                        
+                        if (!callSlotCompletion.complete) {
+                            log('🚫 BOOKING_BLOCKED_MISSING_SLOTS: Cannot finalize - callSlots incomplete', {
+                                missingSlots: callSlotCompletion.missingSlots,
+                                totalRequired: callSlotCompletion.totalRequired,
+                                totalComplete: callSlotCompletion.totalComplete
+                            });
+                            
+                            // Find the next incomplete slot and ask its question
+                            const nextSlot = CallSlotInitializer.getNextSlotToProcess(
+                                session.callSlots, 
+                                session.callSlotOrder
+                            );
+                            
+                            if (nextSlot) {
+                                finalReply = nextSlot.slot.question;
+                                nextSlotId = nextSlot.slotId;
+                                session.booking.activeSlot = nextSlot.slotId;
+                                
+                                log('📋 V49: Redirecting to missing slot', {
+                                    slotId: nextSlot.slotId,
+                                    question: nextSlot.slot.question
+                                });
+                            }
+                            
+                            // Skip finalization - continue booking mode
+                            shouldContinueBooking = true;
+                        }
+                    }
+                    
+                    // Only finalize if not blocked by callSlots guardrail
+                    if (!shouldContinueBooking) {
                     // Finalize booking with configurable outcome
                     const finalizationResult = await finalizeBooking(session, company, currentSlots, {
                         channel,
@@ -4932,6 +5000,7 @@ async function processTurn({
                             status: finalizationResult.status
                         }
                     };
+                    } // Close V49 callSlots guardrail if
                 }
             }
             } else {
@@ -5999,6 +6068,10 @@ async function processTurn({
                 // 🧠 LLM BRAIN DEBUG - What the LLM decided (if used)
                 llmBrain: !aiResult.fromStateMachine ? (aiResult.debug || null) : null,
                 debugLog,
+                // ════════════════════════════════════════════════════════════════
+                // V49 CALL SLOTS - Bulletproof slot state machine (UI reads this)
+                // ════════════════════════════════════════════════════════════════
+                callSlots: session.callSlots ? CallSlotInitializer.getCallSlotsDiagnostics(session) : null,
                 // ════════════════════════════════════════════════════════════════
                 // V22 BLACK BOX - AUTHORITATIVE MODE TRACKING (UI reads this)
                 // ════════════════════════════════════════════════════════════════

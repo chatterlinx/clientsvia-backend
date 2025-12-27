@@ -1980,6 +1980,84 @@ const companySchema = new mongoose.Schema({
             },
             
             // ═══════════════════════════════════════════════════════════════
+            // SLOT LIBRARY - Master list of all possible booking slots
+            // ═══════════════════════════════════════════════════════════════
+            // UI: Front Desk → Call Slots → Slot Library
+            // 
+            // Each slot definition contains:
+            // - id: unique identifier
+            // - type: string | name | address | phone | email | datetime | enum
+            // - question: exact text to ask caller
+            // - required: whether slot must be filled
+            // - confirmBack: whether to confirm the value
+            // - confirmPrompt: template for confirmation
+            // - validation: validation rule to apply
+            // - typeOptions: type-specific options (e.g., askFullName for name)
+            // ═══════════════════════════════════════════════════════════════
+            slotLibrary: [{
+                id: { type: String, required: true, trim: true },
+                label: { type: String, trim: true },
+                type: { 
+                    type: String, 
+                    enum: ['string', 'name', 'address', 'phone', 'email', 'datetime', 'enum', 'boolean'],
+                    default: 'string'
+                },
+                question: { type: String, required: true, trim: true },
+                required: { type: Boolean, default: true },
+                confirmBack: { type: Boolean, default: false },
+                confirmPrompt: { type: String, default: "Just to confirm, {value}?", trim: true },
+                validation: { 
+                    type: String, 
+                    enum: ['none', 'phone', 'email', 'alphanumeric', 'numeric', 'address'],
+                    default: 'none'
+                },
+                enumOptions: [{ type: String, trim: true }],
+                order: { type: Number, default: 0 },
+                // Type-specific options
+                typeOptions: {
+                    // Name options
+                    askFullName: { type: Boolean, default: true },
+                    confirmSpelling: { type: Boolean, default: false },
+                    lastNameQuestion: { type: String, trim: true },
+                    // Address options
+                    requireCityStateZip: { type: Boolean, default: true },
+                    useGoogleValidation: { type: Boolean, default: false },
+                    askForUnit: { type: String, enum: ['never', 'smart', 'always'], default: 'smart' },
+                    // Phone options
+                    offerCallerId: { type: Boolean, default: true },
+                    // DateTime options
+                    offerAsap: { type: Boolean, default: true },
+                    offerMorningAfternoon: { type: Boolean, default: true }
+                }
+            }],
+            
+            // ═══════════════════════════════════════════════════════════════
+            // SLOT GROUPS - Conditional slot selection based on context
+            // ═══════════════════════════════════════════════════════════════
+            // UI: Front Desk → Call Slots → Slot Groups
+            // 
+            // Each group has:
+            // - id: unique identifier
+            // - name: display name
+            // - when: conditions object (all must match)
+            // - slots: array of slot IDs from slotLibrary
+            // - isDefault: if true, used when no other groups match
+            // ═══════════════════════════════════════════════════════════════
+            slotGroups: [{
+                id: { type: String, required: true, trim: true },
+                name: { type: String, trim: true },
+                description: { type: String, trim: true },
+                when: {
+                    type: Map,
+                    of: mongoose.Schema.Types.Mixed,
+                    default: new Map()
+                },
+                slots: [{ type: String, trim: true }],
+                isDefault: { type: Boolean, default: false },
+                order: { type: Number, default: 0 }
+            }],
+            
+            // ═══════════════════════════════════════════════════════════════
             // BOOKING TEMPLATES - Confirmation and completion messages
             // ═══════════════════════════════════════════════════════════════
             bookingTemplates: {
