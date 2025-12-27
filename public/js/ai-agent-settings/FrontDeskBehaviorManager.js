@@ -2112,10 +2112,10 @@ Sean → Shawn, Shaun`;
                             📝 Last Name Question (when asking for missing last name):
                         </label>
                         <input type="text" class="slot-lastNameQuestion" data-index="${index}" 
-                            value="${slot.lastNameQuestion || 'And what\\'s your last name?'}" 
-                            placeholder="And what's your last name?"
+                            value="${slot.lastNameQuestion || "And what is your last name?"}" 
+                            placeholder="And what is your last name?"
                             style="width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
-                        <span style="font-size: 10px; color: #8b949e;">Use {firstName} to include caller's first name, e.g. "Got it, {firstName}. And what's your last name?"</span>
+                        <span style="font-size: 10px; color: #8b949e;">Use {firstName} to include caller name, e.g. "Got it, {firstName}. And what is your last name?"</span>
                     </div>
                     
                     <!-- V46: Spelling Variant Check - creates a sub-requirement -->
