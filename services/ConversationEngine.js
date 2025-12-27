@@ -50,6 +50,48 @@ const CallSlotInitializer = require('../runtime/CallSlotInitializer');
 const logger = require('../utils/logger');
 
 // ═══════════════════════════════════════════════════════════════════════════
+// V50: BOOKING SLOTS BRIDGE - Use new callSlots system, fallback to legacy
+// ═══════════════════════════════════════════════════════════════════════════
+function getActiveBookingSlots(session, company) {
+    // Priority 1: Use new callSlots system if populated
+    if (session.callSlots && Object.keys(session.callSlots).length > 0) {
+        const slots = Object.values(session.callSlots).map(slot => ({
+            slotId: slot.slotId,
+            id: slot.slotId,
+            type: slot.type,
+            label: slot.label,
+            question: slot.question,
+            required: slot.required,
+            confirmBack: slot.confirmBack,
+            confirmPrompt: slot.confirmPrompt,
+            validation: slot.validation,
+            order: slot.order,
+            typeOptions: slot.typeOptions || {},
+            // State from callSlots
+            _state: slot.state,
+            _value: slot.value,
+            _confirmed: slot.confirmed
+        }));
+        
+        return {
+            source: 'callSlots',
+            isConfigured: true,
+            slots: slots.sort((a, b) => (a.order || 0) - (b.order || 0)),
+            slotCount: slots.length
+        };
+    }
+    
+    // Priority 2: Fallback to legacy BookingScriptEngine
+    const legacyConfig = BookingScriptEngine.getBookingSlotsFromCompany(company);
+    return {
+        source: legacyConfig.source || 'legacy_bookingSlots',
+        isConfigured: legacyConfig.isConfigured,
+        slots: legacyConfig.slots || [],
+        slotCount: legacyConfig.slots?.length || 0
+    };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2141,6 +2183,66 @@ async function processTurn({
                 log('🧠 PHASE 3: Flow generated responses', { count: flowResponses.length });
             }
             
+            // ═══════════════════════════════════════════════════════════════════
+            // V50: BIND SCENARIO ACTIONHOOKS TO CALLSLOTS
+            // If a triggered scenario has capture_* hooks, add to callSlots
+            // ═══════════════════════════════════════════════════════════════════
+            const triggeredScenarios = dynamicFlowResult.actionsExecuted
+                ?.filter(a => a.type === 'trigger_scenario' && a.scenario)
+                ?.map(a => a.scenario) || [];
+            
+            for (const scenario of triggeredScenarios) {
+                const actionHooks = scenario.actionHooks || [];
+                
+                for (const hook of actionHooks) {
+                    if (typeof hook === 'string' && hook.startsWith('capture_')) {
+                        const slotId = hook.replace('capture_', '');
+                        
+                        // Only add if not already in callSlots
+                        if (session.callSlots && !session.callSlots[slotId]) {
+                            // Look up in slotLibrary first
+                            const slotLibrary = company?.aiAgentSettings?.frontDeskBehavior?.slotLibrary || [];
+                            const slotDef = slotLibrary.find(s => s.id === slotId);
+                            
+                            if (slotDef) {
+                                session.callSlots[slotId] = CallSlotInitializer.buildCallSlot(slotDef);
+                                log('📋 V50: Added slot from scenario hook (library)', { 
+                                    scenarioId: scenario.scenarioId || scenario._id,
+                                    hook,
+                                    slotId 
+                                });
+                            } else {
+                                // Fallback: create basic slot definition
+                                session.callSlots[slotId] = CallSlotInitializer.buildCallSlot({
+                                    id: slotId,
+                                    type: 'string',
+                                    question: `What is your ${slotId.replace(/_/g, ' ')}?`,
+                                    required: true
+                                });
+                                log('📋 V50: Added slot from scenario hook (dynamic)', { 
+                                    scenarioId: scenario.scenarioId || scenario._id,
+                                    hook,
+                                    slotId 
+                                });
+                            }
+                        }
+                    }
+                }
+                
+                // V50: Apply entity validation from scenario if present
+                if (scenario.entityValidation && session.callSlots) {
+                    for (const [slotId, validation] of Object.entries(scenario.entityValidation)) {
+                        if (session.callSlots[slotId]) {
+                            session.callSlots[slotId].validation = validation.type || validation;
+                            if (validation.pattern) {
+                                session.callSlots[slotId].validationPattern = validation.pattern;
+                            }
+                            log('📋 V50: Applied entity validation to slot', { slotId, validation });
+                        }
+                    }
+                }
+            }
+            
         } catch (flowErr) {
             // Non-fatal - system works without dynamic flows
             log('⚠️ PHASE 3: Dynamic Flow Engine failed (non-fatal)', { 
@@ -2296,8 +2398,8 @@ async function processTurn({
         
         const extractedThisTurn = {};
         
-        // Get booking config for askMissingNamePart setting
-        const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company);
+        // V50: Get booking config using new callSlots bridge (falls back to legacy if needed)
+        const bookingConfig = getActiveBookingSlots(session, company);
         
         // 🔍 DIAGNOSTIC: Log booking config to debug NOT_CONFIGURED issue
         const rawBookingSlots = company?.aiAgentSettings?.frontDeskBehavior?.bookingSlots || [];
@@ -2464,10 +2566,10 @@ async function processTurn({
         // V34 FIX: Renamed to avoid duplicate declaration with greeting intercept
         const inBookingModeForName = session.mode === 'BOOKING' || session.booking?.consentGiven;
         
-        // Check if askFullName is enabled in booking config
-        const bookingConfigCheck = BookingScriptEngine.getBookingSlotsFromCompany(company);
+        // V50: Check if askFullName is enabled in booking config (using bridge)
+        const bookingConfigCheck = getActiveBookingSlots(session, company);
         const nameSlotCheck = (bookingConfigCheck.slots || []).find(s => 
-            (s.slotId || s.id || s.type) === 'name'
+            (s.slotId || s.id || s.type) === 'name' || s.type === 'name'
         );
         // 🎯 PROMPT AS LAW: Default askFullName to FALSE
         // Only ask for last name if UI explicitly requires it
@@ -2590,7 +2692,8 @@ async function processTurn({
             // This is the "clipboard snap" - we don't let LLM freestyle anymore.
             // We use the EXACT question from the booking panel.
             // ═══════════════════════════════════════════════════════════════════
-            const bookingConfigSnap = BookingScriptEngine.getBookingSlotsFromCompany(company);
+            // V50: Use callSlots bridge for booking snap
+            const bookingConfigSnap = getActiveBookingSlots(session, company);
             const bookingSlotsSnap = bookingConfigSnap.slots || [];
             
             // Find first required slot that's not collected
@@ -2807,8 +2910,8 @@ async function processTurn({
                 // LLM handles it, then returns to booking slot
                 log('CHECKPOINT 9c: 🔄 Booking interruption - checking cheat sheets first');
                 
-                // Get the next slot question for bridging back (MUST RESUME THIS EXACT PROMPT)
-                const bookingConfigInt = BookingScriptEngine.getBookingSlotsFromCompany(company);
+                // V50: Get the next slot question for bridging back (using callSlots bridge)
+                const bookingConfigInt = getActiveBookingSlots(session, company);
                 const bookingSlotsInt = bookingConfigInt.slots || [];
                 const nextMissingSlotInt = bookingSlotsInt.find(slot => {
                     const slotId = slot.slotId || slot.id || slot.type;
@@ -2954,8 +3057,15 @@ async function processTurn({
                 // ═══════════════════════════════════════════════════════════════════
                 log('⚠️ BOOKING MODE SAFETY NET: Computing next action');
                 
-                const bookingConfigSafe = BookingScriptEngine.getBookingSlotsFromCompany(company);
+                // V50: Use callSlots bridge for safety net (enables new slot system)
+                const bookingConfigSafe = getActiveBookingSlots(session, company);
                 const bookingSlotsSafe = bookingConfigSafe.slots || [];
+                
+                log('📋 V50: Active booking config', {
+                    source: bookingConfigSafe.source,
+                    slotCount: bookingSlotsSafe.length,
+                    slotIds: bookingSlotsSafe.map(s => s.slotId || s.id).slice(0, 5)
+                });
                 
                 // Initialize booking meta state for tracking confirmations
                 // V38 FIX: Initialize ALL slot metas at the start of booking mode
@@ -4752,7 +4862,39 @@ async function processTurn({
                             reason: 'First required incomplete slot'
                         });
                     } else {
-                        log('✅ V33: ALL SLOTS COMPLETE - Ready for finalization');
+                        // ═══════════════════════════════════════════════════════════════════
+                        // V50: DOUBLE-CHECK WITH CALLSLOTINITIALIZER BEFORE FINALIZING
+                        // The legacy V33 check may miss slots from the new system
+                        // ═══════════════════════════════════════════════════════════════════
+                        if (session.callSlots && Object.keys(session.callSlots).length > 0) {
+                            const callSlotCompletion = CallSlotInitializer.areAllSlotsComplete(session.callSlots);
+                            
+                            if (!callSlotCompletion.complete) {
+                                log('🚫 V50: BLOCKED - callSlots shows missing required slots', {
+                                    missingSlots: callSlotCompletion.missingSlots,
+                                    totalRequired: callSlotCompletion.totalRequired,
+                                    totalComplete: callSlotCompletion.totalComplete
+                                });
+                                
+                                // Use the first missing slot from callSlots
+                                const firstMissing = callSlotCompletion.missingSlots[0];
+                                if (firstMissing && session.callSlots[firstMissing]) {
+                                    const missingSlotDef = session.callSlots[firstMissing];
+                                    nextSlotId = firstMissing;
+                                    finalReply = missingSlotDef.question || `May I have your ${firstMissing}?`;
+                                    
+                                    log('📋 V50: Asking missing callSlot', { 
+                                        slotId: firstMissing, 
+                                        question: finalReply 
+                                    });
+                                }
+                            } else {
+                                log('✅ V50: CallSlotInitializer confirms ALL SLOTS COMPLETE');
+                                log('✅ V33: ALL SLOTS COMPLETE - Ready for finalization');
+                            }
+                        } else {
+                            log('✅ V33: ALL SLOTS COMPLETE - Ready for finalization (legacy mode)');
+                        }
                     }
                     
                     if (nextMissingSlotSafe) {

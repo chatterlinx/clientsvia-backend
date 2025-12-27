@@ -1417,4 +1417,99 @@ router.post('/slot-library', authenticateJWT, async (req, res) => {
     }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// V50: CLONE SLOT CONFIG FROM SOURCE COMPANY (Multi-Tenant Safe)
+// ═══════════════════════════════════════════════════════════════════════════
+/**
+ * POST /api/company/:companyId/seed-golden/clone/:sourceCompanyId
+ * 
+ * Clones slotLibrary and slotGroups from a source company (e.g., Penguin Air)
+ * to the target company. Multi-tenant safe - creates copies, not references.
+ */
+router.post('/clone/:sourceCompanyId', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    const { sourceCompanyId } = req.params;
+    const startTime = Date.now();
+
+    try {
+        logger.info('[CLONE SLOTS] Starting clone operation', { 
+            targetCompanyId: companyId, 
+            sourceCompanyId 
+        });
+
+        // Verify target company exists
+        const targetCompany = await Company.findById(companyId);
+        if (!targetCompany) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Target company not found' 
+            });
+        }
+
+        // Verify source company exists
+        const sourceCompany = await Company.findById(sourceCompanyId);
+        if (!sourceCompany) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Source company not found' 
+            });
+        }
+
+        // Get source slot config
+        const sourceSlotLibrary = sourceCompany.aiAgentSettings?.frontDeskBehavior?.slotLibrary || [];
+        const sourceSlotGroups = sourceCompany.aiAgentSettings?.frontDeskBehavior?.slotGroups || [];
+
+        if (sourceSlotLibrary.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Source company has no slotLibrary configured. Please configure source first or use /call-slots to load golden defaults.'
+            });
+        }
+
+        // Deep clone to ensure no references (multi-tenant isolation)
+        const clonedSlotLibrary = JSON.parse(JSON.stringify(sourceSlotLibrary));
+        const clonedSlotGroups = JSON.parse(JSON.stringify(sourceSlotGroups));
+
+        // Update target company
+        if (!targetCompany.aiAgentSettings) targetCompany.aiAgentSettings = {};
+        if (!targetCompany.aiAgentSettings.frontDeskBehavior) targetCompany.aiAgentSettings.frontDeskBehavior = {};
+
+        targetCompany.aiAgentSettings.frontDeskBehavior.slotLibrary = clonedSlotLibrary;
+        targetCompany.aiAgentSettings.frontDeskBehavior.slotGroups = clonedSlotGroups;
+
+        targetCompany.markModified('aiAgentSettings.frontDeskBehavior.slotLibrary');
+        targetCompany.markModified('aiAgentSettings.frontDeskBehavior.slotGroups');
+
+        await targetCompany.save();
+
+        logger.info('[CLONE SLOTS] ✅ Clone completed', {
+            targetCompanyId: companyId,
+            sourceCompanyId,
+            slotLibraryCount: clonedSlotLibrary.length,
+            slotGroupsCount: clonedSlotGroups.length,
+            duration: Date.now() - startTime
+        });
+
+        res.json({
+            success: true,
+            message: `Cloned ${clonedSlotLibrary.length} slots and ${clonedSlotGroups.length} groups from ${sourceCompany.name || sourceCompanyId}`,
+            source: {
+                companyId: sourceCompanyId,
+                companyName: sourceCompany.name
+            },
+            target: {
+                companyId,
+                companyName: targetCompany.name
+            },
+            slotLibraryCount: clonedSlotLibrary.length,
+            slotGroupsCount: clonedSlotGroups.length,
+            duration: Date.now() - startTime
+        });
+
+    } catch (error) {
+        logger.error('[CLONE SLOTS] Error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;

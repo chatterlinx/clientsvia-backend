@@ -609,6 +609,8 @@ class FrontDeskBehaviorManager {
                     ${this.renderTab('discovery', '🧠 Discovery & Consent')}
                     ${this.renderTab('vocabulary', '📝 Vocabulary')}
                     ${this.renderTab('booking', '📅 Booking Prompts')}
+                    ${this.renderTab('slot-library', '📚 Slot Library')}
+                    ${this.renderTab('slot-groups', '📦 Slot Groups')}
                     ${this.renderTab('flows', '🧠 Dynamic Flows')}
                     ${this.renderTab('emotions', '💭 Emotions')}
                     ${this.renderTab('frustration', '😤 Frustration')}
@@ -2908,6 +2910,249 @@ Sean → Shawn, Shaun`;
         if (elapsed > 5) {
             console.log(`[FRONT DESK] ⏱️ syncBookingSlotsFromDOM: ${elapsed.toFixed(1)}ms for ${slotElements.length} slots`);
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 📚 SLOT LIBRARY TAB - V50: Define individual slot definitions
+    // ═══════════════════════════════════════════════════════════════════════════
+    renderSlotLibraryTab() {
+        const slotLibrary = this.config.slotLibrary || [];
+        
+        return `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div>
+                        <h3 style="margin: 0; color: #58a6ff; display: flex; align-items: center; gap: 8px;">
+                            📚 Slot Library
+                        </h3>
+                        <p style="color: #8b949e; margin: 8px 0 0 0; font-size: 0.875rem;">
+                            Define the building blocks for booking conversations. Each slot has a question, type, and validation.
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="load-golden-slots-btn" style="
+                            padding: 8px 16px;
+                            background: linear-gradient(135deg, #f0883e 0%, #ffa657 100%);
+                            color: white;
+                            border: none;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-weight: 600;
+                        ">✨ Load Golden Defaults</button>
+                        <button id="add-slot-btn" style="
+                            padding: 8px 16px;
+                            background: #238636;
+                            color: white;
+                            border: none;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-weight: 600;
+                        ">+ Add Slot</button>
+                    </div>
+                </div>
+                
+                <!-- Slot Library Table -->
+                <div id="slot-library-table" style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.875rem;">
+                        <thead>
+                            <tr style="background: #21262d; color: #c9d1d9;">
+                                <th style="padding: 12px; text-align: left; border-bottom: 1px solid #30363d;">ID</th>
+                                <th style="padding: 12px; text-align: left; border-bottom: 1px solid #30363d;">Type</th>
+                                <th style="padding: 12px; text-align: left; border-bottom: 1px solid #30363d;">Question</th>
+                                <th style="padding: 12px; text-align: center; border-bottom: 1px solid #30363d;">Required</th>
+                                <th style="padding: 12px; text-align: center; border-bottom: 1px solid #30363d;">Confirm</th>
+                                <th style="padding: 12px; text-align: left; border-bottom: 1px solid #30363d;">Validation</th>
+                                <th style="padding: 12px; text-align: center; border-bottom: 1px solid #30363d;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${slotLibrary.length > 0 ? slotLibrary.map((slot, index) => `
+                                <tr class="slot-library-row" data-index="${index}" style="border-bottom: 1px solid #30363d;">
+                                    <td style="padding: 12px; color: #58a6ff; font-family: monospace;">${slot.id || 'unnamed'}</td>
+                                    <td style="padding: 12px; color: #c9d1d9;">${this.getSlotTypeDisplay(slot.type)}</td>
+                                    <td style="padding: 12px; color: #c9d1d9; max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${slot.question || '-'}</td>
+                                    <td style="padding: 12px; text-align: center;">${slot.required !== false ? '✅' : '❌'}</td>
+                                    <td style="padding: 12px; text-align: center;">${slot.confirmBack ? '✅' : '❌'}</td>
+                                    <td style="padding: 12px; color: #8b949e; font-family: monospace;">${slot.validation || 'none'}</td>
+                                    <td style="padding: 12px; text-align: center;">
+                                        <button class="edit-slot-btn" data-index="${index}" style="
+                                            padding: 4px 8px;
+                                            background: #21262d;
+                                            color: #58a6ff;
+                                            border: 1px solid #30363d;
+                                            border-radius: 4px;
+                                            cursor: pointer;
+                                            margin-right: 4px;
+                                        ">✏️</button>
+                                        <button class="delete-slot-btn" data-index="${index}" style="
+                                            padding: 4px 8px;
+                                            background: #21262d;
+                                            color: #f85149;
+                                            border: 1px solid #30363d;
+                                            border-radius: 4px;
+                                            cursor: pointer;
+                                        ">🗑️</button>
+                                    </td>
+                                </tr>
+                            `).join('') : `
+                                <tr>
+                                    <td colspan="7" style="padding: 40px; text-align: center; color: #8b949e;">
+                                        No slots defined yet. Click "Add Slot" or "Load Golden Defaults" to get started.
+                                    </td>
+                                </tr>
+                            `}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Slot Editor Modal (hidden by default) -->
+                <div id="slot-editor-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; display: none; align-items: center; justify-content: center;">
+                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 24px; max-width: 600px; width: 90%;">
+                        <h3 style="margin: 0 0 20px 0; color: #58a6ff;">Edit Slot</h3>
+                        <div id="slot-editor-content"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    getSlotTypeDisplay(type) {
+        const types = {
+            'name': '👤 Name',
+            'phone': '📞 Phone',
+            'email': '📧 Email',
+            'address': '📍 Address',
+            'datetime': '📅 Date/Time',
+            'string': '📝 Text',
+            'enum': '📋 Options',
+            'boolean': '✅ Yes/No'
+        };
+        return types[type] || `📝 ${type || 'string'}`;
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 📦 SLOT GROUPS TAB - V50: Define conditional slot groupings
+    // ═══════════════════════════════════════════════════════════════════════════
+    renderSlotGroupsTab() {
+        const slotGroups = this.config.slotGroups || [];
+        const slotLibrary = this.config.slotLibrary || [];
+        
+        return `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div>
+                        <h3 style="margin: 0; color: #58a6ff; display: flex; align-items: center; gap: 8px;">
+                            📦 Slot Groups
+                        </h3>
+                        <p style="color: #8b949e; margin: 8px 0 0 0; font-size: 0.875rem;">
+                            Define WHEN certain slots should be asked. Groups activate based on context (account type, membership, etc.).
+                        </p>
+                    </div>
+                    <button id="add-slot-group-btn" style="
+                        padding: 8px 16px;
+                        background: #238636;
+                        color: white;
+                        border: none;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        font-weight: 600;
+                    ">+ Add Group</button>
+                </div>
+                
+                <!-- Slot Groups List -->
+                <div id="slot-groups-list" style="display: flex; flex-direction: column; gap: 16px;">
+                    ${slotGroups.length > 0 ? slotGroups.map((group, index) => `
+                        <div class="slot-group-card" data-index="${index}" style="
+                            background: #21262d;
+                            border: 1px solid #30363d;
+                            border-radius: 8px;
+                            padding: 16px;
+                        ">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                                <div>
+                                    <h4 style="margin: 0; color: #c9d1d9; font-weight: 600;">${group.label || group.id}</h4>
+                                    <code style="font-size: 0.75rem; color: #8b949e;">ID: ${group.id}</code>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <button class="edit-group-btn" data-index="${index}" style="
+                                        padding: 4px 12px;
+                                        background: #21262d;
+                                        color: #58a6ff;
+                                        border: 1px solid #30363d;
+                                        border-radius: 4px;
+                                        cursor: pointer;
+                                    ">✏️ Edit</button>
+                                    <button class="delete-group-btn" data-index="${index}" style="
+                                        padding: 4px 12px;
+                                        background: #21262d;
+                                        color: #f85149;
+                                        border: 1px solid #30363d;
+                                        border-radius: 4px;
+                                        cursor: pointer;
+                                    ">🗑️</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Conditions -->
+                            <div style="margin-bottom: 12px;">
+                                <span style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px;">When:</span>
+                                <div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px;">
+                                    ${group.when && Object.keys(group.when).length > 0 
+                                        ? Object.entries(group.when).map(([key, value]) => `
+                                            <span style="
+                                                padding: 4px 8px;
+                                                background: #1f6feb33;
+                                                color: #58a6ff;
+                                                border-radius: 4px;
+                                                font-size: 0.75rem;
+                                                font-family: monospace;
+                                            ">${key} = ${value}</span>
+                                        `).join('')
+                                        : '<span style="color: #3fb950; font-size: 0.75rem;">⚡ Always Active (no conditions)</span>'
+                                    }
+                                </div>
+                            </div>
+                            
+                            <!-- Slots in this group -->
+                            <div>
+                                <span style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px;">Slots:</span>
+                                <div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px;">
+                                    ${(group.slots || []).map(slotId => {
+                                        const slotDef = slotLibrary.find(s => s.id === slotId);
+                                        return `
+                                            <span style="
+                                                padding: 4px 8px;
+                                                background: #23863633;
+                                                color: #3fb950;
+                                                border-radius: 4px;
+                                                font-size: 0.75rem;
+                                            ">${slotDef ? this.getSlotTypeDisplay(slotDef.type) : '📝'} ${slotId}</span>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('') : `
+                        <div style="padding: 40px; text-align: center; color: #8b949e; background: #21262d; border-radius: 8px;">
+                            No slot groups defined yet. Click "Add Group" to create conditional slot collections.
+                        </div>
+                    `}
+                </div>
+                
+                <!-- Context Flags Reference -->
+                <div style="margin-top: 24px; padding: 16px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
+                    <h4 style="margin: 0 0 12px 0; color: #8b949e; font-size: 0.875rem;">📖 Available Context Flags</h4>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        <code style="padding: 4px 8px; background: #21262d; border-radius: 4px; color: #c9d1d9; font-size: 0.75rem;">accountType</code>
+                        <code style="padding: 4px 8px; background: #21262d; border-radius: 4px; color: #c9d1d9; font-size: 0.75rem;">membership</code>
+                        <code style="padding: 4px 8px; background: #21262d; border-radius: 4px; color: #c9d1d9; font-size: 0.75rem;">isNewCustomer</code>
+                        <code style="padding: 4px 8px; background: #21262d; border-radius: 4px; color: #c9d1d9; font-size: 0.75rem;">channel</code>
+                        <code style="padding: 4px 8px; background: #21262d; border-radius: 4px; color: #c9d1d9; font-size: 0.75rem;">callType</code>
+                        <code style="padding: 4px 8px; background: #21262d; border-radius: 4px; color: #c9d1d9; font-size: 0.75rem;">isEmergency</code>
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -6321,6 +6566,8 @@ Sean → Shawn, Shaun`;
             case 'discovery': content.innerHTML = this.renderDiscoveryConsentTab(); break;
             case 'vocabulary': content.innerHTML = this.renderVocabularyTab(); break;
             case 'booking': content.innerHTML = this.renderBookingPromptsTab(); break;
+            case 'slot-library': content.innerHTML = this.renderSlotLibraryTab(); break;
+            case 'slot-groups': content.innerHTML = this.renderSlotGroupsTab(); break;
             case 'flows': 
                 content.innerHTML = this.renderDynamicFlowsTab(); 
                 // Load trade categories and flows asynchronously after rendering
@@ -6361,6 +6608,39 @@ Sean → Shawn, Shaun`;
                     btn.addEventListener('click', (e) => {
                         const slotId = e.target.closest('[data-slot-id]')?.dataset.slotId;
                         if (slotId) this.removeBookingSlot(slotId);
+                    });
+                });
+                break;
+            case 'slot-library':
+                // V50: Slot Library tab events
+                content.querySelector('#load-golden-slots-btn')?.addEventListener('click', () => this.loadGoldenSlots());
+                content.querySelector('#add-slot-btn')?.addEventListener('click', () => this.addNewSlot());
+                content.querySelectorAll('.edit-slot-btn')?.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const index = parseInt(e.target.dataset.index);
+                        this.editSlot(index);
+                    });
+                });
+                content.querySelectorAll('.delete-slot-btn')?.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const index = parseInt(e.target.dataset.index);
+                        this.deleteSlot(index);
+                    });
+                });
+                break;
+            case 'slot-groups':
+                // V50: Slot Groups tab events
+                content.querySelector('#add-slot-group-btn')?.addEventListener('click', () => this.addNewSlotGroup());
+                content.querySelectorAll('.edit-group-btn')?.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const index = parseInt(e.target.dataset.index);
+                        this.editSlotGroup(index);
+                    });
+                });
+                content.querySelectorAll('.delete-group-btn')?.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const index = parseInt(e.target.dataset.index);
+                        this.deleteSlotGroup(index);
                     });
                 });
                 break;
@@ -7082,6 +7362,177 @@ Sean → Shawn, Shaun`;
         } catch (error) {
             resultDiv.innerHTML = `<div style="color: #f85149;">Error: ${error.message}</div>`;
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V50: SLOT LIBRARY MANAGEMENT METHODS
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    async loadGoldenSlots() {
+        const confirmed = confirm('This will load the golden slot defaults (name, phone, address, time). Continue?');
+        if (!confirmed) return;
+        
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const response = await fetch(`/api/company/${this.companyId}/seed-golden/call-slots`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showNotification(`✅ Loaded ${result.slotLibraryCount} slots and ${result.slotGroupsCount} groups`, 'success');
+                
+                // Refresh config
+                await this.loadConfig();
+                
+                // Re-render tab
+                const container = document.querySelector('.front-desk-behavior-panel');
+                if (container) this.switchTab('slot-library', container);
+            } else {
+                this.showNotification(`Failed: ${result.error || result.message}`, 'error');
+            }
+        } catch (error) {
+            this.showNotification(`Error: ${error.message}`, 'error');
+        }
+    }
+    
+    addNewSlot() {
+        if (!this.config.slotLibrary) this.config.slotLibrary = [];
+        
+        const newSlot = {
+            id: `slot_${Date.now()}`,
+            type: 'string',
+            label: 'New Slot',
+            question: 'What is your value?',
+            required: true,
+            confirmBack: false,
+            validation: 'none',
+            order: this.config.slotLibrary.length
+        };
+        
+        this.config.slotLibrary.push(newSlot);
+        this.isDirty = true;
+        
+        // Re-render tab
+        const container = document.querySelector('.front-desk-behavior-panel');
+        if (container) this.switchTab('slot-library', container);
+        
+        this.showNotification('New slot added. Edit to customize.', 'info');
+    }
+    
+    editSlot(index) {
+        const slot = this.config.slotLibrary?.[index];
+        if (!slot) return;
+        
+        // Simple prompt-based editing for now
+        const newId = prompt('Slot ID:', slot.id);
+        if (newId === null) return;
+        
+        const newQuestion = prompt('Question:', slot.question);
+        if (newQuestion === null) return;
+        
+        const newType = prompt('Type (name/phone/email/address/datetime/string/enum/boolean):', slot.type);
+        if (newType === null) return;
+        
+        slot.id = newId || slot.id;
+        slot.question = newQuestion || slot.question;
+        slot.type = newType || slot.type;
+        
+        this.isDirty = true;
+        
+        // Re-render tab
+        const container = document.querySelector('.front-desk-behavior-panel');
+        if (container) this.switchTab('slot-library', container);
+        
+        this.showNotification('Slot updated', 'success');
+    }
+    
+    deleteSlot(index) {
+        if (!confirm('Delete this slot?')) return;
+        
+        this.config.slotLibrary?.splice(index, 1);
+        this.isDirty = true;
+        
+        // Re-render tab
+        const container = document.querySelector('.front-desk-behavior-panel');
+        if (container) this.switchTab('slot-library', container);
+        
+        this.showNotification('Slot deleted', 'success');
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V50: SLOT GROUPS MANAGEMENT METHODS
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    addNewSlotGroup() {
+        if (!this.config.slotGroups) this.config.slotGroups = [];
+        
+        const newGroup = {
+            id: `group_${Date.now()}`,
+            label: 'New Group',
+            when: {},  // Always active
+            slots: [],
+            isDefault: this.config.slotGroups.length === 0
+        };
+        
+        this.config.slotGroups.push(newGroup);
+        this.isDirty = true;
+        
+        // Re-render tab
+        const container = document.querySelector('.front-desk-behavior-panel');
+        if (container) this.switchTab('slot-groups', container);
+        
+        this.showNotification('New slot group added. Edit to customize.', 'info');
+    }
+    
+    editSlotGroup(index) {
+        const group = this.config.slotGroups?.[index];
+        if (!group) return;
+        
+        // Simple prompt-based editing for now
+        const newLabel = prompt('Group Label:', group.label);
+        if (newLabel === null) return;
+        
+        const slotsStr = prompt('Slot IDs (comma-separated):', (group.slots || []).join(', '));
+        if (slotsStr === null) return;
+        
+        const conditionsStr = prompt('Conditions (JSON, e.g. {"accountType":"commercial"}):', JSON.stringify(group.when || {}));
+        if (conditionsStr === null) return;
+        
+        try {
+            group.label = newLabel || group.label;
+            group.slots = slotsStr.split(',').map(s => s.trim()).filter(s => s);
+            group.when = conditionsStr ? JSON.parse(conditionsStr) : {};
+        } catch (e) {
+            this.showNotification('Invalid JSON for conditions', 'error');
+            return;
+        }
+        
+        this.isDirty = true;
+        
+        // Re-render tab
+        const container = document.querySelector('.front-desk-behavior-panel');
+        if (container) this.switchTab('slot-groups', container);
+        
+        this.showNotification('Slot group updated', 'success');
+    }
+    
+    deleteSlotGroup(index) {
+        if (!confirm('Delete this slot group?')) return;
+        
+        this.config.slotGroups?.splice(index, 1);
+        this.isDirty = true;
+        
+        // Re-render tab
+        const container = document.querySelector('.front-desk-behavior-panel');
+        if (container) this.switchTab('slot-groups', container);
+        
+        this.showNotification('Slot group deleted', 'success');
     }
 
     showNotification(message, type = 'info') {

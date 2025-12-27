@@ -337,64 +337,299 @@ function areAllSlotsComplete(callSlots) {
 }
 
 /**
+ * Common name misspellings/variants for spelling check
+ */
+const COMMON_NAME_VARIANTS = {
+    'mark': ['marc'],
+    'marc': ['mark'],
+    'brian': ['bryan'],
+    'bryan': ['brian'],
+    'steven': ['stephen'],
+    'stephen': ['steven'],
+    'jeff': ['geoff'],
+    'geoff': ['jeff'],
+    'erik': ['eric'],
+    'eric': ['erik'],
+    'shawn': ['sean', 'shaun'],
+    'sean': ['shawn', 'shaun'],
+    'shaun': ['shawn', 'sean'],
+    'caitlin': ['kaitlyn', 'katelyn'],
+    'kaitlyn': ['caitlin', 'katelyn'],
+    'megan': ['meghan'],
+    'meghan': ['megan'],
+    'lindsay': ['lindsey'],
+    'lindsey': ['lindsay'],
+    'ashley': ['ashlee', 'ashleigh'],
+    'sarah': ['sara'],
+    'sara': ['sarah'],
+    'allan': ['alan', 'allen'],
+    'alan': ['allan', 'allen'],
+    'allen': ['allan', 'alan'],
+    'phillip': ['philip'],
+    'philip': ['phillip'],
+    'matthew': ['mathew'],
+    'mathew': ['matthew'],
+    'jeffrey': ['geoffrey'],
+    'geoffrey': ['jeffrey'],
+    'carl': ['karl'],
+    'karl': ['carl'],
+    'curt': ['kurt'],
+    'kurt': ['curt'],
+    'katherine': ['catherine', 'kathryn'],
+    'catherine': ['katherine', 'kathryn'],
+    'kathryn': ['katherine', 'catherine'],
+    'anne': ['ann'],
+    'ann': ['anne']
+};
+
+/**
  * Update a slot's value and state
+ * Handles type-specific logic (name spelling, address merging)
  * 
  * @param {Object} callSlots - The session.callSlots object
  * @param {string} slotId - Slot to update
  * @param {Object} update - { value, confirmed, state }
- * @returns {boolean} Success
+ * @returns {Object} { success: boolean, needsFollowUp: boolean, followUpType: string }
  */
 function updateSlotValue(callSlots, slotId, update) {
     const slot = callSlots?.[slotId];
     if (!slot) {
         logger.warn('[CALL SLOTS] ⚠️ Cannot update non-existent slot', { slotId });
-        return false;
+        return { success: false, needsFollowUp: false };
     }
     
-    // Update allowed fields only
-    if (update.value !== undefined) {
-        slot.rawValue = update.value;
-        slot.value = update.value;
+    const result = { success: true, needsFollowUp: false, followUpType: null };
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // TYPE-SPECIFIC HANDLING: NAME
+    // ═══════════════════════════════════════════════════════════════════
+    if (slot.type === 'name' && update.value) {
+        // Initialize name-specific meta
+        slot.nameMeta = slot.nameMeta || {
+            firstName: null,
+            lastName: null,
+            spellingChecked: false,
+            spellingVariant: null,
+            lastNameAsked: false
+        };
+        
+        const nameParts = update.value.trim().split(/\s+/);
+        
+        if (nameParts.length === 1) {
+            // Single name - this is first name only
+            slot.nameMeta.firstName = nameParts[0];
+            slot.rawValue = update.value;
+            
+            const typeOpts = slot.typeOptions || {};
+            const lowerFirst = nameParts[0].toLowerCase();
+            
+            // Check for spelling variants
+            if (typeOpts.spellingCheck !== false && COMMON_NAME_VARIANTS[lowerFirst]) {
+                if (!slot.nameMeta.spellingChecked) {
+                    slot.nameMeta.spellingVariant = COMMON_NAME_VARIANTS[lowerFirst][0];
+                    slot.state = 'CONFIRMING';
+                    result.needsFollowUp = true;
+                    result.followUpType = 'spelling_variant';
+                    result.variant = slot.nameMeta.spellingVariant;
+                    
+                    logger.info('[CALL SLOTS] 🔍 Name spelling variant check needed', {
+                        firstName: nameParts[0],
+                        variant: slot.nameMeta.spellingVariant
+                    });
+                }
+            }
+            
+            // Check if we need last name
+            if (typeOpts.askLastIfMissing !== false && !slot.nameMeta.lastName) {
+                if (!slot.nameMeta.lastNameAsked && !result.needsFollowUp) {
+                    slot.state = 'CAPTURED_PARTIAL';
+                    result.needsFollowUp = true;
+                    result.followUpType = 'need_last_name';
+                    slot.nameMeta.lastNameAsked = true;
+                    
+                    logger.info('[CALL SLOTS] 👤 Need last name', { firstName: nameParts[0] });
+                }
+            }
+            
+            // If no follow-up needed and only first name required
+            if (!result.needsFollowUp && typeOpts.firstNameOnly) {
+                slot.value = nameParts[0];
+                slot.state = slot.confirmBack ? 'CONFIRMING' : 'DONE';
+            }
+        } else {
+            // Full name provided
+            slot.nameMeta.firstName = nameParts[0];
+            slot.nameMeta.lastName = nameParts.slice(1).join(' ');
+            slot.rawValue = update.value;
+            slot.value = update.value;
+            
+            // Still check spelling for first name
+            const typeOpts = slot.typeOptions || {};
+            const lowerFirst = nameParts[0].toLowerCase();
+            
+            if (typeOpts.spellingCheck !== false && COMMON_NAME_VARIANTS[lowerFirst] && !slot.nameMeta.spellingChecked) {
+                slot.nameMeta.spellingVariant = COMMON_NAME_VARIANTS[lowerFirst][0];
+                slot.state = 'CONFIRMING';
+                result.needsFollowUp = true;
+                result.followUpType = 'spelling_variant';
+                result.variant = slot.nameMeta.spellingVariant;
+            } else {
+                slot.state = slot.confirmBack ? 'CONFIRMING' : 'DONE';
+            }
+        }
     }
+    // ═══════════════════════════════════════════════════════════════════
+    // TYPE-SPECIFIC HANDLING: ADDRESS (merging partials)
+    // ═══════════════════════════════════════════════════════════════════
+    else if (slot.type === 'address' && update.value) {
+        // Initialize address-specific meta
+        slot.addressMeta = slot.addressMeta || {
+            street: null,
+            city: null,
+            state: null,
+            zip: null,
+            raw: []
+        };
+        
+        // Append raw inputs for merging
+        slot.addressMeta.raw.push(update.value);
+        slot.rawValue = slot.addressMeta.raw.join(' ');
+        
+        // Parse address components from combined raw
+        const combined = slot.rawValue;
+        
+        // Extract ZIP (5 digits, not at start of address)
+        const zipMatch = combined.match(/\b(\d{5})(?:-\d{4})?\b(?!.*\d)/);
+        if (zipMatch) {
+            slot.addressMeta.zip = zipMatch[1];
+        }
+        
+        // Extract state (2-letter code or full name)
+        const statePatterns = [
+            /\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b/i,
+            /\b(Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New\s+Hampshire|New\s+Jersey|New\s+Mexico|New\s+York|North\s+Carolina|North\s+Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode\s+Island|South\s+Carolina|South\s+Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West\s+Virginia|Wisconsin|Wyoming)\b/i
+        ];
+        
+        for (const pattern of statePatterns) {
+            const stateMatch = combined.match(pattern);
+            if (stateMatch) {
+                slot.addressMeta.state = stateMatch[1];
+                break;
+            }
+        }
+        
+        // Extract street (starts with number)
+        const streetMatch = combined.match(/^\d+\s+[^,]+/);
+        if (streetMatch) {
+            slot.addressMeta.street = streetMatch[0].trim();
+        }
+        
+        // City is trickier - look for pattern between street and state
+        // Simple heuristic: after street, before state/zip
+        if (slot.addressMeta.street && slot.addressMeta.state) {
+            const afterStreet = combined.slice(slot.addressMeta.street.length);
+            const cityMatch = afterStreet.match(/,?\s*([A-Za-z\s]+?)(?:,|\s+(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|Alabama|Alaska|Arizona|Florida|Georgia|Texas|California|Colorado|Nevada|Oregon|Washington))/i);
+            if (cityMatch) {
+                slot.addressMeta.city = cityMatch[1].trim();
+            }
+        }
+        
+        // Determine completeness
+        const hasStreet = !!slot.addressMeta.street;
+        const hasCity = !!slot.addressMeta.city;
+        const hasState = !!slot.addressMeta.state;
+        const hasZip = !!slot.addressMeta.zip;
+        
+        const typeOpts = slot.typeOptions || {};
+        const requireCityStateZip = typeOpts.requireCityStateZip !== false;
+        
+        logger.info('[CALL SLOTS] 📍 Address parsed', {
+            street: slot.addressMeta.street,
+            city: slot.addressMeta.city,
+            state: slot.addressMeta.state,
+            zip: slot.addressMeta.zip,
+            hasStreet, hasCity, hasState, hasZip
+        });
+        
+        if (hasStreet && (!requireCityStateZip || (hasCity && hasState))) {
+            slot.value = slot.rawValue;
+            slot.state = slot.confirmBack ? 'CONFIRMING' : 'DONE';
+        } else {
+            // Need more info
+            slot.state = 'CAPTURED_PARTIAL';
+            result.needsFollowUp = true;
+            
+            if (!hasCity || !hasState) {
+                result.followUpType = 'need_city_state';
+            } else if (!hasZip && typeOpts.requireZip) {
+                result.followUpType = 'need_zip';
+            }
+            
+            logger.info('[CALL SLOTS] 📍 Address incomplete, need more info', {
+                needCity: !hasCity,
+                needState: !hasState,
+                needZip: !hasZip && typeOpts.requireZip
+            });
+        }
+    }
+    // ═══════════════════════════════════════════════════════════════════
+    // GENERIC HANDLING (non-name, non-address)
+    // ═══════════════════════════════════════════════════════════════════
+    else {
+        // Update allowed fields
+        if (update.value !== undefined) {
+            slot.rawValue = update.value;
+            slot.value = update.value;
+        }
+        if (update.confirmed !== undefined) {
+            slot.confirmed = update.confirmed;
+        }
+        if (update.state !== undefined) {
+            slot.state = update.state;
+        }
+        if (update.askedCount !== undefined) {
+            slot.askedCount = update.askedCount;
+        }
+        
+        // Auto-transition states based on data
+        if (slot.value && (slot.state === 'NOT_ASKED' || slot.state === 'ASKED')) {
+            slot.state = 'CAPTURED';
+        }
+        
+        // Check if slot is DONE
+        if (slot.value) {
+            if (!slot.confirmBack || slot.confirmed) {
+                slot.state = 'DONE';
+            } else if (slot.confirmBack && !slot.confirmed && slot.state === 'CAPTURED') {
+                slot.state = 'CONFIRMING';
+            }
+        }
+    }
+    
+    // Handle explicit confirmation (for all types)
     if (update.confirmed !== undefined) {
         slot.confirmed = update.confirmed;
-    }
-    if (update.state !== undefined) {
-        slot.state = update.state;
-    }
-    if (update.askedCount !== undefined) {
-        slot.askedCount = update.askedCount;
-    }
-    
-    // Auto-transition states based on data
-    if (slot.value && slot.state === 'NOT_ASKED') {
-        slot.state = 'CAPTURED';
-    }
-    if (slot.value && slot.state === 'ASKED') {
-        slot.state = 'CAPTURED';
-    }
-    if (slot.confirmed && slot.state === 'CONFIRMING') {
-        slot.state = 'CONFIRMED';
-    }
-    
-    // Check if slot is DONE
-    // DONE = has value AND (confirmBack=false OR confirmed=true)
-    if (slot.value) {
-        if (!slot.confirmBack || slot.confirmed) {
-            slot.state = 'DONE';
-        } else if (slot.confirmBack && !slot.confirmed && slot.state === 'CAPTURED') {
-            slot.state = 'CONFIRMING';
+        
+        if (slot.confirmed && slot.state === 'CONFIRMING') {
+            if (slot.type === 'name') {
+                slot.nameMeta = slot.nameMeta || {};
+                slot.nameMeta.spellingChecked = true;
+            }
+            slot.state = slot.value ? 'DONE' : 'CONFIRMED';
         }
     }
     
     logger.debug('[CALL SLOTS] 📝 Slot updated', {
         slotId,
-        value: slot.value?.substring?.(0, 20) || slot.value,
+        type: slot.type,
+        value: slot.value?.substring?.(0, 30) || slot.value,
         confirmed: slot.confirmed,
-        state: slot.state
+        state: slot.state,
+        needsFollowUp: result.needsFollowUp,
+        followUpType: result.followUpType
     });
     
-    return true;
+    return result;
 }
 
 /**
