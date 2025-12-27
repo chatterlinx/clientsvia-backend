@@ -50,10 +50,10 @@ const CallSlotInitializer = require('../runtime/CallSlotInitializer');
 const logger = require('../utils/logger');
 
 // ═══════════════════════════════════════════════════════════════════════════
-// V50: BOOKING SLOTS BRIDGE - Use new callSlots system, fallback to legacy
+// V50.1: BOOKING SLOTS - ONLY callSlots system (legacy REMOVED Dec 2025)
 // ═══════════════════════════════════════════════════════════════════════════
 function getActiveBookingSlots(session, company) {
-    // Priority 1: Use new callSlots system if populated
+    // V50.1: ONLY use callSlots system - legacy booking.slots is deprecated
     if (session.callSlots && Object.keys(session.callSlots).length > 0) {
         const slots = Object.values(session.callSlots).map(slot => ({
             slotId: slot.slotId,
@@ -81,13 +81,24 @@ function getActiveBookingSlots(session, company) {
         };
     }
     
-    // Priority 2: Fallback to legacy BookingScriptEngine
-    const legacyConfig = BookingScriptEngine.getBookingSlotsFromCompany(company);
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LEGACY FALLBACK REMOVED DEC 2025 - Log warning and return NOT_CONFIGURED
+    // Admin must configure slots via Slot Library + Slot Groups in Front Desk UI
+    // ═══════════════════════════════════════════════════════════════════════════
+    logger.warn('[LEGACY BOOKING] ⚠️ No callSlots found - booking not configured', {
+        companyId: company?._id,
+        companyName: company?.companyName,
+        hasSlotLibrary: !!(company?.aiAgentSettings?.frontDeskBehavior?.slotLibrary?.length),
+        hasSlotGroups: !!(company?.aiAgentSettings?.frontDeskBehavior?.slotGroups?.length),
+        action: 'Configure slots in Front Desk → Booking Questions + When to Ask tabs'
+    });
+    
     return {
-        source: legacyConfig.source || 'legacy_bookingSlots',
-        isConfigured: legacyConfig.isConfigured,
-        slots: legacyConfig.slots || [],
-        slotCount: legacyConfig.slots?.length || 0
+        source: 'NOT_CONFIGURED',
+        isConfigured: false,
+        slots: [],
+        slotCount: 0,
+        _deprecated: 'Legacy booking.slots removed Dec 2025 - use Slot Library/Groups'
     };
 }
 
@@ -95,9 +106,12 @@ function getActiveBookingSlots(session, company) {
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V41-DYNAMIC-FLOW-ENGINE';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V50.1-CALLSLOTS-ONLY';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
+        '✅ V50.1: CALLSLOTS ONLY - Legacy booking.slots REMOVED',
+        '✅ V50: CallSlotInitializer is source of truth',
+        '✅ V50: Slot Library + Slot Groups from UI',
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
         '✅ LLM is PRIMARY BRAIN (not fallback)',
         '✅ Scenarios are TOOLS (not scripts)',

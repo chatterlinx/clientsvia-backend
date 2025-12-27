@@ -332,22 +332,56 @@ router.get('/', async (req, res) => {
         };
         
         // ═══════════════════════════════════════════════════════════════════════
-        // BUILD BOOKING CONFIG
+        // BUILD BOOKING CONFIG - V50.1: Prioritize slotLibrary + slotGroups
         // ═══════════════════════════════════════════════════════════════════════
+        const slotLibrary = frontDeskBehavior.slotLibrary || [];
+        const slotGroups = frontDeskBehavior.slotGroups || [];
+        
+        // V50.1: Use new slotLibrary if available, fallback to legacy controlPlane.booking.slots
+        const useNewSystem = slotLibrary.length > 0;
+        const legacySlots = controlPlane?.booking?.slots || [];
+        
         const booking = {
-            enabled: controlPlane.booking.enabled,
-            slots: controlPlane.booking.slots.map((s, idx) => ({
+            enabled: controlPlane?.booking?.enabled ?? frontDeskBehavior.bookingEnabled,
+            
+            // V50.1: Prioritize new system (slotLibrary)
+            source: useNewSystem ? 'slotLibrary' : (legacySlots.length > 0 ? 'legacy_bookingSlots' : 'NOT_CONFIGURED'),
+            
+            // New system: slotLibrary (UI-configured booking questions)
+            slotLibrary: slotLibrary.map(s => ({
+                id: s.id,
+                type: s.type,
+                label: s.label,
+                question: s.question,
+                required: s.required !== false,
+                confirmBack: s.confirmBack || false,
+                validation: s.validation || null,
+                order: s.order || 0
+            })),
+            slotLibraryCount: slotLibrary.length,
+            
+            // New system: slotGroups (when to ask which questions)
+            slotGroups: slotGroups.map(g => ({
+                id: g.id,
+                label: g.label || g.name,
+                when: g.when || {},
+                slots: g.slots || [],
+                isDefault: g.isDefault || false
+            })),
+            slotGroupsCount: slotGroups.length,
+            
+            // Legacy: controlPlane.booking.slots (deprecated Dec 2025)
+            legacySlots: legacySlots.map((s, idx) => ({
                 id: `slot_${s.key || s.name || idx}`,
                 key: s.key || s.name,
                 label: s.label || s.name,
                 required: s.required !== false,
-                validation: s.validation || null,
-                editable: true
+                _deprecated: 'Use slotLibrary instead'
             })),
-            slotsCount: controlPlane.booking.slotsCount,
+            legacySlotsCount: legacySlots.length,
             
             // Time windows (if configured)
-            timeWindows: company.frontDeskBehavior?.bookingWindows || [
+            timeWindows: frontDeskBehavior?.bookingWindows || [
                 '8:00 AM - 10:00 AM',
                 '10:00 AM - 12:00 PM',
                 '12:00 PM - 2:00 PM',
@@ -465,8 +499,14 @@ router.get('/', async (req, res) => {
             issues.push({ severity: 'ERROR', area: 'greeting', message: 'No greeting configured', fix: 'Set controlPlane.greeting.text' });
         }
         
-        if (controlPlane.booking.slotsCount === 0 && controlPlane.booking.enabled) {
-            issues.push({ severity: 'ERROR', area: 'booking', message: 'Booking enabled but no slots configured', fix: 'Add booking slots' });
+        // V50.1: Check new slotLibrary system first
+        if (booking.enabled && booking.slotLibraryCount === 0 && booking.legacySlotsCount === 0) {
+            issues.push({ 
+                severity: 'ERROR', 
+                area: 'booking', 
+                message: 'Booking enabled but no slots configured', 
+                fix: 'Go to Front Desk → Booking Questions tab and add slots, or click "Load Golden Defaults"'
+            });
         }
         
         if (scenarios.length === 0) {

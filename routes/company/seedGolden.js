@@ -509,11 +509,16 @@ router.post('/quick-booking-flow', authenticateJWT, async (req, res) => {
  * - Address slot with confirmation
  * - Time slot with ASAP option
  * 
- * This is the "gold standard" for how booking should be configured.
+ * ⚠️ DEPRECATED DEC 2025 - Use /call-slots endpoint instead
+ * This endpoint writes to the legacy bookingSlots field which is no longer used.
+ * The runtime now uses slotLibrary + slotGroups from /call-slots endpoint.
  */
 router.post('/booking-slots', authenticateJWT, async (req, res) => {
     const { companyId } = req.params;
     const startTime = Date.now();
+    
+    // Log deprecation warning
+    logger.warn('[DEPRECATED] /booking-slots endpoint called - use /call-slots instead', { companyId });
     
     try {
         const company = await Company.findById(companyId);
@@ -522,7 +527,8 @@ router.post('/booking-slots', authenticateJWT, async (req, res) => {
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // GOLDEN BOOKING SLOTS - The proper way to configure booking
+        // ⚠️ DEPRECATED - This writes to legacy bookingSlots field
+        // Use /call-slots endpoint which writes to slotLibrary + slotGroups
         // ═══════════════════════════════════════════════════════════════════════════
         const goldenBookingSlots = [
             {
@@ -894,16 +900,22 @@ async function seedFrontDeskBehavior(companyId, config, company) {
     return { action: 'updated', fields: Object.keys(update).length };
 }
 
+// ⚠️ DEPRECATED DEC 2025 - Use slotLibrary + slotGroups instead
+// This function writes to the legacy bookingSlots field which is no longer used by the runtime.
+// The runtime now uses session.callSlots generated from slotLibrary + slotGroups.
 async function seedBookingConfig(companyId, config, company) {
+    logger.warn('[DEPRECATED] seedBookingConfig called - use slotLibrary/slotGroups instead', { companyId });
+    
     const update = {
         'aiAgentSettings.bookingEnabled': config.enabled,
+        // LEGACY: bookingSlots field - runtime no longer reads this
         'aiAgentSettings.frontDeskBehavior.bookingSlots': config.slots,
         'aiAgentSettings.frontDeskBehavior.urgentBookingBehavior': config.urgentBookingBehavior,
         'aiAgentSettings.frontDeskBehavior.urgentTransferTarget': config.urgentTransferTarget
     };
     
     await Company.findByIdAndUpdate(companyId, { $set: update });
-    return { action: 'updated', slotsCount: config.slots.length };
+    return { action: 'updated', slotsCount: config.slots?.length || 0, deprecated: true };
 }
 
 async function seedDefaultReplies(companyId, config) {

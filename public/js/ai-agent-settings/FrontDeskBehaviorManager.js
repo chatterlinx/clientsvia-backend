@@ -835,7 +835,27 @@ class FrontDeskBehaviorManager {
         `;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ⚠️ DEPRECATED DEC 2025 - Use Slot Library + Slot Groups instead
+    // This entire tab has been replaced by the new V50 Call Slots architecture
+    // ═══════════════════════════════════════════════════════════════════════════
     renderBookingPromptsTab() {
+        console.warn('[DEPRECATED] renderBookingPromptsTab called - use Slot Library/Groups tabs instead');
+        // Return redirect message instead of old UI
+        return `
+            <div style="background: #f85149; color: white; padding: 24px; border-radius: 8px; text-align: center;">
+                <h2 style="margin: 0 0 12px 0;">⚠️ This Tab Has Been Replaced</h2>
+                <p style="margin: 0 0 16px 0; font-size: 1.1rem;">
+                    Booking configuration has moved to:<br>
+                    <strong>📚 Booking Questions (Slot Library)</strong> and <strong>📦 When to Ask (Slot Groups)</strong>
+                </p>
+                <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">
+                    The old Booking Prompts tab has been deprecated and will be removed soon.
+                </p>
+            </div>
+        `;
+        
+        /* LEGACY CODE BELOW - PRESERVED FOR REFERENCE ONLY - DO NOT USE
         // Use new bookingSlots if available, otherwise migrate from legacy bookingPrompts
         const slots = this.config.bookingSlots || this.getDefaultBookingSlots();
         const templates = this.config.bookingTemplates || this.config.bookingPrompts || {};
@@ -1089,6 +1109,7 @@ Sean → Shawn, Shaun"
                 ${this.renderBookingOutcomeSection()}
             </div>
         `;
+        END OF LEGACY CODE - PRESERVED FOR REFERENCE ONLY */
     }
     
     renderCommonFirstNameTags() {
@@ -6580,7 +6601,8 @@ Sean → Shawn, Shaun`;
             case 'personality': content.innerHTML = this.renderPersonalityTab(); break;
             case 'discovery': content.innerHTML = this.renderDiscoveryConsentTab(); break;
             case 'vocabulary': content.innerHTML = this.renderVocabularyTab(); break;
-            case 'booking': content.innerHTML = this.renderBookingPromptsTab(); break;
+            // LEGACY REMOVED DEC 2025 - Old Booking Prompts tab replaced by Slot Library/Groups
+            // case 'booking': content.innerHTML = this.renderBookingPromptsTab(); break;
             case 'slot-library': content.innerHTML = this.renderSlotLibraryTab(); break;
             case 'slot-groups': content.innerHTML = this.renderSlotGroupsTab(); break;
             case 'flows': 
@@ -6617,15 +6639,15 @@ Sean → Shawn, Shaun`;
     attachTabSpecificListeners(tabId, content) {
         // Only attach listeners for the current tab's content
         switch (tabId) {
-            case 'booking':
-                // Booking slot drag handles, delete buttons, etc.
-                content.querySelectorAll('.booking-slot-delete')?.forEach(btn => {
-                    btn.addEventListener('click', (e) => {
-                        const slotId = e.target.closest('[data-slot-id]')?.dataset.slotId;
-                        if (slotId) this.removeBookingSlot(slotId);
-                    });
-                });
-                break;
+            // LEGACY REMOVED DEC 2025 - Old Booking Prompts tab replaced by Slot Library/Groups
+            // case 'booking':
+            //     content.querySelectorAll('.booking-slot-delete')?.forEach(btn => {
+            //         btn.addEventListener('click', (e) => {
+            //             const slotId = e.target.closest('[data-slot-id]')?.dataset.slotId;
+            //             if (slotId) this.removeBookingSlot(slotId);
+            //         });
+            //     });
+            //     break;
             case 'slot-library':
                 // V50: Slot Library tab events
                 content.querySelector('#load-golden-slots-btn')?.addEventListener('click', () => this.loadGoldenSlots());
