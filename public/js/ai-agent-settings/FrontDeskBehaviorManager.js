@@ -603,14 +603,24 @@ class FrontDeskBehaviorManager {
                     </div>
                 </div>
 
+                <!-- V50: Success Banner - New Booking Architecture -->
+                <div style="background: linear-gradient(135deg, #238636 0%, #2ea043 100%); color: white; padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(35,134,54,0.3);">
+                    <span style="font-size: 24px;">✅</span>
+                    <div>
+                        <div style="font-weight: 700; font-size: 1rem;">NEW: Booking Questions Architecture</div>
+                        <div style="font-size: 0.875rem; opacity: 0.9;">Manage what the AI asks in "📚 Booking Questions" and when to ask in "📦 When to Ask" tabs. Old Booking Prompts has been replaced.</div>
+                    </div>
+                </div>
+
                 <!-- Tab Navigation -->
                 <div id="fdb-tabs" style="display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap;">
-                    ${this.renderTab('personality', '🎭 Personality', true)}
+                    ${this.renderTab('slot-library', '📚 Booking Questions', true)}
+                    ${this.renderTab('slot-groups', '📦 When to Ask')}
+                    ${this.renderTab('personality', '🎭 Personality')}
                     ${this.renderTab('discovery', '🧠 Discovery & Consent')}
                     ${this.renderTab('vocabulary', '📝 Vocabulary')}
-                    ${this.renderTab('booking', '📅 Booking Prompts')}
-                    ${this.renderTab('slot-library', '📚 Slot Library')}
-                    ${this.renderTab('slot-groups', '📦 Slot Groups')}
+                    <!-- DEPRECATED: Old Booking Prompts tab replaced by Slot Library + Groups -->
+                    <!-- ${this.renderTab('booking', '📅 Booking Prompts')} -->
                     ${this.renderTab('flows', '🧠 Dynamic Flows')}
                     ${this.renderTab('emotions', '💭 Emotions')}
                     ${this.renderTab('frustration', '😤 Frustration')}
@@ -625,7 +635,7 @@ class FrontDeskBehaviorManager {
 
                 <!-- Tab Content -->
                 <div id="fdb-tab-content" style="min-height: 400px;">
-                    ${this.renderPersonalityTab()}
+                    ${this.renderSlotLibraryTab()}
                 </div>
             </div>
         `;
@@ -2923,31 +2933,35 @@ Sean → Shawn, Shaun`;
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <div>
                         <h3 style="margin: 0; color: #58a6ff; display: flex; align-items: center; gap: 8px;">
-                            📚 Slot Library
+                            📚 Booking Questions (Slot Library)
                         </h3>
                         <p style="color: #8b949e; margin: 8px 0 0 0; font-size: 0.875rem;">
-                            Define the building blocks for booking conversations. Each slot has a question, type, and validation.
+                            Define the <strong>exact questions</strong> your AI will ask during booking. Each question is a "slot" that collects specific information.
                         </p>
                     </div>
                     <div style="display: flex; gap: 8px;">
                         <button id="load-golden-slots-btn" style="
-                            padding: 8px 16px;
+                            padding: 10px 20px;
                             background: linear-gradient(135deg, #f0883e 0%, #ffa657 100%);
                             color: white;
                             border: none;
-                            border-radius: 6px;
+                            border-radius: 8px;
                             cursor: pointer;
-                            font-weight: 600;
-                        ">✨ Load Golden Defaults</button>
+                            font-weight: 700;
+                            font-size: 0.95rem;
+                            box-shadow: 0 2px 8px rgba(240,136,62,0.3);
+                            transition: transform 0.1s, box-shadow 0.1s;
+                        " onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">✨ Load Golden Defaults</button>
                         <button id="add-slot-btn" style="
-                            padding: 8px 16px;
+                            padding: 10px 20px;
                             background: #238636;
                             color: white;
                             border: none;
-                            border-radius: 6px;
+                            border-radius: 8px;
                             cursor: pointer;
-                            font-weight: 600;
-                        ">+ Add Slot</button>
+                            font-weight: 700;
+                            font-size: 0.95rem;
+                        ">+ Add Question</button>
                     </div>
                 </div>
                 
@@ -3042,21 +3056,22 @@ Sean → Shawn, Shaun`;
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <div>
                         <h3 style="margin: 0; color: #58a6ff; display: flex; align-items: center; gap: 8px;">
-                            📦 Slot Groups
+                            📦 When to Ask (Slot Groups)
                         </h3>
                         <p style="color: #8b949e; margin: 8px 0 0 0; font-size: 0.875rem;">
-                            Define WHEN certain slots should be asked. Groups activate based on context (account type, membership, etc.).
+                            Define <strong>WHEN</strong> certain questions are asked. Groups activate based on caller context (account type, membership, etc.).
                         </p>
                     </div>
                     <button id="add-slot-group-btn" style="
-                        padding: 8px 16px;
+                        padding: 10px 20px;
                         background: #238636;
                         color: white;
                         border: none;
-                        border-radius: 6px;
+                        border-radius: 8px;
                         cursor: pointer;
-                        font-weight: 600;
-                    ">+ Add Group</button>
+                        font-weight: 700;
+                        font-size: 0.95rem;
+                    ">+ Add Requirement Set</button>
                 </div>
                 
                 <!-- Slot Groups List -->
@@ -7369,9 +7384,77 @@ Sean → Shawn, Shaun`;
     // ═══════════════════════════════════════════════════════════════════════════
     
     async loadGoldenSlots() {
-        const confirmed = confirm('This will load the golden slot defaults (name, phone, address, time). Continue?');
-        if (!confirmed) return;
+        // Show confirmation modal
+        this.showGoldenSlotsConfirmModal();
+    }
+    
+    showGoldenSlotsConfirmModal() {
+        const existingModal = document.getElementById('golden-slots-modal');
+        if (existingModal) existingModal.remove();
         
+        const modal = document.createElement('div');
+        modal.id = 'golden-slots-modal';
+        modal.style.cssText = `
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85); z-index: 10000;
+            display: flex; align-items: center; justify-content: center;
+        `;
+        
+        modal.innerHTML = `
+            <div style="
+                background: #161b22; border: 2px solid #f0883e; border-radius: 16px;
+                padding: 32px; max-width: 500px; width: 90%;
+                box-shadow: 0 8px 32px rgba(240,136,62,0.3);
+            ">
+                <div style="text-align: center; margin-bottom: 24px;">
+                    <span style="font-size: 48px;">✨</span>
+                    <h2 style="margin: 16px 0 8px 0; color: #f0883e; font-size: 1.5rem;">Load Golden Defaults</h2>
+                </div>
+                
+                <p style="color: #c9d1d9; font-size: 1rem; line-height: 1.6; margin-bottom: 16px;">
+                    This will load the <strong>standard HVAC booking questions</strong>:
+                </p>
+                
+                <ul style="color: #8b949e; font-size: 0.95rem; margin: 0 0 20px 20px; line-height: 1.8;">
+                    <li>👤 <strong>Customer Name</strong> (with spelling confirmation)</li>
+                    <li>📞 <strong>Phone Number</strong> (with callback option)</li>
+                    <li>📍 <strong>Service Address</strong> (with city/state validation)</li>
+                    <li>📅 <strong>Preferred Time</strong> (with ASAP option)</li>
+                    <li>🏢 <strong>Company Name</strong> (for commercial accounts)</li>
+                    <li>🎫 <strong>Member ID</strong> (for membership accounts)</li>
+                </ul>
+                
+                <p style="color: #3fb950; font-size: 0.875rem; margin-bottom: 24px;">
+                    ✓ Existing slots will be replaced with golden defaults.
+                </p>
+                
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button id="golden-cancel-btn" style="
+                        padding: 12px 24px; background: #21262d; color: #c9d1d9;
+                        border: 1px solid #30363d; border-radius: 8px; cursor: pointer;
+                        font-weight: 600; font-size: 1rem;
+                    ">Cancel</button>
+                    <button id="golden-confirm-btn" style="
+                        padding: 12px 24px;
+                        background: linear-gradient(135deg, #f0883e 0%, #ffa657 100%);
+                        color: white; border: none; border-radius: 8px; cursor: pointer;
+                        font-weight: 700; font-size: 1rem;
+                    ">✨ Load Golden Defaults</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        modal.querySelector('#golden-cancel-btn').addEventListener('click', () => modal.remove());
+        modal.querySelector('#golden-confirm-btn').addEventListener('click', async () => {
+            modal.remove();
+            await this.executeLoadGoldenSlots();
+        });
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    }
+    
+    async executeLoadGoldenSlots() {
         try {
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
             const response = await fetch(`/api/company/${this.companyId}/seed-golden/call-slots`, {
@@ -7385,12 +7468,8 @@ Sean → Shawn, Shaun`;
             const result = await response.json();
             
             if (result.success) {
-                this.showNotification(`✅ Loaded ${result.slotLibraryCount} slots and ${result.slotGroupsCount} groups`, 'success');
-                
-                // Refresh config
+                this.showNotification(`✅ Loaded ${result.slotLibraryCount} questions and ${result.slotGroupsCount} requirement sets`, 'success');
                 await this.loadConfig();
-                
-                // Re-render tab
                 const container = document.querySelector('.front-desk-behavior-panel');
                 if (container) this.switchTab('slot-library', container);
             } else {
@@ -7402,67 +7481,239 @@ Sean → Shawn, Shaun`;
     }
     
     addNewSlot() {
-        if (!this.config.slotLibrary) this.config.slotLibrary = [];
-        
-        const newSlot = {
-            id: `slot_${Date.now()}`,
-            type: 'string',
-            label: 'New Slot',
-            question: 'What is your value?',
-            required: true,
-            confirmBack: false,
-            validation: 'none',
-            order: this.config.slotLibrary.length
-        };
-        
-        this.config.slotLibrary.push(newSlot);
-        this.isDirty = true;
-        
-        // Re-render tab
-        const container = document.querySelector('.front-desk-behavior-panel');
-        if (container) this.switchTab('slot-library', container);
-        
-        this.showNotification('New slot added. Edit to customize.', 'info');
+        this.showSlotEditorModal(null);  // null = new slot
     }
     
     editSlot(index) {
         const slot = this.config.slotLibrary?.[index];
         if (!slot) return;
+        this.showSlotEditorModal(slot, index);
+    }
+    
+    showSlotEditorModal(slot = null, index = null) {
+        const isNew = !slot;
+        const existingModal = document.getElementById('slot-editor-modal');
+        if (existingModal) existingModal.remove();
         
-        // Simple prompt-based editing for now
-        const newId = prompt('Slot ID:', slot.id);
-        if (newId === null) return;
+        const currentSlot = slot || {
+            id: `slot_${Date.now()}`,
+            type: 'string',
+            label: '',
+            question: '',
+            required: true,
+            confirmBack: false,
+            confirmPrompt: 'Just to confirm, {value}?',
+            validation: 'none',
+            order: (this.config.slotLibrary?.length || 0)
+        };
         
-        const newQuestion = prompt('Question:', slot.question);
-        if (newQuestion === null) return;
+        const modal = document.createElement('div');
+        modal.id = 'slot-editor-modal';
+        modal.style.cssText = `
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85); z-index: 10000;
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
+        `;
         
-        const newType = prompt('Type (name/phone/email/address/datetime/string/enum/boolean):', slot.type);
-        if (newType === null) return;
+        modal.innerHTML = `
+            <div style="
+                background: #161b22; border: 1px solid #30363d; border-radius: 16px;
+                padding: 32px; max-width: 700px; width: 100%;
+                max-height: 90vh; overflow-y: auto;
+            ">
+                <h2 style="margin: 0 0 8px 0; color: #58a6ff; font-size: 1.5rem;">
+                    ${isNew ? '➕ Create New Booking Question' : '✏️ Edit Booking Question'}
+                </h2>
+                <p style="color: #8b949e; margin: 0 0 24px 0;">
+                    ${isNew ? 'Add a new question the AI will ask during booking.' : 'Modify this booking question.'}
+                </p>
+                
+                <!-- Question Text -->
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; color: #c9d1d9; font-weight: 600; margin-bottom: 8px;">
+                        📝 Question Text <span style="color: #f85149;">*</span>
+                    </label>
+                    <p style="color: #8b949e; font-size: 0.85rem; margin: 0 0 8px 0;">
+                        The exact words your AI will say to ask for this information.
+                    </p>
+                    <textarea id="slot-question" rows="3" style="
+                        width: 100%; padding: 12px; background: #0d1117;
+                        border: 1px solid #30363d; border-radius: 8px;
+                        color: #c9d1d9; font-size: 1rem; resize: vertical;
+                    " placeholder="e.g. May I have your name, please?">${currentSlot.question || ''}</textarea>
+                </div>
+                
+                <!-- Field ID -->
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; color: #c9d1d9; font-weight: 600; margin-bottom: 8px;">
+                        🔑 Field ID <span style="color: #f85149;">*</span>
+                    </label>
+                    <p style="color: #8b949e; font-size: 0.85rem; margin: 0 0 8px 0;">
+                        Internal identifier (no spaces, lowercase). Used for data storage.
+                    </p>
+                    <input type="text" id="slot-id" value="${currentSlot.id || ''}" style="
+                        width: 100%; padding: 12px; background: #0d1117;
+                        border: 1px solid #30363d; border-radius: 8px;
+                        color: #c9d1d9; font-size: 1rem; font-family: monospace;
+                    " placeholder="e.g. customerName, phoneNumber, memberId">
+                </div>
+                
+                <!-- Type Selector -->
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; color: #c9d1d9; font-weight: 600; margin-bottom: 8px;">
+                        📋 Question Type
+                    </label>
+                    <p style="color: #8b949e; font-size: 0.85rem; margin: 0 0 8px 0;">
+                        Determines validation and special handling.
+                    </p>
+                    <select id="slot-type" style="
+                        width: 100%; padding: 12px; background: #0d1117;
+                        border: 1px solid #30363d; border-radius: 8px;
+                        color: #c9d1d9; font-size: 1rem;
+                    ">
+                        <option value="name" ${currentSlot.type === 'name' ? 'selected' : ''}>👤 Name (spelling check, first/last)</option>
+                        <option value="phone" ${currentSlot.type === 'phone' ? 'selected' : ''}>📞 Phone (format validation)</option>
+                        <option value="email" ${currentSlot.type === 'email' ? 'selected' : ''}>📧 Email (format validation)</option>
+                        <option value="address" ${currentSlot.type === 'address' ? 'selected' : ''}>📍 Address (city/state/zip)</option>
+                        <option value="datetime" ${currentSlot.type === 'datetime' ? 'selected' : ''}>📅 Date/Time (ASAP option)</option>
+                        <option value="string" ${currentSlot.type === 'string' || !currentSlot.type ? 'selected' : ''}>📝 Text (free-form)</option>
+                        <option value="enum" ${currentSlot.type === 'enum' ? 'selected' : ''}>📋 Options (choose from list)</option>
+                        <option value="boolean" ${currentSlot.type === 'boolean' ? 'selected' : ''}>✅ Yes/No</option>
+                    </select>
+                </div>
+                
+                <!-- Rules -->
+                <div style="margin-bottom: 20px; padding: 16px; background: #21262d; border-radius: 8px;">
+                    <label style="display: block; color: #c9d1d9; font-weight: 600; margin-bottom: 12px;">
+                        ⚙️ Rules
+                    </label>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="slot-required" ${currentSlot.required !== false ? 'checked' : ''} style="width: 18px; height: 18px; accent-color: #238636;">
+                            <span style="color: #c9d1d9;">Required (must be collected before booking completes)</span>
+                        </label>
+                        
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="slot-confirmBack" ${currentSlot.confirmBack ? 'checked' : ''} style="width: 18px; height: 18px; accent-color: #238636;">
+                            <span style="color: #c9d1d9;">Confirm back (AI repeats answer for verification)</span>
+                        </label>
+                    </div>
+                    
+                    <div id="confirm-prompt-section" style="margin-top: 12px; display: ${currentSlot.confirmBack ? 'block' : 'none'};">
+                        <label style="display: block; color: #8b949e; font-size: 0.85rem; margin-bottom: 6px;">
+                            Confirmation prompt (use {value} for the answer):
+                        </label>
+                        <input type="text" id="slot-confirmPrompt" value="${currentSlot.confirmPrompt || 'Just to confirm, {value}?'}" style="
+                            width: 100%; padding: 10px; background: #0d1117;
+                            border: 1px solid #30363d; border-radius: 6px;
+                            color: #c9d1d9; font-size: 0.9rem;
+                        " placeholder="Just to confirm, {value}?">
+                    </div>
+                </div>
+                
+                <!-- Actions -->
+                <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+                    <button id="slot-cancel-btn" style="
+                        padding: 12px 24px; background: #21262d; color: #c9d1d9;
+                        border: 1px solid #30363d; border-radius: 8px; cursor: pointer;
+                        font-weight: 600; font-size: 1rem;
+                    ">Cancel</button>
+                    ${isNew ? `
+                    <button id="slot-save-add-btn" style="
+                        padding: 12px 24px; background: #1f6feb; color: white;
+                        border: none; border-radius: 8px; cursor: pointer;
+                        font-weight: 600; font-size: 1rem;
+                    ">Save & Add Another</button>
+                    ` : ''}
+                    <button id="slot-save-btn" style="
+                        padding: 12px 24px; background: #238636; color: white;
+                        border: none; border-radius: 8px; cursor: pointer;
+                        font-weight: 700; font-size: 1rem;
+                    ">${isNew ? 'Create Question' : 'Save Changes'}</button>
+                </div>
+            </div>
+        `;
         
-        slot.id = newId || slot.id;
-        slot.question = newQuestion || slot.question;
-        slot.type = newType || slot.type;
+        document.body.appendChild(modal);
+        
+        // Toggle confirm prompt visibility
+        modal.querySelector('#slot-confirmBack').addEventListener('change', (e) => {
+            modal.querySelector('#confirm-prompt-section').style.display = e.target.checked ? 'block' : 'none';
+        });
+        
+        // Cancel
+        modal.querySelector('#slot-cancel-btn').addEventListener('click', () => modal.remove());
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+        
+        // Save
+        modal.querySelector('#slot-save-btn').addEventListener('click', () => {
+            this.saveSlotFromModal(modal, index, false);
+        });
+        
+        // Save & Add Another
+        if (isNew) {
+            modal.querySelector('#slot-save-add-btn').addEventListener('click', () => {
+                this.saveSlotFromModal(modal, index, true);
+            });
+        }
+    }
+    
+    saveSlotFromModal(modal, index, addAnother) {
+        const id = modal.querySelector('#slot-id').value.trim();
+        const question = modal.querySelector('#slot-question').value.trim();
+        const type = modal.querySelector('#slot-type').value;
+        const required = modal.querySelector('#slot-required').checked;
+        const confirmBack = modal.querySelector('#slot-confirmBack').checked;
+        const confirmPrompt = modal.querySelector('#slot-confirmPrompt').value.trim();
+        
+        if (!id || !question) {
+            this.showNotification('Field ID and Question are required', 'error');
+            return;
+        }
+        
+        const slotData = {
+            id,
+            question,
+            type,
+            required,
+            confirmBack,
+            confirmPrompt: confirmBack ? confirmPrompt : null,
+            order: index !== null ? (this.config.slotLibrary[index]?.order || 0) : (this.config.slotLibrary?.length || 0)
+        };
+        
+        if (!this.config.slotLibrary) this.config.slotLibrary = [];
+        
+        if (index !== null) {
+            this.config.slotLibrary[index] = { ...this.config.slotLibrary[index], ...slotData };
+        } else {
+            this.config.slotLibrary.push(slotData);
+        }
         
         this.isDirty = true;
+        modal.remove();
         
-        // Re-render tab
-        const container = document.querySelector('.front-desk-behavior-panel');
-        if (container) this.switchTab('slot-library', container);
-        
-        this.showNotification('Slot updated', 'success');
+        if (addAnother) {
+            this.showSlotEditorModal(null);  // Open fresh modal
+            this.showNotification('Question saved! Add another.', 'success');
+        } else {
+            const container = document.querySelector('.front-desk-behavior-panel');
+            if (container) this.switchTab('slot-library', container);
+            this.showNotification(index !== null ? 'Question updated' : 'Question created', 'success');
+        }
     }
     
     deleteSlot(index) {
-        if (!confirm('Delete this slot?')) return;
+        if (!confirm('Delete this booking question?')) return;
         
         this.config.slotLibrary?.splice(index, 1);
         this.isDirty = true;
         
-        // Re-render tab
         const container = document.querySelector('.front-desk-behavior-panel');
         if (container) this.switchTab('slot-library', container);
         
-        this.showNotification('Slot deleted', 'success');
+        this.showNotification('Question deleted', 'success');
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
@@ -7470,69 +7721,264 @@ Sean → Shawn, Shaun`;
     // ═══════════════════════════════════════════════════════════════════════════
     
     addNewSlotGroup() {
-        if (!this.config.slotGroups) this.config.slotGroups = [];
-        
-        const newGroup = {
-            id: `group_${Date.now()}`,
-            label: 'New Group',
-            when: {},  // Always active
-            slots: [],
-            isDefault: this.config.slotGroups.length === 0
-        };
-        
-        this.config.slotGroups.push(newGroup);
-        this.isDirty = true;
-        
-        // Re-render tab
-        const container = document.querySelector('.front-desk-behavior-panel');
-        if (container) this.switchTab('slot-groups', container);
-        
-        this.showNotification('New slot group added. Edit to customize.', 'info');
+        this.showSlotGroupEditorModal(null);
     }
     
     editSlotGroup(index) {
         const group = this.config.slotGroups?.[index];
         if (!group) return;
+        this.showSlotGroupEditorModal(group, index);
+    }
+    
+    showSlotGroupEditorModal(group = null, index = null) {
+        const isNew = !group;
+        const existingModal = document.getElementById('slot-group-modal');
+        if (existingModal) existingModal.remove();
         
-        // Simple prompt-based editing for now
-        const newLabel = prompt('Group Label:', group.label);
-        if (newLabel === null) return;
+        const currentGroup = group || {
+            id: `group_${Date.now()}`,
+            label: '',
+            description: '',
+            when: {},
+            slots: [],
+            isDefault: false
+        };
         
-        const slotsStr = prompt('Slot IDs (comma-separated):', (group.slots || []).join(', '));
-        if (slotsStr === null) return;
+        const slotLibrary = this.config.slotLibrary || [];
         
-        const conditionsStr = prompt('Conditions (JSON, e.g. {"accountType":"commercial"}):', JSON.stringify(group.when || {}));
-        if (conditionsStr === null) return;
+        const modal = document.createElement('div');
+        modal.id = 'slot-group-modal';
+        modal.style.cssText = `
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85); z-index: 10000;
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
+        `;
         
-        try {
-            group.label = newLabel || group.label;
-            group.slots = slotsStr.split(',').map(s => s.trim()).filter(s => s);
-            group.when = conditionsStr ? JSON.parse(conditionsStr) : {};
-        } catch (e) {
-            this.showNotification('Invalid JSON for conditions', 'error');
+        modal.innerHTML = `
+            <div style="
+                background: #161b22; border: 1px solid #30363d; border-radius: 16px;
+                padding: 32px; max-width: 800px; width: 100%;
+                max-height: 90vh; overflow-y: auto;
+            ">
+                <h2 style="margin: 0 0 8px 0; color: #58a6ff; font-size: 1.5rem;">
+                    ${isNew ? '➕ Create Requirement Set' : '✏️ Edit Requirement Set'}
+                </h2>
+                <p style="color: #8b949e; margin: 0 0 24px 0;">
+                    Define WHEN these questions should be asked based on caller context.
+                </p>
+                
+                <!-- Name & Description -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                    <div>
+                        <label style="display: block; color: #c9d1d9; font-weight: 600; margin-bottom: 8px;">
+                            📛 Name <span style="color: #f85149;">*</span>
+                        </label>
+                        <input type="text" id="group-label" value="${currentGroup.label || currentGroup.name || ''}" style="
+                            width: 100%; padding: 12px; background: #0d1117;
+                            border: 1px solid #30363d; border-radius: 8px;
+                            color: #c9d1d9; font-size: 1rem;
+                        " placeholder="e.g. Commercial Booking">
+                    </div>
+                    <div>
+                        <label style="display: block; color: #c9d1d9; font-weight: 600; margin-bottom: 8px;">
+                            🔑 ID
+                        </label>
+                        <input type="text" id="group-id" value="${currentGroup.id || ''}" style="
+                            width: 100%; padding: 12px; background: #0d1117;
+                            border: 1px solid #30363d; border-radius: 8px;
+                            color: #c9d1d9; font-size: 1rem; font-family: monospace;
+                        " placeholder="e.g. commercial_booking">
+                    </div>
+                </div>
+                
+                <!-- Conditions -->
+                <div style="margin-bottom: 20px; padding: 16px; background: #21262d; border-radius: 8px;">
+                    <label style="display: block; color: #c9d1d9; font-weight: 600; margin-bottom: 12px;">
+                        🎯 When to Use (Conditions)
+                    </label>
+                    <p style="color: #8b949e; font-size: 0.85rem; margin: 0 0 12px 0;">
+                        Leave empty for "always active" (default group). Add conditions to target specific callers.
+                    </p>
+                    
+                    <div id="conditions-list" style="display: flex; flex-direction: column; gap: 8px;">
+                        ${Object.keys(currentGroup.when || {}).length > 0 ? 
+                            Object.entries(currentGroup.when).map(([key, val], i) => `
+                                <div class="condition-row" style="display: flex; gap: 8px; align-items: center;">
+                                    <select class="condition-key" style="padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                                        <option value="accountType" ${key === 'accountType' ? 'selected' : ''}>Account Type</option>
+                                        <option value="membership" ${key === 'membership' ? 'selected' : ''}>Has Membership</option>
+                                        <option value="isNewCustomer" ${key === 'isNewCustomer' ? 'selected' : ''}>Is New Customer</option>
+                                        <option value="channel" ${key === 'channel' ? 'selected' : ''}>Channel</option>
+                                    </select>
+                                    <span style="color: #8b949e;">=</span>
+                                    <input type="text" class="condition-value" value="${val}" style="flex: 1; padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                                    <button class="remove-condition" style="padding: 6px 10px; background: #f8514920; color: #f85149; border: 1px solid #f8514950; border-radius: 6px; cursor: pointer;">✕</button>
+                                </div>
+                            `).join('')
+                        : ''}
+                    </div>
+                    <button id="add-condition-btn" style="margin-top: 12px; padding: 8px 16px; background: #21262d; color: #58a6ff; border: 1px solid #30363d; border-radius: 6px; cursor: pointer;">
+                        + Add Condition
+                    </button>
+                </div>
+                
+                <!-- Slots Selection -->
+                <div style="margin-bottom: 20px; padding: 16px; background: #21262d; border-radius: 8px;">
+                    <label style="display: block; color: #c9d1d9; font-weight: 600; margin-bottom: 12px;">
+                        📋 Questions to Ask (Select from Library)
+                    </label>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto;">
+                        ${slotLibrary.length > 0 ? slotLibrary.map(slot => `
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 8px; background: #0d1117; border-radius: 6px;">
+                                <input type="checkbox" class="group-slot-check" value="${slot.id}" ${(currentGroup.slots || []).includes(slot.id) ? 'checked' : ''} style="width: 18px; height: 18px; accent-color: #238636;">
+                                <span style="color: #c9d1d9;">${this.getSlotTypeDisplay(slot.type)} <strong>${slot.id}</strong></span>
+                                <span style="color: #8b949e; font-size: 0.85rem; margin-left: auto;">${(slot.question || '').substring(0, 40)}...</span>
+                            </label>
+                        `).join('') : `
+                            <p style="color: #f0883e; padding: 12px;">
+                                ⚠️ No questions in library yet. Go to "Booking Questions" tab first.
+                            </p>
+                        `}
+                    </div>
+                </div>
+                
+                <!-- Preview -->
+                <div style="margin-bottom: 20px; padding: 16px; background: #0d1117; border: 1px dashed #30363d; border-radius: 8px;">
+                    <label style="display: block; color: #8b949e; font-weight: 600; margin-bottom: 8px;">
+                        👁️ Preview
+                    </label>
+                    <p id="group-preview" style="color: #3fb950; margin: 0;">
+                        AI will ask: ${(currentGroup.slots || []).join(', ') || '(none selected)'}
+                    </p>
+                </div>
+                
+                <!-- Default checkbox -->
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 24px;">
+                    <input type="checkbox" id="group-isDefault" ${currentGroup.isDefault ? 'checked' : ''} style="width: 18px; height: 18px; accent-color: #238636;">
+                    <span style="color: #c9d1d9;">Set as default (used when no other conditions match)</span>
+                </label>
+                
+                <!-- Actions -->
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button id="group-cancel-btn" style="
+                        padding: 12px 24px; background: #21262d; color: #c9d1d9;
+                        border: 1px solid #30363d; border-radius: 8px; cursor: pointer;
+                        font-weight: 600; font-size: 1rem;
+                    ">Cancel</button>
+                    <button id="group-save-btn" style="
+                        padding: 12px 24px; background: #238636; color: white;
+                        border: none; border-radius: 8px; cursor: pointer;
+                        font-weight: 700; font-size: 1rem;
+                    ">${isNew ? 'Create Set' : 'Save Changes'}</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Update preview when slots change
+        const updatePreview = () => {
+            const selected = [...modal.querySelectorAll('.group-slot-check:checked')].map(cb => cb.value);
+            modal.querySelector('#group-preview').textContent = 'AI will ask: ' + (selected.join(', ') || '(none selected)');
+        };
+        
+        modal.querySelectorAll('.group-slot-check').forEach(cb => {
+            cb.addEventListener('change', updatePreview);
+        });
+        
+        // Add condition
+        modal.querySelector('#add-condition-btn').addEventListener('click', () => {
+            const list = modal.querySelector('#conditions-list');
+            const row = document.createElement('div');
+            row.className = 'condition-row';
+            row.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+            row.innerHTML = `
+                <select class="condition-key" style="padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                    <option value="accountType">Account Type</option>
+                    <option value="membership">Has Membership</option>
+                    <option value="isNewCustomer">Is New Customer</option>
+                    <option value="channel">Channel</option>
+                </select>
+                <span style="color: #8b949e;">=</span>
+                <input type="text" class="condition-value" placeholder="value" style="flex: 1; padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                <button class="remove-condition" style="padding: 6px 10px; background: #f8514920; color: #f85149; border: 1px solid #f8514950; border-radius: 6px; cursor: pointer;">✕</button>
+            `;
+            list.appendChild(row);
+            row.querySelector('.remove-condition').addEventListener('click', () => row.remove());
+        });
+        
+        // Remove condition handlers
+        modal.querySelectorAll('.remove-condition').forEach(btn => {
+            btn.addEventListener('click', (e) => e.target.closest('.condition-row').remove());
+        });
+        
+        // Cancel
+        modal.querySelector('#group-cancel-btn').addEventListener('click', () => modal.remove());
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+        
+        // Save
+        modal.querySelector('#group-save-btn').addEventListener('click', () => {
+            this.saveSlotGroupFromModal(modal, index);
+        });
+    }
+    
+    saveSlotGroupFromModal(modal, index) {
+        const id = modal.querySelector('#group-id').value.trim() || `group_${Date.now()}`;
+        const label = modal.querySelector('#group-label').value.trim();
+        const isDefault = modal.querySelector('#group-isDefault').checked;
+        
+        // Collect conditions
+        const when = {};
+        modal.querySelectorAll('.condition-row').forEach(row => {
+            const key = row.querySelector('.condition-key').value;
+            let value = row.querySelector('.condition-value').value.trim();
+            if (key && value) {
+                // Convert "true"/"false" strings
+                if (value === 'true') value = true;
+                else if (value === 'false') value = false;
+                when[key] = value;
+            }
+        });
+        
+        // Collect selected slots
+        const slots = [...modal.querySelectorAll('.group-slot-check:checked')].map(cb => cb.value);
+        
+        if (!label) {
+            this.showNotification('Name is required', 'error');
             return;
         }
         
-        this.isDirty = true;
+        const groupData = { id, label, name: label, when, slots, isDefault };
         
-        // Re-render tab
+        if (!this.config.slotGroups) this.config.slotGroups = [];
+        
+        if (index !== null) {
+            this.config.slotGroups[index] = { ...this.config.slotGroups[index], ...groupData };
+        } else {
+            this.config.slotGroups.push(groupData);
+        }
+        
+        this.isDirty = true;
+        modal.remove();
+        
         const container = document.querySelector('.front-desk-behavior-panel');
         if (container) this.switchTab('slot-groups', container);
         
-        this.showNotification('Slot group updated', 'success');
+        this.showNotification(index !== null ? 'Requirement set updated' : 'Requirement set created', 'success');
     }
     
     deleteSlotGroup(index) {
-        if (!confirm('Delete this slot group?')) return;
+        if (!confirm('Delete this requirement set?')) return;
         
         this.config.slotGroups?.splice(index, 1);
         this.isDirty = true;
         
-        // Re-render tab
         const container = document.querySelector('.front-desk-behavior-panel');
         if (container) this.switchTab('slot-groups', container);
         
-        this.showNotification('Slot group deleted', 'success');
+        this.showNotification('Requirement set deleted', 'success');
     }
 
     showNotification(message, type = 'info') {
