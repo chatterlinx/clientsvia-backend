@@ -1335,13 +1335,23 @@ Sean → Shawn, Shaun`;
         const variantGroupsText = document.getElementById('fdb-variant-groups')?.value || '';
         const variantGroups = this.parseVariantGroups(variantGroupsText);
         
+        // ═══════════════════════════════════════════════════════════════════
+        // V45 FIX: PRESERVE precomputedVariantMap when saving!
+        // The "Scan Names" button stores this, and we must NOT overwrite it
+        // ═══════════════════════════════════════════════════════════════════
+        const existingConfig = this.config.nameSpellingVariants || {};
+        
         return {
             enabled,
             source,
             mode,
             script,
             maxAsksPerCall: maxAsks,
-            variantGroups
+            variantGroups,
+            // CRITICAL: Preserve precomputed map from "Scan Names"
+            precomputedVariantMap: existingConfig.precomputedVariantMap || null,
+            precomputedAt: existingConfig.precomputedAt || null,
+            precomputedFromCount: existingConfig.precomputedFromCount || null
         };
     }
     
