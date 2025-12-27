@@ -3253,6 +3253,7 @@ async function processTurn({
                                 // No variant found - proceed with normal confirm
                                 nameMeta.lastConfirmed = true;
                                 nameMeta.askedSpellingVariant = true; // Mark as checked
+                                nameMeta.spellingVariantAnswer = 'no_variant'; // V48 FIX: Must set this to prevent isNameSlotComplete from blocking!
                                 const confirmText = confirmBackTemplate.replace('{value}', nameToConfirm);
                                 finalReply = confirmText;
                                 nextSlotId = 'name';
@@ -3453,6 +3454,7 @@ async function processTurn({
                     } else {
                         // No variant found or couldn't check - mark as done and move to phone
                         nameMeta.askedSpellingVariant = true; // Mark as checked (even if no variant)
+                        nameMeta.spellingVariantAnswer = 'no_variant'; // V48 FIX: Must set this to prevent isNameSlotComplete from blocking!
                         
                         if (!currentSlots.name) {
                             const firstName = nameMeta.first || '';
@@ -3687,6 +3689,8 @@ async function processTurn({
                                 });
                             } else {
                                 // No variant found, proceed with normal confirm
+                                nameMeta.askedSpellingVariant = true; // V48 FIX: Mark as checked
+                                nameMeta.spellingVariantAnswer = 'no_variant'; // V48 FIX: Must set to prevent isNameSlotComplete from blocking!
                                 const confirmText = confirmBackTemplate.replace('{value}', extractedName);
                                 finalReply = confirmText;
                                 nextSlotId = 'name';
