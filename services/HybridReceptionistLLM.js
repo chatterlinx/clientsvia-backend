@@ -603,7 +603,7 @@ RULES:
             // ════════════════════════════════════════════════════════════════
             // ENGINE RESPONSE ASSEMBLY - Inject exact questions from DB
             // ════════════════════════════════════════════════════════════════
-            const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company);
+            const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
             const bookingSlots = bookingConfig.slots || [];
             
             let finalReply;
@@ -867,7 +867,7 @@ RULES:
     static getBookingSlots(behaviorConfig = {}, company = null) {
         // If company object provided, use BookingScriptEngine for full path checking
         if (company) {
-            const result = BookingScriptEngine.getBookingSlotsFromCompany(company);
+            const result = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
             return result.slots;
         }
         
@@ -907,7 +907,7 @@ RULES:
         const trade = company.tradeType || company.trade || 'service';
         
         // Get booking slots for determining what to collect
-        const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company);
+        const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
         const bookingSlots = bookingConfig.slots || [];
         const slotIds = bookingSlots.map(s => s.slotId || s.id);
         

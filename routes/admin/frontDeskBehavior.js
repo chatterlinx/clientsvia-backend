@@ -224,6 +224,10 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
                 personality: config.personality,
                 // 🚨 Dynamic booking slots (new system)
                 bookingSlots: config.bookingSlots || null,
+                // 🧾 Booking Contract V2 (feature-flagged; stored per-company)
+                bookingContractV2Enabled: saved.bookingContractV2Enabled === true,
+                slotLibrary: saved.slotLibrary || [],
+                slotGroups: saved.slotGroups || [],
                 bookingTemplates: config.bookingTemplates || null,
                 // Legacy booking prompts (for backward compatibility)
                 bookingPrompts: config.bookingPrompts,
@@ -371,6 +375,17 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
                     askMissingNamePart: s.askMissingNamePart  // Log this specifically
                 }))
             });
+        }
+
+        // 🧾 Booking Contract V2 (feature-flagged)
+        if (updates.bookingContractV2Enabled !== undefined) {
+            updateObj['aiAgentSettings.frontDeskBehavior.bookingContractV2Enabled'] = updates.bookingContractV2Enabled === true;
+        }
+        if (updates.slotLibrary !== undefined) {
+            updateObj['aiAgentSettings.frontDeskBehavior.slotLibrary'] = Array.isArray(updates.slotLibrary) ? updates.slotLibrary : [];
+        }
+        if (updates.slotGroups !== undefined) {
+            updateObj['aiAgentSettings.frontDeskBehavior.slotGroups'] = Array.isArray(updates.slotGroups) ? updates.slotGroups : [];
         }
         
         // Save booking templates

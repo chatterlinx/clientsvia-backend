@@ -34,6 +34,7 @@ const { unifyConfig } = require('../../utils/configUnifier');
 const { substitutePlaceholders } = require('../../utils/placeholderStandard');
 const { validateScenarioQuality, QUALITY_REQUIREMENTS } = require('../../utils/scenarioEnforcement');
 const logger = require('../../utils/logger');
+const BookingContractCompiler = require('../../services/BookingContractCompiler');
 
 // ============================================================================
 // PROVIDER VERSIONS - Track what version of each provider generated data
@@ -334,6 +335,14 @@ router.get('/', async (req, res) => {
         // ═══════════════════════════════════════════════════════════════════════
         // BUILD BOOKING CONFIG
         // ═══════════════════════════════════════════════════════════════════════
+        const frontDeskBehavior = company.aiAgentSettings?.frontDeskBehavior || {};
+        const bookingV2Enabled = frontDeskBehavior.bookingContractV2Enabled === true;
+        const bookingV2Library = Array.isArray(frontDeskBehavior.slotLibrary) ? frontDeskBehavior.slotLibrary : [];
+        const bookingV2Groups = Array.isArray(frontDeskBehavior.slotGroups) ? frontDeskBehavior.slotGroups : [];
+        const bookingV2CompiledPreview = (bookingV2Enabled && bookingV2Library.length > 0 && bookingV2Groups.length > 0)
+            ? BookingContractCompiler.compileBookingSlots({ slotLibrary: bookingV2Library, slotGroups: bookingV2Groups, contextFlags: {} })
+            : null;
+
         const booking = {
             enabled: controlPlane.booking.enabled,
             slots: controlPlane.booking.slots.map((s, idx) => ({
@@ -345,20 +354,25 @@ router.get('/', async (req, res) => {
                 editable: true
             })),
             slotsCount: controlPlane.booking.slotsCount,
-            
-            // Time windows (if configured)
-            timeWindows: company.frontDeskBehavior?.bookingWindows || [
-                '8:00 AM - 10:00 AM',
-                '10:00 AM - 12:00 PM',
-                '12:00 PM - 2:00 PM',
-                '2:00 PM - 4:00 PM',
-                '4:00 PM - 6:00 PM'
-            ],
-            
-            // Consent rules
+
+            // Consent rules (do NOT invent defaults here; missing config must be visible)
             consent: {
-                required: aiSettings.discoveryConsent?.enabled || false,
-                phrase: aiSettings.discoveryConsent?.consentPhrase || 'Would you like me to schedule that for you?'
+                required: aiSettings.discoveryConsent?.enabled === true,
+                phrase: aiSettings.discoveryConsent?.consentPhrase || null,
+                configured: !!aiSettings.discoveryConsent?.consentPhrase
+            },
+
+            // Booking Contract V2 (feature-flagged; compiler preview uses empty flags)
+            bookingContractV2: {
+                enabled: bookingV2Enabled,
+                slotLibraryCount: bookingV2Library.length,
+                slotGroupsCount: bookingV2Groups.length,
+                compiledPreview: bookingV2CompiledPreview ? {
+                    hash: bookingV2CompiledPreview.hash,
+                    matchingGroupIds: bookingV2CompiledPreview.matchingGroupIds,
+                    activeSlotIdsOrdered: bookingV2CompiledPreview.activeSlotIdsOrdered,
+                    missingSlotRefs: bookingV2CompiledPreview.missingSlotRefs
+                } : null
             }
         };
         
@@ -475,6 +489,33 @@ router.get('/', async (req, res) => {
         
         if (enabledFlows.length === 0) {
             issues.push({ severity: 'WARNING', area: 'flows', message: 'No dynamic flows enabled - scenarios will reply but not coordinate', fix: 'Enable at least one flow in dynamicFlows' });
+        }
+
+        // Booking Contract V2 health (feature-flagged)
+        if (booking.bookingContractV2?.enabled) {
+            const compiledPreview = booking.bookingContractV2.compiledPreview;
+            if (!compiledPreview) {
+                issues.push({
+                    severity: 'ERROR',
+                    area: 'bookingContractV2',
+                    message: 'Booking Contract V2 enabled but no slotLibrary/slotGroups configured',
+                    fix: 'Add slotLibrary + slotGroups (or disable bookingContractV2Enabled)'
+                });
+            } else if ((compiledPreview.activeSlotIdsOrdered || []).length === 0) {
+                issues.push({
+                    severity: 'ERROR',
+                    area: 'bookingContractV2',
+                    message: 'Booking Contract V2 enabled but compiled active slots is empty',
+                    fix: 'Ensure at least one enabled slotGroup matches flags and includes slot IDs present in slotLibrary'
+                });
+            } else if ((compiledPreview.missingSlotRefs || []).length > 0) {
+                issues.push({
+                    severity: 'ERROR',
+                    area: 'bookingContractV2',
+                    message: 'Booking Contract V2 compiled slots reference missing slotLibrary IDs',
+                    fix: `Fix slotGroups.slots to reference valid slotLibrary ids (missing: ${(compiledPreview.missingSlotRefs || []).slice(0, 5).join(', ')})`
+                });
+            }
         }
         
         const unknownScenarios = scenarios.filter(s => s.scenarioType === 'UNKNOWN').length;

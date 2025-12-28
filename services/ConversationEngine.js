@@ -2269,7 +2269,7 @@ async function processTurn({
         const extractedThisTurn = {};
         
         // Get booking config for askMissingNamePart setting
-        const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company);
+        const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
         
         // 🔍 DIAGNOSTIC: Log booking config to debug NOT_CONFIGURED issue
         const rawBookingSlots = company?.aiAgentSettings?.frontDeskBehavior?.bookingSlots || [];
@@ -2437,7 +2437,7 @@ async function processTurn({
         const inBookingModeForName = session.mode === 'BOOKING' || session.booking?.consentGiven;
         
         // Check if askFullName is enabled in booking config
-        const bookingConfigCheck = BookingScriptEngine.getBookingSlotsFromCompany(company);
+        const bookingConfigCheck = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
         const nameSlotCheck = (bookingConfigCheck.slots || []).find(s => 
             (s.slotId || s.id || s.type) === 'name'
         );
@@ -2562,7 +2562,7 @@ async function processTurn({
             // This is the "clipboard snap" - we don't let LLM freestyle anymore.
             // We use the EXACT question from the booking panel.
             // ═══════════════════════════════════════════════════════════════════
-            const bookingConfigSnap = BookingScriptEngine.getBookingSlotsFromCompany(company);
+            const bookingConfigSnap = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
             const bookingSlotsSnap = bookingConfigSnap.slots || [];
             
             // Find first required slot that's not collected
@@ -2777,7 +2777,7 @@ async function processTurn({
                 log('CHECKPOINT 9c: 🔄 Booking interruption - checking cheat sheets first');
                 
                 // Get the next slot question for bridging back (MUST RESUME THIS EXACT PROMPT)
-                const bookingConfigInt = BookingScriptEngine.getBookingSlotsFromCompany(company);
+                const bookingConfigInt = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
                 const bookingSlotsInt = bookingConfigInt.slots || [];
                 const nextMissingSlotInt = bookingSlotsInt.find(slot => {
                     const slotId = slot.slotId || slot.id || slot.type;
@@ -2923,7 +2923,7 @@ async function processTurn({
                 // ═══════════════════════════════════════════════════════════════════
                 log('⚠️ BOOKING MODE SAFETY NET: Computing next action');
                 
-                const bookingConfigSafe = BookingScriptEngine.getBookingSlotsFromCompany(company);
+                const bookingConfigSafe = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
                 const bookingSlotsSafe = bookingConfigSafe.slots || [];
                 
                 // Initialize booking meta state for tracking confirmations

@@ -17,6 +17,7 @@
  */
 
 const logger = require('../utils/logger');
+const BookingContractCompiler = require('./BookingContractCompiler');
 
 /**
  * DEFAULT_BOOKING_SLOTS - Applied to NEW companies via Mongoose schema
@@ -177,9 +178,11 @@ function normalizeBookingSlots(rawSlots = []) {
  * Checks multiple possible paths for backward compatibility
  * 
  * @param {Object} company - Company document from MongoDB
+ * @param {Object} [options]
+ * @param {Object} [options.contextFlags] - Typically session.flags (Dynamic Flow set_flag)
  * @returns {Object} { slots: [], isConfigured: boolean, source: string }
  */
-function getBookingSlotsFromCompany(company) {
+function getBookingSlotsFromCompany(company, options = {}) {
     if (!company) {
         logger.warn('[BOOKING ENGINE] No company provided');
         return {
@@ -193,8 +196,43 @@ function getBookingSlotsFromCompany(company) {
     // PATH PRIORITY - Check multiple locations for backward compatibility
     // ═══════════════════════════════════════════════════════════════════════════
     
+    const frontDesk = company?.aiAgentSettings?.frontDeskBehavior || {};
+
+    // Priority 0 (feature-flagged): Booking Contract V2 (slotLibrary + slotGroups)
+    // This compiles into the legacy bookingSlots format so the rest of runtime remains stable.
+    const contextFlags = options?.contextFlags && typeof options.contextFlags === 'object' ? options.contextFlags : {};
+    const v2Enabled = frontDesk.bookingContractV2Enabled === true;
+    const v2Library = frontDesk.slotLibrary;
+    const v2Groups = frontDesk.slotGroups;
+    const v2HasConfig = Array.isArray(v2Library) && v2Library.length > 0 && Array.isArray(v2Groups) && v2Groups.length > 0;
+
+    if (v2Enabled && v2HasConfig) {
+        const { compiled, legacySlots } = BookingContractCompiler.compileToLegacyBookingSlots({
+            slotLibrary: v2Library,
+            slotGroups: v2Groups,
+            contextFlags
+        });
+
+        logger.info('[BOOKING ENGINE] ✅ Using Booking Contract V2 (compiled to legacy slots)', {
+            companyId: company._id,
+            v2GroupCount: v2Groups.length,
+            v2LibraryCount: v2Library.length,
+            compiledHash: compiled.hash,
+            compiledActiveCount: compiled.activeSlotsOrdered.length,
+            legacySlotCount: legacySlots.length
+        });
+
+        const slots = normalizeBookingSlots(legacySlots);
+        const isConfigured = slots.length > 0;
+        return {
+            slots,
+            isConfigured,
+            source: isConfigured ? 'frontDeskBehavior.bookingContractV2 (compiled)' : 'NOT_CONFIGURED'
+        };
+    }
+
     // Priority 1: New standard path (UI saves here)
-    let rawSlots = company?.aiAgentSettings?.frontDeskBehavior?.bookingSlots;
+    let rawSlots = frontDesk.bookingSlots;
     let source = 'frontDeskBehavior.bookingSlots';
     
     // Priority 2: Legacy callFlowEngine path
