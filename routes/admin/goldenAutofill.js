@@ -41,6 +41,8 @@ const GOLDEN_DEFAULTS = {
         SMALL_TALK: 'never',
         SYSTEM: 'never',
         TRANSFER: 'always_on_keyword',
+        TROUBLESHOOT: 'low_confidence',
+        BILLING: 'low_confidence',
         UNKNOWN: 'low_confidence'
     },
     
@@ -52,6 +54,8 @@ const GOLDEN_DEFAULTS = {
         SMALL_TALK: { min: 0, max: 10, default: 5 },
         SYSTEM: { min: 20, max: 40, default: 30 },
         TRANSFER: { min: 80, max: 90, default: 85 },
+        TROUBLESHOOT: { min: 50, max: 70, default: 60 },
+        BILLING: { min: 40, max: 60, default: 50 },
         UNKNOWN: { min: 50, max: 70, default: 60 }
     },
     
@@ -63,6 +67,8 @@ const GOLDEN_DEFAULTS = {
         SMALL_TALK: { min: 0.35, max: 0.45, default: 0.40 },
         SYSTEM: { min: 0.50, max: 0.65, default: 0.55 },
         TRANSFER: { min: 0.55, max: 0.70, default: 0.60 },
+        TROUBLESHOOT: { min: 0.45, max: 0.60, default: 0.50 },
+        BILLING: { min: 0.45, max: 0.60, default: 0.50 },
         UNKNOWN: { min: 0.45, max: 0.55, default: 0.50 }
     },
     
@@ -74,6 +80,8 @@ const GOLDEN_DEFAULTS = {
         SMALL_TALK: 0.50,
         SYSTEM: 0.60,
         TRANSFER: 0.85,
+        TROUBLESHOOT: 0.75,
+        BILLING: 0.70,
         UNKNOWN: 0.70
     },
     
@@ -136,6 +144,17 @@ const TYPE_KEYWORDS = {
         'service area', 'do you service', 'payment', 'accept credit',
         'hours', 'open', 'closed', 'location', 'address', 'reviews'
     ],
+    BILLING: [
+        'billing', 'invoice', 'invoicing', 'bill', 'payment', 'pay', 'paid',
+        'charge', 'charges', 'refund', 'refunded', 'credit', 'debit', 'receipt',
+        'account balance', 'statement', 'past due', 'collections', 'finance'
+    ],
+    TROUBLESHOOT: [
+        'troubleshoot', 'troubleshooting', 'diagnose', 'diagnostic', 'help me fix',
+        'not working', 'stopped working', 'keeps', 'won\'t', 'will not', 'why is',
+        'error code', 'making noise', 'leaking', 'rattling', 'smells', 'smell',
+        'intermittent', 'reset', 'breaker', 'fuse'
+    ],
     SYSTEM: [
         'hold please', 'one moment', 'got it', 'understood', 'okay',
         'processing', 'looking up', 'checking'
@@ -160,8 +179,11 @@ function detectScenarioType(scenario, categoryName) {
             return type;
         }
     }
-    
-    return 'UNKNOWN';
+
+    // Last-resort guess (schema comment: "autofill will guess").
+    // We intentionally avoid returning UNKNOWN because UNKNOWN scenarios don't route at runtime.
+    // Emergency/booking/transfer/small-talk/billing/troubleshoot have already been checked above.
+    return 'FAQ';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -248,13 +270,18 @@ function computeScenarioUpdates(scenario, categoryName) {
     // 1. SET scenarioType (if not explicitly set)
     // ─────────────────────────────────────────────────────────────────────────
     if (!scenario.scenarioType || scenario.scenarioType === 'UNKNOWN') {
-        updates.scenarioType = detectedType;
-        diff.push({
-            field: 'scenarioType',
-            before: scenario.scenarioType || null,
-            after: detectedType,
-            reason: 'Auto-classified from name/triggers'
-        });
+        // Only add a diff/update if it actually changes something.
+        const beforeType = scenario.scenarioType || null;
+        const afterType = detectedType;
+        if (beforeType !== afterType) {
+            updates.scenarioType = afterType;
+            diff.push({
+                field: 'scenarioType',
+                before: beforeType,
+                after: afterType,
+                reason: 'Auto-classified from name/category/triggers'
+            });
+        }
     }
     
     const effectiveType = updates.scenarioType || scenario.scenarioType || detectedType;
@@ -441,7 +468,7 @@ router.post('/:templateId/golden-autofill', async (req, res) => {
         
         // Type breakdown
         const byType = {};
-        for (const type of ['EMERGENCY', 'BOOKING', 'FAQ', 'SMALL_TALK', 'SYSTEM', 'TRANSFER', 'UNKNOWN']) {
+        for (const type of ['EMERGENCY', 'BOOKING', 'FAQ', 'SMALL_TALK', 'SYSTEM', 'TRANSFER', 'TROUBLESHOOT', 'BILLING', 'UNKNOWN']) {
             byType[type] = allResults.filter(r => r.effectiveType === type).length;
         }
         
@@ -728,7 +755,7 @@ router.get('/:templateId/quality-report', async (req, res) => {
                 scenarioReports.push({
                     scenarioId: scenario.scenarioId,
                     name: scenario.name,
-                    scenarioType: scenario.scenarioType || detectedType,
+                    scenarioType: (scenario.scenarioType && scenario.scenarioType !== 'UNKNOWN') ? scenario.scenarioType : detectedType,
                     detectedType,
                     priority: scenario.priority || 0,
                     minConfidence: scenario.minConfidence || 0.5,

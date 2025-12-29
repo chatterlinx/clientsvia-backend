@@ -317,11 +317,21 @@ router.get('/', async (req, res) => {
         const frontDeskDiscoveryConsent = frontDeskBehavior.discoveryConsent || {};
         const frontDeskDetectionTriggers = frontDeskBehavior.detectionTriggers || {};
 
+        // Normalize booleans that may arrive as strings (e.g., "false") or undefined.
+        // This prevents "ghost warnings" where UI shows false but truth logic treats it as true.
+        const normalizeBoolean = (value, defaultValue) => {
+            if (value === true || value === false) return value;
+            if (value === 'true') return true;
+            if (value === 'false') return false;
+            return defaultValue;
+        };
+
         // V22 Consent (runtime uses frontDeskBehavior.discoveryConsent + detectionTriggers.wantsBooking)
         const v22Consent = {
-            bookingRequiresExplicitConsent: frontDeskDiscoveryConsent.bookingRequiresExplicitConsent !== false,
-            forceLLMDiscovery: frontDeskDiscoveryConsent.forceLLMDiscovery !== false,
-            disableScenarioAutoResponses: frontDeskDiscoveryConsent.disableScenarioAutoResponses !== false,
+            bookingRequiresExplicitConsent: normalizeBoolean(frontDeskDiscoveryConsent.bookingRequiresExplicitConsent, true),
+            forceLLMDiscovery: normalizeBoolean(frontDeskDiscoveryConsent.forceLLMDiscovery, true),
+            // Default MUST be false (do not silently block scenario replies when unset)
+            disableScenarioAutoResponses: normalizeBoolean(frontDeskDiscoveryConsent.disableScenarioAutoResponses, false),
             consentQuestionTemplate: frontDeskDiscoveryConsent.consentQuestionTemplate || null,
             consentYesWords: Array.isArray(frontDeskDiscoveryConsent.consentYesWords) ? frontDeskDiscoveryConsent.consentYesWords : [],
             consentPhrases: Array.isArray(frontDeskDetectionTriggers.wantsBooking) ? frontDeskDetectionTriggers.wantsBooking : []
@@ -346,7 +356,7 @@ router.get('/', async (req, res) => {
                 bookingRequiresExplicitConsent: v22Consent.bookingRequiresExplicitConsent,
                 forceLLMDiscovery: v22Consent.forceLLMDiscovery,
                 disableScenarioAutoResponses: v22Consent.disableScenarioAutoResponses,
-                scenariosBlockedByConsent: v22Consent.disableScenarioAutoResponses,
+                scenariosBlockedByConsent: v22Consent.disableScenarioAutoResponses === true,
                 consentPhrasesCount: v22Consent.consentPhrases.length,
                 consentYesWordsCount: v22Consent.consentYesWords.length
             }
@@ -871,7 +881,7 @@ router.get('/', async (req, res) => {
             });
         }
         
-        if (matchingPolicy.discoveryConsent.scenariosBlockedByConsent) {
+        if (matchingPolicy.discoveryConsent.disableScenarioAutoResponses === true) {
             issues.push({ 
                 severity: 'WARNING', 
                 area: 'consent', 
