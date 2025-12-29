@@ -77,6 +77,44 @@ router.get('/preview', async (req, res) => {
 });
 
 /**
+ * POST /api/company/:companyId/booking-contract-v2/compile
+ * Body:
+ * - slotLibrary: []
+ * - slotGroups: []
+ * - flags: {}
+ *
+ * Compiles WITHOUT saving. This is the safe “preview what will happen” endpoint.
+ */
+router.post('/compile', async (req, res) => {
+    const { companyId } = req.params;
+    const slotLibrary = Array.isArray(req.body?.slotLibrary) ? req.body.slotLibrary : [];
+    const slotGroups = Array.isArray(req.body?.slotGroups) ? req.body.slotGroups : [];
+    const flags = req.body?.flags && typeof req.body.flags === 'object' ? req.body.flags : {};
+
+    try {
+        const compiled = BookingContractCompiler.compileBookingSlots({
+            slotLibrary,
+            slotGroups,
+            contextFlags: flags
+        });
+
+        return res.json({
+            success: true,
+            data: {
+                companyId,
+                flags,
+                slotLibraryCount: slotLibrary.length,
+                slotGroupsCount: slotGroups.length,
+                compiled
+            }
+        });
+    } catch (error) {
+        logger.error('[BOOKING CONTRACT V2] compile error', { companyId, error: error.message, stack: error.stack });
+        return res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
  * POST /api/company/:companyId/booking-contract-v2/migrate/from-bookingSlots
  * Body:
  * - enableAfter?: boolean (default false)

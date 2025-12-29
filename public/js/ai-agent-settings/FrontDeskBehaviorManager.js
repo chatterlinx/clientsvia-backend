@@ -52,6 +52,12 @@ class FrontDeskBehaviorManager {
             
             const result = await response.json();
             this.config = result.data;
+
+            // Booking Contract V2 (feature-flagged) - ensure shape exists for UI
+            if (this.config.bookingContractV2Enabled === undefined) this.config.bookingContractV2Enabled = false;
+            if (!Array.isArray(this.config.slotLibrary)) this.config.slotLibrary = [];
+            if (!Array.isArray(this.config.slotGroups)) this.config.slotGroups = [];
+
             console.log('[FRONT DESK BEHAVIOR] Config loaded:', this.config);
             
             // 🔇 V36: Load custom fillers from fillerWords.custom (if exists)
@@ -479,7 +485,12 @@ class FrontDeskBehaviorManager {
                 forbiddenWords: [],
                 // Replacements for forbidden words
                 replacementMap: {}
-            }
+            },
+
+            // Booking Contract V2 (feature-flagged, OFF by default)
+            bookingContractV2Enabled: false,
+            slotLibrary: [],
+            slotGroups: []
         };
     }
 
@@ -828,6 +839,10 @@ class FrontDeskBehaviorManager {
         const slots = this.config.bookingSlots || this.getDefaultBookingSlots();
         const templates = this.config.bookingTemplates || this.config.bookingPrompts || {};
         
+        const slotLibraryJson = this.escapeHtml(JSON.stringify(this.config.slotLibrary || [], null, 2));
+        const slotGroupsJson = this.escapeHtml(JSON.stringify(this.config.slotGroups || [], null, 2));
+        const v2Enabled = this.config.bookingContractV2Enabled === true;
+
         return `
             <!-- ═══════════════════════════════════════════════════════════════════════ -->
             <!-- GOLDEN SLOTS LOADER - Quick setup with best practices -->
@@ -842,6 +857,66 @@ class FrontDeskBehaviorManager {
                     style="padding: 10px 20px; background: linear-gradient(135deg, #f0883e 0%, #d97706 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; white-space: nowrap;">
                     🎯 Load Golden Slots
                 </button>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <!-- BOOKING CONTRACT V2 (BETA) - Slot Library + Slot Groups -->
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <div style="background: #0d1117; border: 1px solid ${v2Enabled ? '#3fb950' : '#30363d'}; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                    <div>
+                        <h3 style="margin: 0; color: ${v2Enabled ? '#3fb950' : '#58a6ff'};">🧾 Booking Contract V2 (Beta)</h3>
+                        <p style="margin: 6px 0 0 0; color: #8b949e; font-size: 0.8rem;">
+                            This is the clean “receptionist requirements” layer: <strong>Slot Library</strong> (what can be collected) + <strong>Slot Groups</strong> (when to ask) compiled using <code style="background:#161b22; padding:2px 6px; border-radius:4px;">session.flags</code>.
+                            <br><span style="color:#f0883e;">Safe rollout:</span> V2 is OFF unless you enable it here for this company.
+                        </p>
+                    </div>
+                    <label style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; cursor: pointer;">
+                        <input type="checkbox" id="fdb-bcv2-enabled" ${v2Enabled ? 'checked' : ''} style="accent-color: #3fb950; width: 18px; height: 18px;">
+                        <span style="color: ${v2Enabled ? '#3fb950' : '#8b949e'}; font-weight: 700;">
+                            ${v2Enabled ? 'ENABLED' : 'DISABLED'}
+                        </span>
+                    </label>
+                </div>
+
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;">
+                    <button id="fdb-bcv2-migrate-btn"
+                        onclick="window.frontDeskManager.migrateBookingContractV2FromBookingSlots()"
+                        style="padding: 8px 12px; background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                        🔁 Migrate from current Booking Slots
+                    </button>
+                    <input id="fdb-bcv2-flags-json" value="{}"
+                        placeholder='{"accountType":"commercial"}'
+                        style="flex: 1; min-width: 260px; padding: 8px 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 12px;">
+                    <button id="fdb-bcv2-preview-btn"
+                        onclick="window.frontDeskManager.previewBookingContractV2Compile()"
+                        style="padding: 8px 12px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 700;">
+                        🔍 Preview compile
+                    </button>
+                </div>
+
+                <div id="fdb-bcv2-preview-status" style="margin-top: 10px; display: none; padding: 10px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #8b949e; font-size: 12px;"></div>
+                <pre id="fdb-bcv2-preview-output" style="margin-top: 10px; display: none; padding: 12px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; max-height: 220px; overflow: auto; font-size: 12px;"></pre>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+                    <div>
+                        <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">
+                            Slot Library JSON <span style="color:#6e7681;">(what to collect)</span>
+                        </label>
+                        <textarea id="fdb-bcv2-slotLibrary-json" rows="10"
+                            style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 12px; resize: vertical;">${slotLibraryJson}</textarea>
+                    </div>
+                    <div>
+                        <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">
+                            Slot Groups JSON <span style="color:#6e7681;">(when to ask)</span>
+                        </label>
+                        <textarea id="fdb-bcv2-slotGroups-json" rows="10"
+                            style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 12px; resize: vertical;">${slotGroupsJson}</textarea>
+                    </div>
+                </div>
+                <p style="margin: 10px 0 0 0; color: #6e7681; font-size: 0.75rem;">
+                    Tip: Dynamic Flows can set flags (e.g. <code style="background:#161b22; padding:2px 6px; border-radius:4px;">accountType=commercial</code>), and Slot Groups can activate additional required questions based on those flags.
+                </p>
             </div>
             
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
@@ -2606,6 +2681,138 @@ Sean → Shawn, Shaun`;
                 btn.style.background = '';
                 btn.disabled = false;
             }, 2000);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BOOKING CONTRACT V2 (BETA) - Safe migration + preview compile
+    // ═══════════════════════════════════════════════════════════════════════
+    async migrateBookingContractV2FromBookingSlots() {
+        const btn = document.getElementById('fdb-bcv2-migrate-btn');
+        if (!btn) return;
+
+        const ok = confirm(
+            'Migrate current Booking Slots → Booking Contract V2?\n\n' +
+            'This will generate slotLibrary + a Base Booking slotGroup.\n' +
+            'It does NOT delete your existing bookingSlots.\n\n' +
+            'Proceed?'
+        );
+        if (!ok) return;
+
+        const original = btn.innerHTML;
+        try {
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Migrating...';
+
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+            const resp = await fetch(`/api/company/${this.companyId}/booking-contract-v2/migrate/from-bookingSlots`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ enableAfter: false, groupLabel: 'Base Booking' })
+            });
+
+            const data = await resp.json();
+            if (!resp.ok || !data.success) {
+                throw new Error(data.message || data.error || `HTTP ${resp.status}`);
+            }
+
+            // Reload Front Desk config (admin endpoint) so UI reflects persisted values
+            await this.load();
+
+            const container = document.querySelector('.front-desk-behavior-panel');
+            if (container) this.switchTab('booking', container);
+
+            this.showNotification('✅ Migrated Booking Slots → Booking Contract V2 (not enabled yet)', 'success');
+        } catch (e) {
+            console.error('[FRONT DESK] ❌ V2 migrate failed', e);
+            this.showNotification('❌ V2 migrate failed: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = original;
+        }
+    }
+
+    async previewBookingContractV2Compile() {
+        const statusEl = document.getElementById('fdb-bcv2-preview-status');
+        const outEl = document.getElementById('fdb-bcv2-preview-output');
+        const btn = document.getElementById('fdb-bcv2-preview-btn');
+
+        const showStatus = (text, tone = 'neutral') => {
+            if (!statusEl) return;
+            statusEl.style.display = 'block';
+            statusEl.style.borderColor = tone === 'error' ? '#f85149' : tone === 'success' ? '#3fb950' : '#30363d';
+            statusEl.style.color = tone === 'error' ? '#f85149' : tone === 'success' ? '#3fb950' : '#8b949e';
+            statusEl.textContent = text;
+        };
+
+        const showOutput = (obj) => {
+            if (!outEl) return;
+            outEl.style.display = 'block';
+            outEl.textContent = JSON.stringify(obj, null, 2);
+        };
+
+        try {
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = '⏳ Previewing...';
+            }
+
+            // Parse flags JSON
+            const rawFlags = document.getElementById('fdb-bcv2-flags-json')?.value || '{}';
+            let flags = {};
+            try {
+                flags = rawFlags && rawFlags.trim() ? JSON.parse(rawFlags) : {};
+            } catch (e) {
+                throw new Error(`Flags JSON is invalid: ${e.message}`);
+            }
+
+            // Parse editors (so preview reflects unsaved edits)
+            const rawLibrary = document.getElementById('fdb-bcv2-slotLibrary-json')?.value || '[]';
+            const rawGroups = document.getElementById('fdb-bcv2-slotGroups-json')?.value || '[]';
+            const slotLibrary = JSON.parse(rawLibrary);
+            const slotGroups = JSON.parse(rawGroups);
+            if (!Array.isArray(slotLibrary)) throw new Error('Slot Library must be a JSON array');
+            if (!Array.isArray(slotGroups)) throw new Error('Slot Groups must be a JSON array');
+
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+            const resp = await fetch(`/api/company/${this.companyId}/booking-contract-v2/compile`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ slotLibrary, slotGroups, flags })
+            });
+
+            const data = await resp.json();
+            if (!resp.ok || !data.success) {
+                throw new Error(data.message || data.error || `HTTP ${resp.status}`);
+            }
+
+            const compiled = data.data.compiled;
+            const activeCount = (compiled.activeSlotIdsOrdered || []).length;
+            const missing = (compiled.missingSlotRefs || []).length;
+
+            if (activeCount === 0) {
+                showStatus('❌ Compiled active slots is empty. Check your slotGroups.when and slotGroups.slots.', 'error');
+            } else if (missing > 0) {
+                showStatus(`❌ Missing slotLibrary ids referenced by groups: ${compiled.missingSlotRefs.slice(0, 5).join(', ')}`, 'error');
+            } else {
+                showStatus(`✅ Compiled OK: ${activeCount} active slots. Hash: ${compiled.hash}`, 'success');
+            }
+
+            showOutput(data.data);
+        } catch (e) {
+            console.error('[FRONT DESK] ❌ V2 preview failed', e);
+            showStatus('❌ Preview failed: ' + e.message, 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '🔍 Preview compile';
+            }
         }
     }
     
@@ -6296,7 +6503,9 @@ Sean → Shawn, Shaun`;
         });
 
         // Make manager globally accessible
+        // NOTE: legacy UI uses both names in onclick handlers.
         window.frontDeskBehaviorManager = this;
+        window.frontDeskManager = this;
     }
 
     switchTab(tabId, container) {
@@ -6514,6 +6723,32 @@ Sean → Shawn, Shaun`;
                 confirmTemplate: get('fdb-confirmTemplate'),
                 completeTemplate: get('fdb-completeTemplate')
             };
+        }
+
+        // Booking Contract V2 (beta)
+        if (document.getElementById('fdb-bcv2-enabled')) {
+            this.config.bookingContractV2Enabled = getChecked('fdb-bcv2-enabled') === true;
+
+            const parseJsonStrict = (raw, label) => {
+                if (!raw || !raw.trim()) return [];
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (!Array.isArray(parsed)) {
+                        throw new Error(`${label} must be a JSON array`);
+                    }
+                    return parsed;
+                } catch (e) {
+                    const msg = `${label} JSON is invalid: ${e.message}`;
+                    console.error('[FRONT DESK BEHAVIOR] ❌', msg);
+                    this.showNotification(`❌ ${msg}`, 'error');
+                    throw new Error(msg);
+                }
+            };
+
+            const rawLibrary = get('fdb-bcv2-slotLibrary-json');
+            const rawGroups = get('fdb-bcv2-slotGroups-json');
+            this.config.slotLibrary = parseJsonStrict(rawLibrary, 'Slot Library');
+            this.config.slotGroups = parseJsonStrict(rawGroups, 'Slot Groups');
         }
         
         // ═══════════════════════════════════════════════════════════════════
