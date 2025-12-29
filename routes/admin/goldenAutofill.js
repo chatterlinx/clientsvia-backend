@@ -139,11 +139,6 @@ const TYPE_KEYWORDS = {
         'wrong number', 'wrong department', 'sorry', 'oops', 'never mind',
         'just kidding', 'hello', 'hi there', 'good morning', 'good afternoon'
     ],
-    FAQ: [
-        'pricing', 'cost', 'how much', 'warranty', 'financing', 'membership',
-        'service area', 'do you service', 'payment', 'accept credit',
-        'hours', 'open', 'closed', 'location', 'address', 'reviews'
-    ],
     BILLING: [
         'billing', 'invoice', 'invoicing', 'bill', 'payment', 'pay', 'paid',
         'charge', 'charges', 'refund', 'refunded', 'credit', 'debit', 'receipt',
@@ -153,7 +148,16 @@ const TYPE_KEYWORDS = {
         'troubleshoot', 'troubleshooting', 'diagnose', 'diagnostic', 'help me fix',
         'not working', 'stopped working', 'keeps', 'won\'t', 'will not', 'why is',
         'error code', 'making noise', 'leaking', 'rattling', 'smells', 'smell',
-        'intermittent', 'reset', 'breaker', 'fuse'
+        'intermittent', 'reset', 'breaker', 'fuse',
+        // HVAC/common field-service phrasing
+        'fan not spinning', 'not spinning', 'outdoor fan', 'condenser fan', 'outdoor unit', 'condenser',
+        'ac not cooling', 'not cooling', 'no cooling', 'not blowing cold', 'not blowing',
+        'compressor', 'capacitor', 'contactors', 'contactor'
+    ],
+    FAQ: [
+        'pricing', 'cost', 'how much', 'warranty', 'financing', 'membership',
+        'service area', 'do you service', 'accept credit',
+        'hours', 'open', 'closed', 'location', 'address', 'reviews'
     ],
     SYSTEM: [
         'hold please', 'one moment', 'got it', 'understood', 'okay',

@@ -195,6 +195,7 @@ router.get('/', async (req, res) => {
                         
                         // Classification (PATCHABLE via company override)
                         scenarioType: scenario.scenarioType || 'UNKNOWN',
+                        autofillLock: scenario.autofillLock === true,
                         status: scenario.status || 'live',
                         
                         // Replies
@@ -336,6 +337,24 @@ router.get('/', async (req, res) => {
             consentYesWords: Array.isArray(frontDeskDiscoveryConsent.consentYesWords) ? frontDeskDiscoveryConsent.consentYesWords : [],
             consentPhrases: Array.isArray(frontDeskDetectionTriggers.wantsBooking) ? frontDeskDetectionTriggers.wantsBooking : []
         };
+
+        // Canonical consent truth: this is the ONLY object Runtime Truth should display and warn from.
+        // Enterprise rule: a "truth report" must not contradict itself.
+        const discoveryConsentTruth = {
+            source: 'aiAgentSettings.frontDeskBehavior.discoveryConsent + aiAgentSettings.frontDeskBehavior.detectionTriggers.wantsBooking',
+            bookingRequiresExplicitConsent: v22Consent.bookingRequiresExplicitConsent,
+            forceLLMDiscovery: v22Consent.forceLLMDiscovery,
+            disableScenarioAutoResponses: v22Consent.disableScenarioAutoResponses,
+            configured: !!(v22Consent.consentQuestionTemplate || v22Consent.consentPhrases.length > 0 || v22Consent.consentYesWords.length > 0),
+            consentQuestionTemplate: v22Consent.consentQuestionTemplate,
+            consentPhrasesCount: v22Consent.consentPhrases.length,
+            consentPhrasesSample: v22Consent.consentPhrases.slice(0, 5),
+            consentYesWordsCount: v22Consent.consentYesWords.length,
+            consentYesWordsSample: v22Consent.consentYesWords.slice(0, 5),
+            status: v22Consent.disableScenarioAutoResponses === true
+                ? 'BLOCKED: Scenarios will not auto-reply until consent is given'
+                : 'OK: Scenarios can respond normally'
+        };
         
         const matchingPolicy = {
             source: PROVIDER_VERSIONS.matchingPolicy,
@@ -352,13 +371,13 @@ router.get('/', async (req, res) => {
             },
             discoveryConsent: {
                 // NOTE: these fields must reflect what runtime actually uses
-                required: v22Consent.bookingRequiresExplicitConsent,
-                bookingRequiresExplicitConsent: v22Consent.bookingRequiresExplicitConsent,
-                forceLLMDiscovery: v22Consent.forceLLMDiscovery,
-                disableScenarioAutoResponses: v22Consent.disableScenarioAutoResponses,
-                scenariosBlockedByConsent: v22Consent.disableScenarioAutoResponses === true,
-                consentPhrasesCount: v22Consent.consentPhrases.length,
-                consentYesWordsCount: v22Consent.consentYesWords.length
+                required: discoveryConsentTruth.bookingRequiresExplicitConsent,
+                bookingRequiresExplicitConsent: discoveryConsentTruth.bookingRequiresExplicitConsent,
+                forceLLMDiscovery: discoveryConsentTruth.forceLLMDiscovery,
+                disableScenarioAutoResponses: discoveryConsentTruth.disableScenarioAutoResponses,
+                scenariosBlockedByConsent: discoveryConsentTruth.disableScenarioAutoResponses === true,
+                consentPhrasesCount: discoveryConsentTruth.consentPhrasesCount,
+                consentYesWordsCount: discoveryConsentTruth.consentYesWordsCount
             }
         };
         
@@ -876,7 +895,7 @@ router.get('/', async (req, res) => {
         if (unknownScenarios > 0) {
             const unknownExamples = unknownScenarioItems
                 .slice(0, 5)
-                .map(s => ({ id: s.id, name: s.name, templateName: s.templateName }));
+                .map(s => ({ id: s.id, name: s.name, templateName: s.templateName, locked: s.autofillLock === true }));
 
             issues.push({ 
                 severity: 'WARNING', 
@@ -887,7 +906,7 @@ router.get('/', async (req, res) => {
             });
         }
         
-        if (matchingPolicy.discoveryConsent.disableScenarioAutoResponses === true) {
+        if (discoveryConsentTruth.disableScenarioAutoResponses === true) {
             issues.push({ 
                 severity: 'WARNING', 
                 area: 'consent', 
@@ -949,7 +968,7 @@ router.get('/', async (req, res) => {
                     editable: true
                 },
                 // V22 Consent Gate (this MUST match runtime; if it's not here, it doesn't exist)
-                discoveryConsent: controlPlane.discoveryConsent,
+                discoveryConsent: discoveryConsentTruth,
                 // Vocabulary (Caller input translation + output guardrails)
                 vocabulary,
                 // Front Desk tabs (truth mirrors runtime)
