@@ -2246,7 +2246,56 @@ Sean → Shawn, Shaun`;
     renderBookingSlot(slot, index, totalSlots) {
         const isFirst = index === 0;
         const isLast = index === totalSlots - 1;
-        
+        const safeLabel = this.escapeHtml(slot.label || 'Unnamed');
+        const safeId = this.escapeHtml(slot.id || `slot_${index}`);
+        const safeQuestion = this.escapeHtml((slot.question || '').slice(0, 120));
+        const type = slot.type || 'text';
+        const required = slot.required !== false;
+        const confirmBack = slot.confirmBack === true;
+
+        return `
+            <div class="booking-slot-card" data-slot-index="${index}" style="background: #0d1117; border: 1px solid #30363d; border-radius: 10px; padding: 14px 14px;">
+                <div style="display:flex; align-items:flex-start; justify-content: space-between; gap: 12px;">
+                    <div style="min-width: 0;">
+                        <div style="display:flex; align-items:center; gap: 10px; flex-wrap: wrap;">
+                            <span style="font-weight: 800; color: #c9d1d9;">${safeLabel}</span>
+                            <span style="font-family: monospace; font-size: 12px; color: #8b949e; background: #161b22; border: 1px solid #30363d; padding: 2px 8px; border-radius: 999px;">${safeId}</span>
+                            <span style="font-size: 12px; color: #8b949e; background: #161b22; border: 1px solid #30363d; padding: 2px 8px; border-radius: 999px;">type: ${this.escapeHtml(type)}</span>
+                            ${required ? `<span style="font-size: 12px; color: #f85149; background: #161b22; border: 1px solid #f8514950; padding: 2px 8px; border-radius: 999px;">required</span>` : `<span style="font-size: 12px; color: #6e7681; background: #161b22; border: 1px solid #30363d; padding: 2px 8px; border-radius: 999px;">optional</span>`}
+                            ${confirmBack ? `<span style="font-size: 12px; color: #3fb950; background: #161b22; border: 1px solid #3fb95040; padding: 2px 8px; border-radius: 999px;">confirm back</span>` : ``}
+                        </div>
+                        <div style="margin-top: 8px; color: #8b949e; font-size: 12px; line-height: 1.35;">
+                            <span style="color:#6e7681;">Question:</span>
+                            <span style="color:#c9d1d9;">${safeQuestion || '<span style="color:#f0883e;">(not set)</span>'}</span>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+                        <div style="display:flex; gap: 6px;">
+                            <button onclick="window.frontDeskManager.moveSlot(${index}, -1)" ${isFirst ? 'disabled' : ''} 
+                                style="padding: 6px 10px; background: ${isFirst ? '#21262d' : '#30363d'}; border: none; border-radius: 6px; color: ${isFirst ? '#484f58' : '#c9d1d9'}; cursor: ${isFirst ? 'not-allowed' : 'pointer'}; font-size: 12px;"
+                                title="Move up">▲</button>
+                            <button onclick="window.frontDeskManager.moveSlot(${index}, 1)" ${isLast ? 'disabled' : ''} 
+                                style="padding: 6px 10px; background: ${isLast ? '#21262d' : '#30363d'}; border: none; border-radius: 6px; color: ${isLast ? '#484f58' : '#c9d1d9'}; cursor: ${isLast ? 'not-allowed' : 'pointer'}; font-size: 12px;"
+                                title="Move down">▼</button>
+                        </div>
+                        <div style="display:flex; gap: 6px;">
+                            <button onclick="window.frontDeskManager.editBookingSlot(${index})"
+                                style="padding: 7px 10px; background: #238636; border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: 800; font-size: 12px;">
+                                Edit
+                            </button>
+                            <button onclick="window.frontDeskManager.removeSlot(${index})"
+                                style="padding: 7px 10px; background: #21262d; border: 1px solid #f8514950; border-radius: 6px; color: #f85149; cursor: pointer; font-weight: 800; font-size: 12px;">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    renderBookingSlotEditorForm(slot) {
         // Extended type options with descriptions
         const typeOptions = [
             { value: 'name', label: '👤 Name', desc: 'Customer name with smart options' },
@@ -2280,120 +2329,338 @@ Sean → Shawn, Shaun`;
             custom: "Just to confirm, {value}?"
         };
         const confirmPrompt = slot.confirmPrompt || defaultConfirmPrompts[slot.type] || defaultConfirmPrompts.text;
-        
-        // Determine which type-specific options to show
-        const isNameType = slot.type === 'name' || slot.id === 'name';
-        const isPhoneType = slot.type === 'phone' || slot.id === 'phone';
-        const isAddressType = slot.type === 'address' || slot.id === 'address';
-        const isSelectType = slot.type === 'select';
-        const isDateTimeType = ['date', 'time', 'datetime'].includes(slot.type);
-        const isNumberType = slot.type === 'number';
-        
+
         return `
-            <div class="booking-slot" data-slot-index="${index}" data-slot-type="${slot.type}" style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;">
-                <div style="display: flex; align-items: flex-start; gap: 12px;">
-                    <!-- Reorder Buttons -->
-                    <div style="display: flex; flex-direction: column; gap: 4px; padding-top: 4px;">
-                        <button onclick="window.frontDeskManager.moveSlot(${index}, -1)" ${isFirst ? 'disabled' : ''} 
-                            style="width: 28px; height: 24px; background: ${isFirst ? '#21262d' : '#30363d'}; border: none; border-radius: 4px; color: ${isFirst ? '#484f58' : '#c9d1d9'}; cursor: ${isFirst ? 'not-allowed' : 'pointer'}; font-size: 14px;"
-                            title="Move up">▲</button>
-                        <button onclick="window.frontDeskManager.moveSlot(${index}, 1)" ${isLast ? 'disabled' : ''} 
-                            style="width: 28px; height: 24px; background: ${isLast ? '#21262d' : '#30363d'}; border: none; border-radius: 4px; color: ${isLast ? '#484f58' : '#c9d1d9'}; cursor: ${isLast ? 'not-allowed' : 'pointer'}; font-size: 14px;"
-                            title="Move down">▼</button>
+            <div class="booking-slot" style="display:flex; flex-direction: column; gap: 12px;">
+                <!-- Row 1: Label, ID, Type -->
+                <div style="display: grid; grid-template-columns: 2fr 1fr 1.5fr; gap: 12px; align-items: end;">
+                    <div>
+                        <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 6px;">Label (what admin sees)</label>
+                        <input type="text" class="slot-label" value="${this.escapeHtml(slot.label || '')}" placeholder="e.g. Full Name" 
+                            style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 8px; color: #c9d1d9;">
                     </div>
-                    
-                    <!-- Slot Content -->
-                    <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
-                        <!-- Row 1: Label, ID, Type -->
-                        <div style="display: flex; gap: 12px; align-items: flex-end;">
-                            <div style="flex: 2;">
-                                <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Label (what admin sees)</label>
-                                <input type="text" class="slot-label" data-index="${index}" value="${slot.label || ''}" placeholder="e.g. Full Name" 
-                                    style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9;">
-                            </div>
-                            <div style="flex: 1;">
-                                <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Slot ID (code reference)</label>
-                                <input type="text" class="slot-id" data-index="${index}" value="${slot.id || ''}" placeholder="e.g. name" 
-                                    style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-family: monospace; font-size: 12px;">
-                            </div>
-                            <div style="flex: 1.5;">
-                                <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Type</label>
-                                <select class="slot-type" data-index="${index}" onchange="window.frontDeskManager.onSlotTypeChange(${index}, this.value)"
-                                    style="width: 100%; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9;">
-                                    ${typeOptions.map(t => `<option value="${t.value}" ${slot.type === t.value ? 'selected' : ''}>${t.label}</option>`).join('')}
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <!-- Row 2: Question -->
+                    <div>
+                        <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 6px;">Slot ID (code reference)</label>
+                        <input type="text" class="slot-id" value="${this.escapeHtml(slot.id || '')}" placeholder="e.g. name" 
+                            style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 8px; color: #c9d1d9; font-family: monospace; font-size: 12px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 6px;">Type</label>
+                        <select class="slot-type" id="fdb-slot-editor-type"
+                            style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 8px; color: #c9d1d9;">
+                            ${typeOptions.map(t => `<option value="${t.value}" ${slot.type === t.value ? 'selected' : ''}>${t.label}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Row 2: Question -->
+                <div>
+                    <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 6px;">🎙️ Question AI Asks (exact wording)</label>
+                    <input type="text" class="slot-question" value="${this.escapeHtml(slot.question || '')}" placeholder="May I have your name, please?" 
+                        style="width: 100%; padding: 12px; background: #0b0f14; border: 1px solid #30363d; border-radius: 8px; color: #c9d1d9; font-size: 14px;">
+                </div>
+
+                <!-- Row 3: Required + Confirm Back -->
+                <div style="display:flex; gap: 12px; flex-wrap: wrap;">
+                    <label style="display:flex; align-items:center; gap: 10px; padding: 10px 12px; background:#0b0f14; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
+                        <input type="checkbox" class="slot-required" ${slot.required !== false ? 'checked' : ''} style="accent-color:#f85149; width: 18px; height: 18px;">
+                        <span style="color:#c9d1d9; font-weight:800;">Required</span>
+                    </label>
+                    <label style="display:flex; align-items:center; gap: 10px; padding: 10px 12px; background:#0b0f14; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
+                        <input type="checkbox" class="slot-confirmBack" ${slot.confirmBack ? 'checked' : ''} style="accent-color:#3fb950; width: 18px; height: 18px;">
+                        <span style="color:#c9d1d9; font-weight:800;">Confirm back</span>
+                    </label>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 6px;">Confirm prompt (used only if Confirm back is ON)</label>
+                    <input type="text" class="slot-confirmPrompt" value="${this.escapeHtml(confirmPrompt)}" 
+                        placeholder="Just to confirm, that's {value}, correct?"
+                        style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 8px; color: #c9d1d9; font-size: 12px; ${slot.confirmBack ? '' : 'opacity: 0.5;'}"
+                        ${slot.confirmBack ? '' : 'disabled'}>
+                </div>
+
+                <!-- Type-Specific Options Container -->
+                <div class="slot-type-options" id="fdb-slot-editor-type-options">
+                    ${this.renderSlotTypeOptions(slot, 0)}
+                </div>
+
+                <!-- Advanced Options -->
+                <details style="background: #0b0f14; border-radius: 8px; border: 1px solid #30363d;">
+                    <summary style="padding: 10px 12px; cursor: pointer; font-size: 12px; color: #8b949e; user-select: none;">
+                        ⚙️ Advanced Options
+                    </summary>
+                    <div style="padding: 12px; display: grid; gap: 12px; border-top: 1px solid #30363d;">
                         <div>
-                            <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">🎙️ Question AI Asks (exact wording)</label>
-                            <input type="text" class="slot-question" data-index="${index}" value="${slot.question || ''}" placeholder="May I have your full name?" 
-                                style="width: 100%; padding: 10px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px;">
+                            <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 6px;">Validation Pattern (regex, optional)</label>
+                            <input type="text" class="slot-validation" value="${this.escapeHtml(slot.validation || '')}" 
+                                placeholder="e.g. ^[a-zA-Z ]+$ for text only"
+                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; color: #c9d1d9; font-family: monospace; font-size: 11px;">
                         </div>
-                        
-                        <!-- Row 3: Confirm Back -->
-                        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #161b22; border-radius: 4px; border: 1px solid ${slot.confirmBack ? '#238636' : '#30363d'};">
-                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;" title="Repeat value back for confirmation">
-                                <input type="checkbox" class="slot-confirmBack" data-index="${index}" ${slot.confirmBack ? 'checked' : ''} 
-                                    style="accent-color: #238636;" onchange="window.frontDeskManager.toggleConfirmPrompt(${index}, this.checked)">
-                                <span style="font-size: 12px; color: ${slot.confirmBack ? '#3fb950' : '#8b949e'};">🔄 Confirm Back</span>
-                            </label>
-                            <input type="text" class="slot-confirmPrompt" data-index="${index}" value="${confirmPrompt}" 
-                                placeholder="Just to confirm, that's {value}, correct?"
-                                style="flex: 1; padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; ${slot.confirmBack ? '' : 'opacity: 0.5;'}"
-                                ${slot.confirmBack ? '' : 'disabled'}>
-                        </div>
-                        
-                        <!-- Type-Specific Options Container -->
-                        <div class="slot-type-options" data-index="${index}">
-                            ${this.renderSlotTypeOptions(slot, index)}
-                        </div>
-                        
-                        <!-- Advanced Options (collapsible) -->
-                        <details style="background: #161b22; border-radius: 4px; border: 1px solid #30363d;">
-                            <summary style="padding: 8px 12px; cursor: pointer; font-size: 12px; color: #8b949e; user-select: none;">
-                                ⚙️ Advanced Options
-                            </summary>
-                            <div style="padding: 12px; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid #30363d;">
-                                <!-- Validation Pattern -->
-                                <div>
-                                    <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">Validation Pattern (regex, optional)</label>
-                                    <input type="text" class="slot-validation" data-index="${index}" value="${slot.validation || ''}" 
-                                        placeholder="e.g. ^[a-zA-Z ]+$ for text only"
-                                        style="width: 100%; padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-family: monospace; font-size: 11px;">
-                                </div>
-                                
-                                <!-- Skip If Known -->
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                    <input type="checkbox" class="slot-skipIfKnown" data-index="${index}" ${slot.skipIfKnown ? 'checked' : ''} style="accent-color: #58a6ff;">
-                                    <span style="font-size: 12px; color: #c9d1d9;">Skip if already known (returning customer)</span>
-                                </label>
-                                
-                                <!-- Help Text -->
-                                <div>
-                                    <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px;">AI Helper Note (internal, not spoken)</label>
-                                    <input type="text" class="slot-helperNote" data-index="${index}" value="${slot.helperNote || ''}" 
-                                        placeholder="e.g. Accept partial address if caller is unsure"
-                                        style="width: 100%; padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
-                                </div>
-                            </div>
-                        </details>
-                    </div>
-                    
-                    <!-- Required Toggle & Delete -->
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 16px;">
-                        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;" title="Required field">
-                            <input type="checkbox" class="slot-required" data-index="${index}" ${slot.required !== false ? 'checked' : ''} style="accent-color: #f85149;">
-                            <span style="font-size: 11px; color: ${slot.required !== false ? '#f85149' : '#8b949e'};">Req</span>
+
+                        <label style="display:flex; align-items:center; gap: 10px; padding: 10px 12px; background:#0d1117; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
+                            <input type="checkbox" class="slot-skipIfKnown" ${slot.skipIfKnown ? 'checked' : ''} style="accent-color:#58a6ff; width: 18px; height: 18px;">
+                            <span style="color:#c9d1d9; font-weight:800;">Skip if already known (returning customer)</span>
                         </label>
-                        <button onclick="window.frontDeskManager.removeSlot(${index})" 
-                            style="width: 28px; height: 28px; background: #21262d; border: 1px solid #f8514950; border-radius: 4px; color: #f85149; cursor: pointer; font-size: 14px;"
-                            title="Delete slot">🗑</button>
+
+                        <div>
+                            <label style="display: block; font-size: 11px; color: #8b949e; margin-bottom: 6px;">AI Helper Note (internal, not spoken)</label>
+                            <input type="text" class="slot-helperNote" value="${this.escapeHtml(slot.helperNote || '')}" 
+                                placeholder="Internal hint for the AI (not spoken)"
+                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; color: #c9d1d9; font-size: 12px;">
+                        </div>
                     </div>
+                </details>
+            </div>
+        `;
+    }
+
+    showBookingSlotEditorModal({ mode, slotIndex = null, slotDraft }) {
+        // Close any existing
+        this.closeBookingSlotEditorModal();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'fdb-slot-editor-overlay';
+        overlay.style.cssText = `
+            position: fixed; inset: 0; z-index: 999999;
+            background: rgba(0,0,0,0.72);
+            display: flex; align-items: stretch; justify-content: stretch;
+        `;
+
+        const panel = document.createElement('div');
+        panel.id = 'fdb-slot-editor-panel';
+        panel.style.cssText = `
+            width: 100%; height: 100%;
+            background: #0d1117;
+            color: #c9d1d9;
+            display: flex; flex-direction: column;
+        `;
+
+        const title = mode === 'create' ? 'Add Booking Slot' : 'Edit Booking Slot';
+        panel.innerHTML = `
+            <div style="display:flex; align-items:center; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid #30363d;">
+                <div style="min-width: 0;">
+                    <div style="font-size: 18px; font-weight: 900; color: #58a6ff;">${title}</div>
+                    <div style="font-size: 12px; color: #8b949e; margin-top: 2px;">Configure the slot comfortably. This editor is the source of truth.</div>
+                </div>
+                <div style="display:flex; gap: 10px;">
+                    <button id="fdb-slot-editor-cancel"
+                        style="padding: 10px 14px; background: #21262d; border: 1px solid #30363d; border-radius: 8px; color: #c9d1d9; cursor: pointer; font-weight: 800;">
+                        Cancel
+                    </button>
+                    <button id="fdb-slot-editor-save"
+                        style="padding: 10px 14px; background: #238636; border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 900;">
+                        Save Slot
+                    </button>
+                </div>
+            </div>
+
+            <div style="flex: 1; overflow: auto; padding: 18px;">
+                <div style="max-width: 1100px; margin: 0 auto;">
+                    ${this.renderBookingSlotEditorForm(slotDraft)}
                 </div>
             </div>
         `;
+
+        overlay.appendChild(panel);
+        document.body.appendChild(overlay);
+
+        const close = () => this.closeBookingSlotEditorModal();
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+        panel.querySelector('#fdb-slot-editor-cancel')?.addEventListener('click', close);
+
+        // Wire type change inside modal
+        const typeEl = panel.querySelector('#fdb-slot-editor-type');
+        if (typeEl) {
+            typeEl.addEventListener('change', () => {
+                const newType = typeEl.value || 'text';
+                slotDraft.type = newType;
+                const container = panel.querySelector('#fdb-slot-editor-type-options');
+                if (container) {
+                    container.innerHTML = this.renderSlotTypeOptions(slotDraft, 0);
+                }
+            });
+        }
+
+        // Wire confirmBack toggle
+        const confirmBackEl = panel.querySelector('.slot-confirmBack');
+        const confirmPromptEl = panel.querySelector('.slot-confirmPrompt');
+        if (confirmBackEl && confirmPromptEl) {
+            const syncConfirm = () => {
+                const enabled = confirmBackEl.checked === true;
+                confirmPromptEl.disabled = !enabled;
+                confirmPromptEl.style.opacity = enabled ? '1' : '0.5';
+            };
+            confirmBackEl.addEventListener('change', syncConfirm);
+            syncConfirm();
+        }
+
+        // Save
+        panel.querySelector('#fdb-slot-editor-save')?.addEventListener('click', () => {
+            try {
+                const savedSlot = this.collectBookingSlotFromEditor(panel);
+                this.upsertBookingSlot(mode, slotIndex, savedSlot);
+                this.closeBookingSlotEditorModal();
+            } catch (e) {
+                console.error('[FRONT DESK] ❌ Slot editor save failed', e);
+                alert(`Save failed: ${e.message}`);
+            }
+        });
+
+        // Focus first input
+        setTimeout(() => {
+            const first = panel.querySelector('.slot-label');
+            if (first) { first.focus(); first.select?.(); }
+        }, 50);
+    }
+
+    closeBookingSlotEditorModal() {
+        const overlay = document.getElementById('fdb-slot-editor-overlay');
+        if (overlay) overlay.remove();
+    }
+
+    collectBookingSlotFromEditor(panelEl) {
+        const el = panelEl.querySelector('.booking-slot');
+        if (!el) throw new Error('Slot editor is missing form element');
+
+        const getVal = (selector) => el.querySelector(selector)?.value?.trim() || '';
+        const getChecked = (selector) => el.querySelector(selector)?.checked ?? false;
+        const getCheckedDefault = (selector, defaultVal) => {
+            const elem = el.querySelector(selector);
+            return elem ? elem.checked : defaultVal;
+        };
+
+        const slotData = {
+            id: getVal('.slot-id'),
+            label: getVal('.slot-label'),
+            question: getVal('.slot-question'),
+            required: getCheckedDefault('.slot-required', true),
+            type: el.querySelector('.slot-type')?.value || 'text',
+            confirmBack: getChecked('.slot-confirmBack'),
+            confirmPrompt: getVal('.slot-confirmPrompt') || "Just to confirm, that's {value}, correct?",
+            validation: getVal('.slot-validation') || null,
+            skipIfKnown: getChecked('.slot-skipIfKnown'),
+            helperNote: getVal('.slot-helperNote') || null
+        };
+
+        // Validate basics
+        if (!slotData.id) throw new Error('Slot ID is required (e.g. "name", "phone", "address")');
+        if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(slotData.id)) {
+            throw new Error('Slot ID must be alphanumeric/underscore and start with a letter (e.g. "serviceAddress", "unit_number")');
+        }
+        if (!slotData.label) throw new Error('Label is required');
+        if (!slotData.question) throw new Error('Question is required');
+
+        // Reuse the existing collector by temporarily running the same logic on the editor element
+        // (Type-specific options use the same class names as the list view did.)
+        // We replicate the relevant parts here to stay deterministic.
+
+        // NAME options
+        if (el.querySelector('.slot-askFullName')) slotData.askFullName = getCheckedDefault('.slot-askFullName', false);
+        if (el.querySelector('.slot-useFirstNameOnly')) slotData.useFirstNameOnly = getCheckedDefault('.slot-useFirstNameOnly', true);
+        if (el.querySelector('.slot-askMissingNamePart')) slotData.askMissingNamePart = getChecked('.slot-askMissingNamePart');
+        if (el.querySelector('.slot-confirmSpelling')) slotData.confirmSpelling = getChecked('.slot-confirmSpelling');
+        if (el.querySelector('.slot-lastNameQuestion')) slotData.lastNameQuestion = getVal('.slot-lastNameQuestion') || "And what's your last name?";
+
+        // PHONE options
+        if (el.querySelector('.slot-offerCallerId')) slotData.offerCallerId = getCheckedDefault('.slot-offerCallerId', true);
+        if (el.querySelector('.slot-callerIdPrompt')) slotData.callerIdPrompt = getVal('.slot-callerIdPrompt') || "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?";
+        if (el.querySelector('.slot-acceptTextMe')) slotData.acceptTextMe = getCheckedDefault('.slot-acceptTextMe', true);
+        if (el.querySelector('.slot-breakDownIfUnclear')) slotData.breakDownIfUnclear = getChecked('.slot-breakDownIfUnclear');
+
+        // ADDRESS options
+        if (el.querySelector('.slot-addressConfirmLevel')) slotData.addressConfirmLevel = el.querySelector('.slot-addressConfirmLevel')?.value || 'street_city';
+        if (el.querySelector('.slot-acceptPartialAddress')) slotData.acceptPartialAddress = getChecked('.slot-acceptPartialAddress');
+        if (el.querySelector('.slot-useGoogleMapsValidation')) slotData.useGoogleMapsValidation = getChecked('.slot-useGoogleMapsValidation');
+        if (el.querySelector('.slot-googleMapsValidationMode')) slotData.googleMapsValidationMode = el.querySelector('.slot-googleMapsValidationMode')?.value || 'confirm_low_confidence';
+        if (el.querySelector('.slot-unitNumberMode')) slotData.unitNumberMode = el.querySelector('.slot-unitNumberMode')?.value || 'smart';
+        if (el.querySelector('.slot-unitNumberPrompt')) slotData.unitNumberPrompt = getVal('.slot-unitNumberPrompt') || 'Is there an apartment or unit number?';
+        if (el.querySelector('.slot-unitPromptVariants')) {
+            const variantsText = getVal('.slot-unitPromptVariants');
+            slotData.unitPromptVariants = variantsText ? variantsText.split('\n').map(v => v.trim()).filter(v => v) : [];
+        }
+        if (el.querySelector('.slot-unitTriggerWords')) {
+            const triggerText = getVal('.slot-unitTriggerWords');
+            slotData.unitTriggerWords = triggerText ? triggerText.split(',').map(w => w.trim().toLowerCase()).filter(w => w) : [];
+        }
+        if (el.querySelector('.slot-unitAlwaysAskZips')) {
+            const zipsText = getVal('.slot-unitAlwaysAskZips');
+            slotData.unitAlwaysAskZips = zipsText ? zipsText.split(',').map(z => z.trim()).filter(z => /^\d{5}$/.test(z)) : [];
+        }
+        if (el.querySelector('.slot-unitNeverAskZips')) {
+            const zipsText = getVal('.slot-unitNeverAskZips');
+            slotData.unitNeverAskZips = zipsText ? zipsText.split(',').map(z => z.trim()).filter(z => /^\d{5}$/.test(z)) : [];
+        }
+
+        // EMAIL options
+        if (el.querySelector('.slot-spellOutEmail')) slotData.spellOutEmail = getCheckedDefault('.slot-spellOutEmail', true);
+        if (el.querySelector('.slot-offerToSendText')) slotData.offerToSendText = getChecked('.slot-offerToSendText');
+
+        // DATE/TIME options
+        if (el.querySelector('.slot-offerAsap')) slotData.offerAsap = getCheckedDefault('.slot-offerAsap', true);
+        if (el.querySelector('.slot-offerMorningAfternoon')) slotData.offerMorningAfternoon = getChecked('.slot-offerMorningAfternoon');
+        if (el.querySelector('.slot-asapPhrase')) slotData.asapPhrase = getVal('.slot-asapPhrase') || 'first available';
+
+        // SELECT options
+        if (el.querySelector('.slot-selectOptions')) {
+            const optionsText = getVal('.slot-selectOptions');
+            slotData.selectOptions = optionsText ? optionsText.split('\n').map(o => o.trim()).filter(o => o) : [];
+        }
+        if (el.querySelector('.slot-allowOther')) slotData.allowOther = getChecked('.slot-allowOther');
+
+        // YES/NO options
+        if (el.querySelector('.slot-yesAction')) slotData.yesAction = getVal('.slot-yesAction') || null;
+        if (el.querySelector('.slot-noAction')) slotData.noAction = getVal('.slot-noAction') || null;
+
+        // NUMBER options
+        if (el.querySelector('.slot-minValue')) {
+            const minVal = el.querySelector('.slot-minValue')?.value;
+            slotData.minValue = minVal !== '' ? parseFloat(minVal) : null;
+        }
+        if (el.querySelector('.slot-maxValue')) {
+            const maxVal = el.querySelector('.slot-maxValue')?.value;
+            slotData.maxValue = maxVal !== '' ? parseFloat(maxVal) : null;
+        }
+        if (el.querySelector('.slot-unit')) slotData.unit = getVal('.slot-unit') || null;
+
+        return slotData;
+    }
+
+    upsertBookingSlot(mode, slotIndex, savedSlot) {
+        const slots = this.config.bookingSlots || this.getDefaultBookingSlots();
+
+        // Enforce unique id
+        const existing = slots.find((s, idx) => (s?.id === savedSlot.id) && !(mode === 'edit' && idx === slotIndex));
+        if (existing) {
+            throw new Error(`Slot ID "${savedSlot.id}" already exists. Slot IDs must be unique.`);
+        }
+
+        if (mode === 'create') {
+            slots.push(savedSlot);
+        } else {
+            if (slotIndex === null || slotIndex === undefined || !slots[slotIndex]) {
+                throw new Error('Invalid slot index for edit');
+            }
+            slots[slotIndex] = { ...slots[slotIndex], ...savedSlot };
+        }
+
+        // Normalize order
+        slots.forEach((s, i) => { s.order = i; });
+        this.config.bookingSlots = slots;
+        this.isDirty = true;
+
+        const container = document.getElementById('booking-slots-container');
+        if (container) {
+            container.innerHTML = slots.map((slot, idx) => this.renderBookingSlot(slot, idx, slots.length)).join('');
+        }
+    }
+
+    editBookingSlot(index) {
+        const slots = this.config.bookingSlots || [];
+        const slot = slots[index];
+        if (!slot) return;
+        const draft = JSON.parse(JSON.stringify(slot));
+        this.showBookingSlotEditorModal({ mode: 'edit', slotIndex: index, slotDraft: draft });
     }
     
     // Render type-specific options based on slot type
@@ -3062,16 +3329,9 @@ Sean → Shawn, Shaun`;
     }
     
     addBookingSlot() {
-        const startTime = performance.now();
-        
-        // PERF FIX: Sync any pending DOM changes to config first
-        this.syncBookingSlotsFromDOM();
-        
-        // Use config as source of truth (no DOM reads)
         const slots = this.config.bookingSlots || this.getDefaultBookingSlots();
-        const newId = `custom_${Date.now()}`;
-        slots.push({
-            id: newId,
+        const draft = {
+            id: `custom_${Date.now()}`,
             label: 'New Field',
             question: '',
             required: false,
@@ -3079,33 +3339,11 @@ Sean → Shawn, Shaun`;
             type: 'text',
             confirmBack: false,
             confirmPrompt: "Just to confirm, {value}?"
-        });
-        
-        // Update config and re-render
-        this.config.bookingSlots = slots;
-        this.isDirty = true;
-        document.getElementById('booking-slots-container').innerHTML = 
-            slots.map((slot, idx) => this.renderBookingSlot(slot, idx, slots.length)).join('');
-        
-        console.log(`[FRONT DESK] ⏱️ addBookingSlot completed in ${(performance.now() - startTime).toFixed(1)}ms`);
-        
-        // Focus the new slot's label input
-        setTimeout(() => {
-            const inputs = document.querySelectorAll('.slot-label');
-            if (inputs.length > 0) {
-                inputs[inputs.length - 1].focus();
-                inputs[inputs.length - 1].select();
-            }
-        }, 100);
+        };
+        this.showBookingSlotEditorModal({ mode: 'create', slotDraft: draft });
     }
     
     removeSlot(index) {
-        const startTime = performance.now();
-        
-        // PERF FIX: Sync any pending DOM changes to config first (lightweight)
-        this.syncBookingSlotsFromDOM();
-        
-        // Use config as source of truth (no heavy DOM reads)
         const slots = this.config.bookingSlots || [];
         
         if (slots.length <= 1) {
@@ -3134,15 +3372,10 @@ Sean → Shawn, Shaun`;
         document.getElementById('booking-slots-container').innerHTML = 
             slots.map((slot, idx) => this.renderBookingSlot(slot, idx, slots.length)).join('');
         
-        console.log(`[FRONT DESK] ✅ removeSlot completed in ${(performance.now() - startTime).toFixed(1)}ms (excluding confirm dialog)`);
+        console.log(`[FRONT DESK] ✅ Slot removed: ${slot.id}`);
     }
     
     moveSlot(index, direction) {
-        const startTime = performance.now();
-        
-        // PERF FIX: Sync any pending DOM changes to config first
-        this.syncBookingSlotsFromDOM();
-        
         // Use config as source of truth
         const slots = this.config.bookingSlots || [];
         const newIndex = index + direction;
@@ -3159,172 +3392,14 @@ Sean → Shawn, Shaun`;
         this.isDirty = true;
         document.getElementById('booking-slots-container').innerHTML = 
             slots.map((slot, idx) => this.renderBookingSlot(slot, idx, slots.length)).join('');
-        
-        console.log(`[FRONT DESK] ⏱️ moveSlot completed in ${(performance.now() - startTime).toFixed(1)}ms`);
+        console.log(`[FRONT DESK] ⏱️ Slot moved: ${index} → ${newIndex}`);
     }
     
     collectBookingSlots() {
-        const slots = [];
-        const slotElements = document.querySelectorAll('.booking-slot');
-        
-        slotElements.forEach((el, index) => {
-            // Helper function to safely get element value
-            const getVal = (selector) => el.querySelector(selector)?.value?.trim() || '';
-            const getChecked = (selector) => el.querySelector(selector)?.checked ?? false;
-            const getCheckedDefault = (selector, defaultVal) => {
-                const elem = el.querySelector(selector);
-                return elem ? elem.checked : defaultVal;
-            };
-            
-            const slotData = {
-                // Basic fields
-                id: getVal('.slot-id') || `slot_${index}`,
-                label: getVal('.slot-label') || 'Unnamed',
-                question: getVal('.slot-question') || '',
-                required: getCheckedDefault('.slot-required', true),
-                order: index,
-                type: el.querySelector('.slot-type')?.value || 'text',
-                confirmBack: getChecked('.slot-confirmBack'),
-                confirmPrompt: getVal('.slot-confirmPrompt') || "Just to confirm, that's {value}, correct?",
-                
-                // Advanced options (all types)
-                validation: getVal('.slot-validation') || null,
-                skipIfKnown: getChecked('.slot-skipIfKnown'),
-                helperNote: getVal('.slot-helperNote') || null
-            };
-            
-            // ═══════════════════════════════════════════════════════════════
-            // TYPE-SPECIFIC OPTIONS
-            // ═══════════════════════════════════════════════════════════════
-            
-            // NAME options - Default askFullName to FALSE (prompt as law)
-            if (el.querySelector('.slot-askFullName')) {
-                slotData.askFullName = getCheckedDefault('.slot-askFullName', false);
-            }
-            if (el.querySelector('.slot-useFirstNameOnly')) {
-                slotData.useFirstNameOnly = getCheckedDefault('.slot-useFirstNameOnly', true);
-            }
-            if (el.querySelector('.slot-askMissingNamePart')) {
-                slotData.askMissingNamePart = getChecked('.slot-askMissingNamePart');
-            }
-            // V46: Confirm spelling variants - creates a slot requirement
-            if (el.querySelector('.slot-confirmSpelling')) {
-                slotData.confirmSpelling = getChecked('.slot-confirmSpelling');
-            }
-            // V47: Last name question - UI configurable, not hardcoded
-            if (el.querySelector('.slot-lastNameQuestion')) {
-                slotData.lastNameQuestion = getVal('.slot-lastNameQuestion') || "And what's your last name?";
-            }
-            
-            // PHONE options
-            if (el.querySelector('.slot-offerCallerId')) {
-                slotData.offerCallerId = getCheckedDefault('.slot-offerCallerId', true);
-            }
-            if (el.querySelector('.slot-callerIdPrompt')) {
-                slotData.callerIdPrompt = getVal('.slot-callerIdPrompt') || "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?";
-            }
-            if (el.querySelector('.slot-acceptTextMe')) {
-                slotData.acceptTextMe = getCheckedDefault('.slot-acceptTextMe', true);
-            }
-            
-            // BREAK DOWN IF UNCLEAR (works for phone AND address)
-            if (el.querySelector('.slot-breakDownIfUnclear')) {
-                slotData.breakDownIfUnclear = getChecked('.slot-breakDownIfUnclear');
-            }
-            
-            // ADDRESS options
-            if (el.querySelector('.slot-addressConfirmLevel')) {
-                slotData.addressConfirmLevel = el.querySelector('.slot-addressConfirmLevel')?.value || 'street_city';
-            }
-            if (el.querySelector('.slot-acceptPartialAddress')) {
-                slotData.acceptPartialAddress = getChecked('.slot-acceptPartialAddress');
-            }
-            
-            // V35: GOOGLE MAPS VALIDATION options
-            if (el.querySelector('.slot-useGoogleMapsValidation')) {
-                slotData.useGoogleMapsValidation = getChecked('.slot-useGoogleMapsValidation');
-            }
-            if (el.querySelector('.slot-googleMapsValidationMode')) {
-                slotData.googleMapsValidationMode = el.querySelector('.slot-googleMapsValidationMode')?.value || 'confirm_low_confidence';
-            }
-            
-            // V35: UNIT/APARTMENT DETECTION options (World-Class)
-            if (el.querySelector('.slot-unitNumberMode')) {
-                slotData.unitNumberMode = el.querySelector('.slot-unitNumberMode')?.value || 'smart';
-            }
-            if (el.querySelector('.slot-unitNumberPrompt')) {
-                slotData.unitNumberPrompt = getVal('.slot-unitNumberPrompt') || 'Is there an apartment or unit number?';
-            }
-            if (el.querySelector('.slot-unitPromptVariants')) {
-                const variantsText = getVal('.slot-unitPromptVariants');
-                slotData.unitPromptVariants = variantsText ? variantsText.split('\n').map(v => v.trim()).filter(v => v) : [];
-            }
-            if (el.querySelector('.slot-unitTriggerWords')) {
-                const triggerText = getVal('.slot-unitTriggerWords');
-                slotData.unitTriggerWords = triggerText ? triggerText.split(',').map(w => w.trim().toLowerCase()).filter(w => w) : [];
-            }
-            if (el.querySelector('.slot-unitAlwaysAskZips')) {
-                const zipsText = getVal('.slot-unitAlwaysAskZips');
-                slotData.unitAlwaysAskZips = zipsText ? zipsText.split(',').map(z => z.trim()).filter(z => /^\d{5}$/.test(z)) : [];
-            }
-            if (el.querySelector('.slot-unitNeverAskZips')) {
-                const zipsText = getVal('.slot-unitNeverAskZips');
-                slotData.unitNeverAskZips = zipsText ? zipsText.split(',').map(z => z.trim()).filter(z => /^\d{5}$/.test(z)) : [];
-            }
-            
-            // EMAIL options
-            if (el.querySelector('.slot-spellOutEmail')) {
-                slotData.spellOutEmail = getCheckedDefault('.slot-spellOutEmail', true);
-            }
-            if (el.querySelector('.slot-offerToSendText')) {
-                slotData.offerToSendText = getChecked('.slot-offerToSendText');
-            }
-            
-            // DATE/TIME options
-            if (el.querySelector('.slot-offerAsap')) {
-                slotData.offerAsap = getCheckedDefault('.slot-offerAsap', true);
-            }
-            if (el.querySelector('.slot-offerMorningAfternoon')) {
-                slotData.offerMorningAfternoon = getChecked('.slot-offerMorningAfternoon');
-            }
-            if (el.querySelector('.slot-asapPhrase')) {
-                slotData.asapPhrase = getVal('.slot-asapPhrase') || 'first available';
-            }
-            
-            // SELECT options
-            if (el.querySelector('.slot-selectOptions')) {
-                const optionsText = getVal('.slot-selectOptions');
-                slotData.selectOptions = optionsText ? optionsText.split('\n').map(o => o.trim()).filter(o => o) : [];
-            }
-            if (el.querySelector('.slot-allowOther')) {
-                slotData.allowOther = getChecked('.slot-allowOther');
-            }
-            
-            // YES/NO options
-            if (el.querySelector('.slot-yesAction')) {
-                slotData.yesAction = getVal('.slot-yesAction') || null;
-            }
-            if (el.querySelector('.slot-noAction')) {
-                slotData.noAction = getVal('.slot-noAction') || null;
-            }
-            
-            // NUMBER options
-            if (el.querySelector('.slot-minValue')) {
-                const minVal = el.querySelector('.slot-minValue')?.value;
-                slotData.minValue = minVal !== '' ? parseFloat(minVal) : null;
-            }
-            if (el.querySelector('.slot-maxValue')) {
-                const maxVal = el.querySelector('.slot-maxValue')?.value;
-                slotData.maxValue = maxVal !== '' ? parseFloat(maxVal) : null;
-            }
-            if (el.querySelector('.slot-unit')) {
-                slotData.unit = getVal('.slot-unit') || null;
-            }
-            
-            slots.push(slotData);
-        });
-        
-        return slots.length > 0 ? slots : this.getDefaultBookingSlots();
+        // UI now edits booking slots via full-screen modal; config is the source of truth.
+        const slots = Array.isArray(this.config.bookingSlots) ? this.config.bookingSlots : [];
+        const normalized = slots.map((s, i) => ({ ...s, order: i }));
+        return normalized.length > 0 ? normalized : this.getDefaultBookingSlots();
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
@@ -3332,34 +3407,8 @@ Sean → Shawn, Shaun`;
     // Called before add/remove/move operations to capture any user edits
     // ═══════════════════════════════════════════════════════════════════════════
     syncBookingSlotsFromDOM() {
-        const startTime = performance.now();
-        const slots = this.config.bookingSlots || [];
-        const slotElements = document.querySelectorAll('.booking-slot');
-        
-        if (slotElements.length === 0) {
-            // No DOM yet (first render) - nothing to sync
-            return;
-        }
-        
-        slotElements.forEach((el, index) => {
-            if (!slots[index]) return; // Safety check
-            
-            // Only sync the user-editable core fields (fast)
-            const labelEl = el.querySelector('.slot-label');
-            const questionEl = el.querySelector('.slot-question');
-            const typeEl = el.querySelector('.slot-type');
-            const requiredEl = el.querySelector('.slot-required');
-            
-            if (labelEl) slots[index].label = labelEl.value?.trim() || slots[index].label;
-            if (questionEl) slots[index].question = questionEl.value?.trim() || slots[index].question;
-            if (typeEl) slots[index].type = typeEl.value || slots[index].type;
-            if (requiredEl) slots[index].required = requiredEl.checked;
-        });
-        
-        const elapsed = performance.now() - startTime;
-        if (elapsed > 5) {
-            console.log(`[FRONT DESK] ⏱️ syncBookingSlotsFromDOM: ${elapsed.toFixed(1)}ms for ${slotElements.length} slots`);
-        }
+        // No-op: booking slot editing no longer relies on scraping inline DOM.
+        return;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
