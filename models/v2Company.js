@@ -1709,6 +1709,44 @@ const companySchema = new mongoose.Schema({
                     transferMessage: { type: String, trim: true, default: "Thank you. Let me connect you to our team." }
                 }
             },
+
+            // ═══════════════════════════════════════════════════════════════
+            // UNIT OF WORK (UoW) - Universal multi-location / multi-job container
+            // ═══════════════════════════════════════════════════════════════
+            // This generalizes "work orders", "delivery stops", "appointments", etc.
+            //
+            // Enterprise-safe default:
+            // - 1 unit of work per call
+            // - only create additional units after explicit confirmation
+            //
+            // CRITICAL:
+            // - All prompts/labels must be UI-controlled (multi-tenant, multi-trade)
+            // - If not configured in UI, defaults below are safety nets only.
+            unitOfWork: {
+                enabled: { type: Boolean, default: false },
+                allowMultiplePerCall: { type: Boolean, default: false },
+                maxUnitsPerCall: { type: Number, default: 3, min: 1, max: 10 },
+
+                // UI labels only (do NOT drive runtime logic)
+                labelSingular: { type: String, trim: true, default: 'Job' },   // DEFAULT - OVERRIDE IN UI
+                labelPlural: { type: String, trim: true, default: 'Jobs' },     // DEFAULT - OVERRIDE IN UI
+
+                // Which bookingSlots should be re-collected per unit-of-work
+                // Example: ['address', 'time', 'issue']
+                perUnitSlotIds: { type: [String], default: ['address'] },
+
+                // Confirmation gating (explicit request required)
+                confirmation: {
+                    // DEFAULT - OVERRIDE IN UI
+                    askAddAnotherPrompt: { type: String, trim: true, default: "Is this for just this location, or do you have another location to add today?" },
+                    clarifyPrompt: { type: String, trim: true, default: "Just to confirm — do you have another location or job to add today?" },
+                    nextUnitIntro: { type: String, trim: true, default: "Okay — let’s get the details for the next one." },
+                    // Final message when multiple units were captured (avoid single-address wording)
+                    finalScriptMulti: { type: String, trim: true, default: "Perfect — I’ve got both locations. Our team will take it from here." },
+                    yesWords: { type: [String], default: ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'correct', 'another', 'one more'] },
+                    noWords: { type: [String], default: ['no', 'nope', 'nah', 'just this', 'only this', 'that’s it', "that's it", 'all set'] }
+                }
+            },
             
             // ═══════════════════════════════════════════════════════════════
             // BOOKING SLOTS - Dynamic, customizable slots for booking

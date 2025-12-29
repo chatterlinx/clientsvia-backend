@@ -155,6 +155,42 @@ const UI_DEFAULTS = {
         finalScripts: {},
         asapVariantScript: null,
         customFinalScript: null
+    },
+
+    // 🏷️ Vendor / Supplier Handling (Call Center directory)
+    vendorHandling: {
+        vendorFirstEnabled: false,
+        enabled: false,
+        mode: 'collect_message',
+        allowLinkToCustomer: false,
+        prompts: {
+            // DEFAULT - OVERRIDE IN UI
+            greeting: "Thanks for calling. How can we help?",
+            askSummary: "What can I help you with today?",
+            askOrderNumber: "Do you have an order number or invoice number I should note?",
+            askCustomerName: "Which customer is this regarding?",
+            completion: "Got it. I’ll make sure the team gets this message right away.",
+            transferMessage: "Thank you. Let me connect you to our team."
+        }
+    },
+
+    // 📦 Unit of Work (UoW) - Universal multi-location / multi-job container
+    unitOfWork: {
+        enabled: false,
+        allowMultiplePerCall: false,
+        maxUnitsPerCall: 3,
+        labelSingular: 'Job',
+        labelPlural: 'Jobs',
+        perUnitSlotIds: ['address'],
+        confirmation: {
+            // DEFAULT - OVERRIDE IN UI
+            askAddAnotherPrompt: "Is this for just this location, or do you have another location to add today?",
+            clarifyPrompt: "Just to confirm — do you have another location or job to add today?",
+            nextUnitIntro: "Okay — let’s get the details for the next one.",
+            finalScriptMulti: "Perfect — I’ve got both locations. Our team will take it from here.",
+            yesWords: ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'correct', 'another', 'one more'],
+            noWords: ['no', 'nope', 'nah', 'just this', 'only this', 'that’s it', "that's it", 'all set']
+        }
     }
 };
 
@@ -230,6 +266,8 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
                 slotGroups: saved.slotGroups || [],
                 // 🏷️ Vendor / Supplier Handling (Call Center directory)
                 vendorHandling: config.vendorHandling || null,
+                // 📦 Unit of Work (UoW)
+                unitOfWork: config.unitOfWork || null,
                 bookingTemplates: config.bookingTemplates || null,
                 // Legacy booking prompts (for backward compatibility)
                 bookingPrompts: config.bookingPrompts,
@@ -382,6 +420,11 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
         // 🏷️ Vendor / Supplier Handling (Call Center directory)
         if (updates.vendorHandling && typeof updates.vendorHandling === 'object') {
             updateObj['aiAgentSettings.frontDeskBehavior.vendorHandling'] = updates.vendorHandling;
+        }
+
+        // 📦 Unit of Work (UoW)
+        if (updates.unitOfWork && typeof updates.unitOfWork === 'object') {
+            updateObj['aiAgentSettings.frontDeskBehavior.unitOfWork'] = updates.unitOfWork;
         }
 
         // 🧾 Booking Contract V2 (feature-flagged)

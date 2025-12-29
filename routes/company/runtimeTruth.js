@@ -388,6 +388,24 @@ router.get('/', async (req, res) => {
             allowLinkToCustomer: vendorHandling.allowLinkToCustomer === true,
             promptsConfigured: !!vendorHandling.prompts
         };
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // BUILD UNIT OF WORK (UoW) - Universal multi-location / multi-job container
+        // ═══════════════════════════════════════════════════════════════════════
+        const uow = frontDeskBehavior.unitOfWork || {};
+        const unitOfWork = {
+            source: 'aiAgentSettings.frontDeskBehavior.unitOfWork',
+            enabled: uow.enabled === true,
+            allowMultiplePerCall: uow.allowMultiplePerCall === true,
+            maxUnitsPerCall: typeof uow.maxUnitsPerCall === 'number' ? uow.maxUnitsPerCall : 3,
+            labelSingular: uow.labelSingular || 'Job',
+            labelPlural: uow.labelPlural || 'Jobs',
+            perUnitSlotIds: Array.isArray(uow.perUnitSlotIds) ? uow.perUnitSlotIds : [],
+            confirmation: {
+                hasAskAddAnotherPrompt: !!uow.confirmation?.askAddAnotherPrompt,
+                hasFinalScriptMulti: !!uow.confirmation?.finalScriptMulti
+            }
+        };
         
         // ═══════════════════════════════════════════════════════════════════════
         // BUILD WIRING MAP - The Critical Link (Scenario → Action → Flow → Booking)
@@ -598,6 +616,7 @@ router.get('/', async (req, res) => {
                 },
                 booking,
                 vendor,
+                unitOfWork,
                 fallbacks: {
                     notOffered: { 
                         text: controlPlane.fallbacks.notOfferedReply, 

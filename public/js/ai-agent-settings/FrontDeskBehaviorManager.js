@@ -506,6 +506,24 @@ class FrontDeskBehaviorManager {
                     completion: "Got it. I’ll make sure the team gets this message right away.",
                     transferMessage: "Thank you. Let me connect you to our team."
                 }
+            },
+
+            // Unit of Work (UoW) - Universal multi-location / multi-job container
+            unitOfWork: {
+                enabled: false,
+                allowMultiplePerCall: false,
+                maxUnitsPerCall: 3,
+                labelSingular: 'Job',
+                labelPlural: 'Jobs',
+                perUnitSlotIds: ['address'],
+                confirmation: {
+                    askAddAnotherPrompt: "Is this for just this location, or do you have another location to add today?",
+                    clarifyPrompt: "Just to confirm — do you have another location or job to add today?",
+                    nextUnitIntro: "Okay — let’s get the details for the next one.",
+                    finalScriptMulti: "Perfect — I’ve got both locations. Our team will take it from here.",
+                    yesWords: ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'correct', 'another', 'one more'],
+                    noWords: ['no', 'nope', 'nah', 'just this', 'only this', "that's it", 'all set']
+                }
             }
         };
     }
@@ -609,6 +627,44 @@ class FrontDeskBehaviorManager {
             allowLinkToCustomer: getChecked('fdb-vendor-allow-link') === true,
             // Prompts are editable later; we keep the existing object if present.
             prompts: this.config.vendorHandling?.prompts || this.getDefaultConfig().vendorHandling.prompts
+        };
+    }
+
+    collectUnitOfWorkConfig() {
+        const getChecked = (id) => document.getElementById(id)?.checked === true;
+        const getValue = (id) => (document.getElementById(id)?.value || '').trim();
+
+        const rawPerUnit = getValue('fdb-uow-perUnitSlotIds') || '["address"]';
+        let perUnitSlotIds = ['address'];
+        try {
+            const parsed = JSON.parse(rawPerUnit);
+            if (Array.isArray(parsed)) perUnitSlotIds = parsed.map(x => String(x));
+        } catch (e) {
+            // keep default; UI will show error on save through collectFormData if needed later
+        }
+
+        const yesWordsRaw = getValue('fdb-uow-yesWords') || '[]';
+        const noWordsRaw = getValue('fdb-uow-noWords') || '[]';
+        let yesWords = this.getDefaultConfig().unitOfWork.confirmation.yesWords;
+        let noWords = this.getDefaultConfig().unitOfWork.confirmation.noWords;
+        try { const p = JSON.parse(yesWordsRaw); if (Array.isArray(p)) yesWords = p.map(x => String(x)); } catch {}
+        try { const p = JSON.parse(noWordsRaw); if (Array.isArray(p)) noWords = p.map(x => String(x)); } catch {}
+
+        return {
+            enabled: getChecked('fdb-uow-enabled') === true,
+            allowMultiplePerCall: getChecked('fdb-uow-allowMultiple') === true,
+            maxUnitsPerCall: parseInt(getValue('fdb-uow-maxUnits') || '3', 10) || 3,
+            labelSingular: getValue('fdb-uow-labelSingular') || 'Job',
+            labelPlural: getValue('fdb-uow-labelPlural') || 'Jobs',
+            perUnitSlotIds,
+            confirmation: {
+                askAddAnotherPrompt: getValue('fdb-uow-askAddAnother') || this.getDefaultConfig().unitOfWork.confirmation.askAddAnotherPrompt,
+                clarifyPrompt: getValue('fdb-uow-clarify') || this.getDefaultConfig().unitOfWork.confirmation.clarifyPrompt,
+                nextUnitIntro: getValue('fdb-uow-nextIntro') || this.getDefaultConfig().unitOfWork.confirmation.nextUnitIntro,
+                finalScriptMulti: getValue('fdb-uow-finalMulti') || this.getDefaultConfig().unitOfWork.confirmation.finalScriptMulti,
+                yesWords,
+                noWords
+            }
         };
     }
 
@@ -878,6 +934,19 @@ class FrontDeskBehaviorManager {
         const vendorEnabled = vendorHandling.enabled === true;
         const vendorMode = vendorHandling.mode || 'collect_message';
         const vendorAllowLinkToCustomer = vendorHandling.allowLinkToCustomer === true;
+        const uow = this.config.unitOfWork || {};
+        const uowEnabled = uow.enabled === true;
+        const uowAllowMultiple = uow.allowMultiplePerCall === true;
+        const uowMax = uow.maxUnitsPerCall || 3;
+        const uowLabelSingular = uow.labelSingular || 'Job';
+        const uowLabelPlural = uow.labelPlural || 'Jobs';
+        const uowPerUnitSlotIds = this.escapeHtml(JSON.stringify(uow.perUnitSlotIds || ['address'], null, 0));
+        const uowYesWords = this.escapeHtml(JSON.stringify(uow.confirmation?.yesWords || [], null, 0));
+        const uowNoWords = this.escapeHtml(JSON.stringify(uow.confirmation?.noWords || [], null, 0));
+        const uowAskAddAnother = this.escapeHtml(uow.confirmation?.askAddAnotherPrompt || '');
+        const uowClarify = this.escapeHtml(uow.confirmation?.clarifyPrompt || '');
+        const uowNextIntro = this.escapeHtml(uow.confirmation?.nextUnitIntro || '');
+        const uowFinalMulti = this.escapeHtml(uow.confirmation?.finalScriptMulti || '');
 
         return `
             <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -1002,6 +1071,92 @@ class FrontDeskBehaviorManager {
                     <p style="margin: 10px 0 0 0; color: #6e7681; font-size: 0.75rem;">
                         Tip: Manage Vendors in the Call Center directory. Vendor-first works by matching the caller’s phone to a saved Vendor phone/secondary phone.
                     </p>
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════════════════════ -->
+                <!-- UNIT OF WORK (UoW) - Multi-location / multi-job in one call -->
+                <!-- ═══════════════════════════════════════════════════════════════════════ -->
+                <div style="background: #0d1117; border: 1px solid ${uowEnabled ? '#3fb950' : '#30363d'}; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div>
+                        <h3 style="margin: 0; color: #58a6ff;">📦 Unit of Work (Universal)</h3>
+                        <p style="margin: 6px 0 0 0; color: #8b949e; font-size: 0.8rem;">
+                            Makes multi-location calls safe. Default is <strong>one</strong> unit per call; the AI only adds another after explicit confirmation.
+                            This works across trades (service job, delivery stop, appointment, etc.) because it’s just a container + required slots.
+                        </p>
+                    </div>
+
+                    <div style="display:flex; gap: 14px; flex-wrap: wrap; margin-top: 12px;">
+                        <label style="display:flex; align-items:center; gap: 10px; padding: 10px 12px; background:#161b22; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
+                            <input type="checkbox" id="fdb-uow-enabled" ${uowEnabled ? 'checked' : ''} style="accent-color:#3fb950; width: 18px; height: 18px;">
+                            <span style="color:${uowEnabled ? '#3fb950' : '#8b949e'}; font-weight:700;">Enable Unit of Work container</span>
+                        </label>
+                        <label style="display:flex; align-items:center; gap: 10px; padding: 10px 12px; background:#161b22; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
+                            <input type="checkbox" id="fdb-uow-allowMultiple" ${uowAllowMultiple ? 'checked' : ''} style="accent-color:#3fb950; width: 18px; height: 18px;">
+                            <span style="color:${uowAllowMultiple ? '#3fb950' : '#8b949e'}; font-weight:700;">Allow multiple per call (explicitly confirmed)</span>
+                        </label>
+                        <label style="display:flex; align-items:center; gap: 8px; padding: 10px 12px; background:#161b22; border:1px solid #30363d; border-radius: 8px;">
+                            <span style="color:#8b949e; font-weight:700;">Max</span>
+                            <input id="fdb-uow-maxUnits" value="${uowMax}" type="number" min="1" max="10"
+                                style="width: 90px; padding: 8px 10px; background:#0b0f14; border:1px solid #30363d; border-radius: 6px; color:#c9d1d9;">
+                        </label>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+                        <div>
+                            <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">Label (singular)</label>
+                            <input id="fdb-uow-labelSingular" value="${this.escapeHtml(uowLabelSingular)}"
+                                style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        </div>
+                        <div>
+                            <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">Label (plural)</label>
+                            <input id="fdb-uow-labelPlural" value="${this.escapeHtml(uowLabelPlural)}"
+                                style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 12px;">
+                        <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">
+                            Per-unit Slot IDs (JSON array) <span style="color:#6e7681;">(these will be re-collected for each new unit)</span>
+                        </label>
+                        <input id="fdb-uow-perUnitSlotIds" value='${uowPerUnitSlotIds}'
+                            style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 12px;">
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+                        <div>
+                            <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">Yes words (JSON array)</label>
+                            <input id="fdb-uow-yesWords" value='${uowYesWords}'
+                                style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 12px;">
+                        </div>
+                        <div>
+                            <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">No words (JSON array)</label>
+                            <input id="fdb-uow-noWords" value='${uowNoWords}'
+                                style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 12px;">
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 12px; display:grid; gap: 10px;">
+                        <div>
+                            <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">Ask “add another?” prompt</label>
+                            <input id="fdb-uow-askAddAnother" value="${uowAskAddAnother}"
+                                style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        </div>
+                        <div>
+                            <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">Clarify prompt</label>
+                            <input id="fdb-uow-clarify" value="${uowClarify}"
+                                style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        </div>
+                        <div>
+                            <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">Next unit intro</label>
+                            <input id="fdb-uow-nextIntro" value="${uowNextIntro}"
+                                style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        </div>
+                        <div>
+                            <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">Final script (multi-unit)</label>
+                            <input id="fdb-uow-finalMulti" value="${uowFinalMulti}"
+                                style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        </div>
+                    </div>
                 </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -6844,6 +6999,11 @@ Sean → Shawn, Shaun`;
         // Vendor / Supplier Handling
         if (document.getElementById('fdb-vendor-first-enabled')) {
             this.config.vendorHandling = this.collectVendorHandlingConfig();
+        }
+
+        // Unit of Work (UoW)
+        if (document.getElementById('fdb-uow-enabled')) {
+            this.config.unitOfWork = this.collectUnitOfWorkConfig();
         }
         
         // ═══════════════════════════════════════════════════════════════════

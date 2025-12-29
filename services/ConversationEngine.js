@@ -2734,6 +2734,175 @@ async function processTurn({
             // 4. Never re-asks the same slot
             // ═══════════════════════════════════════════════════════════════════
             log('CHECKPOINT 9b: 📋 BOOKING MODE (deterministic - no state machine)');
+
+            // ═══════════════════════════════════════════════════════════════════
+            // 📦 UNIT OF WORK (UoW) - Multi-location / multi-job (UI-controlled)
+            // ═══════════════════════════════════════════════════════════════════
+            // Enterprise-safe behavior:
+            // - Default: 1 unit per call
+            // - Only add another after explicit confirmation
+            const uowConfig = company.aiAgentSettings?.frontDeskBehavior?.unitOfWork || {};
+            const uowEnabled = uowConfig.enabled === true;
+            const uowAllowMultiple = uowConfig.allowMultiplePerCall === true;
+            const uowMaxUnits = typeof uowConfig.maxUnitsPerCall === 'number' ? uowConfig.maxUnitsPerCall : 3;
+            const uowPerUnitSlotIds = Array.isArray(uowConfig.perUnitSlotIds) && uowConfig.perUnitSlotIds.length > 0
+                ? uowConfig.perUnitSlotIds
+                : ['address'];
+            const uowConfirm = uowConfig.confirmation || {};
+
+            if (uowEnabled) {
+                session.unitOfWork = session.unitOfWork || {
+                    activeUnitIndex: 0,
+                    units: [{ index: 1, createdAt: new Date(), bookingRequestId: null, finalScript: null }],
+                    awaitingAddAnother: false
+                };
+
+                // If we are waiting for the caller to confirm whether there is another unit,
+                // handle that deterministically BEFORE any slot logic.
+                if (session.unitOfWork.awaitingAddAnother === true) {
+                    const yesWords = Array.isArray(uowConfirm.yesWords) ? uowConfirm.yesWords : [];
+                    const noWords = Array.isArray(uowConfirm.noWords) ? uowConfirm.noWords : [];
+                    const normalized = (userText || '').toLowerCase();
+
+                    const saysYes = yesWords.some(w => w && normalized.includes(String(w).toLowerCase()));
+                    const saysNo = noWords.some(w => w && normalized.includes(String(w).toLowerCase()));
+
+                    log('📦 UOW: Awaiting add-another confirmation', {
+                        saysYes,
+                        saysNo,
+                        activeUnitIndex: session.unitOfWork.activeUnitIndex,
+                        units: session.unitOfWork.units?.length || 0
+                    });
+
+                    if (saysYes && !saysNo) {
+                        // Start next unit (clear per-unit slots, keep global slots like name/phone)
+                        const nextIndex = (session.unitOfWork.units?.length || 1);
+                        if (nextIndex >= uowMaxUnits) {
+                            // Cannot add more
+                            session.unitOfWork.awaitingAddAnother = false;
+                            session.markModified('unitOfWork');
+                            aiResult = {
+                                reply: uowConfirm.clarifyPrompt || "I can only take one more request at a time. Let’s finish what we have.",
+                                conversationMode: 'booking',
+                                intent: 'uow_max_reached',
+                                nextGoal: 'CONTINUE_BOOKING',
+                                filledSlots: currentSlots,
+                                signals: { wantsBooking: true, consentGiven: true },
+                                latencyMs: Date.now() - aiStartTime,
+                                tokensUsed: 0,
+                                fromStateMachine: true,
+                                mode: 'BOOKING',
+                                debug: { source: 'UOW_MAX_REACHED' }
+                            };
+                        } else {
+                            // Append unit and clear per-unit slots
+                            session.unitOfWork.awaitingAddAnother = false;
+                            session.unitOfWork.activeUnitIndex = nextIndex;
+                            session.unitOfWork.units = session.unitOfWork.units || [];
+                            session.unitOfWork.units.push({ index: nextIndex + 1, createdAt: new Date(), bookingRequestId: null, finalScript: null });
+
+                            // Clear per-unit slot values + meta so they are re-asked
+                            session.collectedSlots = session.collectedSlots || {};
+                            session.booking.meta = session.booking.meta || {};
+                            for (const slotId of uowPerUnitSlotIds) {
+                                delete session.collectedSlots[slotId];
+                                if (session.booking.meta[slotId]) {
+                                    delete session.booking.meta[slotId];
+                                }
+                            }
+                            session.markModified('collectedSlots');
+                            session.markModified('booking');
+                            session.markModified('unitOfWork');
+
+                            // Ask the first missing required slot now
+                            const bookingConfigUow = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
+                            const bookingSlotsUow = bookingConfigUow.slots || [];
+                            const firstMissing = bookingSlotsUow.find(slot => {
+                                const slotId = slot.slotId || slot.id || slot.type;
+                                const val = (session.collectedSlots || {})[slotId] || (session.collectedSlots || {})[slot.type];
+                                return slot.required && !val;
+                            });
+                            const slotId = firstMissing ? (firstMissing.slotId || firstMissing.id || firstMissing.type) : null;
+                            const question = firstMissing ? getSlotPromptVariant(firstMissing, slotId, 0) : null;
+                            const intro = uowConfirm.nextUnitIntro || "Okay — let’s get the details for the next one.";
+                            const reply = question ? `${intro} ${question}` : intro;
+
+                            aiResult = {
+                                reply,
+                                conversationMode: 'booking',
+                                intent: 'uow_next_unit_started',
+                                nextGoal: slotId ? `COLLECT_${slotId.toUpperCase()}` : 'CONTINUE_BOOKING',
+                                filledSlots: session.collectedSlots || {},
+                                signals: { wantsBooking: true, consentGiven: true },
+                                latencyMs: Date.now() - aiStartTime,
+                                tokensUsed: 0,
+                                fromStateMachine: true,
+                                mode: 'BOOKING',
+                                debug: { source: 'UOW_NEXT_UNIT', nextSlot: slotId }
+                            };
+                        }
+
+                        // Skip remaining booking logic if we produced a response
+                        if (aiResult) {
+                            session.mode = 'BOOKING';
+                            session.markModified('mode');
+                            return aiResult;
+                        }
+                    } else if (saysNo && !saysYes) {
+                        // Close booking (single vs multi final script)
+                        session.unitOfWork.awaitingAddAnother = false;
+                        session.markModified('unitOfWork');
+
+                        const unitCount = session.unitOfWork.units?.length || 1;
+                        const lastUnit = (session.unitOfWork.units || [])[unitCount - 1] || {};
+                        const finalScript = unitCount > 1
+                            ? (uowConfirm.finalScriptMulti || lastUnit.finalScript || "Perfect — I’ve got everything.")
+                            : (lastUnit.finalScript || "Perfect — you’re all set.");
+
+                        session.mode = 'COMPLETE';
+                        session.booking.completedAt = new Date();
+                        session.booking.bookingRequestId = lastUnit.bookingRequestId || session.booking.bookingRequestId || null;
+                        session.booking.bookingRequestIds = (session.unitOfWork.units || [])
+                            .map(u => u.bookingRequestId)
+                            .filter(Boolean);
+                        session.markModified('booking');
+                        session.markModified('mode');
+
+                        aiResult = {
+                            reply: finalScript,
+                            conversationMode: 'complete',
+                            intent: 'booking_complete_multi_uow',
+                            nextGoal: 'END_CALL',
+                            filledSlots: currentSlots,
+                            signals: { wantsBooking: true, consentGiven: true, bookingComplete: true, uowCount: unitCount },
+                            latencyMs: Date.now() - aiStartTime,
+                            tokensUsed: 0,
+                            fromStateMachine: true,
+                            mode: 'COMPLETE',
+                            debug: { source: 'UOW_COMPLETE', unitCount }
+                        };
+
+                        return aiResult;
+                    } else {
+                        // Ambiguous, ask clarify prompt
+                        const clarify = uowConfirm.clarifyPrompt || "Just to confirm — do you have another location or job to add today?";
+                        aiResult = {
+                            reply: clarify,
+                            conversationMode: 'booking',
+                            intent: 'uow_clarify_add_another',
+                            nextGoal: 'UOW_CONFIRM',
+                            filledSlots: currentSlots,
+                            signals: { wantsBooking: true, consentGiven: true },
+                            latencyMs: Date.now() - aiStartTime,
+                            tokensUsed: 0,
+                            fromStateMachine: true,
+                            mode: 'BOOKING',
+                            debug: { source: 'UOW_CLARIFY' }
+                        };
+                        return aiResult;
+                    }
+                }
+            }
             
             // ═══════════════════════════════════════════════════════════════════
             // STRICT INTERRUPT DETECTION (from brainstorming doc)
@@ -4881,8 +5050,15 @@ async function processTurn({
                     // - No hardcoded "technician will reach out" unless enabled
                     // ═══════════════════════════════════════════════════════════════
                     log('✅ BOOKING COMPLETE: All required slots collected - finalizing');
-                    
-                    // Finalize booking with configurable outcome
+
+                    // Unit of Work handling (feature flag, UI-controlled)
+                    const uowConfig = company.aiAgentSettings?.frontDeskBehavior?.unitOfWork || {};
+                    const uowEnabled = uowConfig.enabled === true;
+                    const uowAllowMultiple = uowConfig.allowMultiplePerCall === true;
+                    const uowConfirm = uowConfig.confirmation || {};
+                    const uowMaxUnits = typeof uowConfig.maxUnitsPerCall === 'number' ? uowConfig.maxUnitsPerCall : 3;
+
+                    // Finalize booking with configurable outcome (creates BookingRequest record)
                     const finalizationResult = await finalizeBooking(session, company, currentSlots, {
                         channel,
                         callSid: metadata?.callSid || null,
@@ -4898,40 +5074,126 @@ async function processTurn({
                         isAsap: finalizationResult.isAsap,
                         requiresTransfer: finalizationResult.requiresTransfer
                     });
-                    
-                    session.mode = 'COMPLETE';
-                    session.booking.completedAt = new Date();
-                    session.booking.bookingRequestId = finalizationResult.bookingRequestId;
-                    session.markModified('booking');
-                
-                aiResult = {
-                        reply: finalizationResult.finalScript,
-                        conversationMode: 'complete',
-                        intent: 'booking_complete',
-                        nextGoal: finalizationResult.requiresTransfer ? 'TRANSFER' : 'END_CALL',
-                    filledSlots: currentSlots,
-                        signals: { 
-                            wantsBooking: true,
-                            consentGiven: true,
-                            bookingComplete: true,
-                            requiresTransfer: finalizationResult.requiresTransfer
-                        },
-                        latencyMs: Date.now() - aiStartTime,
-                    tokensUsed: 0,
-                    fromStateMachine: true,
-                        mode: 'COMPLETE',
-                        debug: {
-                            source: 'BOOKING_COMPLETE_FINALIZED',
-                            stage: 'complete',
-                            collectedSlots: Object.keys(currentSlots).filter(k => currentSlots[k]),
-                            // V23 Booking Outcome tracking
-                            bookingRequestId: finalizationResult.bookingRequestId,
-                            caseId: finalizationResult.caseId,
-                            outcomeMode: finalizationResult.outcomeMode,
-                            isAsap: finalizationResult.isAsap,
-                            status: finalizationResult.status
+
+                    if (uowEnabled) {
+                        session.unitOfWork = session.unitOfWork || {
+                            activeUnitIndex: 0,
+                            units: [{ index: 1, createdAt: new Date(), bookingRequestId: null, finalScript: null }],
+                            awaitingAddAnother: false
+                        };
+
+                        const unitIndex = session.unitOfWork.activeUnitIndex || 0;
+                        session.unitOfWork.units = session.unitOfWork.units || [];
+                        const unit = session.unitOfWork.units[unitIndex] || { index: unitIndex + 1 };
+                        unit.bookingRequestId = finalizationResult.bookingRequestId;
+                        unit.finalScript = finalizationResult.finalScript;
+                        session.unitOfWork.units[unitIndex] = unit;
+                        session.markModified('unitOfWork');
+
+                        const unitCount = session.unitOfWork.units.length;
+                        const canAskAddAnother = uowAllowMultiple && unitCount < uowMaxUnits;
+
+                        if (canAskAddAnother) {
+                            // Stay in BOOKING mode until caller confirms no more units
+                            session.mode = 'BOOKING';
+                            session.unitOfWork.awaitingAddAnother = true;
+                            session.markModified('mode');
+                            session.markModified('unitOfWork');
+
+                            const askAnother = uowConfirm.askAddAnotherPrompt || "Is this for just this location, or do you have another location to add today?";
+
+                            aiResult = {
+                                reply: askAnother,
+                                conversationMode: 'booking',
+                                intent: 'uow_ask_add_another',
+                                nextGoal: 'UOW_CONFIRM',
+                                filledSlots: currentSlots,
+                                signals: { wantsBooking: true, consentGiven: true, bookingUnitCaptured: true, uowCount: unitCount },
+                                latencyMs: Date.now() - aiStartTime,
+                                tokensUsed: 0,
+                                fromStateMachine: true,
+                                mode: 'BOOKING',
+                                debug: {
+                                    source: 'UOW_UNIT_CAPTURED',
+                                    unitIndex: unitIndex + 1,
+                                    bookingRequestId: finalizationResult.bookingRequestId
+                                }
+                            };
+                        } else {
+                            // Not allowed to add more units; complete now.
+                            session.mode = 'COMPLETE';
+                            session.booking.completedAt = new Date();
+                            session.booking.bookingRequestId = finalizationResult.bookingRequestId;
+                            session.booking.bookingRequestIds = (session.unitOfWork.units || [])
+                                .map(u => u.bookingRequestId)
+                                .filter(Boolean);
+                            session.markModified('booking');
+                            session.markModified('mode');
+
+                            const finalScript = (session.unitOfWork.units.length > 1)
+                                ? (uowConfirm.finalScriptMulti || finalizationResult.finalScript)
+                                : finalizationResult.finalScript;
+
+                            aiResult = {
+                                reply: finalScript,
+                                conversationMode: 'complete',
+                                intent: 'booking_complete_multi_uow',
+                                nextGoal: finalizationResult.requiresTransfer ? 'TRANSFER' : 'END_CALL',
+                                filledSlots: currentSlots,
+                                signals: { 
+                                    wantsBooking: true,
+                                    consentGiven: true,
+                                    bookingComplete: true,
+                                    requiresTransfer: finalizationResult.requiresTransfer,
+                                    uowCount: session.unitOfWork.units.length
+                                },
+                                latencyMs: Date.now() - aiStartTime,
+                                tokensUsed: 0,
+                                fromStateMachine: true,
+                                mode: 'COMPLETE',
+                                debug: {
+                                    source: 'UOW_BOOKING_COMPLETE_FINALIZED',
+                                    bookingRequestId: finalizationResult.bookingRequestId,
+                                    caseId: finalizationResult.caseId,
+                                    outcomeMode: finalizationResult.outcomeMode
+                                }
+                            };
                         }
-                    };
+                    } else {
+                        // Legacy single-booking completion
+                        session.mode = 'COMPLETE';
+                        session.booking.completedAt = new Date();
+                        session.booking.bookingRequestId = finalizationResult.bookingRequestId;
+                        session.markModified('booking');
+                    
+                        aiResult = {
+                            reply: finalizationResult.finalScript,
+                            conversationMode: 'complete',
+                            intent: 'booking_complete',
+                            nextGoal: finalizationResult.requiresTransfer ? 'TRANSFER' : 'END_CALL',
+                            filledSlots: currentSlots,
+                            signals: { 
+                                wantsBooking: true,
+                                consentGiven: true,
+                                bookingComplete: true,
+                                requiresTransfer: finalizationResult.requiresTransfer
+                            },
+                            latencyMs: Date.now() - aiStartTime,
+                            tokensUsed: 0,
+                            fromStateMachine: true,
+                            mode: 'COMPLETE',
+                            debug: {
+                                source: 'BOOKING_COMPLETE_FINALIZED',
+                                stage: 'complete',
+                                collectedSlots: Object.keys(currentSlots).filter(k => currentSlots[k]),
+                                bookingRequestId: finalizationResult.bookingRequestId,
+                                caseId: finalizationResult.caseId,
+                                outcomeMode: finalizationResult.outcomeMode,
+                                isAsap: finalizationResult.isAsap,
+                                status: finalizationResult.status
+                            }
+                        };
+                    }
                 }
             }
             } else {
