@@ -51,7 +51,7 @@ const PROVIDER_VERSIONS = {
 // ============================================================================
 // SCHEMA VERSION - Increment when output shape changes
 // ============================================================================
-const SCHEMA_VERSION = 'RT_V22.1';
+const SCHEMA_VERSION = 'RT_V22.2';
 
 router.use(authenticateJWT);
 router.use(requireCompanyAccess);
@@ -871,13 +871,19 @@ router.get('/', async (req, res) => {
             }
         }
         
-        const unknownScenarios = scenarios.filter(s => s.scenarioType === 'UNKNOWN').length;
+        const unknownScenarioItems = scenarios.filter(s => s.scenarioType === 'UNKNOWN');
+        const unknownScenarios = unknownScenarioItems.length;
         if (unknownScenarios > 0) {
+            const unknownExamples = unknownScenarioItems
+                .slice(0, 5)
+                .map(s => ({ id: s.id, name: s.name, templateName: s.templateName }));
+
             issues.push({ 
                 severity: 'WARNING', 
                 area: 'scenarios', 
                 message: `${unknownScenarios} scenarios have scenarioType=UNKNOWN (no routing)`,
-                fix: 'Set scenarioType for each scenario (EMERGENCY, BOOKING, FAQ, TROUBLESHOOT, TRANSFER, SMALL_TALK)'
+                fix: 'Run Golden Autofill (apply) on ALL enabled templates or manually set scenarioType per scenario.',
+                examples: unknownExamples
             });
         }
         
@@ -916,6 +922,12 @@ router.get('/', async (req, res) => {
                 version, // For optimistic concurrency in patches
                 generatedAt: timestamp,
                 generationTimeMs: Date.now() - startTime,
+                deploy: {
+                    // Render provides these env vars in production; null locally.
+                    renderGitCommit: process.env.RENDER_GIT_COMMIT || null,
+                    renderServiceId: process.env.RENDER_SERVICE_ID || null,
+                    renderInstanceId: process.env.RENDER_INSTANCE_ID || null
+                },
                 sources: [
                     PROVIDER_VERSIONS.controlPlane,
                     PROVIDER_VERSIONS.scenarioBrain,

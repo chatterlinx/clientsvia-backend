@@ -3155,111 +3155,113 @@
     }
     
     async function runGoldenAutofill() {
-      // Find the active template ID for this company
-      if (!qaSelectedTemplateId && currentCompanyId) {
-        // Try to detect active template - API returns array directly
+      // Runtime Truth loads scenarios from ALL enabled templates for a company.
+      // This button must not silently run on only templates[0], or UNKNOWN types will remain in other enabled templates.
+      let enabledTemplates = [];
+      if (currentCompanyId) {
         try {
           const response = await fetch(`/api/company/${currentCompanyId}/configuration/templates`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
           });
-          const templates = await response.json();
-          console.log('[GOLDEN AUTOFILL] Templates detected:', templates);
-          
-          // API returns array directly, each item has templateId
-          if (Array.isArray(templates) && templates.length > 0) {
-            qaSelectedTemplateId = templates[0].templateId;
-            console.log('[GOLDEN AUTOFILL] Using template:', qaSelectedTemplateId);
-          }
+          enabledTemplates = await response.json();
+          console.log('[GOLDEN AUTOFILL] Enabled templates for company:', enabledTemplates);
         } catch (e) {
-          console.log('[GOLDEN AUTOFILL] Could not auto-detect template:', e);
+          console.log('[GOLDEN AUTOFILL] Could not load enabled templates:', e);
         }
       }
-      
-      if (!qaSelectedTemplateId) {
-        showSnapshotToast('No Template', 'Go to QA Dashboard tab first to load template', 'warning');
+
+      const enabledTemplateIds = Array.isArray(enabledTemplates)
+        ? enabledTemplates.map(t => t?.templateId).filter(Boolean)
+        : [];
+
+      // Prefer explicit QA selection; otherwise default to ALL enabled templates.
+      const selectedTemplateIds = qaSelectedTemplateId
+        ? [qaSelectedTemplateId]
+        : enabledTemplateIds;
+
+      if (!selectedTemplateIds || selectedTemplateIds.length === 0) {
+        showSnapshotToast('No Templates', 'No enabled templates found for this company. Open QA Dashboard and select a template.', 'warning');
         return;
       }
-      
-      // Show confirmation
-      if (!confirm('Run Golden Autofill to classify all scenarios?\\n\\nThis will:\\n- Auto-detect scenarioType (BOOKING, FAQ, EMERGENCY, etc.)\\n- Set priority and minConfidence based on type\\n- Respect locked scenarios (autofillLock=true)\\n\\nContinue?')) {
+
+      const multi = selectedTemplateIds.length > 1;
+      const templateLabel = multi ? `${selectedTemplateIds.length} enabled templates` : `template ${selectedTemplateIds[0]}`;
+
+      if (!confirm(`Run Golden Autofill for ${templateLabel}?\\n\\nThis will:\\n- Classify scenarioType (BOOKING, FAQ, EMERGENCY, etc.)\\n- Set priority and minConfidence based on type\\n- Respect locked scenarios (autofillLock=true)\\n\\nContinue?`)) {
         return;
       }
-      
-      showSnapshotToast('Running...', 'Classifying scenarios...', 'info');
-      
+
+      showSnapshotToast('Running...', `Classifying scenarios for ${templateLabel}...`, 'info');
+
       try {
-        // First do dry run to show preview
-        const dryRunResponse = await fetch(`/api/trade-knowledge/templates/${qaSelectedTemplateId}/golden-autofill`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${authToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ mode: 'dry_run' })
-        });
-        
-        const dryRunData = await dryRunResponse.json();
-        
-        if (!dryRunData.success) {
-          throw new Error(dryRunData.error || 'Dry run failed');
+        // Dry-run every selected template
+        const previews = [];
+        for (const tid of selectedTemplateIds) {
+          const dryRunResponse = await fetch(`/api/trade-knowledge/templates/${tid}/golden-autofill`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${authToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ mode: 'dry_run' })
+          });
+
+          const dryRunData = await dryRunResponse.json();
+          if (!dryRunData.success) {
+            throw new Error(dryRunData.error || `Dry run failed for template ${tid}`);
+          }
+          previews.push(dryRunData);
         }
-        
-        // Show preview count - backend uses 'toUpdate' not 'scenariosWithChanges'
-        const willUpdate = dryRunData.summary?.toUpdate || 0;
-        const unknownCount = dryRunData.byType?.UNKNOWN || 0;
-        const totalScenarios = dryRunData.summary?.totalScenarios || 0;
-        
-        console.log('[GOLDEN AUTOFILL] Dry run result:', {
-          willUpdate,
-          unknownCount,
-          totalScenarios,
-          byType: dryRunData.byType,
-          summary: dryRunData.summary
-        });
-        
-        if (willUpdate === 0) {
-          showSnapshotToast('No Changes', `All ${totalScenarios} scenarios already compliant`, 'info');
+
+        const agg = previews.reduce((acc, p) => {
+          acc.totalScenarios += (p.summary?.totalScenarios || 0);
+          acc.toUpdate += (p.summary?.toUpdate || 0);
+          acc.locked += (p.summary?.locked || 0);
+          acc.unknown += (p.byType?.UNKNOWN || 0);
+          return acc;
+        }, { totalScenarios: 0, toUpdate: 0, locked: 0, unknown: 0 });
+
+        console.log('[GOLDEN AUTOFILL] Dry run aggregate:', agg, previews);
+
+        if (agg.toUpdate === 0) {
+          showSnapshotToast('No Changes', `All ${agg.totalScenarios} scenarios already compliant across ${templateLabel}`, 'info');
           return;
         }
-        
-        // Confirm apply - show what types were detected
-        const typeBreakdown = Object.entries(dryRunData.byType || {})
-          .filter(([k, v]) => v > 0)
-          .map(([k, v]) => `${k}: ${v}`)
-          .join(', ');
-        
-        if (!confirm(`Found ${willUpdate} scenarios to update.\\n\\nType breakdown: ${typeBreakdown}\\n\\nApply changes now?`)) {
+
+        if (!confirm(`Found ${agg.toUpdate} scenarios to update across ${templateLabel}.\\n\\nApply changes now?`)) {
           return;
         }
-        
-        // Apply the changes
-        const applyResponse = await fetch(`/api/trade-knowledge/templates/${qaSelectedTemplateId}/golden-autofill`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${authToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ mode: 'apply' })
-        });
-        
-        const applyData = await applyResponse.json();
-        
-        if (!applyData.success) {
-          throw new Error(applyData.error || 'Apply failed');
+
+        // Apply each template
+        let totalUpdated = 0;
+        let totalFailedTemplates = 0;
+        let totalLocked = 0;
+
+        for (const tid of selectedTemplateIds) {
+          const applyResponse = await fetch(`/api/trade-knowledge/templates/${tid}/golden-autofill`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${authToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ mode: 'apply' })
+          });
+
+          const applyData = await applyResponse.json();
+          if (!applyData.success) {
+            totalFailedTemplates += 1;
+            console.error('[GOLDEN AUTOFILL] Apply failed for template:', tid, applyData);
+            continue;
+          }
+
+          totalUpdated += (applyData.summary?.applied || applyData.applied?.length || 0);
+          totalLocked += (applyData.summary?.skipped || applyData.skipped?.length || 0);
         }
-        
-        // Backend uses 'applied' array and 'summary.applied' count
-        const appliedCount = applyData.summary?.applied || applyData.applied?.length || 0;
-        const appliedTypeBreakdown = Object.entries(applyData.byType || {})
-          .filter(([k, v]) => v > 0 && k !== 'UNKNOWN')
-          .map(([k, v]) => `${k}: ${v}`)
-          .join(', ');
-        
-        showSnapshotToast('Success!', `Updated ${appliedCount} scenarios. Types: ${appliedTypeBreakdown || 'classified'}`, 'success');
-        
+
+        showSnapshotToast('Success!', `Updated ${totalUpdated} scenarios (${totalLocked} locked, ${totalFailedTemplates} templates failed)`, totalFailedTemplates ? 'warning' : 'success');
+
         // Refresh Runtime Truth to see changes
         await refreshSystemSnapshot();
-        
       } catch (error) {
         console.error('[GOLDEN AUTOFILL] Error:', error);
         showSnapshotToast('Error', error.message, 'error');
