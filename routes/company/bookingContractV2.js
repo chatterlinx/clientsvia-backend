@@ -126,13 +126,14 @@ router.post('/migrate/from-bookingSlots', async (req, res) => {
     const groupLabel = (req.body?.groupLabel || 'Base Booking').toString();
 
     try {
-        const company = await v2Company.findById(companyId);
+        // IMPORTANT: do NOT call company.save() here.
+        // Some legacy companies may contain invalid data in unrelated subdocs (e.g., cheatSheet enums).
+        // Using $set avoids triggering full-document validation and keeps this migration safe.
+        const company = await v2Company.findById(companyId).lean();
         if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
 
-        const frontDesk = company.aiAgentSettings?.frontDeskBehavior || {};
-
         // Use the existing normalized slots as the source of truth (legacy path)
-        const normalized = BookingScriptEngine.getBookingSlotsFromCompany(company.toObject(), { contextFlags: {} });
+        const normalized = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: {} });
         const slots = normalized.slots || [];
 
         // Convert normalized legacy slots -> slotLibrary
@@ -180,13 +181,18 @@ router.post('/migrate/from-bookingSlots', async (req, res) => {
             slots: slotIdsOrdered
         }];
 
-        company.aiAgentSettings = company.aiAgentSettings || {};
-        company.aiAgentSettings.frontDeskBehavior = company.aiAgentSettings.frontDeskBehavior || {};
-        company.aiAgentSettings.frontDeskBehavior.slotLibrary = slotLibrary;
-        company.aiAgentSettings.frontDeskBehavior.slotGroups = slotGroups;
-        if (enableAfter) company.aiAgentSettings.frontDeskBehavior.bookingContractV2Enabled = true;
+        const updateObj = {
+            'aiAgentSettings.frontDeskBehavior.slotLibrary': slotLibrary,
+            'aiAgentSettings.frontDeskBehavior.slotGroups': slotGroups
+        };
+        if (enableAfter) {
+            updateObj['aiAgentSettings.frontDeskBehavior.bookingContractV2Enabled'] = true;
+        }
 
-        await company.save();
+        await v2Company.updateOne(
+            { _id: companyId },
+            { $set: updateObj }
+        );
 
         const compiledPreview = BookingContractCompiler.compileBookingSlots({
             slotLibrary,
@@ -198,7 +204,7 @@ router.post('/migrate/from-bookingSlots', async (req, res) => {
             success: true,
             data: {
                 migratedFrom: normalized.source,
-                bookingContractV2Enabled: company.aiAgentSettings.frontDeskBehavior.bookingContractV2Enabled === true,
+                bookingContractV2Enabled: enableAfter === true,
                 slotLibraryCount: slotLibrary.length,
                 slotGroupsCount: slotGroups.length,
                 compiledPreview
