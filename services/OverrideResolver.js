@@ -28,6 +28,7 @@ const CompanyScenarioOverride = require('../models/CompanyScenarioOverride');
 const CompanyCategoryOverride = require('../models/CompanyCategoryOverride');
 const CompanyResponseDefaults = require('../models/CompanyResponseDefaults');
 const CompanyPlaceholders = require('../models/CompanyPlaceholders');
+const v2Company = require('../models/v2Company');
 
 // Redis for caching overrides (optional performance boost)
 let redisClient;
@@ -324,9 +325,31 @@ class OverrideResolver {
         
         try {
             const placeholdersMap = await CompanyPlaceholders.getPlaceholdersMap(companyId);
-            
-            if (placeholdersMap.size === 0) {
-                return reply;
+
+            // Always inject SYSTEM placeholders so templates/scenarios can safely use:
+            // {companyname}, {companyphone}, {companyid} without requiring admin setup.
+            // (keys are case-insensitive because CompanyPlaceholders.render lowercases)
+            try {
+                const company = await v2Company.findById(companyId)
+                    .select('companyName companyPhone phoneNumber tradeKey')
+                    .lean();
+                if (company) {
+                    if (!placeholdersMap.has('companyname') && company.companyName) {
+                        placeholdersMap.set('companyname', company.companyName);
+                    }
+                    const phone = company.companyPhone || company.phoneNumber;
+                    if (!placeholdersMap.has('companyphone') && phone) {
+                        placeholdersMap.set('companyphone', phone);
+                    }
+                    if (!placeholdersMap.has('companyid') && companyId) {
+                        placeholdersMap.set('companyid', companyId.toString());
+                    }
+                    if (!placeholdersMap.has('tradekey') && company.tradeKey) {
+                        placeholdersMap.set('tradekey', company.tradeKey);
+                    }
+                }
+            } catch (e) {
+                logger.warn('[OVERRIDE RESOLVER] System placeholder injection failed (non-fatal)', { companyId, error: e.message });
             }
             
             // Render both quick and full replies
