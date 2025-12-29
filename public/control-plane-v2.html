@@ -1788,9 +1788,10 @@
             </div>
           </div>
           <!-- Hidden select for backwards compatibility -->
-          <select id="qa-template-select" style="display: none;">
-            <option value="">Loading...</option>
-          </select>
+          <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
+            <select id="qa-template-select" style="display: none;">
+              <option value="">Loading...</option>
+            </select>
             <button onclick="runGoldenAutofillDryRun()" class="btn btn-primary" style="padding: 8px 16px;">
               <i class="fas fa-magic"></i> Golden Autofill (Dry Run)
             </button>
@@ -2522,7 +2523,9 @@
     // DATA & CONFIG INITIALIZATION
     // Placeholders (V2), Templates, Scenarios
     // ═══════════════════════════════════════════════════════════════════════════
-    let currentPlaceholders = {};
+    // Data & Config: Placeholders are stored in CompanyPlaceholders.placeholders (array)
+    // IMPORTANT: This is the SAME storage runtime-truth uses. Do NOT write to legacy company.variables.
+    let currentPlaceholders = []; // [{ key, value, description? }]
     
     // Store references to the original managers
     let aiCoreTemplatesManager = null;
@@ -3392,19 +3395,24 @@
       const tbody = document.getElementById('placeholders-list');
       
       try {
-        // Load from company.variables (legacy) until we have a proper placeholders endpoint
-        const response = await fetch(`/api/company/${currentCompanyId}`, {
+        // Load from CompanyPlaceholders (authoritative source)
+        const response = await fetch(`/api/company/${currentCompanyId}/placeholders`, {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
         
-        if (response.ok) {
-          const data = await response.json();
-          const company = data.company || data;
-          const variables = company.variables || {};
-          
-          currentPlaceholders = variables;
-          
-          if (Object.keys(variables).length === 0) {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const placeholders = Array.isArray(data.placeholders) ? data.placeholders : [];
+        currentPlaceholders = placeholders.map(p => ({
+          key: (p.key || '').toString(),
+          value: (p.value || '').toString(),
+          description: p.description || null
+        }));
+
+        if (currentPlaceholders.length === 0) {
             tbody.innerHTML = `
               <tr>
                 <td colspan="3" style="text-align: center; padding: 40px; color: #94a3b8;">
@@ -3413,14 +3421,14 @@
                 </td>
               </tr>
             `;
-          } else {
-            tbody.innerHTML = Object.entries(variables).map(([key, value]) => `
+        } else {
+            tbody.innerHTML = currentPlaceholders.map(({ key, value }) => `
               <tr data-placeholder-key="${key}">
                 <td>
                   <code style="background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 13px;">{${key}}</code>
                 </td>
                 <td>
-                  <input type="text" value="${escapeHtml(value)}" 
+                  <input type="text" value="${escapeHtml(value)}"
                          onchange="updatePlaceholder('${key}', this.value)"
                          style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
                 </td>
@@ -3431,8 +3439,6 @@
             </td>
           </tr>
         `).join('');
-          }
-        }
       } catch (error) {
         console.error('Failed to load placeholders:', error);
         tbody.innerHTML = `
@@ -3450,47 +3456,61 @@
       const name = prompt('Enter placeholder name (no spaces, e.g., "companyName"):');
       if (!name) return;
       
-      const sanitizedName = name.replace(/[^a-zA-Z0-9_]/g, '');
+      const sanitizedName = name.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
       if (!sanitizedName) {
         alert('Invalid placeholder name');
         return;
       }
       
-      if (currentPlaceholders[sanitizedName]) {
+      if (currentPlaceholders.some(p => p.key === sanitizedName)) {
         alert('Placeholder already exists');
         return;
       }
       
-      currentPlaceholders[sanitizedName] = '';
+      currentPlaceholders.push({ key: sanitizedName, value: '', description: null });
       loadPlaceholders();
     }
     
     function updatePlaceholder(key, value) {
-      currentPlaceholders[key] = value;
+      const k = (key || '').toString().toLowerCase();
+      const idx = currentPlaceholders.findIndex(p => p.key === k);
+      if (idx !== -1) {
+        currentPlaceholders[idx].value = value;
+      }
     }
     
     function deletePlaceholder(key) {
       if (confirm(`Delete placeholder {${key}}?`)) {
-        delete currentPlaceholders[key];
+        const k = (key || '').toString().toLowerCase();
+        currentPlaceholders = currentPlaceholders.filter(p => p.key !== k);
         loadPlaceholders();
       }
     }
     
     async function savePlaceholders() {
       try {
-        const response = await fetch(`/api/company/${currentCompanyId}`, {
-          method: 'PATCH',
+        // Validate before sending (backend requires key + value)
+        const invalid = currentPlaceholders.filter(p => !p.key || !p.value || !p.key.trim() || !p.value.trim());
+        if (invalid.length > 0) {
+          const sample = invalid.slice(0, 5).map(p => `{${p.key || 'missing_key'}}`).join(', ');
+          alert(`❌ Please fill in values for all placeholders before saving.\nMissing values: ${sample}${invalid.length > 5 ? '…' : ''}`);
+          return;
+        }
+
+        const response = await fetch(`/api/company/${currentCompanyId}/placeholders`, {
+          method: 'PUT',
           headers: {
             'Authorization': `Bearer ${authToken}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ variables: currentPlaceholders })
+          body: JSON.stringify({ placeholders: currentPlaceholders })
         });
         
         if (response.ok) {
           alert('✅ Placeholders saved!');
         } else {
-          throw new Error('Failed to save');
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.message || err.error || 'Failed to save');
         }
       } catch (error) {
         alert('❌ Failed to save placeholders: ' + error.message);
@@ -3498,25 +3518,32 @@
     }
     
     async function importPlaceholderDefaults() {
-      // Import common defaults
-      const defaults = {
-        companyName: '',
-        companyPhone: '',
-        companyAddress: '',
-        businessHours: 'Monday-Friday 8am-5pm',
-        serviceArea: '',
-        emergencyPhone: '',
-        websiteUrl: ''
-      };
-      
-      currentPlaceholders = { ...defaults, ...currentPlaceholders };
+      // Import common defaults (custom placeholders only)
+      // NOTE: {companyName} and {companyPhone} are SYSTEM placeholders; do not duplicate them here.
+      const defaults = [
+        { key: 'companyAddress', value: '', description: 'Company address (if different from service address)' },
+        { key: 'businessHours', value: 'Monday-Friday 8am-5pm', description: 'Business hours' },
+        { key: 'serviceArea', value: '', description: 'Primary service area' },
+        { key: 'emergencyPhone', value: '', description: 'Emergency / after-hours number' },
+        { key: 'websiteUrl', value: '', description: 'Website URL' },
+        { key: 'license', value: '', description: 'License number (if applicable)' }
+      ];
+
+      // Merge without duplicates (existing wins)
+      const existingKeys = new Set(currentPlaceholders.map(p => p.key));
+      for (const d of defaults) {
+        const k = d.key.toLowerCase();
+        if (!existingKeys.has(k)) {
+          currentPlaceholders.push({ ...d, key: k });
+        }
+      }
       loadPlaceholders();
       alert('✅ Default placeholders imported. Fill in the values and click Save.');
     }
     
     function resetPlaceholders() {
       if (confirm('Reset all placeholders to defaults? This will clear custom values.')) {
-        currentPlaceholders = {};
+        currentPlaceholders = [];
         importPlaceholderDefaults();
       }
     }
