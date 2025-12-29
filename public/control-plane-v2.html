@@ -2796,9 +2796,38 @@
       }
       
       const jsonStr = JSON.stringify(currentExecutionMap, null, 2);
-      navigator.clipboard.writeText(jsonStr).then(() => {
-        showSnapshotToast(`Execution map copied (${jsonStr.length} bytes)`, 'success');
-      });
+      
+      // Download (preferred) — files can be large and clipboard is fragile
+      try {
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        const companyIdSafe = (currentCompanyId || 'company').toString().replace(/[^a-zA-Z0-9_-]/g, '_');
+        const fileName = `execution-map_${companyIdSafe}_${ts}.json`;
+        const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        
+        showSnapshotToast(`Execution map downloaded (${jsonStr.length} bytes)`, 'success');
+        return;
+      } catch (e) {
+        console.warn('[EXECUTION MAP] Download failed, falling back to clipboard:', e);
+      }
+      
+      // Fallback: clipboard copy
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(jsonStr).then(() => {
+          showSnapshotToast(`Execution map copied (${jsonStr.length} bytes)`, 'success');
+        }).catch(() => {
+          showSnapshotToast('Failed to copy execution map', 'error');
+        });
+      } else {
+        showSnapshotToast('Clipboard not available for export', 'warning');
+      }
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
