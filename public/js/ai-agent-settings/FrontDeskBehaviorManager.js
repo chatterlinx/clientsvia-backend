@@ -2631,6 +2631,9 @@ Sean → Shawn, Shaun`;
             
             // Get token from correct storage key (same as other API calls)
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+            if (!token) {
+                throw new Error('No auth token found. Please refresh and sign in again.');
+            }
             
             const response = await fetch(`/api/company/${this.companyId}/seed-golden/booking-slots`, {
                 method: 'POST',
@@ -2640,22 +2643,25 @@ Sean → Shawn, Shaun`;
                 }
             });
             
-            const data = await response.json();
+            let data;
+            try {
+                data = await response.json();
+            } catch (e) {
+                const text = await response.text().catch(() => '');
+                throw new Error(`Golden slots API returned non-JSON (HTTP ${response.status}). ${text ? `Body: ${text.substring(0, 200)}` : ''}`);
+            }
             
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to load golden slots');
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || data.message || `Failed to load golden slots (HTTP ${response.status})`);
             }
             
             console.log('[FRONT DESK] ✅ Golden booking slots loaded:', data);
             
-            // Reload the config from backend to get the new slots
-            await this.loadConfig(this.companyId);
-            
-            // Re-render the booking tab
-            const content = document.getElementById('front-desk-tab-content');
-            if (content) {
-                content.innerHTML = this.renderBookingPromptsTab();
-                this.attachEventListeners('booking');
+            // Reload config from backend and re-render properly
+            await this.load();
+            const panel = document.querySelector('.front-desk-behavior-panel');
+            if (panel) {
+                this.switchTab('booking', panel);
             }
             
             btn.innerHTML = '✅ Loaded!';
