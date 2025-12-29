@@ -40,6 +40,8 @@ const CallTranscript = require('../models/CallTranscript');
 const CustomerEvent = require('../models/CustomerEvent');
 const CustomerLookup = require('./CustomerLookup');
 const Customer = require('../models/Customer');
+const Company = require('../models/v2Company');
+const Vendor = require('../models/Vendor');
 const logger = require('../utils/logger');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -92,6 +94,99 @@ class CallSummaryService {
     });
     
     try {
+      // ─────────────────────────────────────────────────────────────────────────
+      // STEP 0: Vendor-first caller identity (company-scoped)
+      // ─────────────────────────────────────────────────────────────────────────
+      // If enabled and vendor match found, do NOT create/attach a Customer record.
+      // This prevents vendor/supplier numbers from polluting the customer directory.
+      let vendorHandling = null;
+      try {
+        const company = await Company.findById(companyId)
+          .select('aiAgentSettings.frontDeskBehavior.vendorHandling')
+          .lean();
+        vendorHandling = company?.aiAgentSettings?.frontDeskBehavior?.vendorHandling || null;
+      } catch (cfgErr) {
+        // Non-blocking: config load failure should not break calls
+        logger.warn('[CALL_SERVICE] VendorHandling config load failed (non-blocking)', {
+          companyId,
+          error: cfgErr.message
+        });
+      }
+
+      const vendorFirstEnabled = vendorHandling?.vendorFirstEnabled === true;
+      if (vendorFirstEnabled) {
+        const vendor = await Vendor.findByPhone(companyId, phone);
+        if (vendor) {
+          const callId = CallSummary.generateCallId();
+
+          const consentType = callerState && CONFIG.TWO_PARTY_CONSENT_STATES.includes(callerState.toUpperCase())
+            ? 'two-party'
+            : 'one-party';
+
+          const callSummary = await CallSummary.create({
+            companyId,
+            callId,
+            twilioSid,
+            phone: vendor.phone || phone,
+            customerId: null,
+            callerName: vendor.businessName || null,
+            isReturning: false,
+            direction,
+            startedAt: new Date(),
+            consent: {
+              consentType,
+              callerState,
+              consentTimestamp: new Date()
+            },
+            processingStatus: 'pending'
+          });
+
+          const callContext = {
+            // Call identity
+            callId,
+            twilioSid,
+            companyId,
+
+            // Caller identity
+            callerType: 'vendor',
+            vendorId: vendor._id,
+            vendorContext: {
+              vendorName: vendor.businessName || null,
+              vendorType: vendor.vendorType || null,
+              vendorId: vendor.vendorId || null
+            },
+
+            // Customer fields intentionally null
+            customerId: null,
+            customerContext: null,
+            isNewCustomer: false,
+            isReturning: false,
+
+            // AI context (for higher layers)
+            aiContext: {
+              callerType: 'vendor',
+              vendorName: vendor.businessName || null,
+              callId,
+              direction
+            },
+
+            startedAt: callSummary.startedAt,
+            customerLookupTime: Date.now() - startTime,
+            fromCache: false
+          };
+
+          logger.info('[CALL_SERVICE] Vendor recognized (vendor-first)', {
+            callId,
+            companyId,
+            phone: vendor.phone || phone,
+            vendorName: vendor.businessName || null,
+            duration: Date.now() - startTime
+          });
+
+          return callContext;
+        }
+      }
+
       // ─────────────────────────────────────────────────────────────────────────
       // STEP 1: Look up or create customer (race-proof)
       // ─────────────────────────────────────────────────────────────────────────
@@ -156,6 +251,9 @@ class CallSummaryService {
         callId,
         twilioSid,
         companyId,
+
+        // Caller identity
+        callerType: 'customer',
         
         // Customer info
         customerId: customer._id,

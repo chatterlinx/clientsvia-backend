@@ -2600,21 +2600,33 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
     
     // ────────────────────────────────────────────────────────────────
-    // 👤 CALL CENTER V2: Pass customer context to AI Brain
+    // 👤 CALL CENTER V2: Pass caller identity context to AI Brain
     // ────────────────────────────────────────────────────────────────
-    // This enables personalized responses: "Hi John, welcome back!"
-    // And smart data collection: Skip address if we already have it.
+    // Customer: enables personalization and smarter booking.
+    // Vendor: prevents customer-directory pollution and enables vendor protocols.
     if (req.session?.callCenterContext?.customerContext) {
       callState.customerContext = req.session.callCenterContext.customerContext;
       callState.customerId = req.session.callCenterContext.customerId;
       callState.isReturning = req.session.callCenterContext.isReturning;
       callState.callSummaryId = req.session.callCenterContext.callId;
+      callState.callerType = req.session.callCenterContext.callerType || 'customer';
       
       logger.info('[CALL CENTER] Customer context attached to callState', {
         callSid,
         isReturning: callState.isReturning,
         customerName: callState.customerContext?.customerName || null,
         customerId: callState.customerId
+      });
+    } else if (req.session?.callCenterContext?.callerType === 'vendor') {
+      callState.callerType = 'vendor';
+      callState.vendorId = req.session.callCenterContext.vendorId || null;
+      callState.vendorContext = req.session.callCenterContext.vendorContext || null;
+      callState.callSummaryId = req.session.callCenterContext.callId || null;
+
+      logger.info('[CALL CENTER] Vendor context attached to callState', {
+        callSid,
+        vendorId: callState.vendorId,
+        vendorName: callState.vendorContext?.vendorName || null
       });
     }
     
@@ -2692,7 +2704,44 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // No more forceBookingPath logic needed - hybrid handles everything
       
       if (llm0Enabled && company) {
-        
+
+        // ────────────────────────────────────────────────────────────────
+        // 🏷️ VENDOR CALL FAST-PATH (deterministic)
+        // ────────────────────────────────────────────────────────────────
+        // If the caller is a known Vendor (by phone) and the company has enabled
+        // vendorHandling, we run a bounded "take-a-message" flow and record a VendorCall.
+        const vendorHandling = company?.aiAgentSettings?.frontDeskBehavior?.vendorHandling || {};
+        if (callState?.callerType === 'vendor' && vendorHandling.enabled === true && vendorHandling.mode !== 'ignore') {
+          try {
+            const VendorCallTurnHandler = require('../services/VendorCallTurnHandler');
+            const { result: vendorResult, updatedCallState } = await VendorCallTurnHandler.handleTurn({
+              companyId: companyID,
+              company,
+              callSid,
+              fromNumber,
+              userText: speechResult,
+              callState
+            });
+            
+            if (vendorResult) {
+              result = vendorResult;
+              result.callState = updatedCallState;
+              tracer.step('VENDOR_FLOW', 'Vendor call handled by deterministic flow', {
+                vendorId: updatedCallState.vendorId || null,
+                vendorName: updatedCallState.vendorContext?.vendorName || null,
+                vendorCallId: updatedCallState.vendorFlow?.vendorCallId || null,
+                step: updatedCallState.vendorFlow?.step || null
+              });
+            }
+          } catch (vendorErr) {
+            logger.warn('[VENDOR_FLOW] Failed to run vendor flow (non-blocking)', {
+              callSid,
+              companyId: companyID,
+              error: vendorErr.message
+            });
+          }
+        }
+
         // ════════════════════════════════════════════════════════════════════════════════════
         // 🚀 UNIFIED AI PATH (Dec 2025)
         // ════════════════════════════════════════════════════════════════════════════════════
@@ -2702,9 +2751,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         
         const useHybridPath = company?.aiAgentSettings?.callFlowEngine?.enabled !== false; // Default ON
         const hybridStartTime = Date.now();
-        let usedPath = 'legacy';
+        let usedPath = result ? 'vendor' : 'legacy';
         
-        if (useHybridPath) {
+        if (useHybridPath && !result) {
           try {
             usedPath = 'hybrid';
             tracer.step('HYBRID_PATH_START', '🚀 Fast hybrid path - bypassing slow decideNextStep');

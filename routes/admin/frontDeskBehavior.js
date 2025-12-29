@@ -228,6 +228,8 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
                 bookingContractV2Enabled: saved.bookingContractV2Enabled === true,
                 slotLibrary: saved.slotLibrary || [],
                 slotGroups: saved.slotGroups || [],
+                // 🏷️ Vendor / Supplier Handling (Call Center directory)
+                vendorHandling: config.vendorHandling || null,
                 bookingTemplates: config.bookingTemplates || null,
                 // Legacy booking prompts (for backward compatibility)
                 bookingPrompts: config.bookingPrompts,
@@ -375,6 +377,11 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
                     askMissingNamePart: s.askMissingNamePart  // Log this specifically
                 }))
             });
+        }
+
+        // 🏷️ Vendor / Supplier Handling (Call Center directory)
+        if (updates.vendorHandling && typeof updates.vendorHandling === 'object') {
+            updateObj['aiAgentSettings.frontDeskBehavior.vendorHandling'] = updates.vendorHandling;
         }
 
         // 🧾 Booking Contract V2 (feature-flagged)

@@ -375,6 +375,19 @@ router.get('/', async (req, res) => {
                 } : null
             }
         };
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // BUILD VENDOR / SUPPLIER HANDLING (Call Center directory)
+        // ═══════════════════════════════════════════════════════════════════════
+        const vendorHandling = frontDeskBehavior.vendorHandling || {};
+        const vendor = {
+            source: 'aiAgentSettings.frontDeskBehavior.vendorHandling',
+            vendorFirstEnabled: vendorHandling.vendorFirstEnabled === true,
+            enabled: vendorHandling.enabled === true,
+            mode: vendorHandling.mode || 'collect_message',
+            allowLinkToCustomer: vendorHandling.allowLinkToCustomer === true,
+            promptsConfigured: !!vendorHandling.prompts
+        };
         
         // ═══════════════════════════════════════════════════════════════════════
         // BUILD WIRING MAP - The Critical Link (Scenario → Action → Flow → Booking)
@@ -584,6 +597,7 @@ router.get('/', async (req, res) => {
                     editable: true
                 },
                 booking,
+                vendor,
                 fallbacks: {
                     notOffered: { 
                         text: controlPlane.fallbacks.notOfferedReply, 

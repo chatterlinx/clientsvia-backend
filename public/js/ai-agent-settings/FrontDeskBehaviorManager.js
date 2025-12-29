@@ -490,7 +490,23 @@ class FrontDeskBehaviorManager {
             // Booking Contract V2 (feature-flagged, OFF by default)
             bookingContractV2Enabled: false,
             slotLibrary: [],
-            slotGroups: []
+            slotGroups: [],
+
+            // Vendor / Supplier Handling (Call Center directory)
+            vendorHandling: {
+                vendorFirstEnabled: false,
+                enabled: false,
+                mode: 'collect_message',
+                allowLinkToCustomer: false,
+                prompts: {
+                    greeting: "Thanks for calling. How can we help?",
+                    askSummary: "What can I help you with today?",
+                    askOrderNumber: "Do you have an order number or invoice number I should note?",
+                    askCustomerName: "Which customer is this regarding?",
+                    completion: "Got it. I’ll make sure the team gets this message right away.",
+                    transferMessage: "Thank you. Let me connect you to our team."
+                }
+            }
         };
     }
 
@@ -579,6 +595,21 @@ class FrontDeskBehaviorManager {
             this.showNotification('❌ Save failed: ' + error.message, 'error');
             throw error;
         }
+    }
+
+    collectVendorHandlingConfig() {
+        const getChecked = (id) => document.getElementById(id)?.checked === true;
+        const getValue = (id) => (document.getElementById(id)?.value || '').trim();
+
+        const mode = getValue('fdb-vendor-flow-mode') || 'collect_message';
+        return {
+            vendorFirstEnabled: getChecked('fdb-vendor-first-enabled') === true,
+            enabled: getChecked('fdb-vendor-flow-enabled') === true,
+            mode: ['collect_message', 'transfer', 'ignore'].includes(mode) ? mode : 'collect_message',
+            allowLinkToCustomer: getChecked('fdb-vendor-allow-link') === true,
+            // Prompts are editable later; we keep the existing object if present.
+            prompts: this.config.vendorHandling?.prompts || this.getDefaultConfig().vendorHandling.prompts
+        };
     }
 
     // Render the full UI
@@ -842,6 +873,11 @@ class FrontDeskBehaviorManager {
         const slotLibraryJson = this.escapeHtml(JSON.stringify(this.config.slotLibrary || [], null, 2));
         const slotGroupsJson = this.escapeHtml(JSON.stringify(this.config.slotGroups || [], null, 2));
         const v2Enabled = this.config.bookingContractV2Enabled === true;
+        const vendorHandling = this.config.vendorHandling || {};
+        const vendorFirstEnabled = vendorHandling.vendorFirstEnabled === true;
+        const vendorEnabled = vendorHandling.enabled === true;
+        const vendorMode = vendorHandling.mode || 'collect_message';
+        const vendorAllowLinkToCustomer = vendorHandling.allowLinkToCustomer === true;
 
         return `
             <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -920,6 +956,54 @@ class FrontDeskBehaviorManager {
             </div>
             
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+                <!-- ═══════════════════════════════════════════════════════════════════════ -->
+                <!-- VENDOR / SUPPLIER HANDLING (Call Center Directory) -->
+                <!-- ═══════════════════════════════════════════════════════════════════════ -->
+                <div style="background: #0d1117; border: 1px solid ${vendorFirstEnabled ? '#3fb950' : '#30363d'}; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div style="display:flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                        <div>
+                            <h3 style="margin: 0; color: #58a6ff;">🏷️ Vendor / Supplier Calls</h3>
+                            <p style="margin: 6px 0 0 0; color: #8b949e; font-size: 0.8rem;">
+                                If enabled, inbound calls from known Vendors (by phone) are handled as <strong>non-customer</strong> calls.
+                                This prevents supplier numbers from polluting your Customer directory.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div style="display:flex; gap: 14px; flex-wrap: wrap; margin-top: 12px;">
+                        <label style="display:flex; align-items:center; gap: 10px; padding: 10px 12px; background:#161b22; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
+                            <input type="checkbox" id="fdb-vendor-first-enabled" ${vendorFirstEnabled ? 'checked' : ''} style="accent-color:#3fb950; width: 18px; height: 18px;">
+                            <span style="color:${vendorFirstEnabled ? '#3fb950' : '#8b949e'}; font-weight:700;">
+                                Vendor-first identity (recommended)
+                            </span>
+                        </label>
+                        <label style="display:flex; align-items:center; gap: 10px; padding: 10px 12px; background:#161b22; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
+                            <input type="checkbox" id="fdb-vendor-flow-enabled" ${vendorEnabled ? 'checked' : ''} style="accent-color:#3fb950; width: 18px; height: 18px;">
+                            <span style="color:${vendorEnabled ? '#3fb950' : '#8b949e'}; font-weight:700;">
+                                Enable vendor message flow
+                            </span>
+                        </label>
+                        <label style="display:flex; align-items:center; gap: 8px; padding: 10px 12px; background:#161b22; border:1px solid #30363d; border-radius: 8px;">
+                            <span style="color:#8b949e; font-weight:700;">Mode</span>
+                            <select id="fdb-vendor-flow-mode" style="padding: 8px 10px; background:#0b0f14; border:1px solid #30363d; border-radius: 6px; color:#c9d1d9;">
+                                <option value="collect_message" ${vendorMode === 'collect_message' ? 'selected' : ''}>Collect message → transfer</option>
+                                <option value="transfer" ${vendorMode === 'transfer' ? 'selected' : ''}>Transfer immediately (still logs vendor)</option>
+                                <option value="ignore" ${vendorMode === 'ignore' ? 'selected' : ''}>Ignore vendor special handling</option>
+                            </select>
+                        </label>
+                        <label style="display:flex; align-items:center; gap: 10px; padding: 10px 12px; background:#161b22; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
+                            <input type="checkbox" id="fdb-vendor-allow-link" ${vendorAllowLinkToCustomer ? 'checked' : ''} style="accent-color:#58a6ff; width: 18px; height: 18px;">
+                            <span style="color:#c9d1d9; font-weight:700;">
+                                Allow optional “link to customer/work order” questions
+                            </span>
+                        </label>
+                    </div>
+                    
+                    <p style="margin: 10px 0 0 0; color: #6e7681; font-size: 0.75rem;">
+                        Tip: Manage Vendors in the Call Center directory. Vendor-first works by matching the caller’s phone to a saved Vendor phone/secondary phone.
+                    </p>
+                </div>
+
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <div>
                         <h3 style="margin: 0; color: #58a6ff;">📋 Booking Slots</h3>
@@ -6755,6 +6839,11 @@ Sean → Shawn, Shaun`;
             const rawGroups = get('fdb-bcv2-slotGroups-json');
             this.config.slotLibrary = parseJsonStrict(rawLibrary, 'Slot Library');
             this.config.slotGroups = parseJsonStrict(rawGroups, 'Slot Groups');
+        }
+
+        // Vendor / Supplier Handling
+        if (document.getElementById('fdb-vendor-first-enabled')) {
+            this.config.vendorHandling = this.collectVendorHandlingConfig();
         }
         
         // ═══════════════════════════════════════════════════════════════════

@@ -1674,6 +1674,41 @@ const companySchema = new mongoose.Schema({
                 balanced: { type: String, trim: true, default: "I can help with that!" },
                 polite: { type: String, trim: true, default: "I'd be happy to help." }
             },
+
+            // ═══════════════════════════════════════════════════════════════
+            // VENDOR / SUPPLIER CALL HANDLING (Call Center Directory)
+            // ═══════════════════════════════════════════════════════════════
+            // Purpose: If an inbound caller matches a Vendor by phone, treat them as
+            // a NON-CUSTOMER caller (do not create Customer placeholders).
+            //
+            // NOTE: This must be fully UI-controlled and visible in runtime-truth.
+            //
+            // vendorFirstEnabled:
+            // - true: vendor directory lookup happens before CustomerLookup at call start
+            // - false: legacy behavior (always treat caller as customer)
+            //
+            // enabled:
+            // - true: runtime may run a dedicated vendor "take-a-message" flow
+            // - false: runtime only tags callerType=vendor and continues normal flow
+            vendorHandling: {
+                vendorFirstEnabled: { type: Boolean, default: false },
+                enabled: { type: Boolean, default: false },
+                mode: {
+                    type: String,
+                    enum: ['collect_message', 'transfer', 'ignore'],
+                    default: 'collect_message'
+                },
+                allowLinkToCustomer: { type: Boolean, default: false },
+                prompts: {
+                    // DEFAULT - OVERRIDE IN UI
+                    greeting: { type: String, trim: true, default: "Thanks for calling. How can we help?" },
+                    askSummary: { type: String, trim: true, default: "What can I help you with today?" },
+                    askOrderNumber: { type: String, trim: true, default: "Do you have an order number or invoice number I should note?" },
+                    askCustomerName: { type: String, trim: true, default: "Which customer is this regarding?" },
+                    completion: { type: String, trim: true, default: "Got it. I’ll make sure the team gets this message right away." },
+                    transferMessage: { type: String, trim: true, default: "Thank you. Let me connect you to our team." }
+                }
+            },
             
             // ═══════════════════════════════════════════════════════════════
             // BOOKING SLOTS - Dynamic, customizable slots for booking
