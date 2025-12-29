@@ -358,9 +358,19 @@ router.get('/', async (req, res) => {
         const bookingV2Enabled = frontDeskBehavior.bookingContractV2Enabled === true;
         const bookingV2Library = Array.isArray(frontDeskBehavior.slotLibrary) ? frontDeskBehavior.slotLibrary : [];
         const bookingV2Groups = Array.isArray(frontDeskBehavior.slotGroups) ? frontDeskBehavior.slotGroups : [];
+        const bookingV2PreviewFlags = {};
         const bookingV2CompiledPreview = (bookingV2Enabled && bookingV2Library.length > 0 && bookingV2Groups.length > 0)
-            ? BookingContractCompiler.compileBookingSlots({ slotLibrary: bookingV2Library, slotGroups: bookingV2Groups, contextFlags: {} })
+            ? BookingContractCompiler.compileBookingSlots({ slotLibrary: bookingV2Library, slotGroups: bookingV2Groups, contextFlags: bookingV2PreviewFlags })
             : null;
+
+        // Enterprise guardrail: default group should exist so preview {} never shows 0 "by design"
+        // A "default group" is either explicitly isDefault=true or a group with empty when:{} (matches all).
+        const bookingV2DefaultGroupExists = Array.isArray(bookingV2Groups) && bookingV2Groups.some(g => {
+            if (!g || g.enabled === false) return false;
+            const when = g.when;
+            const whenIsEmptyObject = when && typeof when === 'object' && !Array.isArray(when) && Object.keys(when).length === 0;
+            return g.isDefault === true || whenIsEmptyObject;
+        });
         
         const booking = {
             enabled: controlPlane.booking.enabled,
@@ -396,7 +406,10 @@ router.get('/', async (req, res) => {
                 slotGroupsCount: bookingV2Groups.length,
                 compiledPreview: bookingV2CompiledPreview ? {
                     hash: bookingV2CompiledPreview.hash,
+                    compilePreviewFlagsUsed: bookingV2CompiledPreview.contextFlags || bookingV2PreviewFlags,
+                    defaultGroupExists: bookingV2DefaultGroupExists,
                     matchingGroupIds: bookingV2CompiledPreview.matchingGroupIds,
+                    activatedGroupId: (bookingV2CompiledPreview.matchingGroupIds && bookingV2CompiledPreview.matchingGroupIds[0]) || null,
                     activeSlotIdsOrdered: bookingV2CompiledPreview.activeSlotIdsOrdered,
                     missingSlotRefs: bookingV2CompiledPreview.missingSlotRefs
                 } : null
@@ -518,7 +531,10 @@ router.get('/', async (req, res) => {
                     slotGroupsCount: Array.isArray(frontDeskBehavior.slotGroups) ? frontDeskBehavior.slotGroups.length : 0,
                     compiledPreviewHash: bookingV2CompiledPreview?.hash || null,
                     compiledPreviewActiveCount: bookingV2CompiledPreview?.activeSlotIdsOrdered?.length || 0,
-                    compiledPreviewMissingRefsCount: bookingV2CompiledPreview?.missingSlotRefs?.length || 0
+                    compiledPreviewMissingRefsCount: bookingV2CompiledPreview?.missingSlotRefs?.length || 0,
+                    compilePreviewFlagsUsed: bookingV2CompiledPreview?.contextFlags || bookingV2PreviewFlags,
+                    defaultGroupExists: bookingV2DefaultGroupExists,
+                    activatedGroupId: (bookingV2CompiledPreview?.matchingGroupIds && bookingV2CompiledPreview.matchingGroupIds[0]) || null
                 },
 
                 // Vendor / Supplier handling (runtime fast-path exists)
