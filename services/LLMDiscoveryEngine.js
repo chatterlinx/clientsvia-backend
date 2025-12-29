@@ -409,12 +409,47 @@ Answer: ${cheatSheetKnowledge.answer}
 `;
         }
         
-        // Build emotion context
+        // Build emotion context (UI-controlled toggles)
         let emotionContext = '';
-        if (emotion?.emotion === 'frustrated') {
-            emotionContext = '\nNOTE: Caller sounds frustrated. Acknowledge their frustration empathetically before helping.';
-        } else if (emotion?.emotion === 'urgent') {
+        const emotionKey = emotion?.emotion || null;
+        const emotionResponses = company?.aiAgentSettings?.frontDeskBehavior?.emotionResponses || {};
+        const emotionCfg = (emotionKey && typeof emotionResponses === 'object') ? (emotionResponses[emotionKey] || {}) : {};
+        const emotionEnabled = emotionKey ? (emotionCfg.enabled !== false) : true;
+
+        if (emotionKey === 'urgent') {
+            // NOTE: "urgent" is a runtime detection bucket, not a UI toggle today.
             emotionContext = '\nNOTE: This sounds urgent. Prioritize getting help to them quickly.';
+        } else if (emotionKey && emotionEnabled) {
+            if (emotionKey === 'stressed') {
+                emotionContext = '\nNOTE: Caller sounds stressed. Be calm, reassuring, and keep questions simple.';
+            }
+            if (emotionKey === 'frustrated') {
+                emotionContext = '\nNOTE: Caller sounds frustrated. Acknowledge their frustration empathetically before helping.';
+                if (emotionCfg.reduceFriction === true) {
+                    emotionContext += ' Reduce friction: keep this short, avoid extra probing, and move toward scheduling sooner when appropriate.';
+                }
+            }
+            if (emotionKey === 'angry') {
+                emotionContext = '\nNOTE: Caller sounds angry. Stay professional, acknowledge briefly, and focus on resolving.';
+                if (emotionCfg.offerEscalation === true) {
+                    emotionContext += ' If appropriate, offer to connect them with a human.';
+                }
+            }
+            if (emotionKey === 'friendly' && emotionCfg.allowSmallTalk === true) {
+                emotionContext = '\nNOTE: Caller sounds friendly. Light small talk is okay, but keep the call moving.';
+            }
+            if (emotionKey === 'joking' && emotionCfg.respondInKind === true) {
+                emotionContext = '\nNOTE: Caller is joking. You may respond lightly, but keep it professional and progress the call.';
+            }
+            if (emotionKey === 'panicked') {
+                emotionContext = '\nNOTE: Caller sounds panicked. Be calm, confirm safety, and keep questions minimal.';
+                if (emotionCfg.bypassAllQuestions === true) {
+                    emotionContext += ' Prioritize immediate help and reduce all non-essential questions.';
+                }
+                if (emotionCfg.confirmFirst === true) {
+                    emotionContext += ' Confirm you understand their immediate need before asking for details.';
+                }
+            }
         }
         
         // Build discovery state context

@@ -181,7 +181,8 @@ function getSlotPromptVariant(slotConfig, slotId, askedCount = 0) {
     
     // 🚨 NO HARDCODED FALLBACKS - Log error and use generic
     logger.error(`[PROMPT AS LAW] ⚠️ NO UI CONFIG for slot "${slotId}"! Add question in Front Desk Behavior → Booking Prompts`);
-    return `What is your ${slotId}?`; // Generic last resort - should never happen if UI is configured
+    // DEFAULT - OVERRIDE IN UI: This is a last-resort safety net only.
+    return `What is your ${slotId}?`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -964,7 +965,9 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
     }
 }
 
-// Default final scripts (used if not configured in company settings)
+// Default final scripts (LAST-RESORT SAFETY NET)
+// DEFAULT - OVERRIDE IN UI:
+// Configure these in Control Plane → Front Desk → Booking Prompts → Booking Outcome.
 function getDefaultFinalScript(mode) {
     const defaults = {
         'confirmed_on_call': "Perfect, {name}. You're all set. Your appointment is scheduled for {timePreference}. If anything changes, you can call us back anytime. Is there anything else I can help you with today?",
@@ -1067,30 +1070,10 @@ const ConsentDetector = {
         }
         
         // ═══════════════════════════════════════════════════════════════════
-        // URGENCY IMPLIES BOOKING - "need someone today", "ASAP", etc.
+        // IMPORTANT: No hardcoded booking-consent triggers.
+        // If you want phrases like "ASAP" or "send someone" to count as consent,
+        // add them to UI → Discovery & Consent Gate → Consent Phrases.
         // ═══════════════════════════════════════════════════════════════════
-        const urgencyBookingPhrases = [
-            'need someone today',
-            'need somebody today',
-            'as soon as possible',
-            'asap',
-            'come out today',
-            'today if possible',
-            'right away',
-            'immediately',
-            'send someone',
-            'send somebody'
-        ];
-        
-        for (const urgencyPhrase of urgencyBookingPhrases) {
-            if (textLower.includes(urgencyPhrase)) {
-                return { 
-                    hasConsent: true, 
-                    matchedPhrase: urgencyPhrase, 
-                    reason: 'urgency_implies_booking' 
-                };
-            }
-        }
         
         return { hasConsent: false, matchedPhrase: null, reason: 'no_consent_detected' };
     },
@@ -1955,6 +1938,50 @@ async function processTurn({
         }
         
         // ═══════════════════════════════════════════════════════════════════
+        // ESCALATION INTERCEPT (UI-CONTROLLED) - "Can I talk to a human?"
+        // ═══════════════════════════════════════════════════════════════════
+        // This is intentionally BEFORE session/customer work:
+        // - Fast response
+        // - Clean transfer behavior
+        // - No LLM needed
+        const escalationCfg = company.aiAgentSettings?.frontDeskBehavior?.escalation || {};
+        const escalationEnabled = escalationCfg.enabled !== false;
+        const escalationPhrases = Array.isArray(escalationCfg.triggerPhrases) ? escalationCfg.triggerPhrases : [];
+        if (escalationEnabled && escalationPhrases.length > 0) {
+            const matched = escalationPhrases.find(p => p && userTextLower.includes(String(p).toLowerCase()));
+            if (matched) {
+                const transferMsg =
+                    escalationCfg.transferMessage ||
+                    company.connectionMessages?.voice?.transferMessage ||
+                    "DEFAULT - OVERRIDE IN UI: One moment while I transfer you to our team.";
+
+                log('🧑‍💼 ESCALATION INTERCEPT - transfer requested (0 tokens)', {
+                    matchedPhrase: matched,
+                    hasFrontDeskTransferMessage: !!escalationCfg.transferMessage,
+                    hasCompanyTransferMessage: !!company.connectionMessages?.voice?.transferMessage
+                });
+
+                return {
+                    success: true,
+                    reply: transferMsg,
+                    response: transferMsg,
+                    sessionId: providedSessionId || `escalation-${Date.now()}`,
+                    phase: 'DISCOVERY',
+                    mode: 'DISCOVERY',
+                    conversationMode: 'DISCOVERY',
+                    emotion: { emotion: 'neutral', confidence: 1.0 },
+                    tokensUsed: 0,
+                    llmUsed: false,
+                    source: 'ESCALATION_INTERCEPT',
+                    latencyMs: Date.now() - startTime,
+                    slotsCollected: {},
+                    requiresTransfer: true,
+                    transferReason: 'caller_requested_human'
+                };
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
         // STEP 2: Find or create customer
         // ═══════════════════════════════════════════════════════════════════
         log('CHECKPOINT 3: Customer lookup...');
@@ -2046,6 +2073,27 @@ async function processTurn({
                 acknowledgedClaims: []
             };
         }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // DETECTION TRIGGERS → FLAGS (UI-CONTROLLED, NO TEXT)
+        // ═══════════════════════════════════════════════════════════════════
+        // Purpose: turn caller phrases into session.flags for routing/contract decisions.
+        // This does NOT generate language; it only sets state.
+        // Example usage: Booking Contract V2 slotGroups.when can key off session.flags.
+        const detectionTriggers = company.aiAgentSettings?.frontDeskBehavior?.detectionTriggers || {};
+        session.flags = session.flags || {};
+        const setFlagIfMatched = (flagKey, phrases) => {
+            if (!Array.isArray(phrases) || phrases.length === 0) return;
+            const matched = phrases.find(p => p && userTextLower.includes(String(p).toLowerCase()));
+            if (matched) {
+                session.flags[flagKey] = true;
+                log('🎯 DETECTION FLAG SET', { flagKey, matched });
+            }
+        };
+        setFlagIfMatched('trustConcern', detectionTriggers.trustConcern);
+        setFlagIfMatched('callerFeelsIgnored', detectionTriggers.callerFeelsIgnored);
+        setFlagIfMatched('refusedSlot', detectionTriggers.refusedSlot);
+        setFlagIfMatched('describingProblem', detectionTriggers.describingProblem);
         
         // Track turn number for locks
         const currentTurnNumber = (session.metrics?.totalTurns || 0) + 1;
@@ -2585,7 +2633,17 @@ async function processTurn({
                 const askedCount = session.booking.meta[slotId].askedCount || 0;
                 
                 // Get variant (UI-configured or fallback)
-                const exactQuestion = getSlotPromptVariant(firstMissingSlot, slotId, askedCount);
+                let exactQuestion = getSlotPromptVariant(firstMissingSlot, slotId, askedCount);
+                
+                // Loop prevention (UI-controlled): rephrase intro if we're repeating the same slot too many times
+                const lp = company.aiAgentSettings?.frontDeskBehavior?.loopPrevention || {};
+                const lpEnabled = lp.enabled !== false;
+                const maxSame = typeof lp.maxSameQuestion === 'number' ? lp.maxSameQuestion : 2;
+                const rephraseIntro = (lp.rephraseIntro || 'Let me try this differently - ').toString();
+                if (lpEnabled && askedCount >= maxSame) {
+                    exactQuestion = `${rephraseIntro}${exactQuestion}`.replace(/\s{2,}/g, ' ').trim();
+                    log('🔁 LOOP PREVENTION: Rephrasing intro applied (booking snap)', { slotId, askedCount, maxSame });
+                }
                 session.booking.currentSlotQuestion = exactQuestion;
                 session.booking.meta[slotId].askedCount = askedCount + 1;
                 
@@ -4908,11 +4966,20 @@ async function processTurn({
                         session.booking.meta[nextSlotId] = session.booking.meta[nextSlotId] || {};
                         const askedCount = session.booking.meta[nextSlotId].askedCount || 0;
                         
-                        // Get max attempts from config (default 3)
-                        const bookingConfig = company.aiAgentSettings?.frontDeskBehavior?.bookingSettings || {};
-                        const maxAttemptsPerSlot = bookingConfig.maxAttemptsPerSlot || 3;
-                        const escalationScript = bookingConfig.escalationScript || 
-                            "No problem. If you'd rather, I can transfer you to a service advisor to get you booked.";
+                        // Loop prevention (UI-controlled)
+                        // DEFAULT - OVERRIDE IN UI: configure in Control Plane → Front Desk → Loops / Escalation
+                        const lp = company.aiAgentSettings?.frontDeskBehavior?.loopPrevention || {};
+                        const lpEnabled = lp.enabled !== false;
+                        const maxAttemptsPerSlot = lpEnabled
+                            ? (typeof lp.maxSameQuestion === 'number' ? lp.maxSameQuestion : 2)
+                            : 999; // effectively disabled
+                        const rephraseIntro = (lp.rephraseIntro || 'Let me try this differently - ').toString();
+                        const escalationCfg = company.aiAgentSettings?.frontDeskBehavior?.escalation || {};
+                        const escalationScript =
+                            lp.onLoop ||
+                            escalationCfg.offerMessage ||
+                            escalationCfg.transferMessage ||
+                            "DEFAULT - OVERRIDE IN UI: No problem — I can connect you to our team or take a message. Which would you prefer?";
                         
                         // Check if we've exceeded max attempts (ANTI-LOOP BREAKER)
                         if (askedCount >= maxAttemptsPerSlot) {
@@ -4943,6 +5010,12 @@ async function processTurn({
                                 exactQuestion = nextMissingSlotSafe.question || 
                                     getSlotPromptVariant(nextMissingSlotSafe, nextSlotId, 0);
                                 log('📋 V33: Using PRIMARY prompt from UI', { slotId: nextSlotId });
+                            }
+
+                            // Loop prevention (UI-controlled): on reprompts (askedCount >= 1), prepend rephrase intro
+                            if (lpEnabled && askedCount >= 1 && rephraseIntro) {
+                                exactQuestion = `${rephraseIntro}${exactQuestion}`.replace(/\s{2,}/g, ' ').trim();
+                                log('🔁 LOOP PREVENTION: Rephrasing intro applied (booking mode)', { slotId: nextSlotId, askedCount });
                             }
                             session.booking.meta[nextSlotId].askedCount = askedCount + 1;
                             
@@ -5331,7 +5404,12 @@ async function processTurn({
             // Once we understand the issue, don't ask more diagnostic questions.
             // Offer to schedule immediately. Caller can still ask questions.
             // ═══════════════════════════════════════════════════════════════════
-            if (shouldAutoOffer && !session.discovery.offeredScheduling) {
+            const modeSwitchingCfg = company.aiAgentSettings?.frontDeskBehavior?.modeSwitching || {};
+            const minTurnsBeforeBooking = Number.isFinite(modeSwitchingCfg.minTurnsBeforeBooking)
+                ? modeSwitchingCfg.minTurnsBeforeBooking
+                : 2;
+
+            if (shouldAutoOffer && !session.discovery.offeredScheduling && currentTurnNumber >= minTurnsBeforeBooking) {
                 // Get empathy variant
                 const empathyVariants = discoveryConfig.empathyVariants || DEFAULT_PROMPT_VARIANTS.empathy;
                 const empathyLine = getVariant(empathyVariants);
@@ -5445,7 +5523,8 @@ async function processTurn({
             });
             
             // If fast-path triggered, respond with offer script instead of LLM
-            if (fastPathTriggered || (fastPathEnabled && exceededMaxQuestions && emotion.emotion === 'frustrated')) {
+            const autoRescueOnFrustration = modeSwitchingCfg.autoRescueOnFrustration !== false;
+            if (fastPathTriggered || (autoRescueOnFrustration && fastPathEnabled && exceededMaxQuestions && emotion.emotion === 'frustrated')) {
                 const offerScript = fastPathConfig.offerScript || 
                     "Got it — I completely understand. We can get someone out to you. Would you like me to schedule a technician now?";
                 const oneQuestionScript = fastPathConfig.oneQuestionScript || "";

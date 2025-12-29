@@ -4728,6 +4728,13 @@ Sean → Shawn, Shaun`;
     
     async openFlowEditor(flowId, container) {
         let flow = null;
+
+        // Defensive: ensure we never stack multiple editor modals (double-modal bug)
+        const existing = document.getElementById('flow-editor-modal');
+        if (existing) {
+            console.warn('[FLOW EDITOR] ⚠️ Existing flow editor modal found - removing before opening a new one');
+            existing.remove();
+        }
         
         // Load existing flow if editing
         if (flowId) {

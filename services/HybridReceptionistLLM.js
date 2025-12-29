@@ -185,6 +185,120 @@ function loadFrontDeskConfig(company) {
 // ════════════════════════════════════════════════════════════════════════════
 
 class HybridReceptionistLLM {
+
+    /**
+     * Enforce UI-configured vocabulary guardrails on AI output (multi-tenant safety).
+     *
+     * Guardrails live at:
+     * - company.aiAgentSettings.frontDeskBehavior.vocabularyGuardrails
+     *
+     * Enforcement:
+     * - Apply `replacementMap` first (word-boundary, case-insensitive).
+     * - If `forbiddenWords` still appear, remove them (last-resort sanitation).
+     * - Never hides the event: logs structured warning when it changes output.
+     */
+    static applyVocabularyGuardrailsToReply(reply, company) {
+        if (!reply || typeof reply !== 'string') return { reply, changed: false, violations: [] };
+
+        const vg = company?.aiAgentSettings?.frontDeskBehavior?.vocabularyGuardrails || {};
+        const forbiddenWords = Array.isArray(vg.forbiddenWords) ? vg.forbiddenWords.map(String).map(s => s.trim()).filter(Boolean) : [];
+        const replacementMap = (vg.replacementMap && typeof vg.replacementMap === 'object') ? vg.replacementMap : {};
+
+        if (forbiddenWords.length === 0 && Object.keys(replacementMap).length === 0) {
+            return { reply, changed: false, violations: [] };
+        }
+
+        const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const hasWord = (text, word) => new RegExp(`\\b${escapeRegex(word)}\\b`, 'i').test(text);
+        const findViolations = (text) => {
+            const lower = String(text).toLowerCase();
+            return forbiddenWords
+                .map(w => w.toLowerCase())
+                .filter(w => w && hasWord(lower, w));
+        };
+
+        const original = reply;
+        let next = reply;
+
+        // 1) Apply replacement map (longest keys first)
+        const replacementEntries = Object.entries(replacementMap)
+            .map(([from, to]) => [String(from).trim(), String(to)])
+            .filter(([from, to]) => from && to)
+            .sort((a, b) => b[0].length - a[0].length);
+
+        for (const [from, to] of replacementEntries) {
+            const re = new RegExp(`\\b${escapeRegex(from)}\\b`, 'gi');
+            next = next.replace(re, to);
+        }
+
+        // 2) If forbidden words remain, remove them (last resort)
+        const remaining = findViolations(next);
+        if (remaining.length > 0) {
+            for (const word of remaining) {
+                const re = new RegExp(`\\b${escapeRegex(word)}\\b`, 'gi');
+                next = next.replace(re, '').replace(/\s{2,}/g, ' ').trim();
+            }
+        }
+
+        const changed = next !== original;
+        const finalViolations = findViolations(next);
+
+        if (changed || finalViolations.length > 0) {
+            logger.warn('[HYBRID LLM] 🧱 Vocabulary guardrails applied', {
+                companyId: company?._id?.toString?.() || company?.id,
+                forbiddenWordsCount: forbiddenWords.length,
+                replacementMapCount: Object.keys(replacementMap).length,
+                remainingViolations: finalViolations,
+                changed
+            });
+        }
+
+        return { reply: next, changed, violations: finalViolations };
+    }
+
+    /**
+     * Enforce UI-configured forbidden phrases on AI output.
+     *
+     * Config:
+     * - company.aiAgentSettings.frontDeskBehavior.forbiddenPhrases: string[]
+     *
+     * Behavior:
+     * - Removes forbidden substrings (case-insensitive) and trims.
+     * - Logs whenever a phrase is removed (do not hide mistakes).
+     */
+    static applyForbiddenPhrasesToReply(reply, company) {
+        if (!reply || typeof reply !== 'string') return { reply, changed: false, removed: [] };
+
+        const phrases = company?.aiAgentSettings?.frontDeskBehavior?.forbiddenPhrases;
+        const forbidden = Array.isArray(phrases) ? phrases.map(String).map(s => s.trim()).filter(Boolean) : [];
+        if (forbidden.length === 0) return { reply, changed: false, removed: [] };
+
+        const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const original = reply;
+        let next = reply;
+        const removed = [];
+
+        // Remove longer phrases first
+        const sorted = [...forbidden].sort((a, b) => b.length - a.length);
+        for (const phrase of sorted) {
+            const re = new RegExp(escapeRegex(phrase), 'gi');
+            if (re.test(next)) {
+                next = next.replace(re, '').replace(/\s{2,}/g, ' ').trim();
+                removed.push(phrase);
+            }
+        }
+
+        const changed = next !== original;
+        if (changed) {
+            logger.warn('[HYBRID LLM] 🚫 Forbidden phrases removed from output', {
+                companyId: company?._id?.toString?.() || company?.id,
+                removedCount: removed.length,
+                removed: removed.slice(0, 10)
+            });
+        }
+
+        return { reply: next, changed, removed };
+    }
     
     /**
      * Process a turn with full conversation context
@@ -262,6 +376,10 @@ class HybridReceptionistLLM {
                         // Nudge toward booking after answering
                         reply += ` Is there anything else I can help you with, or would you like to schedule service?`;
                     }
+
+                    // Enforce output guardrails (multi-tenant safety + admin forbidden phrases)
+                    reply = this.applyVocabularyGuardrailsToReply(reply, company).reply;
+                    reply = this.applyForbiddenPhrasesToReply(reply, company).reply;
                     
                     BlackBoxLogger.logEvent({
                         type: 'QUICK_ANSWER_USED',
@@ -573,7 +691,9 @@ RULES:
                 const say = (parsed.say || '').trim();
                 const bridgeBack = (parsed.bridgeBack || enterpriseContext.nextSlotQuestion || '').trim();
                 
-                const finalReply = bridgeBack ? `${say} ${bridgeBack}` : say;
+                const assembled = bridgeBack ? `${say} ${bridgeBack}` : say;
+                let finalReply = this.applyVocabularyGuardrailsToReply(assembled, company).reply;
+                finalReply = this.applyForbiddenPhrasesToReply(finalReply, company).reply;
                 
                 logger.info('[HYBRID LLM] 🔄 BOOKING INTERRUPTION response assembled', {
                     callId,
@@ -759,7 +879,10 @@ RULES:
             };
             
             const result = {
-                reply: finalReply,
+                reply: this.applyForbiddenPhrasesToReply(
+                    this.applyVocabularyGuardrailsToReply(finalReply, company).reply,
+                    company
+                ).reply,
                 conversationMode,
                 needsInfo: collectingSlot || 'none',
                 nextGoal: collectingSlot ? `ASK_${collectingSlot.toUpperCase()}` : 'CONTINUE',
@@ -1126,6 +1249,9 @@ User: "What time do you open?"
         // 🚨 TIERED FALLBACK - HONESTY-FIRST APPROACH
         // When the LLM fails or doesn't understand, be HONEST about it
         // ═══════════════════════════════════════════════════════════════════
+        //
+        // DEFAULT - OVERRIDE IN UI:
+        // Configure these in Control Plane → Front Desk → Fallbacks.
         
         if (!isConfigured) {
             // Config error - this is a system problem, not caller's fault

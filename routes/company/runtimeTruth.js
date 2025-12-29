@@ -35,6 +35,7 @@ const { substitutePlaceholders } = require('../../utils/placeholderStandard');
 const { validateScenarioQuality, QUALITY_REQUIREMENTS } = require('../../utils/scenarioEnforcement');
 const logger = require('../../utils/logger');
 const BookingContractCompiler = require('../../services/BookingContractCompiler');
+const BookingScriptEngine = require('../../services/BookingScriptEngine');
 
 // ============================================================================
 // PROVIDER VERSIONS - Track what version of each provider generated data
@@ -312,6 +313,19 @@ router.get('/', async (req, res) => {
         // ═══════════════════════════════════════════════════════════════════════
         const aiSettings = company.aiAgentSettings || {};
         const thresholds = aiSettings.thresholds || {};
+        const frontDeskBehavior = company.aiAgentSettings?.frontDeskBehavior || {};
+        const frontDeskDiscoveryConsent = frontDeskBehavior.discoveryConsent || {};
+        const frontDeskDetectionTriggers = frontDeskBehavior.detectionTriggers || {};
+
+        // V22 Consent (runtime uses frontDeskBehavior.discoveryConsent + detectionTriggers.wantsBooking)
+        const v22Consent = {
+            bookingRequiresExplicitConsent: frontDeskDiscoveryConsent.bookingRequiresExplicitConsent !== false,
+            forceLLMDiscovery: frontDeskDiscoveryConsent.forceLLMDiscovery !== false,
+            disableScenarioAutoResponses: frontDeskDiscoveryConsent.disableScenarioAutoResponses !== false,
+            consentQuestionTemplate: frontDeskDiscoveryConsent.consentQuestionTemplate || null,
+            consentYesWords: Array.isArray(frontDeskDiscoveryConsent.consentYesWords) ? frontDeskDiscoveryConsent.consentYesWords : [],
+            consentPhrases: Array.isArray(frontDeskDetectionTriggers.wantsBooking) ? frontDeskDetectionTriggers.wantsBooking : []
+        };
         
         const matchingPolicy = {
             source: PROVIDER_VERSIONS.matchingPolicy,
@@ -327,22 +341,27 @@ router.get('/', async (req, res) => {
                 negativeMatchBlock: true
             },
             discoveryConsent: {
-                required: aiSettings.discoveryConsent?.enabled || false,
-                scenariosBlockedByConsent: aiSettings.discoveryConsent?.disableScenarioAutoResponses || false
+                // NOTE: these fields must reflect what runtime actually uses
+                required: v22Consent.bookingRequiresExplicitConsent,
+                bookingRequiresExplicitConsent: v22Consent.bookingRequiresExplicitConsent,
+                forceLLMDiscovery: v22Consent.forceLLMDiscovery,
+                disableScenarioAutoResponses: v22Consent.disableScenarioAutoResponses,
+                scenariosBlockedByConsent: v22Consent.disableScenarioAutoResponses,
+                consentPhrasesCount: v22Consent.consentPhrases.length,
+                consentYesWordsCount: v22Consent.consentYesWords.length
             }
         };
         
         // ═══════════════════════════════════════════════════════════════════════
         // BUILD BOOKING CONFIG
         // ═══════════════════════════════════════════════════════════════════════
-        const frontDeskBehavior = company.aiAgentSettings?.frontDeskBehavior || {};
         const bookingV2Enabled = frontDeskBehavior.bookingContractV2Enabled === true;
         const bookingV2Library = Array.isArray(frontDeskBehavior.slotLibrary) ? frontDeskBehavior.slotLibrary : [];
         const bookingV2Groups = Array.isArray(frontDeskBehavior.slotGroups) ? frontDeskBehavior.slotGroups : [];
         const bookingV2CompiledPreview = (bookingV2Enabled && bookingV2Library.length > 0 && bookingV2Groups.length > 0)
             ? BookingContractCompiler.compileBookingSlots({ slotLibrary: bookingV2Library, slotGroups: bookingV2Groups, contextFlags: {} })
             : null;
-
+        
         const booking = {
             enabled: controlPlane.booking.enabled,
             slots: controlPlane.booking.slots.map((s, idx) => ({
@@ -357,9 +376,17 @@ router.get('/', async (req, res) => {
 
             // Consent rules (do NOT invent defaults here; missing config must be visible)
             consent: {
-                required: aiSettings.discoveryConsent?.enabled === true,
-                phrase: aiSettings.discoveryConsent?.consentPhrase || null,
-                configured: !!aiSettings.discoveryConsent?.consentPhrase
+                // NOTE: runtime uses V22 fields in frontDeskBehavior.discoveryConsent + detectionTriggers.wantsBooking
+                required: v22Consent.bookingRequiresExplicitConsent,
+                configured: !!(v22Consent.consentQuestionTemplate || v22Consent.consentPhrases.length > 0),
+                // Backward-compatible fields (do not remove)
+                phrase: v22Consent.consentQuestionTemplate,
+                // V22 fields (preferred)
+                consentQuestionTemplate: v22Consent.consentQuestionTemplate,
+                consentPhrasesCount: v22Consent.consentPhrases.length,
+                consentPhrasesSample: v22Consent.consentPhrases.slice(0, 5),
+                consentYesWordsCount: v22Consent.consentYesWords.length,
+                consentYesWordsSample: v22Consent.consentYesWords.slice(0, 5)
             },
 
             // Booking Contract V2 (feature-flagged; compiler preview uses empty flags)
@@ -373,6 +400,275 @@ router.get('/', async (req, res) => {
                     activeSlotIdsOrdered: bookingV2CompiledPreview.activeSlotIdsOrdered,
                     missingSlotRefs: bookingV2CompiledPreview.missingSlotRefs
                 } : null
+            }
+        };
+
+        // What runtime will actually use for booking slots (single entry point)
+        const bookingRuntime = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: {} });
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // BUILD VOCABULARY CONFIG (Caller Input + AI Output Guardrails)
+        // ═══════════════════════════════════════════════════════════════════════
+        const callerVocabulary = frontDeskBehavior.callerVocabulary || {};
+        const vocabularyGuardrails = frontDeskBehavior.vocabularyGuardrails || {};
+        const fillerWordsEnabled = frontDeskBehavior.fillerWordsEnabled !== false;
+        const customFillers = company.aiAgentSettings?.fillerWords?.custom || [];
+        const nameStopWordsEnabled = frontDeskBehavior.nameStopWordsEnabled !== false;
+        const customNameStopWords = company.aiAgentSettings?.nameStopWords?.custom || [];
+
+        const vocabulary = {
+            source: 'aiAgentSettings.frontDeskBehavior.(callerVocabulary|vocabularyGuardrails) + aiAgentSettings.(fillerWords|nameStopWords)',
+
+            // INPUT: translate caller slang before matching/LLM
+            callerVocabulary: {
+                enabled: callerVocabulary.enabled !== false,
+                synonymCount: callerVocabulary.synonymMap ? Object.keys(callerVocabulary.synonymMap).length : 0,
+                sample: callerVocabulary.synonymMap
+                    ? Object.entries(callerVocabulary.synonymMap).slice(0, 5).map(([slang, meaning]) => ({ slang, meaning }))
+                    : []
+            },
+
+            // OUTPUT: control what AI is allowed to say (enforcement is runtime-owned)
+            vocabularyGuardrails: {
+                allowedServiceNounsCount: Array.isArray(vocabularyGuardrails.allowedServiceNouns) ? vocabularyGuardrails.allowedServiceNouns.length : 0,
+                forbiddenWordsCount: Array.isArray(vocabularyGuardrails.forbiddenWords) ? vocabularyGuardrails.forbiddenWords.length : 0,
+                replacementMapCount: vocabularyGuardrails.replacementMap ? Object.keys(vocabularyGuardrails.replacementMap).length : 0
+            },
+
+            // INPUT: remove conversational noise before processing
+            fillerWords: {
+                enabled: fillerWordsEnabled,
+                customCount: Array.isArray(customFillers) ? customFillers.length : 0,
+                sample: Array.isArray(customFillers) ? customFillers.slice(0, 10) : []
+            },
+
+            // INPUT: block false-positive name extraction
+            nameStopWords: {
+                enabled: nameStopWordsEnabled,
+                customCount: Array.isArray(customNameStopWords) ? customNameStopWords.length : 0,
+                sample: Array.isArray(customNameStopWords) ? customNameStopWords.slice(0, 10) : []
+            }
+        };
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // FRONT DESK (TAB-BY-TAB TRUTH) - must mirror what runtime actually reads
+        // ═══════════════════════════════════════════════════════════════════════
+        const frontDesk = {
+            source: 'aiAgentSettings.frontDeskBehavior',
+
+            // Tab: Personality
+            personality: {
+                // The runtime uses this (HybridReceptionistLLM.loadFrontDeskConfig)
+                agentName: frontDeskBehavior.personality?.agentName || '',
+                tone: frontDeskBehavior.personality?.tone || null,
+                verbosity: frontDeskBehavior.personality?.verbosity || null,
+                maxResponseWords: frontDeskBehavior.personality?.maxResponseWords ?? null,
+                useCallerName: frontDeskBehavior.personality?.useCallerName ?? null,
+                conversationStyle: frontDeskBehavior.conversationStyle || 'balanced',
+                styleAcknowledgmentsConfigured: !!frontDeskBehavior.styleAcknowledgments,
+                styleAcknowledgments: frontDeskBehavior.styleAcknowledgments || null
+            },
+
+            // Tab: Personality (Greeting Rules)
+            greetingRules: {
+                enabled: frontDeskBehavior.conversationStages?.enabled !== false,
+                rulesCount: Array.isArray(frontDeskBehavior.conversationStages?.greetingRules)
+                    ? frontDeskBehavior.conversationStages.greetingRules.length
+                    : 0,
+                rulesSample: Array.isArray(frontDeskBehavior.conversationStages?.greetingRules)
+                    ? frontDeskBehavior.conversationStages.greetingRules.slice(0, 5).map(r => ({
+                        trigger: r.trigger,
+                        fuzzy: r.fuzzy === true,
+                        responsePreview: (r.response || '').substring(0, 60)
+                    }))
+                    : []
+            },
+
+            // Tab: Booking
+            booking: {
+                // Single runtime entry point for slots
+                runtimeSlots: {
+                    source: bookingRuntime.source,
+                    isConfigured: bookingRuntime.isConfigured === true,
+                    slotCount: (bookingRuntime.slots || []).length,
+                    requiredSlotIds: (bookingRuntime.slots || []).filter(s => s.required).map(s => s.slotId),
+                    slotsSample: (bookingRuntime.slots || []).slice(0, 6).map(s => ({
+                        id: s.slotId,
+                        type: s.type,
+                        required: s.required === true,
+                        questionPreview: (s.question || '').substring(0, 60)
+                    }))
+                },
+
+                // Booking outcome (finalization copy + mode)
+                bookingOutcome: {
+                    mode: frontDeskBehavior.bookingOutcome?.mode || 'confirmed_on_call',
+                    useAsapVariant: frontDeskBehavior.bookingOutcome?.useAsapVariant !== false,
+                    hasAsapVariantScript: !!frontDeskBehavior.bookingOutcome?.asapVariantScript,
+                    hasCustomFinalScript: !!frontDeskBehavior.bookingOutcome?.customFinalScript,
+                    finalScriptsCount: frontDeskBehavior.bookingOutcome?.finalScripts
+                        ? Object.keys(frontDeskBehavior.bookingOutcome.finalScripts).length
+                        : 0
+                },
+
+                // Contract V2 status (feature-flagged)
+                bookingContractV2: {
+                    enabled: frontDeskBehavior.bookingContractV2Enabled === true,
+                    slotLibraryCount: Array.isArray(frontDeskBehavior.slotLibrary) ? frontDeskBehavior.slotLibrary.length : 0,
+                    slotGroupsCount: Array.isArray(frontDeskBehavior.slotGroups) ? frontDeskBehavior.slotGroups.length : 0,
+                    compiledPreviewHash: bookingV2CompiledPreview?.hash || null,
+                    compiledPreviewActiveCount: bookingV2CompiledPreview?.activeSlotIdsOrdered?.length || 0,
+                    compiledPreviewMissingRefsCount: bookingV2CompiledPreview?.missingSlotRefs?.length || 0
+                },
+
+                // Vendor / Supplier handling (runtime fast-path exists)
+                vendorHandling: {
+                    vendorFirstEnabled: frontDeskBehavior.vendorHandling?.vendorFirstEnabled === true,
+                    enabled: frontDeskBehavior.vendorHandling?.enabled === true,
+                    mode: frontDeskBehavior.vendorHandling?.mode || 'collect_message',
+                    allowLinkToCustomer: frontDeskBehavior.vendorHandling?.allowLinkToCustomer === true
+                },
+
+                // Unit of Work (UoW)
+                unitOfWork: {
+                    enabled: frontDeskBehavior.unitOfWork?.enabled === true,
+                    allowMultiplePerCall: frontDeskBehavior.unitOfWork?.allowMultiplePerCall === true,
+                    maxUnitsPerCall: typeof frontDeskBehavior.unitOfWork?.maxUnitsPerCall === 'number'
+                        ? frontDeskBehavior.unitOfWork.maxUnitsPerCall
+                        : null,
+                    perUnitSlotIds: Array.isArray(frontDeskBehavior.unitOfWork?.perUnitSlotIds)
+                        ? frontDeskBehavior.unitOfWork.perUnitSlotIds
+                        : []
+                }
+            },
+
+            // Tab: Emotions
+            emotions: {
+                source: 'aiAgentSettings.frontDeskBehavior.emotionResponses',
+                configured: !!frontDeskBehavior.emotionResponses,
+                // Show toggles only (no scripts)
+                responses: (() => {
+                    const er = frontDeskBehavior.emotionResponses || {};
+                    const pick = (k) => ({
+                        enabled: er?.[k]?.enabled !== false,
+                        ...(k === 'frustrated' ? { reduceFriction: er?.[k]?.reduceFriction === true } : {}),
+                        ...(k === 'angry' ? { offerEscalation: er?.[k]?.offerEscalation === true } : {}),
+                        ...(k === 'friendly' ? { allowSmallTalk: er?.[k]?.allowSmallTalk === true } : {}),
+                        ...(k === 'joking' ? { respondInKind: er?.[k]?.respondInKind === true } : {}),
+                        ...(k === 'panicked' ? {
+                            bypassAllQuestions: er?.[k]?.bypassAllQuestions === true,
+                            confirmFirst: er?.[k]?.confirmFirst === true
+                        } : {})
+                    });
+                    return {
+                        stressed: pick('stressed'),
+                        frustrated: pick('frustrated'),
+                        angry: pick('angry'),
+                        friendly: pick('friendly'),
+                        joking: pick('joking'),
+                        panicked: pick('panicked')
+                    };
+                })()
+            },
+
+            // Tab: Frustration
+            frustration: {
+                source: 'aiAgentSettings.frontDeskBehavior.frustrationTriggers',
+                triggerCount: Array.isArray(frontDeskBehavior.frustrationTriggers) ? frontDeskBehavior.frustrationTriggers.length : 0,
+                triggersSample: Array.isArray(frontDeskBehavior.frustrationTriggers)
+                    ? frontDeskBehavior.frustrationTriggers.slice(0, 10)
+                    : []
+            },
+
+            // Tab: Escalation
+            escalation: {
+                source: 'aiAgentSettings.frontDeskBehavior.escalation',
+                enabled: frontDeskBehavior.escalation?.enabled !== false,
+                triggerCount: Array.isArray(frontDeskBehavior.escalation?.triggerPhrases)
+                    ? frontDeskBehavior.escalation.triggerPhrases.length
+                    : 0,
+                maxLoopsBeforeOffer: typeof frontDeskBehavior.escalation?.maxLoopsBeforeOffer === 'number'
+                    ? frontDeskBehavior.escalation.maxLoopsBeforeOffer
+                    : null,
+                hasOfferMessage: !!frontDeskBehavior.escalation?.offerMessage,
+                hasTransferMessage: !!frontDeskBehavior.escalation?.transferMessage,
+                triggersSample: Array.isArray(frontDeskBehavior.escalation?.triggerPhrases)
+                    ? frontDeskBehavior.escalation.triggerPhrases.slice(0, 10)
+                    : []
+            },
+
+            // Tab: Loops
+            loops: {
+                source: 'aiAgentSettings.frontDeskBehavior.loopPrevention',
+                enabled: frontDeskBehavior.loopPrevention?.enabled !== false,
+                maxSameQuestion: typeof frontDeskBehavior.loopPrevention?.maxSameQuestion === 'number'
+                    ? frontDeskBehavior.loopPrevention.maxSameQuestion
+                    : null,
+                rephraseIntro: frontDeskBehavior.loopPrevention?.rephraseIntro || null,
+                hasOnLoopScript: !!frontDeskBehavior.loopPrevention?.onLoop
+            },
+
+            // Tab: Forbidden
+            forbidden: {
+                source: 'aiAgentSettings.frontDeskBehavior.forbiddenPhrases',
+                count: Array.isArray(frontDeskBehavior.forbiddenPhrases) ? frontDeskBehavior.forbiddenPhrases.length : 0,
+                sample: Array.isArray(frontDeskBehavior.forbiddenPhrases) ? frontDeskBehavior.forbiddenPhrases.slice(0, 10) : []
+            },
+
+            // Tab: Detection
+            detection: {
+                source: 'aiAgentSettings.frontDeskBehavior.detectionTriggers',
+                triggers: {
+                    trustConcernCount: Array.isArray(frontDeskBehavior.detectionTriggers?.trustConcern)
+                        ? frontDeskBehavior.detectionTriggers.trustConcern.length
+                        : 0,
+                    callerFeelsIgnoredCount: Array.isArray(frontDeskBehavior.detectionTriggers?.callerFeelsIgnored)
+                        ? frontDeskBehavior.detectionTriggers.callerFeelsIgnored.length
+                        : 0,
+                    refusedSlotCount: Array.isArray(frontDeskBehavior.detectionTriggers?.refusedSlot)
+                        ? frontDeskBehavior.detectionTriggers.refusedSlot.length
+                        : 0,
+                    describingProblemCount: Array.isArray(frontDeskBehavior.detectionTriggers?.describingProblem)
+                        ? frontDeskBehavior.detectionTriggers.describingProblem.length
+                        : 0,
+                    wantsBookingCount: Array.isArray(frontDeskBehavior.detectionTriggers?.wantsBooking)
+                        ? frontDeskBehavior.detectionTriggers.wantsBooking.length
+                        : 0
+                }
+            },
+
+            // Tab: Fallbacks
+            fallbacks: {
+                source: 'aiAgentSettings.frontDeskBehavior.fallbackResponses',
+                configured: !!frontDeskBehavior.fallbackResponses,
+                keysConfigured: (() => {
+                    const fb = frontDeskBehavior.fallbackResponses || {};
+                    return Object.keys(fb).filter(k => typeof fb[k] === 'string' && fb[k].trim().length > 0);
+                })(),
+                preview: (() => {
+                    const fb = frontDeskBehavior.fallbackResponses || {};
+                    const pick = (k) => (typeof fb[k] === 'string' && fb[k].trim()) ? fb[k].trim().substring(0, 80) : null;
+                    return {
+                        greeting: pick('greeting'),
+                        didNotUnderstandTier1: pick('didNotUnderstandTier1'),
+                        didNotUnderstandTier2: pick('didNotUnderstandTier2'),
+                        didNotUnderstandTier3: pick('didNotUnderstandTier3')
+                    };
+                })()
+            },
+
+            // Tab: Modes
+            modes: {
+                source: 'aiAgentSettings.frontDeskBehavior.modeSwitching',
+                configured: !!frontDeskBehavior.modeSwitching,
+                minTurnsBeforeBooking: Number.isFinite(frontDeskBehavior.modeSwitching?.minTurnsBeforeBooking)
+                    ? frontDeskBehavior.modeSwitching.minTurnsBeforeBooking
+                    : null,
+                bookingConfidenceThreshold: typeof frontDeskBehavior.modeSwitching?.bookingConfidenceThreshold === 'number'
+                    ? frontDeskBehavior.modeSwitching.bookingConfidenceThreshold
+                    : null,
+                autoRescueOnFrustration: frontDeskBehavior.modeSwitching?.autoRescueOnFrustration !== false,
+                autoTriageOnProblem: frontDeskBehavior.modeSwitching?.autoTriageOnProblem !== false
             }
         };
 
@@ -614,6 +910,12 @@ router.get('/', async (req, res) => {
                     preview: substitutePlaceholders(controlPlane.greeting.standardized, placeholderMap),
                     editable: true
                 },
+                // V22 Consent Gate (this MUST match runtime; if it's not here, it doesn't exist)
+                discoveryConsent: controlPlane.discoveryConsent,
+                // Vocabulary (Caller input translation + output guardrails)
+                vocabulary,
+                // Front Desk tabs (truth mirrors runtime)
+                frontDesk,
                 booking,
                 vendor,
                 unitOfWork,
@@ -634,7 +936,8 @@ router.get('/', async (req, res) => {
                         id: 'fallback_afterHours'
                     }
                 },
-                personality: controlPlane.personality
+                // Keep legacy/unified personality in output for backward compat (do not use for runtime)
+                unifiedPersonality: controlPlane.personality
             },
             
             // Scenario Brain

@@ -2835,8 +2835,16 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             result = {
               text: engineResult.reply,
               response: engineResult.reply,
-              action: engineResult.conversationMode === 'complete' ? 'COMPLETE' : 
-                      engineResult.wantsBooking ? 'BOOKING' : 'DISCOVERY',
+              // If ConversationEngine requests a transfer, honor it (Twilio handles transfer separately)
+              action: engineResult.requiresTransfer === true ? 'transfer' :
+                      (engineResult.conversationMode === 'complete' ? 'COMPLETE' : 
+                       engineResult.wantsBooking ? 'BOOKING' : 'DISCOVERY'),
+              transferTarget: engineResult.requiresTransfer === true
+                ? (company?.twilioConfig?.fallbackNumber || null)
+                : null,
+              transferReason: engineResult.requiresTransfer === true
+                ? (engineResult.transferReason || 'runtime_requires_transfer')
+                : null,
               callState: {
                 ...callState,
                 sessionId: engineResult.sessionId,
