@@ -1509,12 +1509,12 @@
               </div>
             </div>
             
-            <!-- Golden Autofill - Classifies all scenarios with scenarioType -->
-            <button onclick="runGoldenAutofill()"
+            <!-- Golden Autofill - Preview (Dry Run) then Apply -->
+            <button onclick="runGoldenAutofillDryRun()"
                     style="padding: 8px 14px; background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); color: #1e293b; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;"
-                    title="STEP 4: Classify all scenarios with scenarioType">
+                    title="Preview changes (Dry Run) and then optionally Apply. This classifies scenarioType, priority, minConfidence for the active template.">
               <i class="fas fa-magic"></i> Golden Autofill
-              <span style="font-size: 9px; background: #f59e0b; color: black; padding: 1px 4px; border-radius: 3px; margin-left: 4px;">REVIEW</span>
+              <span style="font-size: 9px; background: #f59e0b; color: black; padding: 1px 4px; border-radius: 3px; margin-left: 4px;">PREVIEW</span>
             </button>
           </div>
         </div>
@@ -1792,8 +1792,8 @@
             <select id="qa-template-select" style="display: none;">
               <option value="">Loading...</option>
             </select>
-            <button onclick="runGoldenAutofillDryRun()" class="btn btn-primary" style="padding: 8px 16px;">
-              <i class="fas fa-magic"></i> Golden Autofill (Dry Run)
+            <button onclick="runGoldenAutofillDryRun()" class="btn btn-primary" style="padding: 8px 16px;" title="Preview what Golden Autofill will change before applying">
+              <i class="fas fa-search"></i> Preview Golden Autofill
             </button>
           </div>
           
@@ -1853,6 +1853,9 @@
             <h4 style="font-size: 16px; font-weight: 600; margin: 0 0 16px 0; color: #334155;">
               <i class="fas fa-wrench" style="color: #f59e0b;"></i> Fix Queue (Worst First)
             </h4>
+            <p style="margin: -8px 0 14px 0; color: #64748b; font-size: 13px;">
+              This is the <strong>top 5 categories</strong> with the lowest quality scores. Click <strong>View</strong> to jump to that category below.
+            </p>
             <div id="qa-fix-queue" style="display: grid; gap: 12px;">
               <div style="text-align: center; padding: 40px; color: #94a3b8;">
                 <i class="fas fa-spinner fa-spin"></i> Loading scenarios...
@@ -1865,6 +1868,9 @@
             <h4 style="font-size: 16px; font-weight: 600; margin: 0 0 16px 0; color: #334155;">
               <i class="fas fa-folder-open" style="color: #3b82f6;"></i> All Categories
             </h4>
+            <p style="margin: -8px 0 14px 0; color: #64748b; font-size: 13px;">
+              This is the <strong>full list</strong>. Click a category row to expand and see each scenario’s grade and issues.
+            </p>
             <div id="qa-categories-list" style="display: grid; gap: 12px;">
               <div style="text-align: center; padding: 40px; color: #94a3b8;">
                 <i class="fas fa-spinner fa-spin"></i> Loading categories...
@@ -3261,6 +3267,15 @@
     }
     
     async function runGoldenAutofillDryRun() {
+      // Ensure QA Dashboard has loaded the active template first
+      if (!qaSelectedTemplateId) {
+        try {
+          await initQADashboard();
+        } catch (e) {
+          // initQADashboard already handles UI errors; fall through
+        }
+      }
+
       if (!qaSelectedTemplateId) {
         showSnapshotToast('No active template found. Go to Templates tab to activate one.', 'warning');
         return;
