@@ -3307,6 +3307,10 @@
     }
     
     function showGoldenAutofillPreview(data) {
+      // Persist last preview so we can export it (AI review workflow)
+      window.__goldenAutofillPreview = data;
+      window.__goldenAutofillPreviewGeneratedAt = new Date().toISOString();
+
       // Create modal for preview
       const modal = document.createElement('div');
       modal.id = 'golden-autofill-preview-modal';
@@ -3384,11 +3388,21 @@
           ` : ''}
         </div>
         
-        <div style="padding: 16px 24px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 12px; background: #f8fafc;">
-          <button onclick="closeGoldenAutofillPreview()" class="btn btn-secondary">Cancel</button>
-          <button onclick="applyGoldenAutofill()" class="btn btn-primary" ${data.summary.toUpdate === 0 ? 'disabled' : ''}>
-            <i class="fas fa-check"></i> Apply ${data.summary.toUpdate} Changes
-          </button>
+        <div style="padding: 16px 24px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; gap: 12px; background: #f8fafc; align-items: center;">
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button onclick="downloadGoldenAutofillPreviewJson()" class="btn btn-secondary" title="Download the exact dry-run payload (safe)">
+              <i class="fas fa-download"></i> Download Preview JSON
+            </button>
+            <button onclick="downloadGoldenAutofillReviewBundle()" class="btn btn-secondary" title="Download a single JSON bundle: preview + runtime-truth + QA report">
+              <i class="fas fa-file-archive"></i> Download Review Bundle
+            </button>
+          </div>
+          <div style="display: flex; gap: 12px;">
+            <button onclick="closeGoldenAutofillPreview()" class="btn btn-secondary">Cancel</button>
+            <button onclick="applyGoldenAutofill()" class="btn btn-primary" ${data.summary.toUpdate === 0 ? 'disabled' : ''}>
+              <i class="fas fa-check"></i> Apply ${data.summary.toUpdate} Changes
+            </button>
+          </div>
         </div>
       `;
       
@@ -3399,6 +3413,98 @@
     function closeGoldenAutofillPreview() {
       const modal = document.getElementById('golden-autofill-preview-modal');
       if (modal) modal.remove();
+    }
+
+    // Helper: download any JSON payload as a file
+    function downloadJsonFile(fileName, obj) {
+      const jsonStr = JSON.stringify(obj, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return jsonStr.length;
+    }
+
+    function downloadGoldenAutofillPreviewJson() {
+      const preview = window.__goldenAutofillPreview;
+      if (!preview) {
+        showSnapshotToast('No Preview', 'Run Preview first', 'warning');
+        return;
+      }
+
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      const templateId = qaSelectedTemplateId || preview.templateId || 'template';
+      const fileName = `golden-autofill-preview_${templateId}_${ts}.json`;
+      const bytes = downloadJsonFile(fileName, {
+        _meta: {
+          type: 'golden_autofill_preview',
+          generatedAt: window.__goldenAutofillPreviewGeneratedAt || new Date().toISOString(),
+          companyId: currentCompanyId,
+          templateId
+        },
+        preview
+      });
+
+      showSnapshotToast('Downloaded', `Preview JSON downloaded (${bytes} bytes)`, 'success');
+    }
+
+    async function downloadGoldenAutofillReviewBundle() {
+      const preview = window.__goldenAutofillPreview;
+      if (!preview) {
+        showSnapshotToast('No Preview', 'Run Preview first', 'warning');
+        return;
+      }
+
+      try {
+        showSnapshotToast('Preparing...', 'Building review bundle (this may take a moment)', 'info');
+
+        const templateId = qaSelectedTemplateId || preview.templateId;
+        const token = authToken;
+
+        // Fetch runtime truth (authoritative runtime config)
+        const rtResp = await fetch(`/api/company/${currentCompanyId}/runtime-truth`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const runtimeTruth = await rtResp.json();
+
+        // Fetch QA report (quality dashboard data) if not already loaded
+        let qaReport = (typeof currentQAReport === 'object' && currentQAReport) ? currentQAReport : null;
+        if (!qaReport && templateId) {
+          const qaResp = await fetch(`/api/trade-knowledge/templates/${templateId}/quality-report`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          qaReport = await qaResp.json();
+        }
+
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        const fileName = `review-bundle_${currentCompanyId}_${templateId || 'template'}_${ts}.json`;
+
+        const bundle = {
+          _meta: {
+            type: 'review_bundle',
+            generatedAt: new Date().toISOString(),
+            companyId: currentCompanyId,
+            templateId: templateId || null,
+            templateName: preview.templateName || null,
+            goldenVersion: preview.goldenVersion || null,
+            notes: 'Bundle includes: Golden Autofill Preview (dry run), Runtime Truth (authoritative), QA Report (template quality).'
+          },
+          goldenAutofillPreview: preview,
+          runtimeTruth,
+          qaReport
+        };
+
+        const bytes = downloadJsonFile(fileName, bundle);
+        showSnapshotToast('Downloaded', `Review bundle downloaded (${bytes} bytes)`, 'success');
+      } catch (err) {
+        console.error('[REVIEW BUNDLE] Download failed:', err);
+        showSnapshotToast('Error', `Failed to build review bundle: ${err.message}`, 'error');
+      }
     }
     
     async function applyGoldenAutofill() {
