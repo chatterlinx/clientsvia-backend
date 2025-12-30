@@ -2702,8 +2702,69 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       
       // LLM-0 is ALWAYS ON now (simplified Dec 2025)
       // No more forceBookingPath logic needed - hybrid handles everything
+
+      // ────────────────────────────────────────────────────────────────
+      // 🌙 AFTER-HOURS MESSAGE MODE (deterministic, no LLM)
+      // ────────────────────────────────────────────────────────────────
+      // Enterprise KPI rule:
+      // - After-hours "message-taking" counts as containment success ONLY if:
+      //   - required message fields are collected AND
+      //   - confirmation is spoken AND caller confirms.
+      if (afterHoursMode === true && company) {
+        try {
+          const AfterHoursCallTurnHandler = require('../services/AfterHoursCallTurnHandler');
+          const { result: ahResult, updatedCallState } = await AfterHoursCallTurnHandler.handleTurn({
+            companyId: companyID,
+            company,
+            callSid,
+            userText: speechResult,
+            callState
+          });
+
+          result = ahResult;
+          result.callState = updatedCallState;
+          tracer.step('AFTER_HOURS_FLOW', 'After-hours deterministic message flow executed', {
+            step: updatedCallState.afterHoursFlow?.step || null,
+            completed: updatedCallState.afterHoursFlow?.completed === true,
+            confirmed: updatedCallState.afterHoursFlow?.confirmed === true
+          });
+
+          // KPI: only mark success when contract is confirmed complete
+          try {
+            const CallSummary = require('../models/CallSummary');
+            const completed = updatedCallState.afterHoursFlow?.completed === true && updatedCallState.afterHoursFlow?.confirmed === true;
+            const message = updatedCallState.afterHoursFlow?.message || {};
+            const missing = [];
+            if (!message.name) missing.push('name');
+            if (!message.phone) missing.push('phone');
+            if (!message.address) missing.push('address');
+            if (!message.problem) missing.push('problemSummary');
+            if (!message.preferredTime) missing.push('preferredTime');
+
+            await CallSummary.updateLiveProgress(callSid, {
+              kpi: {
+                afterHoursMessageCaptured: completed === true && missing.length === 0,
+                containmentOutcome: completed === true && missing.length === 0 ? 'INTENTIONAL_HANDOFF' : undefined,
+                containmentCountedAsSuccess: completed === true && missing.length === 0 ? true : undefined,
+                failureReason: completed === true && missing.length === 0 ? 'UNKNOWN' : (missing.length ? 'SLOT_MISSING' : 'UNKNOWN'),
+                missingRequiredSlotsCount: missing.length,
+                missingRequiredSlotsSample: missing.slice(0, 5),
+                bucket: 'FAQ_ONLY'
+              }
+            });
+          } catch (e) {
+            logger.warn('[AFTER_HOURS] Failed to update CallSummary KPI (non-fatal)', { callSid, error: e.message });
+          }
+        } catch (afterHoursErr) {
+          logger.warn('[AFTER_HOURS] After-hours flow failed (non-fatal)', {
+            callSid,
+            companyId: companyID,
+            error: afterHoursErr.message
+          });
+        }
+      }
       
-      if (llm0Enabled && company) {
+      if (!result && llm0Enabled && company) {
 
         // ────────────────────────────────────────────────────────────────
         // 🏷️ VENDOR CALL FAST-PATH (deterministic)
@@ -2732,6 +2793,22 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 vendorCallId: updatedCallState.vendorFlow?.vendorCallId || null,
                 step: updatedCallState.vendorFlow?.step || null
               });
+
+              // KPI: vendor message-taking is an intentional handoff (counts as success per policy)
+              try {
+                const CallSummary = require('../models/CallSummary');
+                await CallSummary.updateLiveProgress(callSid, {
+                  kpi: {
+                    callerType: 'vendor',
+                    vendorMessageCaptured: updatedCallState.vendorFlow?.completed === true,
+                    containmentOutcome: updatedCallState.vendorFlow?.completed === true ? 'INTENTIONAL_HANDOFF' : undefined,
+                    containmentCountedAsSuccess: updatedCallState.vendorFlow?.completed === true ? true : undefined,
+                    failureReason: updatedCallState.vendorFlow?.completed === true ? 'UNKNOWN' : undefined
+                  }
+                });
+              } catch (e) {
+                logger.warn('[VENDOR_FLOW] Failed to update CallSummary KPI (non-fatal)', { callSid, error: e.message });
+              }
             }
           } catch (vendorErr) {
             logger.warn('[VENDOR_FLOW] Failed to run vendor flow (non-blocking)', {
@@ -3333,6 +3410,22 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             transferTarget,
             mainText: (result.response || result.text || '').substring(0, 50)
           });
+
+          // Persist transfer initiation for KPI/containment (status-callback often reports "completed")
+          try {
+            const CallSummary = require('../models/CallSummary');
+            await CallSummary.updateLiveProgress(callSid, {
+              kpi: {
+                transferInitiated: true,
+                bucket: 'TRANSFER'
+              }
+            });
+          } catch (e) {
+            logger.warn('[TWILIO] Failed to mark transferInitiated on CallSummary (non-fatal)', {
+              callSid,
+              error: e.message
+            });
+          }
           
           const mainText = result.response || result.text;
           if (mainText && mainText.trim()) {

@@ -941,6 +941,15 @@
       background: #2563eb;
     }
     
+    .btn-warning {
+      background: #f59e0b;
+      color: white;
+    }
+    
+    .btn-warning:hover {
+      background: #d97706;
+    }
+    
     .btn-secondary {
       background: #e2e8f0;
       color: var(--text-dark);
@@ -1854,9 +1863,12 @@
             <select id="qa-template-select" style="display: none;">
               <option value="">Loading...</option>
             </select>
-            <button onclick="runGoldenAutofillDryRun()" class="btn btn-primary" style="padding: 8px 16px;" title="Preview what Golden Autofill will change before applying">
-              <i class="fas fa-search"></i> Preview Golden Autofill
+            <button onclick="runGoldenAutofillDryRun()" class="btn btn-primary" style="padding: 8px 16px;" title="Blue = preview only (dry run). Nothing is saved until you click Apply in the preview modal.">
+              <i class="fas fa-search"></i> Preview Golden Autofill (Dry Run)
             </button>
+            <div style="font-size: 12px; color: #64748b;">
+              Blue = preview. In the preview window, click the <strong style="color:#b45309;">yellow Apply</strong> button to write changes.
+            </div>
           </div>
           
           <!-- Summary Cards -->
@@ -3896,7 +3908,7 @@
           </div>
           <div style="display: flex; gap: 12px;">
             <button onclick="closeGoldenAutofillPreview()" class="btn btn-secondary">Cancel</button>
-            <button onclick="applyGoldenAutofill()" class="btn btn-primary" ${data.summary.toUpdate === 0 ? 'disabled' : ''}>
+            <button onclick="applyGoldenAutofill()" class="btn btn-warning" ${data.summary.toUpdate === 0 ? 'disabled' : ''}>
               <i class="fas fa-check"></i> Apply ${data.summary.toUpdate} Changes
             </button>
           </div>

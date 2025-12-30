@@ -55,6 +55,45 @@ const URGENCY_LEVELS = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// KPI TRACE (Operator-grade measurement)
+// ═══════════════════════════════════════════════════════════════════════════
+// These fields are intentionally compact. CallSummary must remain < 8KB.
+const KPI_CALL_BUCKETS = {
+  BOOKING: 'BOOKING',
+  FAQ_ONLY: 'FAQ_ONLY',
+  TRANSFER: 'TRANSFER'
+};
+
+const KPI_CONTAINMENT_OUTCOMES = {
+  SUCCESS: 'SUCCESS',
+  INTENTIONAL_HANDOFF: 'INTENTIONAL_HANDOFF',
+  FAILURE: 'FAILURE'
+};
+
+const KPI_FAILURE_REASONS = {
+  SLOT_MISSING: 'SLOT_MISSING',
+  USER_REFUSED: 'USER_REFUSED',
+  ESCALATION_TRIGGERED: 'ESCALATION_TRIGGERED',
+  STT_FAILURE: 'STT_FAILURE',
+  LLM_TIMEOUT: 'LLM_TIMEOUT',
+  POLICY_BLOCKED: 'POLICY_BLOCKED',
+  UNKNOWN: 'UNKNOWN'
+};
+
+const KPI_BOOKING_OUTCOMES = {
+  SCHEDULED: 'SCHEDULED',
+  CONFIRMED_REQUEST: 'CONFIRMED_REQUEST',
+  NONE: 'NONE'
+};
+
+const KPI_CALLER_TYPES = {
+  CUSTOMER: 'customer',
+  VENDOR: 'vendor',
+  STAFF: 'staff',
+  UNKNOWN: 'unknown'
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // SCHEMA DEFINITION
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -631,6 +670,95 @@ const CallSummarySchema = new mongoose.Schema({
   errorMessage: {
     type: String,
     maxLength: 500
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // KPI TRACE (World-class MVP metrics)
+  // ─────────────────────────────────────────────────────────────────────────
+  // Stored as compact primitives to keep CallSummary "hot" and queryable.
+  kpi: {
+    /**
+     * Caller type classification used for containment exceptions
+     * (vendor-first message taking should not count as a containment failure).
+     */
+    callerType: {
+      type: String,
+      enum: Object.values(KPI_CALLER_TYPES),
+      default: KPI_CALLER_TYPES.CUSTOMER,
+      index: true
+    },
+
+    /**
+     * Did this call ever enter booking mode?
+     * This is the denominator for booking completion %.
+     */
+    enteredBooking: { type: Boolean, default: false, index: true },
+    enteredBookingTurn: { type: Number, min: 0 },
+
+    /**
+     * Booking outcome (locked definition)
+     */
+    bookingOutcome: {
+      type: String,
+      enum: Object.values(KPI_BOOKING_OUTCOMES),
+      default: KPI_BOOKING_OUTCOMES.NONE,
+      index: true
+    },
+
+    /**
+     * Booking status + contract enforcement proof
+     */
+    bookingComplete: { type: Boolean, default: false, index: true },
+    missingRequiredSlotsCount: { type: Number, default: 0, min: 0 },
+    missingRequiredSlotsSample: [{ type: String, maxLength: 50 }],
+
+    /**
+     * Containment outcome (SUCCESS, INTENTIONAL_HANDOFF, FAILURE)
+     * Note: INTENTIONAL_HANDOFF can still count as success depending on policy (vendor/after-hours).
+     */
+    containmentOutcome: {
+      type: String,
+      enum: Object.values(KPI_CONTAINMENT_OUTCOMES),
+      default: KPI_CONTAINMENT_OUTCOMES.SUCCESS,
+      index: true
+    },
+    containmentCountedAsSuccess: { type: Boolean, default: true, index: true },
+
+    /**
+     * Failure reason for actionable debugging
+     */
+    failureReason: {
+      type: String,
+      enum: Object.values(KPI_FAILURE_REASONS),
+      default: KPI_FAILURE_REASONS.UNKNOWN,
+      index: true
+    },
+
+    /**
+     * KPI bucket for duration metrics (median/p90 by bucket)
+     */
+    bucket: {
+      type: String,
+      enum: Object.values(KPI_CALL_BUCKETS),
+      default: KPI_CALL_BUCKETS.FAQ_ONLY,
+      index: true
+    },
+
+    /**
+     * Mark that a transfer was initiated at any point (prevents endCall from overwriting outcome)
+     */
+    transferInitiated: { type: Boolean, default: false, index: true },
+
+    /**
+     * Mark intentional message-taking outcomes (policy-defined success cases)
+     */
+    afterHoursMessageCaptured: { type: Boolean, default: false },
+    vendorMessageCaptured: { type: Boolean, default: false },
+
+    /**
+     * Last KPI update time (debugging only)
+     */
+    lastUpdatedAt: { type: Date }
   }
   
 }, { 
@@ -870,7 +998,8 @@ CallSummarySchema.statics.updateLiveProgress = async function(callId, progress) 
     offRailsCount,
     triageOutcome,
     lastResponse,
-    turnCount
+    turnCount,
+    kpi
   } = progress;
   
   const now = new Date();
@@ -887,6 +1016,25 @@ CallSummarySchema.statics.updateLiveProgress = async function(callId, progress) 
   if (triageOutcome) updateData['liveProgress.triageOutcome'] = triageOutcome;
   if (lastResponse) updateData['liveProgress.lastResponse'] = lastResponse.substring(0, 500);
   if (typeof turnCount === 'number') updateData.turnCount = turnCount;
+
+  // KPI trace (compact)
+  if (kpi && typeof kpi === 'object') {
+    updateData['kpi.lastUpdatedAt'] = now;
+    if (typeof kpi.callerType === 'string') updateData['kpi.callerType'] = kpi.callerType;
+    if (typeof kpi.enteredBooking === 'boolean') updateData['kpi.enteredBooking'] = kpi.enteredBooking;
+    if (typeof kpi.enteredBookingTurn === 'number') updateData['kpi.enteredBookingTurn'] = kpi.enteredBookingTurn;
+    if (typeof kpi.bookingOutcome === 'string') updateData['kpi.bookingOutcome'] = kpi.bookingOutcome;
+    if (typeof kpi.bookingComplete === 'boolean') updateData['kpi.bookingComplete'] = kpi.bookingComplete;
+    if (typeof kpi.missingRequiredSlotsCount === 'number') updateData['kpi.missingRequiredSlotsCount'] = kpi.missingRequiredSlotsCount;
+    if (Array.isArray(kpi.missingRequiredSlotsSample)) updateData['kpi.missingRequiredSlotsSample'] = kpi.missingRequiredSlotsSample.slice(0, 5);
+    if (typeof kpi.containmentOutcome === 'string') updateData['kpi.containmentOutcome'] = kpi.containmentOutcome;
+    if (typeof kpi.containmentCountedAsSuccess === 'boolean') updateData['kpi.containmentCountedAsSuccess'] = kpi.containmentCountedAsSuccess;
+    if (typeof kpi.failureReason === 'string') updateData['kpi.failureReason'] = kpi.failureReason;
+    if (typeof kpi.bucket === 'string') updateData['kpi.bucket'] = kpi.bucket;
+    if (typeof kpi.transferInitiated === 'boolean') updateData['kpi.transferInitiated'] = kpi.transferInitiated;
+    if (typeof kpi.afterHoursMessageCaptured === 'boolean') updateData['kpi.afterHoursMessageCaptured'] = kpi.afterHoursMessageCaptured;
+    if (typeof kpi.vendorMessageCaptured === 'boolean') updateData['kpi.vendorMessageCaptured'] = kpi.vendorMessageCaptured;
+  }
   
   // Discovery fields
   if (discovery) {
@@ -1175,4 +1323,9 @@ const CallSummary = mongoose.model('CallSummary', CallSummarySchema);
 module.exports = CallSummary;
 module.exports.CALL_OUTCOMES = CALL_OUTCOMES;
 module.exports.URGENCY_LEVELS = URGENCY_LEVELS;
+module.exports.KPI_CALL_BUCKETS = KPI_CALL_BUCKETS;
+module.exports.KPI_CONTAINMENT_OUTCOMES = KPI_CONTAINMENT_OUTCOMES;
+module.exports.KPI_FAILURE_REASONS = KPI_FAILURE_REASONS;
+module.exports.KPI_BOOKING_OUTCOMES = KPI_BOOKING_OUTCOMES;
+module.exports.KPI_CALLER_TYPES = KPI_CALLER_TYPES;
 

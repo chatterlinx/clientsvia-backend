@@ -133,6 +133,9 @@ class CallSummaryService {
             isReturning: false,
             direction,
             startedAt: new Date(),
+            kpi: {
+              callerType: 'vendor'
+            },
             consent: {
               consentType,
               callerState,
@@ -218,6 +221,9 @@ class CallSummaryService {
         isReturning: customerContext.isReturning,
         direction,
         startedAt: new Date(),
+        kpi: {
+          callerType: 'customer'
+        },
         consent: {
           consentType,
           callerState,
@@ -378,11 +384,27 @@ class CallSummaryService {
       // ─────────────────────────────────────────────────────────────────────────
       const now = new Date();
       const durationSeconds = Math.round((now - existingCall.startedAt) / 1000);
+
+      // Preserve more-specific outcomes that may have been set during the live call
+      // (e.g., transfer initiated). Status callbacks often report "completed" even when transferred.
+      const preserveOutcome = (existing, incoming) => {
+        if (!incoming) return existing || CALL_OUTCOMES.COMPLETED;
+        if (!existing) return incoming;
+
+        // If we already know it was transferred, never downgrade to "completed".
+        if (existing === CALL_OUTCOMES.TRANSFERRED && incoming === CALL_OUTCOMES.COMPLETED) return existing;
+        if (existing === CALL_OUTCOMES.VOICEMAIL && incoming === CALL_OUTCOMES.COMPLETED) return existing;
+        if (existing === CALL_OUTCOMES.CALLBACK_REQUESTED && incoming === CALL_OUTCOMES.COMPLETED) return existing;
+
+        return incoming;
+      };
+
+      const finalOutcome = preserveOutcome(existingCall.outcome, outcome);
       
       const updateData = {
         endedAt: now,
         durationSeconds,
-        outcome,
+        outcome: finalOutcome,
         outcomeDetail,
         transferredTo,
         appointmentCreatedId,
@@ -404,6 +426,34 @@ class CallSummaryService {
         hasTranscript: !!transcriptRef,
         processingStatus: 'complete'
       };
+
+      // Derive KPI bucket and containment outcome at end-of-call (compact, non-invasive).
+      // If the call ever entered booking, it's a BOOKING bucket. If transfer occurred/was initiated, TRANSFER bucket.
+      try {
+        const kpi = existingCall.kpi || {};
+        const transferLike = finalOutcome === CALL_OUTCOMES.TRANSFERRED || kpi.transferInitiated === true;
+        const bucket = transferLike
+          ? 'TRANSFER'
+          : (kpi.enteredBooking === true ? 'BOOKING' : 'FAQ_ONLY');
+
+        // Containment outcome rules (locked definition):
+        // - SUCCESS: no transfer/voicemail-to-human handoff
+        // - INTENTIONAL_HANDOFF: policy-defined "take message" outcomes (vendor/after-hours)
+        // - FAILURE: otherwise
+        const isIntentional = (kpi.vendorMessageCaptured === true) || (kpi.afterHoursMessageCaptured === true);
+        const containmentOutcome = transferLike
+          ? (isIntentional ? 'INTENTIONAL_HANDOFF' : 'FAILURE')
+          : 'SUCCESS';
+
+        const containmentCountedAsSuccess = containmentOutcome === 'SUCCESS' || containmentOutcome === 'INTENTIONAL_HANDOFF';
+
+        updateData['kpi.bucket'] = bucket;
+        updateData['kpi.containmentOutcome'] = containmentOutcome;
+        updateData['kpi.containmentCountedAsSuccess'] = containmentCountedAsSuccess;
+        updateData['kpi.lastUpdatedAt'] = now;
+      } catch (kpiErr) {
+        logger.warn('[CALL_SERVICE] KPI derivation failed (non-blocking)', { callId, error: kpiErr.message });
+      }
       
       // Update caller name if captured
       if (callerName && !existingCall.callerName) {

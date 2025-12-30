@@ -965,6 +965,16 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
     }
 }
 
+function mapOutcomeModeToKpiBookingOutcome(outcomeMode) {
+    const mode = (outcomeMode || '').toString();
+    // MVP: we treat "confirmed_on_call" and similar as a CONFIRMED_REQUEST (revenue-safe).
+    // If/when you add real calendar scheduling, map those modes to SCHEDULED.
+    if (['confirmed_on_call', 'pending_dispatch', 'after_hours_hold', 'callback_required'].includes(mode)) {
+        return 'CONFIRMED_REQUEST';
+    }
+    return 'NONE';
+}
+
 // Default final scripts (LAST-RESORT SAFETY NET)
 // DEFAULT - OVERRIDE IN UI:
 // Configure these in Control Plane → Front Desk → Booking Prompts → Booking Outcome.
@@ -5138,6 +5148,10 @@ async function processTurn({
                         callerPhone: callerPhone || null,
                         serviceType: session.discovery?.serviceType || null
                     });
+
+                    // Persist outcomeMode for KPI trace / audit
+                    session.booking.outcomeMode = finalizationResult.outcomeMode;
+                    session.markModified('booking');
                     
                     log('📋 BOOKING FINALIZED', {
                         success: finalizationResult.success,
@@ -5200,6 +5214,7 @@ async function processTurn({
                             session.booking.bookingRequestIds = (session.unitOfWork.units || [])
                                 .map(u => u.bookingRequestId)
                                 .filter(Boolean);
+                            session.booking.outcomeMode = finalizationResult.outcomeMode;
                             session.markModified('booking');
                             session.markModified('mode');
 
@@ -5237,6 +5252,7 @@ async function processTurn({
                         session.mode = 'COMPLETE';
                         session.booking.completedAt = new Date();
                         session.booking.bookingRequestId = finalizationResult.bookingRequestId;
+                        session.booking.outcomeMode = finalizationResult.outcomeMode;
                         session.markModified('booking');
                     
                         aiResult = {
@@ -6107,6 +6123,46 @@ async function processTurn({
         if (channel === 'phone' && callSid) {
             try {
                 const CallSummary = require('../models/CallSummary');
+
+                // KPI trace snapshot (compact and enforceable)
+                // Booking completion % denominator: enteredBooking === true
+                // Numerator requires: bookingComplete + missingRequiredSlotsCount=0 + bookingOutcome in {SCHEDULED, CONFIRMED_REQUEST}
+                const bookingConfigForKpi = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
+                const bookingSlotsForKpi = bookingConfigForKpi.slots || [];
+                const requiredSlots = bookingSlotsForKpi.filter(s => (s?.required !== false));
+
+                const missingRequired = [];
+                for (const slot of requiredSlots) {
+                    const slotId = slot.slotId || slot.id || slot.key;
+                    if (!slotId) continue;
+                    try {
+                        const complete = isSlotComplete(slotId, session.collectedSlots || {}, session, slot);
+                        if (!complete) {
+                            missingRequired.push(slotId);
+                        }
+                    } catch (e) {
+                        // If completion check fails, treat as missing (never inflate metrics).
+                        missingRequired.push(slotId);
+                    }
+                }
+
+                const enteredBooking = !!(session.booking?.consentGiven || session.mode === 'BOOKING' || session.booking?.completedAt);
+                const enteredBookingTurn = typeof session.booking?.consentTurn === 'number' ? session.booking.consentTurn : null;
+
+                const outcomeMode = session.booking?.outcomeMode || aiResult?.debug?.outcomeMode || null;
+                const bookingOutcome = mapOutcomeModeToKpiBookingOutcome(outcomeMode);
+                const bookingComplete =
+                    !!session.booking?.completedAt &&
+                    missingRequired.length === 0 &&
+                    (bookingOutcome === 'SCHEDULED' || bookingOutcome === 'CONFIRMED_REQUEST');
+
+                // FailureReason heuristic (small, deterministic, improves over time)
+                let failureReason = 'UNKNOWN';
+                if (enteredBooking && !bookingComplete) {
+                    if (aiResult?.signals?.bookingBlocked === true) failureReason = 'POLICY_BLOCKED';
+                    else if ((session.flags && session.flags.refusedSlot) === true) failureReason = 'USER_REFUSED';
+                    else if (missingRequired.length > 0) failureReason = 'SLOT_MISSING';
+                }
                 
                 await CallSummary.updateLiveProgress(callSid, {
                     currentStage: session.conversationMemory?.currentStage || newPhase,
@@ -6116,7 +6172,19 @@ async function processTurn({
                     offRailsCount: session.conversationMemory?.offRailsCount || 0,
                     triageOutcome: session.triageState?.outcome,
                     lastResponse: aiResponse.substring(0, 500),
-                    turnCount: (session.metrics?.totalTurns || 0) + 1
+                    turnCount: (session.metrics?.totalTurns || 0) + 1,
+                    kpi: {
+                        callerType: 'customer',
+                        enteredBooking,
+                        enteredBookingTurn,
+                        bookingOutcome,
+                        bookingComplete,
+                        missingRequiredSlotsCount: missingRequired.length,
+                        missingRequiredSlotsSample: missingRequired.slice(0, 5),
+                        failureReason,
+                        // bucket + containment set at endCall (duration-based)
+                        bucket: enteredBooking ? 'BOOKING' : 'FAQ_ONLY'
+                    }
                 });
                 
                 log('CHECKPOINT 10b: 📡 Live progress updated in Call Center');
