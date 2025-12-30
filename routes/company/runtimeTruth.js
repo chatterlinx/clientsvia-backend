@@ -584,6 +584,26 @@ router.get('/', async (req, res) => {
                     perUnitSlotIds: Array.isArray(frontDeskBehavior.unitOfWork?.perUnitSlotIds)
                         ? frontDeskBehavior.unitOfWork.perUnitSlotIds
                         : []
+                },
+
+                // After-hours deterministic message contract
+                afterHoursMessageContract: (() => {
+                    const c = frontDeskBehavior.afterHoursMessageContract || {};
+                    const mode = c.mode === 'custom' ? 'custom' : 'inherit_booking_minimum';
+                    const requiredFieldKeys = Array.isArray(c.requiredFieldKeys) ? c.requiredFieldKeys : [];
+                    const extraSlotIds = Array.isArray(c.extraSlotIds) ? c.extraSlotIds : [];
+                    const baseline = ['name', 'phone', 'address', 'problemSummary', 'preferredTime'];
+                    const effective = mode === 'custom'
+                        ? [...requiredFieldKeys, ...extraSlotIds]
+                        : baseline;
+                    return {
+                        mode,
+                        requiredFieldKeysCount: requiredFieldKeys.length,
+                        extraSlotIdsCount: extraSlotIds.length,
+                        effectiveFieldCount: effective.length,
+                        effectiveFieldKeysSample: effective.slice(0, 10)
+                    };
+                })()
                 }
             },
 

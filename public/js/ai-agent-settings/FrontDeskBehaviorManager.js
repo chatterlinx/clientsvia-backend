@@ -537,6 +537,13 @@ class FrontDeskBehaviorManager {
                     yesWords: ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'correct', 'another', 'one more'],
                     noWords: ['no', 'nope', 'nah', 'just this', 'only this', "that's it", 'all set']
                 }
+            },
+
+            // After-hours message contract (deterministic)
+            afterHoursMessageContract: {
+                mode: 'inherit_booking_minimum',
+                requiredFieldKeys: ['name', 'phone', 'address', 'problemSummary', 'preferredTime'],
+                extraSlotIds: []
             }
         };
     }
@@ -678,6 +685,69 @@ class FrontDeskBehaviorManager {
                 yesWords,
                 noWords
             }
+        };
+    }
+
+    onAfterHoursContractModeChange(mode) {
+        const el = document.getElementById('fdb-ah-contract-custom');
+        if (!el) return;
+        el.style.display = mode === 'custom' ? 'block' : 'none';
+    }
+
+    collectAfterHoursMessageContractConfig() {
+        const getChecked = (id) => document.getElementById(id)?.checked === true;
+        const getValue = (id) => (document.getElementById(id)?.value || '').trim();
+
+        const modeRaw = getValue('fdb-ah-contract-mode') || 'inherit_booking_minimum';
+        const mode = ['inherit_booking_minimum', 'custom'].includes(modeRaw) ? modeRaw : 'inherit_booking_minimum';
+
+        // Default: inherit booking minimum (safe baseline)
+        if (mode !== 'custom') {
+            return {
+                mode: 'inherit_booking_minimum',
+                requiredFieldKeys: ['name', 'phone', 'address', 'problemSummary', 'preferredTime'],
+                extraSlotIds: []
+            };
+        }
+
+        const requiredFieldKeys = [];
+        if (getChecked('fdb-ah-req-name')) requiredFieldKeys.push('name');
+        if (getChecked('fdb-ah-req-phone')) requiredFieldKeys.push('phone');
+        if (getChecked('fdb-ah-req-address')) requiredFieldKeys.push('address');
+        if (getChecked('fdb-ah-req-problem')) requiredFieldKeys.push('problemSummary');
+        if (getChecked('fdb-ah-req-time')) requiredFieldKeys.push('preferredTime');
+
+        // Optional extras: booking slot IDs
+        const extrasRaw = getValue('fdb-ah-extra-slotIds') || '[]';
+        let extraSlotIds = [];
+        try {
+            const parsed = JSON.parse(extrasRaw);
+            if (!Array.isArray(parsed)) {
+                throw new Error('Extra slot IDs must be a JSON array');
+            }
+            extraSlotIds = parsed
+                .map(x => String(x || '').trim())
+                .filter(Boolean);
+            // de-dupe while preserving order
+            const seen = new Set();
+            extraSlotIds = extraSlotIds.filter(id => (seen.has(id) ? false : (seen.add(id), true)));
+        } catch (e) {
+            const msg = `After-hours extra slot IDs JSON is invalid: ${e.message}`;
+            console.error('[FRONT DESK BEHAVIOR] ❌', msg);
+            this.showNotification(`❌ ${msg}`, 'error');
+            throw new Error(msg);
+        }
+
+        if (requiredFieldKeys.length === 0 && extraSlotIds.length === 0) {
+            const msg = 'After-hours custom contract requires at least one required field (or extra slot ID).';
+            this.showNotification(`❌ ${msg}`, 'error');
+            throw new Error(msg);
+        }
+
+        return {
+            mode: 'custom',
+            requiredFieldKeys,
+            extraSlotIds
         };
     }
 
@@ -961,6 +1031,21 @@ class FrontDeskBehaviorManager {
         const uowNextIntro = this.escapeHtml(uow.confirmation?.nextUnitIntro || '');
         const uowFinalMulti = this.escapeHtml(uow.confirmation?.finalScriptMulti || '');
 
+        // After-hours message contract (deterministic)
+        const ah = this.config.afterHoursMessageContract || {};
+        const ahMode = ah.mode || 'inherit_booking_minimum';
+        const ahRequiredRaw = Array.isArray(ah.requiredFieldKeys) ? ah.requiredFieldKeys : [];
+        const ahRequired = ahRequiredRaw.length > 0
+            ? ahRequiredRaw
+            : ['name', 'phone', 'address', 'problemSummary', 'preferredTime'];
+        const ahExtraSlotIds = this.escapeHtml(JSON.stringify(Array.isArray(ah.extraSlotIds) ? ah.extraSlotIds : [], null, 0));
+        const ahCustomVisible = ahMode === 'custom';
+        const ahReqName = ahRequired.includes('name');
+        const ahReqPhone = ahRequired.includes('phone');
+        const ahReqAddress = ahRequired.includes('address');
+        const ahReqProblem = ahRequired.includes('problemSummary');
+        const ahReqTime = ahRequired.includes('preferredTime');
+
         return `
             <!-- ═══════════════════════════════════════════════════════════════════════ -->
             <!-- GOLDEN SLOTS LOADER - Quick setup with best practices -->
@@ -1084,6 +1169,69 @@ class FrontDeskBehaviorManager {
                     <p style="margin: 10px 0 0 0; color: #6e7681; font-size: 0.75rem;">
                         Tip: Manage Vendors in the Call Center directory. Vendor-first works by matching the caller’s phone to a saved Vendor phone/secondary phone.
                     </p>
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════════════════════ -->
+                <!-- AFTER-HOURS MESSAGE CONTRACT (Deterministic) -->
+                <!-- ═══════════════════════════════════════════════════════════════════════ -->
+                <div style="background: #0d1117; border: 1px solid ${ahMode === 'custom' ? '#f0883e' : '#30363d'}; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div style="display:flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                        <div>
+                            <h3 style="margin: 0; color: #58a6ff;">🌙 After-Hours Message Contract</h3>
+                            <p style="margin: 6px 0 0 0; color: #8b949e; font-size: 0.8rem;">
+                                Enterprise default: after-hours message-taking asks the <strong>booking minimum</strong> (name, phone, address, issue, time) and requires confirmation.
+                                <br><span style="color:#6e7681;">Use <strong>Custom</strong> only if your after-hours policy needs a different required set.</span>
+                            </p>
+                        </div>
+                        <div style="display:flex; align-items:center; gap: 10px; padding: 10px 12px; background:#161b22; border:1px solid #30363d; border-radius: 8px;">
+                            <span style="color:#8b949e; font-weight:700;">Mode</span>
+                            <select id="fdb-ah-contract-mode"
+                                onchange="window.frontDeskManager.onAfterHoursContractModeChange(this.value)"
+                                style="padding: 8px 10px; background:#0b0f14; border:1px solid #30363d; border-radius: 6px; color:#c9d1d9;">
+                                <option value="inherit_booking_minimum" ${ahMode === 'inherit_booking_minimum' ? 'selected' : ''}>Inherit booking minimum (recommended)</option>
+                                <option value="custom" ${ahMode === 'custom' ? 'selected' : ''}>Custom required fields</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="fdb-ah-contract-custom" style="margin-top: 12px; display: ${ahCustomVisible ? 'block' : 'none'};">
+                        <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px;">
+                            <div style="display:flex; flex-wrap: wrap; gap: 10px;">
+                                <label style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; background:#0b0f14; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
+                                    <input type="checkbox" id="fdb-ah-req-name" ${ahReqName ? 'checked' : ''} style="accent-color:#f0883e; width: 16px; height: 16px;">
+                                    <span style="color:#c9d1d9; font-weight:700;">Name</span>
+                                </label>
+                                <label style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; background:#0b0f14; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
+                                    <input type="checkbox" id="fdb-ah-req-phone" ${ahReqPhone ? 'checked' : ''} style="accent-color:#f0883e; width: 16px; height: 16px;">
+                                    <span style="color:#c9d1d9; font-weight:700;">Phone</span>
+                                </label>
+                                <label style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; background:#0b0f14; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
+                                    <input type="checkbox" id="fdb-ah-req-address" ${ahReqAddress ? 'checked' : ''} style="accent-color:#f0883e; width: 16px; height: 16px;">
+                                    <span style="color:#c9d1d9; font-weight:700;">Service Address</span>
+                                </label>
+                                <label style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; background:#0b0f14; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
+                                    <input type="checkbox" id="fdb-ah-req-problem" ${ahReqProblem ? 'checked' : ''} style="accent-color:#f0883e; width: 16px; height: 16px;">
+                                    <span style="color:#c9d1d9; font-weight:700;">Problem Summary</span>
+                                </label>
+                                <label style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; background:#0b0f14; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
+                                    <input type="checkbox" id="fdb-ah-req-time" ${ahReqTime ? 'checked' : ''} style="accent-color:#f0883e; width: 16px; height: 16px;">
+                                    <span style="color:#c9d1d9; font-weight:700;">Preferred Time</span>
+                                </label>
+                            </div>
+
+                            <div style="margin-top: 12px;">
+                                <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">
+                                    Extra booking slot IDs (JSON array) <span style="color:#6e7681;">(optional: additional fields to collect after-hours)</span>
+                                </label>
+                                <input id="fdb-ah-extra-slotIds" value='${ahExtraSlotIds}'
+                                    placeholder='["email","gateCode","unitNumber"]'
+                                    style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 12px;">
+                                <p style="margin: 8px 0 0 0; color:#6e7681; font-size: 0.75rem;">
+                                    Tip: these must match <strong>Booking Slots</strong> IDs so the question text stays UI-controlled.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -7073,6 +7221,11 @@ Sean → Shawn, Shaun`;
         // Unit of Work (UoW)
         if (document.getElementById('fdb-uow-enabled')) {
             this.config.unitOfWork = this.collectUnitOfWorkConfig();
+        }
+
+        // After-hours message contract (deterministic)
+        if (document.getElementById('fdb-ah-contract-mode')) {
+            this.config.afterHoursMessageContract = this.collectAfterHoursMessageContractConfig();
         }
         
         // ═══════════════════════════════════════════════════════════════════

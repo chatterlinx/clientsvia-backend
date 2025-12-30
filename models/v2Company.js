@@ -1747,6 +1747,34 @@ const companySchema = new mongoose.Schema({
                     noWords: { type: [String], default: ['no', 'nope', 'nah', 'just this', 'only this', 'that’s it', "that's it", 'all set'] }
                 }
             },
+
+            // ═══════════════════════════════════════════════════════════════
+            // AFTER-HOURS MESSAGE CONTRACT (Deterministic message capture)
+            // ═══════════════════════════════════════════════════════════════
+            // Enterprise intent:
+            // - Default: after-hours "message-taking" asks the booking minimum
+            // - Optional: allow a separate after-hours contract (lighter/stricter)
+            //
+            // IMPORTANT:
+            // - This is not trade-specific language; it's just required field keys.
+            // - Prompt phrasing should come from existing company scripts (protocols/slots).
+            afterHoursMessageContract: {
+                mode: {
+                    type: String,
+                    enum: ['inherit_booking_minimum', 'custom'],
+                    default: 'inherit_booking_minimum'
+                },
+                // Ordered list of required "fields" for after-hours message capture.
+                // Supported values:
+                // - built-ins: name, phone, address, problemSummary, preferredTime
+                // - booking slot ids: any string that matches a bookingSlots slot id
+                requiredFieldKeys: {
+                    type: [String],
+                    default: ['name', 'phone', 'address', 'problemSummary', 'preferredTime']
+                },
+                // Optional additional booking slot ids (collected as extra fields)
+                extraSlotIds: { type: [String], default: [] }
+            },
             
             // ═══════════════════════════════════════════════════════════════
             // BOOKING SLOTS - Dynamic, customizable slots for booking

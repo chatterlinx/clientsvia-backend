@@ -2733,13 +2733,25 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           try {
             const CallSummary = require('../models/CallSummary');
             const completed = updatedCallState.afterHoursFlow?.completed === true && updatedCallState.afterHoursFlow?.confirmed === true;
-            const message = updatedCallState.afterHoursFlow?.message || {};
-            const missing = [];
-            if (!message.name) missing.push('name');
-            if (!message.phone) missing.push('phone');
-            if (!message.address) missing.push('address');
-            if (!message.problem) missing.push('problemSummary');
-            if (!message.preferredTime) missing.push('preferredTime');
+            const flow = updatedCallState.afterHoursFlow || {};
+            const message = flow.message || {};
+            const slots = flow.slots || {};
+            const contract = flow.contract || {};
+            const baseline = ['name', 'phone', 'address', 'problemSummary', 'preferredTime'];
+            const effectiveFieldKeys = Array.isArray(contract.effectiveFieldKeys) && contract.effectiveFieldKeys.length > 0
+              ? contract.effectiveFieldKeys
+              : baseline;
+
+            const getVal = (k) => {
+              if (k === 'name') return message.name;
+              if (k === 'phone') return message.phone;
+              if (k === 'address') return message.address;
+              if (k === 'problemSummary') return message.problem;
+              if (k === 'preferredTime') return message.preferredTime;
+              return slots[k];
+            };
+
+            const missing = effectiveFieldKeys.filter(k => !getVal(k));
 
             await CallSummary.updateLiveProgress(callSid, {
               kpi: {

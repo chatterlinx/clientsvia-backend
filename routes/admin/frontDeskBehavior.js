@@ -191,6 +191,13 @@ const UI_DEFAULTS = {
             yesWords: ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'correct', 'another', 'one more'],
             noWords: ['no', 'nope', 'nah', 'just this', 'only this', 'that’s it', "that's it", 'all set']
         }
+    },
+
+    // 🌙 After-hours message contract (deterministic message-taking)
+    afterHoursMessageContract: {
+        mode: 'inherit_booking_minimum',
+        requiredFieldKeys: ['name', 'phone', 'address', 'problemSummary', 'preferredTime'],
+        extraSlotIds: []
     }
 };
 
@@ -268,6 +275,8 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
                 vendorHandling: config.vendorHandling || null,
                 // 📦 Unit of Work (UoW)
                 unitOfWork: config.unitOfWork || null,
+                // 🌙 After-hours message contract (deterministic)
+                afterHoursMessageContract: config.afterHoursMessageContract || null,
                 bookingTemplates: config.bookingTemplates || null,
                 // Legacy booking prompts (for backward compatibility)
                 bookingPrompts: config.bookingPrompts,
@@ -425,6 +434,11 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
         // 📦 Unit of Work (UoW)
         if (updates.unitOfWork && typeof updates.unitOfWork === 'object') {
             updateObj['aiAgentSettings.frontDeskBehavior.unitOfWork'] = updates.unitOfWork;
+        }
+
+        // 🌙 After-hours message contract (deterministic)
+        if (updates.afterHoursMessageContract && typeof updates.afterHoursMessageContract === 'object') {
+            updateObj['aiAgentSettings.frontDeskBehavior.afterHoursMessageContract'] = updates.afterHoursMessageContract;
         }
 
         // 🧾 Booking Contract V2 (feature-flagged)
