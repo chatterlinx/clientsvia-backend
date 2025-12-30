@@ -5330,7 +5330,15 @@ async function processTurn({
             log('CHECKPOINT 9c: 📚 Scenarios retrieved as tools', {
                 count: scenarioRetrieval.scenarios?.length || 0,
                 retrievalTimeMs: scenarioRetrieval.retrievalTimeMs,
-                topScenario: scenarioRetrieval.scenarios?.[0]?.title
+                topScenario: scenarioRetrieval.scenarios?.[0]?.title,
+                selectedScenarios: Array.isArray(scenarioRetrieval.scenarios)
+                    ? scenarioRetrieval.scenarios.slice(0, 3).map(s => ({
+                        scenarioId: s.scenarioId || null,
+                        templateId: s.templateId || null,
+                        title: s.title || null,
+                        confidence: s.confidence ?? null
+                    }))
+                    : []
             });
             
             // ═══════════════════════════════════════════════════════════════════

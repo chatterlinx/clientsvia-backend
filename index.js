@@ -204,6 +204,7 @@ async function loadAllRoutes() {
         routes.triageBuilderRoutes = await loadRouteWithTimeout('./routes/admin/triageBuilder', 'triageBuilderRoutes'); // 🤖 LLM Triage Builder (admin content generator)
         routes.triageEvaluatorRoutes = await loadRouteWithTimeout('./routes/admin/triageEvaluator', 'triageEvaluatorRoutes'); // 🎯 Triage Command Center (A+ Evaluation)
         routes.triagePresetsRoutes = await loadRouteWithTimeout('./routes/admin/triagePresets', 'triagePresetsRoutes'); // 🎯 Dynamic Triage Presets per Trade
+        routes.scenarioDiagnosticsRoutes = await loadRouteWithTimeout('./routes/admin/scenarioDiagnostics', 'scenarioDiagnosticsRoutes'); // 🔍 Scenario Diagnostics (Link check + selection trace)
         // callFlowRoutes REMOVED Dec 2025 - replaced by Mission Control (callFlowEngine)
         // V1 LLM Console removed - 2025-11-08
         routes.llmLearningV2Routes = await loadRouteWithTimeout('./routes/admin/llmLearningV2', 'llmLearningV2Routes');
@@ -448,6 +449,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/triage-builder', routes.triageBuilderRoutes); // 🤖 LLM Triage Builder (admin content generator)
     app.use('/api/admin/triage-evaluator', routes.triageEvaluatorRoutes); // 🎯 Triage Command Center (A+ Evaluation)
     app.use('/api/admin/triage-presets', routes.triagePresetsRoutes); // 🎯 Dynamic Triage Presets per Trade
+    app.use('/api/admin/scenario-diagnostics', routes.scenarioDiagnosticsRoutes); // 🔍 Scenario Diagnostics (proof layer)
     // callFlowRoutes REMOVED Dec 2025 - use Mission Control (call-flow-engine) instead
     // V1 LLM Console API removed - 2025-11-08 (use V2 instead)
     app.use('/api/admin/llm-learning/v2', routes.llmLearningV2Routes); // LLM Learning Console V2 API (Enhanced with latency tracking)

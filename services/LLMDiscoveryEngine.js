@@ -161,6 +161,7 @@ class LLMDiscoveryEngine {
         
         return {
             scenarioId: scenario.scenarioId || scenario.id,
+            templateId: scenario.templateId || null,
             title: scenario.name || scenario.title || 'Unknown',
             category: scenario.categoryName || scenario.categories?.[0] || 'General',
             knowledge: knowledge,
