@@ -5331,6 +5331,7 @@ async function processTurn({
                 count: scenarioRetrieval.scenarios?.length || 0,
                 retrievalTimeMs: scenarioRetrieval.retrievalTimeMs,
                 topScenario: scenarioRetrieval.scenarios?.[0]?.title,
+                effectiveConfigVersion: scenarioRetrieval.effectiveConfigVersion || null,
                 selectedScenarios: Array.isArray(scenarioRetrieval.scenarios)
                     ? scenarioRetrieval.scenarios.slice(0, 3).map(s => ({
                         scenarioId: s.scenarioId || null,

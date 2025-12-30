@@ -36,6 +36,7 @@ const { validateScenarioQuality, QUALITY_REQUIREMENTS } = require('../../utils/s
 const logger = require('../../utils/logger');
 const BookingContractCompiler = require('../../services/BookingContractCompiler');
 const BookingScriptEngine = require('../../services/BookingScriptEngine');
+const { computeEffectiveConfigVersion } = require('../../utils/effectiveConfigVersion');
 
 // ============================================================================
 // PROVIDER VERSIONS - Track what version of each provider generated data
@@ -142,6 +143,23 @@ router.get('/', async (req, res) => {
         const templates = await GlobalInstantResponseTemplate.find({
             _id: { $in: activeTemplateIds }
         }).lean();
+
+        const effectiveConfigVersion = computeEffectiveConfigVersion({
+            companyId,
+            frontDeskBehavior: company.aiAgentSettings?.frontDeskBehavior || null,
+            agentSettings: company.agentSettings || null,
+            templateReferences: company.aiAgentSettings?.templateReferences || [],
+            scenarioControls: company.aiAgentSettings?.scenarioControls || [],
+            templatesMeta: templates.map(t => ({
+                templateId: t._id?.toString?.() || String(t._id),
+                version: t.version || null,
+                updatedAt: t.updatedAt ? new Date(t.updatedAt).toISOString() : null,
+                isPublished: t.isPublished ?? null,
+                isActive: t.isActive ?? null
+            })),
+            placeholders: (placeholdersDoc?.placeholders || []).map(p => ({ key: p.key, value: p.value })),
+            providerVersions: PROVIDER_VERSIONS
+        });
         
         // Flatten scenarios with category info - include ALL IDs
         const scenarios = [];
@@ -957,6 +975,7 @@ router.get('/', async (req, res) => {
                 tradeKey: company.tradeKey || 'hvac',
                 environment: process.env.NODE_ENV || 'development',
                 schemaVersion: SCHEMA_VERSION,
+                effectiveConfigVersion,
                 version, // For optimistic concurrency in patches
                 generatedAt: timestamp,
                 generationTimeMs: Date.now() - startTime,

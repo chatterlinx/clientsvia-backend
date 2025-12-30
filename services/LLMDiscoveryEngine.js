@@ -69,14 +69,16 @@ class LLMDiscoveryEngine {
             });
             
             // Step 1: Get scenario pool for this company
-            const { scenarios: allScenarios } = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
+            const poolResult = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
+            const allScenarios = poolResult?.scenarios || [];
             
             if (!allScenarios || allScenarios.length === 0) {
                 logger.warn('[LLM DISCOVERY] ⚠️ No scenarios available for company', { companyId });
                 return {
                     scenarios: [],
                     retrievalTimeMs: Date.now() - startTime,
-                    message: 'NO_SCENARIOS_AVAILABLE'
+                    message: 'NO_SCENARIOS_AVAILABLE',
+                    effectiveConfigVersion: poolResult?.effectiveConfigVersion || null
                 };
             }
             
@@ -121,7 +123,8 @@ class LLMDiscoveryEngine {
             return {
                 scenarios: scenarioSummaries,
                 retrievalTimeMs,
-                totalAvailable: enabledScenarios.length
+                totalAvailable: enabledScenarios.length,
+                effectiveConfigVersion: poolResult?.effectiveConfigVersion || null
             };
             
         } catch (error) {

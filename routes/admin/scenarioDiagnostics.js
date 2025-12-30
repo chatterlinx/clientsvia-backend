@@ -29,9 +29,12 @@ const Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 const ScenarioPoolService = require('../../services/ScenarioPoolService');
 const HybridScenarioSelector = require('../../services/HybridScenarioSelector');
+const { computeEffectiveConfigVersion } = require('../../utils/effectiveConfigVersion');
 
 router.use(authenticateJWT);
 router.use(requireRole('admin'));
+
+const SCHEMA_VERSION = 'SCENARIO_DIAGNOSTICS_V1';
 
 function dedupeStrings(arr) {
   if (!Array.isArray(arr)) return [];
@@ -159,6 +162,10 @@ router.get('/link-check/:companyId', async (req, res) => {
     return res.json({
       success: true,
       data: {
+        _meta: {
+          schemaVersion: SCHEMA_VERSION,
+          effectiveConfigVersion: pool?.effectiveConfigVersion || null
+        },
         company: {
           companyId,
           name: company.companyName || company.businessName || null,
@@ -230,6 +237,10 @@ router.post('/trace', async (req, res) => {
     return res.json({
       success: true,
       data: {
+        _meta: {
+          schemaVersion: SCHEMA_VERSION,
+          effectiveConfigVersion: pool?.effectiveConfigVersion || null
+        },
         companyId: safeCompanyId,
         tradeKey: company.tradeKey || null,
         templatesUsed: pool?.templatesUsed || [],
@@ -258,6 +269,91 @@ router.post('/trace', async (req, res) => {
     });
   } catch (error) {
     logger.error('[SCENARIO DIAGNOSTICS] trace failed', { companyId: safeCompanyId, error: error.message, stack: error.stack });
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/scenario-diagnostics/replay-turn
+ *
+ * Replay skeleton (Phase B):
+ * - Verifies the caller-provided effectiveConfigVersion matches current effective config
+ * - Runs the same selection trace as /trace
+ *
+ * Body:
+ * {
+ *   companyId: string,
+ *   utterance: string,
+ *   expectedEffectiveConfigVersion?: string
+ * }
+ */
+router.post('/replay-turn', async (req, res) => {
+  const { companyId, utterance, expectedEffectiveConfigVersion } = req.body || {};
+  const safeCompanyId = String(companyId || '').trim();
+  const text = String(utterance || '').trim();
+  const expected = expectedEffectiveConfigVersion ? String(expectedEffectiveConfigVersion).trim() : null;
+
+  if (!safeCompanyId) return res.status(400).json({ success: false, message: 'companyId is required' });
+  if (!text) return res.status(400).json({ success: false, message: 'utterance is required' });
+
+  try {
+    const pool = await ScenarioPoolService.getScenarioPoolForCompany(safeCompanyId);
+    const current = pool?.effectiveConfigVersion || null;
+
+    if (expected && current && expected !== current) {
+      return res.status(409).json({
+        success: false,
+        message: 'effectiveConfigVersion mismatch (cannot replay against a different effective config without a snapshot store)',
+        data: {
+          _meta: { schemaVersion: SCHEMA_VERSION },
+          companyId: safeCompanyId,
+          expectedEffectiveConfigVersion: expected,
+          currentEffectiveConfigVersion: current
+        }
+      });
+    }
+
+    // Reuse /trace logic by calling selector directly against current pool.
+    const company = await Company.findById(safeCompanyId).select('tradeKey aiAgentSettings.templateReferences').lean();
+    if (!company) return res.status(404).json({ success: false, message: 'Company not found' });
+
+    const scenarios = (pool?.scenarios || []).filter(s => s?.isEnabledForCompany !== false);
+    const templateIds = (pool?.templatesUsed || []).map(t => t.templateId);
+    const templates = templateIds.length ? await GlobalInstantResponseTemplate.find({ _id: { $in: templateIds } }).lean() : [];
+
+    const effectiveFillers = mergeFillers(templates);
+    const effectiveSynonyms = mergeSynonymMaps(templates);
+    const urgencyKeywords = mergeUrgencyKeywords(templates);
+    const selector = new HybridScenarioSelector(effectiveFillers, urgencyKeywords, effectiveSynonyms);
+
+    const selection = await selector.selectScenario(text, scenarios, {});
+    const chosen = selection?.scenario || selection?.match || null;
+
+    return res.json({
+      success: true,
+      data: {
+        _meta: {
+          schemaVersion: SCHEMA_VERSION,
+          effectiveConfigVersion: current
+        },
+        companyId: safeCompanyId,
+        tradeKey: company.tradeKey || null,
+        input: { utterance: text },
+        selected: chosen
+          ? {
+            scenarioId: chosen.scenarioId || chosen.id || null,
+            name: chosen.name || null,
+            templateId: chosen.templateId || null,
+            categoryName: chosen.categoryName || null,
+            confidence: selection?.confidence ?? null,
+            score: selection?.score ?? null
+          }
+          : null,
+        trace: selection?.trace || null
+      }
+    });
+  } catch (error) {
+    logger.error('[SCENARIO DIAGNOSTICS] replay-turn failed', { companyId: safeCompanyId, error: error.message, stack: error.stack });
     return res.status(500).json({ success: false, message: error.message });
   }
 });

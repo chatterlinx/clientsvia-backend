@@ -26,6 +26,7 @@
 const logger = require('../utils/logger');
 const Company = require('../models/v2Company');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
+const { computeEffectiveConfigVersion } = require('../utils/effectiveConfigVersion');
 
 class ScenarioPoolService {
     // ============================================================
@@ -144,7 +145,7 @@ class ScenarioPoolService {
             // STEP 1: LOAD COMPANY DATA
             // ========================================================
             const company = await Company.findById(companyId)
-                .select('aiAgentSettings.templateReferences aiAgentSettings.scenarioControls configuration.clonedFrom companyName businessName')
+                .select('aiAgentSettings.templateReferences aiAgentSettings.scenarioControls configuration.clonedFrom companyName businessName tradeKey')
                 .lean();
             
             if (!company) {
@@ -178,7 +179,7 @@ class ScenarioPoolService {
             // ========================================================
             // STEP 3: LOAD TEMPLATES AND FLATTEN SCENARIOS
             // ========================================================
-            const { scenarioPool, templatesUsed } = await this._loadAndFlattenScenarios(
+            const { scenarioPool, templatesUsed, templatesMeta } = await this._loadAndFlattenScenarios(
                 templateIds,
                 companyId
             );
@@ -213,9 +214,23 @@ class ScenarioPoolService {
             // ========================================================
             // 🔧 PHASE 4: CACHE RESULT IN REDIS
             // ========================================================
+            const effectiveConfigVersion = computeEffectiveConfigVersion({
+                companyId,
+                // Scenario pool behavior depends on which templates are enabled + scenario controls
+                templateReferences: company.aiAgentSettings?.templateReferences || [],
+                scenarioControls: company.aiAgentSettings?.scenarioControls || [],
+                templatesMeta,
+                providerVersions: {
+                    scenarioPoolService: 'ScenarioPoolService:v1',
+                    hybridScenarioSelector: 'HybridScenarioSelector:v1'
+                }
+            });
+
             const result = {
                 scenarios: scenarioPool,
-                templatesUsed
+                templatesUsed,
+                templatesMeta,
+                effectiveConfigVersion
             };
             
             try {
@@ -345,11 +360,12 @@ class ScenarioPoolService {
     static async _loadAndFlattenScenarios(templateRefs, companyId) {
         const scenarioPool = [];
         const templatesUsed = [];
+        const templatesMeta = [];
         
         for (const ref of templateRefs) {
             try {
                 const template = await GlobalInstantResponseTemplate.findById(ref.templateId)
-                    .select('_id name categories')
+                    .select('_id name version updatedAt isPublished isActive categories')
                     .lean();
                 
                 if (!template) {
@@ -362,6 +378,14 @@ class ScenarioPoolService {
                 templatesUsed.push({
                     templateId: template._id.toString(),
                     templateName: template.name
+                });
+
+                templatesMeta.push({
+                    templateId: template._id.toString(),
+                    version: template.version || null,
+                    updatedAt: template.updatedAt ? new Date(template.updatedAt).toISOString() : null,
+                    isPublished: template.isPublished ?? null,
+                    isActive: template.isActive ?? null
                 });
                 
                 // Flatten scenarios from all categories
@@ -463,7 +487,7 @@ class ScenarioPoolService {
             }
         }
         
-        return { scenarioPool, templatesUsed };
+        return { scenarioPool, templatesUsed, templatesMeta };
     }
     
     /**
