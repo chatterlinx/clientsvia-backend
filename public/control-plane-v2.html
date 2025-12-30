@@ -1563,6 +1563,39 @@
             </div>
           </div>
 
+          <!-- Preset Packs (Option B) -->
+          <div style="background: linear-gradient(135deg, #ecfeff 0%, #cffafe 100%); border: 1px solid #22d3ee; border-radius: 14px; padding: 16px; margin-bottom: 14px;">
+            <div style="display:flex; align-items:flex-start; justify-content: space-between; gap: 12px;">
+              <div>
+                <div style="font-weight: 900; color: #0e7490; font-size: 14px;">⭐ Preset Packs (Golden Blueprints)</div>
+                <div style="margin-top: 6px; font-size: 12px; color: #155e75; line-height: 1.4;">
+                  Load a versioned pack from the database into UI state. <strong>Nothing is saved</strong> until you click Save in each tab.
+                </div>
+                <div id="preset-pack-banner" style="display:none; margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: rgba(16,185,129,0.15); color: #065f46; font-weight: 800; font-size: 12px;">
+                  Seeded defaults loaded (not saved yet).
+                </div>
+              </div>
+              <div style="display:flex; gap: 8px; align-items:center; flex-wrap: wrap;">
+                <button class="btn btn-secondary" style="padding: 8px 12px; font-size: 12px;" onclick="openPresetPackJsonModal()">
+                  <i class="fas fa-code"></i> Copy / Paste JSON
+                </button>
+                <button class="btn btn-secondary" style="padding: 8px 12px; font-size: 12px;" onclick="resetPresetDraft()">
+                  <i class="fas fa-undo"></i> Reset Draft
+                </button>
+              </div>
+            </div>
+
+            <div style="margin-top: 12px; display:flex; gap: 10px; align-items:center; flex-wrap: wrap;">
+              <select id="preset-pack-select" style="min-width: 320px; padding: 10px 12px; border: 1px solid #99f6e4; border-radius: 10px; background: white;">
+                <option value="">Loading preset packs…</option>
+              </select>
+              <button class="btn btn-primary" style="padding: 10px 14px; font-size: 12px;" onclick="loadSelectedPresetPackIntoUI()">
+                <i class="fas fa-magic"></i> Load Pack (not saved)
+              </button>
+              <span id="preset-pack-hint" style="font-size: 12px; color: #155e75;"></span>
+            </div>
+          </div>
+
           <div id="onboarding-steps" style="display: grid; grid-template-columns: 1fr; gap: 12px;">
             <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; color: #64748b;">
               Loading steps...
@@ -2790,6 +2823,13 @@
         const generatedAt = rt?._meta?.generatedAt ? new Date(rt._meta.generatedAt).toLocaleString() : 'unknown time';
         stampEl.innerHTML = `Runtime Truth: <strong>${schema}</strong>${commit ? ` · commit <code style="background:#f1f5f9;padding:2px 6px;border-radius:6px;">${commit}</code>` : ''} · generated ${generatedAt}`;
 
+        // Load preset packs list (Option B)
+        try {
+          await loadPresetPacksList(rt);
+        } catch (e) {
+          console.warn('[ONBOARDING] preset packs list failed:', e);
+        }
+
         stepsEl.innerHTML = steps.map((s, idx) => {
           const b = badgeForStatus(s.status);
           return `
@@ -2822,6 +2862,229 @@
           </div>
         `;
         stampEl.textContent = 'Runtime status unavailable.';
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // PRESET PACKS (Option B) - In-memory draft only (clears on refresh)
+    // ─────────────────────────────────────────────────────────────────────────────
+    window.__presetDraft = window.__presetDraft || null; // { tradeKey, packId, version, payload, loadedAt }
+
+    function normalizeTradeKeyForPacks(tradeKey) {
+      const t = (tradeKey || '').toString().trim();
+      if (!t) return '';
+      // Common: "hvac_residential" → try "hvac" as well
+      return t.includes('_') ? t.split('_')[0] : t;
+    }
+
+    async function loadPresetPacksList(runtimeTruth) {
+      const sel = document.getElementById('preset-pack-select');
+      const hint = document.getElementById('preset-pack-hint');
+      if (!sel) return;
+
+      const tradeKey = runtimeTruth?._meta?.tradeKey || runtimeTruth?.company?.tradeKey || null;
+      const packTradeKey = normalizeTradeKeyForPacks(tradeKey);
+      if (hint) hint.textContent = packTradeKey ? `Trade: ${packTradeKey}` : '';
+
+      if (!packTradeKey) {
+        sel.innerHTML = `<option value="">No tradeKey detected yet</option>`;
+        return;
+      }
+
+      const resp = await fetch(`/api/admin/preset-packs?tradeKey=${encodeURIComponent(packTradeKey)}`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (!resp.ok) throw new Error(`Preset packs HTTP ${resp.status}`);
+      const json = await resp.json();
+      const packs = Array.isArray(json.packs) ? json.packs : [];
+
+      if (packs.length === 0) {
+        sel.innerHTML = `<option value="">No preset packs found for ${escapeHtml(packTradeKey)}</option>`;
+        return;
+      }
+
+      sel.innerHTML = `<option value="">Select a preset pack…</option>` + packs.map(p => {
+        const key = `${p.tradeKey}::${p.packId}::${p.version}`;
+        const label = `${p.label} (${p.packId}@${p.version})`;
+        return `<option value="${escapeHtml(key)}">${escapeHtml(label)}</option>`;
+      }).join('');
+    }
+
+    async function fetchPresetPack(tradeKey, packId, version) {
+      const qs = version ? `?version=${encodeURIComponent(version)}` : '';
+      const resp = await fetch(`/api/admin/preset-packs/${encodeURIComponent(tradeKey)}/${encodeURIComponent(packId)}${qs}`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (!resp.ok) throw new Error(`Preset pack HTTP ${resp.status}`);
+      const json = await resp.json();
+      if (!json.success || !json.pack) throw new Error(json.error || 'Preset pack not found');
+      return json.pack;
+    }
+
+    function setPresetBanner(visible, text) {
+      const banner = document.getElementById('preset-pack-banner');
+      if (!banner) return;
+      banner.style.display = visible ? 'block' : 'none';
+      if (text) banner.textContent = text;
+    }
+
+    function applyPresetDraftToUI(draftPayload) {
+      // In-memory only. Refresh clears it (proves UI-only).
+      window.__presetDraft = {
+        payload: draftPayload,
+        loadedAt: new Date().toISOString()
+      };
+      setPresetBanner(true, 'Seeded defaults loaded (not saved yet). Navigate tabs, review, then click Save.');
+
+      // Apply to Data & Config tabs that are fully in this file
+      try {
+        if (draftPayload?.placeholders && Array.isArray(draftPayload.placeholders)) {
+          currentPlaceholders = draftPayload.placeholders.map(p => ({
+            key: (p.key || '').toString().toLowerCase(),
+            value: (p.value || '').toString(),
+            description: p.description || null
+          }));
+          renderPlaceholdersTable();
+        }
+      } catch (e) {
+        console.warn('[PRESET DRAFT] placeholders apply failed:', e);
+      }
+
+      try {
+        if (draftPayload?.defaultReplies && typeof draftPayload.defaultReplies === 'object') {
+          currentDefaults = draftPayload.defaultReplies;
+          // Populate form fields if already present in DOM
+          const q1 = document.getElementById('defaults-notOffered-quick');
+          if (q1) {
+            document.getElementById('defaults-notOffered-quick').value = currentDefaults?.notOfferedReply?.quickReply || '';
+            document.getElementById('defaults-notOffered-full').value = currentDefaults?.notOfferedReply?.fullReply || '';
+            document.getElementById('defaults-unknownIntent-quick').value = currentDefaults?.unknownIntentReply?.quickReply || '';
+            document.getElementById('defaults-unknownIntent-full').value = currentDefaults?.unknownIntentReply?.fullReply || '';
+            document.getElementById('defaults-afterHours-quick').value = currentDefaults?.afterHoursReply?.quickReply || '';
+            document.getElementById('defaults-afterHours-full').value = currentDefaults?.afterHoursReply?.fullReply || '';
+            document.getElementById('defaults-strictBehavior').checked = currentDefaults?.strictDisabledBehavior ?? true;
+          }
+        }
+      } catch (e) {
+        console.warn('[PRESET DRAFT] defaults apply failed:', e);
+      }
+
+      // Apply to Front Desk manager (module owns its own UI)
+      try {
+        if (draftPayload?.frontDeskBehavior && window.frontDeskManager && window.frontDeskManager.config) {
+          window.frontDeskManager.config = {
+            ...window.frontDeskManager.config,
+            ...draftPayload.frontDeskBehavior
+          };
+          window.frontDeskManager.isDirty = true;
+          const container = document.getElementById('front-desk-container');
+          if (container) window.frontDeskManager.render(container);
+        }
+      } catch (e) {
+        console.warn('[PRESET DRAFT] front desk apply failed:', e);
+      }
+    }
+
+    async function loadSelectedPresetPackIntoUI() {
+      const sel = document.getElementById('preset-pack-select');
+      if (!sel || !sel.value) {
+        showSnapshotToast('No Preset Selected', 'Choose a preset pack first', 'warning');
+        return;
+      }
+      const [tradeKey, packId, version] = sel.value.split('::');
+      if (!tradeKey || !packId || !version) {
+        showSnapshotToast('Invalid Selection', 'Could not parse selected preset pack', 'error');
+        return;
+      }
+
+      try {
+        showSnapshotToast('Loading…', 'Loading preset pack (UI-only)', 'info');
+        const pack = await fetchPresetPack(tradeKey, packId, version);
+        applyPresetDraftToUI(pack.payload || {});
+        showSnapshotToast('Loaded', 'Preset pack loaded into UI (not saved yet)', 'success');
+      } catch (e) {
+        console.error('[PRESET PACK] Load failed:', e);
+        showSnapshotToast('Error', `Failed to load preset pack: ${e.message}`, 'error');
+      }
+    }
+
+    function resetPresetDraft() {
+      window.__presetDraft = null;
+      setPresetBanner(false);
+      showSnapshotToast('Reset', 'Preset draft cleared (nothing was saved)', 'info');
+      // Reload from DB-backed sources for visible tabs
+      try { loadPlaceholders(); } catch (e) {}
+      try { loadCompanyDefaults(); } catch (e) {}
+      try {
+        const container = document.getElementById('front-desk-container');
+        if (window.frontDeskManager && container) {
+          window.frontDeskManager.load().then(() => window.frontDeskManager.render(container));
+        }
+      } catch (e) {}
+    }
+
+    function openPresetPackJsonModal() {
+      const existing = document.getElementById('preset-pack-json-modal');
+      if (existing) existing.remove();
+
+      const draft = window.__presetDraft?.payload || null;
+      const modal = document.createElement('div');
+      modal.id = 'preset-pack-json-modal';
+      modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+      const content = document.createElement('div');
+      content.style.cssText = 'background: white; border-radius: 16px; max-width: 900px; width: 95%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;';
+
+      const jsonText = draft ? JSON.stringify(draft, null, 2) : '{\n  "placeholders": [],\n  "frontDeskBehavior": {},\n  "defaultReplies": {}\n}\n';
+
+      content.innerHTML = `
+        <div style="padding: 18px 22px; border-bottom: 1px solid #e2e8f0; display:flex; align-items:center; justify-content: space-between;">
+          <div>
+            <div style="font-weight: 900; font-size: 16px;">📄 Preset Pack JSON</div>
+            <div style="margin-top: 4px; font-size: 12px; color: #64748b;">Copy for duplication, or paste to load into UI (not saved).</div>
+          </div>
+          <button onclick="document.getElementById('preset-pack-json-modal')?.remove()" style="padding: 6px 10px; border: none; background: none; cursor: pointer; font-size: 22px;">&times;</button>
+        </div>
+        <div style="padding: 16px 22px; flex: 1; overflow:auto;">
+          <textarea id="preset-pack-json-textarea" style="width: 100%; min-height: 420px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; line-height: 1.4;">${escapeHtml(jsonText)}</textarea>
+        </div>
+        <div style="padding: 14px 22px; border-top: 1px solid #e2e8f0; display:flex; justify-content: space-between; gap: 10px; background: #f8fafc;">
+          <button class="btn btn-secondary" onclick="copyPresetPackJson()" style="padding: 10px 14px; font-size: 12px;">
+            <i class="fas fa-copy"></i> Copy JSON
+          </button>
+          <div style="display:flex; gap: 10px;">
+            <button class="btn btn-secondary" onclick="document.getElementById('preset-pack-json-modal')?.remove()" style="padding: 10px 14px; font-size: 12px;">Cancel</button>
+            <button class="btn btn-primary" onclick="pastePresetPackJson()" style="padding: 10px 14px; font-size: 12px;">
+              <i class="fas fa-upload"></i> Paste → Load (not saved)
+            </button>
+          </div>
+        </div>
+      `;
+
+      modal.appendChild(content);
+      document.body.appendChild(modal);
+    }
+
+    async function copyPresetPackJson() {
+      const ta = document.getElementById('preset-pack-json-textarea');
+      if (!ta) return;
+      try {
+        await navigator.clipboard.writeText(ta.value);
+        showSnapshotToast('Copied', 'Preset JSON copied to clipboard', 'success');
+      } catch (e) {
+        alert('Copy failed. Select and copy manually.');
+      }
+    }
+
+    function pastePresetPackJson() {
+      const ta = document.getElementById('preset-pack-json-textarea');
+      if (!ta) return;
+      try {
+        const obj = JSON.parse(ta.value);
+        if (!obj || typeof obj !== 'object') throw new Error('JSON must be an object');
+        applyPresetDraftToUI(obj);
+        document.getElementById('preset-pack-json-modal')?.remove();
+      } catch (e) {
+        alert('Invalid JSON: ' + e.message);
       }
     }
     
@@ -3779,6 +4042,18 @@
       const tbody = document.getElementById('placeholders-list');
       
       try {
+        // Preset Draft overlay (UI-only): if loaded, show draft values without writing DB.
+        const draftPlaceholders = window.__presetDraft?.payload?.placeholders;
+        if (Array.isArray(draftPlaceholders) && draftPlaceholders.length > 0) {
+          currentPlaceholders = draftPlaceholders.map(p => ({
+            key: (p.key || '').toString().toLowerCase(),
+            value: (p.value || '').toString(),
+            description: p.description || null
+          }));
+          renderPlaceholdersTable();
+          return;
+        }
+
         // Load from CompanyPlaceholders (authoritative source)
         const response = await fetch(`/api/company/${currentCompanyId}/placeholders`, {
           headers: { 'Authorization': `Bearer ${authToken}` }
@@ -3791,39 +4066,11 @@
         const data = await response.json();
         const placeholders = Array.isArray(data.placeholders) ? data.placeholders : [];
         currentPlaceholders = placeholders.map(p => ({
-          key: (p.key || '').toString(),
+          key: (p.key || '').toString().toLowerCase(),
           value: (p.value || '').toString(),
           description: p.description || null
         }));
-
-        if (currentPlaceholders.length === 0) {
-            tbody.innerHTML = `
-              <tr>
-                <td colspan="3" style="text-align: center; padding: 40px; color: #94a3b8;">
-                  <i class="fas fa-tags" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
-                  No placeholders yet. Click "Add Placeholder" or "Import Defaults".
-                </td>
-              </tr>
-            `;
-        } else {
-            tbody.innerHTML = currentPlaceholders.map(({ key, value }) => `
-              <tr data-placeholder-key="${key}">
-                <td>
-                  <code style="background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 13px;">{${key}}</code>
-                </td>
-                <td>
-                  <input type="text" value="${escapeHtml(value)}"
-                         onchange="updatePlaceholder('${key}', this.value)"
-                         style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
-                </td>
-                <td>
-                  <button onclick="deletePlaceholder('${key}')" style="padding: 6px 12px; border: none; background: #fee2e2; color: #dc2626; border-radius: 6px; cursor: pointer; font-size: 12px;">
-                    <i class="fas fa-trash"></i>
-                  </button>
-            </td>
-          </tr>
-        `).join('');
-        }
+        renderPlaceholdersTable();
       } catch (error) {
         console.error('Failed to load placeholders:', error);
         tbody.innerHTML = `
@@ -3835,6 +4082,41 @@
           </tr>
         `;
       }
+    }
+
+    function renderPlaceholdersTable() {
+      const tbody = document.getElementById('placeholders-list');
+      if (!tbody) return;
+
+      if (currentPlaceholders.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="3" style="text-align: center; padding: 40px; color: #94a3b8;">
+              <i class="fas fa-tags" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
+              No placeholders yet. Click "Add Placeholder" or "Import Defaults".
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = currentPlaceholders.map(({ key, value }) => `
+        <tr data-placeholder-key="${key}">
+          <td>
+            <code style="background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 13px;">{${key}}</code>
+          </td>
+          <td>
+            <input type="text" value="${escapeHtml(value)}"
+                   onchange="updatePlaceholder('${key}', this.value)"
+                   style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
+          </td>
+          <td>
+            <button onclick="deletePlaceholder('${key}')" style="padding: 6px 12px; border: none; background: #fee2e2; color: #dc2626; border-radius: 6px; cursor: pointer; font-size: 12px;">
+              <i class="fas fa-trash"></i>
+            </button>
+          </td>
+        </tr>
+      `).join('');
     }
     
     function addPlaceholder() {
@@ -3946,6 +4228,24 @@
       if (formEl) formEl.style.display = 'none';
       
       try {
+        // Preset Draft overlay (UI-only): if loaded, show draft values without writing DB.
+        const draftDefaults = window.__presetDraft?.payload?.defaultReplies;
+        if (draftDefaults && typeof draftDefaults === 'object') {
+          currentDefaults = draftDefaults;
+          // Populate form fields
+          document.getElementById('defaults-notOffered-quick').value = currentDefaults?.notOfferedReply?.quickReply || '';
+          document.getElementById('defaults-notOffered-full').value = currentDefaults?.notOfferedReply?.fullReply || '';
+          document.getElementById('defaults-unknownIntent-quick').value = currentDefaults?.unknownIntentReply?.quickReply || '';
+          document.getElementById('defaults-unknownIntent-full').value = currentDefaults?.unknownIntentReply?.fullReply || '';
+          document.getElementById('defaults-afterHours-quick').value = currentDefaults?.afterHoursReply?.quickReply || '';
+          document.getElementById('defaults-afterHours-full').value = currentDefaults?.afterHoursReply?.fullReply || '';
+          document.getElementById('defaults-strictBehavior').checked = currentDefaults?.strictDisabledBehavior ?? true;
+
+          if (loadingEl) loadingEl.style.display = 'none';
+          if (formEl) formEl.style.display = 'block';
+          return;
+        }
+
         const response = await fetch(`/api/company/${currentCompanyId}/overrides/defaults`, {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });

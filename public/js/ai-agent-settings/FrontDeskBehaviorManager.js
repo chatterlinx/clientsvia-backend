@@ -53,6 +53,19 @@ class FrontDeskBehaviorManager {
             const result = await response.json();
             this.config = result.data;
 
+            // Preset Draft overlay (UI-only): if an in-memory preset is loaded, overlay it onto the loaded config.
+            // This MUST NOT write to DB; it only affects the UI until user clicks Save.
+            try {
+                const draft = window.__presetDraft?.payload?.frontDeskBehavior;
+                if (draft && typeof draft === 'object') {
+                    this.config = { ...this.config, ...draft };
+                    this.isDirty = true;
+                    console.log('[FRONT DESK BEHAVIOR] ⭐ Preset draft applied (UI-only, not saved)');
+                }
+            } catch (e) {
+                console.warn('[FRONT DESK BEHAVIOR] Preset draft overlay failed:', e);
+            }
+
             // Booking Contract V2 (feature-flagged) - ensure shape exists for UI
             if (this.config.bookingContractV2Enabled === undefined) this.config.bookingContractV2Enabled = false;
             if (!Array.isArray(this.config.slotLibrary)) this.config.slotLibrary = [];

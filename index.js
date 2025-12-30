@@ -454,6 +454,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/global-action-hooks', routes.globalActionHooksRoutes); // Global Action Hooks
     app.use('/api/admin/global-action-hook-directories', routes.globalActionHookDirectoriesRoutes); // Global Action Hook Directories
     app.use('/api/admin/global-industry-types', routes.globalIndustryTypesRoutes); // Global Industry Types
+    app.use('/api/admin/preset-packs', require('./routes/admin/presetPacks')); // 🧭 Preset Packs (Versioned UI seed packs)
     app.use('/api/admin/data-center', routes.dataCenterRoutes); // Data Center - Admin Operations
     app.use('/api/admin/diag', require('./routes/admin/diag')); // Diagnostics - DB/Redis fingerprint
     app.use('/api/admin/emergency', require('./routes/admin/emergency-repair')); // 🚨 Emergency database repair endpoints
