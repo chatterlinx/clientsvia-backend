@@ -64,6 +64,7 @@ const path = require('path');
 const { synthesizeSpeech } = require('../services/v2elevenLabsService');
 const { getSharedRedisClient, isRedisConfigured } = require('../services/redisClientFactory');
 const { normalizePhoneNumber, extractDigits, numbersMatch, } = require('../utils/phone');
+const crypto = require('crypto');
 
 // Helper: Get Redis client safely (returns null if unavailable)
 async function getRedis() {
@@ -2446,6 +2447,54 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       error: sttErr.message
     });
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🛡️ TURN IDEMPOTENCY (Twilio retry-safe)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Twilio will retry webhook calls if it doesn't receive a timely 200 OK.
+  // Without idempotency, we can accidentally:
+  // - increment turnCount twice
+  // - double-log transcripts
+  // - double-write KPI/end-call markers
+  //
+  // Strategy:
+  // - Compute a deterministic fingerprint from request payload
+  // - If we already cached the TwiML response for this fingerprint, return it immediately
+  const normalizeSpeechForIdem = (t) => (t || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
+  const idemPayload = {
+    v: 'twilio_v2_agent_respond_v1',
+    companyID,
+    callSid,
+    from: fromNumber,
+    to: req.body.To || null,
+    digits: req.body.Digits || null,
+    speech: normalizeSpeechForIdem(speechResult),
+    confidence: req.body.Confidence || null
+  };
+  const turnFingerprint = crypto.createHash('sha1').update(JSON.stringify(idemPayload)).digest('hex');
+  const turnCacheKey = `twilio:idem:v2-agent-respond:${companyID}:${callSid}:${turnFingerprint}`;
+
+  try {
+    const redisClient = await getRedis();
+    if (redisClient) {
+      const cachedTwiml = await redisClient.get(turnCacheKey);
+      if (cachedTwiml && typeof cachedTwiml === 'string' && cachedTwiml.includes('<Response')) {
+        logger.warn('[TWILIO IDEMPOTENCY] Returning cached TwiML for retry', {
+          companyId: companyID,
+          callSid,
+          fingerprint: turnFingerprint.slice(0, 10),
+          speechPreview: normalizeSpeechForIdem(speechResult).substring(0, 60)
+        });
+        res.type('text/xml');
+        return res.send(cachedTwiml);
+      }
+    }
+  } catch (idemErr) {
+    logger.warn('[TWILIO IDEMPOTENCY] Cache check failed (non-fatal)', {
+      callSid,
+      error: idemErr.message
+    });
+  }
   
   // ═══════════════════════════════════════════════════════════════════════════
   // 📊 CALL FLOW TRACER - Track this turn
@@ -3450,6 +3499,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           logger.info('📤 CHECKPOINT 22A: Sending TRANSFER TwiML response to Twilio');
           const twimlString = twiml.toString();
           logger.info('📋 TwiML Content (TRANSFER):', twimlString);
+
+          // Cache for Twilio retries (idempotency)
+          try {
+            const redisClient = await getRedis();
+            if (redisClient) {
+              await redisClient.setEx(turnCacheKey, 180, twimlString);
+            }
+          } catch {}
+
           return res.type('text/xml').send(twimlString);
         }
       }
@@ -3672,6 +3730,14 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     const twimlString = twiml.toString();
     logger.info('📤 CHECKPOINT 22: Sending TwiML response to Twilio');
     logger.info('📋 TwiML Content:', twimlString);
+
+    // Cache for Twilio retries (idempotency)
+    try {
+      const redisClient = await getRedis();
+      if (redisClient) {
+        await redisClient.setEx(turnCacheKey, 180, twimlString);
+      }
+    } catch {}
     
     // 🎯 COMPREHENSIVE PERFORMANCE SUMMARY
     const totalTime = Date.now() - perfStart;

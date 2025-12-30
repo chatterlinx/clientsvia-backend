@@ -44,7 +44,8 @@ const goldenConfigs = {
 };
 
 // Auth middleware
-const { authenticateJWT } = require('../../middleware/auth');
+const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
+const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
 
 /**
  * POST /api/company/:companyId/seed-golden
@@ -52,7 +53,7 @@ const { authenticateJWT } = require('../../middleware/auth');
  * Seeds company config + global templates
  * Does NOT create company flows (use /copy-templates for that)
  */
-router.post('/', authenticateJWT, async (req, res) => {
+router.post('/', authenticateJWT, requireCompanyAccess, requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
     const { companyId } = req.params;
     const { profile = 'penguin_air', tradeCategoryKey = 'hvac_residential' } = req.body;
     
@@ -243,7 +244,7 @@ router.post('/', authenticateJWT, async (req, res) => {
  *   flowKeys: ["emergency_detection", "booking_intent"] // Optional: specific flows, or all if omitted
  * }
  */
-router.post('/copy-templates', authenticateJWT, async (req, res) => {
+router.post('/copy-templates', authenticateJWT, requireCompanyAccess, requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
     const { companyId } = req.params;
     const { tradeCategoryKey = 'hvac_residential', flowKeys = null } = req.body;
     
@@ -348,7 +349,7 @@ router.post('/copy-templates', authenticateJWT, async (req, res) => {
  * 
  * Does NOT require templates to exist - creates flow directly.
  */
-router.post('/quick-booking-flow', authenticateJWT, async (req, res) => {
+router.post('/quick-booking-flow', authenticateJWT, requireCompanyAccess, requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
     const { companyId } = req.params;
     const startTime = Date.now();
     
@@ -511,7 +512,7 @@ router.post('/quick-booking-flow', authenticateJWT, async (req, res) => {
  * 
  * This is the "gold standard" for how booking should be configured.
  */
-router.post('/booking-slots', authenticateJWT, async (req, res) => {
+router.post('/booking-slots', authenticateJWT, requireCompanyAccess, requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
     const { companyId } = req.params;
     const startTime = Date.now();
     
@@ -706,7 +707,7 @@ router.post('/booking-slots', authenticateJWT, async (req, res) => {
  * 
  * List available templates for a trade category
  */
-router.get('/templates', authenticateJWT, async (req, res) => {
+router.get('/templates', authenticateJWT, requireCompanyAccess, requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
     const { companyId } = req.params;
     const { tradeCategoryKey = 'hvac_residential' } = req.query;
     
@@ -757,7 +758,7 @@ router.get('/templates', authenticateJWT, async (req, res) => {
  * GET /api/company/:companyId/seed-golden/profiles
  * Returns available golden profiles
  */
-router.get('/profiles', authenticateJWT, (req, res) => {
+router.get('/profiles', authenticateJWT, requireCompanyAccess, requirePermission(PERMISSIONS.CONFIG_READ), (req, res) => {
     res.json({
         success: true,
         profiles: Object.keys(goldenConfigs).map(key => ({
@@ -773,7 +774,7 @@ router.get('/profiles', authenticateJWT, (req, res) => {
  * 
  * Copy settings from another company (e.g., golden reference)
  */
-router.post('/copy-from/:sourceCompanyId', authenticateJWT, async (req, res) => {
+router.post('/copy-from/:sourceCompanyId', authenticateJWT, requireCompanyAccess, requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
     const { companyId: targetCompanyId, sourceCompanyId } = req.params;
     const { sections = ['frontDesk', 'booking', 'defaultReplies', 'transfers', 'callProtection'] } = req.body;
     
