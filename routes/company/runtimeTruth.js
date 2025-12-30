@@ -604,7 +604,6 @@ router.get('/', async (req, res) => {
                         effectiveFieldKeysSample: effective.slice(0, 10)
                     };
                 })()
-                }
             },
 
             // Tab: Emotions
