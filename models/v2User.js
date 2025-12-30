@@ -7,7 +7,10 @@ const userSchema = new mongoose.Schema({
   password: { type: String }, // For JWT authentication (optional, used when googleId is not present)
   avatar: { type: String },
   companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company' },
-  role: { type: String, enum: ['admin', 'manager', 'staff'], default: 'admin' },
+  // RBAC (enterprise): keep legacy roles for backward compatibility.
+  // - manager -> owner (effective role mapping in middleware/rbac.js)
+  // - staff   -> read_only
+  role: { type: String, enum: ['admin', 'owner', 'support', 'read_only', 'manager', 'staff'], default: 'admin' },
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
   allowedDomains: { type: [String], default: [] }, // For multi-tenant support
   lastLogin: { type: Date },

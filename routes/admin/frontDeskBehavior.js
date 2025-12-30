@@ -20,7 +20,9 @@ const router = express.Router();
 const logger = require('../../utils/logger');
 const v2Company = require('../../models/v2Company');
 const { authenticateJWT } = require('../../middleware/auth');
+const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
 const { DEFAULT_FRONT_DESK_CONFIG } = require('../../config/frontDeskPrompt');
+const ConfigAuditService = require('../../services/ConfigAuditService');
 
 // ============================================================================
 // DEFAULT VALUES (Shown in UI, can be customized per company)
@@ -204,7 +206,7 @@ const UI_DEFAULTS = {
 // ============================================================================
 // GET - Fetch current config
 // ============================================================================
-router.get('/:companyId', authenticateJWT, async (req, res) => {
+router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -332,7 +334,7 @@ router.get('/:companyId', authenticateJWT, async (req, res) => {
 // ============================================================================
 // PATCH - Update config
 // ============================================================================
-router.patch('/:companyId', authenticateJWT, async (req, res) => {
+router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
     try {
         const { companyId } = req.params;
         const updates = req.body;
@@ -351,6 +353,11 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
             rawValue: updates.commonFirstNames
         });
         
+        // Immutable config audit: BEFORE snapshot (company-scoped)
+        const beforeCompany = await v2Company.findById(companyId)
+            .select('aiAgentSettings.frontDeskBehavior aiAgentSettings.templateReferences aiAgentSettings.scenarioControls agentSettings')
+            .lean();
+
         // Build the update object
         const updateObj = {};
         
@@ -760,6 +767,20 @@ router.patch('/:companyId', authenticateJWT, async (req, res) => {
         } catch (cacheErr) {
             logger.debug('[FRONT DESK BEHAVIOR] Cache clear failed (non-critical)');
         }
+
+        // Immutable config audit: AFTER snapshot (company-scoped)
+        const afterCompany = await v2Company.findById(companyId)
+            .select('aiAgentSettings.frontDeskBehavior aiAgentSettings.templateReferences aiAgentSettings.scenarioControls agentSettings')
+            .lean();
+
+        await ConfigAuditService.logConfigChange({
+            req,
+            companyId,
+            action: 'frontDeskBehavior.patch',
+            updatedPaths: Object.keys(updateObj),
+            beforeCompanyDoc: beforeCompany,
+            afterCompanyDoc: afterCompany
+        });
         
         res.json({
             success: true,

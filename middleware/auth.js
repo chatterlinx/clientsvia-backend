@@ -3,6 +3,7 @@ const logger = require('../utils/logger.js');
 
 const User = require('../models/v2User');
 const sessionManager = require('./singleSessionManager');
+const SupportAccessToken = require('../models/SupportAccessToken');
 
 // Extract JWT from either httpOnly cookie or Authorization header
 function getTokenFromRequest(req) {
@@ -39,6 +40,46 @@ async function authenticateJWT(req, res, next) {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // ─────────────────────────────────────────────────────────────────────
+    // BREAK-GLASS SUPPORT TOKENS (time-limited, scoped, revocable)
+    // ─────────────────────────────────────────────────────────────────────
+    if (decoded?.tokenType === 'support' && decoded?.jti) {
+      const record = await SupportAccessToken.findOne({ jti: decoded.jti }).lean();
+      if (!record) {
+        return res.status(401).json({ message: 'Invalid support token', code: 'SUPPORT_TOKEN_NOT_FOUND' });
+      }
+      if (record.revokedAt) {
+        return res.status(401).json({ message: 'Support token revoked', code: 'SUPPORT_TOKEN_REVOKED' });
+      }
+      if (record.expiresAt && new Date(record.expiresAt).getTime() < Date.now()) {
+        return res.status(401).json({ message: 'Support token expired', code: 'SUPPORT_TOKEN_EXPIRED' });
+      }
+
+      // Path/method scope enforcement
+      const method = String(req.method || '').toUpperCase();
+      const allowedMethods = Array.isArray(record.allowedMethods) ? record.allowedMethods.map(m => String(m).toUpperCase()) : ['GET'];
+      if (!allowedMethods.includes(method)) {
+        return res.status(403).json({ message: 'Support token method not allowed', code: 'SUPPORT_TOKEN_METHOD_DENIED' });
+      }
+
+      const url = req.originalUrl || req.path || '';
+      const prefixes = Array.isArray(record.allowedPathPrefixes) ? record.allowedPathPrefixes : [];
+      if (prefixes.length > 0 && !prefixes.some(p => url.startsWith(p))) {
+        return res.status(403).json({ message: 'Support token path not allowed', code: 'SUPPORT_TOKEN_PATH_DENIED' });
+      }
+
+      // Attach a synthetic user object (no DB user required for break-glass access)
+      req.user = {
+        _id: decoded.issuedByUserId || 'support',
+        email: decoded.issuedByEmail || record.issuedByEmail || 'support@clientsvia',
+        role: 'support',
+        breakGlass: true,
+        companyIds: (record.companyIds || []).map(id => id.toString()),
+        supportTokenJti: decoded.jti
+      };
+      return next();
+    }
     
     const user = await User.findById(decoded.userId).populate('companyId');
     
