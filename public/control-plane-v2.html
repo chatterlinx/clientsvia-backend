@@ -1521,6 +1521,9 @@
         
         <!-- Sub-tabs for Data & Config -->
         <div style="display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px;">
+          <button class="data-config-subtab" data-subtab="onboarding" style="padding: 10px 20px; border: none; background: #f1f5f9; color: #64748b; border-radius: 8px 8px 0 0; font-weight: 600; cursor: pointer;">
+            <i class="fas fa-route"></i> Onboarding
+          </button>
           <button class="data-config-subtab active" data-subtab="placeholders" style="padding: 10px 20px; border: none; background: #3b82f6; color: white; border-radius: 8px 8px 0 0; font-weight: 600; cursor: pointer;">
             <i class="fas fa-tags"></i> Placeholders
           </button>
@@ -1541,6 +1544,32 @@
           </button>
         </div>
         
+        <!-- ONBOARDING (Guided Setup Checklist powered by Runtime Truth) -->
+        <div id="data-config-onboarding" class="data-config-content" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px;">
+            <div>
+              <h3 style="font-size: 18px; font-weight: 700; margin: 0;">🧭 Onboarding Checklist</h3>
+              <p style="font-size: 13px; color: #64748b; margin-top: 6px; line-height: 1.4;">
+                This is the official “start → finish” setup flow. Each step is powered by <strong>Runtime Truth</strong> so you can prove what’s actually wired.
+              </p>
+              <div id="onboarding-stamp" style="font-size: 12px; color: #94a3b8; margin-top: 6px;">
+                Loading runtime status...
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <button onclick="loadOnboardingTab(true)" class="btn btn-secondary" style="padding: 8px 14px;">
+                <i class="fas fa-sync-alt"></i> Refresh Status
+              </button>
+            </div>
+          </div>
+
+          <div id="onboarding-steps" style="display: grid; grid-template-columns: 1fr; gap: 12px;">
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; color: #64748b;">
+              Loading steps...
+            </div>
+          </div>
+        </div>
+
         <!-- PLACEHOLDERS (V2 - Replaces Variables) -->
         <div id="data-config-placeholders" class="data-config-content">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -2578,7 +2607,9 @@
       }
       
       // Load content for the subtab using ORIGINAL managers
-      if (subtab === 'placeholders') {
+      if (subtab === 'onboarding') {
+        await loadOnboardingTab();
+      } else if (subtab === 'placeholders') {
         loadPlaceholders();
       } else if (subtab === 'defaults') {
         await loadCompanyDefaults();
@@ -2590,6 +2621,207 @@
         await loadExecutionMap();
       } else if (subtab === 'qa-dashboard') {
         await initQADashboard();
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // ONBOARDING (guided setup checklist powered by Runtime Truth)
+    // ─────────────────────────────────────────────────────────────────────────────
+    let onboardingRuntimeTruthCache = null;
+
+    async function fetchRuntimeTruthForOnboarding() {
+      const response = await fetch(`/api/company/${currentCompanyId}/runtime-truth`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (!response.ok) throw new Error(`Runtime Truth HTTP ${response.status}`);
+      const json = await response.json();
+      // Support both response shapes:
+      // - { success: true, data: runtimeTruth }
+      // - runtimeTruth directly
+      if (json && json.success === true && json.data) return json.data;
+      return json;
+    }
+
+    function computeOnboardingSteps(rt) {
+      const issues = Array.isArray(rt?.health?.issues) ? rt.health.issues : [];
+      const hasIssue = (area) => issues.some(i => i && i.area === area);
+      const findIssue = (area) => issues.find(i => i && i.area === area) || null;
+
+      const activeTemplates = Array.isArray(rt?.scenarioBrain?.activeTemplates) ? rt.scenarioBrain.activeTemplates : [];
+      const unknownIssue = findIssue('scenarios');
+      const consentIssue = findIssue('consent');
+
+      const placeholders = rt?.placeholders?.map || {};
+      const hasCompanyName = typeof placeholders.companyName === 'string' && placeholders.companyName.trim().length > 0;
+
+      const bookingSlotsCount = rt?.controlPlane?.booking?.slotsCount || 0;
+      const bookingV2 = rt?.controlPlane?.booking?.bookingContractV2 || {};
+
+      const consentTruth = rt?.controlPlane?.discoveryConsent || null;
+      const consentBlocked = consentTruth?.disableScenarioAutoResponses === true;
+
+      return [
+        {
+          id: 'templates',
+          title: 'Choose the Brain (Templates)',
+          description: 'Enable the correct template(s) for this company. Runtime Truth loads scenarios only from enabled templates.',
+          status: activeTemplates.length > 0 ? 'pass' : 'fail',
+          statusText: activeTemplates.length > 0 ? `${activeTemplates.length} template(s) enabled` : 'No templates enabled',
+          go: { tab: 'data-config', subtab: 'templates' }
+        },
+        {
+          id: 'qa',
+          title: 'Make Scenarios Routable (Golden Autofill + QA)',
+          description: 'Preview → Apply to remove UNKNOWN types and align priority/minConfidence. Lock tuned scenarios.',
+          status: hasIssue('scenarios') ? 'warn' : 'pass',
+          statusText: hasIssue('scenarios')
+            ? (unknownIssue?.message || 'Scenario issues detected')
+            : 'No UNKNOWN scenarioType warnings',
+          go: { tab: 'data-config', subtab: 'qa-dashboard' }
+        },
+        {
+          id: 'placeholders',
+          title: 'Brand & Tokens (Placeholders)',
+          description: 'Ensure {companyName} and other tokens render correctly in scenario replies and greetings.',
+          status: hasCompanyName ? 'pass' : 'warn',
+          statusText: hasCompanyName ? `companyName = "${placeholders.companyName}"` : 'companyName placeholder missing',
+          go: { tab: 'data-config', subtab: 'placeholders' }
+        },
+        {
+          id: 'personality',
+          title: 'Front Desk Tone (Personality)',
+          description: 'Set conversation style and voice identity so the agent sounds premium and consistent.',
+          status: 'todo',
+          statusText: 'Configure in Front Desk → Personality',
+          go: { tab: 'front-desk', frontDeskTab: 'personality' }
+        },
+        {
+          id: 'consent',
+          title: 'Discovery / Consent (Optional Gate)',
+          description: 'Only enable consent blocking when you truly want scenarios to wait for consent.',
+          status: consentBlocked ? 'warn' : 'pass',
+          statusText: consentBlocked
+            ? 'Consent blocking ON (scenarios won’t auto-reply until consent)'
+            : 'Consent blocking OFF (scenarios can respond normally)',
+          go: { tab: 'front-desk', frontDeskTab: 'discovery' }
+        },
+        {
+          id: 'vocabulary',
+          title: 'Vocabulary (HVAC Normalization)',
+          description: 'Add synonyms and guardrails so “AC / A/C / aircon” map cleanly and output stays compliant.',
+          status: 'todo',
+          statusText: 'Configure in Front Desk → Vocabulary',
+          go: { tab: 'front-desk', frontDeskTab: 'vocabulary' }
+        },
+        {
+          id: 'fallbacks',
+          title: 'Stability (Fallbacks + Silence + Loops)',
+          description: 'Prevent dead air, repeats, and confusion. This is what makes demos feel “real.”',
+          status: 'todo',
+          statusText: 'Configure in Front Desk → Fallbacks and Loops',
+          go: { tab: 'front-desk', frontDeskTab: 'fallbacks' }
+        },
+        {
+          id: 'booking',
+          title: 'Booking Enforcement (Slots)',
+          description: 'Configure required questions so the agent reliably “follows through” and can actually book.',
+          status: bookingSlotsCount > 0 ? 'pass' : 'warn',
+          statusText: bookingSlotsCount > 0
+            ? `Legacy bookingSlots active (${bookingSlotsCount} slots). V2 enabled: ${bookingV2.enabled === true ? 'YES' : 'NO'}`
+            : 'No booking slots configured',
+          go: { tab: 'front-desk', frontDeskTab: 'booking' }
+        },
+        {
+          id: 'runtime-truth',
+          title: 'Proof (Runtime Truth = Judge)',
+          description: 'Use Runtime Truth as court evidence before you go live. GREEN = safe to demo/ship.',
+          status: (rt?.health?.status === 'GREEN') ? 'pass' : (rt?.health?.status === 'YELLOW') ? 'warn' : 'fail',
+          statusText: `Health: ${rt?.health?.status || 'UNKNOWN'}`,
+          go: { tab: 'flow-tree' }
+        }
+      ];
+    }
+
+    function badgeForStatus(status) {
+      if (status === 'pass') return { emoji: '✅', bg: '#dcfce7', color: '#166534', label: 'Ready' };
+      if (status === 'warn') return { emoji: '⚠️', bg: '#fef3c7', color: '#92400e', label: 'Needs attention' };
+      if (status === 'fail') return { emoji: '❌', bg: '#fee2e2', color: '#991b1b', label: 'Blocked' };
+      return { emoji: '🟦', bg: '#dbeafe', color: '#1e40af', label: 'To do' };
+    }
+
+    async function navigateFromOnboarding(go) {
+      if (!go) return;
+      if (go.tab) {
+        // Ensure the tab is initialized (switchTab() doesn't await)
+        await initializeTab(go.tab);
+        switchTab(go.tab);
+      }
+
+      if (go.tab === 'data-config' && go.subtab) {
+        await initializeTab('data-config');
+        await switchDataConfigSubtab(go.subtab);
+      }
+
+      if (go.tab === 'front-desk' && go.frontDeskTab) {
+        await initializeTab('front-desk');
+        // Switch to front desk tab and then switch internal tab
+        const container = document.getElementById('front-desk-container');
+        if (window.frontDeskManager && container) {
+          window.frontDeskManager.switchTab(go.frontDeskTab, container);
+        }
+      }
+    }
+
+    async function loadOnboardingTab(forceRefresh = false) {
+      const stepsEl = document.getElementById('onboarding-steps');
+      const stampEl = document.getElementById('onboarding-stamp');
+      if (!stepsEl || !stampEl) return;
+
+      try {
+        if (forceRefresh || !onboardingRuntimeTruthCache) {
+          stampEl.textContent = 'Loading runtime status...';
+          onboardingRuntimeTruthCache = await fetchRuntimeTruthForOnboarding();
+        }
+        const rt = onboardingRuntimeTruthCache;
+        const steps = computeOnboardingSteps(rt);
+
+        const commit = rt?._meta?.deploy?.renderGitCommit ? String(rt._meta.deploy.renderGitCommit).slice(0, 10) : null;
+        const schema = rt?._meta?.schemaVersion || 'unknown';
+        const generatedAt = rt?._meta?.generatedAt ? new Date(rt._meta.generatedAt).toLocaleString() : 'unknown time';
+        stampEl.innerHTML = `Runtime Truth: <strong>${schema}</strong>${commit ? ` · commit <code style="background:#f1f5f9;padding:2px 6px;border-radius:6px;">${commit}</code>` : ''} · generated ${generatedAt}`;
+
+        stepsEl.innerHTML = steps.map((s, idx) => {
+          const b = badgeForStatus(s.status);
+          return `
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px; display: flex; gap: 14px; align-items: flex-start;">
+              <div style="width: 42px; height: 42px; border-radius: 12px; background: ${b.bg}; color: ${b.color}; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;">
+                ${b.emoji}
+              </div>
+              <div style="flex: 1;">
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap: wrap;">
+                  <div style="font-weight: 800; color: #0f172a;">${idx + 1}. ${s.title}</div>
+                  <span style="font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: ${b.bg}; color: ${b.color};">${b.label}</span>
+                </div>
+                <div style="margin-top: 6px; font-size: 13px; color: #475569; line-height: 1.45;">${s.description}</div>
+                <div style="margin-top: 8px; font-size: 12px; color: ${b.color}; font-weight: 700;">${s.statusText}</div>
+              </div>
+              <div style="display:flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+                <button class="btn btn-primary" style="padding: 8px 12px; font-size: 12px;" onclick='navigateFromOnboarding(${JSON.stringify(s.go)})'>
+                  <i class="fas fa-arrow-right"></i> Go
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('[ONBOARDING] Failed to load:', err);
+        stepsEl.innerHTML = `
+          <div style="background: #fee2e2; border: 1px solid #fecaca; border-radius: 12px; padding: 16px; color: #991b1b;">
+            <div style="font-weight: 800;">Failed to load Runtime Truth</div>
+            <div style="margin-top: 6px; font-size: 13px;">${err.message}</div>
+          </div>
+        `;
+        stampEl.textContent = 'Runtime status unavailable.';
       }
     }
     
