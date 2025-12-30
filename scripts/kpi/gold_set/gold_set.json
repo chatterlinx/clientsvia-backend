@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "KPI_GOLDSET_V1",
+  "tradeKey": "hvac",
+  "description": "Canonical gold set for regression testing. Split into happy path vs messy callers. Add cases over time.",
+  "cases": [
+    {
+      "id": "hvac_booking_happy_001",
+      "bucket": "BOOKING",
+      "callerType": "customer",
+      "tags": ["happy_path", "booking"],
+      "turns": [
+        { "user": "Hi, my AC isn't cooling. I'd like to schedule service." },
+        { "user": "Mike Johnson." },
+        { "user": "My phone is 602-555-0101." },
+        { "user": "123 Market St, Phoenix." },
+        { "user": "Tomorrow morning works." }
+      ],
+      "expected": {
+        "enteredBooking": true,
+        "bookingComplete": true,
+        "bookingOutcome": "CONFIRMED_REQUEST",
+        "missingRequiredSlotsMax": 0,
+        "maxTurns": 10
+      }
+    },
+    {
+      "id": "hvac_faq_only_001",
+      "bucket": "FAQ_ONLY",
+      "callerType": "customer",
+      "tags": ["happy_path", "faq"],
+      "turns": [
+        { "user": "Do you service my area?" }
+      ],
+      "expected": {
+        "enteredBooking": false,
+        "bookingComplete": false,
+        "maxTurns": 4
+      }
+    },
+    {
+      "id": "hvac_booking_messy_001",
+      "bucket": "BOOKING",
+      "callerType": "customer",
+      "tags": ["messy", "booking", "multi_fact"],
+      "turns": [
+        { "user": "I'm Mike from ABC Corporation. We're at 123 Market St in unit 5 and also 125 Market St unit 7. The rear office isn't cooling." }
+      ],
+      "expected": {
+        "enteredBooking": true,
+        "bookingComplete": false,
+        "failureReasonAllowed": ["SLOT_MISSING", "UNKNOWN"],
+        "maxTurns": 6
+      }
+    }
+  ]
+}
+
+
