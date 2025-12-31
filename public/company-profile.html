@@ -1822,6 +1822,44 @@
         </div>
     </div>
 
+    <!-- ===================================================================== -->
+    <!-- FLOW ACTION POPUP (Operator clarity: "What just happened?") -->
+    <!-- ===================================================================== -->
+    <div id="flow-action-popup" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div style="background-color: #0b1220; color: #e2e8f0; border-radius: 12px; width: 100%; max-width: 720px; border: 1px solid #334155; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.55);">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding: 14px 16px; border-bottom: 1px solid #1f2937;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <i id="flow-action-popup-icon" class="fas fa-info-circle" style="color:#93c5fd;"></i>
+                    <div>
+                        <div id="flow-action-popup-title" style="font-weight:800;">Flow Action</div>
+                        <div id="flow-action-popup-subtitle" style="font-size:12px; color:#94a3b8;">What just happened</div>
+                    </div>
+                </div>
+                <button onclick="closeFlowActionPopup()" style="padding:8px 10px; border-radius:10px; border: 1px solid #334155; background:#111827; color:#e2e8f0; cursor:pointer;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div style="padding: 14px 16px;">
+                <div id="flow-action-popup-message" style="padding: 10px 12px; border-radius: 10px; border: 1px solid #334155; background:#0f172a; color:#e2e8f0; font-size: 13px;">
+                    ...
+                </div>
+                <div id="flow-action-popup-details-wrap" style="margin-top: 10px; display:none;">
+                    <div style="font-size: 12px; color:#94a3b8; margin-bottom: 6px;">Details</div>
+                    <pre id="flow-action-popup-details" style="white-space: pre-wrap; font-size: 12px; color:#cbd5e1; background:#0b1220; border: 1px solid #1f2937; border-radius: 10px; padding: 10px; max-height: 240px; overflow:auto;"></pre>
+                </div>
+                <div id="flow-action-popup-next-wrap" style="margin-top: 10px; display:none;">
+                    <div style="font-size: 12px; color:#94a3b8; margin-bottom: 6px;">Next step</div>
+                    <div id="flow-action-popup-next" style="font-size: 13px; color:#e2e8f0; background:#0f172a; border: 1px solid #334155; border-radius: 10px; padding: 10px 12px;"></div>
+                </div>
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; padding: 14px 16px; border-top: 1px solid #1f2937;">
+                <button onclick="closeFlowActionPopup()" style="padding:10px 14px; border-radius:10px; border: 1px solid #334155; background:#111827; color:#e2e8f0; font-weight:700; cursor:pointer;">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- ═══════════════════════════════════════════════════════════════════════════ -->
     <!-- CONFIG JSON MODAL - Control Plane Effective Configuration -->
     <!-- ═══════════════════════════════════════════════════════════════════════════ -->
@@ -3056,6 +3094,53 @@
                 toast.classList.add('hidden');
             }, 4000);
         }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // FLOW ACTION POPUP (Operator clarity)
+        // ═══════════════════════════════════════════════════════════════════════════
+        function showFlowActionPopup({ status = 'info', title = 'Flow Action', message = '', details = '', next = '' } = {}) {
+            const modal = document.getElementById('flow-action-popup');
+            const icon = document.getElementById('flow-action-popup-icon');
+            const titleEl = document.getElementById('flow-action-popup-title');
+            const msgEl = document.getElementById('flow-action-popup-message');
+            const detailsWrap = document.getElementById('flow-action-popup-details-wrap');
+            const detailsEl = document.getElementById('flow-action-popup-details');
+            const nextWrap = document.getElementById('flow-action-popup-next-wrap');
+            const nextEl = document.getElementById('flow-action-popup-next');
+
+            if (!modal) return;
+
+            const iconByStatus = {
+                success: { cls: 'fas fa-check-circle', color: '#22c55e' },
+                warning: { cls: 'fas fa-exclamation-triangle', color: '#f59e0b' },
+                error: { cls: 'fas fa-times-circle', color: '#ef4444' },
+                info: { cls: 'fas fa-info-circle', color: '#93c5fd' }
+            };
+            const picked = iconByStatus[status] || iconByStatus.info;
+
+            if (icon) {
+                icon.className = picked.cls;
+                icon.style.color = picked.color;
+            }
+            if (titleEl) titleEl.textContent = title;
+            if (msgEl) msgEl.textContent = message;
+
+            const hasDetails = !!(details && String(details).trim().length > 0);
+            if (detailsWrap) detailsWrap.style.display = hasDetails ? 'block' : 'none';
+            if (detailsEl && hasDetails) detailsEl.textContent = String(details);
+
+            const hasNext = !!(next && String(next).trim().length > 0);
+            if (nextWrap) nextWrap.style.display = hasNext ? 'block' : 'none';
+            if (nextEl && hasNext) nextEl.textContent = String(next);
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeFlowActionPopup() {
+            const modal = document.getElementById('flow-action-popup');
+            if (!modal) return;
+            modal.classList.add('hidden');
+        }
         
         // ═══════════════════════════════════════════════════════════════════════════
         // WRITE TEST DYNAMIC FLOW - End-to-End Verification
@@ -3240,14 +3325,35 @@
                 
                 if (errors.length > 0) {
                     resultEl.innerHTML = `<div style="padding: 10px; background-color: #fef3c7; border-radius: 6px; color: #92400e; border: 1px solid #f59e0b;">⚠️ Validation Issues:<br>${errors.join('<br>')}</div>`;
+                    showFlowActionPopup({
+                        status: 'warning',
+                        title: 'Validate Flow',
+                        message: 'Flow JSON parsed, but the schema has validation issues. Nothing was saved.',
+                        details: errors.join('\n'),
+                        next: 'Fix the listed issues, then click Validate again. Only click “Save Flow” after Validate is clean.'
+                    });
                 } else {
                     resultEl.innerHTML = `<div style="padding: 10px; background-color: #dcfce7; border-radius: 6px; color: #166534; border: 1px solid #16a34a;">✅ Valid V2 schema! Ready to save.</div>`;
+                    showFlowActionPopup({
+                        status: 'success',
+                        title: 'Validate Flow',
+                        message: 'Validation passed. This flow JSON is valid and ready to save.',
+                        details: `flowKey: ${flow.flowKey}\ntrigger.type: ${flow.trigger?.type}\nactions: ${(flow.actions || []).length}`,
+                        next: 'If you intended to write this flow into the database, click “Save Flow”. Otherwise, close this panel.'
+                    });
                 }
                 resultEl.style.display = 'block';
                 
             } catch (e) {
                 resultEl.innerHTML = `<div style="padding: 10px; background-color: #fee2e2; border-radius: 6px; color: #991b1b; border: 1px solid #ef4444;">❌ Invalid JSON: ${e.message}</div>`;
                 resultEl.style.display = 'block';
+                showFlowActionPopup({
+                    status: 'error',
+                    title: 'Validate Flow',
+                    message: 'Validation failed because the JSON is not valid. Nothing was saved.',
+                    details: e.message,
+                    next: 'Click “LOAD TEMPLATE” or paste a complete JSON object, then click Validate again.'
+                });
             }
         }
         
@@ -3313,8 +3419,24 @@
             } catch (e) {
                 resultEl.innerHTML = `<div style="padding: 10px; background-color: #fee2e2; border-radius: 6px; color: #991b1b; border: 1px solid #ef4444;">❌ Invalid JSON: ${e.message}</div>`;
                 resultEl.style.display = 'block';
+                showFlowActionPopup({
+                    status: 'error',
+                    title: 'Save Flow',
+                    message: 'Save was blocked because the JSON is invalid. Nothing was saved to the database.',
+                    details: e.message,
+                    next: 'Click “Validate” to see what’s wrong, or click “LOAD TEMPLATE” to generate a valid starter flow.'
+                });
                 return;
             }
+
+            // Operator clarity: confirm intent (this writes directly to DB)
+            showFlowActionPopup({
+                status: 'info',
+                title: 'Save Flow',
+                message: `You are about to save a flow JSON directly to the database for this company.`,
+                details: `companyId: ${companyId}\nflowKey: ${flow.flowKey || 'missing'}\nactions: ${(flow.actions || []).length}`,
+                next: 'If this was accidental: close this popup and DO NOT click “Save Flow” again. If intentional: proceed and watch for “Flow Saved”.'
+            });
             
             if (icon) icon.className = 'fas fa-spinner fa-spin';
             
@@ -3344,11 +3466,25 @@
                         </div>
                     `;
                     showSaveVerifyToast(true, 'Flow Saved', `${v.flowKey} with ${v.actionsCount} actions`);
+                    showFlowActionPopup({
+                        status: 'success',
+                        title: 'Save Flow',
+                        message: 'Flow saved successfully to the database and snapshot refreshed.',
+                        details: `flowKey: ${v.flowKey}\nschemaUsed: ${v.schemaUsed}\ntriggerPhrases: ${v.triggerPhrasesCount}\nactions: ${v.actionsCount}\nactionTypes: ${Array.isArray(v.actionTypes) ? v.actionTypes.join(', ') : ''}`,
+                        next: 'Click Refresh at the top of this modal and confirm Dynamic Flow shows Valid. Then use Runtime Truth (Canonical) to prove enforcement.'
+                    });
                 } else {
                     const errorsHtml = result.validationErrors ? 
                         result.validationErrors.map(e => `• ${e}`).join('<br>') : result.error;
                     resultEl.innerHTML = `<div style="padding: 10px; background-color: #fee2e2; border-radius: 6px; color: #991b1b; border: 1px solid #ef4444;">❌ ${errorsHtml}</div>`;
                     showSaveVerifyToast(false, 'Save Failed', result.error);
+                    showFlowActionPopup({
+                        status: 'error',
+                        title: 'Save Flow',
+                        message: 'Save failed. The server rejected the flow or returned validation errors.',
+                        details: result.validationErrors ? result.validationErrors.join('\n') : (result.error || 'Unknown error'),
+                        next: 'Click Validate first, then fix the errors and try Save again.'
+                    });
                 }
                 resultEl.style.display = 'block';
                 
@@ -3356,6 +3492,13 @@
                 resultEl.innerHTML = `<div style="padding: 10px; background-color: #fee2e2; border-radius: 6px; color: #991b1b; border: 1px solid #ef4444;">❌ Error: ${error.message}</div>`;
                 resultEl.style.display = 'block';
                 showSaveVerifyToast(false, 'Error', error.message);
+                showFlowActionPopup({
+                    status: 'error',
+                    title: 'Save Flow',
+                    message: 'Save failed due to a network/server error.',
+                    details: error.message,
+                    next: 'Try Refresh, then Save again. If it continues, copy the error and send it to engineering.'
+                });
             } finally {
                 if (icon) icon.className = 'fas fa-save';
             }
