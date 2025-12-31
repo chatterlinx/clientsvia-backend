@@ -1599,7 +1599,7 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-3">
-                    <button onclick="openRuntimeTruthCanonical()" class="px-3 py-1.5 text-sm bg-emerald-700 hover:bg-emerald-600 rounded-md transition-colors flex items-center gap-2"
+                    <button id="open-runtime-truth-btn" onclick="openRuntimeTruthCanonical()" class="px-3 py-1.5 text-sm bg-emerald-700 hover:bg-emerald-600 rounded-md transition-colors flex items-center gap-2"
                             title="Open Runtime Truth (Canonical) — what the agent will execute on calls. Source: /api/company/:companyId/runtime-truth">
                         <i class="fas fa-gavel"></i>
                         Open Runtime Truth (Canonical)
@@ -2369,9 +2369,11 @@
                 if (commitEl) commitEl.textContent = renderCommit;
                 const viewer = document.getElementById('truth-canonical-viewer');
                 if (viewer) viewer.textContent = JSON.stringify(rt, null, 2);
+                try { showSaveVerifyToast(true, 'Runtime Truth Loaded', `ECV: ${rt?._meta?.effectiveConfigVersion || '-'}`); } catch {}
             } catch (error) {
                 const viewer = document.getElementById('truth-canonical-viewer');
                 if (viewer) viewer.textContent = `Error loading runtime-truth: ${error.message}`;
+                try { showSaveVerifyToast(false, 'Runtime Truth Failed', error.message); } catch {}
             }
         }
 
@@ -2483,6 +2485,26 @@
                 showSaveVerifyToast(true, 'Runtime Truth Loaded', 'Canonical enforcement JSON is now visible');
             } catch {}
         }
+
+        // Ensure Runtime Truth button works even if inline onclick is blocked/overridden.
+        // (Some injected UI scripts can interfere with inline handlers.)
+        window.openRuntimeTruthCanonical = openRuntimeTruthCanonical;
+        window.loadRuntimeTruthCanonical = loadRuntimeTruthCanonical;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                const btn = document.getElementById('open-runtime-truth-btn');
+                if (btn && !btn.dataset.boundRuntimeTruth) {
+                    btn.dataset.boundRuntimeTruth = '1';
+                    btn.addEventListener('click', (e) => {
+                        // If inline works, this is harmless; if inline is blocked, this saves the day.
+                        e.preventDefault();
+                        e.stopPropagation();
+                        window.openRuntimeTruthCanonical?.();
+                    }, { capture: true });
+                }
+            } catch {}
+        });
 
         // Download a minimal, canonical subset: _meta + health (+ blockers)
         async function downloadRuntimeTruthBlockersJson() {
