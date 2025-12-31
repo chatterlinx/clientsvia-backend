@@ -71,6 +71,9 @@ jspm_packages/
 # Temporary folders
 tmp/
 temp/
+tmp_drive/
+tmp_diagnostics/
+tmp_exports/
 
 # Editor directories and files
 .vscode/
