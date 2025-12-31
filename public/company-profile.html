@@ -1606,6 +1606,12 @@
                         <i id="copy-json-icon" class="fas fa-copy"></i>
                         <span id="copy-json-text">Copy JSON</span>
                     </button>
+                    <button id="download-json-btn" onclick="downloadPlatformSnapshotBundle()" 
+                            class="px-3 py-1.5 text-sm bg-slate-700 hover:bg-slate-600 rounded-md transition-all flex items-center gap-2"
+                            title="Download JSON files (Platform Snapshot + Runtime Truth + DB Echo)">
+                        <i class="fas fa-download"></i>
+                        Download .json
+                    </button>
                     <button onclick="closeTruthReport()" class="p-2 hover:bg-slate-600 rounded-md transition-colors">
                         <i class="fas fa-times"></i>
                     </button>
@@ -2332,6 +2338,86 @@
             } catch (error) {
                 const viewer = document.getElementById('truth-canonical-viewer');
                 if (viewer) viewer.textContent = `Error loading runtime-truth: ${error.message}`;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // DOWNLOAD HELPERS (Large JSON payloads)
+        // ═══════════════════════════════════════════════════════════════════════════
+        function downloadJsonFile({ filename, data }) {
+            try {
+                const jsonString = JSON.stringify(data, null, 2);
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 2000);
+            } catch (e) {
+                alert(`Download failed: ${e.message}`);
+            }
+        }
+
+        function getCompanyIdForDownload() {
+            return window.currentCompanyId || window.companyId ||
+                new URLSearchParams(window.location.search).get('id') ||
+                localStorage.getItem('currentCompanyId');
+        }
+
+        function makeFilename(prefix, companyId) {
+            const ts = new Date().toISOString().replace(/[:.]/g, '-');
+            return `${prefix}_${companyId}_${ts}.json`;
+        }
+
+        async function downloadPlatformSnapshotBundle() {
+            const companyId = getCompanyIdForDownload();
+            if (!companyId) {
+                alert('No companyId found');
+                return;
+            }
+
+            // Ensure we have data; fetch if missing
+            if (!currentTruthSnapshot) {
+                try { await loadTruthReport(); } catch {}
+            }
+            if (!currentDbEcho) {
+                try { await loadDbEcho(); } catch {}
+            }
+            if (!currentRuntimeTruth) {
+                try { await loadRuntimeTruthCanonical(); } catch {}
+            }
+
+            // Platform Snapshot
+            if (currentTruthSnapshot) {
+                downloadJsonFile({
+                    filename: makeFilename('platform_snapshot', companyId),
+                    data: currentTruthSnapshot
+                });
+            } else {
+                alert('Platform Snapshot not available yet (try Refresh).');
+            }
+
+            // Runtime Truth (Canonical)
+            if (currentRuntimeTruth) {
+                downloadJsonFile({
+                    filename: makeFilename('runtime_truth_canonical', companyId),
+                    data: currentRuntimeTruth
+                });
+            } else {
+                alert('Runtime Truth not available yet (click Open Runtime Truth first).');
+            }
+
+            // DB Echo
+            if (currentDbEcho) {
+                downloadJsonFile({
+                    filename: makeFilename('db_echo_raw_company', companyId),
+                    data: currentDbEcho
+                });
+            } else {
+                alert('DB Echo not available yet (try Refresh).');
             }
         }
 
