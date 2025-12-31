@@ -2457,9 +2457,31 @@
 
         // CTA handler (button in header)
         async function openRuntimeTruthCanonical() {
-            // Switch to canonical tab and load
+            // Switch to canonical tab and load (with operator-visible feedback)
+            try {
+                showSaveVerifyToast(true, 'Loading Runtime Truth…', 'Fetching /api/company/:companyId/runtime-truth');
+            } catch {}
+
             switchTruthTab('canonical');
+
+            // Auto-scroll so it never "looks like nothing happened"
+            try {
+                const panel = document.getElementById('truth-canonical-panel');
+                if (panel && typeof panel.scrollIntoView === 'function') {
+                    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            } catch {}
+
             await loadRuntimeTruthCanonical();
+
+            // Scroll to the viewer once loaded (success or error message is visible there)
+            try {
+                const viewer = document.getElementById('truth-canonical-viewer');
+                if (viewer && typeof viewer.scrollIntoView === 'function') {
+                    viewer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+                showSaveVerifyToast(true, 'Runtime Truth Loaded', 'Canonical enforcement JSON is now visible');
+            } catch {}
         }
 
         // Download a minimal, canonical subset: _meta + health (+ blockers)
