@@ -160,6 +160,22 @@ async function generateSnapshot(companyId, options = {}) {
         
         // Compute completeness score (SCOPE-AWARE)
         snapshot.completeness = computeCompleteness(snapshot, scope);
+
+        // Explain why not GREEN (evidence-only)
+        // This is intended to prevent "dashboard lies" where score looks good but runtime is blocked.
+        const blockingPenalties = (snapshot.completeness?.penalties || [])
+            .filter(p => p.severity === 'RED' || p.severity === 'YELLOW')
+            .map(p => ({
+                code: p.code,
+                message: p.message,
+                severity: p.severity,
+                sourcePaths: p.sourcePaths || [],
+                examples: p.examples || []
+            }));
+        snapshot.explainWhyNotGreen = {
+            status: snapshot.completeness.status,
+            blockers: blockingPenalties
+        };
         
         // Finalize timing
         snapshot.meta.generationMs = Date.now() - startTime;

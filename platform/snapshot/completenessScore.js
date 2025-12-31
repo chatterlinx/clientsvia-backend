@@ -56,7 +56,11 @@ const PENALTY_CODES = {
     BOOKING_ENABLED_NO_SLOTS: { severity: 'YELLOW', weight: 8 },
     
     // MINOR - GREEN
-    PLACEHOLDER_OPTIONAL_MISSING: { severity: 'GREEN', weight: 2 }
+    PLACEHOLDER_OPTIONAL_MISSING: { severity: 'GREEN', weight: 2 },
+
+    // Runtime truth blockers (reply behavior governance)
+    CONSENT_SCENARIO_AUTOREPLIES_BLOCKED: { severity: 'YELLOW', weight: 15 },
+    SCENARIO_UNKNOWN_TYPE_ENABLED: { severity: 'YELLOW', weight: 12 }
 };
 
 /**
@@ -346,6 +350,41 @@ function computeCompleteness(snapshot, scopeOverride = null) {
     // 6. PROCESS PROVIDER WARNINGS (December 2025 Directive)
     // Each provider can emit warnings that should become penalties
     // ═══════════════════════════════════════════════════════════════════════
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 6a. RUNTIME-BLOCKING GOVERNANCE RULES (Evidence-based)
+    // Platform Snapshot must NEVER show GREEN while runtime is blocked.
+    // ═══════════════════════════════════════════════════════════════════════
+    const consentSnapshot = providers.controlPlane?.data?.frontDesk?.discoveryConsent;
+    if (consentSnapshot?.disableScenarioAutoResponses === true) {
+        penalties.push({
+            code: 'CONSENT_SCENARIO_AUTOREPLIES_BLOCKED',
+            severity: 'YELLOW',
+            weight: PENALTY_CODES.CONSENT_SCENARIO_AUTOREPLIES_BLOCKED.weight,
+            message: 'Consent kill-switch enabled: scenarios will NOT auto-reply (runtime blocked until consent)',
+            sourcePaths: [
+                'aiAgentSettings.frontDeskBehavior.discoveryConsent.disableScenarioAutoResponses'
+            ]
+        });
+        score -= PENALTY_CODES.CONSENT_SCENARIO_AUTOREPLIES_BLOCKED.weight;
+        recommendations.push('Disable discoveryConsent.disableScenarioAutoResponses (keep bookingRequiresExplicitConsent ON)');
+    }
+
+    const unknownTypeCount = providers.scenarioBrain?.data?.summary?.unknownScenarioTypeCount || 0;
+    if (unknownTypeCount > 0) {
+        penalties.push({
+            code: 'SCENARIO_UNKNOWN_TYPE_ENABLED',
+            severity: 'YELLOW',
+            weight: PENALTY_CODES.SCENARIO_UNKNOWN_TYPE_ENABLED.weight,
+            message: `${unknownTypeCount} enabled scenarios have scenarioType=UNKNOWN (routing blocked)`,
+            sourcePaths: [
+                'templates[].categories[].scenarios[].scenarioType'
+            ],
+            examples: providers.scenarioBrain?.data?.summary?.unknownScenarioTypeExamples || []
+        });
+        score -= PENALTY_CODES.SCENARIO_UNKNOWN_TYPE_ENABLED.weight;
+        recommendations.push('Fix UNKNOWN scenarios: set scenarioType to BOOKING|EMERGENCY|TROUBLESHOOT|FAQ');
+    }
     
     // Control Plane warnings
     const controlPlane = providers.controlPlane;

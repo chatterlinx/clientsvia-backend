@@ -164,6 +164,10 @@ module.exports.getSnapshot = async function(companyId) {
         let disabledWithAlternate = 0;
         let disabledCategoriesNoDefault = 0;
         let disabledScenariosNoAlt = 0;
+
+        // Runtime-affecting: UNKNOWN scenarioType means the scenario cannot route deterministically.
+        let unknownScenarioTypeCount = 0;
+        const unknownScenarioTypeExamples = [];
         
         // ═══════════════════════════════════════════════════════════════════
         // SCOPE LOCK COUNTERS (Multi-tenant contamination prevention)
@@ -217,6 +221,20 @@ module.exports.getSnapshot = async function(companyId) {
                     if (!scenario.isActive || scenario.status !== 'live') continue;
                     
                     totalScenarios++;
+
+                    // Track UNKNOWN scenarioType (routing dead asset)
+                    const scenarioType = (scenario.scenarioType || '').toString().trim();
+                    if (!scenarioType || scenarioType.toUpperCase() === 'UNKNOWN') {
+                        unknownScenarioTypeCount++;
+                        if (unknownScenarioTypeExamples.length < 3) {
+                            unknownScenarioTypeExamples.push({
+                                id: scenario.scenarioId,
+                                name: scenario.name,
+                                templateName: template.name,
+                                locked: isLockedForCompany(scenario, companyId) === true
+                            });
+                        }
+                    }
                     
                     const scenarioOverride = scenarioOverrideMap.get(scenario.scenarioId);
                     const scenarioEnabled = !scenarioOverride || scenarioOverride.enabled !== false;
@@ -317,6 +335,11 @@ module.exports.getSnapshot = async function(companyId) {
             warnings.push(`${disabledScenariosNoAlt} disabled scenarios (SCENARIO fallback) without alternate reply`);
             health = 'YELLOW';
         }
+
+        if (unknownScenarioTypeCount > 0) {
+            warnings.push(`${unknownScenarioTypeCount} scenarios have scenarioType=UNKNOWN (no routing)`);
+            if (health === 'GREEN') health = 'YELLOW';
+        }
         
         if (!companyDefaults?.notOfferedReply?.fullReply) {
             warnings.push('Company "Not Offered" default reply not configured');
@@ -356,7 +379,9 @@ module.exports.getSnapshot = async function(companyId) {
                     scenariosDisabled: disabledScenarios,
                     disabledWithAlternate,
                     disabledCategoriesNoDefault,
-                    disabledScenariosNoAlt
+                    disabledScenariosNoAlt,
+                    unknownScenarioTypeCount,
+                    unknownScenarioTypeExamples
                 },
                 
                 // ═══════════════════════════════════════════════════════════

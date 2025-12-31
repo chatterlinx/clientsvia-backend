@@ -123,6 +123,15 @@
                             <i class="fas fa-info-circle" title="Runtime Truth = what the agent will execute. Platform Snapshot = what providers think is configured + DB echo." style="opacity: 0.85;"></i>
                             <span id="truth-report-badge" class="hidden px-1.5 py-0.5 text-xs font-bold rounded-full"></span>
                         </button>
+                        <!-- Runtime Truth Blockers JSON (canonical subset) -->
+                        <button onclick="downloadRuntimeTruthBlockersJson()"
+                                style="background-color: #0f766e; color: white; padding: 8px 16px; border-radius: 6px; font-weight: 600; display: flex; align-items: center; gap: 8px; border: none; cursor: pointer;"
+                                title="Download Runtime Truth blockers JSON (_meta + health + blockers)."
+                                onmouseover="this.style.backgroundColor='#0d9488'"
+                                onmouseout="this.style.backgroundColor='#0f766e'">
+                            <i class="fas fa-gavel"></i>
+                            <span>Runtime Truth (Blockers)</span>
+                        </button>
                         <span id="company-status-badge" class="status-badge mr-3">Status</span> 
                     </div>
                 </div>
@@ -2426,6 +2435,29 @@
             // Switch to canonical tab and load
             switchTruthTab('canonical');
             await loadRuntimeTruthCanonical();
+        }
+
+        // Download a minimal, canonical subset: _meta + health (+ blockers)
+        async function downloadRuntimeTruthBlockersJson() {
+            if (!currentRuntimeTruth) {
+                try { await loadRuntimeTruthCanonical(); } catch {}
+            }
+            if (!currentRuntimeTruth) {
+                alert('Runtime Truth not available yet (open Runtime Truth first).');
+                return;
+            }
+            const companyId = window.currentCompanyId || window.companyId || 'company';
+            const subset = {
+                _meta: currentRuntimeTruth?._meta || null,
+                health: currentRuntimeTruth?.health || null,
+                blockers: Array.isArray(currentRuntimeTruth?.health?.issues)
+                    ? currentRuntimeTruth.health.issues.filter(i => (i?.severity || '').toString().toUpperCase() !== 'INFO')
+                    : []
+            };
+            downloadJsonFile({
+                filename: makeFilename('runtime_truth_blockers', companyId),
+                data: subset
+            });
         }
         
         // ═══════════════════════════════════════════════════════════════════════════

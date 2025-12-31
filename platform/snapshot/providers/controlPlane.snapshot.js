@@ -101,6 +101,34 @@ module.exports.getSnapshot = async function(companyId) {
         const bookingSlots = frontDesk.bookingSlots || [];
         
         const escalationRules = frontDesk.escalationTriggers || [];
+
+        // Consent + discovery kill-switches (runtime-affecting)
+        // Mirror Runtime Truth defaults:
+        // - bookingRequiresExplicitConsent default: true
+        // - forceLLMDiscovery default: true
+        // - disableScenarioAutoResponses default: false (do NOT silently block unless explicitly enabled)
+        const discoveryConsent = frontDesk.discoveryConsent || {};
+        const normalizeBoolean = (value, defaultValue) => {
+            if (value === true || value === false) return value;
+            if (value === 'true') return true;
+            if (value === 'false') return false;
+            return defaultValue;
+        };
+        const discoveryConsentSnapshot = {
+            source: 'aiAgentSettings.frontDeskBehavior.discoveryConsent',
+            bookingRequiresExplicitConsent: normalizeBoolean(discoveryConsent.bookingRequiresExplicitConsent, true),
+            forceLLMDiscovery: normalizeBoolean(discoveryConsent.forceLLMDiscovery, true),
+            disableScenarioAutoResponses: normalizeBoolean(discoveryConsent.disableScenarioAutoResponses, false),
+            status: normalizeBoolean(discoveryConsent.disableScenarioAutoResponses, false) === true
+                ? 'BLOCKED: Scenarios will not auto-reply until consent is given'
+                : 'OK: Scenarios can respond normally',
+            blockingFields: normalizeBoolean(discoveryConsent.disableScenarioAutoResponses, false) === true
+                ? [{
+                    path: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.disableScenarioAutoResponses',
+                    value: true
+                }]
+                : []
+        };
         
         // Determine health
         let health = 'GREEN';
@@ -135,7 +163,8 @@ module.exports.getSnapshot = async function(companyId) {
                     bookingEnabled,
                     bookingSlotsCount: bookingSlots.length,
                     bookingSlotNames: bookingSlots.map(s => s.id || s.name),
-                    escalationRulesCount: escalationRules.length
+                    escalationRulesCount: escalationRules.length,
+                    discoveryConsent: discoveryConsentSnapshot
                 },
                 
                 personality: {
