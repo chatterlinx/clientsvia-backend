@@ -1636,6 +1636,26 @@
                         <span style="font-weight: 600; color: #f1f5f9;">Focused Health</span>
                         <span id="truth-health-status" style="margin-left: auto; padding: 4px 10px; font-size: 11px; font-weight: 700; border-radius: 12px; background-color: #475569; color: #f1f5f9;">Loading...</span>
                     </div>
+                    <!-- Harmony Lock: Snapshot vs Runtime Truth effective config -->
+                    <div id="truth-drift-banner" style="display:none; margin-bottom: 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid #f59e0b; background: rgba(245, 158, 11, 0.12); color: #fde68a; font-size: 12px;">
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <strong>DRIFT DETECTED</strong>
+                            </div>
+                            <div style="color:#e2e8f0;">
+                                Platform Snapshot effectiveConfigVersion != Runtime Truth effectiveConfigVersion.
+                                Snapshot may be stale or computed from different inputs than runtime.
+                            </div>
+                            <button onclick="refreshTruthReport()" style="margin-left:auto; padding: 6px 10px; border-radius: 8px; border: 1px solid #f59e0b; background: #f59e0b; color: #1e293b; font-weight: 700; cursor: pointer;">
+                                Recompute Snapshot
+                            </button>
+                        </div>
+                        <div style="margin-top: 6px; color:#cbd5e1;">
+                            snapshot: <code id="truth-ecv-snapshot" style="background:#0b1220;padding:2px 6px;border-radius:6px;"></code>
+                            · runtime: <code id="truth-ecv-runtime" style="background:#0b1220;padding:2px 6px;border-radius:6px;"></code>
+                        </div>
+                    </div>
                     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; font-size: 14px;" id="truth-health-grid">
                         <!-- Health metrics will be inserted here -->
                         <div style="padding: 12px; background-color: #475569; border-radius: 8px; text-align: center;">
@@ -2291,6 +2311,11 @@
                 const snapshot = apiResponse.snapshot || apiResponse;
                 currentTruthSnapshot = snapshot;
                 
+                // Load Runtime Truth as the judge for Harmony Lock (effectiveConfigVersion drift)
+                if (!currentRuntimeTruth) {
+                    try { await loadRuntimeTruthCanonical(); } catch {}
+                }
+                
                 const fetchTime = Date.now() - startTime;
                 
                 // Update meta panel
@@ -2619,6 +2644,25 @@
             const callProtection = snapshot.providers?.callProtection?.data || {};
             const drift = snapshot.drift || {};
             const completeness = snapshot.completeness || {};
+
+            // ───────────────────────────────────────────────────────────────
+            // HARMONY LOCK: Snapshot ECV vs Runtime Truth ECV
+            // ───────────────────────────────────────────────────────────────
+            try {
+                const banner = document.getElementById('truth-drift-banner');
+                const ecvSnapEl = document.getElementById('truth-ecv-snapshot');
+                const ecvRunEl = document.getElementById('truth-ecv-runtime');
+                const snapshotECV = snapshot?.meta?.effectiveConfigVersion || null;
+                const runtimeECV = currentRuntimeTruth?._meta?.effectiveConfigVersion || null;
+
+                if (ecvSnapEl) ecvSnapEl.textContent = snapshotECV || '(missing)';
+                if (ecvRunEl) ecvRunEl.textContent = runtimeECV || '(missing)';
+
+                const driftDetected = !!(snapshotECV && runtimeECV && snapshotECV !== runtimeECV);
+                if (banner) {
+                    banner.style.display = driftDetected ? 'block' : 'none';
+                }
+            } catch {}
             
             const frontDesk = controlPlane.frontDesk || {};
             const flows = dynamicFlow.flows || [];

@@ -15,6 +15,9 @@ const { REQUIRED_PROVIDERS, SNAPSHOT_VERSION, SCHEMA_VERSION } = require('./snap
 const { computeCompleteness } = require('./completenessScore');
 const { signSnapshot } = require('./snapshotIntegrity');
 const Company = require('../../models/v2Company');
+const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
+const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+const { computeEffectiveConfigVersion } = require('../../utils/effectiveConfigVersion');
 const logger = require('../../utils/logger');
 
 // Import all providers
@@ -77,14 +80,55 @@ async function generateSnapshot(companyId, options = {}) {
     };
     
     try {
-        // Load company for meta info
+        // Load company for meta info + effective config fingerprint (harmony lock)
         const company = await Company.findById(companyId)
-            .select('companyName tradeKey industryType')
+            .select('companyName tradeKey industryType aiAgentSettings.frontDeskBehavior aiAgentSettings.templateReferences aiAgentSettings.scenarioControls agentSettings')
             .lean();
         
         if (company) {
             snapshot.meta.companyName = company.companyName;
             snapshot.meta.tradeKey = company.tradeKey || company.industryType || 'universal';
+
+            // Compute effectiveConfigVersion using the SAME inputs as /runtime-truth
+            const templateRefs = Array.isArray(company.aiAgentSettings?.templateReferences)
+                ? company.aiAgentSettings.templateReferences
+                : [];
+            const activeTemplateIds = templateRefs
+                .filter(ref => ref && ref.enabled)
+                .map(ref => ref.templateId);
+
+            const [templates, placeholdersDoc] = await Promise.all([
+                GlobalInstantResponseTemplate.find({ _id: { $in: activeTemplateIds } })
+                    .select('_id version updatedAt isPublished isActive')
+                    .lean(),
+                CompanyPlaceholders.findOne({ companyId }).select('placeholders').lean()
+            ]);
+
+            // IMPORTANT: These versions must mirror routes/company/runtimeTruth.js PROVIDER_VERSIONS
+            const PROVIDER_VERSIONS_FOR_ECV = {
+                controlPlane: 'controlPlane:v3',
+                scenarioBrain: 'scenarioBrain:v2',
+                dynamicFlow: 'dynamicFlow:v2',
+                matchingPolicy: 'matchingPolicy:v1',
+                placeholders: 'placeholders:v1'
+            };
+
+            snapshot.meta.effectiveConfigVersion = computeEffectiveConfigVersion({
+                companyId,
+                frontDeskBehavior: company.aiAgentSettings?.frontDeskBehavior || null,
+                agentSettings: company.agentSettings || null,
+                templateReferences: company.aiAgentSettings?.templateReferences || [],
+                scenarioControls: company.aiAgentSettings?.scenarioControls || [],
+                templatesMeta: (templates || []).map(t => ({
+                    templateId: t._id?.toString?.() || String(t._id),
+                    version: t.version || null,
+                    updatedAt: t.updatedAt ? new Date(t.updatedAt).toISOString() : null,
+                    isPublished: t.isPublished ?? null,
+                    isActive: t.isActive ?? null
+                })),
+                placeholders: (placeholdersDoc?.placeholders || []).map(p => ({ key: p.key, value: p.value })),
+                providerVersions: PROVIDER_VERSIONS_FOR_ECV
+            });
         } else {
             snapshot.drift.warnings.push('Company not found');
             snapshot.drift.status = 'YELLOW';
