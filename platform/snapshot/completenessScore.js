@@ -356,7 +356,11 @@ function computeCompleteness(snapshot, scopeOverride = null) {
     // Platform Snapshot must NEVER show GREEN while runtime is blocked.
     // ═══════════════════════════════════════════════════════════════════════
     const consentSnapshot = providers.controlPlane?.data?.frontDesk?.discoveryConsent;
-    if (consentSnapshot?.disableScenarioAutoResponses === true) {
+    const consentAllowedTypes = Array.isArray(consentSnapshot?.autoReplyAllowedScenarioTypes)
+        ? consentSnapshot.autoReplyAllowedScenarioTypes
+        : [];
+    const blockAllUntilConsent = consentSnapshot?.disableScenarioAutoResponses === true && consentAllowedTypes.length === 0;
+    if (blockAllUntilConsent) {
         penalties.push({
             code: 'CONSENT_SCENARIO_AUTOREPLIES_BLOCKED',
             severity: 'YELLOW',

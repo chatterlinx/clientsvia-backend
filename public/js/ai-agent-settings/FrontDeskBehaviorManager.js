@@ -480,6 +480,9 @@ class FrontDeskBehaviorManager {
                 bookingRequiresExplicitConsent: true,  // Booking ONLY after consent
                 forceLLMDiscovery: true,               // LLM always speaks in discovery
                 disableScenarioAutoResponses: true,    // Scenarios are context only
+                // Consent Split (trade-agnostic): allow safe scenario types to respond before consent
+                // Example: ['FAQ','TROUBLESHOOT'] lets callers get help without enabling booking actions.
+                autoReplyAllowedScenarioTypes: [],
                 // Consent question
                 consentQuestionTemplate: "Would you like me to schedule an appointment for you?",
                 // Yes words (after consent question)
@@ -5827,6 +5830,9 @@ Sean → Shawn, Shaun`;
         const bookingRequiresConsent = dc.bookingRequiresExplicitConsent !== false;
         const forceLLMDiscovery = dc.forceLLMDiscovery !== false;
         const disableScenarioAuto = dc.disableScenarioAutoResponses !== false;
+        const autoReplyAllowedTypes = Array.isArray(dc.autoReplyAllowedScenarioTypes)
+            ? dc.autoReplyAllowedScenarioTypes.map(t => (t || '').toString().trim().toUpperCase()).filter(Boolean)
+            : [];
         const consentQuestion = dc.consentQuestionTemplate || "Would you like me to schedule an appointment for you?";
         const consentYesWords = (dc.consentYesWords || ['yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok']).join(', ');
         const wantsBookingPhrases = (dt.wantsBooking || []).join('\n');
@@ -5911,6 +5917,35 @@ Sean → Shawn, Shaun`;
                         <p style="color: #8b949e; font-size: 0.7rem; margin-top: 4px;">
                             Words that count as "yes" after AI asks the consent question
                         </p>
+                    </div>
+                </div>
+
+                <!-- Consent Split: Safe scenario auto-replies BEFORE consent (multi-tenant safe) -->
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                    <h4 style="margin: 0 0 12px 0; color: #3fb950;">🧩 Consent Split (Non-booking Auto-Replies)</h4>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 16px;">
+                        Multi-tenant safe rule: you may allow <strong>specific scenario types</strong> to reply before consent, while still requiring explicit consent for <strong>BOOKING</strong>.
+                        This is a <em>policy</em> (not trade logic).
+                    </p>
+
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                        <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid #30363d; border-radius:8px; background:#161b22; cursor:pointer;">
+                            <input type="checkbox" id="fdb-dc-autoReply-FAQ" ${autoReplyAllowedTypes.includes('FAQ') ? 'checked' : ''} style="accent-color:#3fb950; width:16px; height:16px;">
+                            <span style="color:#c9d1d9; font-weight:600;">FAQ</span>
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid #30363d; border-radius:8px; background:#161b22; cursor:pointer;">
+                            <input type="checkbox" id="fdb-dc-autoReply-TROUBLESHOOT" ${autoReplyAllowedTypes.includes('TROUBLESHOOT') ? 'checked' : ''} style="accent-color:#3fb950; width:16px; height:16px;">
+                            <span style="color:#c9d1d9; font-weight:600;">TROUBLESHOOT</span>
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid #30363d; border-radius:8px; background:#161b22; cursor:pointer;">
+                            <input type="checkbox" id="fdb-dc-autoReply-EMERGENCY" ${autoReplyAllowedTypes.includes('EMERGENCY') ? 'checked' : ''} style="accent-color:#3fb950; width:16px; height:16px;">
+                            <span style="color:#c9d1d9; font-weight:600;">EMERGENCY</span>
+                        </label>
+                    </div>
+
+                    <div style="margin-top: 10px; color:#8b949e; font-size:0.75rem;">
+                        <div><strong>Important:</strong> BOOKING actions remain consent-gated by <code>bookingRequiresExplicitConsent</code>.</div>
+                        <div>If <strong>Scenarios as Context Only</strong> is ON, these types are the only ones allowed to be used verbatim; others stay context-only.</div>
                     </div>
                 </div>
                 
@@ -7334,6 +7369,12 @@ Sean → Shawn, Shaun`;
             if (getChecked('fdb-dc-minField-serviceType')) minFields.push('serviceType');
             if (getChecked('fdb-dc-minField-urgency')) minFields.push('urgency');
             if (getChecked('fdb-dc-minField-existingCustomer')) minFields.push('existingCustomer');
+
+            // Consent split allowlist (scenario types allowed to reply before consent)
+            const autoReplyAllowedScenarioTypes = [];
+            if (getChecked('fdb-dc-autoReply-FAQ')) autoReplyAllowedScenarioTypes.push('FAQ');
+            if (getChecked('fdb-dc-autoReply-TROUBLESHOOT')) autoReplyAllowedScenarioTypes.push('TROUBLESHOOT');
+            if (getChecked('fdb-dc-autoReply-EMERGENCY')) autoReplyAllowedScenarioTypes.push('EMERGENCY');
             
             // Parse yes words from comma-separated input
             const yesWordsRaw = get('fdb-dc-yesWords') || '';
@@ -7344,6 +7385,8 @@ Sean → Shawn, Shaun`;
                 bookingRequiresExplicitConsent: getChecked('fdb-dc-bookingRequiresConsent'),
                 forceLLMDiscovery: getChecked('fdb-dc-forceLLMDiscovery'),
                 disableScenarioAutoResponses: getChecked('fdb-dc-disableScenarioAuto'),
+                // Consent split allowlist (trade-agnostic)
+                autoReplyAllowedScenarioTypes,
                 // Consent question
                 consentQuestionTemplate: get('fdb-dc-consentQuestion') || "Would you like me to schedule an appointment for you?",
                 // Yes words

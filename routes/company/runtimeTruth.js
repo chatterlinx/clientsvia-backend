@@ -346,11 +346,17 @@ router.get('/', async (req, res) => {
         };
 
         // V22 Consent (runtime uses frontDeskBehavior.discoveryConsent + detectionTriggers.wantsBooking)
+        const autoReplyAllowedScenarioTypes = Array.isArray(frontDeskDiscoveryConsent.autoReplyAllowedScenarioTypes)
+            ? frontDeskDiscoveryConsent.autoReplyAllowedScenarioTypes
+                .map(t => (t || '').toString().trim().toUpperCase())
+                .filter(Boolean)
+            : [];
         const v22Consent = {
             bookingRequiresExplicitConsent: normalizeBoolean(frontDeskDiscoveryConsent.bookingRequiresExplicitConsent, true),
             forceLLMDiscovery: normalizeBoolean(frontDeskDiscoveryConsent.forceLLMDiscovery, true),
             // Default MUST be false (do not silently block scenario replies when unset)
             disableScenarioAutoResponses: normalizeBoolean(frontDeskDiscoveryConsent.disableScenarioAutoResponses, false),
+            autoReplyAllowedScenarioTypes,
             consentQuestionTemplate: frontDeskDiscoveryConsent.consentQuestionTemplate || null,
             consentYesWords: Array.isArray(frontDeskDiscoveryConsent.consentYesWords) ? frontDeskDiscoveryConsent.consentYesWords : [],
             consentPhrases: Array.isArray(frontDeskDetectionTriggers.wantsBooking) ? frontDeskDetectionTriggers.wantsBooking : []
@@ -358,20 +364,26 @@ router.get('/', async (req, res) => {
 
         // Canonical consent truth: this is the ONLY object Runtime Truth should display and warn from.
         // Enterprise rule: a "truth report" must not contradict itself.
+        const blockAllScenarioAutoRepliesUntilConsent =
+            v22Consent.disableScenarioAutoResponses === true && v22Consent.autoReplyAllowedScenarioTypes.length === 0;
         const discoveryConsentTruth = {
             source: 'aiAgentSettings.frontDeskBehavior.discoveryConsent + aiAgentSettings.frontDeskBehavior.detectionTriggers.wantsBooking',
             bookingRequiresExplicitConsent: v22Consent.bookingRequiresExplicitConsent,
             forceLLMDiscovery: v22Consent.forceLLMDiscovery,
             disableScenarioAutoResponses: v22Consent.disableScenarioAutoResponses,
+            autoReplyAllowedScenarioTypes: v22Consent.autoReplyAllowedScenarioTypes,
+            blockAllScenarioAutoRepliesUntilConsent,
             configured: !!(v22Consent.consentQuestionTemplate || v22Consent.consentPhrases.length > 0 || v22Consent.consentYesWords.length > 0),
             consentQuestionTemplate: v22Consent.consentQuestionTemplate,
             consentPhrasesCount: v22Consent.consentPhrases.length,
             consentPhrasesSample: v22Consent.consentPhrases.slice(0, 5),
             consentYesWordsCount: v22Consent.consentYesWords.length,
             consentYesWordsSample: v22Consent.consentYesWords.slice(0, 5),
-            status: v22Consent.disableScenarioAutoResponses === true
+            status: blockAllScenarioAutoRepliesUntilConsent
                 ? 'BLOCKED: Scenarios will not auto-reply until consent is given'
-                : 'OK: Scenarios can respond normally'
+                : (v22Consent.disableScenarioAutoResponses === true && v22Consent.autoReplyAllowedScenarioTypes.length > 0)
+                    ? `OK: ${v22Consent.autoReplyAllowedScenarioTypes.join(', ')} may auto-reply before consent (BOOKING remains consent-gated)`
+                    : 'OK: Scenarios can respond normally'
         };
         
         const matchingPolicy = {
@@ -393,7 +405,8 @@ router.get('/', async (req, res) => {
                 bookingRequiresExplicitConsent: discoveryConsentTruth.bookingRequiresExplicitConsent,
                 forceLLMDiscovery: discoveryConsentTruth.forceLLMDiscovery,
                 disableScenarioAutoResponses: discoveryConsentTruth.disableScenarioAutoResponses,
-                scenariosBlockedByConsent: discoveryConsentTruth.disableScenarioAutoResponses === true,
+                // Blocker only when auto-replies are fully disabled with no allowlist.
+                scenariosBlockedByConsent: discoveryConsentTruth.blockAllScenarioAutoRepliesUntilConsent === true,
                 consentPhrasesCount: discoveryConsentTruth.consentPhrasesCount,
                 consentYesWordsCount: discoveryConsentTruth.consentYesWordsCount
             }
@@ -943,12 +956,12 @@ router.get('/', async (req, res) => {
             });
         }
         
-        if (discoveryConsentTruth.disableScenarioAutoResponses === true) {
+        if (discoveryConsentTruth.blockAllScenarioAutoRepliesUntilConsent === true) {
             issues.push({ 
                 severity: 'WARNING', 
                 area: 'consent', 
                 message: 'disableScenarioAutoResponses=true - scenarios will not reply until consent given',
-                fix: 'Set discoveryConsent.disableScenarioAutoResponses=false'
+                fix: 'Either set discoveryConsent.disableScenarioAutoResponses=false, or configure discoveryConsent.autoReplyAllowedScenarioTypes to allow safe scenario types before consent.'
             });
         }
         

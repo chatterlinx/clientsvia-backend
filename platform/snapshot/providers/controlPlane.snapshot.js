@@ -119,6 +119,9 @@ module.exports.getSnapshot = async function(companyId) {
             bookingRequiresExplicitConsent: normalizeBoolean(discoveryConsent.bookingRequiresExplicitConsent, true),
             forceLLMDiscovery: normalizeBoolean(discoveryConsent.forceLLMDiscovery, true),
             disableScenarioAutoResponses: normalizeBoolean(discoveryConsent.disableScenarioAutoResponses, false),
+            autoReplyAllowedScenarioTypes: Array.isArray(discoveryConsent.autoReplyAllowedScenarioTypes)
+                ? discoveryConsent.autoReplyAllowedScenarioTypes.map(t => (t || '').toString().trim().toUpperCase()).filter(Boolean)
+                : [],
             status: normalizeBoolean(discoveryConsent.disableScenarioAutoResponses, false) === true
                 ? 'BLOCKED: Scenarios will not auto-reply until consent is given'
                 : 'OK: Scenarios can respond normally',

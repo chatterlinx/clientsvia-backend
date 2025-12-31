@@ -2704,13 +2704,18 @@ async function processTurn({
         // V22 KILL SWITCHES - Read from company config (UI-controlled)
         // ═══════════════════════════════════════════════════════════════════════
         const discoveryConsent = company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent || {};
+        const autoReplyAllowedScenarioTypes = Array.isArray(discoveryConsent.autoReplyAllowedScenarioTypes)
+            ? discoveryConsent.autoReplyAllowedScenarioTypes.map(t => (t || '').toString().trim().toUpperCase()).filter(Boolean)
+            : [];
         const killSwitches = {
             // If true: Booking REQUIRES explicit consent (default: true)
             bookingRequiresConsent: discoveryConsent.bookingRequiresExplicitConsent !== false,
             // If true: LLM ALWAYS speaks during discovery (default: true)
             forceLLMDiscovery: discoveryConsent.forceLLMDiscovery !== false,
-            // If true: Scenarios are context only, never verbatim (default: true)
-            disableScenarioAutoResponses: discoveryConsent.disableScenarioAutoResponses !== false
+            // If true: Scenarios are context only by default (exceptions may be allowed via allowlist)
+            disableScenarioAutoResponses: discoveryConsent.disableScenarioAutoResponses !== false,
+            // Consent Split: types allowed to be used verbatim before consent (trade-agnostic)
+            autoReplyAllowedScenarioTypes
         };
         
         log('CHECKPOINT 9a: 🔒 Kill switches loaded', killSwitches);
@@ -5644,9 +5649,29 @@ async function processTurn({
                 stateSummary,
                 
                 // Scenario knowledge (tools, not scripts)
-                // KILL SWITCH: disableScenarioAutoResponses controls how scenarios are used
-                scenarioKnowledge: scenarioRetrieval.scenarios,
-                scenarioUsageMode: killSwitches.disableScenarioAutoResponses ? 'context_only' : 'may_verbatim',
+                // Consent Split: allow specific scenarioTypes to be used verbatim before consent, while BOOKING stays consent-gated.
+                scenarioKnowledge: (() => {
+                    const scenarios = Array.isArray(scenarioRetrieval.scenarios) ? scenarioRetrieval.scenarios : [];
+                    const allowTypes = Array.isArray(killSwitches.autoReplyAllowedScenarioTypes) ? killSwitches.autoReplyAllowedScenarioTypes : [];
+
+                    // Legacy behavior:
+                    // - disableScenarioAutoResponses=false → all scenarios may be used verbatim
+                    // - disableScenarioAutoResponses=true  → context-only by default, but allowlist can override per scenario type
+                    const getUsageModeForScenario = (s) => {
+                        const type = (s?.scenarioType || 'UNKNOWN').toString().trim().toUpperCase();
+                        if (killSwitches.disableScenarioAutoResponses !== true) return 'may_verbatim';
+                        return allowTypes.includes(type) ? 'may_verbatim' : 'context_only';
+                    };
+
+                    return scenarios.map(s => ({
+                        ...s,
+                        usageMode: getUsageModeForScenario(s)
+                    }));
+                })(),
+                scenarioUsagePolicy: {
+                    defaultMode: killSwitches.disableScenarioAutoResponses ? 'context_only' : 'may_verbatim',
+                    allowVerbatimScenarioTypes: Array.isArray(killSwitches.autoReplyAllowedScenarioTypes) ? killSwitches.autoReplyAllowedScenarioTypes : []
+                },
                 
                 // ═══════════════════════════════════════════════════════════════
                 // CHEAT SHEET KNOWLEDGE (PHASE 1 - Discovery Fallback)
@@ -5916,7 +5941,12 @@ async function processTurn({
             killSwitches: {
                 bookingRequiresConsent: company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.bookingRequiresExplicitConsent !== false,
                 forceLLMDiscovery: company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.forceLLMDiscovery !== false,
-                disableScenarioAutoResponses: company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.disableScenarioAutoResponses !== false
+                disableScenarioAutoResponses: company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.disableScenarioAutoResponses !== false,
+                autoReplyAllowedScenarioTypes: Array.isArray(company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.autoReplyAllowedScenarioTypes)
+                    ? company.aiAgentSettings.frontDeskBehavior.discoveryConsent.autoReplyAllowedScenarioTypes
+                        .map(t => (t || '').toString().trim().toUpperCase())
+                        .filter(Boolean)
+                    : []
             },
             
             // Response Preview (for human verification)

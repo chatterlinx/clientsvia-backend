@@ -2314,6 +2314,16 @@ const companySchema = new mongoose.Schema({
                 // If ON: Scenarios are context/tools only, LLM rephrases
                 // If OFF: Scenarios may be played back verbatim (legacy)
                 disableScenarioAutoResponses: { type: Boolean, default: true },
+
+                // V23+ CONSENT SPLIT (Multi-tenant safe):
+                // Allow specific scenario types to auto-reply BEFORE consent, while still requiring explicit consent for BOOKING.
+                // This is trade-agnostic; the "HVAC blueprint" is just a preset that sets these values per company.
+                // Example: ['FAQ','TROUBLESHOOT'] allows helpful answers without enabling booking actions.
+                autoReplyAllowedScenarioTypes: {
+                    type: [String],
+                    enum: ['FAQ', 'TROUBLESHOOT', 'EMERGENCY', 'BOOKING', 'UNKNOWN'],
+                    default: []
+                },
                 
                 // The question AI asks to get consent (trade-specific)
                 // HVAC: "Would you like me to schedule a service appointment?"
