@@ -3895,6 +3895,22 @@
               `).join('')}
             </div>
           ` : ''}
+
+          <!-- Locked Scenarios -->
+          ${data.lockedScenarios?.length > 0 ? `
+            <h4 style="font-size: 14px; font-weight: 600; margin: 16px 0 12px 0; color: #1d4ed8;">🔒 Locked (Skipped) (${data.lockedScenarios.length})</h4>
+            <div style="max-height: 140px; overflow-y: auto; border: 1px solid #bfdbfe; border-radius: 8px; background: #eff6ff;">
+              ${data.lockedScenarios.map(s => `
+                <div style="padding: 12px; border-bottom: 1px solid #bfdbfe;">
+                  <div style="font-weight: 600; color: #1e3a8a;">${s.scenarioName}</div>
+                  <div style="font-size: 12px; color: #1d4ed8;">${s.categoryName} • ${s.reason}</div>
+                </div>
+              `).join('')}
+            </div>
+            <div style="margin-top: 8px; font-size: 12px; color: #1d4ed8;">
+              Tip: Locked scenarios won’t be updated by Golden Autofill. Unlock them in the QA Dashboard (🔓 Unlock), then rerun Preview.
+            </div>
+          ` : ''}
         </div>
         
         <div style="padding: 16px 24px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; gap: 12px; background: #f8fafc; align-items: center;">

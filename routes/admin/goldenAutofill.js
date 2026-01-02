@@ -20,6 +20,12 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 const logger = require('../../utils/logger');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+const { authenticateJWT } = require('../../middleware/auth');
+const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
+
+// These endpoints mutate GLOBAL templates; they must be authenticated + authorized.
+router.use(authenticateJWT);
+router.use(requirePermission(PERMISSIONS.CONFIG_WRITE));
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GOLDEN DEFAULTS CONFIGURATION v1.1.0
@@ -417,6 +423,59 @@ function computeScenarioUpdates(scenario, categoryName) {
         updateCount: Object.keys(updates).length
     };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// POST /api/trade-knowledge/templates/:templateId/scenarios/:scenarioId/lock
+// Toggle scenario.autofillLock (protect from Golden Autofill)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.post('/:templateId/scenarios/:scenarioId/lock', async (req, res) => {
+    const { templateId, scenarioId } = req.params;
+    const locked = req.body?.locked === true;
+
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(templateId);
+        if (!template) {
+            return res.status(404).json({ success: false, error: 'Template not found', templateId });
+        }
+
+        let found = null;
+        let foundCategoryName = null;
+
+        for (const category of (template.categories || [])) {
+            for (const scenario of (category.scenarios || [])) {
+                const idStr = (scenario.scenarioId || scenario._id)?.toString();
+                if (idStr && idStr === scenarioId) {
+                    scenario.autofillLock = locked;
+                    found = scenario;
+                    foundCategoryName = category.name;
+                    break;
+                }
+            }
+            if (found) break;
+        }
+
+        if (!found) {
+            return res.status(404).json({ success: false, error: 'Scenario not found in template', scenarioId, templateId });
+        }
+
+        await template.save();
+
+        logger.info(`[GOLDEN AUTOFILL] Scenario lock toggled: template=${templateId} scenario=${scenarioId} locked=${locked}`);
+
+        return res.json({
+            success: true,
+            templateId,
+            scenarioId,
+            locked,
+            scenarioName: found.name || null,
+            categoryName: foundCategoryName || null
+        });
+    } catch (err) {
+        logger.error('[GOLDEN AUTOFILL] Failed to toggle scenario lock', err);
+        return res.status(500).json({ success: false, error: 'Failed to update scenario lock' });
+    }
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // POST /api/trade-knowledge/templates/:templateId/golden-autofill
