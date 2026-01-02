@@ -39,6 +39,7 @@ const v2Company = require('../../models/v2Company');
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const { getScopeDisplayInfo, getResolutionOrder, resolveEffectiveScenarios } = require('../../middleware/scopeGuard');
 const logger = require('../../utils/logger');
+const { isAllowedScenarioType, isUnknownOrBlankScenarioType } = require('../../utils/scenarioTypes');
 
 // ============================================================================
 // SCHEMA MIRROR - List of ALL fields in the scenario schema
@@ -366,7 +367,7 @@ function generateScenarioReport(scenario, context) {
     
     const wiringCheck = {
         scenarioType,
-        scenarioTypeValid: scenarioType !== 'UNKNOWN',
+        scenarioTypeValid: !isUnknownOrBlankScenarioType(scenarioType),
         actionType: actionType || 'inferred',
         handoffPolicy,
         transferTarget,
@@ -380,7 +381,7 @@ function generateScenarioReport(scenario, context) {
     };
     
     if (!wiringCheck.scenarioTypeValid) {
-        issues.push('scenarioType is UNKNOWN');
+        issues.push('scenarioType is blank/UNKNOWN');
     }
     wiringIssues.forEach(w => issues.push(w));
     
@@ -390,7 +391,7 @@ function generateScenarioReport(scenario, context) {
     
     // Enum validation
     const invalidEnums = [];
-    if (scenarioType && !['EMERGENCY', 'BOOKING', 'FAQ', 'TROUBLESHOOT', 'BILLING', 'TRANSFER', 'SMALL_TALK', 'SYSTEM', 'UNKNOWN'].includes(scenarioType)) {
+    if (scenarioType && !isAllowedScenarioType(scenarioType)) {
         invalidEnums.push(`scenarioType: ${scenarioType}`);
     }
     if (actionType && !['REPLY_ONLY', 'START_FLOW', 'REQUIRE_BOOKING', 'TRANSFER', 'SMS_FOLLOWUP'].includes(actionType)) {

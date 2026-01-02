@@ -36,6 +36,7 @@ const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
 const v2Company = require('../../models/v2Company');
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
+const { ALL_SCENARIO_TYPES, isAllowedScenarioType, isUnknownOrBlankScenarioType } = require('../../utils/scenarioTypes');
 
 router.use(authenticateJWT);
 router.use(requireCompanyAccess);
@@ -53,7 +54,7 @@ const QUALITY_REQUIREMENTS = {
     minReplyLength: 10 // Minimum characters per reply
 };
 
-const SCENARIO_TYPE_ENUM = ['EMERGENCY', 'BOOKING', 'FAQ', 'TROUBLESHOOT', 'BILLING', 'TRANSFER', 'SMALL_TALK', 'SYSTEM', 'UNKNOWN'];
+const SCENARIO_TYPE_ENUM = ALL_SCENARIO_TYPES;
 const ACTION_TYPE_ENUM = ['REPLY_ONLY', 'START_FLOW', 'REQUIRE_BOOKING', 'TRANSFER', 'SMS_FOLLOWUP'];
 const HANDOFF_POLICY_ENUM = ['never', 'low_confidence', 'always_on_keyword', 'emergency_only'];
 
@@ -185,15 +186,15 @@ function validateScenario(scenario, context) {
     
     const scenarioType = scenario.scenarioType;
     
-    if (!scenarioType || scenarioType === 'UNKNOWN') {
+    if (isUnknownOrBlankScenarioType(scenarioType)) {
         issues.push({ 
             field: 'scenarioType', 
-            issue: 'Scenario type is UNKNOWN - will not route properly',
+            issue: 'Scenario type is blank/UNKNOWN - will be treated as unclassified in governance checks',
             severity: 'WARNING',
             current: scenarioType || 'null',
             allowed: SCENARIO_TYPE_ENUM
         });
-    } else if (!SCENARIO_TYPE_ENUM.includes(scenarioType)) {
+    } else if (!isAllowedScenarioType(scenarioType)) {
         errors.push({ 
             field: 'scenarioType', 
             issue: `Invalid scenario type: ${scenarioType}`,

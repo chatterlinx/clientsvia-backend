@@ -484,7 +484,10 @@ const scenarioSchema = new Schema({
     
     scenarioType: {
         type: String,
-        enum: ['EMERGENCY', 'BOOKING', 'FAQ', 'SMALL_TALK', 'SYSTEM', 'TRANSFER', 'TROUBLESHOOT', 'BILLING', 'UNKNOWN'],
+        // NOTE: We must accept both canonical + legacy scenarioType values because
+        // older scenario editor UI and seeded templates historically used legacy enums.
+        // Canonical types are what Runtime Truth / scoring uses; legacy types are normalized at runtime.
+        enum: ['EMERGENCY', 'BOOKING', 'FAQ', 'TROUBLESHOOT', 'BILLING', 'TRANSFER', 'SMALL_TALK', 'SYSTEM', 'UNKNOWN', 'INFO_FAQ', 'ACTION_FLOW', 'SYSTEM_ACK'],
         default: 'UNKNOWN'
         // EMERGENCY: Critical issues (gas leak, no heat, flooding) - priority 90-100
         // BOOKING: Scheduling/appointment intents - priority 70-85

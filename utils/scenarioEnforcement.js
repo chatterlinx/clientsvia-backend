@@ -15,6 +15,7 @@
  */
 
 const logger = require('./logger');
+const { ALL_SCENARIO_TYPES, isAllowedScenarioType, isUnknownOrBlankScenarioType } = require('./scenarioTypes');
 
 // ============================================================================
 // QUALITY REQUIREMENTS - THE HARD RULES
@@ -28,7 +29,7 @@ const QUALITY_REQUIREMENTS = {
     minReplyLength: 10
 };
 
-const SCENARIO_TYPE_ENUM = ['EMERGENCY', 'BOOKING', 'FAQ', 'TROUBLESHOOT', 'BILLING', 'TRANSFER', 'SMALL_TALK', 'SYSTEM', 'UNKNOWN'];
+const SCENARIO_TYPE_ENUM = ALL_SCENARIO_TYPES;
 const ACTION_TYPE_ENUM = ['REPLY_ONLY', 'START_FLOW', 'REQUIRE_BOOKING', 'TRANSFER', 'SMS_FOLLOWUP'];
 const HANDOFF_POLICY_ENUM = ['never', 'low_confidence', 'always_on_keyword', 'emergency_only'];
 
@@ -108,11 +109,11 @@ function validateScenarioQuality(scenario, context = {}) {
     const scenarioType = scenario.scenarioType || 'UNKNOWN';
     checks.scenarioType = {
         value: scenarioType,
-        valid: scenarioType !== 'UNKNOWN' && SCENARIO_TYPE_ENUM.includes(scenarioType),
-        pass: scenarioType !== 'UNKNOWN'
+        valid: !isUnknownOrBlankScenarioType(scenarioType) && isAllowedScenarioType(scenarioType),
+        pass: !isUnknownOrBlankScenarioType(scenarioType)
     };
     if (!checks.scenarioType.pass) {
-        issues.push('scenarioType is UNKNOWN');
+        issues.push('scenarioType is blank/UNKNOWN');
     }
     
     // ═══════════════════════════════════════════════════════════════════════

@@ -29,6 +29,7 @@ const DynamicFlow = require('../../models/DynamicFlow');
 const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
+const { ALL_SCENARIO_TYPES, isAllowedScenarioType, isUnknownOrBlankScenarioType } = require('../../utils/scenarioTypes');
 
 router.use(authenticateJWT);
 router.use(requireCompanyAccess);
@@ -37,7 +38,7 @@ router.use(requireCompanyAccess);
 // VALIDATION RULES
 // ============================================================================
 
-const SCENARIO_TYPE_ENUM = ['EMERGENCY', 'BOOKING', 'FAQ', 'TROUBLESHOOT', 'BILLING', 'TRANSFER', 'SMALL_TALK', 'SYSTEM', 'UNKNOWN'];
+const SCENARIO_TYPE_ENUM = ALL_SCENARIO_TYPES;
 const ACTION_TYPE_ENUM = ['REPLY_ONLY', 'START_FLOW', 'REQUIRE_BOOKING', 'TRANSFER', 'SMS_FOLLOWUP'];
 const HANDOFF_POLICY_ENUM = ['never', 'low_confidence', 'always_on_keyword', 'emergency_only'];
 const FOLLOW_UP_MODE_ENUM = ['NONE', 'ASK_FOLLOWUP_QUESTION', 'ASK_IF_BOOK', 'TRANSFER'];
@@ -76,17 +77,17 @@ function validateScenario(scenario, context) {
     // CLASSIFICATION
     // ═══════════════════════════════════════════════════════════════════════
     
-    if (scenario.scenarioType && !SCENARIO_TYPE_ENUM.includes(scenario.scenarioType)) {
+    if (scenario.scenarioType && !isAllowedScenarioType(scenario.scenarioType)) {
         errors.push({ 
             field: 'scenarioType', 
             message: `Invalid scenarioType. Must be: ${SCENARIO_TYPE_ENUM.join(', ')}` 
         });
     }
     
-    if (!scenario.scenarioType || scenario.scenarioType === 'UNKNOWN') {
+    if (isUnknownOrBlankScenarioType(scenario.scenarioType)) {
         warnings.push({ 
             field: 'scenarioType', 
-            message: 'scenarioType is UNKNOWN - scenario will not route properly' 
+            message: 'scenarioType is blank/UNKNOWN - scenario will be treated as unclassified in governance checks' 
         });
     }
     

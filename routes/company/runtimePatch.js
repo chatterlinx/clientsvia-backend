@@ -32,6 +32,7 @@ const GlobalInstantResponseTemplate = require('../../models/GlobalInstantRespons
 const DynamicFlow = require('../../models/DynamicFlow');
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
+const { ALL_SCENARIO_TYPES } = require('../../utils/scenarioTypes');
 
 router.use(authenticateJWT);
 router.use(requireCompanyAccess);
@@ -162,7 +163,7 @@ const SCENARIO_WIRING_PATHS = {
     // ═══════════════════════════════════════════════════════════════════════
     'scenarioBrain.scenarios.*.scenarioType': {
         type: 'enum',
-        values: ['EMERGENCY', 'BOOKING', 'FAQ', 'TROUBLESHOOT', 'BILLING', 'TRANSFER', 'SMALL_TALK', 'SYSTEM', 'UNKNOWN'],
+        values: ALL_SCENARIO_TYPES,
         scope: 'companyOverride',
         note: 'Classification determines default action if actionType not set'
     },

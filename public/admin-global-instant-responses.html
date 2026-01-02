@@ -5087,10 +5087,21 @@ Of course! I'm happy to wait while you look into it."></textarea>
                                 </label>
                                 <select id="scenario-type" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
                                     <option value="">-- Infer from Content --</option>
+                                    <optgroup label="Canonical (Runtime Truth)">
+                                        <option value="FAQ">📋 FAQ (hours, pricing, info)</option>
+                                        <option value="TROUBLESHOOT">🛠️ TROUBLESHOOT (diagnose / fix)</option>
+                                        <option value="BOOKING">📅 BOOKING (schedule / appointment)</option>
+                                        <option value="EMERGENCY">🚨 EMERGENCY (urgent / safety)</option>
+                                        <option value="TRANSFER">☎️ TRANSFER (speak to human)</option>
+                                        <option value="BILLING">💳 BILLING (invoice / payment)</option>
+                                        <option value="SYSTEM">✓ SYSTEM (ack / internal)</option>
+                                        <option value="SMALL_TALK">💬 SMALL_TALK (rapport)</option>
+                                    </optgroup>
+                                    <optgroup label="Legacy (Deprecated)">
                                     <option value="INFO_FAQ">📋 INFO_FAQ (hours, pricing, info)</option>
                                     <option value="ACTION_FLOW">🚀 ACTION_FLOW (booking, transfer)</option>
                                     <option value="SYSTEM_ACK">✓ SYSTEM_ACK (confirmation)</option>
-                                    <option value="SMALL_TALK">💬 SMALL_TALK (rapport)</option>
+                                    </optgroup>
                                 </select>
                                 <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">What this scenario does (blank = infer)</p>
                             </div>
