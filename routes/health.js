@@ -17,7 +17,78 @@ const logger = require('../utils/logger.js');
 
 const router = express.Router();
 const mongoose = require('mongoose');
-const { redisClient } = require('../clients');
+const clients = require('../clients');
+const { isRedisConfigured, getSanitizedRedisUrl } = require('../services/redisClientFactory');
+
+// ============================================================================
+// K8S/LOAD-BALANCER STYLE ENDPOINTS (PUBLIC)
+// ============================================================================
+// /healthz = process alive, NO external dependencies
+// /readyz  = dependencies ready (Mongo required, Redis required only if configured)
+// ============================================================================
+
+router.get('/healthz', (req, res) => {
+    return res.status(200).json({
+        success: true,
+        data: {
+            status: 'ok',
+            timestamp: new Date().toISOString(),
+            uptimeSeconds: Math.round(process.uptime()),
+            pid: process.pid,
+            node: process.version,
+            env: process.env.NODE_ENV || 'development'
+        }
+    });
+});
+
+router.get('/readyz', async (req, res) => {
+    const mongoReady = mongoose.connection.readyState === 1;
+    const redisConfigured = isRedisConfigured();
+    const redisClient = clients.redisClient;
+
+    let redisReady = null;
+    let redisError = null;
+
+    if (redisConfigured) {
+        try {
+            if (redisClient && redisClient.isOpen) {
+                await redisClient.ping();
+                redisReady = true;
+            } else {
+                redisReady = false;
+            }
+        } catch (e) {
+            redisReady = false;
+            redisError = e?.message || String(e);
+        }
+    }
+
+    const ready =
+        mongoReady === true &&
+        (redisConfigured ? redisReady === true : true);
+
+    const payload = {
+        status: ready ? 'ready' : 'not_ready',
+        timestamp: new Date().toISOString(),
+        dependencies: {
+            mongodb: {
+                ready: mongoReady,
+                readyState: mongoose.connection.readyState,
+                host: mongoose.connection.host,
+                database: mongoose.connection.name
+            },
+            redis: {
+                configured: redisConfigured,
+                url: redisConfigured ? getSanitizedRedisUrl() : null,
+                ready: redisConfigured ? redisReady : null,
+                isOpen: redisClient ? redisClient.isOpen : false,
+                error: redisError
+            }
+        }
+    };
+
+    return res.status(ready ? 200 : 503).json({ success: ready, data: payload });
+});
 
 // ============================================================================
 // COMPREHENSIVE HEALTH CHECK
@@ -70,6 +141,9 @@ router.get('/health', async (req, res) => {
         // CHECK 2: Redis Connection
         // ================================================================
         try {
+            // IMPORTANT: clients/index.js exports redisClient via a getter.
+            // Do NOT destructure at require-time or you can capture a stale value.
+            const redisClient = clients.redisClient;
             if (redisClient && redisClient.isOpen) {
                 // Test Redis with a ping
                 await redisClient.ping();

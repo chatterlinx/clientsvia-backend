@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <title>ClientsVia Control Plane</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Prevent stale Control Plane during rapid deploys -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <!-- Tailwind CSS (compiled from input.css) -->
   <link rel="stylesheet" href="/css/output.css">
@@ -6276,6 +6280,11 @@ Loading field report...
   </div>
   
   <script>
+    // Deploy/version stamp (for operator proof)
+    // If you're not seeing this change in DevTools console, you're on a stale build.
+    const CONTROL_PLANE_BUILD = '2026-01-02__healthz_readyz__no_cache';
+    console.log('🧾 [CONTROL PLANE] Build:', CONTROL_PLANE_BUILD);
+
     // ============================================================================
     // RUNTIME TRUTH - THE Single Source of All Runtime Behavior
     // ============================================================================
