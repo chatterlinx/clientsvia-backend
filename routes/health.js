@@ -20,6 +20,10 @@ const mongoose = require('mongoose');
 const clients = require('../clients');
 const { isRedisConfigured, getSanitizedRedisUrl } = require('../services/redisClientFactory');
 
+// Public endpoints must not leak sensitive infra details (hosts, URLs) in production.
+// If you need detailed infra output for debugging, set HEALTH_PUBLIC_DETAILS=true.
+const ALLOW_PUBLIC_DETAILS = process.env.HEALTH_PUBLIC_DETAILS === 'true' || process.env.NODE_ENV !== 'production';
+
 // ============================================================================
 // K8S/LOAD-BALANCER STYLE ENDPOINTS (PUBLIC)
 // ============================================================================
@@ -74,14 +78,16 @@ router.get('/readyz', async (req, res) => {
             mongodb: {
                 ready: mongoReady,
                 readyState: mongoose.connection.readyState,
-                host: mongoose.connection.host,
-                database: mongoose.connection.name
+                ...(ALLOW_PUBLIC_DETAILS ? {
+                    host: mongoose.connection.host,
+                    database: mongoose.connection.name
+                } : {})
             },
             redis: {
                 configured: redisConfigured,
-                url: redisConfigured ? getSanitizedRedisUrl() : null,
                 ready: redisConfigured ? redisReady : null,
                 isOpen: redisClient ? redisClient.isOpen : false,
+                ...(ALLOW_PUBLIC_DETAILS ? { url: redisConfigured ? getSanitizedRedisUrl() : null } : {}),
                 error: redisError
             }
         }
@@ -117,8 +123,10 @@ router.get('/health', async (req, res) => {
                 health.systems.mongodb = 'ok';
                 health.details.mongodb = {
                     status: 'connected',
-                    host: mongoose.connection.host,
-                    database: mongoose.connection.name
+                    ...(ALLOW_PUBLIC_DETAILS ? {
+                        host: mongoose.connection.host,
+                        database: mongoose.connection.name
+                    } : {})
                 };
                 logger.info('✅ [HEALTH CHECK] MongoDB: Connected');
             } else {
