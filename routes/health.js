@@ -19,10 +19,42 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const clients = require('../clients');
 const { isRedisConfigured, getSanitizedRedisUrl } = require('../services/redisClientFactory');
+const { authenticateJWT } = require('../middleware/auth');
+const { requirePermission, PERMISSIONS } = require('../middleware/rbac');
 
-// Public endpoints must not leak sensitive infra details (hosts, URLs) in production.
-// If you need detailed infra output for debugging, set HEALTH_PUBLIC_DETAILS=true.
-const ALLOW_PUBLIC_DETAILS = process.env.HEALTH_PUBLIC_DETAILS === 'true' || process.env.NODE_ENV !== 'production';
+function getBuildInfo() {
+    return {
+        env: process.env.NODE_ENV || 'development',
+        node: process.version,
+        // Render commonly exposes commit via env; if absent, this will be null.
+        gitCommit:
+            process.env.RENDER_GIT_COMMIT ||
+            process.env.GIT_COMMIT ||
+            process.env.COMMIT_SHA ||
+            null
+    };
+}
+
+function checkInternalToken(req) {
+    const token = (req.headers['x-internal-token'] || '').toString();
+    const expected = (process.env.INTERNAL_HEALTH_TOKEN || '').toString();
+    if (!expected) return false;
+    return token.length > 0 && token === expected;
+}
+
+async function requireHealthDetailsAuth(req, res, next) {
+    // Option A: internal shared secret header (fastest for ops tooling)
+    if (checkInternalToken(req)) {
+        return next();
+    }
+
+    // Option B: admin JWT + RBAC (operator visibility)
+    // If auth fails, authenticateJWT will respond with 401.
+    await authenticateJWT(req, res, () => {
+        // requirePermission will respond with 403 if user lacks access.
+        return requirePermission(PERMISSIONS.DIAGNOSTICS_ADMIN)(req, res, next);
+    });
+}
 
 // ============================================================================
 // K8S/LOAD-BALANCER STYLE ENDPOINTS (PUBLIC)
@@ -35,12 +67,11 @@ router.get('/healthz', (req, res) => {
     return res.status(200).json({
         success: true,
         data: {
-            status: 'ok',
+            status: 'alive',
             timestamp: new Date().toISOString(),
             uptimeSeconds: Math.round(process.uptime()),
             pid: process.pid,
-            node: process.version,
-            env: process.env.NODE_ENV || 'development'
+            build: getBuildInfo()
         }
     });
 });
@@ -74,26 +105,70 @@ router.get('/readyz', async (req, res) => {
     const payload = {
         status: ready ? 'ready' : 'not_ready',
         timestamp: new Date().toISOString(),
-        dependencies: {
-            mongodb: {
-                ready: mongoReady,
-                readyState: mongoose.connection.readyState,
-                ...(ALLOW_PUBLIC_DETAILS ? {
-                    host: mongoose.connection.host,
-                    database: mongoose.connection.name
-                } : {})
-            },
-            redis: {
-                configured: redisConfigured,
-                ready: redisConfigured ? redisReady : null,
-                isOpen: redisClient ? redisClient.isOpen : false,
-                ...(ALLOW_PUBLIC_DETAILS ? { url: redisConfigured ? getSanitizedRedisUrl() : null } : {}),
-                error: redisError
-            }
+        build: getBuildInfo(),
+        checks: {
+            mongo: mongoReady ? 'ok' : 'error',
+            redis: redisConfigured ? (redisReady ? 'ok' : 'error') : 'skipped'
         }
     };
 
     return res.status(ready ? 200 : 503).json({ success: ready, data: payload });
+});
+
+// Private details endpoint (ops-only): includes infra details to debug quickly.
+router.get('/readyz/details', requireHealthDetailsAuth, async (req, res) => {
+    const mongoReady = mongoose.connection.readyState === 1;
+    const redisConfigured = isRedisConfigured();
+    const redisClient = clients.redisClient;
+
+    let redisReady = null;
+    let redisError = null;
+
+    if (redisConfigured) {
+        try {
+            if (redisClient && redisClient.isOpen) {
+                await redisClient.ping();
+                redisReady = true;
+            } else {
+                redisReady = false;
+            }
+        } catch (e) {
+            redisReady = false;
+            redisError = e?.message || String(e);
+        }
+    }
+
+    const ready =
+        mongoReady === true &&
+        (redisConfigured ? redisReady === true : true);
+
+    return res.status(ready ? 200 : 503).json({
+        success: ready,
+        data: {
+            status: ready ? 'ready' : 'not_ready',
+            timestamp: new Date().toISOString(),
+            build: getBuildInfo(),
+            checks: {
+                mongo: mongoReady ? 'ok' : 'error',
+                redis: redisConfigured ? (redisReady ? 'ok' : 'error') : 'skipped'
+            },
+            details: {
+                mongodb: {
+                    ready: mongoReady,
+                    readyState: mongoose.connection.readyState,
+                    host: mongoose.connection.host,
+                    database: mongoose.connection.name
+                },
+                redis: {
+                    configured: redisConfigured,
+                    url: redisConfigured ? getSanitizedRedisUrl() : null,
+                    ready: redisConfigured ? redisReady : null,
+                    isOpen: redisClient ? redisClient.isOpen : false,
+                    error: redisError
+                }
+            }
+        }
+    });
 });
 
 // ============================================================================
@@ -123,10 +198,7 @@ router.get('/health', async (req, res) => {
                 health.systems.mongodb = 'ok';
                 health.details.mongodb = {
                     status: 'connected',
-                    ...(ALLOW_PUBLIC_DETAILS ? {
-                        host: mongoose.connection.host,
-                        database: mongoose.connection.name
-                    } : {})
+                    // Public endpoint: never leak infra details
                 };
                 logger.info('✅ [HEALTH CHECK] MongoDB: Connected');
             } else {

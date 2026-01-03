@@ -1041,6 +1041,10 @@
       <h1 class="page-title">🎛️ Control Plane</h1>
     </div>
     <div class="header-right">
+      <div id="cp-ready-chip" title="Readiness: /api/readyz" style="display:none; align-items:center; gap:8px; padding:8px 12px; border-radius:10px; border:1px solid #334155; background:#0f172a; color:#e2e8f0; font-weight:700; font-size:12px;">
+        <span id="cp-ready-dot" style="width:10px; height:10px; border-radius:999px; display:inline-block; background:#94a3b8;"></span>
+        <span id="cp-ready-text">READY: --</span>
+      </div>
       <!-- 🟣 GOLDEN SETUP BUTTON (Admin Only) -->
       <button id="btn-golden-setup" class="btn-golden" onclick="openGoldenSetupModal()" title="Load Golden HVAC Reference Setup">
         <span>🟣</span>
@@ -6284,6 +6288,42 @@ Loading field report...
     // If you're not seeing this change in DevTools console, you're on a stale build.
     const CONTROL_PLANE_BUILD = '2026-01-02__healthz_readyz__no_cache';
     console.log('🧾 [CONTROL PLANE] Build:', CONTROL_PLANE_BUILD);
+
+    async function refreshControlPlaneReadiness() {
+      const chip = document.getElementById('cp-ready-chip');
+      const dot = document.getElementById('cp-ready-dot');
+      const text = document.getElementById('cp-ready-text');
+      if (!chip || !dot || !text) return;
+
+      try {
+        const resp = await fetch('/api/readyz', { cache: 'no-store' });
+        const body = await resp.json().catch(() => null);
+        const checks = body?.data?.checks || {};
+        const redis = checks.redis || 'unknown';
+        const mongo = checks.mongo || 'unknown';
+        const ok = resp.ok && body?.success === true && body?.data?.status === 'ready';
+
+        chip.style.display = 'inline-flex';
+        if (ok) {
+          dot.style.background = '#10b981';
+          chip.style.borderColor = '#10b981';
+          text.textContent = `READY: ✅ (mongo=${mongo}, redis=${redis})`;
+        } else {
+          dot.style.background = '#f59e0b';
+          chip.style.borderColor = '#f59e0b';
+          text.textContent = `READY: ❌ (mongo=${mongo}, redis=${redis})`;
+        }
+      } catch (e) {
+        chip.style.display = 'inline-flex';
+        dot.style.background = '#ef4444';
+        chip.style.borderColor = '#ef4444';
+        text.textContent = 'READY: ❌ (readyz failed)';
+      }
+    }
+
+    // Poll readiness periodically so operators don't chase ghosts when Redis is down.
+    setTimeout(refreshControlPlaneReadiness, 250);
+    setInterval(refreshControlPlaneReadiness, 15000);
 
     // ============================================================================
     // RUNTIME TRUTH - THE Single Source of All Runtime Behavior
