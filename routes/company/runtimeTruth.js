@@ -1054,6 +1054,13 @@ router.get('/', async (req, res) => {
                 environment: process.env.NODE_ENV || 'development',
                 schemaVersion: SCHEMA_VERSION,
                 effectiveConfigVersion,
+                // 🔒 DRIFT DETECTION: Include last saved ECV for UI comparison
+                lastSavedEffectiveConfigVersion: company.aiAgentSettings?._meta?.lastSavedEffectiveConfigVersion || null,
+                lastSavedAt: company.aiAgentSettings?._meta?.lastSavedAt || null,
+                lastSavedBy: company.aiAgentSettings?._meta?.lastSavedBy || null,
+                driftDetected: company.aiAgentSettings?._meta?.lastSavedEffectiveConfigVersion
+                    ? company.aiAgentSettings._meta.lastSavedEffectiveConfigVersion !== effectiveConfigVersion
+                    : false,
                 version, // For optimistic concurrency in patches
                 generatedAt: timestamp,
                 generationTimeMs: Date.now() - startTime,

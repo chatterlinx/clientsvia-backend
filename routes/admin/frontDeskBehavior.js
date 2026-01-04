@@ -23,6 +23,8 @@ const { authenticateJWT } = require('../../middleware/auth');
 const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
 const { DEFAULT_FRONT_DESK_CONFIG } = require('../../config/frontDeskPrompt');
 const ConfigAuditService = require('../../services/ConfigAuditService');
+const { computeEffectiveConfigVersion } = require('../../utils/effectiveConfigVersion');
+const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 
 // ============================================================================
 // DEFAULT VALUES (Shown in UI, can be customized per company)
@@ -773,7 +775,7 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             .select('aiAgentSettings.frontDeskBehavior aiAgentSettings.templateReferences aiAgentSettings.scenarioControls agentSettings')
             .lean();
 
-        await ConfigAuditService.logConfigChange({
+        const auditEntry = await ConfigAuditService.logConfigChange({
             req,
             companyId,
             action: 'frontDeskBehavior.patch',
@@ -781,11 +783,43 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             beforeCompanyDoc: beforeCompany,
             afterCompanyDoc: afterCompany
         });
+
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🔒 DRIFT DETECTION: Save lastSavedEffectiveConfigVersion after successful write
+        // ════════════════════════════════════════════════════════════════════════════
+        // This enables UI to detect drift: UI saved ECV != Runtime ECV
+        // If they differ, something external changed config since last UI save
+        // ════════════════════════════════════════════════════════════════════════════
+        if (auditEntry?.effectiveConfigVersionAfter) {
+            try {
+                await v2Company.findByIdAndUpdate(companyId, {
+                    $set: {
+                        'aiAgentSettings._meta.lastSavedEffectiveConfigVersion': auditEntry.effectiveConfigVersionAfter,
+                        'aiAgentSettings._meta.lastSavedAt': new Date(),
+                        'aiAgentSettings._meta.lastSavedRequestId': auditEntry.request?.requestId || null,
+                        'aiAgentSettings._meta.lastSavedBy': req.user?.email || 'admin'
+                    }
+                });
+                logger.info('[FRONT DESK BEHAVIOR] 🔒 DRIFT: Saved effectiveConfigVersion for drift detection', {
+                    companyId,
+                    effectiveConfigVersion: auditEntry.effectiveConfigVersionAfter
+                });
+            } catch (driftErr) {
+                logger.warn('[FRONT DESK BEHAVIOR] ⚠️ Failed to save drift detection meta (non-fatal)', {
+                    companyId,
+                    error: driftErr.message
+                });
+            }
+        }
         
         res.json({
             success: true,
             message: 'Front Desk Behavior updated',
-            data: result.aiAgentSettings?.frontDeskBehavior
+            data: result.aiAgentSettings?.frontDeskBehavior,
+            _meta: {
+                effectiveConfigVersion: auditEntry?.effectiveConfigVersionAfter || null,
+                requestId: auditEntry?.request?.requestId || null
+            }
         });
         
     } catch (error) {

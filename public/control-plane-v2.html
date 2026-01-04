@@ -1144,6 +1144,41 @@
   </nav>
 
   <!-- ═══════════════════════════════════════════════════════════════════════════
+       🔒 DRIFT DETECTION BANNER - Salesforce-Grade Config Governance
+       Shows when UI saved config differs from current runtime effective config
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="drift-banner" style="display: none; background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: white; padding: 12px 24px; margin: 8px 16px; border-radius: 8px; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 24px;">⚠️</span>
+        <div>
+          <div style="font-weight: 700; font-size: 14px;">DRIFT DETECTED</div>
+          <div style="font-size: 12px; opacity: 0.9;">UI saved config ≠ Runtime effective config — something changed externally</div>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px; font-size: 11px; font-family: monospace;">
+        <div>
+          <div style="opacity: 0.7;">UI Saved ECV:</div>
+          <div id="drift-ui-ecv" style="font-weight: 600;">—</div>
+        </div>
+        <div style="opacity: 0.5;">≠</div>
+        <div>
+          <div style="opacity: 0.7;">Runtime ECV:</div>
+          <div id="drift-runtime-ecv" style="font-weight: 600;">—</div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button onclick="refreshDriftCheck()" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+          <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+        <button onclick="showDriftDiffModal()" style="padding: 8px 16px; background: white; color: #dc2626; border: none; border-radius: 6px; font-weight: 600; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+          <i class="fas fa-code-compare"></i> Show Diff
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════════
        CONTENT PANELS
        ═══════════════════════════════════════════════════════════════════════════ -->
   <main class="content-area">
@@ -8854,6 +8889,113 @@ Loading field report...
   </div>
   
   <!-- ═══════════════════════════════════════════════════════════════════════════
+       🔒 DRIFT DIFF MODAL - Show Config Change Details
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="drift-diff-modal-overlay" class="snapshot-modal-overlay" onclick="if(event.target === this) closeDriftDiffModal()">
+    <div class="snapshot-modal" style="max-width: 700px; max-height: 90vh; display: flex; flex-direction: column;">
+      
+      <div class="snapshot-modal-header" style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);">
+        <div class="snapshot-modal-title">
+          <span style="font-size: 24px;">🔍</span>
+          <div>
+            <h3 style="margin: 0; font-weight: 700;">Config Drift Details</h3>
+            <p style="margin: 0; font-size: 12px; opacity: 0.9;">Last config change audit entry</p>
+          </div>
+        </div>
+        <button onclick="closeDriftDiffModal()" 
+                style="background: rgba(255,255,255,0.2); border: none; color: white; width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <div class="snapshot-modal-content" style="overflow-y: auto; padding: 24px;">
+        <div id="drift-diff-loading" style="text-align: center; padding: 40px; color: #64748b;">
+          <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 16px;"></i>
+          <p>Loading audit entry...</p>
+        </div>
+        
+        <div id="drift-diff-content" style="display: none;">
+          <!-- Meta info -->
+          <div style="background: #0f172a; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 12px;">
+              <div>
+                <div style="color: #64748b; margin-bottom: 4px;">Action</div>
+                <div id="drift-diff-action" style="color: #22d3ee; font-weight: 600;">—</div>
+              </div>
+              <div>
+                <div style="color: #64748b; margin-bottom: 4px;">Timestamp</div>
+                <div id="drift-diff-timestamp" style="color: white;">—</div>
+              </div>
+              <div>
+                <div style="color: #64748b; margin-bottom: 4px;">Actor</div>
+                <div id="drift-diff-actor" style="color: #fbbf24;">—</div>
+              </div>
+              <div>
+                <div style="color: #64748b; margin-bottom: 4px;">Request ID</div>
+                <div id="drift-diff-request-id" style="color: #64748b; font-family: monospace; font-size: 10px;">—</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- ECV Before/After -->
+          <div style="background: #1e293b; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+            <div style="font-weight: 600; color: white; margin-bottom: 12px; font-size: 13px;">
+              <i class="fas fa-fingerprint" style="margin-right: 8px; color: #8b5cf6;"></i>
+              Effective Config Version Change
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; font-family: monospace; font-size: 11px;">
+              <div style="flex: 1; background: #0f172a; padding: 10px; border-radius: 6px;">
+                <div style="color: #64748b; font-size: 10px; margin-bottom: 4px;">BEFORE</div>
+                <div id="drift-diff-ecv-before" style="color: #f87171; word-break: break-all;">—</div>
+              </div>
+              <i class="fas fa-arrow-right" style="color: #64748b;"></i>
+              <div style="flex: 1; background: #0f172a; padding: 10px; border-radius: 6px;">
+                <div style="color: #64748b; font-size: 10px; margin-bottom: 4px;">AFTER</div>
+                <div id="drift-diff-ecv-after" style="color: #34d399; word-break: break-all;">—</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Updated Paths -->
+          <div style="background: #1e293b; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+            <div style="font-weight: 600; color: white; margin-bottom: 12px; font-size: 13px;">
+              <i class="fas fa-code" style="margin-right: 8px; color: #10b981;"></i>
+              Updated Paths
+            </div>
+            <div id="drift-diff-paths" style="background: #0f172a; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 11px; max-height: 200px; overflow-y: auto;">
+              —
+            </div>
+          </div>
+          
+          <!-- Diff Summary -->
+          <div style="background: #1e293b; border-radius: 8px; padding: 16px;">
+            <div style="font-weight: 600; color: white; margin-bottom: 12px; font-size: 13px;">
+              <i class="fas fa-list" style="margin-right: 8px; color: #f59e0b;"></i>
+              Diff Summary
+            </div>
+            <div id="drift-diff-summary" style="color: #94a3b8; font-size: 12px;">
+              —
+            </div>
+          </div>
+        </div>
+        
+        <div id="drift-diff-error" style="display: none; text-align: center; padding: 40px; color: #f87171;">
+          <i class="fas fa-exclamation-triangle" style="font-size: 32px; margin-bottom: 16px;"></i>
+          <p id="drift-diff-error-message">Failed to load audit entry</p>
+        </div>
+      </div>
+      
+      <div class="snapshot-modal-footer" style="border-top: 1px solid rgba(255,255,255,0.1); padding: 16px 24px;">
+        <button onclick="closeDriftDiffModal()"
+                style="padding: 10px 24px; background: #334155; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">
+          Close
+        </button>
+      </div>
+      
+    </div>
+  </div>
+  
+  <!-- ═══════════════════════════════════════════════════════════════════════════
        🔒 SCENARIO OPS MODAL - NO TENANT CONTAMINATION
        ═══════════════════════════════════════════════════════════════════════════ -->
   <div id="scenario-ops-modal-overlay" class="snapshot-modal-overlay" onclick="if(event.target === this) closeScenarioOpsModal()">
@@ -9006,6 +9148,188 @@ DO NOT add scenarios to company docs. Scenarios are global and live only in Glob
         showSnapshotToast('Copy failed', 'Please select and copy manually', 'error');
       });
     }
+  </script>
+  
+  <script>
+    // ============================================================================
+    // 🔒 DRIFT DETECTION FUNCTIONS - Salesforce-Grade Config Governance
+    // ============================================================================
+    let driftCheckData = null;
+    
+    /**
+     * Check for config drift by comparing runtime ECV vs last saved ECV
+     * Called on page load and when refreshing Runtime Truth
+     */
+    async function checkForDrift() {
+      if (!currentCompanyId) return;
+      
+      try {
+        const response = await fetch(`/api/company/${currentCompanyId}/runtime-truth`, {
+          headers: getAuthHeaders()
+        });
+        
+        if (!response.ok) {
+          console.warn('[DRIFT] Failed to fetch runtime truth:', response.status);
+          return;
+        }
+        
+        const data = await response.json();
+        const meta = data._meta || data.data?._meta || {};
+        
+        driftCheckData = {
+          effectiveConfigVersion: meta.effectiveConfigVersion || null,
+          lastSavedEffectiveConfigVersion: meta.lastSavedEffectiveConfigVersion || null,
+          lastSavedAt: meta.lastSavedAt || null,
+          lastSavedBy: meta.lastSavedBy || null,
+          driftDetected: meta.driftDetected === true
+        };
+        
+        updateDriftBanner();
+        
+      } catch (error) {
+        console.error('[DRIFT] Error checking for drift:', error);
+      }
+    }
+    
+    /**
+     * Update the drift banner visibility and content
+     */
+    function updateDriftBanner() {
+      const banner = document.getElementById('drift-banner');
+      if (!banner || !driftCheckData) return;
+      
+      // Show drift banner if drift detected
+      if (driftCheckData.driftDetected) {
+        document.getElementById('drift-ui-ecv').textContent = 
+          driftCheckData.lastSavedEffectiveConfigVersion || 'never saved';
+        document.getElementById('drift-runtime-ecv').textContent = 
+          driftCheckData.effectiveConfigVersion || '—';
+        banner.style.display = 'block';
+        console.warn('[DRIFT] ⚠️ DRIFT DETECTED:', {
+          saved: driftCheckData.lastSavedEffectiveConfigVersion,
+          runtime: driftCheckData.effectiveConfigVersion
+        });
+      } else {
+        banner.style.display = 'none';
+        console.info('[DRIFT] ✅ No drift detected, configs in sync');
+      }
+    }
+    
+    /**
+     * Refresh drift check
+     */
+    async function refreshDriftCheck() {
+      const banner = document.getElementById('drift-banner');
+      const refreshBtn = banner?.querySelector('button');
+      if (refreshBtn) {
+        refreshBtn.disabled = true;
+        refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+      }
+      
+      await checkForDrift();
+      
+      if (refreshBtn) {
+        refreshBtn.disabled = false;
+        refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+      }
+      
+      if (!driftCheckData?.driftDetected) {
+        showSnapshotToast('No Drift', 'Configs are in sync', 'success');
+      }
+    }
+    
+    /**
+     * Open the drift diff modal and load audit entry
+     */
+    async function showDriftDiffModal() {
+      document.getElementById('drift-diff-modal-overlay').classList.add('active');
+      document.getElementById('drift-diff-loading').style.display = 'block';
+      document.getElementById('drift-diff-content').style.display = 'none';
+      document.getElementById('drift-diff-error').style.display = 'none';
+      
+      try {
+        const response = await fetch(`/api/admin/config-audit/${currentCompanyId}?limit=1`, {
+          headers: getAuthHeaders()
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success || !data.items || data.items.length === 0) {
+          throw new Error('No audit entries found');
+        }
+        
+        const entry = data.items[0];
+        
+        // Populate modal content
+        document.getElementById('drift-diff-action').textContent = entry.action || '—';
+        document.getElementById('drift-diff-timestamp').textContent = 
+          entry.createdAt ? new Date(entry.createdAt).toLocaleString() : '—';
+        document.getElementById('drift-diff-actor').textContent = 
+          entry.actor?.email || entry.actor?.userId || 'unknown';
+        document.getElementById('drift-diff-request-id').textContent = 
+          entry.requestId || '—';
+        document.getElementById('drift-diff-ecv-before').textContent = 
+          entry.effectiveConfigVersionBefore || '—';
+        document.getElementById('drift-diff-ecv-after').textContent = 
+          entry.effectiveConfigVersionAfter || '—';
+        
+        // Updated paths
+        const pathsEl = document.getElementById('drift-diff-paths');
+        if (entry.updatedPaths && entry.updatedPaths.length > 0) {
+          pathsEl.innerHTML = entry.updatedPaths
+            .map(p => `<div style="color: #22d3ee; margin-bottom: 4px;">• ${p}</div>`)
+            .join('');
+        } else {
+          pathsEl.textContent = 'No paths recorded';
+        }
+        
+        // Diff summary
+        document.getElementById('drift-diff-summary').textContent = 
+          entry.diffSummary || 'No summary available';
+        
+        document.getElementById('drift-diff-loading').style.display = 'none';
+        document.getElementById('drift-diff-content').style.display = 'block';
+        
+      } catch (error) {
+        console.error('[DRIFT] Error loading audit entry:', error);
+        document.getElementById('drift-diff-loading').style.display = 'none';
+        document.getElementById('drift-diff-error-message').textContent = error.message;
+        document.getElementById('drift-diff-error').style.display = 'block';
+      }
+    }
+    
+    /**
+     * Close drift diff modal
+     */
+    function closeDriftDiffModal() {
+      document.getElementById('drift-diff-modal-overlay').classList.remove('active');
+    }
+    
+    // ============================================================================
+    // AUTO-CHECK FOR DRIFT ON COMPANY LOAD
+    // ============================================================================
+    // Hook into company selection - check for drift when company changes
+    const originalSwitchCompany = window.switchCompany;
+    window.switchCompany = async function(companyId, ...args) {
+      if (typeof originalSwitchCompany === 'function') {
+        await originalSwitchCompany(companyId, ...args);
+      }
+      // Check for drift after company switch
+      setTimeout(() => checkForDrift(), 1000);
+    };
+    
+    // Also check on initial page load after company is loaded
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        if (currentCompanyId) {
+          checkForDrift();
+        }
+      }, 2000);
+    });
   </script>
   
   <script>
