@@ -129,23 +129,48 @@ class ScenarioEngine {
       // Get effective trade key (from input or company)
       const effectiveTradeKey = tradeKey || company.tradeKey || company.industryType || 'universal';
 
-      // Load template for this trade
-      // TODO: Implement trade-specific template selection
-      // For now, use the active/default template
-      let template = await GlobalInstantResponseTemplate.findOne({
-        isActive: true,
-        isPublished: true
-      }).lean();
-
-      if (!template) {
-        template = await GlobalInstantResponseTemplate.findOne({
-          isDefaultTemplate: true
-        }).lean();
+      // ═══════════════════════════════════════════════════════════════
+      // 🔒 MULTI-TENANT SAFE TEMPLATE LOADING
+      // ═══════════════════════════════════════════════════════════════
+      // CRITICAL: Load templates ONLY from company.aiAgentSettings.templateReferences
+      // NEVER use "any active template" fallback - that causes cross-tenant contamination
+      
+      const templateReferences = company.aiAgentSettings?.templateReferences || [];
+      
+      if (templateReferences.length === 0) {
+        logger.warn('[SCENARIO ENGINE] 🚨 MULTI-TENANT SAFETY: No templateReferences configured', {
+          companyId,
+          companyName: company.companyName || company.businessName,
+          action: 'Returning safe empty result - company must activate a template'
+        });
+        result.error = 'NO_TEMPLATES_CONFIGURED';
+        result.message = 'Company has no templates activated. Please activate a template in Control Plane.';
+        return result;
       }
 
+      // Get the primary template (first one, or one marked isPrimary)
+      const primaryRef = templateReferences.find(ref => ref.isPrimary) || templateReferences[0];
+      
+      if (!primaryRef?.templateId) {
+        logger.warn('[SCENARIO ENGINE] 🚨 MULTI-TENANT SAFETY: Invalid templateReference', {
+          companyId,
+          templateReferences
+        });
+        result.error = 'INVALID_TEMPLATE_REFERENCE';
+        return result;
+      }
+
+      // Load ONLY the company's linked template
+      let template = await GlobalInstantResponseTemplate.findById(primaryRef.templateId).lean();
+
       if (!template) {
-        logger.warn('[SCENARIO ENGINE] No template found, returning empty result');
-        result.error = 'No active template found';
+        logger.error('[SCENARIO ENGINE] 🚨 Template not found for company reference', {
+          companyId,
+          templateId: primaryRef.templateId,
+          companyName: company.companyName || company.businessName
+        });
+        result.error = 'TEMPLATE_NOT_FOUND';
+        result.message = `Template ${primaryRef.templateId} not found. Please reconfigure in Control Plane.`;
         return result;
       }
 

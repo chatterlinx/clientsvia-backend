@@ -193,6 +193,7 @@ async function loadAllRoutes() {
         routes.globalInstantResponsesRoutes = await loadRouteWithTimeout('./routes/admin/globalInstantResponses', 'globalInstantResponsesRoutes');
         routes.templateDebugExportRoutes = await loadRouteWithTimeout('./routes/admin/templateDebugExport', 'templateDebugExportRoutes'); // 🔍 Template Debug Export (Read-Only)
         routes.goldenAutofillRoutes = await loadRouteWithTimeout('./routes/admin/goldenAutofill', 'goldenAutofillRoutes'); // ✨ Golden Autofill (Apply Best-Practice Defaults)
+        routes.globalTemplatesPatchRoutes = await loadRouteWithTimeout('./routes/admin/globalTemplatesPatch', 'globalTemplatesPatchRoutes'); // 🔒 Global Templates Patch (ONLY safe write path for scenarios)
         routes.globalAIBehaviorsRoutes = await loadRouteWithTimeout('./routes/admin/globalAIBehaviors', 'globalAIBehaviorsRoutes');
         routes.llmScenarioAssistantRoutes = await loadRouteWithTimeout('./routes/admin/llmScenarioAssistant', 'llmScenarioAssistantRoutes');
         routes.llmSettingsRoutes = await loadRouteWithTimeout('./routes/admin/llmSettings', 'llmSettingsRoutes');
@@ -439,6 +440,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/global-instant-responses', routes.globalInstantResponsesRoutes); // Global AI Brain Management
     app.use('/api/trade-knowledge/templates', routes.templateDebugExportRoutes); // 🔍 Template Debug Export (Read-Only)
     app.use('/api/trade-knowledge/templates', routes.goldenAutofillRoutes); // ✨ Golden Autofill (Apply Best-Practice Defaults)
+    app.use('/api/admin/global-templates', routes.globalTemplatesPatchRoutes); // 🔒 Global Templates Patch (ONLY safe write path for scenarios)
     app.use('/api/admin/global-behaviors', routes.globalAIBehaviorsRoutes); // Global AI Behavior Templates
     app.use('/api/admin/scenario-assistant', routes.llmScenarioAssistantRoutes); // 🤖 LLM Scenario Assistant (admin drafting tool)
     app.use('/api/admin/llm-settings', routes.llmSettingsRoutes); // 🎛️ LLM Enterprise Settings (profiles, compliance, advanced tuning)
