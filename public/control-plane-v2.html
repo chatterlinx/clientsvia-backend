@@ -1533,6 +1533,14 @@
               <i class="fas fa-magic"></i> Golden Autofill
               <span style="font-size: 9px; background: #f59e0b; color: black; padding: 1px 4px; border-radius: 3px; margin-left: 4px;">PREVIEW</span>
             </button>
+            
+            <!-- 🔒 Scenario Ops - READ FIRST (Multi-tenant safety) -->
+            <button onclick="openScenarioOpsModal()"
+                    style="padding: 8px 14px; background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;"
+                    title="CRITICAL: Read this before modifying scenarios. Multi-tenant safety rules.">
+              <i class="fas fa-shield-alt"></i> Scenario Ops
+              <span style="font-size: 9px; background: white; color: #dc2626; padding: 1px 4px; border-radius: 3px; margin-left: 4px;">READ FIRST</span>
+            </button>
           </div>
         </div>
         
@@ -8844,6 +8852,161 @@ Loading field report...
       </div>
     </div>
   </div>
+  
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       🔒 SCENARIO OPS MODAL - NO TENANT CONTAMINATION
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="scenario-ops-modal-overlay" class="snapshot-modal-overlay" onclick="if(event.target === this) closeScenarioOpsModal()">
+    <div class="snapshot-modal" style="max-width: 800px; max-height: 95vh; display: flex; flex-direction: column;">
+      
+      <div class="snapshot-modal-header" style="background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);">
+        <div class="snapshot-modal-title">
+          <h2 style="margin: 0; font-size: 18px; font-weight: 600; color: white;">🔒 Scenario Ops — No Tenant Contamination</h2>
+          <p style="margin: 4px 0 0; font-size: 12px; color: rgba(255,255,255,0.8);">READ BEFORE MODIFYING SCENARIOS</p>
+        </div>
+        <div class="snapshot-modal-controls" style="display: flex; gap: 8px;">
+          <button onclick="closeScenarioOpsModal()" 
+                  style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      
+      <div class="snapshot-modal-body" style="padding: 24px; overflow-y: auto; flex: 1;">
+        
+        <!-- Section 1: Where Scenarios Live -->
+        <div style="background: #fef2f2; border: 2px solid #fecaca; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 12px; color: #991b1b; font-size: 14px; font-weight: 700;">
+            <i class="fas fa-database"></i> 1) Where Scenarios Live (Single Source of Truth)
+          </h4>
+          <div style="font-size: 13px; color: #7f1d1d;">
+            <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px;">
+              <span style="color: #16a34a; font-weight: bold;">✅</span>
+              <span><strong>Global only:</strong> <code style="background: #fee2e2; padding: 2px 6px; border-radius: 4px;">GlobalInstantResponseTemplate → categories[].scenarios[]</code></span>
+            </div>
+            <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px;">
+              <span style="color: #16a34a; font-weight: bold;">✅</span>
+              <span><strong>Companies link templates:</strong> <code style="background: #fee2e2; padding: 2px 6px; border-radius: 4px;">company.aiAgentSettings.templateReferences[]</code></span>
+            </div>
+            <div style="display: flex; align-items: flex-start; gap: 8px;">
+              <span style="color: #dc2626; font-weight: bold;">❌</span>
+              <span><strong>Never:</strong> Store scenarios inside Company documents</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Section 2: Allowed Workflow -->
+        <div style="background: #f0fdf4; border: 2px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 12px; color: #166534; font-size: 14px; font-weight: 700;">
+            <i class="fas fa-check-circle"></i> 2) Allowed Workflow (No Guessing)
+          </h4>
+          <ol style="margin: 0; padding-left: 20px; font-size: 13px; color: #15803d; line-height: 1.8;">
+            <li>Open <strong>Scenario Browser → RAW</strong> to confirm data source is global</li>
+            <li>Use <strong>Export JSON</strong> (Download .json) to get real <code>categoryId</code> and <code>scenarioId</code></li>
+            <li>Build a <strong>Patch JSON</strong> using only real IDs from export</li>
+            <li>Apply using <strong>Patch Import</strong> or the Global Template Patch API</li>
+            <li>Re-check in Scenario Browser RAW:
+              <ul style="margin: 4px 0; padding-left: 20px;">
+                <li><code>scope = "GLOBAL"</code></li>
+                <li><code>ownerCompanyId = null</code></li>
+              </ul>
+            </li>
+          </ol>
+        </div>
+        
+        <!-- Section 3: Forbidden Actions -->
+        <div style="background: #1e293b; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 12px; color: #f87171; font-size: 14px; font-weight: 700;">
+            <i class="fas fa-ban"></i> 3) Forbidden Actions
+          </h4>
+          <div style="font-size: 13px; color: #e2e8f0; line-height: 1.8;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+              <span style="color: #f87171;">❌</span> No adding scenarios under companyId
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+              <span style="color: #f87171;">❌</span> No guessing scenario IDs — use Export JSON
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+              <span style="color: #f87171;">❌</span> No runtime loading "any active template"
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: #f87171;">❌</span> No browser console scripts for scenario edits
+            </div>
+          </div>
+        </div>
+        
+        <!-- Section 4: Quick Actions -->
+        <div style="background: #f8fafc; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 12px; color: #374151; font-size: 14px; font-weight: 700;">
+            <i class="fas fa-rocket"></i> 4) Quick Actions
+          </h4>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+            <button onclick="closeScenarioOpsModal(); switchToDataConfigSubtab('scenarios');"
+                    style="padding: 10px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">
+              <i class="fas fa-theater-masks"></i> Open Scenario Browser
+            </button>
+            <button onclick="closeScenarioOpsModal(); openPatchImportModal();"
+                    style="padding: 10px 16px; background: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">
+              <i class="fas fa-file-import"></i> Open Patch Import
+            </button>
+            <button onclick="closeScenarioOpsModal(); openExportConfigModal();"
+                    style="padding: 10px 16px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">
+              <i class="fas fa-download"></i> Export JSON
+            </button>
+            <button onclick="window.open('/docs/SCENARIO-OPS.md', '_blank')"
+                    style="padding: 10px 16px; background: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">
+              <i class="fas fa-book"></i> Full Documentation
+            </button>
+          </div>
+        </div>
+        
+        <!-- Section 5: Copy Directive -->
+        <div style="background: #fef3c7; border: 2px solid #fcd34d; border-radius: 8px; padding: 16px;">
+          <h4 style="margin: 0 0 12px; color: #92400e; font-size: 14px; font-weight: 700;">
+            <i class="fas fa-clipboard"></i> 5) AI Coder Directive (Copy & Paste)
+          </h4>
+          <div id="scenario-ops-directive" style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; padding: 12px; font-size: 12px; color: #78350f; font-family: monospace; line-height: 1.6; margin-bottom: 12px;">
+DO NOT add scenarios to company docs. Scenarios are global and live only in GlobalInstantResponseTemplate categories[].scenarios[]. Use Export JSON to get real scenarioIds/categoryIds. Build Patch JSON using real IDs only. Apply through the Global Template Patch API (POST /api/admin/global-templates/:templateId/scenarios/patch) with dryRun:true first. Verify in Scenario Browser RAW scope=GLOBAL ownerCompanyId=null.
+          </div>
+          <button onclick="copyScenarioOpsDirective()"
+                  style="padding: 10px 20px; background: #f59e0b; color: #1e293b; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">
+            <i class="fas fa-copy"></i> Copy Ops Directive
+          </button>
+        </div>
+        
+      </div>
+      
+      <div style="padding: 16px 24px; border-top: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: flex-end;">
+        <button onclick="closeScenarioOpsModal()"
+                style="padding: 10px 24px; background: #374151; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">
+          Got It — Close
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // ============================================================================
+    // SCENARIO OPS MODAL FUNCTIONS
+    // ============================================================================
+    function openScenarioOpsModal() {
+      document.getElementById('scenario-ops-modal-overlay').classList.add('active');
+    }
+    
+    function closeScenarioOpsModal() {
+      document.getElementById('scenario-ops-modal-overlay').classList.remove('active');
+    }
+    
+    function copyScenarioOpsDirective() {
+      const directive = document.getElementById('scenario-ops-directive').innerText;
+      navigator.clipboard.writeText(directive).then(() => {
+        showSnapshotToast('Copied!', 'Directive copied to clipboard', 'success');
+      }).catch(err => {
+        console.error('Failed to copy:', err);
+        showSnapshotToast('Copy failed', 'Please select and copy manually', 'error');
+      });
+    }
+  </script>
   
   <script>
     // ============================================================================
