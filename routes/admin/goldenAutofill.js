@@ -948,4 +948,163 @@ router.post('/:templateId/scenarios/:scenarioId/lock', async (req, res) => {
     }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /api/trade-knowledge/unknown-scenarios
+// Diagnostic: Find ALL scenarios with UNKNOWN or null scenarioType
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.get('/unknown-scenarios', async (req, res) => {
+    const startTime = Date.now();
+    
+    try {
+        const templates = await GlobalInstantResponseTemplate.find({}).lean();
+        
+        const unknownScenarios = [];
+        let totalScenarios = 0;
+        
+        for (const template of templates) {
+            for (const category of (template.categories || [])) {
+                for (const scenario of (category.scenarios || [])) {
+                    totalScenarios++;
+                    
+                    const currentType = scenario.scenarioType;
+                    const isUnknown = !currentType || currentType === 'UNKNOWN';
+                    
+                    if (isUnknown) {
+                        const detected = detectScenarioType(scenario, category.name);
+                        
+                        unknownScenarios.push({
+                            templateId: template._id.toString(),
+                            templateName: template.name,
+                            categoryName: category.name,
+                            scenarioId: scenario.scenarioId || scenario._id?.toString(),
+                            scenarioName: scenario.name,
+                            currentType: currentType || null,
+                            detectedType: detected,
+                            isLocked: scenario.autofillLock === true,
+                            triggerCount: (scenario.triggers || []).length,
+                            triggerSample: (scenario.triggers || []).slice(0, 3)
+                        });
+                    }
+                }
+            }
+        }
+        
+        res.json({
+            success: true,
+            summary: {
+                totalTemplates: templates.length,
+                totalScenarios,
+                unknownCount: unknownScenarios.length,
+                lockedUnknownCount: unknownScenarios.filter(s => s.isLocked).length,
+                fixableCount: unknownScenarios.filter(s => !s.isLocked).length
+            },
+            unknownScenarios: unknownScenarios.slice(0, 50), // Limit for response size
+            meta: {
+                generatedAt: new Date().toISOString(),
+                generatedInMs: Date.now() - startTime
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[UNKNOWN SCENARIOS] Error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// POST /api/trade-knowledge/fix-unknown-scenarios
+// Fix ALL scenarios with UNKNOWN or null scenarioType (applies detection)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.post('/fix-unknown-scenarios', async (req, res) => {
+    const startTime = Date.now();
+    const adminUser = req.user?.email || req.user?.username || 'system';
+    const { dryRun = true } = req.body; // Default to dry run for safety
+    
+    logger.info(`[FIX UNKNOWN] ${dryRun ? 'DRY RUN' : 'APPLY'} by ${adminUser}`);
+    
+    try {
+        const templates = await GlobalInstantResponseTemplate.find({});
+        
+        const results = {
+            total: 0,
+            fixed: 0,
+            skipped: 0,
+            locked: 0,
+            changes: []
+        };
+        
+        for (const template of templates) {
+            let templateModified = false;
+            
+            for (const category of (template.categories || [])) {
+                for (const scenario of (category.scenarios || [])) {
+                    const currentType = scenario.scenarioType;
+                    const isUnknown = !currentType || currentType === 'UNKNOWN';
+                    
+                    if (isUnknown) {
+                        results.total++;
+                        
+                        if (scenario.autofillLock === true) {
+                            results.locked++;
+                            results.changes.push({
+                                scenarioName: scenario.name,
+                                templateName: template.name,
+                                action: 'SKIPPED',
+                                reason: 'autofillLock=true'
+                            });
+                            continue;
+                        }
+                        
+                        const detected = detectScenarioType(scenario, category.name);
+                        
+                        if (!dryRun) {
+                            scenario.scenarioType = detected;
+                            scenario.updatedAt = new Date();
+                            scenario.updatedBy = adminUser;
+                            templateModified = true;
+                        }
+                        
+                        results.fixed++;
+                        results.changes.push({
+                            scenarioName: scenario.name,
+                            templateName: template.name,
+                            before: currentType || null,
+                            after: detected,
+                            action: dryRun ? 'WOULD_FIX' : 'FIXED'
+                        });
+                    }
+                }
+            }
+            
+            if (templateModified && !dryRun) {
+                template.updatedAt = new Date();
+                template.lastUpdatedBy = adminUser;
+                await template.save();
+            }
+        }
+        
+        res.json({
+            success: true,
+            mode: dryRun ? 'dry_run' : 'apply',
+            summary: {
+                unknownFound: results.total,
+                fixed: results.fixed,
+                skippedLocked: results.locked
+            },
+            changes: results.changes.slice(0, 30), // Limit response size
+            meta: {
+                executedBy: adminUser,
+                executedAt: new Date().toISOString(),
+                executedInMs: Date.now() - startTime
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[FIX UNKNOWN] Error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;

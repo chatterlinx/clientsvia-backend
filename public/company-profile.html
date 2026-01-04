@@ -1656,6 +1656,18 @@
                             · runtime: <code id="truth-ecv-runtime" style="background:#0b1220;padding:2px 6px;border-radius:6px;"></code>
                         </div>
                     </div>
+                    <!-- EXPLAIN WHY NOT GREEN - Runtime Truth blockers -->
+                    <div id="truth-why-not-green-banner" style="display:none; margin-bottom: 12px; padding: 12px 14px; border-radius: 10px; border: 1px solid #ef4444; background: rgba(239, 68, 68, 0.12); color: #fecaca; font-size: 12px;">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom: 8px;">
+                            <i class="fas fa-gavel"></i>
+                            <strong id="truth-why-not-green-title">EXPLAIN WHY NOT GREEN</strong>
+                            <span id="truth-why-not-green-status" style="margin-left: auto; padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; background: #dc2626; color: #fff;">RED</span>
+                        </div>
+                        <div id="truth-why-not-green-summary" style="color:#e2e8f0; margin-bottom: 8px;"></div>
+                        <div id="truth-why-not-green-blockers" style="background: rgba(0,0,0,0.2); padding: 10px 12px; border-radius: 6px; font-family: monospace; font-size: 11px;">
+                            <!-- Blockers will be inserted here -->
+                        </div>
+                    </div>
                     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; font-size: 14px;" id="truth-health-grid">
                         <!-- Health metrics will be inserted here -->
                         <div style="padding: 12px; background-color: #475569; border-radius: 8px; text-align: center;">
@@ -2407,11 +2419,87 @@
                 if (commitEl) commitEl.textContent = renderCommit;
                 const viewer = document.getElementById('truth-canonical-viewer');
                 if (viewer) viewer.textContent = JSON.stringify(rt, null, 2);
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // EXPLAIN WHY NOT GREEN - Display Runtime Truth blockers
+                // ═══════════════════════════════════════════════════════════════════
+                updateWhyNotGreenBanner(rt?.data?.health || rt?.health);
+                
                 try { showSaveVerifyToast(true, 'Runtime Truth Loaded', `ECV: ${rt?._meta?.effectiveConfigVersion || '-'}`); } catch {}
             } catch (error) {
                 const viewer = document.getElementById('truth-canonical-viewer');
                 if (viewer) viewer.textContent = `Error loading runtime-truth: ${error.message}`;
                 try { showSaveVerifyToast(false, 'Runtime Truth Failed', error.message); } catch {}
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // EXPLAIN WHY NOT GREEN - Render blockers from Runtime Truth
+        // ═══════════════════════════════════════════════════════════════════════════
+        function updateWhyNotGreenBanner(health) {
+            const banner = document.getElementById('truth-why-not-green-banner');
+            const title = document.getElementById('truth-why-not-green-title');
+            const statusBadge = document.getElementById('truth-why-not-green-status');
+            const summary = document.getElementById('truth-why-not-green-summary');
+            const blockersDiv = document.getElementById('truth-why-not-green-blockers');
+            
+            if (!banner) return;
+            
+            const status = health?.status || 'UNKNOWN';
+            const explain = health?.explainWhyNotGreen;
+            
+            // Show banner if not GREEN
+            if (status === 'GREEN' || !explain) {
+                banner.style.display = 'none';
+                return;
+            }
+            
+            banner.style.display = 'block';
+            
+            // Update status badge
+            if (statusBadge) {
+                statusBadge.textContent = status;
+                if (status === 'RED') {
+                    banner.style.borderColor = '#ef4444';
+                    banner.style.background = 'rgba(239, 68, 68, 0.12)';
+                    statusBadge.style.background = '#dc2626';
+                } else if (status === 'YELLOW') {
+                    banner.style.borderColor = '#f59e0b';
+                    banner.style.background = 'rgba(245, 158, 11, 0.12)';
+                    statusBadge.style.background = '#d97706';
+                }
+            }
+            
+            // Update summary
+            if (summary) {
+                summary.textContent = explain.summary || `Runtime Truth: ${status}`;
+            }
+            
+            // Render blockers and warnings
+            if (blockersDiv) {
+                let html = '';
+                
+                if (explain.blockers?.length > 0) {
+                    html += '<div style="margin-bottom: 8px;"><strong style="color: #f87171;">🔴 Critical Blockers:</strong></div>';
+                    explain.blockers.forEach(b => {
+                        html += `<div style="margin-left: 12px; margin-bottom: 4px;">
+                            <span style="color: #fecaca;">• [${b.area || 'runtime'}]</span> ${b.message}
+                            ${b.fix ? `<br><span style="color: #9ca3af; margin-left: 14px;">Fix: ${b.fix}</span>` : ''}
+                        </div>`;
+                    });
+                }
+                
+                if (explain.warnings?.length > 0) {
+                    html += '<div style="margin-top: 8px; margin-bottom: 8px;"><strong style="color: #fcd34d;">🟡 Warnings:</strong></div>';
+                    explain.warnings.forEach(w => {
+                        html += `<div style="margin-left: 12px; margin-bottom: 4px;">
+                            <span style="color: #fef3c7;">• [${w.area || 'runtime'}]</span> ${w.message}
+                            ${w.fix ? `<br><span style="color: #9ca3af; margin-left: 14px;">Fix: ${w.fix}</span>` : ''}
+                        </div>`;
+                    });
+                }
+                
+                blockersDiv.innerHTML = html || 'No details available';
             }
         }
 

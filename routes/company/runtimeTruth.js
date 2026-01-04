@@ -965,12 +965,38 @@ router.get('/', async (req, res) => {
             });
         }
         
+        const healthStatus = issues.some(i => i.severity === 'ERROR') ? 'RED' : 
+                             issues.some(i => i.severity === 'WARNING') ? 'YELLOW' : 'GREEN';
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // EXPLAIN WHY NOT GREEN - Human-readable blockers summary
+        // This is THE authoritative list of what's preventing production readiness
+        // ═══════════════════════════════════════════════════════════════════════
+        const explainWhyNotGreen = healthStatus === 'GREEN' 
+            ? null 
+            : {
+                status: healthStatus,
+                summary: healthStatus === 'RED' 
+                    ? `${issues.filter(i => i.severity === 'ERROR').length} critical issue(s) blocking production`
+                    : `${issues.filter(i => i.severity === 'WARNING').length} warning(s) need attention`,
+                blockers: issues.filter(i => i.severity === 'ERROR').map(i => ({
+                    area: i.area,
+                    message: i.message,
+                    fix: i.fix
+                })),
+                warnings: issues.filter(i => i.severity === 'WARNING').map(i => ({
+                    area: i.area,
+                    message: i.message,
+                    fix: i.fix
+                }))
+            };
+        
         const health = {
-            status: issues.some(i => i.severity === 'ERROR') ? 'RED' : 
-                    issues.some(i => i.severity === 'WARNING') ? 'YELLOW' : 'GREEN',
+            status: healthStatus,
             issues,
             criticalCount: issues.filter(i => i.severity === 'ERROR').length,
-            warningCount: issues.filter(i => i.severity === 'WARNING').length
+            warningCount: issues.filter(i => i.severity === 'WARNING').length,
+            explainWhyNotGreen
         };
         
         // ═══════════════════════════════════════════════════════════════════════
