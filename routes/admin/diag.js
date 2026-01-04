@@ -162,10 +162,16 @@ router.post('/selfcheck', async (req, res) => {
         const criticalIssues = [];
         
         // ========================================================================
-        // CHECK 1: REDIS ROUND-TRIP TEST (SET → GET → DEL with timing)
+        // CHECK 1: REDIS ROUND-TRIP TEST (uses CANONICAL health check)
         // ========================================================================
         try {
-            const { getSharedRedisClient, isRedisConfigured, REDIS_URL } = require('../../services/redisClientFactory');
+            const { 
+                getSharedRedisClient, 
+                isRedisConfigured, 
+                redisHealthCheck,
+                getSanitizedRedisUrl,
+                REDIS_URL 
+            } = require('../../services/redisClientFactory');
             
             if (!isRedisConfigured()) {
                 criticalIssues.push('REDIS_URL not configured');
@@ -175,31 +181,18 @@ router.post('/selfcheck', async (req, res) => {
                     notes: ['REDIS_URL environment variable is missing']
                 };
             } else {
-                // Get shared client from factory (now async - handles connection internally)
-                const redisClient = await getSharedRedisClient();
+                // Use the CANONICAL health check from the factory
+                const healthResult = await redisHealthCheck();
+                const setGetDelOk = healthResult.ok;
+                const roundTripMs = healthResult.rttMs ? healthResult.rttMs.toFixed(2) : '0.00';
                 
-                if (!redisClient) {
-                    throw new Error('Could not connect to Redis');
+                // If health check failed, report it
+                if (!setGetDelOk) {
+                    throw new Error(healthResult.errorMessage || 'Health check failed');
                 }
-                // Real round-trip test
-                const testKey = `healthcheck:${Date.now()}`;
-                const testValue = 'triage-test';
                 
-                const startTime = performance.now();
-                
-                // SET with expiration
-                await redisClient.set(testKey, testValue, { EX: 10 });
-                
-                // GET to verify
-                const retrieved = await redisClient.get(testKey);
-                
-                // DEL to clean up
-                await redisClient.del(testKey);
-                
-                const roundTripMs = (performance.now() - startTime).toFixed(2);
-                
-                // Verify round trip worked
-                const setGetDelOk = retrieved === testValue;
+                // Get shared client for additional metrics (INFO, dbsize, etc.)
+                const redisClient = await getSharedRedisClient();
                 
                 // Get Redis INFO for detailed metrics
                 const info = await redisClient.info();

@@ -2,10 +2,10 @@
  * V2 Redis Session Store
  * Replaces in-memory storage with persistent, scalable Redis
  * 
- * STANDARDIZED CONNECTION:
- * - Uses redisClientFactory for consistent Redis connections
- * - REDIS_URL only - no HOST/PORT/PASSWORD fallbacks
- * - Never falls back to localhost
+ * UNIFIED CONNECTION:
+ * - Uses the SHARED client from redisClientFactory
+ * - Does NOT create its own client
+ * - Falls back to memory if Redis not available
  * 
  * GRACEFUL DEGRADATION:
  * - If REDIS_URL is not configured, operates in memory-only mode
@@ -14,7 +14,11 @@
  */
 
 const logger = require('../utils/logger.js');
-const { createNodeRedisClient, isRedisConfigured } = require('../services/redisClientFactory');
+const { 
+    getSharedRedisClient, 
+    getSharedRedisClientSync,
+    isRedisConfigured 
+} = require('../services/redisClientFactory');
 
 const crypto = require('crypto');
 
@@ -24,7 +28,6 @@ const REDIS_ENABLED = isRedisConfigured();
 class RedisSessionStore {
     constructor() {
         this.enabled = REDIS_ENABLED;
-        this.client = null;
         
         // In-memory fallback when Redis is not configured
         this.memoryStore = new Map();
@@ -32,37 +35,26 @@ class RedisSessionStore {
         if (!REDIS_ENABLED) {
             logger.warn('[REDIS SESSION STORE] ⚠️ REDIS_URL not configured - using MEMORY-ONLY mode');
             logger.warn('[REDIS SESSION STORE] Sessions will NOT persist across restarts');
-            return;
         }
-        
-        // Use centralized factory for consistent connection
-        this.client = createNodeRedisClient({
-            socket: {
-                connectTimeout: 60000,
-                lazyConnect: true,
-            }
-        });
-
-        if (!this.client) {
-            logger.warn('[REDIS SESSION STORE] ⚠️ Factory returned null - using MEMORY-ONLY mode');
-            this.enabled = false;
-            return;
-        }
-
-        // Connect to Redis
-        this.connect();
     }
 
-    async connect() {
-        // Skip if Redis not configured
-        if (!this.client) return;
+    /**
+     * Get the shared Redis client (async)
+     * Uses the factory's singleton - does NOT create new connections
+     */
+    async getClient() {
+        if (!this.enabled) return null;
         
         try {
-            if (!this.client.isOpen) {
-                await this.client.connect();
+            const client = await getSharedRedisClient();
+            if (!client) {
+                logger.warn('[REDIS SESSION STORE] Shared client not available');
+                return null;
             }
+            return client;
         } catch (error) {
-            logger.error('Redis connection failed:', error);
+            logger.error('[REDIS SESSION STORE] Failed to get shared client:', { error: error.message });
+            return null;
         }
     }
 
@@ -74,7 +66,8 @@ class RedisSessionStore {
         const key = `session:${sessionId}`;
         
         // Memory-only mode
-        if (!this.client) {
+        const client = await this.getClient();
+        if (!client) {
             this.memoryStore.set(key, {
                 data: sessionData,
                 expiresAt: Date.now() + (ttlSeconds * 1000)
@@ -85,12 +78,11 @@ class RedisSessionStore {
         
         // Redis mode
         try {
-            await this.connect();
-            await this.client.setEx(key, ttlSeconds, JSON.stringify(sessionData));
+            await client.setEx(key, ttlSeconds, JSON.stringify(sessionData));
             logger.security(`💾 Session stored in Redis: ${sessionId} (TTL: ${ttlSeconds}s)`);
             return true;
         } catch (error) {
-            logger.security('Redis setSession error:', error);
+            logger.security('Redis setSession error:', { error: error.message });
             // Fallback to memory on Redis error
             this.memoryStore.set(key, {
                 data: sessionData,
@@ -107,8 +99,9 @@ class RedisSessionStore {
     async getSession(sessionId) {
         const key = `session:${sessionId}`;
         
-        // Memory-only mode
-        if (!this.client) {
+        // Try memory first for fallback
+        const client = await this.getClient();
+        if (!client) {
             const cached = this.memoryStore.get(key);
             if (!cached) return null;
             
@@ -125,8 +118,7 @@ class RedisSessionStore {
         
         // Redis mode
         try {
-            await this.connect();
-            const data = await this.client.get(key);
+            const data = await client.get(key);
             
             if (!data) {return null;}
             
@@ -137,7 +129,7 @@ class RedisSessionStore {
             
             return session;
         } catch (error) {
-            logger.security('Redis getSession error:', error);
+            logger.security('Redis getSession error:', { error: error.message });
             return null;
         }
     }
@@ -150,7 +142,8 @@ class RedisSessionStore {
         const key = `session:${sessionId}`;
         
         // Memory-only mode
-        if (!this.client) {
+        const client = await this.getClient();
+        if (!client) {
             const existed = this.memoryStore.has(key);
             this.memoryStore.delete(key);
             logger.security(`🗑️ Session deleted from MEMORY: ${sessionId}`);
@@ -159,12 +152,11 @@ class RedisSessionStore {
         
         // Redis mode
         try {
-            await this.connect();
-            const result = await this.client.del(key);
+            const result = await client.del(key);
             logger.security(`🗑️ Session deleted from Redis: ${sessionId}`);
             return result > 0;
         } catch (error) {
-            logger.security('Redis deleteSession error:', error);
+            logger.security('Redis deleteSession error:', { error: error.message });
             return false;
         }
     }
@@ -175,7 +167,8 @@ class RedisSessionStore {
      */
     async killAllUserSessions(userId) {
         // Memory-only mode
-        if (!this.client) {
+        const client = await this.getClient();
+        if (!client) {
             let killedCount = 0;
             for (const [key, cached] of this.memoryStore.entries()) {
                 if (key.startsWith('session:') && cached.data.userId === userId) {
@@ -189,17 +182,16 @@ class RedisSessionStore {
         
         // Redis mode
         try {
-            await this.connect();
             const pattern = `session:*`;
-            const keys = await this.client.keys(pattern);
+            const keys = await client.keys(pattern);
             let killedCount = 0;
 
             for (const key of keys) {
-                const data = await this.client.get(key);
+                const data = await client.get(key);
                 if (data) {
                     const session = JSON.parse(data);
                     if (session.userId === userId) {
-                        await this.client.del(key);
+                        await client.del(key);
                         killedCount++;
                         logger.security(`💀 Killed Redis session: ${key} for user ${userId}`);
                     }
@@ -208,7 +200,7 @@ class RedisSessionStore {
 
             return killedCount;
         } catch (error) {
-            logger.security('Redis killAllUserSessions error:', error);
+            logger.security('Redis killAllUserSessions error:', { error: error.message });
             return 0;
         }
     }
@@ -219,7 +211,8 @@ class RedisSessionStore {
      */
     async getAllActiveSessions() {
         // Memory-only mode
-        if (!this.client) {
+        const client = await this.getClient();
+        if (!client) {
             const sessions = [];
             const now = Date.now();
             
@@ -241,16 +234,15 @@ class RedisSessionStore {
         
         // Redis mode
         try {
-            await this.connect();
             const pattern = `session:*`;
-            const keys = await this.client.keys(pattern);
+            const keys = await client.keys(pattern);
             const sessions = [];
 
             for (const key of keys) {
-                const data = await this.client.get(key);
+                const data = await client.get(key);
                 if (data) {
                     const session = JSON.parse(data);
-                    const ttl = await this.client.ttl(key);
+                    const ttl = await client.ttl(key);
                     sessions.push({
                         sessionId: key.replace('session:', ''),
                         userId: session.userId,
@@ -264,7 +256,7 @@ class RedisSessionStore {
 
             return sessions;
         } catch (error) {
-            logger.security('Redis getAllActiveSessions error:', error);
+            logger.security('Redis getAllActiveSessions error:', { error: error.message });
             return [];
         }
     }
@@ -283,7 +275,8 @@ class RedisSessionStore {
         };
         
         // Memory-only mode - limited retention (auto-cleanup older than 1 hour)
-        if (!this.client) {
+        const client = await this.getClient();
+        if (!client) {
             this.memoryStore.set(logKey, {
                 data: logData,
                 expiresAt: Date.now() + (60 * 60 * 1000) // 1 hour in memory
@@ -294,12 +287,11 @@ class RedisSessionStore {
         
         // Redis mode
         try {
-            await this.connect();
             // Store log with 30-day TTL
-            await this.client.setEx(logKey, 30 * 24 * 60 * 60, JSON.stringify(logData));
+            await client.setEx(logKey, 30 * 24 * 60 * 60, JSON.stringify(logData));
             logger.security(`🔍 Security event logged: ${event}`);
         } catch (error) {
-            logger.security('Redis security log error:', error);
+            logger.security('Redis security log error:', { error: error.message });
         }
     }
 
@@ -311,7 +303,8 @@ class RedisSessionStore {
         const oneHourAgo = Date.now() - (60 * 60 * 1000);
         
         // Memory-only mode
-        if (!this.client) {
+        const client = await this.getClient();
+        if (!client) {
             const recentLogins = [];
             
             for (const [key, cached] of this.memoryStore.entries()) {
@@ -338,14 +331,13 @@ class RedisSessionStore {
         
         // Redis mode
         try {
-            await this.connect();
             const pattern = `security_log:*`;
-            const keys = await this.client.keys(pattern);
+            const keys = await client.keys(pattern);
             
             const recentLogins = [];
 
             for (const key of keys) {
-                const data = await this.client.get(key);
+                const data = await client.get(key);
                 if (data) {
                     const log = JSON.parse(data);
                     if (log.data.userId === userId && 
@@ -368,7 +360,7 @@ class RedisSessionStore {
 
             return { suspicious: false };
         } catch (error) {
-            logger.security('Suspicious activity check error:', error);
+            logger.security('Suspicious activity check error:', { error: error.message });
             return { suspicious: false };
         }
     }

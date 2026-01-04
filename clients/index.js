@@ -3,28 +3,33 @@
 // CENTRALIZED CLIENT EXPORTS - Redis, Email, and SMS
 // ============================================================================
 // 
-// REDIS: Uses redisClientFactory.js for standardized connection
-// All Redis connections use REDIS_URL only - no HOST/PORT/PASSWORD fallbacks
+// REDIS: Uses the SINGLE shared client from redisClientFactory.js
+// This module does NOT create its own Redis client.
+// All Redis operations use the factory's singleton.
 //
 // ============================================================================
 
 const logger = require('../utils/logger.js');
-const { createNodeRedisClient, isRedisConfigured, getSanitizedRedisUrl, warmupRedis } = require('../services/redisClientFactory');
+const { 
+  getSharedRedisClient,
+  getSharedRedisClientSync,
+  isRedisConfigured, 
+  getSanitizedRedisUrl,
+  redisHealthCheck,
+  warmupRedis 
+} = require('../services/redisClientFactory');
 
-let redisClient = null;
 let AdminNotificationService; // Lazy load to avoid circular dependency
 
 /**
- * Initialize Redis client using the centralized factory
+ * Initialize Redis using the centralized factory's shared client
  * 
- * STANDARDIZED CONNECTION:
- * - Uses REDIS_URL only (no HOST/PORT/PASSWORD fallbacks)
- * - Never falls back to localhost
- * - Returns null if REDIS_URL not configured
+ * IMPORTANT: This does NOT create a new client.
+ * It initializes the factory's singleton and returns it.
  */
 async function initializeRedis() {
   console.log('═══════════════════════════════════════════════════════════════════════');
-  console.log('🔧 [REDIS INIT] STARTING');
+  console.log('🔧 [REDIS INIT] STARTING (via factory singleton)');
   console.log('═══════════════════════════════════════════════════════════════════════');
   console.log(`🔍 [REDIS INIT] Node.js version: ${process.version}`);
   console.log(`🔍 [REDIS INIT] Platform: ${process.platform}`);
@@ -64,122 +69,64 @@ async function initializeRedis() {
     console.log('⚠️ [REDIS] To enable Redis, set REDIS_URL environment variable');
     logger.warn('[REDIS] ⚠️ Redis NOT configured - operating in MEMORY-ONLY mode');
     logger.warn('[REDIS] Sessions and cache will NOT persist across restarts');
-    redisClient = null;
     return null;
   }
 
   try {
     // ========================================================================
-    // CHECKPOINT 2: Create Redis client via factory
+    // CHECKPOINT 2: Get shared client from factory (creates if needed)
     // ========================================================================
     console.log('───────────────────────────────────────────────────────────────────────');
-    console.log('🔍 [REDIS] CHECKPOINT 2: Creating client via redisClientFactory...');
+    console.log('🔍 [REDIS] CHECKPOINT 2: Getting shared client from factory...');
     console.log('───────────────────────────────────────────────────────────────────────');
     
-    redisClient = createNodeRedisClient();
+    const client = await getSharedRedisClient();
     
-    if (!redisClient) {
-      throw new Error('Factory returned null - REDIS_URL may be invalid');
+    if (!client) {
+      throw new Error('Factory returned null - could not connect to Redis');
     }
     
-    console.log('   └─ ✅ Client created via factory');
+    console.log('   └─ ✅ Shared client obtained from factory');
 
     // ========================================================================
-    // CHECKPOINT 2.5: Set up additional event handlers
-    // ========================================================================
-    console.log('───────────────────────────────────────────────────────────────────────');
-    console.log('🔍 [REDIS] CHECKPOINT 2.5: Setting up notification handlers...');
-    console.log('───────────────────────────────────────────────────────────────────────');
-
-    // Add AdminNotificationService alerts on top of factory handlers
-    redisClient.on('ready', () => {
-      const connectionTime = Date.now() - connectionStartTime;
-      
-      // ⚠️ WARNING: Slow Redis connection
-      if (connectionTime > 5000 && AdminNotificationService) {
-        AdminNotificationService.sendAlert({
-          code: 'REDIS_CONNECTION_SLOW',
-          severity: 'WARNING',
-          companyId: null,
-          companyName: 'Platform',
-          message: '⚠️ Slow Redis connection detected',
-          details: `Redis connection took ${connectionTime}ms (threshold: 5000ms).`,
-          stackTrace: null
-        }).catch(notifErr => logger.error('Failed to send Redis slow alert:', notifErr));
-      }
-    });
-
-    redisClient.on('error', async (err) => {
-      if (AdminNotificationService && err.code !== 'ECONNREFUSED') {
-        await AdminNotificationService.sendAlert({
-          code: 'REDIS_CONNECTION_ERROR',
-          severity: 'WARNING',
-          companyId: null,
-          companyName: 'Platform',
-          message: '⚠️ Redis connection error',
-          details: {
-            error: err.message,
-            errorCode: err.code || 'UNKNOWN',
-            impact: 'Cache operations may be failing - Performance degraded',
-            action: 'Check Redis logs, verify service health'
-          },
-          stackTrace: err.stack
-        }).catch(notifErr => logger.error('Failed to send Redis error alert:', notifErr));
-      }
-    });
-
-    redisClient.on('end', async () => {
-      if (AdminNotificationService) {
-        await AdminNotificationService.sendAlert({
-          code: 'REDIS_CONNECTION_CLOSED',
-          severity: 'WARNING',
-          companyId: null,
-          companyName: 'Platform',
-          message: '⚠️ Redis connection closed',
-          details: 'Redis connection was closed. Cache unavailable until reconnected.',
-          stackTrace: new Error().stack
-        }).catch(notifErr => logger.error('Failed to send Redis close alert:', notifErr));
-      }
-      redisClient = null;
-    });
-    
-    console.log('   └─ Event handlers attached');
-
-    // ========================================================================
-    // CHECKPOINT 3: Connect to Redis (required in v5+)
+    // CHECKPOINT 3: Run canonical health check
     // ========================================================================
     console.log('───────────────────────────────────────────────────────────────────────');
-    console.log('🔍 [REDIS] CHECKPOINT 3: Initiating connection...');
+    console.log('🔍 [REDIS] CHECKPOINT 3: Running health check (SET/GET/DEL)...');
     console.log('───────────────────────────────────────────────────────────────────────');
     
-    const connectStart = Date.now();
-    await redisClient.connect();
-    const connectTime = Date.now() - connectStart;
-    console.log(`   └─ ✅ connect() completed in ${connectTime}ms`);
+    const healthResult = await redisHealthCheck();
     
-    // ========================================================================
-    // CHECKPOINT 4: Test connection with ping
-    // ========================================================================
-    console.log('───────────────────────────────────────────────────────────────────────');
-    console.log('🔍 [REDIS] CHECKPOINT 4: Testing connection with PING...');
-    console.log('───────────────────────────────────────────────────────────────────────');
+    if (!healthResult.ok) {
+      throw new Error(`Health check failed: ${healthResult.errorMessage} (code: ${healthResult.errorCode})`);
+    }
     
-    const pingStart = Date.now();
-    const pingResult = await redisClient.ping();
-    const pingTime = Date.now() - pingStart;
-    console.log(`   ├─ Ping result: ${pingResult}`);
-    console.log(`   └─ Ping latency: ${pingTime}ms`);
+    console.log(`   ├─ Health check: ✅ PASSED`);
+    console.log(`   └─ Round trip time: ${healthResult.rttMs}ms`);
     
     // ========================================================================
     // SUCCESS: All checkpoints passed
     // ========================================================================
     const connectionTime = Date.now() - connectionStartTime;
     console.log('═══════════════════════════════════════════════════════════════════════');
-    console.log(`✅ [REDIS] ALL CHECKPOINTS PASSED - Connected in ${connectionTime}ms`);
+    console.log(`✅ [REDIS] ALL CHECKPOINTS PASSED - Ready in ${connectionTime}ms`);
     console.log('═══════════════════════════════════════════════════════════════════════');
-    logger.debug('🚀 Redis client initialized successfully', { connectionTimeMs: connectionTime });
+    logger.debug('🚀 Redis initialized successfully via factory', { connectionTimeMs: connectionTime });
     
-    return redisClient;
+    // ⚠️ WARNING: Slow Redis connection
+    if (connectionTime > 5000 && AdminNotificationService) {
+      AdminNotificationService.sendAlert({
+        code: 'REDIS_CONNECTION_SLOW',
+        severity: 'WARNING',
+        companyId: null,
+        companyName: 'Platform',
+        message: '⚠️ Slow Redis connection detected',
+        details: `Redis initialization took ${connectionTime}ms (threshold: 5000ms).`,
+        stackTrace: null
+      }).catch(notifErr => logger.error('Failed to send Redis slow alert:', notifErr));
+    }
+    
+    return client;
 
   } catch (error) {
     const connectionTime = Date.now() - connectionStartTime;
@@ -237,18 +184,23 @@ async function initializeRedis() {
       }).catch(notifErr => logger.error('Failed to send Redis connection failure alert:', notifErr));
     }
 
-    redisClient = null;
     return null;
   }
 }
 
 // Redis initialization is handled explicitly in index.js during server startup
 // to ensure proper async sequencing with database and other services
-logger.info('📦 [REDIS] Redis client module loaded - waiting for explicit initialization');
+logger.info('📦 [REDIS] Redis client module loaded - using factory singleton');
 
 module.exports = {
+  // Synchronous getter - returns the shared client or null
+  // This maintains backward compatibility with existing code
   get redisClient() {
-    return redisClient;
+    return getSharedRedisClientSync();
   },
-  initializeRedis
+  // Async getter for when you need the client guaranteed connected
+  getRedisClient: getSharedRedisClient,
+  initializeRedis,
+  // Re-export health check for convenience
+  redisHealthCheck
 };

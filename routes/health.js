@@ -17,8 +17,12 @@ const logger = require('../utils/logger.js');
 
 const router = express.Router();
 const mongoose = require('mongoose');
-const clients = require('../clients');
-const { isRedisConfigured, getSanitizedRedisUrl } = require('../services/redisClientFactory');
+const { 
+  isRedisConfigured, 
+  getSanitizedRedisUrl, 
+  redisHealthCheck,
+  getSharedRedisClientSync 
+} = require('../services/redisClientFactory');
 const { authenticateJWT } = require('../middleware/auth');
 const { requirePermission, PERMISSIONS } = require('../middleware/rbac');
 
@@ -79,23 +83,19 @@ router.get('/healthz', (req, res) => {
 router.get('/readyz', async (req, res) => {
     const mongoReady = mongoose.connection.readyState === 1;
     const redisConfigured = isRedisConfigured();
-    const redisClient = clients.redisClient;
 
-    let redisReady = null;
-    let redisError = null;
+    // Use the CANONICAL health check from the factory
+    let redisReady = false;
+    let redisRttMs = null;
+    let redisErrorCode = null;
+    let redisErrorMessage = null;
 
     if (redisConfigured) {
-        try {
-            if (redisClient && redisClient.isOpen) {
-                await redisClient.ping();
-                redisReady = true;
-            } else {
-                redisReady = false;
-            }
-        } catch (e) {
-            redisReady = false;
-            redisError = e?.message || String(e);
-        }
+        const healthResult = await redisHealthCheck();
+        redisReady = healthResult.ok;
+        redisRttMs = healthResult.rttMs;
+        redisErrorCode = healthResult.errorCode;
+        redisErrorMessage = healthResult.errorMessage;
     }
 
     const ready =
@@ -109,7 +109,13 @@ router.get('/readyz', async (req, res) => {
         checks: {
             mongo: mongoReady ? 'ok' : 'error',
             redis: redisConfigured ? (redisReady ? 'ok' : 'error') : 'skipped'
-        }
+        },
+        // Additional Redis diagnostics (safe to expose)
+        redisClientSource: 'REDIS_URL',
+        redisUrlHint: redisConfigured ? getSanitizedRedisUrl() : null,
+        redisRttMs: redisRttMs,
+        redisErrorCode: redisErrorCode,
+        redisErrorMessage: redisErrorMessage
     };
 
     return res.status(ready ? 200 : 503).json({ success: ready, data: payload });
@@ -119,24 +125,23 @@ router.get('/readyz', async (req, res) => {
 router.get('/readyz/details', requireHealthDetailsAuth, async (req, res) => {
     const mongoReady = mongoose.connection.readyState === 1;
     const redisConfigured = isRedisConfigured();
-    const redisClient = clients.redisClient;
 
-    let redisReady = null;
-    let redisError = null;
+    // Use the CANONICAL health check from the factory
+    let redisReady = false;
+    let redisRttMs = null;
+    let redisErrorCode = null;
+    let redisErrorMessage = null;
 
     if (redisConfigured) {
-        try {
-            if (redisClient && redisClient.isOpen) {
-                await redisClient.ping();
-                redisReady = true;
-            } else {
-                redisReady = false;
-            }
-        } catch (e) {
-            redisReady = false;
-            redisError = e?.message || String(e);
-        }
+        const healthResult = await redisHealthCheck();
+        redisReady = healthResult.ok;
+        redisRttMs = healthResult.rttMs;
+        redisErrorCode = healthResult.errorCode;
+        redisErrorMessage = healthResult.errorMessage;
     }
+
+    // Get client state for additional diagnostics
+    const redisClient = getSharedRedisClientSync();
 
     const ready =
         mongoReady === true &&
@@ -161,10 +166,13 @@ router.get('/readyz/details', requireHealthDetailsAuth, async (req, res) => {
                 },
                 redis: {
                     configured: redisConfigured,
+                    clientSource: 'REDIS_URL',
                     url: redisConfigured ? getSanitizedRedisUrl() : null,
                     ready: redisConfigured ? redisReady : null,
                     isOpen: redisClient ? redisClient.isOpen : false,
-                    error: redisError
+                    rttMs: redisRttMs,
+                    errorCode: redisErrorCode,
+                    errorMessage: redisErrorMessage
                 }
             }
         }
@@ -218,35 +226,44 @@ router.get('/health', async (req, res) => {
         }
 
         // ================================================================
-        // CHECK 2: Redis Connection
+        // CHECK 2: Redis Connection (uses CANONICAL health check)
         // ================================================================
         try {
-            // IMPORTANT: clients/index.js exports redisClient via a getter.
-            // Do NOT destructure at require-time or you can capture a stale value.
-            const redisClient = clients.redisClient;
-            if (redisClient && redisClient.isOpen) {
-                // Test Redis with a ping
-                await redisClient.ping();
-                health.systems.redis = 'ok';
+            if (!isRedisConfigured()) {
+                health.systems.redis = 'skipped';
                 health.details.redis = {
-                    status: 'connected',
-                    isOpen: redisClient.isOpen
+                    status: 'not_configured',
+                    message: 'REDIS_URL not set'
                 };
-                logger.info('✅ [HEALTH CHECK] Redis: Connected');
+                logger.info('⚠️ [HEALTH CHECK] Redis: Not configured');
             } else {
-                health.systems.redis = 'error';
-                health.status = 'degraded';
-                health.details.redis = {
-                    status: 'disconnected',
-                    isOpen: redisClient ? redisClient.isOpen : false
-                };
-                logger.error('❌ [HEALTH CHECK] Redis: Disconnected');
+                const healthResult = await redisHealthCheck();
+                if (healthResult.ok) {
+                    health.systems.redis = 'ok';
+                    health.details.redis = {
+                        status: 'connected',
+                        rttMs: healthResult.rttMs
+                    };
+                    logger.info('✅ [HEALTH CHECK] Redis: Connected');
+                } else {
+                    health.systems.redis = 'error';
+                    health.status = 'degraded';
+                    health.details.redis = {
+                        status: 'error',
+                        errorCode: healthResult.errorCode,
+                        errorMessage: healthResult.errorMessage
+                    };
+                    logger.error('❌ [HEALTH CHECK] Redis: Failed', { 
+                        errorCode: healthResult.errorCode,
+                        errorMessage: healthResult.errorMessage 
+                    });
+                }
             }
         } catch (error) {
             health.systems.redis = 'error';
             health.status = 'degraded';
             health.details.redis = { error: error.message };
-            logger.error('❌ [HEALTH CHECK] Redis error:', error);
+            logger.error('❌ [HEALTH CHECK] Redis error:', { error: error.message });
         }
 
         // ================================================================

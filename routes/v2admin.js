@@ -14,7 +14,7 @@ const aiAgentMonitoringRoutes = require('./admin/aiAgentMonitoring');
 const User = require('../models/v2User');
 const Company = require('../models/v2Company');
 const { authenticateJWT } = require('../middleware/auth');
-const { createNodeRedisClient, isRedisConfigured } = require('../services/redisClientFactory');
+const { getSharedRedisClient, isRedisConfigured } = require('../services/redisClientFactory');
 
 /**
  * 🚨 EMERGENCY: Fix User-Company Association
@@ -164,9 +164,15 @@ router.post('/clear-cache/:companyId', authenticateJWT, async (req, res) => {
             });
         }
         
-        const client = createNodeRedisClient();
-        await client.connect();
-        logger.debug('✅ Connected to Redis');
+        // Use the SHARED client from factory - do NOT create new connections
+        const client = await getSharedRedisClient();
+        if (!client) {
+            return res.status(503).json({
+                success: false,
+                error: 'Redis client not available'
+            });
+        }
+        logger.debug('✅ Using shared Redis client');
 
         // Clear all possible cache keys for this company
         const keysToDelete = [
@@ -189,7 +195,7 @@ router.post('/clear-cache/:companyId', authenticateJWT, async (req, res) => {
             logger.debug(`🗑️ Cache key: ${key} (${result ? 'deleted' : 'not found'})`);
         }
 
-        await client.disconnect();
+        // Do NOT disconnect - this is a shared client
         logger.debug(`✅ Cache cleared: ${deletedCount} keys deleted`);
 
         res.json({

@@ -117,6 +117,18 @@ function isSharedClientReady() {
   return sharedClient && sharedClientConnected;
 }
 
+/**
+ * Get the shared client synchronously (may be null if not connected)
+ * Use this for backward compatibility with code expecting sync access
+ * @returns {Object|null} - The shared client or null
+ */
+function getSharedRedisClientSync() {
+  if (sharedClient && sharedClientConnected) {
+    return sharedClient;
+  }
+  return null;
+}
+
 // ============================================================================
 // IOREDIS CLIENT FACTORY
 // ============================================================================
@@ -295,12 +307,89 @@ function getSanitizedRedisUrl() {
 }
 
 // ============================================================================
+// REDIS HEALTH CHECK - SINGLE SOURCE OF TRUTH
+// ============================================================================
+// This is the ONE health check used by /api/readyz AND ER triage
+// Performs SET/GET/DEL test and returns standardized result
+// ============================================================================
+
+/**
+ * Canonical Redis health check - SET/GET/DEL test
+ * @returns {Promise<{ok: boolean, rttMs: number|null, errorCode: string|null, errorMessage: string|null}>}
+ */
+async function redisHealthCheck() {
+  // Not configured = not ok (but not an error - just skipped)
+  if (!REDIS_URL) {
+    return {
+      ok: false,
+      rttMs: null,
+      errorCode: 'NOT_CONFIGURED',
+      errorMessage: 'REDIS_URL not set'
+    };
+  }
+
+  try {
+    const client = await getSharedRedisClient();
+    
+    if (!client) {
+      return {
+        ok: false,
+        rttMs: null,
+        errorCode: 'CLIENT_NULL',
+        errorMessage: 'Could not get shared Redis client'
+      };
+    }
+
+    // Perform SET/GET/DEL test
+    const testKey = `cv:healthcheck:${Date.now()}`;
+    const testValue = 'healthcheck-test';
+    const startTime = Date.now();
+
+    // SET
+    await client.set(testKey, testValue, { EX: 10 });
+    
+    // GET and verify
+    const retrieved = await client.get(testKey);
+    
+    // DEL
+    await client.del(testKey);
+
+    const rttMs = Date.now() - startTime;
+
+    // Verify round-trip succeeded
+    if (retrieved !== testValue) {
+      return {
+        ok: false,
+        rttMs,
+        errorCode: 'VALUE_MISMATCH',
+        errorMessage: `GET returned '${retrieved}' instead of '${testValue}'`
+      };
+    }
+
+    return {
+      ok: true,
+      rttMs,
+      errorCode: null,
+      errorMessage: null
+    };
+
+  } catch (err) {
+    return {
+      ok: false,
+      rttMs: null,
+      errorCode: err.code || 'UNKNOWN',
+      errorMessage: err.message
+    };
+  }
+}
+
+// ============================================================================
 // WARMUP FUNCTION - Call at startup to verify Redis works
 // ============================================================================
 
 /**
  * Warmup Redis connection - call during server startup
- * Connects, runs SET/GET test, then closes
+ * Uses the canonical redisHealthCheck()
  * @returns {Promise<boolean>} - true if Redis is healthy
  */
 async function warmupRedis() {
@@ -309,42 +398,15 @@ async function warmupRedis() {
     return false;
   }
   
-  console.log('[REDIS] 🔄 Warmup: connecting and running SET/GET test...');
+  console.log('[REDIS] 🔄 Warmup: running health check...');
   
-  const client = createNodeRedisClient();
-  if (!client) {
-    console.error('[REDIS] ❌ Warmup failed - could not create client');
-    return false;
-  }
+  const result = await redisHealthCheck();
   
-  try {
-    await client.connect();
-    console.log('[REDIS] ✅ Warmup: connected');
-    
-    // Test SET
-    await client.set('cv:startup:test', 'ok', { EX: 30 });
-    console.log('[REDIS] ✅ Warmup: SET test passed');
-    
-    // Test GET
-    const value = await client.get('cv:startup:test');
-    if (value === 'ok') {
-      console.log('[REDIS] ✅ Warmup: GET test passed');
-    } else {
-      console.warn('[REDIS] ⚠️ Warmup: GET returned unexpected value:', value);
-    }
-    
-    // Test DEL
-    await client.del('cv:startup:test');
-    console.log('[REDIS] ✅ Warmup: DEL test passed');
-    
-    await client.quit();
-    console.log('[REDIS] ✅ Warmup COMPLETE - Redis is healthy');
+  if (result.ok) {
+    console.log(`[REDIS] ✅ Warmup COMPLETE - Redis healthy (${result.rttMs}ms RTT)`);
     return true;
-    
-  } catch (err) {
-    console.error('[REDIS] ❌ Warmup FAILED:', err.message);
-    console.error('[REDIS] ❌ Error code:', err.code || 'N/A');
-    try { await client.quit(); } catch (e) { /* ignore */ }
+  } else {
+    console.error(`[REDIS] ❌ Warmup FAILED: ${result.errorMessage} (code: ${result.errorCode})`);
     return false;
   }
 }
@@ -357,9 +419,11 @@ module.exports = {
   createIORedisClient,
   createNodeRedisClient,
   getSharedRedisClient,
+  getSharedRedisClientSync,  // Sync access for backward compatibility
   isSharedClientReady,
   isRedisConfigured,
   getSanitizedRedisUrl,
+  redisHealthCheck,  // CANONICAL health check - use this everywhere
   warmupRedis,
   REDIS_URL,
 };
