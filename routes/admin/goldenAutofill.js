@@ -1013,6 +1013,103 @@ router.get('/unknown-scenarios', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// POST /api/trade-knowledge/fix-scenario-type
+// Fix a SPECIFIC scenario's scenarioType (BYPASSES autofillLock for type only)
+// Use this when a locked scenario has UNKNOWN type
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.post('/fix-scenario-type', async (req, res) => {
+    const { scenarioId, scenarioType, templateId } = req.body;
+    const adminUser = req.user?.email || req.user?.username || 'system';
+    
+    if (!scenarioId || !scenarioType) {
+        return res.status(400).json({
+            success: false,
+            error: 'Required: scenarioId and scenarioType',
+            validTypes: ['EMERGENCY', 'BOOKING', 'FAQ', 'TROUBLESHOOT', 'BILLING', 'TRANSFER', 'SMALL_TALK', 'SYSTEM']
+        });
+    }
+    
+    const validTypes = ['EMERGENCY', 'BOOKING', 'FAQ', 'TROUBLESHOOT', 'BILLING', 'TRANSFER', 'SMALL_TALK', 'SYSTEM'];
+    if (!validTypes.includes(scenarioType.toUpperCase())) {
+        return res.status(400).json({
+            success: false,
+            error: `Invalid scenarioType: ${scenarioType}`,
+            validTypes
+        });
+    }
+    
+    logger.info(`[FIX SCENARIO TYPE] ${scenarioId} → ${scenarioType} by ${adminUser}`);
+    
+    try {
+        // Find the scenario in templates
+        const query = templateId ? { _id: templateId } : {};
+        const templates = await GlobalInstantResponseTemplate.find(query);
+        
+        let found = false;
+        let result = null;
+        
+        for (const template of templates) {
+            for (const category of (template.categories || [])) {
+                for (const scenario of (category.scenarios || [])) {
+                    const id = scenario.scenarioId || scenario._id?.toString();
+                    
+                    if (id === scenarioId || scenario.name === scenarioId) {
+                        // Found it - fix the type (bypass lock for this specific field)
+                        const before = scenario.scenarioType || 'UNKNOWN';
+                        scenario.scenarioType = scenarioType.toUpperCase();
+                        scenario.updatedAt = new Date();
+                        scenario.updatedBy = adminUser;
+                        scenario.scenarioTypeFixedAt = new Date();
+                        scenario.scenarioTypeFixedBy = adminUser;
+                        
+                        template.updatedAt = new Date();
+                        template.lastUpdatedBy = adminUser;
+                        await template.save();
+                        
+                        found = true;
+                        result = {
+                            scenarioId: id,
+                            scenarioName: scenario.name,
+                            templateId: template._id.toString(),
+                            templateName: template.name,
+                            categoryName: category.name,
+                            before,
+                            after: scenario.scenarioType,
+                            isLocked: scenario.autofillLock === true,
+                            note: scenario.autofillLock ? 'Lock preserved - only scenarioType was fixed' : null
+                        };
+                        break;
+                    }
+                }
+                if (found) break;
+            }
+            if (found) break;
+        }
+        
+        if (!found) {
+            return res.status(404).json({
+                success: false,
+                error: `Scenario not found: ${scenarioId}`,
+                hint: templateId ? `Searched in template ${templateId}` : 'Searched all templates'
+            });
+        }
+        
+        logger.info(`[FIX SCENARIO TYPE] Fixed: ${result.scenarioName} → ${result.after}`, result);
+        
+        res.json({
+            success: true,
+            message: `Fixed scenarioType for "${result.scenarioName}"`,
+            result
+        });
+        
+    } catch (error) {
+        logger.error('[FIX SCENARIO TYPE] Error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // POST /api/trade-knowledge/fix-unknown-scenarios
 // Fix ALL scenarios with UNKNOWN or null scenarioType (applies detection)
 // ═══════════════════════════════════════════════════════════════════════════════
