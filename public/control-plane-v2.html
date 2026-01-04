@@ -5103,6 +5103,56 @@
       });
     }
     
+    // Download Platform Snapshot as JSON file
+    function downloadPlatformSnapshotJson() {
+      if (!currentSnapshot) {
+        showSnapshotToast('❌ No snapshot loaded', 'Load a snapshot first by clicking Refresh', 'error');
+        return;
+      }
+      
+      const jsonText = JSON.stringify(currentSnapshot, null, 2);
+      const charCount = jsonText.length;
+      const providerCount = Object.keys(currentSnapshot.providers || {}).length;
+      const score = currentSnapshot.completeness?.score || 0;
+      const status = currentSnapshot.completeness?.status || 'UNKNOWN';
+      const companyName = (currentSnapshot.meta?.companyName || 'company').replace(/[^a-zA-Z0-9]/g, '_');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      
+      // Create download blob
+      const blob = new Blob([jsonText], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      // Create temporary download link
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `platform-snapshot_${companyName}_${timestamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      // Update button visual
+      const btn = document.getElementById('btn-download-snapshot-modal');
+      if (btn) {
+        btn.innerHTML = '<i class="fas fa-check"></i> Downloaded!';
+        btn.style.background = '#10b981';
+        btn.style.transform = 'scale(1.05)';
+        
+        setTimeout(() => {
+          btn.innerHTML = '<i class="fas fa-download"></i> Download JSON';
+          btn.style.background = '#8b5cf6';
+          btn.style.transform = 'scale(1)';
+        }, 2500);
+      }
+      
+      // Show detailed toast
+      showSnapshotToast(
+        '✅ Snapshot Downloaded!',
+        `${providerCount} providers • ${(charCount/1024).toFixed(1)}KB • Score: ${score}% (${status})`,
+        'success'
+      );
+    }
+    
     function showSnapshotToast(title, message, type = 'info') {
       // Remove existing toast
       const existing = document.getElementById('snapshot-toast');
@@ -5188,6 +5238,13 @@
                   onmouseup="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 4px rgba(59,130,246,0.3)';"
                   onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 4px rgba(59,130,246,0.3)';">
             <i class="fas fa-copy"></i> Copy JSON
+          </button>
+          <button id="btn-download-snapshot-modal" onclick="downloadPlatformSnapshotJson()" 
+                  style="padding: 10px 20px; background: #8b5cf6; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; font-size: 14px; transition: all 0.15s ease; box-shadow: 0 2px 4px rgba(139,92,246,0.3);"
+                  onmousedown="this.style.transform='scale(0.95)'; this.style.boxShadow='0 1px 2px rgba(139,92,246,0.2)';"
+                  onmouseup="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 4px rgba(139,92,246,0.3)';"
+                  onmouseleave="this.style.transform='scale(1)'; this.style.boxShadow='0 2px 4px rgba(139,92,246,0.3)';">
+            <i class="fas fa-download"></i> Download JSON
           </button>
           <button onclick="refreshPlatformSnapshot()" 
                   style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 6px;">
