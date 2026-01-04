@@ -76,6 +76,9 @@ try {
     STTPreprocessor = null;
 }
 
+// 🚨 EMERGENCY Enforcement - Ensure EMERGENCY scenarios stop routing and escalate
+const EmergencyEnforcement = require('./EmergencyEnforcement');
+
 class IntelligentRouter {
     constructor() {
         this.config = {
@@ -433,6 +436,9 @@ class IntelligentRouter {
                     // Apply company overrides (December 2025 - deterministic disabled handling)
                     await this.applyCompanyOverrides(result, company, template);
                     
+                    // 🚨 EMERGENCY ENFORCEMENT: Check if this is an EMERGENCY/stopRouting scenario
+                    EmergencyEnforcement.applyToResult(result, company);
+                    
                     // Log success and return
                     await this.logCall(result, template, company);
                     result.performance.totalTime = Date.now() - startTime;
@@ -540,6 +546,9 @@ class IntelligentRouter {
                     
                     // Apply company overrides (December 2025 - deterministic disabled handling)
                     await this.applyCompanyOverrides(result, company, template);
+                    
+                    // 🚨 EMERGENCY ENFORCEMENT: Check if this is an EMERGENCY/stopRouting scenario
+                    EmergencyEnforcement.applyToResult(result, company);
                     
                     await this.logCall(result, template, company);
                     result.performance.totalTime = Date.now() - startTime;
@@ -969,6 +978,11 @@ class IntelligentRouter {
             // Apply company overrides (December 2025 - deterministic disabled handling)
             if (result.matched && result.scenario) {
                 await this.applyCompanyOverrides(result, company, template);
+            }
+            
+            // 🚨 EMERGENCY ENFORCEMENT: Check if this is an EMERGENCY/stopRouting scenario
+            if (result.matched && result.scenario) {
+                EmergencyEnforcement.applyToResult(result, company);
             }
             
             // Log to database

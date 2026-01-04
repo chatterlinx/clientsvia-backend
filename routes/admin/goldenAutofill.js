@@ -91,6 +91,19 @@ const GOLDEN_DEFAULTS = {
         UNKNOWN: 0.70
     },
     
+    // 🚨 STOP ROUTING by scenarioType - EMERGENCY and TRANSFER must stop routing
+    stopRouting: {
+        EMERGENCY: true,    // MUST always be true
+        TRANSFER: true,     // MUST always be true
+        BOOKING: false,
+        FAQ: false,
+        SMALL_TALK: false,
+        SYSTEM: false,
+        TROUBLESHOOT: false,
+        BILLING: false,
+        UNKNOWN: false
+    },
+    
     // Quality Minimums
     minimums: {
         triggers: 8,
@@ -375,6 +388,23 @@ function computeScenarioUpdates(scenario, categoryName) {
             before: currentWeight,
             after: targetWeight,
             reason: `Golden default for ${effectiveType}`
+        });
+    }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // 6B. 🚨 STOP ROUTING ENFORCEMENT (EMERGENCY/TRANSFER = MUST STOP)
+    // ─────────────────────────────────────────────────────────────────────────
+    const targetStopRouting = GOLDEN_DEFAULTS.stopRouting[effectiveType] ?? false;
+    const currentStopRouting = scenario.stopRouting ?? false;
+    if (targetStopRouting !== currentStopRouting) {
+        updates.stopRouting = targetStopRouting;
+        diff.push({
+            field: 'stopRouting',
+            before: currentStopRouting,
+            after: targetStopRouting,
+            reason: targetStopRouting 
+                ? `${effectiveType} MUST have stopRouting=true for safety` 
+                : `${effectiveType} does not require stopRouting`
         });
     }
     

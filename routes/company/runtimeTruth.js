@@ -956,6 +956,45 @@ router.get('/', async (req, res) => {
             });
         }
         
+        // 🚨 EMERGENCY ENFORCEMENT: Check for EMERGENCY scenarios without stopRouting=true
+        const emergencyWithoutStop = scenarios.filter(s => 
+            s.scenarioType === 'EMERGENCY' && s.wiring?.stopRouting !== true
+        );
+        if (emergencyWithoutStop.length > 0) {
+            const examples = emergencyWithoutStop.slice(0, 5).map(s => ({
+                id: s.id,
+                name: s.name,
+                templateName: s.templateName,
+                stopRouting: s.wiring?.stopRouting
+            }));
+            issues.push({
+                severity: 'WARNING',
+                area: 'emergency_enforcement',
+                message: `${emergencyWithoutStop.length} EMERGENCY scenario(s) lack stopRouting=true (safety risk)`,
+                fix: 'Run Golden Autofill (apply) or manually set stopRouting=true on EMERGENCY scenarios.',
+                examples
+            });
+        }
+        
+        // 🛑 TRANSFER ENFORCEMENT: Check for TRANSFER scenarios without stopRouting=true
+        const transferWithoutStop = scenarios.filter(s => 
+            s.scenarioType === 'TRANSFER' && s.wiring?.stopRouting !== true
+        );
+        if (transferWithoutStop.length > 0) {
+            const examples = transferWithoutStop.slice(0, 3).map(s => ({
+                id: s.id,
+                name: s.name,
+                templateName: s.templateName
+            }));
+            issues.push({
+                severity: 'WARNING',
+                area: 'transfer_enforcement',
+                message: `${transferWithoutStop.length} TRANSFER scenario(s) lack stopRouting=true`,
+                fix: 'Run Golden Autofill (apply) or manually set stopRouting=true on TRANSFER scenarios.',
+                examples
+            });
+        }
+        
         if (discoveryConsentTruth.blockAllScenarioAutoRepliesUntilConsent === true) {
             issues.push({ 
                 severity: 'WARNING', 
