@@ -368,6 +368,115 @@ When adding NEW scenarios or templates:
 
 ---
 
+---
+
+## ⭐ SCENARIO PATCH EXECUTION PROTOCOL (Required)
+
+**This applies to ANY template, ANY scenario patch, FOREVER.**
+
+### A. PREFLIGHT
+
+1. **Export JSON** (get real `templateId`, `categoryId`, `scenarioId`)
+2. **Confirm scope is GLOBAL:**
+   - `scope=GLOBAL`
+   - `ownerCompanyId=null`
+
+### B. PATCH
+
+3. Run patch script `--dry-run`
+4. Run patch script `--apply`
+5. Run patch script `--dry-run` again (must be **0 operations**)
+
+### C. ENFORCEMENT
+
+6. Run `node scripts/identify-worst-scenarios.js`
+   - **Required result:** `Below minimums: 0`
+
+### D. RUNTIME TRUTH (THE PART THAT WAS MISSING!)
+
+7. **Open 🔌 Wiring Tab** and confirm:
+
+   | Check | Required Status |
+   |-------|-----------------|
+   | Template References | **LINKED** |
+   | Scenario Pool | **LOADED**, count > 0 |
+   | Kill Switches | **SCENARIOS_ENABLED** |
+   | Booking Contract | **WIRED** or **DISABLED** (not REJECTED) |
+   | Booking Slot Normalization | **ALL_VALID** (no rejections) |
+   | Redis Cache | **HIT** or **MISS** (not ERROR) |
+
+### E. LIVE CHAT TEST
+
+8. **Website test phrases** (must route correctly):
+
+   ```
+   "AC blowing warm air"
+   "Water leaking from air handler"
+   "Smell of gas near heater"
+   ```
+
+9. **Confirm debug logs show:**
+   - `scenarioCount > 0`
+   - `triggersEvaluated > 0`
+   - Response source NOT "LLM-only discovery lockdown"
+
+### ❌ IF STEPS D/E FAIL
+
+Scenarios are **NOT actually live** even if the template is "perfect".
+
+Common root causes:
+- **Kill switches ON** → Front Desk → Discovery & Consent → Set both to false
+- **Template not linked** → Data & Config → Add templateReference
+- **Redis stale** → Wiring Tab → Clear Cache button
+- **Booking slots rejected** → Add `question` field to all slots
+
+---
+
+## 🔌 Wiring Tab Critical Checks Explained
+
+The Wiring Tab (`/api/admin/wiring-status/:companyId`) surfaces these **exact blockers**:
+
+### 1. Kill Switches (CRITICAL)
+
+**What it checks:**
+- `forceLLMDiscovery` - If true, LLM speaks first, scenarios as tools only
+- `disableScenarioAutoResponses` - If true, scenarios matched but cannot respond
+
+**Why it matters:**
+Both ON = scenarios will NEVER fire. This is why `scenarioCount=0` even with 71 perfect scenarios.
+
+### 2. Template References (CRITICAL)
+
+**What it checks:**
+- `company.aiAgentSettings.templateReferences[]`
+- How many templates linked
+- Which templateIds are active
+
+**Why it matters:**
+If templateReferences is empty, ScenarioPoolService returns 0 scenarios.
+
+### 3. Booking Slot Normalization (HIGH)
+
+**What it checks:**
+- Total slots defined
+- Slots with `question` field (valid)
+- Slots missing `question` (rejected)
+- Rejection reasons
+
+**Why it matters:**
+Legacy slots without `question` field are silently rejected at runtime.
+
+### 4. Greeting Intercept (HIGH)
+
+**What it checks:**
+- Greeting responses configured
+- Common triggers covered (hello, hi, good morning, etc.)
+
+**Why it matters:**
+The V34 bug caused "good morning" to return "connection was rough" on website channel.
+
+---
+
 ## Contact
 
 Questions about scenario architecture? Check:
@@ -376,4 +485,5 @@ Questions about scenario architecture? Check:
 - `services/GlobalTemplatePatchService.js` for business logic
 - `middleware/scopeGuard.js` for scope enforcement
 - Phase scripts in `/scripts/phase*.js` for batch patterns
+- **🔌 Wiring Tab** for runtime truth verification
 

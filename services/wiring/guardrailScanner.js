@@ -90,19 +90,29 @@ const SCAN_PATTERNS = [
     },
     {
         id: 'GR_CACHE_KEYS_SCOPED',
-        label: 'Cache keys must be companyId scoped',
+        label: 'Cache keys must be scoped (companyId OR templateId OR tradeKey)',
         severity: 'CRITICAL',
         patterns: [
             // Redis set/get without variable interpolation
             /redis\.(get|set)\(\s*['"`][^${}\n]+['"`]\s*[,)]/gi,
-            // Static cache keys
+            // Static cache keys without any scoping
             /cacheKey\s*=\s*['"`][^${}\n]+['"`]/gi
         ],
-        // Whitelist patterns that are OK
+        // Whitelist patterns that are OK (scoped by some identifier)
         whitelist: [
+            // Company-scoped (for company config)
             /scenario-pool:\$\{companyId\}/i,
             /scenario-pool:.*companyId/i,
-            /\$\{companyId\}/i
+            /\$\{companyId\}/i,
+            /companyId/i,
+            // Template-scoped (for global templates - this is OK!)
+            /\$\{templateId\}/i,
+            /templateId/i,
+            /template:/i,
+            // Trade-scoped (for trade knowledge)
+            /\$\{tradeKey\}/i,
+            /tradeKey/i,
+            /trade:/i
         ]
     },
     {

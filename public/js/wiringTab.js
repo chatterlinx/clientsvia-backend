@@ -251,13 +251,16 @@
         
         el.innerHTML = `
             <div class="w-panel">
-                <div class="w-panel-title">🔍 Critical Checks</div>
+                <div class="w-panel-title">🔍 Critical Checks (THE blockers we found)</div>
                 <div class="w-checks-grid">
-                    ${renderCheckCard('Template References', sc.templateReferences)}
-                    ${renderCheckCard('Scenario Pool', sc.scenarioPool)}
-                    ${renderCheckCard('Redis Cache', sc.redisCache)}
-                    ${renderCheckCard('Booking Contract', sc.bookingContract)}
-                    ${renderCheckCard('Dynamic Flows', sc.dynamicFlows)}
+                    ${renderCheckCard('🔑 Kill Switches', sc.killSwitches)}
+                    ${renderCheckCard('🔗 Template References', sc.templateReferences)}
+                    ${renderCheckCard('📦 Scenario Pool', sc.scenarioPool)}
+                    ${renderCheckCard('📋 Booking Slots', sc.bookingSlotNormalization)}
+                    ${renderCheckCard('👋 Greeting Intercept', sc.greetingIntercept)}
+                    ${renderCheckCard('💾 Redis Cache', sc.redisCache)}
+                    ${renderCheckCard('📝 Booking Contract', sc.bookingContract)}
+                    ${renderCheckCard('🔀 Dynamic Flows', sc.dynamicFlows)}
                 </div>
             </div>
         `;
@@ -270,6 +273,19 @@
         const status = check.status || 'UNKNOWN';
         
         let details = '';
+        
+        // Kill switches
+        if (check.forceLLMDiscovery !== undefined) {
+            details += `<div>forceLLMDiscovery: <strong class="${check.forceLLMDiscovery ? 'text-red' : 'text-green'}">${check.forceLLMDiscovery}</strong></div>`;
+        }
+        if (check.disableScenarioAutoResponses !== undefined) {
+            details += `<div>disableScenarioAutoResponses: <strong class="${check.disableScenarioAutoResponses ? 'text-red' : 'text-green'}">${check.disableScenarioAutoResponses}</strong></div>`;
+        }
+        if (check.scenarioAutoResponseAllowed !== undefined) {
+            details += `<div>Scenarios can auto-respond: <strong class="${check.scenarioAutoResponseAllowed ? 'text-green' : 'text-red'}">${check.scenarioAutoResponseAllowed ? 'YES' : 'NO'}</strong></div>`;
+        }
+        
+        // Template refs
         if (check.enabledRefs !== undefined) {
             details += `<div>Linked: ${check.enabledRefs}/${check.totalRefs}</div>`;
         }
@@ -287,6 +303,25 @@
         }
         if (check.definedSlotCount !== undefined) {
             details += `<div>Slots: ${check.definedSlotCount}</div>`;
+        }
+        
+        // Booking slot normalization
+        if (check.validSlots !== undefined) {
+            details += `<div>Valid slots: <strong class="text-green">${check.validSlots}</strong></div>`;
+        }
+        if (check.rejectedSlots !== undefined && check.rejectedSlots > 0) {
+            details += `<div>Rejected slots: <strong class="text-red">${check.rejectedSlots}</strong></div>`;
+        }
+        if (check.rejectionReasons && Object.keys(check.rejectionReasons).length > 0) {
+            details += `<div>Reasons: ${Object.entries(check.rejectionReasons).map(([k,v]) => `${k}(${v})`).join(', ')}</div>`;
+        }
+        
+        // Greeting intercept
+        if (check.responseCount !== undefined) {
+            details += `<div>Greeting responses: ${check.responseCount}</div>`;
+        }
+        if (check.missingTriggers?.length > 0) {
+            details += `<div>Missing: ${check.missingTriggers.slice(0, 3).join(', ')}${check.missingTriggers.length > 3 ? '...' : ''}</div>`;
         }
         
         return `

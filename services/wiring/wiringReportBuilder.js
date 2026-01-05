@@ -244,6 +244,205 @@ function checkBookingContract(companyDoc) {
 }
 
 // ============================================================================
+// KILL SWITCHES CHECK (CRITICAL - blocks scenarios even when template is perfect)
+// ============================================================================
+
+function checkKillSwitches(companyDoc) {
+    const discoveryConsent = companyDoc?.aiAgentSettings?.frontDeskBehavior?.discoveryConsent || {};
+    
+    // These kill switches block scenario auto-responses
+    const forceLLMDiscovery = discoveryConsent.forceLLMDiscovery ?? false;
+    const disableScenarioAutoResponses = discoveryConsent.disableScenarioAutoResponses ?? false;
+    const bookingRequiresExplicitConsent = discoveryConsent.bookingRequiresExplicitConsent ?? true;
+    const autoReplyAllowedScenarioTypes = discoveryConsent.autoReplyAllowedScenarioTypes || ['FAQ', 'TROUBLESHOOT', 'EMERGENCY'];
+    
+    // The critical question: Can scenarios auto-respond?
+    const scenarioAutoResponseAllowed = !forceLLMDiscovery && !disableScenarioAutoResponses;
+    
+    // Determine health
+    let health = 'GREEN';
+    let status = 'SCENARIOS_ENABLED';
+    let message = 'Scenarios can auto-respond for allowed types';
+    
+    if (forceLLMDiscovery && disableScenarioAutoResponses) {
+        health = 'RED';
+        status = 'SCENARIOS_BLOCKED';
+        message = 'BOTH kill switches ON - scenarios will NEVER fire. scenarioCount will always be 0.';
+    } else if (forceLLMDiscovery) {
+        health = 'YELLOW';
+        status = 'DISCOVERY_FORCED';
+        message = 'forceLLMDiscovery=true - LLM speaks first, scenarios as tools only';
+    } else if (disableScenarioAutoResponses) {
+        health = 'RED';
+        status = 'AUTO_RESPONSE_DISABLED';
+        message = 'disableScenarioAutoResponses=true - scenarios matched but cannot auto-respond';
+    }
+    
+    return {
+        status,
+        health,
+        message,
+        
+        // Individual switch values
+        forceLLMDiscovery,
+        disableScenarioAutoResponses,
+        bookingRequiresExplicitConsent,
+        autoReplyAllowedScenarioTypes,
+        
+        // The bottom line
+        scenarioAutoResponseAllowed,
+        
+        // Fix instructions
+        fix: !scenarioAutoResponseAllowed 
+            ? 'Set forceLLMDiscovery=false AND disableScenarioAutoResponses=false in Front Desk → Discovery & Consent'
+            : null
+    };
+}
+
+// ============================================================================
+// GREETING INTERCEPT CHECK (the V34 bug that made agent say "connection rough")
+// ============================================================================
+
+function checkGreetingIntercept(companyDoc) {
+    const greetingResponses = companyDoc?.aiAgentSettings?.frontDeskBehavior?.greetingResponses || [];
+    
+    // Check if greeting responses are configured
+    const hasGreetingResponses = greetingResponses.length > 0;
+    
+    // Check for common greeting triggers
+    const greetingTriggers = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening'];
+    const configuredTriggers = greetingResponses.flatMap(g => {
+        if (typeof g === 'string') return [g.toLowerCase()];
+        if (g.trigger) return [g.trigger.toLowerCase()];
+        if (g.triggers) return g.triggers.map(t => t.toLowerCase());
+        return [];
+    });
+    
+    const missingTriggers = greetingTriggers.filter(t => 
+        !configuredTriggers.some(ct => ct.includes(t) || t.includes(ct))
+    );
+    
+    // The V34 bug was about fresh-* session IDs being treated as existing sessions
+    // We can't check that here directly, but we can note if the fix is deployed
+    const v34BugNote = 'V34 bug FIXED in commit e1b68c44 - fresh-* sessions now correctly trigger greeting intercept';
+    
+    if (!hasGreetingResponses) {
+        return {
+            status: 'NOT_CONFIGURED',
+            health: 'YELLOW',
+            message: 'No greeting responses configured - LLM will handle all greetings',
+            responseCount: 0,
+            configuredTriggers: [],
+            missingTriggers: greetingTriggers,
+            v34BugNote
+        };
+    }
+    
+    if (missingTriggers.length > 0) {
+        return {
+            status: 'PARTIAL',
+            health: 'YELLOW',
+            message: `${greetingResponses.length} responses configured, but missing common triggers`,
+            responseCount: greetingResponses.length,
+            configuredTriggers,
+            missingTriggers,
+            v34BugNote,
+            fix: `Add responses for: ${missingTriggers.join(', ')}`
+        };
+    }
+    
+    return {
+        status: 'WIRED',
+        health: 'GREEN',
+        message: `${greetingResponses.length} greeting responses configured with all common triggers`,
+        responseCount: greetingResponses.length,
+        configuredTriggers,
+        missingTriggers: [],
+        v34BugNote
+    };
+}
+
+// ============================================================================
+// BOOKING SLOT NORMALIZATION CHECK (detailed view of what's rejected)
+// ============================================================================
+
+function checkBookingSlotNormalization(companyDoc) {
+    const frontDesk = companyDoc?.aiAgentSettings?.frontDeskBehavior || {};
+    const bookingSlots = frontDesk.bookingSlots || [];
+    
+    const analysis = {
+        total: bookingSlots.length,
+        valid: [],
+        rejected: [],
+        reasons: {}
+    };
+    
+    for (const slot of bookingSlots) {
+        const slotId = slot.id || slot.slotId || slot._id?.toString() || 'unknown';
+        const issues = [];
+        
+        // Check for question field
+        if (!slot.question && !slot.prompt) {
+            issues.push('missing_question');
+        }
+        
+        // Check for type field
+        if (!slot.type && !slot.slotType) {
+            issues.push('missing_type');
+        }
+        
+        // Check for ID
+        if (!slot.id && !slot.slotId) {
+            issues.push('missing_id');
+        }
+        
+        if (issues.length === 0) {
+            analysis.valid.push({
+                id: slotId,
+                type: slot.type || slot.slotType,
+                hasQuestion: true
+            });
+        } else {
+            analysis.rejected.push({
+                id: slotId,
+                type: slot.type || slot.slotType || 'unknown',
+                issues
+            });
+            
+            // Aggregate rejection reasons
+            for (const issue of issues) {
+                analysis.reasons[issue] = (analysis.reasons[issue] || 0) + 1;
+            }
+        }
+    }
+    
+    const status = analysis.rejected.length === 0 
+        ? (analysis.valid.length > 0 ? 'ALL_VALID' : 'NONE_CONFIGURED')
+        : 'HAS_REJECTIONS';
+    
+    const health = analysis.rejected.length === 0
+        ? (analysis.valid.length > 0 ? 'GREEN' : 'GRAY')
+        : 'RED';
+    
+    return {
+        status,
+        health,
+        message: analysis.rejected.length > 0 
+            ? `${analysis.rejected.length}/${analysis.total} slots will be REJECTED at runtime`
+            : `${analysis.valid.length} slots valid and ready`,
+        totalSlots: analysis.total,
+        validSlots: analysis.valid.length,
+        rejectedSlots: analysis.rejected.length,
+        rejectionReasons: analysis.reasons,
+        validSlotDetails: analysis.valid,
+        rejectedSlotDetails: analysis.rejected,
+        fix: analysis.rejected.length > 0 
+            ? 'Add "question" field to all slots in Front Desk → Booking Prompts'
+            : null
+    };
+}
+
+// ============================================================================
 // MAIN REPORT BUILDER
 // ============================================================================
 
@@ -397,6 +596,15 @@ async function buildWiringReport({
     // Booking contract check
     specialChecks.bookingContract = checkBookingContract(companyDoc);
     
+    // Booking slot normalization check (detailed rejection analysis)
+    specialChecks.bookingSlotNormalization = checkBookingSlotNormalization(companyDoc);
+    
+    // Kill switches check (CRITICAL - the reason scenarioCount=0)
+    specialChecks.killSwitches = checkKillSwitches(companyDoc);
+    
+    // Greeting intercept check (the V34 bug)
+    specialChecks.greetingIntercept = checkGreetingIntercept(companyDoc);
+    
     // Template references check
     const templateRefs = companyDoc?.aiAgentSettings?.templateReferences || [];
     const enabledRefs = templateRefs.filter(r => r.enabled !== false);
@@ -444,6 +652,55 @@ async function buildWiringReport({
             status: 'NOT_COMPILED',
             reasons: ['Slots defined but booking contract not compiled'],
             fix: 'Compile booking contract via UI or API'
+        });
+    }
+    
+    // Kill switches blocking scenarios (CRITICAL - the actual reason scenarioCount=0)
+    if (specialChecks.killSwitches.status === 'SCENARIOS_BLOCKED') {
+        issues.unshift({
+            severity: 'CRITICAL',
+            nodeId: 'frontDesk.discoveryConsent',
+            label: 'Kill Switches BLOCKING Scenarios',
+            status: 'SCENARIOS_BLOCKED',
+            reasons: [
+                'forceLLMDiscovery=true AND disableScenarioAutoResponses=true',
+                'Scenarios will NEVER fire even if template is perfect',
+                'This is why scenarioCount shows 0 in debug logs'
+            ],
+            fix: 'Set BOTH to false in Front Desk → Discovery & Consent tab'
+        });
+    } else if (specialChecks.killSwitches.status === 'AUTO_RESPONSE_DISABLED') {
+        issues.unshift({
+            severity: 'CRITICAL',
+            nodeId: 'frontDesk.discoveryConsent',
+            label: 'Scenario Auto-Response Disabled',
+            status: 'AUTO_RESPONSE_DISABLED',
+            reasons: ['disableScenarioAutoResponses=true - scenarios matched but cannot respond'],
+            fix: 'Set disableScenarioAutoResponses=false in Front Desk → Discovery & Consent'
+        });
+    } else if (specialChecks.killSwitches.status === 'DISCOVERY_FORCED') {
+        issues.push({
+            severity: 'HIGH',
+            nodeId: 'frontDesk.discoveryConsent',
+            label: 'LLM Discovery Forced',
+            status: 'DISCOVERY_FORCED',
+            reasons: ['forceLLMDiscovery=true - LLM speaks first, scenarios as tools only'],
+            fix: 'If you want scenario auto-responses, set forceLLMDiscovery=false'
+        });
+    }
+    
+    // Booking slot rejections
+    if (specialChecks.bookingSlotNormalization.status === 'HAS_REJECTIONS') {
+        issues.push({
+            severity: 'HIGH',
+            nodeId: 'frontDesk.bookingPrompts',
+            label: 'Booking Slots Will Be Rejected',
+            status: 'HAS_REJECTIONS',
+            reasons: [
+                `${specialChecks.bookingSlotNormalization.rejectedSlots} of ${specialChecks.bookingSlotNormalization.totalSlots} slots missing required fields`,
+                `Rejection reasons: ${Object.entries(specialChecks.bookingSlotNormalization.rejectionReasons).map(([k, v]) => `${k}(${v})`).join(', ')}`
+            ],
+            fix: 'Add "question" field to all booking slots in Front Desk → Booking Prompts'
         });
     }
     

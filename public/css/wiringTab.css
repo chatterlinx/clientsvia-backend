@@ -318,6 +318,19 @@
     background: rgba(50, 50, 50, 0.3);
 }
 
+/* Inline colored text for kill switch values */
+.text-red {
+    color: #ff6666 !important;
+}
+
+.text-green {
+    color: #66ff66 !important;
+}
+
+.text-yellow {
+    color: #ffcc66 !important;
+}
+
 .w-severity.red {
     color: #ff8c8c;
     border-color: #4a1a1a;
