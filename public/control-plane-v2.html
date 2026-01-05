@@ -2215,14 +2215,12 @@
           const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
               if (mutation.target === tab && tab.classList.contains('active')) {
-                if (!tab.dataset.initialized) {
-                  tab.dataset.initialized = 'true';
-                  const companyId = window.getSelectedCompanyId ? window.getSelectedCompanyId() : 
-                                   new URLSearchParams(window.location.search).get('companyId') || 
-                                   localStorage.getItem('lastCompanyId');
-                  if (companyId && window.ClientViaWiringTab) {
-                    window.ClientViaWiringTab.initWiringTab({ companyId });
-                  }
+                const companyId = window.getSelectedCompanyId ? window.getSelectedCompanyId() : 
+                                 new URLSearchParams(window.location.search).get('companyId') || 
+                                 localStorage.getItem('lastCompanyId');
+                if (window.ClientViaWiringTab) {
+                  // Always re-init on activation so company switches don’t leave Wiring “dead”.
+                  window.ClientViaWiringTab.initWiringTab({ companyId });
                 }
               }
             });

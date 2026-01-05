@@ -34,6 +34,17 @@
     let _viewMode = 'tree'; // tree | diagram
     let _searchTerm = '';
     let _expandedNodes = new Set();
+    let _companyId = null;
+    let _initialized = false;
+    let _lastLoad = {
+        url: null,
+        companyId: null,
+        status: null,
+        ok: null,
+        responseText: null,
+        errorMessage: null,
+        at: null
+    };
     
     // ========================================================================
     // UTILITIES
@@ -99,6 +110,101 @@
         el.textContent = msg;
         el.className = `w-toast ${isErr ? 'err' : 'ok'} visible`;
         setTimeout(() => el.classList.remove('visible'), 2500);
+    }
+
+    function setState(state, details = {}) {
+        // Enterprise rule: Wiring must never be blank. Always show a state panel.
+        const scoreboard = $('#wiringScoreboard');
+        const special = $('#wiringSpecialChecks');
+        const issues = $('#wiringIssues');
+        const guardrails = $('#wiringGuardrails');
+        const tree = $('#wiringTree');
+        const checkpoints = $('#wiringCheckpoints');
+        
+        const hideIf = (el, hide) => { if (el) el.style.display = hide ? 'none' : ''; };
+        
+        // Hide all content panels when not in "success"
+        const isSuccess = state === 'success';
+        hideIf(special, !isSuccess);
+        hideIf(issues, !isSuccess);
+        hideIf(guardrails, !isSuccess);
+        hideIf(tree, !isSuccess);
+        hideIf(checkpoints, !isSuccess);
+        
+        if (!scoreboard) return;
+        
+        const url = details.url || _lastLoad.url;
+        const companyId = details.companyId || _companyId || _lastLoad.companyId;
+        const status = details.status ?? _lastLoad.status;
+        const respText = details.responseText ?? _lastLoad.responseText;
+        const errMsg = details.errorMessage ?? _lastLoad.errorMessage;
+        const stack = details.stack || null;
+        const rect = details.rect || null;
+        const payload = details.payload || null;
+        
+        const rawJson = payload
+            ? JSON.stringify(payload, null, 2)
+            : (respText && String(respText).trim().startsWith('{') ? respText : null);
+        
+        const header = state === 'loading'
+            ? 'Loading wiring…'
+            : state === 'error'
+            ? 'Wiring fetch/render failed'
+            : state === 'empty'
+            ? 'No wiring nodes returned (0)'
+            : state === 'needs_company'
+            ? 'No company selected'
+            : state === 'zero_size'
+            ? 'Renderer container has zero size'
+            : 'Wiring';
+        
+        const subtitle = state === 'needs_company'
+            ? 'Select a company (or ensure companyId is in the URL) then click Reload.'
+            : state === 'empty'
+            ? 'Backend returned an empty graph. This is valid but should not be silent.'
+            : state === 'zero_size'
+            ? 'The Wiring tab is mounted, but the content container is collapsed/hidden.'
+            : state === 'error'
+            ? 'The UI must never go blank — this panel is the “hard failure” surface.'
+            : '';
+        
+        scoreboard.innerHTML = `
+          <div class="w-score-container">
+            <div class="w-score-header">
+              <div class="w-score-title">
+                <span class="w-title">${esc(header)}</span>
+              </div>
+              <div class="w-score-meta">
+                <div class="w-meta-row">
+                  <span><strong>Company:</strong> ${esc(companyId || '—')}</span>
+                  ${url ? `<span>•</span><span><strong>URL:</strong> ${esc(url)}</span>` : ''}
+                  ${status ? `<span>•</span><span><strong>Status:</strong> ${esc(String(status))}</span>` : ''}
+                </div>
+                ${subtitle ? `<div class="w-meta-small">${esc(subtitle)}</div>` : ''}
+              </div>
+            </div>
+            <div style="margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap;">
+              <button class="w-btn primary" id="wiringStateReload">🔄 Reload</button>
+              <button class="w-btn" id="wiringStateCopyRaw">Copy Raw</button>
+            </div>
+            <div style="margin-top: 12px;">
+              ${errMsg ? `<div class="w-issue-item" style="border-color:#7f1d1d;background:#1b0b0b;"><div><strong>Error:</strong> ${esc(errMsg)}</div></div>` : ''}
+              ${rect ? `<div class="w-issue-item"><div><strong>Container:</strong> ${esc(JSON.stringify(rect))}</div></div>` : ''}
+              ${stack ? `<details style="margin-top:10px;"><summary style="cursor:pointer;">Show stack</summary><pre style="white-space:pre-wrap; background:#0b0b0d; border:1px solid #2a2a2e; padding:12px; border-radius:10px; overflow:auto;">${esc(stack)}</pre></details>` : ''}
+              ${rawJson ? `<details style="margin-top:10px;" open><summary style="cursor:pointer;">Show Raw JSON</summary><pre style="white-space:pre-wrap; background:#0b0b0d; border:1px solid #2a2a2e; padding:12px; border-radius:10px; overflow:auto; max-height: 420px;">${esc(rawJson)}</pre></details>` : ''}
+            </div>
+          </div>
+        `;
+        
+        // Wire state panel buttons
+        const btnReload = $('#wiringStateReload');
+        if (btnReload) btnReload.addEventListener('click', () => refresh(_companyId));
+        
+        const btnCopyRaw = $('#wiringStateCopyRaw');
+        if (btnCopyRaw) btnCopyRaw.addEventListener('click', () => {
+            const toCopy = rawJson || respText || errMsg || 'No raw payload available';
+            copyText(String(toCopy));
+        });
     }
     
     // ========================================================================
@@ -568,6 +674,16 @@
     // ========================================================================
     
     function renderAll() {
+        // Layout sanity check: never silently render into a 0-size container.
+        const container = $('#wiringTab');
+        if (container) {
+            const rect = container.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) {
+                setState('zero_size', { rect: { width: rect.width, height: rect.height, top: rect.top, left: rect.left } });
+                return;
+            }
+        }
+        
         renderScoreboard();
         renderSpecialChecks();
         renderIssues();
@@ -620,12 +736,36 @@
             }
         });
         
+        const text = await res.text().catch(() => '');
+        _lastLoad = {
+            url,
+            companyId,
+            status: res.status,
+            ok: res.ok,
+            responseText: text,
+            errorMessage: null,
+            at: new Date().toISOString()
+        };
+        
         if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.error || `HTTP ${res.status}`);
+            // Preserve a useful error message for the UI state panel.
+            let msg = `HTTP ${res.status}`;
+            try {
+                const parsed = JSON.parse(text || '{}');
+                msg = parsed.error || parsed.message || msg;
+            } catch (_) {
+                // keep msg
+            }
+            _lastLoad.errorMessage = msg;
+            throw new Error(msg);
         }
         
-        return res.json();
+        try {
+            return JSON.parse(text || '{}');
+        } catch (e) {
+            _lastLoad.errorMessage = `Invalid JSON from wiring endpoint: ${e.message}`;
+            throw new Error(_lastLoad.errorMessage);
+        }
     }
     
     async function clearCache(companyId) {
@@ -648,27 +788,53 @@
     // ========================================================================
     
     async function refresh(companyId) {
+        if (companyId) _companyId = companyId;
+        if (!_companyId) {
+            setState('needs_company', { companyId: null, url: null, status: null });
+            toast('Company ID missing', true);
+            return;
+        }
+        
         setLoading(true);
+        setState('loading', { companyId: _companyId });
         try {
-            _report = await loadWiringReport(companyId);
+            _report = await loadWiringReport(_companyId);
             _index = buildIndex(_report);
-            renderAll();
+            
+            const nodeCount = Array.isArray(_report?.nodes) ? _report.nodes.length : 0;
+            console.log('[WiringTab] Loaded report', { companyId: _companyId, nodeCount });
+            
+            if (!nodeCount) {
+                setState('empty', { companyId: _companyId, url: _lastLoad.url, status: _lastLoad.status, payload: _report });
+            } else {
+                setState('success');
+                renderAll();
+            }
             toast('Wiring report loaded');
         } catch (e) {
             console.error('[WiringTab] Load error:', e);
-            toast(e.message, true);
+            setState('error', {
+                companyId: _companyId,
+                url: _lastLoad.url,
+                status: _lastLoad.status,
+                responseText: _lastLoad.responseText,
+                errorMessage: e.message,
+                stack: e.stack
+            });
+            toast(e.message || 'Wiring failed', true);
         } finally {
             setLoading(false);
         }
     }
     
     async function initWiringTab({ companyId, tradeKey = 'universal' }) {
-        console.log('[WiringTab] Initializing...', { companyId });
+        _companyId = companyId || _companyId;
+        console.log('[WiringTab] Initializing...', { companyId: _companyId });
         
         // Reload button
         const reloadBtn = $('#wiringReload');
         if (reloadBtn) {
-            reloadBtn.addEventListener('click', () => refresh(companyId));
+            reloadBtn.addEventListener('click', () => refresh(_companyId));
         }
         
         // Clear focus button
@@ -742,18 +908,24 @@
         if (clearCacheBtn) {
             clearCacheBtn.addEventListener('click', async () => {
                 try {
-                    const result = await clearCache(companyId);
+                    const result = await clearCache(_companyId);
                     toast(result.message || 'Cache cleared');
                     // Refresh after clearing
-                    await refresh(companyId);
+                    await refresh(_companyId);
                 } catch (e) {
                     toast(e.message, true);
                 }
             });
         }
         
-        // Initial load
-        await refresh(companyId);
+        // Initial load (or rebind to new companyId)
+        if (!_initialized) {
+            _initialized = true;
+            if (!_companyId) {
+                setState('needs_company', { companyId: null });
+            }
+        }
+        await refresh(_companyId);
     }
     
     // ========================================================================
