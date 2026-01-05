@@ -143,6 +143,47 @@ async function main() {
             console.log(`      ownerCompanyId: ${found.ownerCompanyId || 'null'} ${ownerOk ? '✓' : '✗'}`);
         }
         
+        // 4. Simple trigger matching test (proves scenarios are selectable)
+        console.log('\n─────────────────────────────────────────────────────────────────────────────');
+        console.log('4️⃣  TRIGGER MATCHING TEST (Selection Proof)');
+        console.log('─────────────────────────────────────────────────────────────────────────────');
+        
+        const testPhrases = [
+            { phrase: 'confirm my appointment', expected: 'Confirm Appointment' },
+            { phrase: 'switch thermostat to heat mode', expected: 'Thermostat heat mode tips' },
+            { phrase: 'something is off with my system', expected: 'Caller Vague About Symptoms' },
+            { phrase: 'tune up but ac not working', expected: 'Needs Repair But Asking for Maintenance' }
+        ];
+        
+        for (const test of testPhrases) {
+            const lowerPhrase = test.phrase.toLowerCase();
+            let bestMatch = null;
+            let bestScore = 0;
+            
+            for (const cat of template.categories) {
+                for (const scenario of cat.scenarios || []) {
+                    for (const trigger of scenario.triggers || []) {
+                        const lowerTrigger = trigger.toLowerCase();
+                        // Simple word overlap scoring
+                        const phraseWords = lowerPhrase.split(/\s+/);
+                        const triggerWords = lowerTrigger.split(/\s+/);
+                        const matches = phraseWords.filter(w => triggerWords.includes(w)).length;
+                        const score = matches / Math.max(phraseWords.length, triggerWords.length);
+                        
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestMatch = { scenario: scenario.name, trigger, score };
+                        }
+                    }
+                }
+            }
+            
+            const matchesExpected = bestMatch?.scenario === test.expected;
+            console.log(`\n   "${test.phrase}"`);
+            console.log(`   → ${bestMatch?.scenario || 'NO MATCH'} (score: ${(bestScore * 100).toFixed(0)}%)`);
+            console.log(`   ${matchesExpected ? '✅' : '⚠️'} Expected: ${test.expected}`);
+        }
+        
         console.log('\n═══════════════════════════════════════════════════════════════════════════');
         if (allPass) {
             console.log('🎉 PHASE 1 VERIFICATION PASSED - All 5 scenarios enterprise-ready!');
