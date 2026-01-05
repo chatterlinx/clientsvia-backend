@@ -125,6 +125,9 @@ class ScenarioPoolService {
             // ========================================================
             const { redisClient } = require('../db');
             
+            if (!redisClient || typeof redisClient.get !== 'function') {
+                logger.warn('⚠️ [SCENARIO POOL CACHE] Redis client unavailable - caching disabled');
+            } else {
             try {
                 const cached = await redisClient.get(cacheKey);
                 if (cached) {
@@ -141,6 +144,7 @@ class ScenarioPoolService {
                     code: cacheError?.code || null
                 });
                 // Continue to MongoDB fallback
+            }
             }
             
             logger.info(`⚪ [SCENARIO POOL CACHE] Cache MISS, loading from MongoDB...`);
@@ -239,9 +243,13 @@ class ScenarioPoolService {
             
             try {
                 const { redisClient } = require('../db');
-                await redisClient.setEx(cacheKey, CACHE_TTL, JSON.stringify(result));
-                logger.info(`💾 [SCENARIO POOL CACHE] Cached ${scenarioPool.length} scenarios for ${CACHE_TTL}s`);
-                console.log(`[💾 CACHE WRITE] Scenario pool cached (TTL: ${CACHE_TTL}s)`);
+                if (!redisClient || typeof redisClient.setEx !== 'function') {
+                    logger.warn('⚠️ [SCENARIO POOL CACHE] Redis client unavailable - skip cache write');
+                } else {
+                    await redisClient.setEx(cacheKey, CACHE_TTL, JSON.stringify(result));
+                    logger.info(`💾 [SCENARIO POOL CACHE] Cached ${scenarioPool.length} scenarios for ${CACHE_TTL}s`);
+                    console.log(`[💾 CACHE WRITE] Scenario pool cached (TTL: ${CACHE_TTL}s)`);
+                }
             } catch (cacheError) {
                 logger.warn(`⚠️ [SCENARIO POOL CACHE] Failed to cache`, {
                     message: cacheError?.message || String(cacheError),

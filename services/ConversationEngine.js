@@ -2162,6 +2162,37 @@ async function processTurn({
         }
 
         // ═══════════════════════════════════════════════════════════════════
+        // 🆕 BLACK BOX - ENSURE RECORDING EARLY (before any LLM calls)
+        // ═══════════════════════════════════════════════════════════════════
+        // LLM Registry logs LLM_RESPONSE events during the OpenAI call. If we
+        // only initialize Black Box at the end of processTurn, those events
+        // are dropped as "recording not found".
+        if (channel === 'test' || channel === 'website' || channel === 'sms') {
+            try {
+                const BlackBoxLogger = require('./BlackBoxLogger');
+                const sourceType = channel === 'test' ? 'test' : channel === 'sms' ? 'sms' : 'web';
+                
+                await BlackBoxLogger.ensureCall({
+                    callId: session._id.toString(),
+                    companyId,
+                    from: callerPhone || visitorInfo?.ip || 'test-console',
+                    to: company.companyName || 'AI Agent',
+                    source: sourceType,
+                    sessionSnapshot: {
+                        phase: session.phase,
+                        mode: session.mode,
+                        locks: session.locks,
+                        memory: session.memory
+                    }
+                });
+                
+                log('📼 PHASE 2: Black Box recording ensured (early)', { source: sourceType });
+            } catch (bbInitErr) {
+                log('⚠️ Black Box ensureCall failed (non-fatal)', { error: bbInitErr.message });
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
         // DETECTION TRIGGERS → FLAGS (UI-CONTROLLED, NO TEXT)
         // ═══════════════════════════════════════════════════════════════════
         // Purpose: turn caller phrases into session.flags for routing/contract decisions.
