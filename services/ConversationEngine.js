@@ -1652,6 +1652,110 @@ async function processTurn({
     // Backward-compatible alias: many callers pass debug:true.
     // Treat either flag as “include debug payload in response”.
     includeDebug = Boolean(includeDebug || debug);
+
+    // ════════════════════════════════════════════════════════════════════════
+    // PRIORITY A: DEBUG SNAPSHOT FLIGHT RECORDER (V1)
+    // ════════════════════════════════════════════════════════════════════════
+    // Non-negotiables:
+    // - If includeDebug=true => debugSnapshot MUST exist on EVERY return path
+    // - Built from final mutated truth only (no recompute)
+    // - Keys are standardized and always present (null allowed)
+    function buildDebugSnapshotV1(truth = {}) {
+        const {
+            session = null,
+            companyId: cid = companyId,
+            channel: ch = channel,
+            turnNumber = null,
+            isSessionReused = null,
+            phase = null,
+            mode = null,
+            locks = null,
+            memory = null,
+            effectiveConfigVersion = null,
+            lastAgentIntent = null,
+            responseSource = null,
+            bookingRequiresConsent = null,
+            consentGiven = null,
+            consentPhrase = null,
+            bookingSnapTriggered = null,
+            activeSlotId = null,
+            slotIds = null,
+            currentSlots = null,
+            extractedThisTurn = null,
+            flow = null,
+            scenarios = null,
+            blackBox = null
+        } = truth;
+
+        // Always return required shape, with nulls if missing.
+        return {
+            sessionId: session?._id?.toString?.() || truth.sessionId || null,
+            companyId: cid ? String(cid) : null,
+            channel: ch || null,
+            turnNumber: Number.isFinite(turnNumber) ? turnNumber : null,
+            isSessionReused: typeof isSessionReused === 'boolean' ? isSessionReused : null,
+
+            phase: phase || session?.phase || null,
+            mode: mode || session?.mode || null,
+
+            locks: locks || session?.locks || null,
+            memory: memory || session?.memory || null,
+
+            effectiveConfigVersion: effectiveConfigVersion || null,
+
+            routing: {
+                lastAgentIntent: lastAgentIntent || session?.lastAgentIntent || null,
+                responseSource: responseSource || null
+            },
+
+            booking: {
+                bookingRequiresConsent: typeof bookingRequiresConsent === 'boolean' ? bookingRequiresConsent : null,
+                consentGiven: typeof consentGiven === 'boolean' ? consentGiven : (session?.booking?.consentGiven ?? null),
+                consentPhrase: consentPhrase ?? session?.booking?.consentPhrase ?? null,
+
+                bookingSnapTriggered: typeof bookingSnapTriggered === 'boolean' ? bookingSnapTriggered : null,
+
+                activeSlotId: activeSlotId ?? session?.booking?.currentSlotId ?? session?.booking?.activeSlot ?? null,
+                slotIds: Array.isArray(slotIds) ? slotIds : [],
+
+                currentSlots: currentSlots || session?.collectedSlots || {},
+                extractedThisTurn: extractedThisTurn || {}
+            },
+
+            flow: {
+                triggersFired: flow?.triggersFired ?? 0,
+                flowsActivated: flow?.flowsActivated ?? 0,
+                actionsExecuted: flow?.actionsExecuted ?? 0,
+                stateChanges: flow?.stateChanges ?? {}
+            },
+
+            scenarios: {
+                toolCount: scenarios?.toolCount ?? 0,
+                tools: Array.isArray(scenarios?.tools) ? scenarios.tools : []
+            },
+
+            blackBox: {
+                callId: blackBox?.callId ?? (session?._id?.toString?.() || truth.sessionId || null),
+                source: blackBox?.source ?? null
+            }
+        };
+    }
+
+    function safeBuildDebugSnapshotV1(truth) {
+        try {
+            return buildDebugSnapshotV1(truth);
+        } catch (err) {
+            return { error: 'snapshot_build_failed', message: err?.message || String(err) };
+        }
+    }
+
+    function sourceFromChannel(ch) {
+        if (ch === 'website') return 'web';
+        if (ch === 'sms') return 'sms';
+        if (ch === 'test') return 'test';
+        if (ch === 'phone' || ch === 'voice') return 'voice';
+        return 'unknown';
+    }
     
     const log = (msg, data = {}) => {
         const entry = { ts: Date.now() - startTime, msg, ...data };
@@ -1972,7 +2076,7 @@ async function processTurn({
             });
             
             // Return immediately without LLM - 0 tokens!
-            return {
+            const resp = {
                 success: true,
                 reply: greetingResponse,
                 response: greetingResponse,
@@ -2002,6 +2106,32 @@ async function processTurn({
                     log: debugLog
                 } : undefined
             };
+            if (includeDebug) {
+                resp.debugSnapshot = safeBuildDebugSnapshotV1({
+                    sessionId: resp.sessionId,
+                    companyId,
+                    channel,
+                    turnNumber: 1,
+                    isSessionReused: false,
+                    phase: resp.phase,
+                    mode: resp.mode,
+                    effectiveConfigVersion: null,
+                    lastAgentIntent: 'DISCOVERY',
+                    responseSource: 'GREETING_INTERCEPT',
+                    bookingRequiresConsent: null,
+                    consentGiven: false,
+                    consentPhrase: null,
+                    bookingSnapTriggered: false,
+                    activeSlotId: null,
+                    slotIds: [],
+                    currentSlots: {},
+                    extractedThisTurn: {},
+                    flow: { triggersFired: 0, flowsActivated: 0, actionsExecuted: 0, stateChanges: {} },
+                    scenarios: { toolCount: 0, tools: [] },
+                    blackBox: { callId: resp.sessionId, source: sourceFromChannel(channel) }
+                });
+            }
+            return resp;
         }
         
         // ═══════════════════════════════════════════════════════════════════
@@ -2028,7 +2158,7 @@ async function processTurn({
                     hasCompanyTransferMessage: !!company.connectionMessages?.voice?.transferMessage
                 });
 
-                return {
+                const resp = {
                     success: true,
                     reply: transferMsg,
                     response: transferMsg,
@@ -2045,6 +2175,32 @@ async function processTurn({
                     requiresTransfer: true,
                     transferReason: 'caller_requested_human'
                 };
+                if (includeDebug) {
+                    resp.debugSnapshot = safeBuildDebugSnapshotV1({
+                        sessionId: resp.sessionId,
+                        companyId,
+                        channel,
+                        turnNumber: 1,
+                        isSessionReused: false,
+                        phase: resp.phase,
+                        mode: resp.mode,
+                        effectiveConfigVersion: null,
+                        lastAgentIntent: 'DISCOVERY',
+                        responseSource: 'ESCALATION_INTERCEPT',
+                        bookingRequiresConsent: null,
+                        consentGiven: false,
+                        consentPhrase: null,
+                        bookingSnapTriggered: false,
+                        activeSlotId: null,
+                        slotIds: [],
+                        currentSlots: {},
+                        extractedThisTurn: {},
+                        flow: { triggersFired: 0, flowsActivated: 0, actionsExecuted: 0, stateChanges: {} },
+                        scenarios: { toolCount: 0, tools: [] },
+                        blackBox: { callId: resp.sessionId, source: sourceFromChannel(channel) }
+                    });
+                }
+                return resp;
             }
         }
 
@@ -2701,6 +2857,8 @@ async function processTurn({
         // Declare aiResult early so booking snap can set it
         let aiResult = null;
         let aiLatencyMs = 0;
+        // Scenario tools retrieval result (only set in DISCOVERY/SUPPORT turns; used for debugSnapshot)
+        let scenarioRetrieval = null;
             const aiStartTime = Date.now();
             
         // ═══════════════════════════════════════════════════════════════════════
@@ -2906,7 +3064,7 @@ async function processTurn({
         // ═══════════════════════════════════════════════════════════════════════
         // MODE-BASED ROUTING (THE CORE OF OPTION 1)
         // ═══════════════════════════════════════════════════════════════════════
-        else if (session.mode === 'BOOKING' && canEnterBooking) {
+        else if (session.mode === 'BOOKING' && canEnterBooking) BOOKING_MODE: {
             // ═══════════════════════════════════════════════════════════════════
             // BOOKING MODE - Deterministic clipboard (consent already given)
             // ═══════════════════════════════════════════════════════════════════
@@ -3033,7 +3191,7 @@ async function processTurn({
                         if (aiResult) {
                             session.mode = 'BOOKING';
                             session.markModified('mode');
-                            return aiResult;
+                            break BOOKING_MODE;
                         }
                     } else if (saysNo && !saysYes) {
                         // Close booking (single vs multi final script)
@@ -3069,7 +3227,7 @@ async function processTurn({
                             debug: { source: 'UOW_COMPLETE', unitCount }
                         };
 
-                        return aiResult;
+                        break BOOKING_MODE;
                     } else {
                         // Ambiguous, ask clarify prompt
                         const clarify = uowConfirm.clarifyPrompt || "Just to confirm — do you have another location or job to add today?";
@@ -3086,7 +3244,7 @@ async function processTurn({
                             mode: 'BOOKING',
                             debug: { source: 'UOW_CLARIFY' }
                         };
-                        return aiResult;
+                        break BOOKING_MODE;
                     }
                 }
             }
@@ -5434,7 +5592,7 @@ async function processTurn({
             const templateRefs = company.aiAgentSettings?.templateReferences || [];
             const activeTemplate = templateRefs.find(ref => ref.enabled !== false);
             
-            const scenarioRetrieval = await LLMDiscoveryEngine.retrieveRelevantScenarios({
+            scenarioRetrieval = await LLMDiscoveryEngine.retrieveRelevantScenarios({
                 companyId,
                 trade: company.trade || 'HVAC',
                 utterance: userText,
@@ -6628,44 +6786,62 @@ async function processTurn({
             // ════════════════════════════════════════════════════════════════
             // Purpose: provide a compact, stable “truth bundle” without requiring
             // consumers to reverse-engineer nested debug structures.
-            try {
-                const toolCount = Number.isFinite(response.debug?.v22?.scenarioCount)
-                    ? response.debug.v22.scenarioCount
-                    : null;
-                
-                response.debugSnapshot = {
-                    sessionId: session._id.toString(),
-                    companyId: String(companyId),
-                    channel: normalizedChannel,
-                    phase: session.phase || newPhase,
-                    mode: session.mode || 'DISCOVERY',
-                    locks: {
-                        greeted: !!session.locks?.greeted,
-                        issueCaptured: !!session.locks?.issueCaptured,
-                        bookingStarted: !!session.locks?.bookingStarted,
-                        bookingLocked: !!session.locks?.bookingLocked
-                    },
-                    memory: {
-                        rollingSummary: session.memory?.rollingSummary || '',
-                        facts: session.memory?.facts || {}
-                    },
-                    discovery: {
-                        issue: session.discovery?.issue || null,
-                        issueConfidence: Number.isFinite(session.discovery?.issueConfidence) ? session.discovery.issueConfidence : null
-                    },
-                    scenarios: {
-                        toolCount,
-                        tools: Array.isArray(response.debug?.v22?.scenariosRetrieved)
-                            ? response.debug.v22.scenariosRetrieved
-                            : []
-                    },
-                    blackBox: {
-                        callId: session._id.toString()
-                    }
-                };
-            } catch (_) {
-                // Best-effort only
-            }
+            // PRIORITY A: debugSnapshot MUST exist, built from final mutated truth (no recompute).
+            const v22 = aiResult?.v22BlackBox || null;
+            const responseSourceTruth = v22?.responseSource || aiResult?.debug?.source || (aiResult?.fromStateMachine ? 'STATE_MACHINE' : 'LLM');
+            const turnNumberTruth = v22?.turn ?? ((session.metrics?.totalTurns || 0) + 1);
+            const sourceTruth = sourceFromChannel(channel);
+
+            // Booking slot IDs (in order) from already-computed bookingConfig (no recompute)
+            const slotIdsTruth = Array.isArray(bookingConfig?.slots)
+                ? bookingConfig.slots.map(s => s?.slotId || s?.id || s?.type).filter(Boolean)
+                : [];
+
+            // Expanded scenario tools (already retrieved, no re-fetch)
+            const scenarioToolsExpanded = Array.isArray(scenarioRetrieval?.scenarios)
+                ? scenarioRetrieval.scenarios.map(s => ({
+                    scenarioId: s.scenarioId || null,
+                    title: s.title || null,
+                    confidence: (typeof s.confidence === 'number') ? s.confidence : null,
+                    templateId: s.templateId || null,
+                    scenarioType: s.scenarioType || null
+                }))
+                : [];
+
+            response.debugSnapshot = safeBuildDebugSnapshotV1({
+                session,
+                sessionId: session._id.toString(),
+                companyId,
+                channel,
+                turnNumber: turnNumberTruth,
+                isSessionReused: (session.metrics?.totalTurns || 0) > 0,
+                phase: session.phase || newPhase,
+                mode: session.mode || null,
+                locks: session.locks || null,
+                memory: session.memory || null,
+                effectiveConfigVersion: scenarioRetrieval?.effectiveConfigVersion || null,
+                lastAgentIntent: session.lastAgentIntent || null,
+                responseSource: responseSourceTruth,
+                bookingRequiresConsent: killSwitches?.bookingRequiresConsent ?? null,
+                consentGiven: session.booking?.consentGiven ?? null,
+                consentPhrase: session.booking?.consentPhrase ?? null,
+                bookingSnapTriggered: responseSourceTruth === 'BOOKING_SNAP',
+                activeSlotId: session.booking?.currentSlotId ?? session.booking?.activeSlot ?? null,
+                slotIds: slotIdsTruth,
+                currentSlots: session.collectedSlots || {},
+                extractedThisTurn: extractedThisTurn || {},
+                flow: {
+                    triggersFired: (dynamicFlowResult?.triggersFired || []).length,
+                    flowsActivated: (dynamicFlowResult?.flowsActivated || []).length,
+                    actionsExecuted: (dynamicFlowResult?.actionsExecuted || []).length,
+                    stateChanges: dynamicFlowResult?.stateChanges || {}
+                },
+                scenarios: {
+                    toolCount: scenarioToolsExpanded.length,
+                    tools: scenarioToolsExpanded
+                },
+                blackBox: { callId: session._id.toString(), source: sourceTruth }
+            });
         }
         
         log('✅ processTurn complete', { responseLength: aiResponse.length, latencyMs });
@@ -6776,7 +6952,7 @@ async function processTurn({
         console.error('[CONVERSATION ENGINE] Stack:', error.stack?.split('\n').slice(0, 5).join('\n'));
         console.error('[CONVERSATION ENGINE] Last checkpoint:', errorDetails.lastCheckpoint);
         
-        return {
+        const errResp = {
             success: false,
             error: error.message,
             errorType: error.name,
@@ -6796,6 +6972,32 @@ async function processTurn({
                 stackPreview: error.stack?.split('\n').slice(0, 3).join(' | ')
             }
         };
+        if (includeDebug) {
+            errResp.debugSnapshot = safeBuildDebugSnapshotV1({
+                sessionId: errResp.sessionId,
+                companyId,
+                channel,
+                turnNumber: null,
+                isSessionReused: null,
+                phase: errResp.phase,
+                mode: errResp.mode,
+                effectiveConfigVersion: null,
+                lastAgentIntent: null,
+                responseSource: 'ERROR',
+                bookingRequiresConsent: null,
+                consentGiven: null,
+                consentPhrase: null,
+                bookingSnapTriggered: false,
+                activeSlotId: null,
+                slotIds: [],
+                currentSlots: {},
+                extractedThisTurn: {},
+                flow: { triggersFired: 0, flowsActivated: 0, actionsExecuted: 0, stateChanges: {} },
+                scenarios: { toolCount: 0, tools: [] },
+                blackBox: { callId: errResp.sessionId, source: sourceFromChannel(channel) }
+            });
+        }
+        return errResp;
     }
 }
 
