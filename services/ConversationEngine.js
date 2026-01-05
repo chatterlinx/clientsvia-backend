@@ -1620,6 +1620,7 @@ const SlotExtractors = {
  * @param {Object} params.visitorInfo - Optional: Website visitor info { ip, userAgent, pageUrl }
  * @param {Object} params.metadata - Optional: Additional metadata (STT confidence, etc.)
  * @param {boolean} params.includeDebug - Optional: Include debug info in response
+ * @param {boolean} params.debug - Optional alias for includeDebug (backward-compatible)
  * 
  * @returns {Object} {
  *   success: boolean,
@@ -1642,10 +1643,15 @@ async function processTurn({
     visitorInfo = {},
     metadata = {},
     includeDebug = false,
+    debug = false,
     forceNewSession = false  // For Test Console - always create fresh session
 }) {
     const startTime = Date.now();
     const debugLog = [];
+
+    // Backward-compatible alias: many callers pass debug:true.
+    // Treat either flag as “include debug payload in response”.
+    includeDebug = Boolean(includeDebug || debug);
     
     const log = (msg, data = {}) => {
         const entry = { ts: Date.now() - startTime, msg, ...data };
