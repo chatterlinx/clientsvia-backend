@@ -457,6 +457,38 @@ async function translateCallerVocabulary(userText, company, template) {
     
     const replacements = [];
     let translated = userText;
+
+    // 🚨 SAFETY GUARDRAILS (DEFAULT - OVERRIDE IN UI)
+    // Some synonym keys are too generic and will corrupt meaning if replaced globally.
+    // Example: "air" → "air conditioner" causes "air conditioner conditioner".
+    // These are blocked unless you explicitly add a safer, phrase-level synonym (e.g., "a/c" → "air conditioner").
+    const DANGEROUS_GENERIC_KEYS = new Set([
+        'air',
+        'heat',
+        'heating',
+        'cool',
+        'cooling',
+        'system'
+    ]);
+    const SHORT_KEY_ALLOWLIST = new Set(['ac', 'a/c']);
+    
+    function isUnsafeSynonymKey(slangKey) {
+        const k = String(slangKey || '').toLowerCase().trim();
+        if (!k) return true;
+        if (DANGEROUS_GENERIC_KEYS.has(k)) return true;
+        if (k.length < 3 && !SHORT_KEY_ALLOWLIST.has(k)) return true;
+        return false;
+    }
+    
+    function wouldCascadeInsideReplacement(slangKey, meaningValue) {
+        const k = String(slangKey || '').toLowerCase().trim();
+        const m = String(meaningValue || '').toLowerCase().trim();
+        if (!k || !m) return false;
+        // If the meaning contains the slang token as a whole word, later passes can duplicate it.
+        // Example: slang "air", meaning "air conditioner".
+        const re = new RegExp(`\\b${escapeRegex(k)}\\b`, 'i');
+        return re.test(m);
+    }
     
     // Build merged synonym map (template + company)
     const synonymMap = new Map();
@@ -474,7 +506,13 @@ async function translateCallerVocabulary(userText, company, template) {
         for (const [technical, variants] of templateSynonyms.entries()) {
             if (Array.isArray(variants)) {
                 for (const variant of variants) {
-                    synonymMap.set(variant.toLowerCase(), technical);
+                    const slang = String(variant || '').toLowerCase().trim();
+                    const meaning = String(technical || '').trim();
+                    if (!slang || !meaning) continue;
+                    if (isUnsafeSynonymKey(slang) || wouldCascadeInsideReplacement(slang, meaning)) {
+                        continue;
+                    }
+                    synonymMap.set(slang, meaning);
                 }
             }
         }
@@ -490,7 +528,13 @@ async function translateCallerVocabulary(userText, company, template) {
         for (const [technical, variants] of templateSynonyms.entries()) {
             if (Array.isArray(variants)) {
                 for (const variant of variants) {
-                    synonymMap.set(variant.toLowerCase(), technical);
+                    const slang = String(variant || '').toLowerCase().trim();
+                    const meaning = String(technical || '').trim();
+                    if (!slang || !meaning) continue;
+                    if (isUnsafeSynonymKey(slang) || wouldCascadeInsideReplacement(slang, meaning)) {
+                        continue;
+                    }
+                    synonymMap.set(slang, meaning);
                 }
             }
         }
@@ -507,7 +551,13 @@ async function translateCallerVocabulary(userText, company, template) {
         
         for (const [slang, meaning] of companyMap.entries()) {
             // Company overrides template
-            synonymMap.set(slang.toLowerCase(), meaning);
+            const k = String(slang || '').toLowerCase().trim();
+            const v = String(meaning || '').trim();
+            if (!k || !v) continue;
+            if (isUnsafeSynonymKey(k) || wouldCascadeInsideReplacement(k, v)) {
+                continue;
+            }
+            synonymMap.set(k, v);
         }
     }
     

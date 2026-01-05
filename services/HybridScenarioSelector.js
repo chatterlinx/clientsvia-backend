@@ -136,6 +136,31 @@ class HybridScenarioSelector {
         // This allows non-technical customers to use natural language
         this.synonymMap = new Map();
         
+        // 🚨 SAFETY GUARDRAILS (DEFAULT - OVERRIDE IN UI)
+        // Some alias keys are too generic and corrupt meaning if replaced globally.
+        // Example: alias "air" -> technical "air conditioner" leads to "air conditioner conditioner"
+        // because it can replace inside the replacement phrase.
+        const DANGEROUS_GENERIC_ALIASES = new Set([
+            'air',
+            'heat',
+            'heating',
+            'cool',
+            'cooling',
+            'system'
+        ]);
+        const SHORT_ALIAS_ALLOWLIST = new Set(['ac', 'a/c']);
+        const isUnsafeAlias = (alias, technicalTerm) => {
+            const a = String(alias || '').toLowerCase().trim();
+            const t = String(technicalTerm || '').toLowerCase().trim();
+            if (!a || !t) return true;
+            if (DANGEROUS_GENERIC_ALIASES.has(a)) return true;
+            if (a.length < 3 && !SHORT_ALIAS_ALLOWLIST.has(a)) return true;
+            // Prevent cascading replacements: if technical term already contains alias as a word (e.g., "air conditioner" contains "air")
+            const re = new RegExp(`\\b${a.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&')}\\b`, 'i');
+            if (re.test(t)) return true;
+            return false;
+        };
+        
         if (synonymMapObject && typeof synonymMapObject === 'object') {
             // Convert from various formats to Map
             if (synonymMapObject instanceof Map) {
@@ -146,7 +171,9 @@ class HybridScenarioSelector {
                     if (Array.isArray(aliases) && aliases.length > 0) {
                         this.synonymMap.set(
                             technicalTerm.toLowerCase().trim(),
-                            aliases.map(a => String(a).toLowerCase().trim())
+                            aliases
+                                .map(a => String(a).toLowerCase().trim())
+                                .filter(a => !isUnsafeAlias(a, technicalTerm))
                         );
                     }
                 }
@@ -156,7 +183,9 @@ class HybridScenarioSelector {
                     if (Array.isArray(aliases) && aliases.length > 0) {
                         this.synonymMap.set(
                             technicalTerm.toLowerCase().trim(),
-                            aliases.map(a => String(a).toLowerCase().trim())
+                            aliases
+                                .map(a => String(a).toLowerCase().trim())
+                                .filter(a => !isUnsafeAlias(a, technicalTerm))
                         );
                     }
                 }
