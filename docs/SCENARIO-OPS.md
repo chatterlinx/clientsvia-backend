@@ -217,6 +217,157 @@ If contamination is suspected:
 
 ---
 
+---
+
+# 🔒 Scenario Enforcement Protocol (SEP-1)
+
+> **Version:** 1.0  
+> **Status:** MANDATORY  
+> **Last Updated:** January 2026  
+
+This protocol was established after achieving **71/71 scenarios meeting enforcement minimums** through an 8-phase batch process. It is now the permanent, non-negotiable standard for all scenario work.
+
+---
+
+## ✅ REQUIRED MINIMUMS (Hard Gate)
+
+A scenario is **INVALID** unless it meets **ALL** of the following:
+
+| Field | Minimum | Enforced |
+|-------|---------|----------|
+| `triggers` | ≥ 8 | ✅ |
+| `negativeUserPhrases` | ≥ 3 | ✅ |
+| `quickReplies` | ≥ 7 | ✅ |
+| `fullReplies` | ≥ 7 | ✅ |
+| `scope` | `"GLOBAL"` | ✅ |
+| `ownerCompanyId` | `null` | ✅ |
+
+**No exceptions. No partial saves.**
+
+---
+
+## 🧪 REQUIRED EXECUTION FLOW (Non-Negotiable)
+
+### Step 1 — Baseline Snapshot
+```bash
+node scripts/identify-worst-scenarios.js 2>/dev/null
+```
+Record the current state before any changes.
+
+### Step 2 — Build Patch Script
+Patch scripts MUST:
+- Target scenarios by **real scenarioId** (from export)
+- Be template-scoped (single templateId)
+- Support `--dry-run` flag
+- Print before → after counts
+- Merge + dedupe arrays (never overwrite)
+
+Naming convention:
+```bash
+scripts/phaseX-patch-N.js
+```
+
+### Step 3 — DRY RUN (MANDATORY)
+```bash
+node scripts/phaseX-patch-N.js --dry-run
+```
+
+✅ Expected output:
+- `WILL_UPDATE` for intended scenarios
+- Correct before → after deltas
+- `Total operations: N` (matches your intention)
+- **NO database writes**
+
+❌ If anything unexpected appears → **STOP. DO NOT APPLY.**
+
+### Step 4 — APPLY
+```bash
+node scripts/phaseX-patch-N.js --apply
+```
+
+### Step 5 — VERIFICATION DRY RUN
+```bash
+node scripts/phaseX-patch-N.js --dry-run
+```
+
+✅ Required output: `Total operations: 0`
+
+If not 0 → something failed. Investigate before proceeding.
+
+### Step 6 — GLOBAL VERIFICATION
+```bash
+node scripts/identify-worst-scenarios.js 2>/dev/null
+```
+
+✅ REQUIRED FINAL STATE:
+```
+Total scenarios: N
+✅ Meeting minimums: N
+❌ Below minimums: 0
+```
+
+---
+
+## 🚫 STRICTLY FORBIDDEN
+
+- ❌ Adding scenarios under `companyId`
+- ❌ Editing scenarios via browser console
+- ❌ Guessing scenario IDs
+- ❌ Applying without dry-run first
+- ❌ Saving templates with failing enforcement
+- ❌ Running one mega-script for all scenarios (batch in ≤10)
+- ❌ Manual UI edits while batch scripts are running
+
+---
+
+## 📊 Enforcement Verification Script
+
+Use this script to verify template health at any time:
+
+```bash
+node scripts/identify-worst-scenarios.js 2>/dev/null
+```
+
+### Interpreting Results
+
+| Output | Status | Action |
+|--------|--------|--------|
+| `Below minimums: 0` | 🟢 Enterprise-Safe | Good to deploy |
+| `Below minimums: 1-10` | 🟡 At Risk | Run patch phase |
+| `Below minimums: 10+` | 🔴 Invalid | Do NOT deploy |
+
+---
+
+## 🎯 Phase Scripts Reference
+
+The following scripts were used to achieve 71/71 compliance:
+
+| Phase | Script | Scenarios | Focus |
+|-------|--------|-----------|-------|
+| 1 | `phase1-patch-5-worst.js` | 5 | Initial worst offenders |
+| 2 | `phase2-patch-10-worst.js` | 10 | Emergency + water/gas |
+| 3 | `phase3-patch-10.js` | 10 | Frozen coils, smells, noises |
+| 4 | `phase4-patch-10.js` | 10 | Commercial, pricing, emergency |
+| 5 | `phase5-patch-10.js` | 10 | FAQ/admin scenarios |
+| 6 | `phase6-patch-10.js` | 10 | Booking + thermostat |
+| 7 | `phase7-patch-10.js` | 10 | Core HVAC (negatives only) |
+| 8 | `phase8-patch-6.js` | 6 | Final heating scenarios |
+
+All scripts follow the same pattern and can be used as templates for future batches.
+
+---
+
+## 🔄 Ongoing Maintenance
+
+When adding NEW scenarios or templates:
+
+1. Create a new phase script following the pattern
+2. Follow SEP-1 execution flow exactly
+3. Verify `Below minimums: 0` after every change
+4. Commit scripts to repo (audit trail)
+
+---
+
 ## Contact
 
 Questions about scenario architecture? Check:
@@ -224,4 +375,5 @@ Questions about scenario architecture? Check:
 - `routes/admin/globalTemplatesPatch.js` for endpoint implementation
 - `services/GlobalTemplatePatchService.js` for business logic
 - `middleware/scopeGuard.js` for scope enforcement
+- Phase scripts in `/scripts/phase*.js` for batch patterns
 
