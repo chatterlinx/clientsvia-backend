@@ -6616,6 +6616,50 @@ async function processTurn({
                     callLedger: session.callLedger || {}
                 } : null
             };
+
+            // ════════════════════════════════════════════════════════════════
+            // 🧾 DEBUG SNAPSHOT (stable keys for shell + Wiring Tab)
+            // ════════════════════════════════════════════════════════════════
+            // Purpose: provide a compact, stable “truth bundle” without requiring
+            // consumers to reverse-engineer nested debug structures.
+            try {
+                const toolCount = Number.isFinite(response.debug?.v22?.scenarioCount)
+                    ? response.debug.v22.scenarioCount
+                    : null;
+                
+                response.debugSnapshot = {
+                    sessionId: session._id.toString(),
+                    companyId: String(companyId),
+                    channel: normalizedChannel,
+                    phase: session.phase || newPhase,
+                    mode: session.mode || 'DISCOVERY',
+                    locks: {
+                        greeted: !!session.locks?.greeted,
+                        issueCaptured: !!session.locks?.issueCaptured,
+                        bookingStarted: !!session.locks?.bookingStarted,
+                        bookingLocked: !!session.locks?.bookingLocked
+                    },
+                    memory: {
+                        rollingSummary: session.memory?.rollingSummary || '',
+                        facts: session.memory?.facts || {}
+                    },
+                    discovery: {
+                        issue: session.discovery?.issue || null,
+                        issueConfidence: Number.isFinite(session.discovery?.issueConfidence) ? session.discovery.issueConfidence : null
+                    },
+                    scenarios: {
+                        toolCount,
+                        tools: Array.isArray(response.debug?.v22?.scenariosRetrieved)
+                            ? response.debug.v22.scenariosRetrieved
+                            : []
+                    },
+                    blackBox: {
+                        callId: session._id.toString()
+                    }
+                };
+            } catch (_) {
+                // Best-effort only
+            }
         }
         
         log('✅ processTurn complete', { responseLength: aiResponse.length, latencyMs });
