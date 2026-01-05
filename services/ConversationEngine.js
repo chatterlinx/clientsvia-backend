@@ -1757,7 +1757,8 @@ async function processTurn({
         // V34: Determine context WITHOUT session (session loaded later)
         // If no sessionId provided, this is likely a new conversation = treat as greeting
         // If sessionId exists, we need to be careful about ambiguous words
-        const hasExistingSession = !!providedSessionId;
+        // FIX (Jan 2026): "fresh-*" IDs from chat widget indicate NEW sessions, not existing
+        const hasExistingSession = !!providedSessionId && !String(providedSessionId).startsWith('fresh-');
         
         // V34: Words that are BOTH greetings AND time preferences
         const ambiguousTimeWords = ['morning', 'afternoon', 'evening'];
