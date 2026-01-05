@@ -9126,10 +9126,65 @@ Loading field report...
           </div>
         </div>
         
-        <!-- Section 5: Quick Actions -->
+        <!-- Section 5: Multi-Trade Operations -->
+        <div style="background: #ecfdf5; border: 2px solid #a7f3d0; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 12px; color: #065f46; font-size: 14px; font-weight: 700;">
+            <i class="fas fa-exchange-alt"></i> 5) Multi-Trade Operations (HVAC, Plumbing, Dental, etc.)
+          </h4>
+          
+          <!-- How to find templateId -->
+          <div style="background: white; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
+            <p style="margin: 0 0 8px; font-size: 12px; color: #047857; font-weight: 600;">
+              🔍 Find the correct templateId for ANY company:
+            </p>
+            <div style="font-size: 11px; color: #065f46; font-family: monospace; line-height: 1.8;">
+              <div><strong>Option A:</strong> Company Profile → aiAgentSettings.templateReferences[0].templateId</div>
+              <div><strong>Option B:</strong> Export JSON → <code>_meta.templateId</code> in header</div>
+              <div><strong>Option C:</strong> Runtime Truth → <code>/api/company/:id/runtime-truth</code></div>
+              <div><strong>Option D:</strong> Data Center → Templates tab → click template</div>
+            </div>
+          </div>
+          
+          <!-- Trade Safety Rules -->
+          <div style="background: #fef2f2; border-radius: 6px; padding: 12px;">
+            <p style="margin: 0 0 8px; font-size: 12px; color: #991b1b; font-weight: 600;">
+              ⚠️ Cross-Trade Safety Rules:
+            </p>
+            <div style="font-size: 11px; color: #7f1d1d; line-height: 1.8;">
+              <div>• Each template has a <code>templateType</code>: "hvac", "plumbing", "dental", etc.</div>
+              <div>• Company's <code>tradeKey</code> MUST match template's <code>templateType</code></div>
+              <div>• <strong>NEVER</strong> mix scenarios across trades (plumbing scenarios in HVAC template = contamination)</div>
+              <div>• When editing: confirm you're in the RIGHT template FIRST</div>
+              <div>• One patch script per template — never multi-template patches</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Section 6: New Template Creation -->
+        <div style="background: #fef3c7; border: 2px solid #fcd34d; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 12px; color: #92400e; font-size: 14px; font-weight: 700;">
+            <i class="fas fa-plus-circle"></i> 6) Creating a New Trade Template
+          </h4>
+          <div style="font-size: 12px; color: #78350f; line-height: 1.8;">
+            <p style="margin: 0 0 8px;">When adding a new trade (e.g., Plumbing, Dental, Legal):</p>
+            <ol style="margin: 0; padding-left: 20px;">
+              <li>Create new <code>GlobalInstantResponseTemplate</code> with unique <code>templateType</code></li>
+              <li>Add categories and scenarios following SEP-1 minimums from the start</li>
+              <li>Link companies to the new template via <code>templateReferences</code></li>
+              <li>Create a dedicated phase script: <code>scripts/plumbing-phase1.js</code> etc.</li>
+              <li>Update <code>identify-worst-scenarios.js</code> with the new <code>TEMPLATE_ID</code></li>
+              <li>Run full SEP-1 flow before going live</li>
+            </ol>
+            <p style="margin: 12px 0 0; font-size: 11px; color: #b45309;">
+              <strong>Template naming:</strong> Keep scripts organized by trade: <code>hvac-phase1.js</code>, <code>plumbing-phase1.js</code>, etc.
+            </p>
+          </div>
+        </div>
+        
+        <!-- Section 7: Quick Actions -->
         <div style="background: #f8fafc; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
           <h4 style="margin: 0 0 12px; color: #374151; font-size: 14px; font-weight: 700;">
-            <i class="fas fa-rocket"></i> 5) Quick Actions
+            <i class="fas fa-rocket"></i> 7) Quick Actions
           </h4>
           <div style="display: flex; flex-wrap: wrap; gap: 10px;">
             <button onclick="closeScenarioOpsModal(); switchToDataConfigSubtab('scenarios');"
@@ -9151,16 +9206,16 @@ Loading field report...
           </div>
         </div>
         
-        <!-- Section 6: Copy Directive -->
-        <div style="background: #fef3c7; border: 2px solid #fcd34d; border-radius: 8px; padding: 16px;">
-          <h4 style="margin: 0 0 12px; color: #92400e; font-size: 14px; font-weight: 700;">
-            <i class="fas fa-clipboard"></i> 6) AI Coder Directive (Copy & Paste)
+        <!-- Section 8: Copy Directive -->
+        <div style="background: #1e293b; border-radius: 8px; padding: 16px;">
+          <h4 style="margin: 0 0 12px; color: #fbbf24; font-size: 14px; font-weight: 700;">
+            <i class="fas fa-clipboard"></i> 8) AI Coder Directive (Copy & Paste)
           </h4>
-          <div id="scenario-ops-directive" style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; padding: 12px; font-size: 11px; color: #78350f; font-family: monospace; line-height: 1.6; margin-bottom: 12px;">
-All scenario changes MUST follow SEP-1 (Scenario Enforcement Protocol). Minimums: triggers≥8, negatives≥3, quickReplies≥7, fullReplies≥7. Required flow: dry-run → apply → dry-run (0 ops) → verify. Scenarios are GLOBAL only in GlobalInstantResponseTemplate categories[].scenarios[]. Use Export JSON for real IDs. No guessing. No company docs. Verify scope=GLOBAL ownerCompanyId=null. Run identify-worst-scenarios.js → Below minimums must be 0.
+          <div id="scenario-ops-directive" style="background: #334155; border: 1px solid #475569; border-radius: 6px; padding: 12px; font-size: 11px; color: #e2e8f0; font-family: monospace; line-height: 1.6; margin-bottom: 12px;">
+All scenario changes MUST follow SEP-1 (Scenario Enforcement Protocol). Minimums: triggers≥8, negatives≥3, quickReplies≥7, fullReplies≥7. FIRST: Confirm you have the correct templateId for this company/trade. Required flow: dry-run → apply → dry-run (0 ops) → verify. Scenarios are GLOBAL only in GlobalInstantResponseTemplate. Use Export JSON for real IDs. No guessing. No company docs. NEVER mix scenarios across trades (HVAC/plumbing/dental templates are separate). Verify scope=GLOBAL ownerCompanyId=null. Run identify-worst-scenarios.js → Below minimums must be 0.
           </div>
           <button onclick="copyScenarioOpsDirective()"
-                  style="padding: 10px 20px; background: #f59e0b; color: #1e293b; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">
+                  style="padding: 10px 20px; background: #fbbf24; color: #1e293b; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">
             <i class="fas fa-copy"></i> Copy Ops Directive
           </button>
         </div>
