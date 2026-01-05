@@ -727,7 +727,20 @@
     
     async function loadWiringReport(companyId) {
         const url = `/api/admin/wiring-status/${companyId}?includeGuardrails=1&includeInfrastructure=1`;
-        const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+        // Control-plane stores admin JWT under 'adminToken' key
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('auth_token') || localStorage.getItem('token');
+        
+        // Debug: log token presence (never log actual token)
+        console.log('[WiringTab] Auth check:', {
+            hasAdminToken: !!localStorage.getItem('adminToken'),
+            hasAuthToken: !!localStorage.getItem('auth_token'),
+            hasToken: !!localStorage.getItem('token'),
+            tokenLength: token ? token.length : 0
+        });
+        
+        if (!token) {
+            throw new Error('No auth token found in localStorage (checked: adminToken, auth_token, token). Please log in again.');
+        }
         
         const res = await fetch(url, {
             headers: {
@@ -770,7 +783,8 @@
     
     async function clearCache(companyId) {
         const url = `/api/admin/wiring-status/${companyId}/clear-cache`;
-        const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+        // Control-plane stores admin JWT under 'adminToken' key
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('auth_token') || localStorage.getItem('token');
         
         const res = await fetch(url, {
             method: 'POST',
