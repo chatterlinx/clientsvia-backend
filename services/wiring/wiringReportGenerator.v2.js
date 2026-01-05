@@ -324,23 +324,60 @@ function buildHealth(companyDoc) {
         const status = computeFieldStatus(field, dbValue, hasRuntime);
         
         health.byStatus[status]++;
-        health.fields.push({
+        
+        // Build detailed field entry
+        const fieldEntry = {
             id: field.id,
             label: field.label,
             status,
             hasValue: isNonEmpty(dbValue),
             hasRuntime,
             critical: field.critical || false,
-            required: field.required || false
-        });
+            required: field.required || false,
+            dbPath: field.db?.path || null,
+            currentValue: dbValue,
+            defaultValue: field.defaultValue,
+            source: isNonEmpty(dbValue) ? 'companyDoc' : (field.defaultValue !== undefined ? 'default' : 'not_set')
+        };
         
-        // Track issues
-        if (status === STATUS.MISCONFIGURED && field.critical) {
+        health.fields.push(fieldEntry);
+        
+        // CRITICAL FIX: If health=RED, criticalIssues must never be empty
+        // Every MISCONFIGURED field must emit a criticalIssue entry
+        if (status === STATUS.MISCONFIGURED) {
+            // Determine WHY it's misconfigured
+            let reason = 'Unknown validation failure';
+            let expected = 'Valid value';
+            let fix = 'Check UI configuration';
+            
+            if (!isNonEmpty(dbValue) && field.required) {
+                reason = `Required field is empty/missing in database`;
+                expected = field.defaultValue !== undefined ? `Default: ${JSON.stringify(field.defaultValue)}` : 'Any valid value';
+                fix = `Set value in Control Plane → ${field.ui?.path || field.label}`;
+            } else if (field.validators && field.validators.length > 0) {
+                // Run validators to get specific failure message
+                for (const validator of field.validators) {
+                    if (typeof validator.fn === 'function' && !validator.fn(dbValue)) {
+                        reason = validator.message || 'Validation failed';
+                        expected = validator.message || 'Passes validation';
+                        fix = `Fix in Control Plane → ${field.ui?.path || field.label}`;
+                        break;
+                    }
+                }
+            }
+            
             health.criticalIssues.push({
                 fieldId: field.id,
                 label: field.label,
                 status,
-                message: `Critical field is misconfigured`
+                reason,
+                expected,
+                actual: dbValue === undefined ? 'undefined' : (dbValue === null ? 'null' : JSON.stringify(dbValue)),
+                dbPath: field.db?.path,
+                uiPath: field.ui?.path,
+                fix,
+                critical: field.critical || false,
+                required: field.required || false
             });
         } else if (status === STATUS.UI_ONLY && field.required) {
             health.warnings.push({
@@ -570,16 +607,25 @@ pie title Field Health Status
 /**
  * Main report generator
  */
-async function generateWiringReport({ companyId, tradeKey = 'universal', environment = 'production' }) {
+async function generateWiringReport({ companyId, tradeKey = null, environment = 'production' }) {
     const startTime = Date.now();
     
-    logger.info('[WIRING REPORT V2] Generating report', { companyId, tradeKey });
-    
-    // Load company doc
+    // Load company doc FIRST so we can get the actual tradeKey
     const companyDoc = await Company.findById(companyId).lean();
     if (!companyDoc) {
         throw new Error(`Company not found: ${companyId}`);
     }
+    
+    // CRITICAL FIX: Use company's actual tradeKey, not a blind default to 'universal'
+    // This prevents scenario pool mismatches when company is HVAC but we query as universal
+    const resolvedTradeKey = tradeKey || companyDoc.trade || companyDoc.tradeKey || 'universal';
+    
+    logger.info('[WIRING REPORT V2] Generating report', { 
+        companyId, 
+        requestedTradeKey: tradeKey,
+        resolvedTradeKey,
+        companyTrade: companyDoc.trade || companyDoc.tradeKey
+    });
     
     // Build all report sections
     const uiMap = buildUiMap();
@@ -608,7 +654,9 @@ async function generateWiringReport({ companyId, tradeKey = 'universal', environ
         scope: {
             companyId,
             companyName: companyDoc.companyName || companyDoc.businessName,
-            tradeKey: companyDoc.trade || companyDoc.tradeKey || tradeKey,
+            tradeKey: resolvedTradeKey,
+            requestedTradeKey: tradeKey,
+            companyTradeKey: companyDoc.trade || companyDoc.tradeKey || null,
             environment,
             effectiveConfigVersion: companyDoc.effectiveConfigVersion || null
         },
