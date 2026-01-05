@@ -64,9 +64,24 @@ function isNonEmpty(val) {
 /**
  * Compute status for a field
  */
-function computeFieldStatus(field, dbValue, hasRuntime) {
+function computeFieldStatus(field, dbValue, hasRuntime, derivedData = null) {
     const hasDbValue = isNonEmpty(dbValue);
     const hasUi = !!field.ui;
+    
+    // GLOBAL_TEMPLATE_DERIVED fields are checked differently
+    if (field.isDerived || field.source === 'GLOBAL_TEMPLATE_DERIVED') {
+        // For derived fields, check the derivedData instead of dbValue
+        if (derivedData) {
+            if (derivedData.hasTemplateRefs && derivedData.scenarioCount > 0) {
+                return STATUS.WIRED;
+            } else if (derivedData.hasTemplateRefs && derivedData.scenarioCount === 0) {
+                return STATUS.PARTIAL; // Templates linked but no scenarios
+            } else {
+                return STATUS.NOT_CONFIGURED; // No template refs
+            }
+        }
+        return STATUS.NOT_CONFIGURED;
+    }
     
     // No runtime reader = UI_ONLY
     if (!hasRuntime) {
@@ -297,7 +312,7 @@ function buildEffectiveConfig(companyDoc, globalTemplates = []) {
 /**
  * Build health report
  */
-function buildHealth(companyDoc) {
+function buildHealth(companyDoc, derivedData = {}) {
     const health = {
         overall: 'GREEN',
         byStatus: {
@@ -317,11 +332,22 @@ function buildHealth(companyDoc) {
     const allFields = getAllFields();
     
     for (const field of allFields) {
-        const dbPath = field.db?.path;
-        const dbValue = dbPath && companyDoc ? getPath(companyDoc, dbPath) : undefined;
+        // Handle GLOBAL_TEMPLATE_DERIVED fields differently
+        const isDerived = field.isDerived || field.source === 'GLOBAL_TEMPLATE_DERIVED';
+        
+        let dbPath = null;
+        let dbValue = undefined;
+        
+        if (!isDerived) {
+            dbPath = field.db?.path;
+            dbValue = dbPath && companyDoc ? getPath(companyDoc, dbPath) : undefined;
+        }
+        
         const hasRuntime = hasRuntimeReaders(field.id);
         
-        const status = computeFieldStatus(field, dbValue, hasRuntime);
+        // Pass derivedData for derived fields
+        const fieldDerivedData = isDerived ? derivedData : null;
+        const status = computeFieldStatus(field, dbValue, hasRuntime, fieldDerivedData);
         
         health.byStatus[status]++;
         
@@ -330,17 +356,48 @@ function buildHealth(companyDoc) {
             id: field.id,
             label: field.label,
             status,
-            hasValue: isNonEmpty(dbValue),
+            hasValue: isDerived ? (derivedData?.scenarioCount > 0) : isNonEmpty(dbValue),
             hasRuntime,
             critical: field.critical || false,
             required: field.required || false,
-            dbPath: field.db?.path || null,
-            currentValue: dbValue,
+            dbPath: isDerived ? null : (field.db?.path || null),
+            currentValue: isDerived ? `${derivedData?.scenarioCount || 0} scenarios from ${derivedData?.templateCount || 0} templates` : dbValue,
             defaultValue: field.defaultValue,
-            source: isNonEmpty(dbValue) ? 'companyDoc' : (field.defaultValue !== undefined ? 'default' : 'not_set')
+            source: isDerived ? 'GLOBAL_TEMPLATE_DERIVED' : (isNonEmpty(dbValue) ? 'companyDoc' : (field.defaultValue !== undefined ? 'default' : 'not_set')),
+            isDerived: isDerived || false
         };
         
         health.fields.push(fieldEntry);
+        
+        // Handle derived fields that aren't wired (missing templates or scenarios)
+        if (isDerived && status !== STATUS.WIRED) {
+            let reason, fix;
+            
+            if (!derivedData?.hasTemplateRefs) {
+                reason = 'No templates linked to company';
+                fix = field.fixInstructions?.noTemplateRefs || 'Select templates in Data & Config → Template References';
+            } else if (derivedData?.scenarioCount === 0) {
+                reason = 'Templates linked but contain 0 scenarios';
+                fix = field.fixInstructions?.scenariosEmpty || 'Add scenarios to the linked template';
+            } else {
+                reason = 'Unknown derivation issue';
+                fix = 'Check template configuration';
+            }
+            
+            if (status === STATUS.PARTIAL || status === STATUS.NOT_CONFIGURED) {
+                health.warnings.push({
+                    fieldId: field.id,
+                    label: field.label,
+                    status,
+                    reason,
+                    fix,
+                    derivedFrom: 'templateReferences',
+                    templateCount: derivedData?.templateCount || 0,
+                    scenarioCount: derivedData?.scenarioCount || 0
+                });
+            }
+            continue; // Skip the MISCONFIGURED block for derived fields
+        }
         
         // CRITICAL FIX: If health=RED, criticalIssues must never be empty
         // Every MISCONFIGURED field must emit a criticalIssue entry
@@ -617,14 +674,69 @@ async function generateWiringReport({ companyId, tradeKey = null, environment = 
     }
     
     // CRITICAL FIX: Use company's actual tradeKey, not a blind default to 'universal'
-    // This prevents scenario pool mismatches when company is HVAC but we query as universal
-    const resolvedTradeKey = tradeKey || companyDoc.trade || companyDoc.tradeKey || 'universal';
+    // Resolution order:
+    // 1. Explicit tradeKey passed
+    // 2. Company's stored tradeKey
+    // 3. Infer from templateReferences if available
+    // 4. Fallback to 'universal'
+    const templateRefs = companyDoc.aiAgentSettings?.templateReferences || [];
+    let inferredTradeKey = null;
+    
+    // Try to infer tradeKey from template references
+    if (templateRefs.length > 0 && templateRefs[0].templateId) {
+        try {
+            const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+            const firstTemplate = await GlobalInstantResponseTemplate.findById(templateRefs[0].templateId).select('tradeKey templateType').lean();
+            if (firstTemplate) {
+                inferredTradeKey = firstTemplate.tradeKey || firstTemplate.templateType || null;
+            }
+        } catch (e) {
+            logger.warn('[WIRING REPORT V2] Could not infer tradeKey from template', { error: e.message });
+        }
+    }
+    
+    const resolvedTradeKey = (
+        tradeKey || 
+        companyDoc.trade || 
+        companyDoc.tradeKey || 
+        companyDoc.aiAgentSettings?.tradeKey ||
+        inferredTradeKey ||
+        'universal'
+    ).toLowerCase(); // Normalize to lowercase
     
     logger.info('[WIRING REPORT V2] Generating report', { 
         companyId, 
         requestedTradeKey: tradeKey,
         resolvedTradeKey,
+        inferredTradeKey,
         companyTrade: companyDoc.trade || companyDoc.tradeKey
+    });
+    
+    // Load DERIVED data (scenario pool from templates)
+    let derivedData = {
+        hasTemplateRefs: templateRefs.length > 0,
+        templateCount: templateRefs.filter(r => r.enabled !== false).length,
+        scenarioCount: 0,
+        scenarios: []
+    };
+    
+    if (derivedData.hasTemplateRefs) {
+        try {
+            const ScenarioPoolService = require('../../services/ScenarioPoolService');
+            const poolResult = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
+            derivedData.scenarioCount = poolResult.scenarios?.length || 0;
+            derivedData.scenarios = poolResult.scenarios || [];
+            derivedData.effectiveConfigVersion = poolResult.effectiveConfigVersion || null;
+        } catch (e) {
+            logger.warn('[WIRING REPORT V2] Could not load scenario pool', { error: e.message });
+            derivedData.scenarioPoolError = e.message;
+        }
+    }
+    
+    logger.info('[WIRING REPORT V2] Derived data loaded', {
+        hasTemplateRefs: derivedData.hasTemplateRefs,
+        templateCount: derivedData.templateCount,
+        scenarioCount: derivedData.scenarioCount
     });
     
     // Build all report sections
@@ -632,7 +744,7 @@ async function generateWiringReport({ companyId, tradeKey = null, environment = 
     const dataMap = buildDataMap(companyDoc);
     const runtimeMap = buildRuntimeMap();
     const effectiveConfig = buildEffectiveConfig(companyDoc);
-    const health = buildHealth(companyDoc);
+    const health = buildHealth(companyDoc, derivedData);
     const diff = buildDiff(companyDoc);
     const noTenantBleedProof = buildNoTenantBleedProof(companyDoc, companyId);
     const diagrams = buildDiagrams(companyDoc, health);
@@ -714,6 +826,15 @@ async function generateWiringReport({ companyId, tradeKey = null, environment = 
         
         // TENANT SAFETY
         noTenantBleedProof,
+        
+        // DERIVED DATA (from global templates)
+        derivedData: {
+            hasTemplateRefs: derivedData.hasTemplateRefs,
+            templateCount: derivedData.templateCount,
+            scenarioCount: derivedData.scenarioCount,
+            effectiveConfigVersion: derivedData.effectiveConfigVersion || null,
+            scenarioPoolError: derivedData.scenarioPoolError || null
+        },
         
         // COVERAGE ANALYSIS
         coverage: {

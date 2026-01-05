@@ -542,7 +542,7 @@ const wiringRegistryV2 = {
                     ]
                 },
                 
-                // SCENARIOS (from templates - GLOBAL scope)
+                // SCENARIOS (from templates - GLOBAL DERIVED, not company field)
                 {
                     id: 'dataConfig.scenarios',
                     label: 'Scenarios',
@@ -553,17 +553,27 @@ const wiringRegistryV2 = {
                             id: 'dataConfig.scenarios',
                             label: 'Scenario Pool',
                             ui: { inputId: 'scenarios', path: 'Data & Config → Scenarios → Pool' },
-                            db: { 
-                                collection: 'globalinstantresponsetemplates',
-                                path: 'categories[].scenarios[]',
-                                note: 'Loaded via templateReferences - NOT stored in company doc'
+                            // CRITICAL: This is NOT a company field - it's derived from global templates
+                            db: null, // No direct DB path on company doc
+                            source: 'GLOBAL_TEMPLATE_DERIVED',
+                            derivation: {
+                                method: 'Load templates from company.aiAgentSettings.templateReferences[]',
+                                templateCollection: 'globalinstantresponsetemplates',
+                                templatePath: 'categories[].scenarios[]',
+                                dependsOn: ['dataConfig.templateReferences']
                             },
                             runtime: RUNTIME_READERS_MAP['dataConfig.scenarios'],
                             scope: 'global',
-                            required: true,
+                            required: false, // Not required on company doc - derived from templates
+                            isDerived: true, // Flag for report generator to handle differently
                             validators: [],
                             defaultValue: [],
-                            tenantRule: 'Scenarios MUST come from global templates only. Company doc MUST NOT contain scenario text.'
+                            tenantRule: 'Scenarios MUST come from global templates only. Company doc MUST NOT contain scenario text.',
+                            fixInstructions: {
+                                noTemplateRefs: 'Select templates in Data & Config → Template References',
+                                templatesMissing: 'Global templates not found in DB (restore templates)',
+                                scenariosEmpty: 'Template contains 0 scenarios (add scenarios to template)'
+                            }
                         }
                     ]
                 },
