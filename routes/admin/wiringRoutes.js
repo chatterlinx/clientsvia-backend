@@ -15,7 +15,7 @@ const express = require('express');
 const router = express.Router();
 const { buildWiringReport } = require('../../services/wiring/wiringReportBuilder');
 const { scanGuardrails } = require('../../services/wiring/guardrailScanner');
-const Company = require('../../models/Company');
+const Company = require('../../models/v2Company');
 const logger = require('../../utils/logger');
 
 // ============================================================================
