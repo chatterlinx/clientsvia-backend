@@ -9211,13 +9211,19 @@ Loading field report...
           <h4 style="margin: 0 0 12px; color: #fbbf24; font-size: 14px; font-weight: 700;">
             <i class="fas fa-clipboard"></i> 8) AI Coder Directive (Copy & Paste)
           </h4>
-          <div id="scenario-ops-directive" style="background: #334155; border: 1px solid #475569; border-radius: 6px; padding: 12px; font-size: 11px; color: #e2e8f0; font-family: monospace; line-height: 1.6; margin-bottom: 12px;">
-All scenario changes MUST follow SEP-1 (Scenario Enforcement Protocol). Minimums: triggers≥8, negatives≥3, quickReplies≥7, fullReplies≥7. FIRST: Confirm you have the correct templateId for this company/trade. Required flow: dry-run → apply → dry-run (0 ops) → verify. Scenarios are GLOBAL only in GlobalInstantResponseTemplate. Use Export JSON for real IDs. No guessing. No company docs. NEVER mix scenarios across trades (HVAC/plumbing/dental templates are separate). Verify scope=GLOBAL ownerCompanyId=null. Run identify-worst-scenarios.js → Below minimums must be 0.
+          <p style="margin: 0 0 12px; font-size: 12px; color: #94a3b8;">
+            Copy the full ops manual and paste it to AI Coder so they have ALL the rules:
+          </p>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <button onclick="copyFullScenarioOpsManual()"
+                    style="padding: 12px 24px; background: #22c55e; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 14px;">
+              <i class="fas fa-book"></i> Copy Full Ops Manual (Recommended)
+            </button>
+            <button onclick="copyScenarioOpsDirective()"
+                    style="padding: 12px 20px; background: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">
+              <i class="fas fa-copy"></i> Copy Short Directive
+            </button>
           </div>
-          <button onclick="copyScenarioOpsDirective()"
-                  style="padding: 10px 20px; background: #fbbf24; color: #1e293b; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">
-            <i class="fas fa-copy"></i> Copy Ops Directive
-          </button>
         </div>
         
       </div>
@@ -9243,8 +9249,94 @@ All scenario changes MUST follow SEP-1 (Scenario Enforcement Protocol). Minimums
       document.getElementById('scenario-ops-modal-overlay').classList.remove('active');
     }
     
+    function copyFullScenarioOpsManual() {
+      const fullManual = `
+═══════════════════════════════════════════════════════════════════════════════
+SCENARIO OPS MANUAL — READ THIS BEFORE MODIFYING ANY SCENARIOS
+═══════════════════════════════════════════════════════════════════════════════
+
+## 1) WHERE SCENARIOS LIVE (Single Source of Truth)
+✅ GLOBAL only: GlobalInstantResponseTemplate → categories[].scenarios[]
+✅ Companies link templates: company.aiAgentSettings.templateReferences[]
+❌ NEVER store scenarios inside Company documents
+
+## 2) ALLOWED WORKFLOW
+1. Open Scenario Browser → RAW to confirm data source is global
+2. Use Export JSON to get real categoryId and scenarioId
+3. Build Patch JSON using only real IDs from export
+4. Apply using Patch Import or Global Template Patch API
+5. Re-check in Scenario Browser RAW: scope="GLOBAL", ownerCompanyId=null
+
+## 3) FORBIDDEN ACTIONS
+❌ No adding scenarios under companyId
+❌ No guessing scenario IDs — use Export JSON
+❌ No runtime loading "any active template"
+❌ No browser console scripts for scenario edits
+❌ No applying patches without dry-run first
+❌ No saving templates with failing enforcement minimums
+
+## 4) SEP-1: SCENARIO ENFORCEMENT PROTOCOL
+
+REQUIRED MINIMUMS (Hard Gate):
+┌──────────────────────┬─────────┬──────────┐
+│ Field                │ Minimum │ Enforced │
+├──────────────────────┼─────────┼──────────┤
+│ triggers             │ ≥ 8     │ 🔒       │
+│ negativeUserPhrases  │ ≥ 3     │ 🔒       │
+│ quickReplies         │ ≥ 7     │ 🔒       │
+│ fullReplies          │ ≥ 7     │ 🔒       │
+│ scope                │ "GLOBAL"│ 🔒       │
+│ ownerCompanyId       │ null    │ 🔒       │
+└──────────────────────┴─────────┴──────────┘
+
+REQUIRED EXECUTION FLOW:
+1️⃣ node scripts/identify-worst-scenarios.js → baseline
+2️⃣ node scripts/phaseX-patch-N.js --dry-run → preview
+3️⃣ node scripts/phaseX-patch-N.js --apply → execute
+4️⃣ node scripts/phaseX-patch-N.js --dry-run → must show 0 ops
+5️⃣ identify-worst-scenarios → Below minimums: 0 ✅
+
+## 5) MULTI-TRADE OPERATIONS (HVAC, Plumbing, Dental, etc.)
+
+FIND THE CORRECT templateId FOR ANY COMPANY:
+- Option A: Company Profile → aiAgentSettings.templateReferences[0].templateId
+- Option B: Export JSON → _meta.templateId in header
+- Option C: Runtime Truth → /api/company/:id/runtime-truth
+- Option D: Data Center → Templates tab → click template
+
+CROSS-TRADE SAFETY RULES:
+⚠️ Each template has a templateType: "hvac", "plumbing", "dental", etc.
+⚠️ Company's tradeKey MUST match template's templateType
+⚠️ NEVER mix scenarios across trades (plumbing in HVAC = contamination)
+⚠️ When editing: confirm you're in the RIGHT template FIRST
+⚠️ One patch script per template — never multi-template patches
+
+## 6) CREATING A NEW TRADE TEMPLATE
+
+When adding a new trade (Plumbing, Dental, Legal, etc.):
+1. Create new GlobalInstantResponseTemplate with unique templateType
+2. Add categories and scenarios following SEP-1 minimums from the start
+3. Link companies to the new template via templateReferences
+4. Create a dedicated phase script: scripts/plumbing-phase1.js etc.
+5. Update identify-worst-scenarios.js with the new TEMPLATE_ID
+6. Run full SEP-1 flow before going live
+
+Script naming: Keep scripts organized by trade
+- hvac-phase1.js, hvac-phase2.js
+- plumbing-phase1.js, plumbing-phase2.js
+- dental-phase1.js, etc.
+
+═══════════════════════════════════════════════════════════════════════════════
+END OF SCENARIO OPS MANUAL
+═══════════════════════════════════════════════════════════════════════════════
+`;
+      navigator.clipboard.writeText(fullManual.trim()).then(() => {
+        showSnapshotToast('Copied!', 'Full Ops Manual copied to clipboard — paste to AI Coder', 'success');
+      });
+    }
+    
     function copyScenarioOpsDirective() {
-      const directive = document.getElementById('scenario-ops-directive').innerText;
+      const directive = "All scenario changes MUST follow SEP-1 (Scenario Enforcement Protocol). Minimums: triggers≥8, negatives≥3, quickReplies≥7, fullReplies≥7. FIRST: Confirm you have the correct templateId for this company/trade. Required flow: dry-run → apply → dry-run (0 ops) → verify. Scenarios are GLOBAL only in GlobalInstantResponseTemplate. Use Export JSON for real IDs. No guessing. No company docs. NEVER mix scenarios across trades. Verify scope=GLOBAL ownerCompanyId=null. Run identify-worst-scenarios.js → Below minimums must be 0.";
       navigator.clipboard.writeText(directive).then(() => {
         showSnapshotToast('Copied!', 'Directive copied to clipboard', 'success');
       }).catch(err => {
