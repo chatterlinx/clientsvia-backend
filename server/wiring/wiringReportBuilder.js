@@ -1,0 +1,550 @@
+/**
+ * ============================================================================
+ * WIRING REPORT BUILDER - Generates truth from actual config
+ * ============================================================================
+ * 
+ * This builds the wiring report by checking ACTUAL database values against
+ * the wiring registry definitions.
+ * 
+ * RULES:
+ * 1. Never hardcode status - always compute from real data
+ * 2. Check Redis cache status for debugging
+ * 3. Include infrastructure health
+ * 4. Report critical issues prominently
+ * 
+ * ============================================================================
+ */
+
+const { wiringRegistryV1, WIRING_SCHEMA_VERSION } = require('./wiringRegistry.v1');
+const logger = require('../../utils/logger');
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+
+function getPath(obj, path) {
+    if (!obj || !path) return undefined;
+    
+    // Handle special collection references
+    if (path.includes(' collection')) return undefined; // Collections checked separately
+    
+    const parts = path.split('.');
+    let cur = obj;
+    
+    for (const p of parts) {
+        if (cur == null) return undefined;
+        cur = cur[p];
+    }
+    return cur;
+}
+
+function isNonEmpty(val) {
+    if (val == null) return false;
+    if (Array.isArray(val)) return val.length > 0;
+    if (typeof val === 'object') return Object.keys(val).length > 0;
+    if (typeof val === 'string') return val.trim().length > 0;
+    if (typeof val === 'boolean') return true;
+    if (typeof val === 'number') return true;
+    return true;
+}
+
+function computeStatus({ enabled, dbOk, compiledOk, consumerDeclared, hasCriticalIssue, uiOnly }) {
+    if (!enabled) return { status: 'DISABLED', health: 'GRAY' };
+    if (hasCriticalIssue) return { status: 'MISCONFIGURED', health: 'RED' };
+    if (uiOnly) return { status: 'UI_ONLY', health: 'RED' };
+    
+    // WIRED requires: db exists + consumers declared
+    if (dbOk && consumerDeclared) return { status: 'WIRED', health: 'GREEN' };
+    
+    // PARTIAL if some but not all
+    if (dbOk || consumerDeclared) return { status: 'PARTIAL', health: 'YELLOW' };
+    
+    return { status: 'NOT_CONFIGURED', health: 'GRAY' };
+}
+
+// ============================================================================
+// REDIS CACHE CHECK
+// ============================================================================
+
+async function checkRedisCache(companyId) {
+    const cacheKey = `scenario-pool:${companyId}`;
+    
+    try {
+        const redisFactory = require('../../utils/redisFactory');
+        const redis = redisFactory.getClient();
+        
+        if (!redis) {
+            return {
+                status: 'UNAVAILABLE',
+                health: 'YELLOW',
+                message: 'Redis client not available'
+            };
+        }
+        
+        const cached = await redis.get(cacheKey);
+        const ttl = await redis.ttl(cacheKey);
+        
+        if (!cached) {
+            return {
+                status: 'MISS',
+                health: 'YELLOW',
+                cacheKey,
+                ttlSeconds: -1,
+                scenarioCount: 0,
+                effectiveConfigVersion: null,
+                message: 'No cached data - will load from MongoDB on next request'
+            };
+        }
+        
+        const parsed = JSON.parse(cached);
+        return {
+            status: 'HIT',
+            health: 'GREEN',
+            cacheKey,
+            ttlSeconds: ttl,
+            scenarioCount: parsed.scenarios?.length || 0,
+            effectiveConfigVersion: parsed.effectiveConfigVersion || null,
+            message: `Cached ${parsed.scenarios?.length || 0} scenarios, expires in ${ttl}s`
+        };
+        
+    } catch (error) {
+        return {
+            status: 'ERROR',
+            health: 'RED',
+            cacheKey,
+            error: error.message
+        };
+    }
+}
+
+// ============================================================================
+// SCENARIO POOL CHECK
+// ============================================================================
+
+async function checkScenarioPool(companyId) {
+    try {
+        const ScenarioPoolService = require('../../services/ScenarioPoolService');
+        const result = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
+        
+        return {
+            status: result.scenarios?.length > 0 ? 'LOADED' : 'EMPTY',
+            health: result.scenarios?.length > 0 ? 'GREEN' : 'RED',
+            scenarioCount: result.scenarios?.length || 0,
+            enabledCount: result.scenarios?.filter(s => s.isEnabledForCompany !== false).length || 0,
+            templatesUsed: result.templatesUsed || [],
+            effectiveConfigVersion: result.effectiveConfigVersion || null
+        };
+    } catch (error) {
+        return {
+            status: 'ERROR',
+            health: 'RED',
+            error: error.message
+        };
+    }
+}
+
+// ============================================================================
+// DYNAMIC FLOW CHECK
+// ============================================================================
+
+async function checkDynamicFlows(companyId) {
+    try {
+        const DynamicFlow = require('../../models/DynamicFlow');
+        
+        const companyFlows = await DynamicFlow.countDocuments({
+            companyId,
+            isTemplate: false,
+            enabled: true
+        });
+        
+        const templates = await DynamicFlow.countDocuments({
+            isTemplate: true,
+            enabled: true
+        });
+        
+        return {
+            status: companyFlows > 0 ? 'ACTIVE' : 'NO_COMPANY_FLOWS',
+            health: companyFlows > 0 ? 'GREEN' : 'YELLOW',
+            companyFlowCount: companyFlows,
+            templateCount: templates,
+            message: companyFlows > 0 
+                ? `${companyFlows} active company flows`
+                : 'No company flows - only templates exist (use Copy Templates to Company)'
+        };
+    } catch (error) {
+        return {
+            status: 'ERROR',
+            health: 'RED',
+            error: error.message
+        };
+    }
+}
+
+// ============================================================================
+// BOOKING CONTRACT CHECK
+// ============================================================================
+
+function checkBookingContract(companyDoc) {
+    const frontDesk = companyDoc?.aiAgentSettings?.frontDeskBehavior || {};
+    const bookingSlots = frontDesk.bookingSlots || [];
+    const bookingEnabled = companyDoc?.aiAgentSettings?.bookingEnabled;
+    
+    // Check if slots have required 'question' field
+    const slotsWithQuestion = bookingSlots.filter(s => s.question || s.prompt);
+    const missingQuestion = bookingSlots.filter(s => !s.question && !s.prompt);
+    
+    // Check bookingContractV2 status (if it exists)
+    const contractV2 = frontDesk.bookingContractV2 || {};
+    const isCompiled = contractV2.enabled === true;
+    
+    const status = {
+        definedSlotCount: bookingSlots.length,
+        slotsWithQuestion: slotsWithQuestion.length,
+        slotsMissingQuestion: missingQuestion.length,
+        bookingEnabled,
+        contractV2Enabled: isCompiled,
+        runtimeConfigured: slotsWithQuestion.length > 0 && isCompiled
+    };
+    
+    if (!bookingEnabled && bookingSlots.length === 0) {
+        return {
+            ...status,
+            status: 'DISABLED',
+            health: 'GRAY',
+            message: 'Booking not enabled'
+        };
+    }
+    
+    if (bookingSlots.length > 0 && !isCompiled) {
+        return {
+            ...status,
+            status: 'NOT_COMPILED',
+            health: 'YELLOW',
+            message: `${bookingSlots.length} slots defined but bookingContractV2 not compiled`,
+            fix: 'Run booking contract compilation'
+        };
+    }
+    
+    if (missingQuestion.length > 0) {
+        return {
+            ...status,
+            status: 'MISCONFIGURED',
+            health: 'RED',
+            message: `${missingQuestion.length} slots missing 'question' field`,
+            missingQuestionSlots: missingQuestion.map(s => s.id || s.slotId)
+        };
+    }
+    
+    return {
+        ...status,
+        status: 'WIRED',
+        health: 'GREEN',
+        message: `${bookingSlots.length} slots configured and compiled`
+    };
+}
+
+// ============================================================================
+// MAIN REPORT BUILDER
+// ============================================================================
+
+async function buildWiringReport({
+    companyId,
+    companyDoc,
+    effectiveConfig = {},
+    runtimeTruth = null,
+    tradeKey = 'universal',
+    environment = 'production',
+    runtimeVersion = null,
+    effectiveConfigVersion = null,
+    includeInfrastructure = true
+}) {
+    const startTime = Date.now();
+    const now = new Date().toISOString();
+    
+    logger.info('[WIRING REPORT] Building report', { companyId, tradeKey });
+    
+    // Build node index
+    const nodeMap = new Map();
+    for (const node of wiringRegistryV1.nodes) {
+        nodeMap.set(node.id, node);
+    }
+    
+    // Track children
+    const childrenMap = new Map();
+    for (const node of wiringRegistryV1.nodes) {
+        if (node.parentId) {
+            if (!childrenMap.has(node.parentId)) {
+                childrenMap.set(node.parentId, []);
+            }
+            childrenMap.get(node.parentId).push(node.id);
+        }
+    }
+    
+    // Evaluate each node
+    const nodesOut = [];
+    const issues = [];
+    
+    for (const node of wiringRegistryV1.nodes) {
+        // Check if config exists in database
+        let dbOk = false;
+        const dbValues = {};
+        
+        for (const path of (node.expectedDbPaths || [])) {
+            if (path.includes(' collection')) continue; // Skip collection references
+            
+            const val = getPath({ company: companyDoc }, path);
+            dbValues[path] = val;
+            if (isNonEmpty(val)) dbOk = true;
+        }
+        
+        // Check consumers declared
+        const consumerDeclared = (node.expectedConsumers || []).length > 0;
+        
+        // Check for critical issues
+        let hasCriticalIssue = false;
+        let criticalIssueMessage = null;
+        
+        if (node.criticalIssue) {
+            const checkField = node.criticalIssue.checkField;
+            if (checkField) {
+                const val = getPath({ company: companyDoc }, checkField);
+                if (!isNonEmpty(val)) {
+                    hasCriticalIssue = true;
+                    criticalIssueMessage = node.criticalIssue.description;
+                }
+            }
+        }
+        
+        // Check required fields
+        const missingFields = [];
+        if (node.requiredFields && dbOk) {
+            // Would need to iterate through actual config items to check
+            // For now, we flag if entire config missing
+        }
+        
+        // Determine enabled status
+        const enabled = dbOk || node.type === 'TAB' || node.type === 'INFRASTRUCTURE';
+        
+        // UI-only check
+        const uiOnly = enabled && !consumerDeclared && node.type !== 'TAB' && node.type !== 'INFRASTRUCTURE';
+        
+        // Compute status
+        const { status, health } = computeStatus({
+            enabled,
+            dbOk,
+            compiledOk: dbOk, // Simplified for now
+            consumerDeclared,
+            hasCriticalIssue,
+            uiOnly
+        });
+        
+        // Build reasons list
+        const reasons = [];
+        if (!dbOk && enabled) reasons.push('Config missing in database');
+        if (!consumerDeclared && enabled) reasons.push('No runtime consumer declared');
+        if (hasCriticalIssue) reasons.push(criticalIssueMessage);
+        if (uiOnly) reasons.push('UI-only - no runtime consumer');
+        
+        const nodeOut = {
+            id: node.id,
+            type: node.type,
+            label: node.label,
+            description: node.description || '',
+            parentId: node.parentId || null,
+            enabled,
+            status,
+            health,
+            reasons,
+            critical: node.critical || false,
+            expectedDbPaths: node.expectedDbPaths || [],
+            expectedConsumers: node.expectedConsumers || [],
+            expectedTraceKeys: node.expectedTraceKeys || [],
+            children: childrenMap.get(node.id) || []
+        };
+        
+        nodesOut.push(nodeOut);
+        
+        // Track issues
+        if (enabled && !['WIRED', 'PROVEN', 'DISABLED'].includes(status)) {
+            issues.push({
+                severity: hasCriticalIssue || node.critical ? 'CRITICAL' : status === 'MISCONFIGURED' ? 'HIGH' : 'MEDIUM',
+                nodeId: node.id,
+                label: node.label,
+                status,
+                reasons,
+                fix: node.criticalIssue?.solution || null
+            });
+        }
+    }
+    
+    // ========================================================================
+    // SPECIAL CHECKS
+    // ========================================================================
+    
+    const specialChecks = {};
+    
+    // Redis cache check
+    if (includeInfrastructure) {
+        specialChecks.redisCache = await checkRedisCache(companyId);
+    }
+    
+    // Scenario pool check
+    specialChecks.scenarioPool = await checkScenarioPool(companyId);
+    
+    // Dynamic flows check
+    specialChecks.dynamicFlows = await checkDynamicFlows(companyId);
+    
+    // Booking contract check
+    specialChecks.bookingContract = checkBookingContract(companyDoc);
+    
+    // Template references check
+    const templateRefs = companyDoc?.aiAgentSettings?.templateReferences || [];
+    const enabledRefs = templateRefs.filter(r => r.enabled !== false);
+    specialChecks.templateReferences = {
+        status: enabledRefs.length > 0 ? 'LINKED' : 'NOT_LINKED',
+        health: enabledRefs.length > 0 ? 'GREEN' : 'RED',
+        totalRefs: templateRefs.length,
+        enabledRefs: enabledRefs.length,
+        templateIds: enabledRefs.map(r => r.templateId?.toString()),
+        message: enabledRefs.length > 0 
+            ? `${enabledRefs.length} template(s) linked`
+            : 'CRITICAL: No templates linked - scenarios will not load!'
+    };
+    
+    // Add critical issues from special checks
+    if (specialChecks.scenarioPool.status === 'EMPTY') {
+        issues.unshift({
+            severity: 'CRITICAL',
+            nodeId: 'dataConfig.scenarios',
+            label: 'Scenarios',
+            status: 'EMPTY',
+            reasons: ['Scenario pool returned 0 scenarios'],
+            fix: specialChecks.templateReferences.status === 'NOT_LINKED'
+                ? 'Link a template via templateReferences'
+                : 'Clear Redis cache: node scripts/clear-scenario-cache.js'
+        });
+    }
+    
+    if (specialChecks.templateReferences.status === 'NOT_LINKED') {
+        issues.unshift({
+            severity: 'CRITICAL',
+            nodeId: 'dataConfig.templateReferences',
+            label: 'Template References',
+            status: 'NOT_LINKED',
+            reasons: ['No templates linked to company'],
+            fix: 'Add template reference via Load Golden Setup or manual config'
+        });
+    }
+    
+    if (specialChecks.bookingContract.status === 'NOT_COMPILED') {
+        issues.push({
+            severity: 'HIGH',
+            nodeId: 'frontDesk.bookingPrompts',
+            label: 'Booking Prompts',
+            status: 'NOT_COMPILED',
+            reasons: ['Slots defined but booking contract not compiled'],
+            fix: 'Compile booking contract via UI or API'
+        });
+    }
+    
+    // ========================================================================
+    // SCOREBOARD
+    // ========================================================================
+    
+    const tabNodes = nodesOut.filter(n => n.type === 'TAB');
+    const sectionNodes = nodesOut.filter(n => n.type === 'SECTION');
+    
+    function countByStatus(nodes) {
+        return {
+            total: nodes.length,
+            wired: nodes.filter(n => n.status === 'WIRED').length,
+            proven: nodes.filter(n => n.status === 'PROVEN').length,
+            partial: nodes.filter(n => n.status === 'PARTIAL').length,
+            misconfigured: nodes.filter(n => n.status === 'MISCONFIGURED').length,
+            uiOnly: nodes.filter(n => n.status === 'UI_ONLY').length,
+            disabled: nodes.filter(n => n.status === 'DISABLED').length,
+            notConfigured: nodes.filter(n => n.status === 'NOT_CONFIGURED').length
+        };
+    }
+    
+    // ========================================================================
+    // OVERALL HEALTH
+    // ========================================================================
+    
+    let overallHealth = 'GREEN';
+    if (issues.some(i => i.severity === 'CRITICAL')) {
+        overallHealth = 'RED';
+    } else if (issues.some(i => i.severity === 'HIGH')) {
+        overallHealth = 'YELLOW';
+    } else if (issues.length > 0) {
+        overallHealth = 'YELLOW';
+    }
+    
+    // ========================================================================
+    // BUILD REPORT
+    // ========================================================================
+    
+    const report = {
+        schemaVersion: WIRING_SCHEMA_VERSION,
+        generatedAt: now,
+        generationTimeMs: Date.now() - startTime,
+        environment,
+        
+        // Company info
+        companyId,
+        companyName: companyDoc?.companyName || companyDoc?.businessName || null,
+        tradeKey: companyDoc?.trade || companyDoc?.tradeKey || tradeKey,
+        
+        // Versions
+        runtimeVersion,
+        effectiveConfigVersion: companyDoc?.effectiveConfigVersion || effectiveConfigVersion,
+        
+        // Overall status
+        health: overallHealth,
+        
+        // Scoreboard
+        counts: {
+            tabs: countByStatus(tabNodes),
+            sections: countByStatus(sectionNodes),
+            issues: {
+                critical: issues.filter(i => i.severity === 'CRITICAL').length,
+                high: issues.filter(i => i.severity === 'HIGH').length,
+                medium: issues.filter(i => i.severity === 'MEDIUM').length,
+                total: issues.length
+            }
+        },
+        
+        // Special checks (most important for debugging)
+        specialChecks,
+        
+        // Issues list (sorted by severity)
+        issues: issues.sort((a, b) => {
+            const order = { CRITICAL: 0, HIGH: 1, MEDIUM: 2 };
+            return (order[a.severity] || 99) - (order[b.severity] || 99);
+        }).slice(0, 50),
+        
+        // Guardrails
+        guardrails: wiringRegistryV1.guardrails,
+        
+        // Checkpoints reference
+        checkpoints: wiringRegistryV1.checkpoints,
+        
+        // All nodes (for tree/diagram view)
+        nodes: nodesOut,
+        
+        // Edges for diagram (simplified)
+        edges: []
+    };
+    
+    logger.info('[WIRING REPORT] Report built', {
+        companyId,
+        health: overallHealth,
+        issueCount: issues.length,
+        generationTimeMs: report.generationTimeMs
+    });
+    
+    return report;
+}
+
+module.exports = { buildWiringReport };
+

@@ -1,0 +1,735 @@
+/**
+ * ============================================================================
+ * WIRING TAB CSS - Enterprise-grade styling
+ * ============================================================================
+ * 
+ * Dark theme matching Control Plane design language.
+ * 
+ * ============================================================================
+ */
+
+/* ============================================================================
+   LAYOUT & CONTAINERS
+   ============================================================================ */
+
+#wiringTab {
+    padding: 16px;
+    color: #e0e0e0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+.w-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #0f0f11 0%, #141418 100%);
+    border: 1px solid #2a2a2e;
+    border-radius: 12px;
+    margin-bottom: 16px;
+}
+
+.w-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.w-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* ============================================================================
+   SEARCH & PILLS
+   ============================================================================ */
+
+.w-search {
+    width: 320px;
+    max-width: 100%;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #2a2a2e;
+    background: #0b0b0d;
+    color: #fff;
+    font-size: 14px;
+    transition: border-color 0.2s ease;
+}
+
+.w-search:focus {
+    outline: none;
+    border-color: #3a3a44;
+}
+
+.w-pill {
+    padding: 8px 12px;
+    border: 1px solid #2a2a2e;
+    border-radius: 999px;
+    background: #0b0b0d;
+    color: #999;
+    font-size: 12px;
+}
+
+/* ============================================================================
+   BUTTONS
+   ============================================================================ */
+
+.w-btn {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #2a2a2e;
+    background: #141418;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.w-btn:hover {
+    background: #1d1d22;
+    border-color: #3a3a44;
+}
+
+.w-btn.primary {
+    background: linear-gradient(135deg, #1a3a6c 0%, #0d2040 100%);
+    border-color: #2a5090;
+    font-weight: 700;
+}
+
+.w-btn.primary:hover {
+    background: linear-gradient(135deg, #2050a0 0%, #103060 100%);
+}
+
+.w-btn.danger {
+    background: linear-gradient(135deg, #6c1a1a 0%, #401010 100%);
+    border-color: #902a2a;
+}
+
+.w-btn.danger:hover {
+    background: linear-gradient(135deg, #a02020 0%, #602020 100%);
+}
+
+.w-mini-btn {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid #2a2a2e;
+    background: #141418;
+    color: #bbb;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.w-mini-btn:hover {
+    background: #1d1d22;
+    color: #fff;
+}
+
+/* ============================================================================
+   LOADING & TOAST
+   ============================================================================ */
+
+.w-loading {
+    padding: 20px;
+    text-align: center;
+    color: #888;
+    font-size: 14px;
+}
+
+.w-toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 18px;
+    border-radius: 12px;
+    border: 1px solid #2a2a2e;
+    background: #141418;
+    color: #fff;
+    font-size: 14px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.25s ease;
+    z-index: 10000;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.w-toast.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.w-toast.ok {
+    border-color: #1a4a2a;
+    background: linear-gradient(135deg, #0d2015 0%, #141418 100%);
+}
+
+.w-toast.err {
+    border-color: #4a1a1a;
+    background: linear-gradient(135deg, #2a1010 0%, #141418 100%);
+}
+
+/* ============================================================================
+   SCOREBOARD
+   ============================================================================ */
+
+.w-score-container {
+    background: linear-gradient(135deg, #0f0f11 0%, #141418 100%);
+    border: 1px solid #2a2a2e;
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 16px;
+}
+
+.w-score-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+    margin-bottom: 16px;
+}
+
+.w-score-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.w-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: 0.5px;
+}
+
+.w-score-meta {
+    text-align: right;
+    color: #999;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.w-meta-row {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.w-meta-small {
+    font-size: 11px;
+    color: #666;
+}
+
+.w-score-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+}
+
+@media (max-width: 900px) {
+    .w-score-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+.w-tile {
+    background: #0b0b0d;
+    border: 1px solid #2a2a2e;
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+}
+
+.w-tile.green {
+    border-color: #1a4a2a;
+    background: linear-gradient(135deg, #0d2015 0%, #0b0b0d 100%);
+}
+
+.w-tile.yellow {
+    border-color: #4a3a1a;
+    background: linear-gradient(135deg, #201a0d 0%, #0b0b0d 100%);
+}
+
+.w-tile.red {
+    border-color: #4a1a1a;
+    background: linear-gradient(135deg, #200d0d 0%, #0b0b0d 100%);
+}
+
+.w-tile-num {
+    font-size: 26px;
+    font-weight: 900;
+    color: #fff;
+}
+
+.w-tile-label {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+}
+
+/* ============================================================================
+   BADGES
+   ============================================================================ */
+
+.w-badge, .w-health, .w-severity {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #333;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.w-badge.green, .w-health.green {
+    color: #8cff8c;
+    border-color: #1a4a2a;
+    background: rgba(26, 74, 42, 0.3);
+}
+
+.w-badge.yellow, .w-health.yellow {
+    color: #ffe066;
+    border-color: #4a3a1a;
+    background: rgba(74, 58, 26, 0.3);
+}
+
+.w-badge.red, .w-health.red {
+    color: #ff8c8c;
+    border-color: #4a1a1a;
+    background: rgba(74, 26, 26, 0.3);
+}
+
+.w-badge.orange {
+    color: #ffaa66;
+    border-color: #4a2a1a;
+    background: rgba(74, 42, 26, 0.3);
+}
+
+.w-badge.gray, .w-health.gray {
+    color: #aaa;
+    border-color: #333;
+    background: rgba(50, 50, 50, 0.3);
+}
+
+.w-severity.red {
+    color: #ff8c8c;
+    border-color: #4a1a1a;
+}
+
+.w-severity.orange {
+    color: #ffaa66;
+    border-color: #4a2a1a;
+}
+
+.w-severity.yellow {
+    color: #ffe066;
+    border-color: #4a3a1a;
+}
+
+/* ============================================================================
+   PANELS
+   ============================================================================ */
+
+.w-panel {
+    background: linear-gradient(135deg, #0f0f11 0%, #141418 100%);
+    border: 1px solid #2a2a2e;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.w-panel-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #2a2a2e;
+}
+
+.w-empty {
+    padding: 20px;
+    text-align: center;
+    color: #8cff8c;
+    font-weight: 600;
+}
+
+/* ============================================================================
+   SPECIAL CHECKS GRID
+   ============================================================================ */
+
+.w-checks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+.w-check-card {
+    background: #0b0b0d;
+    border: 1px solid #2a2a2e;
+    border-radius: 12px;
+    padding: 14px;
+}
+
+.w-check-card.green {
+    border-color: #1a4a2a;
+}
+
+.w-check-card.yellow {
+    border-color: #4a3a1a;
+}
+
+.w-check-card.red {
+    border-color: #4a1a1a;
+}
+
+.w-check-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.w-check-title {
+    font-weight: 700;
+    color: #fff;
+}
+
+.w-check-details {
+    font-size: 12px;
+    color: #888;
+    line-height: 1.6;
+}
+
+.w-check-message {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    font-size: 12px;
+    color: #aaa;
+}
+
+.w-check-fix {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #8cff8c;
+}
+
+/* ============================================================================
+   ISSUES LIST
+   ============================================================================ */
+
+.w-issues-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.w-issue {
+    background: #0b0b0d;
+    border: 1px solid #2a2a2e;
+    border-radius: 12px;
+    padding: 14px;
+}
+
+.w-issue.critical {
+    border-color: #4a1a1a;
+    background: linear-gradient(135deg, #1a0d0d 0%, #0b0b0d 100%);
+}
+
+.w-issue.high {
+    border-color: #4a2a1a;
+}
+
+.w-issue.medium {
+    border-color: #4a3a1a;
+}
+
+.w-issue-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.w-issue-label {
+    font-weight: 700;
+    color: #fff;
+}
+
+.w-issue-node {
+    font-size: 12px;
+    color: #666;
+    font-family: monospace;
+}
+
+.w-issue-reasons {
+    font-size: 12px;
+    color: #aaa;
+    margin-top: 6px;
+}
+
+.w-issue-fix {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #8cff8c;
+}
+
+/* ============================================================================
+   GUARDRAILS
+   ============================================================================ */
+
+.w-guard-violations {
+    margin-bottom: 16px;
+}
+
+.w-guard-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ccc;
+    margin-bottom: 10px;
+}
+
+.w-guard-item {
+    background: #0b0b0d;
+    border: 1px solid #2a2a2e;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 8px;
+}
+
+.w-guard-item.violation {
+    border-color: #4a1a1a;
+}
+
+.w-guard-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.w-guard-status {
+    font-size: 16px;
+}
+
+.w-guard-severity {
+    font-size: 10px;
+    color: #888;
+    background: #1a1a1a;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.w-guard-details {
+    font-size: 12px;
+    color: #aaa;
+}
+
+.w-guard-file {
+    font-size: 11px;
+    color: #666;
+    font-family: monospace;
+    margin-top: 4px;
+}
+
+.w-guard-passes {
+    margin-bottom: 16px;
+}
+
+.w-guard-pass-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.w-guard-pass-item {
+    padding: 4px 10px;
+    background: rgba(26, 74, 42, 0.2);
+    border: 1px solid #1a4a2a;
+    border-radius: 999px;
+    font-size: 11px;
+    color: #8cff8c;
+}
+
+.w-guard-rules {
+    padding-top: 12px;
+    border-top: 1px solid #2a2a2e;
+}
+
+.w-guard-rule {
+    font-size: 12px;
+    color: #888;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(42, 42, 46, 0.5);
+}
+
+.w-guard-rule:last-child {
+    border-bottom: none;
+}
+
+/* ============================================================================
+   TREE VIEW
+   ============================================================================ */
+
+.w-tree-container {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.w-node {
+    background: #0b0b0d;
+    border: 1px solid #2a2a2e;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-top: 8px;
+}
+
+.w-node-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.w-expander {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: 1px solid #2a2a2e;
+    background: #141418;
+    color: #888;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    transition: all 0.15s ease;
+}
+
+.w-expander:hover {
+    background: #1d1d22;
+    color: #fff;
+}
+
+.w-expander-spacer {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+}
+
+.w-node-type {
+    font-size: 10px;
+    color: #666;
+    padding: 2px 8px;
+    border: 1px solid #2a2a2e;
+    border-radius: 999px;
+    text-transform: uppercase;
+}
+
+.w-node-label {
+    font-weight: 700;
+    color: #fff;
+}
+
+.w-critical-flag {
+    font-size: 9px;
+    font-weight: 800;
+    color: #ff6666;
+    padding: 2px 6px;
+    border: 1px solid #4a1a1a;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.w-node-desc {
+    font-size: 12px;
+    color: #888;
+    margin-top: 6px;
+    padding-left: 34px;
+}
+
+.w-node-reasons {
+    font-size: 11px;
+    color: #ff8c8c;
+    margin-top: 4px;
+    padding-left: 34px;
+}
+
+.w-node-details {
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    font-size: 11px;
+    color: #888;
+    line-height: 1.6;
+}
+
+.w-children {
+    margin-top: 4px;
+}
+
+/* ============================================================================
+   CHECKPOINTS
+   ============================================================================ */
+
+.w-checkpoints-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.w-checkpoint {
+    display: grid;
+    grid-template-columns: 120px 1fr 180px;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(42, 42, 46, 0.5);
+    font-size: 12px;
+}
+
+.w-checkpoint:last-child {
+    border-bottom: none;
+}
+
+.w-cp-id {
+    font-weight: 700;
+    color: #fff;
+    font-family: monospace;
+}
+
+.w-cp-desc {
+    color: #aaa;
+}
+
+.w-cp-file {
+    color: #666;
+    font-family: monospace;
+    text-align: right;
+}
+
+/* ============================================================================
+   TWO-COLUMN GRID
+   ============================================================================ */
+
+.w-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+@media (max-width: 1200px) {
+    .w-grid-2 {
+        grid-template-columns: 1fr;
+    }
+}
+

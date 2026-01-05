@@ -1134,6 +1134,10 @@
       <i class="fas fa-history"></i>
       <span>Version History</span>
     </button>
+    <button class="nav-tab" data-tab="wiring" style="color: #22d3ee;">
+      <i class="fas fa-plug"></i>
+      <span>🔌 Wiring</span>
+    </button>
     
     <div class="nav-divider"></div>
     
@@ -2149,6 +2153,84 @@
           </div>
         </div>
       </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         WIRING TAB - Enterprise Single Source of Truth
+         Shows complete wiring status across all platform components
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="wiring">
+      <link rel="stylesheet" href="/css/wiringTab.css">
+      
+      <div id="wiringTab">
+        <!-- Toast notification -->
+        <div id="wiringToast" class="w-toast ok"></div>
+        
+        <!-- Toolbar -->
+        <div class="w-toolbar">
+          <div class="w-toolbar-left">
+            <input type="text" id="wiringSearch" class="w-search" placeholder="Search tabs, sections, nodes..." />
+            <span id="wiringFocusPill" class="w-pill">Focus: none</span>
+          </div>
+          <div class="w-toolbar-right">
+            <button id="wiringExpandAll" class="w-btn">Expand All</button>
+            <button id="wiringCollapseAll" class="w-btn">Collapse All</button>
+            <button id="wiringClearFocus" class="w-btn">Clear Focus</button>
+            <button id="wiringClearCache" class="w-btn danger">Clear Redis Cache</button>
+            <button id="wiringReload" class="w-btn primary">🔄 Reload</button>
+            <button id="wiringCopyJson" class="w-btn">Copy JSON</button>
+            <button id="wiringCopyMd" class="w-btn">Copy MD</button>
+            <button id="wiringDownloadJson" class="w-btn">⬇️ Download</button>
+          </div>
+        </div>
+        
+        <!-- Loading -->
+        <div id="wiringLoading" class="w-loading" style="display: none;">
+          Loading wiring report...
+        </div>
+        
+        <!-- Scoreboard -->
+        <div id="wiringScoreboard"></div>
+        
+        <!-- Special Checks (Critical) -->
+        <div id="wiringSpecialChecks"></div>
+        
+        <!-- Issues & Guardrails in 2-column grid -->
+        <div class="w-grid-2">
+          <div id="wiringIssues"></div>
+          <div id="wiringGuardrails"></div>
+        </div>
+        
+        <!-- Tree View -->
+        <div id="wiringTree"></div>
+        
+        <!-- Checkpoints Reference -->
+        <div id="wiringCheckpoints"></div>
+      </div>
+      
+      <script src="/js/wiringTab.js"></script>
+      <script>
+        // Initialize when tab becomes visible
+        (function() {
+          const tab = document.querySelector('[data-panel="wiring"]');
+          const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+              if (mutation.target === tab && tab.classList.contains('active')) {
+                if (!tab.dataset.initialized) {
+                  tab.dataset.initialized = 'true';
+                  const companyId = window.getSelectedCompanyId ? window.getSelectedCompanyId() : 
+                                   new URLSearchParams(window.location.search).get('companyId') || 
+                                   localStorage.getItem('lastCompanyId');
+                  if (companyId && window.ClientViaWiringTab) {
+                    window.ClientViaWiringTab.initWiringTab({ companyId });
+                  }
+                }
+              }
+            });
+          });
+          observer.observe(tab, { attributes: true, attributeFilter: ['class'] });
+        })();
+      </script>
+    </div>
 
     <!-- ═══════════════════════════════════════════════════════════════════════
          LEGACY (Read-Only + Migration)
