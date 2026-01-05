@@ -208,6 +208,24 @@ router.post('/', authenticateJWT, requireCompanyAccess, requirePermission(PERMIS
             results.errors.push({ section: 'tradeCategory', error: error.message });
         }
         
+        // ═══════════════════════════════════════════════════════════════════
+        // I) SET TEMPLATE REFERENCES (SCENARIOS!)
+        // ═══════════════════════════════════════════════════════════════════
+        // CRITICAL: This connects the company to the GlobalInstantResponseTemplate
+        // Without this, scenarioCount = 0 at runtime!
+        try {
+            const templateRefResult = await seedTemplateReferences(companyId, tradeCategoryKey, company);
+            results.actions.push({
+                section: 'templateReferences',
+                ...templateRefResult
+            });
+            if (templateRefResult.templateId) {
+                results.scenarioTemplateId = templateRefResult.templateId;
+            }
+        } catch (error) {
+            results.errors.push({ section: 'templateReferences', error: error.message });
+        }
+        
         results.duration = Date.now() - startTime;
         results.success = results.errors.length === 0;
         
@@ -1222,6 +1240,111 @@ async function copyPlaceholders(sourceId, targetId) {
             { upsert: true }
         );
     }
+}
+
+/**
+ * SEED TEMPLATE REFERENCES - Connect company to GlobalInstantResponseTemplate
+ * 
+ * CRITICAL: Without this, scenarios won't load at runtime (scenarioCount = 0)
+ * 
+ * This finds the appropriate trade template and adds it to the company's
+ * aiAgentSettings.templateReferences array.
+ * 
+ * @param {string} companyId - Company ID
+ * @param {string} tradeCategoryKey - Trade key (e.g., 'hvac_residential')
+ * @param {Object} company - Company document
+ * @returns {Object} Result with action, templateId, templateName
+ */
+async function seedTemplateReferences(companyId, tradeCategoryKey, company) {
+    const result = { action: 'none', templateId: null, templateName: null, scenarioCount: 0 };
+    
+    // Map trade category keys to template types
+    const tradeToTemplateMap = {
+        'hvac_residential': ['HVAC', 'hvac'],
+        'hvac_commercial': ['HVAC', 'hvac'],
+        'plumbing_residential': ['PLUMBING', 'plumbing'],
+        'electrical_residential': ['ELECTRICAL', 'electrical'],
+        'dental': ['DENTAL', 'dental'],
+        'legal': ['LEGAL', 'legal']
+    };
+    
+    const templateTypes = tradeToTemplateMap[tradeCategoryKey] || [tradeCategoryKey.split('_')[0].toUpperCase()];
+    
+    // Find the GlobalInstantResponseTemplate for this trade
+    const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+    
+    let template = await GlobalInstantResponseTemplate.findOne({
+        $or: [
+            { templateType: { $in: templateTypes } },
+            { name: new RegExp(templateTypes[0], 'i') }
+        ],
+        status: 'active'
+    }).sort({ version: -1 }); // Get latest version
+    
+    if (!template) {
+        // Try broader search
+        template = await GlobalInstantResponseTemplate.findOne({
+            name: new RegExp(templateTypes[0], 'i')
+        }).sort({ version: -1 });
+    }
+    
+    if (!template) {
+        logger.warn('[SEED TEMPLATE REFS] No GlobalInstantResponseTemplate found for trade', {
+            tradeCategoryKey,
+            templateTypes
+        });
+        result.action = 'skipped';
+        result.reason = 'No template found for this trade';
+        return result;
+    }
+    
+    result.templateId = template._id.toString();
+    result.templateName = template.name;
+    result.scenarioCount = template.categories?.reduce((sum, cat) => sum + (cat.scenarios?.length || 0), 0) || 0;
+    
+    // Check if already referenced
+    const existingRefs = company.aiAgentSettings?.templateReferences || [];
+    const alreadyReferenced = existingRefs.some(ref => 
+        ref.templateId?.toString() === template._id.toString() && ref.enabled !== false
+    );
+    
+    if (alreadyReferenced) {
+        logger.info('[SEED TEMPLATE REFS] Template already referenced', {
+            companyId,
+            templateId: result.templateId
+        });
+        result.action = 'already_exists';
+        return result;
+    }
+    
+    // Remove any existing disabled refs for this template and add new enabled one
+    const filteredRefs = existingRefs.filter(ref => 
+        ref.templateId?.toString() !== template._id.toString()
+    );
+    
+    filteredRefs.push({
+        templateId: template._id,
+        enabled: true,
+        priority: 1,
+        addedAt: new Date(),
+        addedBy: 'seed-golden'
+    });
+    
+    await Company.findByIdAndUpdate(companyId, {
+        $set: {
+            'aiAgentSettings.templateReferences': filteredRefs
+        }
+    });
+    
+    logger.info('[SEED TEMPLATE REFS] Template reference added', {
+        companyId,
+        templateId: result.templateId,
+        templateName: result.templateName,
+        scenarioCount: result.scenarioCount
+    });
+    
+    result.action = 'added';
+    return result;
 }
 
 module.exports = router;
