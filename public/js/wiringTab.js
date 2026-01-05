@@ -30,6 +30,7 @@
     
     let _report = null;
     let _index = null;
+    let _selectedNodeId = null;
     let _focusedNodeId = null;
     let _viewMode = 'tree'; // tree | diagram
     let _searchTerm = '';
@@ -77,6 +78,37 @@
         };
         const m = map[status] || { t: status || 'UNKNOWN', c: 'gray' };
         return `<span class="w-badge ${m.c}">${esc(m.t)}</span>`;
+    }
+
+    function isV2Report(r) {
+        return !!(r && r.meta && (r.meta.reportType === 'WIRING_REPORT_V2' || String(r.meta.schemaVersion || '').includes('V2')));
+    }
+
+    function getV2FieldHealthById(r) {
+        const map = new Map();
+        const fields = r?.health?.fields || [];
+        for (const f of fields) {
+            if (f?.id) map.set(f.id, f);
+        }
+        return map;
+    }
+
+    function getV2CriticalById(r) {
+        const map = new Map();
+        const items = r?.health?.criticalIssues || [];
+        for (const i of items) {
+            if (i?.fieldId) map.set(i.fieldId, i);
+        }
+        return map;
+    }
+
+    function getV2WarningsById(r) {
+        const map = new Map();
+        const items = r?.health?.warnings || [];
+        for (const i of items) {
+            if (i?.fieldId) map.set(i.fieldId, i);
+        }
+        return map;
     }
     
     function healthBadge(health) {
@@ -212,6 +244,82 @@
     // ========================================================================
     
     function toMarkdown(r) {
+        // V2 report has a different contract (engineering bible).
+        if (isV2Report(r)) {
+            const lines = [];
+            lines.push(`# Wiring Report (V2): ${r?.scope?.companyName || r?.scope?.companyId || 'Unknown'}`);
+            lines.push('');
+            lines.push(`- **Generated:** ${r?.meta?.generatedAt || ''}`);
+            lines.push(`- **Company ID:** ${r?.scope?.companyId || ''}`);
+            lines.push(`- **TradeKey:** ${r?.scope?.tradeKey || ''} (${r?.scope?.tradeKeySource || 'unknown'})`);
+            lines.push(`- **Environment:** ${r?.scope?.environment || ''}`);
+            lines.push(`- **Health:** ${r?.health?.overall || ''}`);
+            lines.push('');
+
+            lines.push('## Scoreboard');
+            lines.push('');
+            lines.push('| Check | Value | Status |');
+            lines.push('|------:|:------|:-------|');
+            const sb = r?.scoreboard || {};
+            for (const key of Object.keys(sb)) {
+                const c = sb[key];
+                const status = c?.status || 'UNKNOWN';
+                const emoji = status === 'GREEN' ? '✅' : status === 'YELLOW' ? '⚠️' : '🔴';
+                lines.push(`| ${c?.label || key} | ${c?.value || ''} | ${emoji} ${status} |`);
+            }
+            lines.push('');
+
+            if (Array.isArray(r?.health?.criticalIssues) && r.health.criticalIssues.length > 0) {
+                lines.push('## 🔴 Critical Issues');
+                lines.push('');
+                for (const i of r.health.criticalIssues) {
+                    lines.push(`- **${i.fieldId}** (${i.status})`);
+                    if (i.reason) lines.push(`  - Reason: ${i.reason}`);
+                    if (i.expected) lines.push(`  - Expected: ${i.expected}`);
+                    if (i.actual) lines.push(`  - Actual: ${i.actual}`);
+                    if (i.fix) lines.push(`  - Fix: ${i.fix}`);
+                }
+                lines.push('');
+            }
+
+            if (r?.derivedData) {
+                lines.push('## Derived Data (Global Templates)');
+                lines.push('');
+                lines.push(`- hasTemplateRefs: ${String(r.derivedData.hasTemplateRefs)}`);
+                lines.push(`- templateCount: ${String(r.derivedData.templateCount)}`);
+                lines.push(`- scenarioCount: ${String(r.derivedData.scenarioCount)}`);
+                lines.push(`- effectiveConfigVersion: ${r.derivedData.effectiveConfigVersion || 'n/a'}`);
+                if (r.derivedData.scenarioPoolError) lines.push(`- scenarioPoolError: ${r.derivedData.scenarioPoolError}`);
+                lines.push('');
+            }
+
+            if (r?.noTenantBleedProof) {
+                lines.push('## Tenant Safety');
+                lines.push('');
+                lines.push(`- Overall: ${r.noTenantBleedProof.passed ? '✅ PASSED' : '🔴 FAILED'}`);
+                if (Array.isArray(r.noTenantBleedProof.violations) && r.noTenantBleedProof.violations.length > 0) {
+                    lines.push('- Violations:');
+                    for (const v of r.noTenantBleedProof.violations) {
+                        lines.push(`  - ${v.rule}: ${v.message}`);
+                    }
+                }
+                lines.push('');
+            }
+
+            if (r?.diagrams) {
+                lines.push('## Diagrams');
+                for (const [k, v] of Object.entries(r.diagrams)) {
+                    lines.push(`### ${k}`);
+                    lines.push('```mermaid');
+                    lines.push(String(v || '').trim());
+                    lines.push('```');
+                    lines.push('');
+                }
+            }
+
+            return lines.join('\n');
+        }
+
         const lines = [];
         
         lines.push(`# Wiring Report: ${r.companyName || r.companyId}`);
@@ -270,6 +378,73 @@
     // ========================================================================
     
     function buildIndex(report) {
+        // V2 report: build a synthetic tree from uiMap (tabs → sections → fields)
+        if (isV2Report(report)) {
+            const map = new Map();
+            const children = new Map();
+
+            const healthById = getV2FieldHealthById(report);
+
+            const addChild = (parentId, childId) => {
+                if (!parentId) return;
+                if (!children.has(parentId)) children.set(parentId, []);
+                children.get(parentId).push(childId);
+            };
+
+            // Tabs
+            for (const t of (report?.uiMap?.tabs || [])) {
+                const node = {
+                    id: t.id,
+                    type: 'TAB',
+                    label: t.label,
+                    description: '',
+                    parentId: null,
+                    status: 'WIRED', // Tabs are structural; status driven by children counts
+                    critical: !!t.critical,
+                    uiPath: t?.ui?.tabId ? `Tab: ${t.ui.tabId}` : null
+                };
+                map.set(node.id, node);
+                if (!children.has(node.id)) children.set(node.id, []);
+            }
+
+            // Sections
+            for (const s of (report?.uiMap?.sections || [])) {
+                const node = {
+                    id: s.id,
+                    type: 'SECTION',
+                    label: s.label,
+                    description: '',
+                    parentId: s.tabId || null,
+                    status: 'WIRED',
+                    critical: !!s.critical,
+                    uiPath: s?.ui?.path || null
+                };
+                map.set(node.id, node);
+                addChild(node.parentId, node.id);
+                if (!children.has(node.id)) children.set(node.id, []);
+            }
+
+            // Fields
+            for (const f of (report?.uiMap?.fields || [])) {
+                const h = healthById.get(f.id);
+                const node = {
+                    id: f.id,
+                    type: 'FIELD',
+                    label: f.label,
+                    description: '',
+                    parentId: f.sectionId || null,
+                    status: h?.status || 'UNKNOWN',
+                    critical: !!f.critical,
+                    required: !!f.required,
+                    uiPath: f?.ui?.path || null
+                };
+                map.set(node.id, node);
+                addChild(node.parentId, node.id);
+            }
+
+            return { map, children };
+        }
+
         const map = new Map();
         (report.nodes || []).forEach(n => map.set(n.id, n));
         
@@ -290,6 +465,50 @@
     function renderScoreboard() {
         const el = $('#wiringScoreboard');
         if (!el || !_report) return;
+
+        // V2 scoreboard
+        if (isV2Report(_report)) {
+            const sb = _report.scoreboard || {};
+            const scope = _report.scope || {};
+            el.innerHTML = `
+              <div class="w-score-container">
+                <div class="w-score-header">
+                  <div class="w-score-title">
+                    <span class="w-title">WIRING STATUS (V2)</span>
+                    ${healthBadge(_report.health?.overall)}
+                  </div>
+                  <div class="w-score-meta">
+                    <div><strong>${esc(scope.companyName || 'Unknown')}</strong></div>
+                    <div class="w-meta-row">
+                      <span>Trade: ${esc(scope.tradeKey || 'universal')}</span>
+                      <span>•</span>
+                      <span>Trade source: ${esc(scope.tradeKeySource || 'unknown')}</span>
+                      <span>•</span>
+                      <span>Env: ${esc(scope.environment || 'production')}</span>
+                      <span>•</span>
+                      <span>ECV: ${esc((_report.derivedData?.effectiveConfigVersion || scope.effectiveConfigVersion || 'n/a').toString().substring(0, 12))}</span>
+                    </div>
+                    <div class="w-meta-small">Generated: ${esc(_report.meta?.generatedAt || '')} (${esc(String(_report.meta?.generationTimeMs || ''))}ms)</div>
+                  </div>
+                </div>
+                <div class="w-score-grid">
+                  ${Object.keys(sb).map(k => {
+                    const c = sb[k] || {};
+                    const st = c.status || 'GRAY';
+                    const tileClass = st === 'GREEN' ? 'green' : st === 'YELLOW' ? 'yellow' : st === 'RED' ? 'red' : '';
+                    return `
+                      <div class="w-tile ${tileClass}">
+                        <div class="w-tile-num">${esc(String(c.percent ?? ''))}%</div>
+                        <div class="w-tile-label">${esc(c.label || k)}</div>
+                        <div class="w-meta-small">${esc(c.value || '')}</div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            `;
+            return;
+        }
         
         const counts = _report.counts || {};
         const tabs = counts.tabs || {};
@@ -352,6 +571,42 @@
     function renderSpecialChecks() {
         const el = $('#wiringSpecialChecks');
         if (!el || !_report?.specialChecks) return;
+
+        // V2: show derivedData + tenant safety summary here
+        if (isV2Report(_report)) {
+            const d = _report.derivedData || {};
+            const t = _report.noTenantBleedProof || {};
+            el.innerHTML = `
+              <div class="w-panel">
+                <div class="w-panel-title">🔍 Source-of-Truth Summary</div>
+                <div class="w-checks-grid">
+                  <div class="w-check-card green">
+                    <div class="w-check-header">
+                      <span class="w-check-title">📦 Scenario Pool (Derived)</span>
+                      ${statusBadge(d.scenarioCount > 0 ? 'LOADED' : 'EMPTY')}
+                    </div>
+                    <div class="w-check-details">
+                      <div>Templates linked: <strong>${esc(String(d.templateCount ?? 0))}</strong></div>
+                      <div>Scenario count: <strong>${esc(String(d.scenarioCount ?? 0))}</strong></div>
+                      <div>ECV: <strong>${esc(String(d.effectiveConfigVersion || 'n/a'))}</strong></div>
+                    </div>
+                    ${d.scenarioPoolError ? `<div class="w-check-message">Error: ${esc(d.scenarioPoolError)}</div>` : ''}
+                  </div>
+                  <div class="w-check-card ${t.passed ? 'green' : 'red'}">
+                    <div class="w-check-header">
+                      <span class="w-check-title">🛡️ Tenant Safety</span>
+                      ${statusBadge(t.passed ? 'PROVEN' : 'MISCONFIGURED')}
+                    </div>
+                    <div class="w-check-details">
+                      <div>Passed: <strong>${esc(String(!!t.passed))}</strong></div>
+                      <div>Violations: <strong>${esc(String((t.violations || []).length))}</strong></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `;
+            return;
+        }
         
         const sc = _report.specialChecks;
         
@@ -450,6 +705,83 @@
     function renderIssues() {
         const el = $('#wiringIssues');
         if (!el || !_report) return;
+
+        // V2: show criticalIssues + warnings + diff
+        if (isV2Report(_report)) {
+            const crit = _report.health?.criticalIssues || [];
+            const warns = _report.health?.warnings || [];
+            const diff = _report.diff || {};
+            const items = [];
+            for (const c of crit) {
+                items.push({
+                    severity: c.critical ? 'CRITICAL' : 'HIGH',
+                    nodeId: c.fieldId,
+                    label: c.label || c.fieldId,
+                    status: c.status,
+                    reasons: [c.reason, c.expected ? `Expected: ${c.expected}` : null, c.actual ? `Actual: ${c.actual}` : null].filter(Boolean),
+                    fix: c.fix || null
+                });
+            }
+            for (const w of warns) {
+                items.push({
+                    severity: 'MEDIUM',
+                    nodeId: w.fieldId,
+                    label: w.label || w.fieldId,
+                    status: w.status,
+                    reasons: [w.reason].filter(Boolean),
+                    fix: w.fix || null
+                });
+            }
+            // Add diff highlights
+            const uiVsDb = diff.uiVsDb || [];
+            const dbVsRuntime = diff.dbVsRuntime || [];
+            const runtimeVsUi = diff.runtimeVsUi || [];
+            for (const d of uiVsDb.slice(0, 10)) {
+                items.push({ severity: 'HIGH', nodeId: d.fieldId, label: d.issue, status: 'MISCONFIGURED', reasons: [d.dbPath || ''], fix: d.uiPath || null });
+            }
+            for (const d of dbVsRuntime.slice(0, 10)) {
+                items.push({ severity: 'MEDIUM', nodeId: d.fieldId, label: d.issue, status: 'UI_ONLY', reasons: [d.dbPath || ''], fix: null });
+            }
+            for (const d of runtimeVsUi.slice(0, 10)) {
+                items.push({ severity: 'MEDIUM', nodeId: d.fieldId, label: d.issue, status: 'DEAD_READ', reasons: [d.runtimeEntry?.dbPath || ''], fix: null });
+            }
+
+            if (items.length === 0) {
+                el.innerHTML = `
+                  <div class="w-panel">
+                    <div class="w-panel-title">⚠️ Issues</div>
+                    <div class="w-empty">✅ No wiring issues detected</div>
+                  </div>
+                `;
+                return;
+            }
+
+            el.innerHTML = `
+              <div class="w-panel">
+                <div class="w-panel-title">⚠️ Issues (${items.length})</div>
+                <div class="w-issues-list">
+                  ${items.slice(0, 25).map(i => `
+                    <div class="w-issue ${String(i.severity || '').toLowerCase()}">
+                      <div class="w-issue-header">
+                        ${severityBadge(i.severity)}
+                        <span class="w-issue-label">${esc(i.label)}</span>
+                        ${statusBadge(i.status)}
+                      </div>
+                      <div class="w-issue-node">Node: ${esc(i.nodeId)}</div>
+                      ${i.reasons?.length ? `<div class="w-issue-reasons">${esc(i.reasons.join(' | '))}</div>` : ''}
+                      ${i.fix ? `<div class="w-issue-fix">💡 Fix: ${esc(i.fix)}</div>` : ''}
+                      <button class="w-mini-btn" data-focus="${esc(i.nodeId)}">Inspect</button>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            `;
+
+            $$('.w-mini-btn[data-focus]', el).forEach(btn => {
+                btn.addEventListener('click', () => selectNode(btn.dataset.focus));
+            });
+            return;
+        }
         
         const issues = _report.issues || [];
         
@@ -497,6 +829,54 @@
     function renderGuardrails() {
         const el = $('#wiringGuardrails');
         if (!el || !_report) return;
+
+        // V2: show tenant safety checks + violations
+        if (isV2Report(_report)) {
+            const t = _report.noTenantBleedProof || {};
+            const checks = t.checks || [];
+            const violations = t.violations || [];
+            el.innerHTML = `
+              <div class="w-panel">
+                <div class="w-panel-title">🛡️ Tenant Safety & Guardrails</div>
+                <div class="w-meta-small">Strict company scoping, global templates only, no tenant bleed.</div>
+
+                <div style="margin-top: 10px;">
+                  <div><strong>Overall:</strong> ${t.passed ? '<span class="text-green">PASSED</span>' : '<span class="text-red">FAILED</span>'}</div>
+                </div>
+
+                <div style="margin-top: 10px;">
+                  <div class="w-guard-section-title">Checks</div>
+                  ${checks.map(c => `
+                    <div class="w-guard-item ${c.passed ? 'pass' : 'violation'}">
+                      <div class="w-guard-header">
+                        <span class="w-guard-status">${c.passed ? '✅' : '🚫'}</span>
+                        <strong>${esc(c.id || 'CHECK')}</strong>
+                      </div>
+                      <div class="w-guard-details">${esc(c.description || '')}</div>
+                      ${c.expected !== undefined ? `<div class="w-guard-file">Expected: ${esc(String(c.expected))} | Actual: ${esc(String(c.actual))}</div>` : ''}
+                    </div>
+                  `).join('')}
+                </div>
+
+                ${violations.length > 0 ? `
+                  <div style="margin-top: 14px;">
+                    <div class="w-guard-section-title">Violations (${violations.length})</div>
+                    ${violations.map(v => `
+                      <div class="w-guard-item violation">
+                        <div class="w-guard-header">
+                          <span class="w-guard-status">🧨</span>
+                          <strong>${esc(v.rule || 'TENANT_RISK')}</strong>
+                          <span class="w-guard-severity">${esc(v.severity || 'CRITICAL')}</span>
+                        </div>
+                        <div class="w-guard-details">${esc(v.message || '')}</div>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
+              </div>
+            `;
+            return;
+        }
         
         const guardrails = _report.guardrails || [];
         const scan = _report.guardrailScan || [];
@@ -554,7 +934,9 @@
         if (!el || !_report || !_index) return;
         
         const { map, children } = _index;
-        const roots = (_report.nodes || []).filter(n => n.type === 'TAB');
+        const roots = isV2Report(_report)
+            ? (Array.from(map.values()).filter(n => n.type === 'TAB'))
+            : (_report.nodes || []).filter(n => n.type === 'TAB');
         
         function nodeMatches(n) {
             if (!_searchTerm) return true;
@@ -585,7 +967,7 @@
             
             return `
                 <div class="w-node" data-node="${esc(id)}" style="margin-left:${depth * 16}px">
-                    <div class="w-node-row">
+                    <div class="w-node-row" data-select="${esc(id)}" style="cursor:pointer;">
                         ${hasKids ? `
                             <button class="w-expander" data-expand="${esc(id)}">${isExpanded ? '▾' : '▸'}</button>
                         ` : '<span class="w-expander-spacer"></span>'}
@@ -602,6 +984,8 @@
                             ${n.expectedDbPaths?.length ? `<div><strong>DB:</strong> ${esc(n.expectedDbPaths.join(', '))}</div>` : ''}
                             ${n.expectedConsumers?.length ? `<div><strong>Consumers:</strong> ${esc(n.expectedConsumers.join(', '))}</div>` : ''}
                             ${n.expectedTraceKeys?.length ? `<div><strong>Trace Keys:</strong> ${esc(n.expectedTraceKeys.join(', '))}</div>` : ''}
+                            ${n.uiPath ? `<div><strong>UI:</strong> ${esc(n.uiPath)}</div>` : ''}
+                            ${n.required ? `<div><strong>Required:</strong> true</div>` : ''}
                         </div>
                     ` : ''}
                     
@@ -641,6 +1025,157 @@
                     _expandedNodes.add(id);
                 }
                 renderTree();
+            });
+        });
+
+        // Bind node selection (inspector)
+        $$('.w-node-row[data-select]', el).forEach(row => {
+            row.addEventListener('click', (e) => {
+                // Don’t treat expander click as selection click
+                if (e.target && e.target.matches('.w-expander')) return;
+                selectNode(row.dataset.select);
+            });
+        });
+    }
+
+    // ========================================================================
+    // NODE INSPECTOR (Source of Truth)
+    // ========================================================================
+
+    function selectNode(nodeId) {
+        _selectedNodeId = nodeId || null;
+        focusNode(nodeId);
+        renderInspector();
+    }
+
+    function renderInspector() {
+        const el = $('#wiringInspector');
+        if (!el || !_report || !_selectedNodeId) {
+            if (el) el.innerHTML = '';
+            return;
+        }
+
+        if (!isV2Report(_report)) {
+            el.innerHTML = `
+              <div class="w-panel">
+                <div class="w-panel-title">🧩 Node Inspector</div>
+                <div class="w-meta-small">Inspector is available for Wiring V2 reports.</div>
+              </div>
+            `;
+            return;
+        }
+
+        const node = _index?.map?.get(_selectedNodeId);
+        const healthById = getV2FieldHealthById(_report);
+        const critById = getV2CriticalById(_report);
+        const warnById = getV2WarningsById(_report);
+
+        const h = healthById.get(_selectedNodeId) || null;
+        const crit = critById.get(_selectedNodeId) || null;
+        const warn = warnById.get(_selectedNodeId) || null;
+
+        const dataEntry = (_report.dataMap?.fields || []).find(x => x.id === _selectedNodeId) || null;
+        const effectiveEntry = (_report.effectiveConfig?.fields || []).find(x => x.id === _selectedNodeId) || null;
+        const runtimeEntry = (_report.runtimeMap?.readers || []).find(x => x.configPath === _selectedNodeId) || null;
+
+        const valuePreview = (val) => {
+            try {
+                if (val == null) return 'null';
+                if (typeof val === 'string') return val;
+                return JSON.stringify(val, null, 2);
+            } catch (e) {
+                return String(val);
+            }
+        };
+
+        const runtimeReaders = runtimeEntry?.readers || [];
+
+        el.innerHTML = `
+          <div class="w-panel">
+            <div class="w-panel-title">🧩 Node Inspector</div>
+            <div class="w-meta-row" style="margin-top:6px;">
+              <span><strong>ID:</strong> ${esc(_selectedNodeId)}</span>
+              <span>•</span>
+              <span><strong>Type:</strong> ${esc(node?.type || 'UNKNOWN')}</span>
+              <span>•</span>
+              <span><strong>Status:</strong> ${statusBadge((h?.status || node?.status || 'UNKNOWN'))}</span>
+            </div>
+
+            ${node?.uiPath ? `<div style="margin-top:10px;"><strong>UI:</strong> ${esc(node.uiPath)}</div>` : ''}
+
+            <div style="margin-top:12px;">
+              <div><strong>Effective Value</strong> (${esc(effectiveEntry?.source || 'n/a')})</div>
+              <pre style="white-space:pre-wrap; background:#0b0b0d; border:1px solid #2a2a2e; padding:12px; border-radius:10px; overflow:auto; max-height:220px;">${esc(valuePreview(effectiveEntry?.value))}</pre>
+            </div>
+
+            <div style="margin-top:12px;">
+              <div><strong>DB</strong></div>
+              <div class="w-meta-small">Collection: ${esc(dataEntry?.dbCollection || 'companiesCollection')} | Path: ${esc(dataEntry?.dbPath || 'n/a')} | Source: ${esc(dataEntry?.source || 'n/a')}</div>
+              <pre style="white-space:pre-wrap; background:#0b0b0d; border:1px solid #2a2a2e; padding:12px; border-radius:10px; overflow:auto; max-height:220px;">${esc(valuePreview(dataEntry?.value))}</pre>
+            </div>
+
+            <div style="margin-top:12px;">
+              <div><strong>Runtime Readers</strong></div>
+              ${runtimeReaders.length === 0 ? `<div class="w-meta-small">No runtime reader mapping found (would be UI_ONLY).</div>` : `
+                <div class="w-meta-small">Mapped readers: ${runtimeReaders.length}</div>
+                <ul style="margin: 6px 0 0 18px;">
+                  ${runtimeReaders.map(r => `<li><code>${esc(r.file || '')}</code> — <strong>${esc(r.function || '')}</strong>${r.line ? ` (L${esc(String(r.line))})` : ''}${r.description ? `: ${esc(r.description)}` : ''}</li>`).join('')}
+                </ul>
+              `}
+            </div>
+
+            ${crit ? `
+              <div style="margin-top:12px;">
+                <div><strong>Fix (Deterministic)</strong></div>
+                <div class="w-issue-item" style="border-color:#7f1d1d;background:#1b0b0b;">
+                  <div><strong>Reason:</strong> ${esc(crit.reason || '')}</div>
+                  ${crit.expected ? `<div><strong>Expected:</strong> ${esc(crit.expected)}</div>` : ''}
+                  ${crit.actual ? `<div><strong>Actual:</strong> ${esc(crit.actual)}</div>` : ''}
+                  ${crit.fix ? `<div><strong>Fix:</strong> ${esc(crit.fix)}</div>` : ''}
+                </div>
+              </div>
+            ` : ''}
+
+            ${(!crit && warn) ? `
+              <div style="margin-top:12px;">
+                <div><strong>Warning</strong></div>
+                <div class="w-issue-item" style="border-color:#7c2d12;background:#1f1308;">
+                  <div><strong>Reason:</strong> ${esc(warn.reason || warn.message || '')}</div>
+                  ${warn.fix ? `<div><strong>Fix:</strong> ${esc(warn.fix)}</div>` : ''}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        `;
+    }
+
+    // ========================================================================
+    // DIAGRAMS (Mermaid strings)
+    // ========================================================================
+    function renderDiagrams() {
+        const el = $('#wiringDiagrams');
+        if (!el || !_report) return;
+        if (!isV2Report(_report) || !_report.diagrams) {
+            el.innerHTML = '';
+            return;
+        }
+        const diagrams = _report.diagrams || {};
+        el.innerHTML = `
+          <div class="w-panel">
+            <div class="w-panel-title">🗺️ Diagrams (Mermaid)</div>
+            ${Object.entries(diagrams).map(([k, v]) => `
+              <details style="margin-top:10px;">
+                <summary style="cursor:pointer;"><strong>${esc(k)}</strong></summary>
+                <pre style="white-space:pre-wrap; background:#0b0b0d; border:1px solid #2a2a2e; padding:12px; border-radius:10px; overflow:auto; max-height:360px;">${esc(String(v || '').trim())}</pre>
+                <button class="w-btn" data-copy-diagram="${esc(k)}">Copy Mermaid</button>
+              </details>
+            `).join('')}
+          </div>
+        `;
+        $$('button[data-copy-diagram]', el).forEach(btn => {
+            btn.addEventListener('click', () => {
+                const key = btn.getAttribute('data-copy-diagram');
+                copyText(String(diagrams[key] || '').trim());
             });
         });
     }
@@ -689,6 +1224,8 @@
         renderIssues();
         renderGuardrails();
         renderTree();
+        renderInspector();
+        renderDiagrams();
         renderCheckpoints();
         updateFocusPill();
     }
@@ -726,7 +1263,8 @@
     // ========================================================================
     
     async function loadWiringReport(companyId) {
-        const url = `/api/admin/wiring-status/${companyId}?includeGuardrails=1&includeInfrastructure=1`;
+        // Prefer Source-of-Truth V2 endpoint
+        const url = `/api/admin/wiring-status/${companyId}/v2`;
         // Control-plane stores admin JWT under 'adminToken' key
         const token = localStorage.getItem('adminToken') || localStorage.getItem('auth_token') || localStorage.getItem('token');
         
@@ -902,6 +1440,84 @@
             copyMdBtn.addEventListener('click', () => {
                 if (_report) {
                     copyText(toMarkdown(_report));
+                }
+            });
+        }
+
+        // Paste JSON + Validate panel
+        const validateToggleBtn = $('#wiringPasteValidate');
+        const validatePanel = $('#wiringValidatePanel');
+        const validateCloseBtn = $('#wiringValidateClose');
+        const validateRunBtn = $('#wiringValidateRun');
+        const validateInput = $('#wiringValidateInput');
+        const validateOutput = $('#wiringValidateOutput');
+
+        const showValidatePanel = (on) => {
+            if (!validatePanel) return;
+            validatePanel.style.display = on ? 'block' : 'none';
+        };
+
+        if (validateToggleBtn) {
+            validateToggleBtn.addEventListener('click', () => {
+                const isOpen = validatePanel && validatePanel.style.display !== 'none';
+                showValidatePanel(!isOpen);
+                if (validateInput && !validateInput.value && _report) {
+                    validateInput.value = JSON.stringify(_report, null, 2);
+                }
+            });
+        }
+        if (validateCloseBtn) {
+            validateCloseBtn.addEventListener('click', () => showValidatePanel(false));
+        }
+        if (validateRunBtn) {
+            validateRunBtn.addEventListener('click', async () => {
+                if (!validateInput) return;
+                const raw = validateInput.value || '';
+                if (!raw.trim()) {
+                    toast('Paste JSON first', true);
+                    return;
+                }
+                if (validateOutput) validateOutput.innerHTML = `<div class="w-meta-small">Validating…</div>`;
+
+                try {
+                    const token = localStorage.getItem('adminToken') || localStorage.getItem('auth_token') || localStorage.getItem('token');
+                    if (!token) throw new Error('No auth token found (adminToken). Please log in again.');
+
+                    const res = await fetch('/api/admin/wiring-status/validate', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ json: raw })
+                    });
+                    const text = await res.text();
+                    let parsed;
+                    try { parsed = JSON.parse(text); } catch { parsed = { error: 'Invalid JSON response', raw: text }; }
+
+                    if (!res.ok) {
+                        throw new Error(parsed?.error || parsed?.message || `HTTP ${res.status}`);
+                    }
+
+                    const errs = parsed.errors || [];
+                    const warns = parsed.warnings || [];
+                    const ok = parsed.valid === true;
+
+                    if (validateOutput) {
+                        validateOutput.innerHTML = `
+                          <div class="w-issue-item" style="border-color:${ok ? '#14532d' : '#7f1d1d'};background:${ok ? '#07130b' : '#1b0b0b'};">
+                            <div><strong>Valid:</strong> ${esc(String(ok))}</div>
+                            <div><strong>Errors:</strong> ${esc(String(errs.length))}</div>
+                            <div><strong>Warnings:</strong> ${esc(String(warns.length))}</div>
+                          </div>
+                          ${errs.length ? `<details style="margin-top:10px;" open><summary style="cursor:pointer;">Errors</summary><pre style="white-space:pre-wrap; background:#0b0b0d; border:1px solid #2a2a2e; padding:12px; border-radius:10px; overflow:auto; max-height:320px;">${esc(JSON.stringify(errs, null, 2))}</pre></details>` : ''}
+                          ${warns.length ? `<details style="margin-top:10px;"><summary style="cursor:pointer;">Warnings</summary><pre style="white-space:pre-wrap; background:#0b0b0d; border:1px solid #2a2a2e; padding:12px; border-radius:10px; overflow:auto; max-height:320px;">${esc(JSON.stringify(warns, null, 2))}</pre></details>` : ''}
+                        `;
+                    }
+                    toast(ok ? 'Validation passed' : 'Validation failed', !ok);
+                } catch (e) {
+                    if (validateOutput) validateOutput.innerHTML = `<div class="w-issue-item" style="border-color:#7f1d1d;background:#1b0b0b;"><div><strong>Error:</strong> ${esc(e.message || String(e))}</div></div>`;
+                    toast(e.message || 'Validate failed', true);
                 }
             });
         }

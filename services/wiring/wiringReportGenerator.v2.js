@@ -22,6 +22,7 @@ const { wiringRegistryV2, getAllFields, getCriticalFields, getKillSwitchFields, 
 const { RUNTIME_READERS_MAP, hasRuntimeReaders, analyzeCoverage } = require('./runtimeReaders.map');
 const Company = require('../../models/v2Company');
 const logger = require('../../utils/logger');
+const { seedCompanyBaseFields } = require('./companySeeder');
 
 // Status codes
 const STATUS = {
@@ -179,7 +180,10 @@ function buildDataMap(companyDoc) {
         let dbValue = undefined;
         let source = 'not_found';
         
-        if (dbPath && companyDoc) {
+        // Derived/global fields do not count against DB coverage for company doc.
+        const isDerived = field.isDerived || field.source === 'GLOBAL_TEMPLATE_DERIVED' || !dbPath;
+
+        if (!isDerived && dbPath && companyDoc) {
             dbValue = getPath(companyDoc, dbPath);
             if (isNonEmpty(dbValue)) {
                 source = 'companyDoc';
@@ -190,16 +194,19 @@ function buildDataMap(companyDoc) {
             } else {
                 dataMap.coverage.missing++;
             }
+            dataMap.coverage.total++;
+        } else if (isDerived) {
+            source = field.source || 'derived';
         }
         
-        dataMap.coverage.total++;
         dataMap.fields.push({
             id: field.id,
             dbPath,
-            dbCollection: field.db?.collection || 'companies',
+            dbCollection: field.db?.collection || 'companiesCollection',
             value: dbValue,
             source,
-            hasValue: isNonEmpty(dbValue)
+            hasValue: isNonEmpty(dbValue),
+            isDerived
         });
     }
     
@@ -668,9 +675,23 @@ async function generateWiringReport({ companyId, tradeKey = null, environment = 
     const startTime = Date.now();
     
     // Load company doc FIRST so we can get the actual tradeKey
-    const companyDoc = await Company.findById(companyId).lean();
+    let companyDoc = await Company.findById(companyId).lean();
     if (!companyDoc) {
         throw new Error(`Company not found: ${companyId}`);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // MANDATORY: Seed required base fields (idempotent)
+    // This prevents Wiring regression due to missing basics and avoids “Modified:0”
+    // confusion by always writing through the `Company` model (companiesCollection).
+    // ─────────────────────────────────────────────────────────────────────────
+    try {
+        const seedRes = await seedCompanyBaseFields({ companyId, companyDoc });
+        if (seedRes.updated) {
+            companyDoc = await Company.findById(companyId).lean();
+        }
+    } catch (e) {
+        logger.warn('[WIRING REPORT V2] Seeder failed (non-fatal)', { error: e?.message || String(e) });
     }
     
     // CRITICAL FIX: Use company's actual tradeKey, not a blind default to 'universal'
@@ -681,41 +702,64 @@ async function generateWiringReport({ companyId, tradeKey = null, environment = 
     // 4. Fallback to 'universal'
     const templateRefs = companyDoc.aiAgentSettings?.templateReferences || [];
     let inferredTradeKey = null;
+    let tradeKeySource = null;
     
-    // Try to infer tradeKey from template references
-    if (templateRefs.length > 0 && templateRefs[0].templateId) {
-        try {
-            const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
-            const firstTemplate = await GlobalInstantResponseTemplate.findById(templateRefs[0].templateId).select('tradeKey templateType').lean();
-            if (firstTemplate) {
-                inferredTradeKey = firstTemplate.tradeKey || firstTemplate.templateType || null;
+    const requestedTradeKey = tradeKey ? String(tradeKey) : null;
+    const companyTradeKey =
+        companyDoc.aiAgentSettings?.tradeKey ||
+        companyDoc.tradeKey ||
+        companyDoc.trade ||
+        null;
+
+    let resolvedTradeKey = null;
+    if (requestedTradeKey) {
+        resolvedTradeKey = requestedTradeKey;
+        tradeKeySource = 'requested';
+    } else if (companyTradeKey) {
+        resolvedTradeKey = String(companyTradeKey);
+        tradeKeySource = 'company';
+    } else {
+        // Only infer if we actually need it.
+        if (templateRefs.length > 0 && templateRefs[0].templateId) {
+            try {
+                const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+                const firstTemplate = await GlobalInstantResponseTemplate
+                    .findById(templateRefs[0].templateId)
+                    .select('tradeKey templateType')
+                    .lean();
+                inferredTradeKey = firstTemplate?.tradeKey || firstTemplate?.templateType || null;
+                if (inferredTradeKey) {
+                    resolvedTradeKey = String(inferredTradeKey);
+                    tradeKeySource = 'inferredFromTemplates';
+                }
+            } catch (e) {
+                logger.warn('[WIRING REPORT V2] Could not infer tradeKey from template', { error: e?.message || String(e) });
             }
-        } catch (e) {
-            logger.warn('[WIRING REPORT V2] Could not infer tradeKey from template', { error: e.message });
+        }
+        if (!resolvedTradeKey) {
+            resolvedTradeKey = 'universal';
+            tradeKeySource = 'default';
         }
     }
-    
-    const resolvedTradeKey = (
-        tradeKey || 
-        companyDoc.trade || 
-        companyDoc.tradeKey || 
-        companyDoc.aiAgentSettings?.tradeKey ||
-        inferredTradeKey ||
-        'universal'
-    ).toLowerCase(); // Normalize to lowercase
+    resolvedTradeKey = String(resolvedTradeKey).toLowerCase();
+    if (tradeKeySource !== 'inferredFromTemplates') {
+        inferredTradeKey = null; // keep report clean
+    }
     
     logger.info('[WIRING REPORT V2] Generating report', { 
         companyId, 
-        requestedTradeKey: tradeKey,
+        requestedTradeKey,
         resolvedTradeKey,
         inferredTradeKey,
-        companyTrade: companyDoc.trade || companyDoc.tradeKey
+        tradeKeySource,
+        companyTradeKey: companyTradeKey ? String(companyTradeKey).toLowerCase() : null
     });
     
     // Load DERIVED data (scenario pool from templates)
+    const enabledTemplateRefs = Array.isArray(templateRefs) ? templateRefs.filter(r => r?.enabled !== false) : [];
     let derivedData = {
-        hasTemplateRefs: templateRefs.length > 0,
-        templateCount: templateRefs.filter(r => r.enabled !== false).length,
+        hasTemplateRefs: enabledTemplateRefs.length > 0,
+        templateCount: enabledTemplateRefs.length,
         scenarioCount: 0,
         scenarios: []
     };
@@ -767,8 +811,10 @@ async function generateWiringReport({ companyId, tradeKey = null, environment = 
             companyId,
             companyName: companyDoc.companyName || companyDoc.businessName,
             tradeKey: resolvedTradeKey,
-            requestedTradeKey: tradeKey,
-            companyTradeKey: companyDoc.trade || companyDoc.tradeKey || null,
+            requestedTradeKey,
+            tradeKeySource,
+            inferredTradeKey,
+            companyTradeKey: companyTradeKey ? String(companyTradeKey).toLowerCase() : null,
             environment,
             effectiveConfigVersion: companyDoc.effectiveConfigVersion || null
         },

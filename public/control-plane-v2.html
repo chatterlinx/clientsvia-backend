@@ -2180,6 +2180,7 @@
             <button id="wiringCopyJson" class="w-btn">Copy JSON</button>
             <button id="wiringCopyMd" class="w-btn">Copy MD</button>
             <button id="wiringDownloadJson" class="w-btn">⬇️ Download</button>
+            <button id="wiringPasteValidate" class="w-btn">Paste JSON + Validate</button>
           </div>
         </div>
         
@@ -2202,9 +2203,29 @@
         
         <!-- Tree View -->
         <div id="wiringTree"></div>
+
+        <!-- Node Inspector (Source of Truth) -->
+        <div id="wiringInspector"></div>
+
+        <!-- Diagrams (Mermaid strings) -->
+        <div id="wiringDiagrams"></div>
         
         <!-- Checkpoints Reference -->
         <div id="wiringCheckpoints"></div>
+
+        <!-- Paste JSON + Validate Modal (inline panel) -->
+        <div id="wiringValidatePanel" style="display:none; margin-top: 16px;">
+          <div class="w-panel">
+            <div class="w-panel-title">🧪 Paste JSON + Validate (Deterministic)</div>
+            <div class="w-meta-small">Paste a Wiring Report JSON (or company config JSON) and validate against registry rules.</div>
+            <textarea id="wiringValidateInput" style="width:100%; min-height: 180px; margin-top: 10px; background:#0b0b0d; color:#e5e7eb; border:1px solid #2a2a2e; border-radius:10px; padding:12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:12px;"></textarea>
+            <div style="margin-top: 10px; display:flex; gap:10px; flex-wrap:wrap;">
+              <button id="wiringValidateRun" class="w-btn primary">Validate JSON</button>
+              <button id="wiringValidateClose" class="w-btn">Close</button>
+            </div>
+            <div id="wiringValidateOutput" style="margin-top: 12px;"></div>
+          </div>
+        </div>
       </div>
       
       <script src="/js/wiringTab.js"></script>
