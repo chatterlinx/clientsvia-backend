@@ -54,13 +54,15 @@ const MINIMUMS = {
 
 const GOLD_STANDARD_ADDITIONS = {
     // Thermostat heat mode tips - Score 78
-    // Current: triggers: 7, negatives: 2, quickReplies: 3, fullReplies: 3
+    // Current: triggers: 7, negatives: 0, quickReplies: 3, fullReplies: 3
     'scenario-1761398576855-rreo3z8qk': {
         triggers: [
             'change thermostat to heat'  // +1 to reach 8
         ],
         negativeUserPhrases: [
-            'cooling mode problem'  // +1 to reach 3
+            'cooling mode problem',
+            'ac not working',
+            'need air conditioning'  // +3 to reach 3
         ],
         quickReplies: [
             "Switch your thermostat to heat mode by pressing the mode button until you see 'Heat' displayed.",
@@ -77,14 +79,16 @@ const GOLD_STANDARD_ADDITIONS = {
     },
 
     // Caller Vague About Symptoms - Score 77
-    // Current: triggers: 6, negatives: 2, quickReplies: 5, fullReplies: 3
+    // Current: triggers: 6, negatives: 0, quickReplies: 5, fullReplies: 3
     'scenario-1766497690296-xr652uhx5': {
         triggers: [
             'something seems different',
             'not performing like before'  // +2 to reach 8
         ],
         negativeUserPhrases: [
-            'nothing wrong really'  // +1 to reach 3
+            'nothing wrong really',
+            'working perfectly fine',
+            'system is running great'  // +3 to reach 3
         ],
         quickReplies: [
             "Can you tell me more about what feels different? Is it temperature, airflow, or something else?",
@@ -99,7 +103,7 @@ const GOLD_STANDARD_ADDITIONS = {
     },
 
     // Needs Repair But Asking for Maintenance - Score 71
-    // Current: triggers: 4, negatives: 2, quickReplies: 5, fullReplies: 3
+    // Current: triggers: 4, negatives: 0, quickReplies: 5, fullReplies: 3
     'scenario-1766497690696-t6ba4dew6': {
         triggers: [
             'tune up but ac is not working',
@@ -108,7 +112,9 @@ const GOLD_STANDARD_ADDITIONS = {
             'checkup needed system is loud'  // +4 to reach 8
         ],
         negativeUserPhrases: [
-            'everything working fine'  // +1 to reach 3
+            'everything working fine',
+            'just routine maintenance',
+            'system running perfectly'  // +3 to reach 3
         ],
         quickReplies: [
             "It sounds like you may need a repair rather than routine maintenance. Let me help you with that.",
@@ -123,7 +129,7 @@ const GOLD_STANDARD_ADDITIONS = {
     },
 
     // Needs Maintenance But Describing Like Repair - Score 71
-    // Current: triggers: 4, negatives: 2, quickReplies: 5, fullReplies: 3
+    // Current: triggers: 4, negatives: 0, quickReplies: 5, fullReplies: 3
     'scenario-1766497691088-sn21psgwe': {
         triggers: [
             'fix my ac but it works fine',
@@ -132,7 +138,9 @@ const GOLD_STANDARD_ADDITIONS = {
             'service my system nothing broken'  // +4 to reach 8
         ],
         negativeUserPhrases: [
-            'actually broken'  // +1 to reach 3
+            'actually broken',
+            'not cooling at all',
+            'stopped working completely'  // +3 to reach 3
         ],
         quickReplies: [
             "Since your system is working, it sounds like you're looking for preventive maintenance - great idea!",
@@ -147,13 +155,15 @@ const GOLD_STANDARD_ADDITIONS = {
     },
 
     // Confirm Appointment - Score 79
-    // Current: triggers: 7, negatives: 2, quickReplies: 5, fullReplies: 3
+    // Current: triggers: 7, negatives: 0, quickReplies: 5, fullReplies: 3
     'scenario-1766497693608-bjisxlkdp': {
         triggers: [
             'verify appointment time'  // +1 to reach 8
         ],
         negativeUserPhrases: [
-            'need to book new'  // +1 to reach 3
+            'need to book new',
+            'want to schedule',
+            'cancel my appointment'  // +3 to reach 3
         ],
         quickReplies: [
             "I can look up your appointment right now. Can you give me your name or phone number?",
