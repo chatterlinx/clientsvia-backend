@@ -217,7 +217,8 @@ function computeQualityScore(scenario) {
     let score = 0;
     const issues = [];
     const triggerCount = (scenario.triggers || []).length;
-    const negativeCount = (scenario.negativeTriggers || []).length;
+    // FIXED: Schema field is negativeUserPhrases, not negativeTriggers
+    const negativeCount = (scenario.negativeUserPhrases || scenario.negativeTriggers || []).length;
     const quickCount = (scenario.quickReplies || []).length;
     const fullCount = (scenario.fullReplies || []).length;
     
