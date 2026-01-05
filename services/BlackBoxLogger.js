@@ -123,6 +123,29 @@ async function initCall({ callId, companyId, from, to, source = 'voice', custome
   }
 }
 
+/**
+ * Ensure a call recording exists (idempotent).
+ * If a recording already exists, return it; otherwise initialize one.
+ *
+ * This prevents "recording not found" drops on web/sms/test paths where
+ * turn counters and session reuse can make "first turn" heuristics unreliable.
+ */
+async function ensureCall({ callId, companyId, from, to, source = 'voice', customerId, customerContext, sessionSnapshot }) {
+  try {
+    const existing = await BlackBoxRecording.findOne({ callId, companyId }).lean();
+    if (existing) return existing;
+    return await initCall({ callId, companyId, from, to, source, customerId, customerContext, sessionSnapshot });
+  } catch (error) {
+    logger.error('[BLACK BOX] Failed to ensure recording (non-fatal)', {
+      callId,
+      companyId,
+      source,
+      error: error.message
+    });
+    return null;
+  }
+}
+
 // ============================================================================
 // LOG EVENT - Append to timeline
 // ============================================================================
@@ -1367,6 +1390,7 @@ async function logBookingConflict(callId, companyId, conflictData) {
 
 module.exports = {
   initCall,
+  ensureCall,
   logEvent,
   appendError,
   addTranscript,

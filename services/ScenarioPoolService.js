@@ -135,7 +135,11 @@ class ScenarioPoolService {
                     return parsed;
                 }
             } catch (cacheError) {
-                logger.warn(`⚠️ [SCENARIO POOL CACHE] Redis error (non-critical):`, cacheError.message);
+                logger.warn(`⚠️ [SCENARIO POOL CACHE] Redis error (non-critical)`, {
+                    message: cacheError?.message || String(cacheError),
+                    name: cacheError?.name || null,
+                    code: cacheError?.code || null
+                });
                 // Continue to MongoDB fallback
             }
             
@@ -239,7 +243,11 @@ class ScenarioPoolService {
                 logger.info(`💾 [SCENARIO POOL CACHE] Cached ${scenarioPool.length} scenarios for ${CACHE_TTL}s`);
                 console.log(`[💾 CACHE WRITE] Scenario pool cached (TTL: ${CACHE_TTL}s)`);
             } catch (cacheError) {
-                logger.warn(`⚠️ [SCENARIO POOL CACHE] Failed to cache:`, cacheError.message);
+                logger.warn(`⚠️ [SCENARIO POOL CACHE] Failed to cache`, {
+                    message: cacheError?.message || String(cacheError),
+                    name: cacheError?.name || null,
+                    code: cacheError?.code || null
+                });
                 // Non-critical, continue
             }
             

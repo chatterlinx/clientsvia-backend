@@ -2096,6 +2096,8 @@ async function processTurn({
             customer,
             forceNewSession  // Test Console can force fresh session
         });
+
+        const sessionWasReused = (session.metrics?.totalTurns || 0) > 0;
         
         log('CHECKPOINT 4: ✅ Session ready', { 
             sessionId: session._id, 
@@ -2103,7 +2105,7 @@ async function processTurn({
             phase: session.phase,
             // 🔍 DIAGNOSTIC: Show what slots were already saved in this session
             existingSlots: JSON.stringify(session.collectedSlots || {}),
-            isSessionReused: (session.metrics?.totalTurns || 0) > 0
+            isSessionReused: sessionWasReused
         });
         
         // ═══════════════════════════════════════════════════════════════════
@@ -2115,24 +2117,48 @@ async function processTurn({
         // - No restart booking once started
         // - Always acknowledge what caller said
         // ═══════════════════════════════════════════════════════════════════
-        if (!session.locks) {
-            session.locks = {
-                greeted: false,
-                issueCaptured: false,
-                bookingStarted: false,
-                bookingLocked: false,
-                askedSlots: {}
-            };
-        }
+        // NOTE: ConversationSession schema defines locks + memory. Never reset them on reuse.
+        // If missing (legacy sessions), initialize once; if reused, backfill invariants.
+        session.locks = session.locks || {
+            greeted: false,
+            issueCaptured: false,
+            bookingStarted: false,
+            bookingLocked: false,
+            askedSlots: {},
+            flowAcked: {}
+        };
         
-        if (!session.memory) {
-            session.memory = {
-                rollingSummary: '',
-                facts: {},
-                lastUserIntent: null,
-                lastUserNeed: null,
-                acknowledgedClaims: []
-            };
+        session.memory = session.memory || {
+            rollingSummary: '',
+            facts: {},
+            lastUserIntent: null,
+            lastUserNeed: null,
+            acknowledgedClaims: []
+        };
+        
+        if (sessionWasReused) {
+            // If the session has turns, the agent has already spoken.
+            session.locks.greeted = true;
+            
+            if (session.discovery?.issue) {
+                session.locks.issueCaptured = true;
+            }
+            
+            if (session.mode === 'BOOKING') {
+                session.locks.bookingStarted = true;
+            }
+            
+            if (session.mode === 'COMPLETE' || session.booking?.consentGiven) {
+                session.locks.bookingLocked = true;
+            }
+            
+            // If memory was never populated, derive rolling summary from runningSummary.
+            if (!session.memory.rollingSummary) {
+                const lastBullet = Array.isArray(session.runningSummary) ? session.runningSummary[session.runningSummary.length - 1] : null;
+                if (lastBullet) {
+                    session.memory.rollingSummary = String(lastBullet).trim();
+                }
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -5362,11 +5388,6 @@ async function processTurn({
             // The LLM is the PRIMARY BRAIN. Scenarios are just knowledge tools.
             // ═══════════════════════════════════════════════════════════════════
             
-            // ENFORCE: forceLLMDiscovery kill switch
-            if (!killSwitches.forceLLMDiscovery) {
-                log('⚠️ WARNING: forceLLMDiscovery is OFF - legacy mode may bypass LLM');
-            }
-            
             log('CHECKPOINT 9b: 🧠 V22 LLM-LED DISCOVERY MODE', {
                 forceLLMDiscovery: killSwitches.forceLLMDiscovery,
                 disableScenarioAutoResponses: killSwitches.disableScenarioAutoResponses
@@ -5397,6 +5418,39 @@ async function processTurn({
                     }))
                     : []
             });
+
+            // ═══════════════════════════════════════════════════════════════════
+            // 🆕 DETERMINISTIC ISSUE CAPTURE (from scenario tools)
+            // ═══════════════════════════════════════════════════════════════════
+            // If we retrieved a problem scenario, capture the issue in state even if regex keywords fail.
+            try {
+                const topTool = Array.isArray(scenarioRetrieval.scenarios) ? scenarioRetrieval.scenarios[0] : null;
+                const hasTool = !!(topTool?.title && topTool?.scenarioId);
+                const scenarioType = String(topTool?.scenarioType || '').toUpperCase();
+                const toolLooksLikeProblem = hasTool && !['SMALL_TALK', 'SYSTEM'].includes(scenarioType);
+                
+                if (toolLooksLikeProblem && !session.discovery?.issue) {
+                    session.discovery = session.discovery || {};
+                    session.discovery.issue = String(topTool.title).trim();
+                    session.discovery.issueConfidence = Number.isFinite(topTool.confidence)
+                        ? Math.max(0, Math.min(1, Number(topTool.confidence) / 100))
+                        : 0;
+                    session.discovery.issueCapturedAtTurn = (session.metrics?.totalTurns || 0) + 1;
+                    
+                    session.locks.issueCaptured = true;
+                    
+                    session.memory.facts = session.memory.facts || {};
+                    session.memory.facts.issue = session.discovery.issue;
+                    
+                    log('🧷 DETERMINISTIC ISSUE CAPTURED (scenario tool)', {
+                        issue: session.discovery.issue,
+                        scenarioId: topTool.scenarioId,
+                        confidence: topTool.confidence
+                    });
+                }
+            } catch (e) {
+                log('⚠️ Deterministic issue capture failed (non-fatal)', { error: e.message });
+            }
             
             // ═══════════════════════════════════════════════════════════════════
             // Step 1.5: CHEAT SHEET FALLBACK (PHASE 1)
@@ -6128,8 +6182,9 @@ async function processTurn({
             session.locks = { greeted: false, issueCaptured: false, bookingStarted: false, bookingLocked: false, askedSlots: {} };
         }
         
-        // Mark as greeted if this was the first turn
-        if ((session.metrics?.totalTurns || 0) === 0) {
+        // Mark as greeted once the conversation has ANY turns.
+        // (ConversationSession tracks user+assistant entries; first "turn" will set totalTurns >= 2)
+        if ((session.metrics?.totalTurns || 0) > 0) {
             session.locks.greeted = true;
         }
         
@@ -6174,7 +6229,8 @@ async function processTurn({
         if (currentSlots?.address) {
             facts.addressCollected = true;
         }
-        session.memory.facts = facts;
+        // Merge facts (do not wipe existing)
+        session.memory.facts = { ...(session.memory.facts || {}), ...facts };
         
         // Build rolling summary
         const summaryParts = [];
@@ -6184,7 +6240,13 @@ async function processTurn({
         if (facts.phoneCollected) summaryParts.push('Phone captured');
         if (facts.addressCollected) summaryParts.push('Address captured');
         
-        session.memory.rollingSummary = summaryParts.join('. ') || 'New conversation';
+        // Never overwrite a reused session's rolling summary with "New conversation".
+        const nextRolling = summaryParts.join('. ');
+        const fallbackRolling =
+            (session.memory?.rollingSummary && String(session.memory.rollingSummary).trim()) ||
+            (Array.isArray(session.runningSummary) && session.runningSummary.length > 0 ? String(session.runningSummary[session.runningSummary.length - 1]).trim() : '') ||
+            'New conversation';
+        session.memory.rollingSummary = nextRolling || fallbackRolling;
         session.memory.lastUserIntent = aiResult?.intent || 'unknown';
         
         // Mark modified for Mongoose
@@ -6539,43 +6601,41 @@ async function processTurn({
                 
                 // Determine source type
                 const sourceType = channel === 'test' ? 'test' : channel === 'sms' ? 'sms' : 'web';
-                
-                // Check if we need to initialize the recording (first turn)
-                const isFirstTurn = (session.metrics?.totalTurns || 0) <= 1;
-                
-                if (isFirstTurn) {
-                    // Initialize Black Box recording for this session
-                    await BlackBoxLogger.initCall({
-                        callId: session._id.toString(),
-                        companyId,
-                        from: callerPhone || visitorInfo?.ip || 'test-console',
-                        to: company.companyName || 'AI Agent',
-                        source: sourceType,
-                        sessionSnapshot: {
-                            phase: session.phase,
-                            mode: session.mode,
-                            locks: session.locks,
-                            memory: session.memory
-                        }
-                    });
-                    
-                    log('📼 PHASE 2: Black Box recording initialized', { source: sourceType });
-                }
-                
-                // Log this turn's transcript
-                await BlackBoxLogger.addTranscript(session._id.toString(), companyId, {
-                    callerTurn: {
-                        turn: session.metrics?.totalTurns || 1,
-                        text: userText,
-                        timestamp: new Date()
-                    },
-                    agentTurn: {
-                        turn: session.metrics?.totalTurns || 1,
-                        text: aiResponse,
-                        timestamp: new Date(),
-                        latencyMs,
-                        tokensUsed: aiResult?.tokensUsed || 0
+
+                // Always ensure the recording exists before writing any events/transcript.
+                // "First turn" heuristics are unreliable because a single turn can add multiple transcript entries.
+                await BlackBoxLogger.ensureCall({
+                    callId: session._id.toString(),
+                    companyId,
+                    from: callerPhone || visitorInfo?.ip || 'test-console',
+                    to: company.companyName || 'AI Agent',
+                    source: sourceType,
+                    sessionSnapshot: {
+                        phase: session.phase,
+                        mode: session.mode,
+                        locks: session.locks,
+                        memory: session.memory
                     }
+                });
+                
+                // Log transcript entries (caller + agent)
+                await BlackBoxLogger.addTranscript({
+                    callId: session._id.toString(),
+                    companyId,
+                    speaker: 'caller',
+                    turn: session.metrics?.totalTurns || 1,
+                    text: userText,
+                    confidence: 1.0,
+                    source: sourceType
+                });
+                
+                await BlackBoxLogger.addTranscript({
+                    callId: session._id.toString(),
+                    companyId,
+                    speaker: 'agent',
+                    turn: session.metrics?.totalTurns || 1,
+                    text: aiResponse,
+                    source: aiResult?.debug?.source || (aiResult?.fromStateMachine ? 'STATE_MACHINE' : 'LLM')
                 });
 
                 // Log dynamic flow trace for this turn (V1)
