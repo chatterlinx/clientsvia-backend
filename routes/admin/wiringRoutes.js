@@ -309,5 +309,126 @@ function wiringReportToMarkdown(r) {
     return lines.join('\n');
 }
 
+// ============================================================================
+// GET /api/admin/wiring-status/:companyId/v2
+// Full V2 wiring report with complete source-of-truth data
+// ============================================================================
+router.get('/:companyId/v2', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { format = 'json' } = req.query;
+        
+        logger.info('[WIRING API V2] Full report requested', { companyId, format });
+        
+        const { generateWiringReport, reportToMarkdown } = require('../../services/wiring/wiringReportGenerator.v2');
+        
+        const report = await generateWiringReport({
+            companyId,
+            tradeKey: req.query.tradeKey || 'universal',
+            environment: process.env.NODE_ENV || 'production'
+        });
+        
+        // Format response
+        if (format === 'md' || format === 'markdown') {
+            const md = reportToMarkdown(report);
+            res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="wiring-report-v2-${companyId}.md"`);
+            return res.status(200).send(md);
+        }
+        
+        // JSON (default)
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        return res.json(report);
+        
+    } catch (error) {
+        logger.error('[WIRING API V2] Error', { error: error.message, stack: error.stack });
+        return res.status(500).json({
+            error: 'Failed to generate V2 wiring report',
+            details: error.message
+        });
+    }
+});
+
+// ============================================================================
+// POST /api/admin/wiring-status/validate
+// Validate pasted JSON against wiring registry
+// ============================================================================
+router.post('/validate', async (req, res) => {
+    try {
+        const { json } = req.body;
+        
+        if (!json) {
+            return res.status(400).json({ error: 'JSON payload required' });
+        }
+        
+        logger.info('[WIRING API] Validate JSON requested');
+        
+        const { wiringRegistryV2, getAllFields, VALIDATORS } = require('../../services/wiring/wiringRegistry.v2');
+        
+        let parsed;
+        try {
+            parsed = typeof json === 'string' ? JSON.parse(json) : json;
+        } catch (e) {
+            return res.status(400).json({ error: 'Invalid JSON', details: e.message });
+        }
+        
+        // Run validators
+        const results = {
+            valid: true,
+            errors: [],
+            warnings: [],
+            fieldCount: 0
+        };
+        
+        const allFields = getAllFields();
+        
+        for (const field of allFields) {
+            const dbPath = field.db?.path;
+            if (!dbPath) continue;
+            
+            // Get value from parsed JSON
+            const parts = dbPath.split('.');
+            let val = parsed;
+            for (const p of parts) {
+                if (val == null) break;
+                val = val[p];
+            }
+            
+            results.fieldCount++;
+            
+            // Run validators
+            if (field.validators) {
+                for (const validator of field.validators) {
+                    if (typeof validator.fn === 'function' && !validator.fn(val)) {
+                        if (field.required || field.critical) {
+                            results.valid = false;
+                            results.errors.push({
+                                fieldId: field.id,
+                                label: field.label,
+                                message: validator.message || 'Validation failed',
+                                path: dbPath,
+                                value: val
+                            });
+                        } else {
+                            results.warnings.push({
+                                fieldId: field.id,
+                                label: field.label,
+                                message: validator.message || 'Validation failed',
+                                path: dbPath
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        
+        return res.json(results);
+        
+    } catch (error) {
+        logger.error('[WIRING API] Validate error', { error: error.message });
+        return res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;
 
