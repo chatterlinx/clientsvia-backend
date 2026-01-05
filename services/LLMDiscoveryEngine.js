@@ -60,6 +60,7 @@ class LLMDiscoveryEngine {
      */
     static async retrieveRelevantScenarios({ companyId, trade, utterance, template }) {
         const startTime = Date.now();
+        let poolResult = null;
         
         try {
             logger.info('[LLM DISCOVERY] 🔍 Retrieving relevant scenarios...', {
@@ -69,7 +70,7 @@ class LLMDiscoveryEngine {
             });
             
             // Step 1: Get scenario pool for this company
-            const poolResult = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
+            poolResult = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
             const allScenarios = poolResult?.scenarios || [];
             
             if (!allScenarios || allScenarios.length === 0) {
@@ -92,24 +93,57 @@ class LLMDiscoveryEngine {
             
             const selector = new HybridScenarioSelector(fillerWords, urgencyKeywords, synonymMap);
             
-            // Step 4: Find relevant scenarios (semantic + keyword matching)
-            const matchResult = selector.findBestMatch(utterance, enabledScenarios, {
-                returnTopN: 3,  // Max 3 scenarios for LLM context
-                minConfidence: 0.35,  // Lower threshold - LLM will decide relevance
-                includeTrace: false  // Skip trace for speed
+            // Step 4: Find relevant scenarios (selector API is selectScenario())
+            // NOTE: For LLM tool context we can include lower-confidence candidates; LLM decides relevance.
+            // DEFAULT - OVERRIDE IN UI (if/when template adds an explicit "llmToolMinConfidence" field)
+            const toolTopN = 3;
+            const minToolConfidence = Number.isFinite(template?.nlpConfig?.llmToolMinConfidence)
+                ? template.nlpConfig.llmToolMinConfidence
+                : 0.35;
+            
+            const matchResult = await selector.selectScenario(utterance, enabledScenarios, {
+                trade,
+                companyId,
+                // Intentionally do not pass heavy conversation state; keep fast.
             });
             
             // Step 5: Build scenario summaries (compressed for LLM)
             const scenarioSummaries = [];
+            const scenarioById = new Map(
+                enabledScenarios
+                    .filter(s => s && (s.scenarioId || s.id))
+                    .map(s => [String(s.scenarioId || s.id), s])
+            );
             
-            if (matchResult.match) {
-                scenarioSummaries.push(this._buildScenarioSummary(matchResult.match, matchResult.confidence));
+            const candidates = [];
+            
+            // Primary match (if above selector thresholds)
+            if (matchResult?.scenario) {
+                candidates.push({ scenario: matchResult.scenario, confidence: matchResult.confidence ?? 0 });
             }
             
-            if (matchResult.alternates) {
-                for (const alt of matchResult.alternates.slice(0, 2)) {
-                    scenarioSummaries.push(this._buildScenarioSummary(alt.scenario, alt.confidence));
-                }
+            // Fallback: use trace topCandidates even if no scenario was returned (below threshold)
+            const topCandidates = matchResult?.trace?.topCandidates || [];
+            for (const c of topCandidates) {
+                const id = c?.scenarioId ? String(c.scenarioId) : null;
+                if (!id) continue;
+                const scenario = scenarioById.get(id);
+                if (!scenario) continue;
+                
+                const conf = typeof c.confidence === 'string' ? Number(c.confidence) : Number(c.confidence ?? 0);
+                candidates.push({ scenario, confidence: Number.isFinite(conf) ? conf : 0 });
+            }
+            
+            // Dedupe by scenarioId and apply min confidence filter
+            const seen = new Set();
+            for (const c of candidates) {
+                const id = String(c.scenario?.scenarioId || c.scenario?.id || '');
+                if (!id || seen.has(id)) continue;
+                seen.add(id);
+                if ((c.confidence ?? 0) < minToolConfidence) continue;
+                
+                scenarioSummaries.push(this._buildScenarioSummary(c.scenario, c.confidence));
+                if (scenarioSummaries.length >= toolTopN) break;
             }
             
             const retrievalTimeMs = Date.now() - startTime;
@@ -136,6 +170,7 @@ class LLMDiscoveryEngine {
             return {
                 scenarios: [],
                 retrievalTimeMs: Date.now() - startTime,
+                effectiveConfigVersion: poolResult?.effectiveConfigVersion || null,
                 error: error.message
             };
         }

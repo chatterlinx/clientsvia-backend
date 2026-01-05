@@ -109,6 +109,13 @@ function initializeFlowState(session) {
     if (!session.dynamicFlows.facts) session.dynamicFlows.facts = {};
     if (!session.dynamicFlows.ledger) session.dynamicFlows.ledger = [];
     if (!session.dynamicFlows.locks) session.dynamicFlows.locks = { acked: {} };
+    if (!session.dynamicFlows.locks.acked) session.dynamicFlows.locks.acked = {};
+
+    // Ensure LEGACY fields exist on existing sessions (prevents undefined.length crashes)
+    if (!Array.isArray(session.dynamicFlows.activeFlows)) session.dynamicFlows.activeFlows = [];
+    if (!Array.isArray(session.dynamicFlows.completedFlows)) session.dynamicFlows.completedFlows = [];
+    if (!Array.isArray(session.dynamicFlows.pendingRequirements)) session.dynamicFlows.pendingRequirements = [];
+    if (!Array.isArray(session.dynamicFlows.pendingActions)) session.dynamicFlows.pendingActions = [];
     
     return session.dynamicFlows;
 }
