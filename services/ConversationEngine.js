@@ -6814,7 +6814,10 @@ async function processTurn({
                 companyId,
                 channel,
                 turnNumber: turnNumberTruth,
-                isSessionReused: (session.metrics?.totalTurns || 0) > 0,
+                // IMPORTANT: "reused" must reflect start-of-turn truth, not end-of-turn metrics.
+                // If we compute this from session.metrics.totalTurns at the end of the turn, it
+                // will flip to true for every session after the first save (lies to the UI).
+                isSessionReused: sessionWasReused,
                 phase: session.phase || newPhase,
                 mode: session.mode || null,
                 locks: session.locks || null,
