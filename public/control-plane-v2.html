@@ -2468,6 +2468,16 @@
       
       // Initialize tab content if not already done
       initializeTab(tabId);
+
+      // Wiring must always re-init on activation (company switches must not leave it dead).
+      if (tabId === 'wiring' && window.ClientViaWiringTab && currentCompanyId) {
+        try {
+          window.ClientViaWiringTab.initWiringTab({ companyId: currentCompanyId });
+          console.log('✅ [NAV] Wiring init triggered on tab switch', { companyId: currentCompanyId });
+        } catch (e) {
+          console.error('❌ [NAV] Wiring init failed on tab switch', e);
+        }
+      }
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
@@ -2506,6 +2516,9 @@
           case 'version-history':
             await initVersionHistory();
             break;
+          case 'wiring':
+            await initWiring();
+            break;
           case 'data-config':
             await initDataConfig();
             break;
@@ -2516,6 +2529,26 @@
         initializedTabs.add(tabId);
       } catch (error) {
         console.error(`❌ [INIT] Failed to initialize ${tabId}:`, error);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // WIRING INITIALIZATION (V2 Source of Truth)
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function initWiring() {
+      try {
+        // wiringTab.js is included inside the wiring panel, but this is a safety net
+        if (!window.ClientViaWiringTab) {
+          await loadScript('/js/wiringTab.js');
+        }
+        if (window.ClientViaWiringTab) {
+          window.ClientViaWiringTab.initWiringTab({ companyId: currentCompanyId });
+          console.log('✅ [INIT] Wiring initialized', { companyId: currentCompanyId });
+        } else {
+          console.error('❌ [INIT] Wiring module missing after load');
+        }
+      } catch (e) {
+        console.error('❌ [INIT] Wiring init failed', e);
       }
     }
     

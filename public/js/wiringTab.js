@@ -1280,6 +1280,8 @@
             throw new Error('No auth token found in localStorage (checked: adminToken, auth_token, token). Please log in again.');
         }
         
+        console.log('WIRING_FETCH_START', { companyId, url });
+
         const res = await fetch(url, {
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -1312,7 +1314,11 @@
         }
         
         try {
-            return JSON.parse(text || '{}');
+            const parsed = JSON.parse(text || '{}');
+            const hasUiMap = !!parsed?.uiMap;
+            const nodeCount = Array.isArray(parsed?.uiMap?.fields) ? parsed.uiMap.fields.length : (Array.isArray(parsed?.nodes) ? parsed.nodes.length : 0);
+            console.log('WIRING_FETCH_OK', { status: res.status, bytes: text.length, hasUiMap, nodeCount });
+            return parsed;
         } catch (e) {
             _lastLoad.errorMessage = `Invalid JSON from wiring endpoint: ${e.message}`;
             throw new Error(_lastLoad.errorMessage);
@@ -1382,67 +1388,61 @@
     async function initWiringTab({ companyId, tradeKey = 'universal' }) {
         _companyId = companyId || _companyId;
         console.log('[WiringTab] Initializing...', { companyId: _companyId });
+
+        // Prevent duplicate listeners when init is called multiple times (tab switch / company switch).
+        const bindOnce = (el, event, handler) => {
+            if (!el) return;
+            const key = `wiringBound_${event}`;
+            if (el.dataset && el.dataset[key] === '1') return;
+            el.addEventListener(event, handler);
+            if (el.dataset) el.dataset[key] = '1';
+        };
         
         // Reload button
         const reloadBtn = $('#wiringReload');
-        if (reloadBtn) {
-            reloadBtn.addEventListener('click', () => refresh(_companyId));
-        }
+        bindOnce(reloadBtn, 'click', () => refresh(_companyId));
         
         // Clear focus button
         const clearFocusBtn = $('#wiringClearFocus');
-        if (clearFocusBtn) {
-            clearFocusBtn.addEventListener('click', () => focusNode(null));
-        }
+        bindOnce(clearFocusBtn, 'click', () => focusNode(null));
         
         // Expand all button
         const expandAllBtn = $('#wiringExpandAll');
-        if (expandAllBtn) {
-            expandAllBtn.addEventListener('click', () => {
-                if (_report?.nodes) {
-                    _report.nodes.forEach(n => _expandedNodes.add(n.id));
-                }
-                renderTree();
-            });
-        }
+        bindOnce(expandAllBtn, 'click', () => {
+            // Works for both V1 and V2 (V2 has no `report.nodes`)
+            if (_index?.map) {
+                Array.from(_index.map.values()).forEach(n => _expandedNodes.add(n.id));
+            } else if (_report?.nodes) {
+                _report.nodes.forEach(n => _expandedNodes.add(n.id));
+            }
+            renderTree();
+        });
         
         // Collapse all button
         const collapseAllBtn = $('#wiringCollapseAll');
-        if (collapseAllBtn) {
-            collapseAllBtn.addEventListener('click', () => {
-                _expandedNodes.clear();
-                renderTree();
-            });
-        }
+        bindOnce(collapseAllBtn, 'click', () => {
+            _expandedNodes.clear();
+            renderTree();
+        });
         
         // Search input
         const searchInput = $('#wiringSearch');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                _searchTerm = e.target.value || '';
-                renderTree();
-            });
-        }
+        bindOnce(searchInput, 'input', (e) => {
+            _searchTerm = e.target.value || '';
+            renderTree();
+        });
         
         // Copy JSON button
         const copyJsonBtn = $('#wiringCopyJson');
-        if (copyJsonBtn) {
-            copyJsonBtn.addEventListener('click', () => {
-                if (_report) {
-                    copyText(JSON.stringify(_report, null, 2));
-                }
-            });
-        }
+        bindOnce(copyJsonBtn, 'click', () => {
+            if (_report) copyText(JSON.stringify(_report, null, 2));
+        });
         
         // Copy Markdown button
         const copyMdBtn = $('#wiringCopyMd');
-        if (copyMdBtn) {
-            copyMdBtn.addEventListener('click', () => {
-                if (_report) {
-                    copyText(toMarkdown(_report));
-                }
-            });
-        }
+        bindOnce(copyMdBtn, 'click', () => {
+            if (_report) copyText(toMarkdown(_report));
+        });
 
         // Paste JSON + Validate panel
         const validateToggleBtn = $('#wiringPasteValidate');
@@ -1458,7 +1458,7 @@
         };
 
         if (validateToggleBtn) {
-            validateToggleBtn.addEventListener('click', () => {
+            bindOnce(validateToggleBtn, 'click', () => {
                 const isOpen = validatePanel && validatePanel.style.display !== 'none';
                 showValidatePanel(!isOpen);
                 if (validateInput && !validateInput.value && _report) {
@@ -1467,10 +1467,10 @@
             });
         }
         if (validateCloseBtn) {
-            validateCloseBtn.addEventListener('click', () => showValidatePanel(false));
+            bindOnce(validateCloseBtn, 'click', () => showValidatePanel(false));
         }
         if (validateRunBtn) {
-            validateRunBtn.addEventListener('click', async () => {
+            bindOnce(validateRunBtn, 'click', async () => {
                 if (!validateInput) return;
                 const raw = validateInput.value || '';
                 if (!raw.trim()) {
@@ -1524,29 +1524,25 @@
         
         // Download JSON button
         const downloadBtn = $('#wiringDownloadJson');
-        if (downloadBtn) {
-            downloadBtn.addEventListener('click', () => {
-                if (_report) {
-                    const filename = `wiring-${_report.companyId}-${new Date().toISOString().slice(0, 10)}.json`;
-                    downloadJson(filename, _report);
-                }
-            });
-        }
+        bindOnce(downloadBtn, 'click', () => {
+            if (_report) {
+                const cid = _report?.scope?.companyId || _report?.companyId || 'unknown';
+                const filename = `wiring-${cid}-${new Date().toISOString().slice(0, 10)}.json`;
+                downloadJson(filename, _report);
+            }
+        });
         
         // Clear cache button
         const clearCacheBtn = $('#wiringClearCache');
-        if (clearCacheBtn) {
-            clearCacheBtn.addEventListener('click', async () => {
-                try {
-                    const result = await clearCache(_companyId);
-                    toast(result.message || 'Cache cleared');
-                    // Refresh after clearing
-                    await refresh(_companyId);
-                } catch (e) {
-                    toast(e.message, true);
-                }
-            });
-        }
+        bindOnce(clearCacheBtn, 'click', async () => {
+            try {
+                const result = await clearCache(_companyId);
+                toast(result.message || 'Cache cleared');
+                await refresh(_companyId);
+            } catch (e) {
+                toast(e.message, true);
+            }
+        });
         
         // Initial load (or rebind to new companyId)
         if (!_initialized) {
