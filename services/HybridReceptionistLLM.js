@@ -723,7 +723,8 @@ RULES:
             // ════════════════════════════════════════════════════════════════
             // ENGINE RESPONSE ASSEMBLY - Inject exact questions from DB
             // ════════════════════════════════════════════════════════════════
-            const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
+            // FIX: 'session' is not a parameter - use callContext instead
+            const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: callContext?.flags || {} });
             const bookingSlots = bookingConfig.slots || [];
             
             let finalReply;
