@@ -109,11 +109,19 @@ class LLMDiscoveryEngine {
             
             // Step 5: Build scenario summaries (compressed for LLM)
             const scenarioSummaries = [];
-            const scenarioById = new Map(
-                enabledScenarios
-                    .filter(s => s && (s.scenarioId || s.id))
-                    .map(s => [String(s.scenarioId || s.id), s])
-            );
+            const scenarioById = new Map();
+            for (const s of enabledScenarios) {
+                if (!s || typeof s !== 'object') continue;
+                const keys = [
+                    s.scenarioId,
+                    s.id,
+                    s._id,
+                    s.scenarioKey
+                ].filter(Boolean).map(v => String(v).trim());
+                for (const k of keys) {
+                    if (!scenarioById.has(k)) scenarioById.set(k, s);
+                }
+            }
             
             const candidates = [];
             
@@ -145,8 +153,41 @@ class LLMDiscoveryEngine {
                 scenarioSummaries.push(this._buildScenarioSummary(c.scenario, c.confidence));
                 if (scenarioSummaries.length >= toolTopN) break;
             }
+
+            // Absolute fallback: if selector produced candidates but all were filtered out,
+            // include the top candidate anyway so the LLM has *some* relevant tool context.
+            if (scenarioSummaries.length === 0 && candidates.length > 0) {
+                const best = candidates
+                    .filter(c => c?.scenario)
+                    .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0];
+                
+                if (best?.scenario) {
+                    scenarioSummaries.push(this._buildScenarioSummary(best.scenario, best.confidence ?? 0));
+                }
+            }
             
             const retrievalTimeMs = Date.now() - startTime;
+            
+            if (scenarioSummaries.length === 0) {
+                const top = (matchResult?.trace?.topCandidates || [])[0] || null;
+                logger.warn('[LLM DISCOVERY] ⚠️ No scenario tools returned (debug)', {
+                    companyId,
+                    trade,
+                    utterancePreview: utterance?.substring(0, 50),
+                    enabledScenarioCount: enabledScenarios.length,
+                    toolTopN,
+                    minToolConfidence,
+                    selectorSelected: matchResult?.scenario?.name || null,
+                    selectorConfidence: matchResult?.confidence ?? null,
+                    selectorReason: matchResult?.trace?.selectionReason || null,
+                    topCandidate: top ? {
+                        scenarioId: top.scenarioId,
+                        name: top.name,
+                        confidence: top.confidence,
+                        score: top.score
+                    } : null
+                });
+            }
             
             logger.info('[LLM DISCOVERY] ✅ Scenarios retrieved', {
                 count: scenarioSummaries.length,
