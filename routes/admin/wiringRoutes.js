@@ -17,6 +17,10 @@ const { buildWiringReport } = require('../../services/wiring/wiringReportBuilder
 const { scanGuardrails } = require('../../services/wiring/guardrailScanner');
 const Company = require('../../models/v2Company');
 const logger = require('../../utils/logger');
+const { authenticateJWT } = require('../../middleware/auth');
+
+// All wiring routes require authentication (admin dashboard)
+router.use(authenticateJWT);
 
 // ============================================================================
 // GET /api/admin/wiring-status/:companyId
