@@ -9071,16 +9071,65 @@ Loading field report...
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
               <span style="color: #f87171;">❌</span> No runtime loading "any active template"
             </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
               <span style="color: #f87171;">❌</span> No browser console scripts for scenario edits
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+              <span style="color: #f87171;">❌</span> No applying patches without dry-run first
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="color: #f87171;">❌</span> No saving templates with failing enforcement minimums
             </div>
           </div>
         </div>
         
-        <!-- Section 4: Quick Actions -->
+        <!-- Section 4: SEP-1 Enforcement Protocol (NEW) -->
+        <div style="background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 12px; color: white; font-size: 14px; font-weight: 700;">
+            <i class="fas fa-shield-alt"></i> 4) SEP-1: Scenario Enforcement Protocol
+          </h4>
+          <p style="margin: 0 0 12px; font-size: 12px; color: rgba(255,255,255,0.8);">
+            Every scenario MUST meet these minimums before deploy:
+          </p>
+          
+          <!-- Minimums Table -->
+          <div style="background: rgba(255,255,255,0.15); border-radius: 6px; padding: 12px; margin-bottom: 12px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; color: white;">
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.2);">
+                <th style="text-align: left; padding: 6px 8px; font-weight: 600;">Field</th>
+                <th style="text-align: center; padding: 6px 8px; font-weight: 600;">Minimum</th>
+                <th style="text-align: center; padding: 6px 8px; font-weight: 600;">Status</th>
+              </tr>
+              <tr><td style="padding: 6px 8px;"><code>triggers</code></td><td style="text-align: center;">≥ 8</td><td style="text-align: center;">🔒</td></tr>
+              <tr><td style="padding: 6px 8px;"><code>negativeUserPhrases</code></td><td style="text-align: center;">≥ 3</td><td style="text-align: center;">🔒</td></tr>
+              <tr><td style="padding: 6px 8px;"><code>quickReplies</code></td><td style="text-align: center;">≥ 7</td><td style="text-align: center;">🔒</td></tr>
+              <tr><td style="padding: 6px 8px;"><code>fullReplies</code></td><td style="text-align: center;">≥ 7</td><td style="text-align: center;">🔒</td></tr>
+              <tr style="border-top: 1px solid rgba(255,255,255,0.2);">
+                <td style="padding: 6px 8px;"><code>scope</code></td><td style="text-align: center;">"GLOBAL"</td><td style="text-align: center;">🔒</td>
+              </tr>
+              <tr><td style="padding: 6px 8px;"><code>ownerCompanyId</code></td><td style="text-align: center;">null</td><td style="text-align: center;">🔒</td></tr>
+            </table>
+          </div>
+          
+          <!-- Execution Flow -->
+          <div style="background: rgba(0,0,0,0.2); border-radius: 6px; padding: 12px;">
+            <p style="margin: 0 0 8px; font-size: 11px; color: #c4b5fd; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+              Required Execution Flow:
+            </p>
+            <div style="font-size: 12px; color: #e9d5ff; font-family: monospace; line-height: 1.8;">
+              <div>1️⃣ <code>node scripts/identify-worst-scenarios.js</code> → baseline</div>
+              <div>2️⃣ <code>node scripts/phaseX-patch-N.js --dry-run</code> → preview</div>
+              <div>3️⃣ <code>node scripts/phaseX-patch-N.js --apply</code> → execute</div>
+              <div>4️⃣ <code>node scripts/phaseX-patch-N.js --dry-run</code> → must show 0 ops</div>
+              <div>5️⃣ <code>identify-worst-scenarios</code> → Below minimums: 0 ✅</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Section 5: Quick Actions -->
         <div style="background: #f8fafc; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
           <h4 style="margin: 0 0 12px; color: #374151; font-size: 14px; font-weight: 700;">
-            <i class="fas fa-rocket"></i> 4) Quick Actions
+            <i class="fas fa-rocket"></i> 5) Quick Actions
           </h4>
           <div style="display: flex; flex-wrap: wrap; gap: 10px;">
             <button onclick="closeScenarioOpsModal(); switchToDataConfigSubtab('scenarios');"
@@ -9102,13 +9151,13 @@ Loading field report...
           </div>
         </div>
         
-        <!-- Section 5: Copy Directive -->
+        <!-- Section 6: Copy Directive -->
         <div style="background: #fef3c7; border: 2px solid #fcd34d; border-radius: 8px; padding: 16px;">
           <h4 style="margin: 0 0 12px; color: #92400e; font-size: 14px; font-weight: 700;">
-            <i class="fas fa-clipboard"></i> 5) AI Coder Directive (Copy & Paste)
+            <i class="fas fa-clipboard"></i> 6) AI Coder Directive (Copy & Paste)
           </h4>
-          <div id="scenario-ops-directive" style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; padding: 12px; font-size: 12px; color: #78350f; font-family: monospace; line-height: 1.6; margin-bottom: 12px;">
-DO NOT add scenarios to company docs. Scenarios are global and live only in GlobalInstantResponseTemplate categories[].scenarios[]. Use Export JSON to get real scenarioIds/categoryIds. Build Patch JSON using real IDs only. Apply through the Global Template Patch API (POST /api/admin/global-templates/:templateId/scenarios/patch) with dryRun:true first. Verify in Scenario Browser RAW scope=GLOBAL ownerCompanyId=null.
+          <div id="scenario-ops-directive" style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; padding: 12px; font-size: 11px; color: #78350f; font-family: monospace; line-height: 1.6; margin-bottom: 12px;">
+All scenario changes MUST follow SEP-1 (Scenario Enforcement Protocol). Minimums: triggers≥8, negatives≥3, quickReplies≥7, fullReplies≥7. Required flow: dry-run → apply → dry-run (0 ops) → verify. Scenarios are GLOBAL only in GlobalInstantResponseTemplate categories[].scenarios[]. Use Export JSON for real IDs. No guessing. No company docs. Verify scope=GLOBAL ownerCompanyId=null. Run identify-worst-scenarios.js → Below minimums must be 0.
           </div>
           <button onclick="copyScenarioOpsDirective()"
                   style="padding: 10px 20px; background: #f59e0b; color: #1e293b; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">
