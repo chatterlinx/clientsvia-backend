@@ -1308,9 +1308,11 @@ ${separator}`;
     
     /**
      * Open the Wiring Tab in the Control Plane
+     * CRITICAL: Must close modal BEFORE navigation or user sees nothing change
      */
     openWiringTab() {
-        const modal = document.getElementById('ai-test-modal');
+        // FIXED: Correct modal ID is 'ai-test-console-modal', not 'ai-test-modal'
+        const modal = document.getElementById('ai-test-console-modal');
         if (modal) modal.remove();
         
         // Switch to Wiring tab in Control Plane

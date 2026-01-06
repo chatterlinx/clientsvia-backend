@@ -532,6 +532,38 @@ const RUNTIME_READERS_MAP = {
     },
 
     // =========================================================================
+    // BUSINESS HOURS (Canonical) - After-hours truth used by multiple subsystems
+    // =========================================================================
+    'frontDesk.businessHours': {
+        readers: [
+            {
+                file: 'services/hours/AfterHoursEvaluator.js',
+                function: 'evaluateAfterHours',
+                line: 1,
+                description: 'Single source of truth: determines after-hours based on company.aiAgentSettings.businessHours',
+                required: false
+            },
+            {
+                file: 'services/DynamicFlowEngine.js',
+                function: 'evaluateTrigger',
+                line: 520,
+                description: 'Dynamic Flow trigger type after_hours delegates to AfterHoursEvaluator',
+                required: false
+            },
+            {
+                file: 'services/AfterHoursCallTurnHandler.js',
+                function: 'handleTurn',
+                line: 1,
+                description: 'After-hours call handler uses AfterHoursEvaluator (no drift)',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.businessHours',
+        scope: 'company',
+        defaultValue: null
+    },
+
+    // =========================================================================
     // INFRASTRUCTURE - REDIS CACHE
     // =========================================================================
     'infra.scenarioPoolCache': {

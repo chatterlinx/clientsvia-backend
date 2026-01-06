@@ -211,6 +211,16 @@ function buildDataMap(companyDoc) {
         });
     }
     
+    // =========================================================================
+    // CRITICAL FIX: Add templateReferences directly to dataMap
+    // WiringDiagnosticService.getQuickDiagnostics() expects this at:
+    //   wiringReport.dataMap.templateReferences
+    // Without this, diagnostics will always show "No Templates Linked" even 
+    // when templates ARE linked via aiAgentSettings.templateReferences
+    // =========================================================================
+    const templateRefs = companyDoc?.aiAgentSettings?.templateReferences || [];
+    dataMap.templateReferences = templateRefs.filter(ref => ref.enabled !== false);
+    
     return dataMap;
 }
 

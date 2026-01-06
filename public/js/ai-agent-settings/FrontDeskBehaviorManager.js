@@ -791,6 +791,7 @@ class FrontDeskBehaviorManager {
                 <div id="fdb-tabs" style="display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap;">
                     ${this.renderTab('personality', '🎭 Personality', true)}
                     ${this.renderTab('discovery', '🧠 Discovery & Consent')}
+                    ${this.renderTab('hours', '🕒 Hours & Availability')}
                     ${this.renderTab('vocabulary', '📝 Vocabulary')}
                     ${this.renderTab('booking', '📅 Booking Prompts')}
                     ${this.renderTab('flows', '🧠 Dynamic Flows')}
@@ -1002,6 +1003,92 @@ class FrontDeskBehaviorManager {
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // ============================================================================
+    // BUSINESS HOURS - Canonical company truth used by:
+    // - AfterHoursEvaluator (single source of truth)
+    // - DynamicFlowEngine trigger: after_hours
+    //
+    // Stored at: aiAgentSettings.businessHours
+    // ============================================================================
+    renderHoursTab() {
+        const bh = (this.config.businessHours && typeof this.config.businessHours === 'object')
+            ? this.config.businessHours
+            : {};
+
+        const tz = (bh.timezone || 'America/New_York');
+        const weekly = (bh.weekly && typeof bh.weekly === 'object') ? bh.weekly : {};
+        const holidays = Array.isArray(bh.holidays) ? bh.holidays : [];
+
+        const days = [
+            { key: 'mon', label: 'Mon' },
+            { key: 'tue', label: 'Tue' },
+            { key: 'wed', label: 'Wed' },
+            { key: 'thu', label: 'Thu' },
+            { key: 'fri', label: 'Fri' },
+            { key: 'sat', label: 'Sat' },
+            { key: 'sun', label: 'Sun' }
+        ];
+
+        const renderDayRow = (d) => {
+            const dayVal = (d.key in weekly) ? weekly[d.key] : null;
+            const closed = dayVal === null;
+            const open = closed ? '' : (dayVal?.open || '');
+            const close = closed ? '' : (dayVal?.close || '');
+            const disabled = closed ? 'disabled' : '';
+
+            return `
+                <div class="bh-row" style="display:flex; align-items:center; gap:10px; padding:10px; border:1px solid #30363d; border-radius:8px; background:#0d1117;">
+                    <div style="width:48px; color:#c9d1d9; font-weight:600;">${d.label}</div>
+                    <input id="bh-${d.key}-open" ${disabled} placeholder="08:00" value="${open}"
+                        style="width:120px; padding:10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#c9d1d9;">
+                    <input id="bh-${d.key}-close" ${disabled} placeholder="17:00" value="${close}"
+                        style="width:120px; padding:10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#c9d1d9;">
+                    <label style="display:flex; align-items:center; gap:8px; margin-left:auto; color:#8b949e; cursor:pointer;">
+                        <input id="bh-${d.key}-closed" type="checkbox" ${closed ? 'checked' : ''} style="accent-color:#58a6ff;">
+                        Closed
+                    </label>
+                </div>
+            `;
+        };
+
+        return `
+            <div data-section-id="hours-availability" data-field-id="businessHours"
+                 style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px;">
+                <h3 style="margin:0 0 10px 0; color:#58a6ff;">🕒 Business Hours</h3>
+                <p style="color:#8b949e; margin:0 0 18px 0; font-size:0.875rem;">
+                    Canonical hours used for after-hours routing (Dynamic Flow trigger <code style="color:#c9d1d9;">after_hours</code>).
+                    Stored at <code style="color:#c9d1d9;">aiAgentSettings.businessHours</code>.
+                </p>
+
+                <div style="margin-bottom:16px;">
+                    <label style="display:block; margin-bottom:6px; color:#c9d1d9; font-weight:600;">Timezone</label>
+                    <input id="bh-timezone" value="${tz}" placeholder="America/New_York"
+                        style="width: 320px; padding: 10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#c9d1d9;">
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
+                    ${days.map(renderDayRow).join('')}
+                </div>
+
+                <div style="margin-bottom:16px;">
+                    <label style="display:block; margin-bottom:6px; color:#c9d1d9; font-weight:600;">
+                        Holidays (YYYY-MM-DD, comma-separated)
+                    </label>
+                    <input id="bh-holidays" value="${holidays.join(', ')}" placeholder="2026-01-01, 2026-12-25"
+                        style="width: 100%; padding: 10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#c9d1d9;">
+                </div>
+
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <button id="bh-save-btn" type="button"
+                        style="padding:10px 16px; background:#238636; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;">
+                        Save Hours
+                    </button>
+                    <span id="bh-status" style="color:#8b949e; font-size:0.875rem;"></span>
                 </div>
             </div>
         `;
@@ -7100,6 +7187,7 @@ Sean → Shawn, Shaun`;
         const tabToSectionId = {
             'personality': 'personality',
             'discovery': 'discovery-consent',
+            'hours': 'hours-availability',
             'vocabulary': 'vocabulary',
             'booking': 'booking-prompts',
             'flows': 'dynamic-flows',
@@ -7119,6 +7207,7 @@ Sean → Shawn, Shaun`;
         switch (tabId) {
             case 'personality': content.innerHTML = this.renderPersonalityTab(); break;
             case 'discovery': content.innerHTML = this.renderDiscoveryConsentTab(); break;
+            case 'hours': content.innerHTML = this.renderHoursTab(); break;
             case 'vocabulary': content.innerHTML = this.renderVocabularyTab(); break;
             case 'booking': content.innerHTML = this.renderBookingPromptsTab(); break;
             case 'flows': 
@@ -7155,6 +7244,28 @@ Sean → Shawn, Shaun`;
     attachTabSpecificListeners(tabId, content) {
         // Only attach listeners for the current tab's content
         switch (tabId) {
+            case 'hours':
+                content.querySelectorAll('input[id^="bh-"][type="checkbox"]').forEach(cb => {
+                    cb.addEventListener('change', () => {
+                        const id = cb.id; // bh-mon-closed
+                        const day = id.split('-')[1];
+                        const openEl = content.querySelector(`#bh-${day}-open`);
+                        const closeEl = content.querySelector(`#bh-${day}-close`);
+                        if (!openEl || !closeEl) return;
+                        const closed = cb.checked === true;
+                        openEl.disabled = closed;
+                        closeEl.disabled = closed;
+                        if (closed) { openEl.value = ''; closeEl.value = ''; }
+                    });
+                });
+                content.querySelector('#bh-save-btn')?.addEventListener('click', async () => {
+                    try {
+                        await this.saveBusinessHoursFromUI(content);
+                    } catch (e) {
+                        // saveBusinessHoursFromUI handles UI messaging
+                    }
+                });
+                break;
             case 'booking':
                 // Booking slot drag handles, delete buttons, etc.
                 content.querySelectorAll('.booking-slot-delete')?.forEach(btn => {
@@ -7182,6 +7293,70 @@ Sean → Shawn, Shaun`;
                 content.querySelector('#fdb-test-btn')?.addEventListener('click', () => this.testPhrase(content));
                 break;
             // Other tabs don't need special listeners or use delegated events
+        }
+    }
+
+    // Collect business hours from the Hours tab DOM and persist via existing admin endpoint.
+    async saveBusinessHoursFromUI(content) {
+        const statusEl = content.querySelector('#bh-status');
+        const setStatus = (text, color = '#8b949e') => {
+            if (!statusEl) return;
+            statusEl.textContent = text;
+            statusEl.style.color = color;
+        };
+
+        try {
+            const tz = (content.querySelector('#bh-timezone')?.value || '').trim() || 'America/New_York';
+            const holidaysRaw = (content.querySelector('#bh-holidays')?.value || '').trim();
+            const holidays = holidaysRaw
+                ? holidaysRaw.split(',').map(s => s.trim()).filter(Boolean)
+                : [];
+
+            const weekly = {};
+            const days = ['mon','tue','wed','thu','fri','sat','sun'];
+            for (const d of days) {
+                const closed = content.querySelector(`#bh-${d}-closed`)?.checked === true;
+                if (closed) {
+                    weekly[d] = null;
+                    continue;
+                }
+                const open = (content.querySelector(`#bh-${d}-open`)?.value || '').trim();
+                const close = (content.querySelector(`#bh-${d}-close`)?.value || '').trim();
+                weekly[d] = { open, close };
+            }
+
+            const businessHours = { timezone: tz, weekly, holidays };
+
+            setStatus('Saving...', '#8b949e');
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+            const resp = await fetch(`/api/admin/front-desk-behavior/${this.companyId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ businessHours })
+            });
+
+            const text = await resp.text();
+            let json = null;
+            try { json = JSON.parse(text); } catch (_) {}
+
+            if (!resp.ok) {
+                const msg = json?.error || json?.message || text || `HTTP ${resp.status}`;
+                setStatus(`Error: ${msg}`, '#f85149');
+                throw new Error(msg);
+            }
+
+            // Update local config truth so runtime + UI stay consistent without reload.
+            this.config.businessHours = businessHours;
+            setStatus('Saved ✅', '#3fb950');
+            this.showNotification('✅ Business Hours saved!', 'success');
+            return true;
+        } catch (e) {
+            console.error('[FRONT DESK BEHAVIOR] ❌ BusinessHours save failed:', e);
+            this.showNotification(`❌ Business Hours save failed: ${e.message}`, 'error');
+            throw e;
         }
     }
 

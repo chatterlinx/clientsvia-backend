@@ -355,9 +355,11 @@ const TIER_MAX = {
             priority: 3,
             payoff: 'Faster FAQ responses, lower LLM costs',
             validator: (val) => val && (val.enabled === true || (Array.isArray(val.items) && val.items.length > 0)),
-            fixInstructions: 'Add FAQ content',
-            nav: { tab: 'data-config', section: 'cheat-sheets', field: 'cheatSheets' },
-            dbPath: 'aiAgentSettings.dataConfig.cheatSheets',
+            fixInstructions: 'Add FAQ content via Cheat Sheet Editor',
+            // NOTE: Cheat Sheets has its own editor page at frontline-intel-editor.html
+            // Nav points to templates section as fallback until cheat-sheets subtab is built
+            nav: { tab: 'data-config', section: 'template-references', field: 'templateReferences' },
+            dbPath: 'CheatSheetVersion collection (companyId filter)',
             recommendedValue: {
                 enabled: true,
                 items: [

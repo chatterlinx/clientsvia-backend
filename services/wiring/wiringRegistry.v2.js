@@ -241,6 +241,31 @@ const wiringRegistryV2 = {
                         }
                     ]
                 },
+
+                // BUSINESS HOURS (CANONICAL)
+                {
+                    id: 'frontDesk.hoursAvailability',
+                    label: 'Hours & Availability',
+                    description: 'Canonical business hours used for after-hours routing',
+                    ui: {
+                        sectionId: 'hours-availability',
+                        path: 'Front Desk → Hours & Availability'
+                    },
+                    fields: [
+                        {
+                            id: 'frontDesk.businessHours',
+                            label: 'Business Hours',
+                            ui: { inputId: 'businessHours', path: 'Front Desk → Hours & Availability → Business Hours' },
+                            db: { path: 'aiAgentSettings.businessHours' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.businessHours'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: null,
+                            notes: 'Used by AfterHoursEvaluator and DynamicFlowEngine trigger after_hours'
+                        }
+                    ]
+                },
                 
                 // BOOKING PROMPTS
                 {
@@ -579,16 +604,18 @@ const wiringRegistryV2 = {
                 },
                 
                 // CHEAT SHEETS
+                // NOTE: CheatSheets has its own editor at frontline-intel-editor.html
+                // Nav targets templates section as fallback - cheatSheets UI not in Data & Config yet
                 {
                     id: 'dataConfig.cheatSheets',
                     label: 'Cheat Sheets',
-                    description: 'FAQ knowledge base',
-                    ui: { sectionId: 'cheatSheets', path: 'Data & Config → Cheat Sheets' },
+                    description: 'FAQ knowledge base (edit via Frontline Intel Editor)',
+                    ui: { sectionId: 'templateReferences', path: 'Data & Config → Templates' },
                     fields: [
                         {
                             id: 'dataConfig.cheatSheets',
                             label: 'Cheat Sheet Config',
-                            ui: { inputId: 'cheatSheets', path: 'Data & Config → Cheat Sheets → Config' },
+                            ui: { inputId: 'templateReferences', path: 'Data & Config → Templates (Cheat Sheet Editor separate)' },
                             db: { collection: 'cheatsheetversions', path: '(companyId filter)' },
                             runtime: RUNTIME_READERS_MAP['dataConfig.cheatSheets'],
                             scope: 'company',
