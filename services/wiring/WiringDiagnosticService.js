@@ -445,7 +445,7 @@ async function getQuickDiagnostics(companyId) {
     
     try {
         // Use the V2 wiring generator - SINGLE SOURCE OF TRUTH
-        const { generateWiringReport } = require('./WiringReportGenerator.v2');
+        const { generateWiringReport } = require('./wiringReportGenerator.v2');
         const wiringReport = await generateWiringReport(companyId);
         
         // Extract evidence from wiring report
