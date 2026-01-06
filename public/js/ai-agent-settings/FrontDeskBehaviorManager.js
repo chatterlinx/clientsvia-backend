@@ -5430,6 +5430,73 @@ Sean → Shawn, Shaun`;
             const flowData = this.buildFlowPayloadFromModal(modal, isNew, { forCopy: false });
             if (!flowData) return;
             
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V1 ACTION COMPLETENESS VALIDATION
+            // Enabled flows MUST have all 4 action types for Wiring to consider them valid:
+            // - set_flag, append_ledger, ack_once, transition_mode
+            // This prevents the "enabled but invalid" state that causes Wiring penalties
+            // ═══════════════════════════════════════════════════════════════════════════
+            if (flowData.enabled) {
+                const actionTypes = (flowData.actions || []).map(a => a.type);
+                const REQUIRED_ACTIONS = ['set_flag', 'append_ledger', 'ack_once', 'transition_mode'];
+                const missingActions = REQUIRED_ACTIONS.filter(t => !actionTypes.includes(t));
+                
+                if (missingActions.length > 0) {
+                    // Auto-inject defaults for missing actions
+                    console.log('[FLOW EDITOR] Auto-injecting missing actions:', missingActions);
+                    
+                    const flowKey = flowData.flowKey || flowData.name?.toLowerCase().replace(/\s+/g, '_');
+                    const flowName = flowData.name || 'Flow';
+                    
+                    for (const actionType of missingActions) {
+                        if (actionType === 'append_ledger') {
+                            flowData.actions.push({
+                                timing: 'on_activate',
+                                type: 'append_ledger',
+                                config: {
+                                    type: 'EVENT',
+                                    key: flowKey.toUpperCase().replace(/-/g, '_'),
+                                    note: `${flowName} triggered`
+                                },
+                                description: 'Auto-injected ledger entry'
+                            });
+                        } else if (actionType === 'transition_mode') {
+                            flowData.actions.push({
+                                timing: 'on_activate',
+                                type: 'transition_mode',
+                                config: {
+                                    targetMode: 'BOOKING',
+                                    setBookingLocked: true
+                                },
+                                description: 'Auto-injected mode transition'
+                            });
+                        } else if (actionType === 'set_flag') {
+                            flowData.actions.push({
+                                timing: 'on_activate',
+                                type: 'set_flag',
+                                config: {
+                                    flagName: `dynamicFlow.${flowKey}`,
+                                    flagValue: true,
+                                    alsoWriteToCallLedgerFacts: true
+                                },
+                                description: 'Auto-injected flag'
+                            });
+                        } else if (actionType === 'ack_once') {
+                            flowData.actions.push({
+                                timing: 'on_activate',
+                                type: 'ack_once',
+                                config: {
+                                    text: '' // Intentionally empty - will use AI-generated acknowledgment
+                                },
+                                description: 'Auto-injected acknowledgment placeholder'
+                            });
+                        }
+                    }
+                    
+                    this.showNotification(`Auto-added ${missingActions.length} required action(s): ${missingActions.join(', ')}`, 'info');
+                }
+            }
+            
             // Save
             try {
                 const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
