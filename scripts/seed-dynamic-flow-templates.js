@@ -623,11 +623,14 @@ async function seedTemplates() {
             });
             
             if (existing) {
-                // Update existing template
+                // Update existing template - use $set to avoid conflict with $inc
+                const updateDoc = { ...template };
+                delete updateDoc.metadata; // Remove metadata from $set to avoid conflict
+                
                 await DynamicFlow.updateOne(
                     { _id: existing._id },
                     { 
-                        ...template,
+                        $set: updateDoc,
                         $inc: { 'metadata.version': 1 }
                     }
                 );
