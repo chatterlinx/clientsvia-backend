@@ -1560,3 +1560,373 @@
     color: #6b7280;
 }
 
+/* ============================================================================
+   TIER SYSTEM - Prescriptive Build Guide
+   ============================================================================ */
+
+.w-tier-panel {
+    margin-bottom: 20px;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #0a0a0c 0%, #0f0f12 100%);
+    border: 1px solid #2a2a2e;
+    border-radius: 16px;
+}
+
+.w-tier-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.w-tier-current {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 24px;
+    border-radius: 12px;
+    border: 2px solid;
+}
+
+.w-tier-icon {
+    font-size: 40px;
+}
+
+.w-tier-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.w-tier-label {
+    font-size: 12px;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+}
+
+.w-tier-name {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+}
+
+.w-tier-score {
+    text-align: center;
+    padding: 16px 24px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    border: 1px solid #2a2a2e;
+}
+
+.w-tier-score-value {
+    font-size: 36px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.w-tier-score-label {
+    font-size: 11px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 4px;
+}
+
+.w-tier-progress-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+@media (max-width: 900px) {
+    .w-tier-progress-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .w-tier-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+.w-tier-progress-card {
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid #2a2a2e;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+}
+
+.w-tier-progress-card.complete {
+    border-color: #22c55e;
+    background: rgba(34, 197, 94, 0.05);
+}
+
+.w-tier-progress-card.locked {
+    opacity: 0.5;
+}
+
+.w-tier-progress-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.w-tier-progress-icon {
+    font-size: 20px;
+}
+
+.w-tier-progress-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.w-tier-complete-badge {
+    margin-left: auto;
+    font-size: 14px;
+    color: #22c55e;
+    font-weight: 800;
+}
+
+.w-tier-locked-badge {
+    margin-left: auto;
+    font-size: 12px;
+}
+
+.w-tier-progress-desc {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-bottom: 12px;
+}
+
+.w-tier-progress-bar {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.w-tier-progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.w-tier-progress-stats {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: #6b7280;
+}
+
+.w-tier-missing {
+    color: #f59e0b;
+    font-weight: 600;
+}
+
+/* ============================================================================
+   NEXT BEST ACTIONS - Prioritized Fixes with Payoff
+   ============================================================================ */
+
+.w-next-actions-panel {
+    margin-bottom: 20px;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #0a0a0c 0%, #0f0f12 100%);
+    border: 1px solid #2a2a2e;
+    border-radius: 16px;
+}
+
+.w-next-actions-header {
+    margin-bottom: 16px;
+}
+
+.w-next-actions-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.w-next-actions-subtitle {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 4px;
+}
+
+.w-next-actions-empty {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.w-next-actions-success-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+}
+
+.w-next-actions-success-text {
+    font-size: 20px;
+    font-weight: 800;
+    color: #22c55e;
+    margin-bottom: 8px;
+}
+
+.w-next-actions-success-sub {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.w-next-actions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.w-next-action-card {
+    display: flex;
+    gap: 16px;
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid #2a2a2e;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.w-next-action-card:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: #3a3a3e;
+    transform: translateX(4px);
+}
+
+.w-next-action-number {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 800;
+    color: #fff;
+}
+
+.w-next-action-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.w-next-action-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.w-next-action-label {
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.w-next-action-tier {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.w-next-action-tier.tier-MVA {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.w-next-action-tier.tier-PRO {
+    background: rgba(34, 197, 94, 0.2);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.w-next-action-tier.tier-MAX {
+    background: rgba(139, 92, 246, 0.2);
+    color: #a78bfa;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.w-next-action-critical {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.w-next-action-purpose {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-bottom: 8px;
+}
+
+.w-next-action-failure {
+    font-size: 11px;
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.08);
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.w-next-action-payoff {
+    font-size: 12px;
+    color: #22c55e;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.w-next-action-fix {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.08);
+    padding: 10px 12px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+}
+
+.w-next-action-fix-icon {
+    flex-shrink: 0;
+}
+
+.w-next-action-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 11px;
+}
+
+.w-next-action-impact {
+    font-weight: 600;
+}
+
+.w-next-action-status {
+    color: #6b7280;
+}
+

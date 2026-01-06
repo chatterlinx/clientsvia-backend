@@ -20,6 +20,7 @@
 
 const { wiringRegistryV2, getAllFields, getCriticalFields, getKillSwitchFields, VALIDATORS } = require('./wiringRegistry.v2');
 const { RUNTIME_READERS_MAP, hasRuntimeReaders, analyzeCoverage } = require('./runtimeReaders.map');
+const { evaluateTiers, getTierDefinitions } = require('./wiringTiers');
 const Company = require('../../models/v2Company');
 const logger = require('../../utils/logger');
 const { seedCompanyBaseFields } = require('./companySeeder');
@@ -991,12 +992,19 @@ async function generateWiringReport({ companyId, tradeKey = null, environment = 
             ...coverage,
             uiOnlyPaths: coverage.uiOnlyPaths.slice(0, 20), // Limit for readability
             deadReadPaths: coverage.deadReadPaths.slice(0, 20)
-        }
+        },
+        
+        // TIER SYSTEM - Prescriptive Build Guide
+        tiers: evaluateTiers(health.fields),
+        tierDefinitions: getTierDefinitions()
     };
     
     logger.info('[WIRING REPORT V2] Report generated', {
         companyId,
         health: health.overall,
+        currentTier: report.tiers.currentTier,
+        tierScores: report.tiers.tierScores,
+        nextActionsCount: report.tiers.nextActions.length,
         generationTimeMs: report.meta.generationTimeMs
     });
     

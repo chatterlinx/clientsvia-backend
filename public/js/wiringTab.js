@@ -1628,6 +1628,160 @@
     }
     
     // ========================================================================
+    // TIER SYSTEM - Prescriptive Build Guide (not passive report)
+    // ========================================================================
+    
+    function renderTierProgress() {
+        const el = $('#wiringTierProgress');
+        if (!el || !_report) return;
+        
+        if (!isV2Report(_report) || !_report.tiers) {
+            el.innerHTML = '';
+            return;
+        }
+        
+        const tiers = _report.tiers;
+        const tierDefs = _report.tierDefinitions || [];
+        const byTier = tiers.byTier || {};
+        
+        // Current tier badge
+        const currentTier = tiers.displayTier || { id: 'NONE', name: 'Not Ready', icon: '⚪', color: '#6b7280' };
+        
+        el.innerHTML = `
+          <div class="w-tier-panel">
+            <div class="w-tier-header">
+              <div class="w-tier-current" style="background: ${currentTier.color}20; border-color: ${currentTier.color};">
+                <div class="w-tier-icon">${currentTier.icon}</div>
+                <div class="w-tier-info">
+                  <div class="w-tier-label">Current Performance Tier</div>
+                  <div class="w-tier-name" style="color: ${currentTier.color};">${esc(currentTier.name)}</div>
+                </div>
+              </div>
+              <div class="w-tier-score">
+                <div class="w-tier-score-value">${tiers.overallScore}%</div>
+                <div class="w-tier-score-label">Overall Score</div>
+              </div>
+            </div>
+            
+            <!-- Tier Progress Bars -->
+            <div class="w-tier-progress-grid">
+              ${tierDefs.map(def => {
+                const tierData = byTier[def.id] || {};
+                const percent = tierData.percent || 0;
+                const isComplete = tierData.isComplete;
+                const isUnlocked = tierData.isUnlocked;
+                const missingCount = (tierData.missing || []).length;
+                
+                return `
+                  <div class="w-tier-progress-card ${isComplete ? 'complete' : ''} ${!isUnlocked ? 'locked' : ''}">
+                    <div class="w-tier-progress-header">
+                      <span class="w-tier-progress-icon">${def.icon}</span>
+                      <span class="w-tier-progress-name">${esc(def.name)}</span>
+                      ${isComplete ? '<span class="w-tier-complete-badge">✓</span>' : ''}
+                      ${!isUnlocked ? '<span class="w-tier-locked-badge">🔒</span>' : ''}
+                    </div>
+                    <div class="w-tier-progress-desc">${esc(def.description)}</div>
+                    <div class="w-tier-progress-bar">
+                      <div class="w-tier-progress-fill" style="width: ${percent}%; background: ${def.color};"></div>
+                    </div>
+                    <div class="w-tier-progress-stats">
+                      <span>${tierData.complete || 0}/${tierData.total || 0} requirements</span>
+                      ${missingCount > 0 ? `<span class="w-tier-missing">${missingCount} missing</span>` : ''}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+    }
+    
+    function renderNextActions() {
+        const el = $('#wiringNextActions');
+        if (!el || !_report) return;
+        
+        if (!isV2Report(_report) || !_report.tiers) {
+            el.innerHTML = '';
+            return;
+        }
+        
+        const nextActions = _report.tiers.nextActions || [];
+        
+        if (nextActions.length === 0) {
+            el.innerHTML = `
+              <div class="w-next-actions-panel">
+                <div class="w-next-actions-header">
+                  <div class="w-next-actions-title">🎯 Next Best Actions</div>
+                </div>
+                <div class="w-next-actions-empty">
+                  <div class="w-next-actions-success-icon">🏆</div>
+                  <div class="w-next-actions-success-text">MAX Performance Achieved!</div>
+                  <div class="w-next-actions-success-sub">All tiers complete. Your AI agent is fully wired.</div>
+                </div>
+              </div>
+            `;
+            return;
+        }
+        
+        const impactColors = {
+            reliability: '#ef4444',
+            safety: '#f59e0b',
+            conversion: '#22c55e',
+            speed: '#3b82f6'
+        };
+        
+        const impactLabels = {
+            reliability: '⚡ Reliability',
+            safety: '🛡️ Safety',
+            conversion: '📈 Conversion',
+            speed: '🚀 Speed'
+        };
+        
+        el.innerHTML = `
+          <div class="w-next-actions-panel">
+            <div class="w-next-actions-header">
+              <div class="w-next-actions-title">🎯 Next Best Actions</div>
+              <div class="w-next-actions-subtitle">Fix these to reach MAX performance</div>
+            </div>
+            <div class="w-next-actions-list">
+              ${nextActions.map((action, idx) => `
+                <div class="w-next-action-card" data-focus="${esc(action.fieldId)}">
+                  <div class="w-next-action-number">${idx + 1}</div>
+                  <div class="w-next-action-content">
+                    <div class="w-next-action-top">
+                      <span class="w-next-action-label">${esc(action.label)}</span>
+                      <span class="w-next-action-tier tier-${action.tier}">${action.tier}</span>
+                      ${action.critical ? '<span class="w-next-action-critical">CRITICAL</span>' : ''}
+                    </div>
+                    <div class="w-next-action-purpose">${esc(action.purpose)}</div>
+                    <div class="w-next-action-failure">
+                      <strong>If missing:</strong> ${esc(action.failureMode)}
+                    </div>
+                    ${action.payoff ? `<div class="w-next-action-payoff">💰 ${esc(action.payoff)}</div>` : ''}
+                    <div class="w-next-action-fix">
+                      <span class="w-next-action-fix-icon">💡</span>
+                      <span>${esc(action.fixInstructions)}</span>
+                    </div>
+                    <div class="w-next-action-meta">
+                      <span class="w-next-action-impact" style="color: ${impactColors[action.impact] || '#666'};">
+                        ${impactLabels[action.impact] || action.impact}
+                      </span>
+                      ${action.currentStatus ? `<span class="w-next-action-status">Status: ${action.currentStatus}</span>` : ''}
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        
+        // Bind click handlers
+        $$('.w-next-action-card[data-focus]', el).forEach(card => {
+            card.addEventListener('click', () => selectNode(card.dataset.focus));
+        });
+    }
+    
+    // ========================================================================
     // MAIN RENDER
     // ========================================================================
     
@@ -1642,16 +1796,20 @@
             }
         }
         
-        console.log('[WiringTab] 🎨 renderAll() - Salesforce-Grade Dashboard');
+        console.log('[WiringTab] 🎨 renderAll() - Prescriptive Build Guide');
         
-        // === EXECUTIVE LAYER (First thing you see) ===
+        // === TIER SYSTEM (First thing you see - "What tier am I? What's next?") ===
+        renderTierProgress();         // MVA → PRO → MAX progress
+        renderNextActions();          // Top 5 prioritized fixes with payoff
+        
+        // === EXECUTIVE LAYER ===
         renderExecutiveBanner();      // Big status banner
         renderScoreboard();           // Quick metrics tiles
         
         // === OPERATIONAL LAYER (What needs attention) ===
         renderKillSwitches();         // Kill switch status
         renderGapAnalysis();          // Registry vs DB vs Runtime gaps
-        renderActionQueue();          // Prioritized fixes
+        renderActionQueue();          // Prioritized fixes (legacy, now superseded by NextActions)
         
         // === DETAIL LAYER (Deep dive) ===
         renderSpecialChecks();        // Source-of-truth checks
