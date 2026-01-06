@@ -683,6 +683,28 @@
       display: block;
     }
     
+    /* ═══════════════════════════════════════════════════════════════════════════
+       DEEP-LINK HIGHLIGHTING - For wiring "Next Best Actions" navigation
+       ═══════════════════════════════════════════════════════════════════════════ */
+    .cp-highlight {
+      outline: 3px solid #3b82f6 !important;
+      box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.2) !important;
+      border-radius: 12px !important;
+      transition: all 0.3s ease;
+      animation: cp-pulse 1.5s ease-in-out;
+    }
+    
+    @keyframes cp-pulse {
+      0%, 100% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.2); }
+      50% { box-shadow: 0 0 0 16px rgba(59, 130, 246, 0.1); }
+    }
+    
+    .cp-highlight-section {
+      background: rgba(59, 130, 246, 0.05) !important;
+      border: 2px solid rgba(59, 130, 246, 0.3) !important;
+      transition: all 0.3s ease;
+    }
+    
     .card {
       background: var(--bg-card);
       border-radius: 16px;
@@ -2505,6 +2527,134 @@
         }
       }
     }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CONTROL PLANE NAVIGATOR - Universal deep-link navigation
+    // Used by Wiring Tab "Next Best Actions" to navigate to any tab/section/field
+    // ═══════════════════════════════════════════════════════════════════════════
+    window.ControlPlaneNav = {
+      /**
+       * Navigate to a specific tab, section, and/or field
+       * @param {Object} opts - { tab, section, field }
+       * @param {string} opts.tab - Tab ID (e.g., 'front-desk', 'dynamic-flow')
+       * @param {string} opts.section - Section ID within the tab
+       * @param {string} opts.field - Field ID to highlight
+       */
+      async go({ tab, section, field }) {
+        console.log('🎯 [ControlPlaneNav] Navigating:', { tab, section, field });
+        
+        // 1) Update URL params (makes link shareable)
+        const url = new URL(window.location.href);
+        if (tab) url.searchParams.set('tab', tab);
+        if (section) url.searchParams.set('section', section);
+        if (field) url.searchParams.set('field', field);
+        history.replaceState({}, '', url.toString());
+        
+        // 2) Switch to target tab
+        if (tab && typeof switchTab === 'function') {
+          switchTab(tab);
+          // Wait for tab initialization
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        
+        // 3) Handle Front Desk internal tabs (they have sub-tabs)
+        if (tab === 'front-desk' && section && window.frontDeskManager) {
+          const container = document.getElementById('front-desk-container');
+          if (container) {
+            // Map section IDs to Front Desk internal tab names
+            const sectionToTab = {
+              'personality': 'basic',
+              'greetings': 'greetings',
+              'discoveryConsent': 'discovery-consent',
+              'discovery-consent': 'discovery-consent',
+              'bookingPrompts': 'booking-prompts',
+              'booking-prompts': 'booking-prompts',
+              'fastPath': 'fast-path',
+              'fast-path': 'fast-path',
+              'vocabulary': 'vocabulary',
+              'escalation': 'escalation',
+              'emotions': 'emotions',
+              'frustration': 'frustration',
+              'forbidden': 'forbidden',
+              'loops': 'loops',
+              'fallbacks': 'fallbacks',
+              'dynamic-flows': 'dynamic-flows'
+            };
+            
+            const internalTab = sectionToTab[section] || section;
+            console.log('🎯 [ControlPlaneNav] Switching Front Desk internal tab:', internalTab);
+            
+            if (typeof window.frontDeskManager.switchTab === 'function') {
+              window.frontDeskManager.switchTab(internalTab, container);
+              await new Promise(resolve => setTimeout(resolve, 150));
+            }
+          }
+        }
+        
+        // 4) Scroll to section and highlight
+        setTimeout(() => {
+          // Try multiple selector strategies for section
+          let sectionEl = null;
+          if (section) {
+            sectionEl = document.querySelector(`[data-section-id="${section}"]`) 
+                     || document.querySelector(`[data-section="${section}"]`)
+                     || document.getElementById(section)
+                     || document.getElementById(`fdb-${section}`)
+                     || document.querySelector(`#fdb-${section}-section`);
+          }
+          
+          if (sectionEl) {
+            console.log('🎯 [ControlPlaneNav] Found section:', section);
+            sectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            sectionEl.classList.add('cp-highlight-section');
+            setTimeout(() => sectionEl.classList.remove('cp-highlight-section'), 2000);
+          }
+          
+          // 5) Highlight specific field
+          if (field) {
+            setTimeout(() => {
+              const fieldEl = document.querySelector(`[data-field-id="${field}"]`)
+                           || document.querySelector(`[data-field="${field}"]`)
+                           || document.getElementById(field)
+                           || document.getElementById(`fdb-${field}`)
+                           || document.querySelector(`[name="${field}"]`)
+                           || document.querySelector(`#${field}-input`)
+                           || document.querySelector(`#${field}-container`);
+              
+              if (fieldEl) {
+                console.log('🎯 [ControlPlaneNav] Found field:', field);
+                fieldEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                fieldEl.classList.add('cp-highlight');
+                setTimeout(() => fieldEl.classList.remove('cp-highlight'), 2500);
+              } else {
+                console.warn('⚠️ [ControlPlaneNav] Field not found:', field);
+              }
+            }, 200);
+          }
+        }, 300);
+        
+        return true;
+      },
+      
+      /**
+       * Parse URL params and navigate on page load
+       */
+      handleUrlParams() {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        const section = params.get('section');
+        const field = params.get('field');
+        
+        if (tab || section || field) {
+          console.log('🎯 [ControlPlaneNav] URL params detected, navigating:', { tab, section, field });
+          // Delay to ensure page is fully loaded
+          setTimeout(() => this.go({ tab, section, field }), 500);
+        }
+      }
+    };
+    
+    // Make switchTab globally accessible for ControlPlaneNav
+    window.switchControlPlaneTab = switchTab;
     
     // ═══════════════════════════════════════════════════════════════════════════
     // TAB INITIALIZATION
@@ -5084,6 +5234,14 @@
       // Auto-initialize Front Desk (default tab)
       if (currentCompanyId) {
         initializeTab('front-desk');
+        
+        // Handle deep-link URL params (tab, section, field)
+        // This must run AFTER front-desk is initialized
+        setTimeout(() => {
+          if (window.ControlPlaneNav) {
+            window.ControlPlaneNav.handleUrlParams();
+          }
+        }, 600);
       } else {
         document.getElementById('front-desk-container').innerHTML = `
           <div style="padding: 60px; text-align: center; color: #ef4444;">

@@ -7094,6 +7094,28 @@ Sean → Shawn, Shaun`;
         // CHECKPOINT 2: Render tab content
         const renderStart = performance.now();
         const content = container.querySelector('#fdb-tab-content');
+        
+        // Add data-section-id for deep linking from Wiring Tab
+        // Maps internal tab IDs to wiring registry section IDs
+        const tabToSectionId = {
+            'personality': 'personality',
+            'discovery': 'discovery-consent',
+            'vocabulary': 'vocabulary',
+            'booking': 'booking-prompts',
+            'flows': 'dynamic-flows',
+            'emotions': 'emotions',
+            'frustration': 'frustration',
+            'escalation': 'escalation',
+            'loops': 'loops',
+            'forbidden': 'forbidden',
+            'detection': 'detection',
+            'fallbacks': 'fallbacks',
+            'modes': 'modes',
+            'test': 'test'
+        };
+        content.setAttribute('data-section-id', tabToSectionId[tabId] || tabId);
+        content.setAttribute('data-section', tabToSectionId[tabId] || tabId);
+        
         switch (tabId) {
             case 'personality': content.innerHTML = this.renderPersonalityTab(); break;
             case 'discovery': content.innerHTML = this.renderDiscoveryConsentTab(); break;

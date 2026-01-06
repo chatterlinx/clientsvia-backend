@@ -1936,12 +1936,31 @@
     /**
      * Navigate to a specific tab/section/field in the Control Plane
      * This is the DEEP LINK function that makes "Fix Now" actually work
+     * 
+     * Uses ControlPlaneNav.go() which:
+     * - Updates URL params (shareable)
+     * - Switches tabs
+     * - Handles Front Desk internal tabs
+     * - Scrolls to section
+     * - Highlights the field
      */
     function navigateToFix(tab, section, field) {
         console.log('[WiringTab] 🚀 navigateToFix:', { tab, section, field });
         
+        // Use the global ControlPlaneNav if available (preferred)
+        if (window.ControlPlaneNav && typeof window.ControlPlaneNav.go === 'function') {
+            console.log('[WiringTab] ✅ Using ControlPlaneNav.go()');
+            window.ControlPlaneNav.go({ tab, section, field });
+            return;
+        }
+        
+        // Fallback: legacy navigation for backwards compatibility
+        console.warn('[WiringTab] ⚠️ ControlPlaneNav not available, using fallback');
+        
         // Step 1: Switch to the target tab using Control Plane's switchTab
-        if (typeof window.switchTab === 'function') {
+        if (typeof window.switchControlPlaneTab === 'function') {
+            window.switchControlPlaneTab(tab);
+        } else if (typeof window.switchTab === 'function') {
             window.switchTab(tab);
         } else {
             // Fallback: click the nav button directly
@@ -1972,8 +1991,8 @@
                 sectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 
                 // Highlight the section
-                sectionEl.classList.add('w-highlight-section');
-                setTimeout(() => sectionEl.classList.remove('w-highlight-section'), 3000);
+                sectionEl.classList.add('cp-highlight-section');
+                setTimeout(() => sectionEl.classList.remove('cp-highlight-section'), 3000);
             }
             
             // Step 3: Try to focus the specific field
@@ -1992,8 +2011,8 @@
                         fieldEl.focus();
                         
                         // Add highlight effect
-                        fieldEl.classList.add('w-highlight-field');
-                        setTimeout(() => fieldEl.classList.remove('w-highlight-field'), 3000);
+                        fieldEl.classList.add('cp-highlight');
+                        setTimeout(() => fieldEl.classList.remove('cp-highlight'), 2500);
                     } else {
                         console.log('[WiringTab] Field not found, showing section only:', field);
                     }
