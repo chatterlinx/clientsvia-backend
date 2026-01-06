@@ -3693,6 +3693,12 @@ Sean → Shawn, Shaun`;
         const requirementCount = (flow.requirements || []).length;
         const actionCount = (flow.actions || []).length;
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // INVALID TEMPLATE WARNING: Templates with 0 triggers cannot be copied
+        // ═══════════════════════════════════════════════════════════════════════════
+        const isInvalidTemplate = isTemplate && flow.enabled && triggerCount === 0;
+        const invalidBadge = isInvalidTemplate ? '<span style="font-size: 11px; padding: 2px 8px; background: #f85149; border-radius: 10px; color: white; font-weight: 600;">⚠️ NEEDS TRIGGERS</span>' : '';
+        
         const templateBadge = isTemplate ? '<span style="font-size: 11px; padding: 2px 8px; background: #6e40c9; border-radius: 10px; color: white;">TEMPLATE</span>' : '';
         const priorityBadge = flow.priority > 50 ? '<span style="font-size: 11px; padding: 2px 8px; background: #f85149; border-radius: 10px; color: white;">HIGH PRIORITY</span>' : '';
         
@@ -3747,6 +3753,19 @@ Sean → Shawn, Shaun`;
                         ">✓ Already Added</span>
                     `;
                 }
+            } else if (isInvalidTemplate) {
+                // Template has 0 triggers - cannot be copied
+                buttons = `
+                    <span style="
+                        padding: 8px 12px;
+                        background: #21262d;
+                        color: #f85149;
+                        border: 1px solid #f85149;
+                        border-radius: 4px;
+                        font-size: 11px;
+                        font-weight: 500;
+                    ">⚠️ Fix Template (0 Triggers)</span>
+                `;
             } else {
                 buttons = `
                     <button class="flow-copy-btn" data-flow-id="${flow._id}" style="
@@ -3811,6 +3830,7 @@ Sean → Shawn, Shaun`;
                             ${statusText}
                         </span>
                         ${templateBadge}
+                        ${invalidBadge}
                         ${alreadyCopiedBadge}
                         ${priorityBadge}
                     </div>
@@ -4895,6 +4915,13 @@ Sean → Shawn, Shaun`;
             
             if (!response.ok) {
                 const err = await response.json();
+                // Show detailed validation errors if present
+                if (err.validationErrors && err.validationErrors.length > 0) {
+                    console.error('[DYNAMIC FLOWS] Template validation failed:', err.validationErrors);
+                    const errorList = err.validationErrors.join('\n• ');
+                    this.showNotification(`Template Invalid:\n• ${errorList}`, 'error');
+                    return;
+                }
                 throw new Error(err.error || 'Failed to copy template');
             }
             
