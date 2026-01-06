@@ -39,7 +39,8 @@ const TIER_MVA = {
             failureMode: 'Generic "AI Assistant" name used',
             impact: 'reliability',
             priority: 1,
-            fixInstructions: 'Go to Front Desk → Personality → Set AI Name'
+            fixInstructions: 'Set AI Name',
+            nav: { tab: 'front-desk', section: 'personality', field: 'aiName' }
         },
         {
             fieldId: 'frontDesk.discoveryConsent.forceLLMDiscovery',
@@ -49,7 +50,8 @@ const TIER_MVA = {
             priority: 1,
             critical: true,
             mustBe: false,
-            fixInstructions: 'Go to Front Desk → Discovery & Consent → Set "Force LLM Discovery" to OFF'
+            fixInstructions: 'Set "Force LLM Discovery" to OFF',
+            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'forceLLMDiscovery' }
         },
         {
             fieldId: 'frontDesk.discoveryConsent.disableScenarioAutoResponses',
@@ -59,7 +61,8 @@ const TIER_MVA = {
             priority: 1,
             critical: true,
             mustBe: false,
-            fixInstructions: 'Go to Front Desk → Discovery & Consent → Set "Disable Auto-Responses" to OFF'
+            fixInstructions: 'Set "Disable Auto-Responses" to OFF',
+            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'disableScenarioAutoResponses' }
         },
         {
             fieldId: 'dataConfig.templateReferences',
@@ -69,7 +72,8 @@ const TIER_MVA = {
             priority: 1,
             critical: true,
             validator: (val) => Array.isArray(val) && val.length > 0 && val.some(r => r.enabled !== false),
-            fixInstructions: 'Go to Data & Config → Template References → Link an active template'
+            fixInstructions: 'Link an active template',
+            nav: { tab: 'data-config', section: 'template-references', field: 'templateReferences' }
         },
         {
             fieldId: 'frontDesk.bookingEnabled',
@@ -77,7 +81,8 @@ const TIER_MVA = {
             failureMode: 'Cannot collect appointments',
             impact: 'conversion',
             priority: 2,
-            fixInstructions: 'Go to Front Desk → Booking Prompts → Enable booking'
+            fixInstructions: 'Enable booking',
+            nav: { tab: 'front-desk', section: 'booking-prompts', field: 'bookingEnabled' }
         },
         {
             fieldId: 'frontDesk.bookingSlots',
@@ -86,7 +91,8 @@ const TIER_MVA = {
             impact: 'conversion',
             priority: 2,
             validator: (val) => Array.isArray(val) && val.length > 0 && val.every(s => s.question),
-            fixInstructions: 'Go to Front Desk → Booking Prompts → Add slots with questions'
+            fixInstructions: 'Add slots with questions',
+            nav: { tab: 'front-desk', section: 'booking-prompts', field: 'bookingSlots' }
         },
         {
             fieldId: 'frontDesk.discoveryConsent.bookingRequiresExplicitConsent',
@@ -94,7 +100,8 @@ const TIER_MVA = {
             failureMode: 'Agent jumps into booking without caller consent',
             impact: 'safety',
             priority: 2,
-            fixInstructions: 'Go to Front Desk → Discovery & Consent → Enable booking consent'
+            fixInstructions: 'Enable booking consent',
+            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'bookingRequiresExplicitConsent' }
         }
     ]
 };
@@ -113,7 +120,8 @@ const TIER_PRO = {
             failureMode: 'Caller trapped with AI when they ask for manager',
             impact: 'reliability',
             priority: 1,
-            fixInstructions: 'Go to Front Desk → Escalation → Enable escalation'
+            fixInstructions: 'Enable escalation',
+            nav: { tab: 'front-desk', section: 'escalation', field: 'escalationEnabled' }
         },
         {
             fieldId: 'frontDesk.escalation.triggerPhrases',
@@ -122,7 +130,8 @@ const TIER_PRO = {
             impact: 'reliability',
             priority: 1,
             validator: (val) => Array.isArray(val) && val.length >= 3,
-            fixInstructions: 'Go to Front Desk → Escalation → Add trigger phrases (manager, supervisor, human, etc.)'
+            fixInstructions: 'Add trigger phrases (manager, supervisor, human)',
+            nav: { tab: 'front-desk', section: 'escalation', field: 'escalationPhrases' }
         },
         {
             fieldId: 'transfers.transferTargets',
@@ -131,7 +140,8 @@ const TIER_PRO = {
             impact: 'reliability',
             priority: 1,
             validator: (val) => Array.isArray(val) && val.length > 0,
-            fixInstructions: 'Go to Transfer Calls → Add at least one transfer target'
+            fixInstructions: 'Add at least one transfer target',
+            nav: { tab: 'transfer-calls', section: 'directory', field: 'transferTargets' }
         },
         {
             fieldId: 'frontDesk.loopPrevention',
@@ -140,7 +150,8 @@ const TIER_PRO = {
             impact: 'reliability',
             priority: 2,
             validator: (val) => val && val.enabled === true,
-            fixInstructions: 'Go to Front Desk → Loops → Enable loop prevention'
+            fixInstructions: 'Enable loop prevention',
+            nav: { tab: 'front-desk', section: 'loops', field: 'loopPrevention' }
         },
         {
             fieldId: 'frontDesk.forbiddenPhrases',
@@ -149,7 +160,8 @@ const TIER_PRO = {
             impact: 'safety',
             priority: 2,
             validator: (val) => Array.isArray(val) && val.length >= 3,
-            fixInstructions: 'Go to Front Desk → Forbidden → Add forbidden phrases'
+            fixInstructions: 'Add forbidden phrases',
+            nav: { tab: 'front-desk', section: 'forbidden', field: 'forbiddenPhrases' }
         },
         {
             fieldId: 'frontDesk.discoveryConsent.consentPhrases',
@@ -158,7 +170,8 @@ const TIER_PRO = {
             impact: 'conversion',
             priority: 3,
             validator: (val) => Array.isArray(val) && val.length >= 5,
-            fixInstructions: 'Go to Front Desk → Discovery & Consent → Add consent phrases'
+            fixInstructions: 'Add consent phrases',
+            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'consentPhrases' }
         },
         {
             fieldId: 'frontDesk.escalation.transferMessage',
@@ -166,7 +179,8 @@ const TIER_PRO = {
             failureMode: 'Silent transfer or generic message',
             impact: 'reliability',
             priority: 3,
-            fixInstructions: 'Go to Front Desk → Escalation → Set transfer message'
+            fixInstructions: 'Set transfer message',
+            nav: { tab: 'front-desk', section: 'escalation', field: 'transferMessage' }
         }
     ]
 };
@@ -187,7 +201,8 @@ const TIER_MAX = {
             priority: 1,
             payoff: 'Reduces "hello?" dead air by 80%',
             validator: (val) => Array.isArray(val) && val.length > 0,
-            fixInstructions: 'Go to Front Desk → Greetings → Add greeting responses'
+            fixInstructions: 'Add greeting responses',
+            nav: { tab: 'front-desk', section: 'greetings', field: 'greetingResponses' }
         },
         {
             fieldId: 'frontDesk.fastPathBooking.enabled',
@@ -196,7 +211,8 @@ const TIER_MAX = {
             impact: 'conversion',
             priority: 1,
             payoff: 'Increases booking rate 20-30%',
-            fixInstructions: 'Go to Front Desk → Fast-Path → Enable fast-path'
+            fixInstructions: 'Enable fast-path',
+            nav: { tab: 'front-desk', section: 'fast-path', field: 'fastPathEnabled' }
         },
         {
             fieldId: 'frontDesk.fastPathBooking.triggerKeywords',
@@ -205,7 +221,8 @@ const TIER_MAX = {
             impact: 'conversion',
             priority: 1,
             validator: (val) => Array.isArray(val) && val.length >= 10,
-            fixInstructions: 'Go to Front Desk → Fast-Path → Add trigger keywords (schedule, book, come out, etc.)'
+            fixInstructions: 'Add trigger keywords (schedule, book, come out)',
+            nav: { tab: 'front-desk', section: 'fast-path', field: 'fastPathKeywords' }
         },
         {
             fieldId: 'frontDesk.fallbackResponses',
@@ -215,7 +232,8 @@ const TIER_MAX = {
             priority: 2,
             payoff: 'Eliminates weird LLM fallback phrases',
             validator: (val) => val && Object.keys(val).length > 0,
-            fixInstructions: 'Go to Front Desk → Fallbacks → Add fallback responses'
+            fixInstructions: 'Add fallback responses',
+            nav: { tab: 'front-desk', section: 'fallbacks', field: 'fallbackResponses' }
         },
         {
             fieldId: 'frontDesk.vocabulary',
@@ -225,7 +243,8 @@ const TIER_MAX = {
             priority: 2,
             payoff: 'Better scenario matching for colloquial speech',
             validator: (val) => val && Object.keys(val).length > 0,
-            fixInstructions: 'Go to Front Desk → Vocabulary → Add term mappings'
+            fixInstructions: 'Add term mappings',
+            nav: { tab: 'front-desk', section: 'vocabulary', field: 'vocabulary' }
         },
         {
             fieldId: 'frontDesk.emotions',
@@ -235,7 +254,8 @@ const TIER_MAX = {
             priority: 3,
             payoff: 'Better handling of frustrated callers',
             validator: (val) => val && Object.keys(val).length > 0,
-            fixInstructions: 'Go to Front Desk → Emotions → Configure emotion detection'
+            fixInstructions: 'Configure emotion detection',
+            nav: { tab: 'front-desk', section: 'emotions', field: 'emotions' }
         },
         {
             fieldId: 'frontDesk.frustration',
@@ -245,7 +265,8 @@ const TIER_MAX = {
             priority: 3,
             payoff: 'Reduces call abandonment from frustration',
             validator: (val) => val && Object.keys(val).length > 0,
-            fixInstructions: 'Go to Front Desk → Frustration → Configure frustration handling'
+            fixInstructions: 'Configure frustration handling',
+            nav: { tab: 'front-desk', section: 'frustration', field: 'frustration' }
         },
         {
             fieldId: 'dataConfig.cheatSheets',
@@ -255,7 +276,8 @@ const TIER_MAX = {
             priority: 3,
             payoff: 'Faster FAQ responses, lower LLM costs',
             validator: (val) => val !== null && val !== undefined,
-            fixInstructions: 'Go to Data & Config → Cheat Sheets → Add FAQ content'
+            fixInstructions: 'Add FAQ content',
+            nav: { tab: 'data-config', section: 'cheat-sheets', field: 'cheatSheets' }
         },
         {
             fieldId: 'dataConfig.placeholders',
@@ -264,7 +286,8 @@ const TIER_MAX = {
             impact: 'reliability',
             priority: 4,
             validator: (val) => val && Object.keys(val).length > 0,
-            fixInstructions: 'Go to Data & Config → Placeholders → Add company placeholders'
+            fixInstructions: 'Add company placeholders',
+            nav: { tab: 'data-config', section: 'placeholders', field: 'placeholders' }
         },
         {
             fieldId: 'dynamicFlow.companyFlows',
@@ -274,7 +297,8 @@ const TIER_MAX = {
             priority: 4,
             payoff: 'Custom flows for specific business needs',
             validator: (val) => Array.isArray(val) && val.length > 0,
-            fixInstructions: 'Go to Dynamic Flow → Create company-specific flows'
+            fixInstructions: 'Create company-specific flows',
+            nav: { tab: 'dynamic-flow', section: 'company-flows', field: 'companyFlows' }
         }
     ]
 };
@@ -359,6 +383,7 @@ function evaluateTiers(healthFields) {
                     payoff: req.payoff,
                     critical: req.critical || false,
                     fixInstructions: req.fixInstructions,
+                    nav: req.nav || null, // Navigation data for deep linking
                     currentValue: fieldValue,
                     currentStatus: fieldStatus
                 });

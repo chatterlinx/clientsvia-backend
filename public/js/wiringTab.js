@@ -1737,6 +1737,14 @@
             speed: '🚀 Speed'
         };
         
+        // Map tabs to human-readable names
+        const tabNames = {
+            'front-desk': 'Front Desk',
+            'data-config': 'Data & Config',
+            'dynamic-flow': 'Dynamic Flow',
+            'transfer-calls': 'Transfer Calls'
+        };
+        
         el.innerHTML = `
           <div class="w-next-actions-panel">
             <div class="w-next-actions-header">
@@ -1744,8 +1752,16 @@
               <div class="w-next-actions-subtitle">Fix these to reach MAX performance</div>
             </div>
             <div class="w-next-actions-list">
-              ${nextActions.map((action, idx) => `
-                <div class="w-next-action-card" data-focus="${esc(action.fieldId)}">
+              ${nextActions.map((action, idx) => {
+                const nav = action.nav || {};
+                const navTab = nav.tab || '';
+                const navSection = nav.section || '';
+                const navField = nav.field || '';
+                const tabLabel = tabNames[navTab] || navTab;
+                const hasNav = navTab && navSection;
+                
+                return `
+                <div class="w-next-action-card">
                   <div class="w-next-action-number">${idx + 1}</div>
                   <div class="w-next-action-content">
                     <div class="w-next-action-top">
@@ -1758,10 +1774,26 @@
                       <strong>If missing:</strong> ${esc(action.failureMode)}
                     </div>
                     ${action.payoff ? `<div class="w-next-action-payoff">💰 ${esc(action.payoff)}</div>` : ''}
-                    <div class="w-next-action-fix">
-                      <span class="w-next-action-fix-icon">💡</span>
-                      <span>${esc(action.fixInstructions)}</span>
+                    
+                    <!-- ACTIONABLE BUTTONS -->
+                    <div class="w-next-action-buttons">
+                      ${hasNav ? `
+                        <button class="w-fix-now-btn" 
+                                data-nav-tab="${esc(navTab)}" 
+                                data-nav-section="${esc(navSection)}" 
+                                data-nav-field="${esc(navField)}">
+                          🔧 Fix Now → ${esc(tabLabel)}
+                        </button>
+                      ` : ''}
+                      <button class="w-inspect-btn" data-focus="${esc(action.fieldId)}">
+                        🔍 Inspect
+                      </button>
                     </div>
+                    
+                    <div class="w-next-action-fix-hint">
+                      💡 ${esc(action.fixInstructions)}
+                    </div>
+                    
                     <div class="w-next-action-meta">
                       <span class="w-next-action-impact" style="color: ${impactColors[action.impact] || '#666'};">
                         ${impactLabels[action.impact] || action.impact}
@@ -1770,15 +1802,109 @@
                     </div>
                   </div>
                 </div>
-              `).join('')}
+              `;}).join('')}
             </div>
           </div>
         `;
         
-        // Bind click handlers
-        $$('.w-next-action-card[data-focus]', el).forEach(card => {
-            card.addEventListener('click', () => selectNode(card.dataset.focus));
+        // Bind "Fix Now" deep link buttons
+        $$('.w-fix-now-btn[data-nav-tab]', el).forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const tab = btn.dataset.navTab;
+                const section = btn.dataset.navSection;
+                const field = btn.dataset.navField;
+                console.log('[WiringTab] 🔧 FIX NOW clicked:', { tab, section, field });
+                navigateToFix(tab, section, field);
+            });
         });
+        
+        // Bind "Inspect" buttons
+        $$('.w-inspect-btn[data-focus]', el).forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectNode(btn.dataset.focus);
+            });
+        });
+    }
+    
+    /**
+     * Navigate to a specific tab/section/field in the Control Plane
+     * This is the DEEP LINK function that makes "Fix Now" actually work
+     */
+    function navigateToFix(tab, section, field) {
+        console.log('[WiringTab] 🚀 navigateToFix:', { tab, section, field });
+        
+        // Step 1: Switch to the target tab using Control Plane's switchTab
+        if (typeof window.switchTab === 'function') {
+            window.switchTab(tab);
+        } else {
+            // Fallback: click the nav button directly
+            const navBtn = document.querySelector(`.nav-tab[data-tab="${tab}"]`);
+            if (navBtn) {
+                navBtn.click();
+            } else {
+                toast(`Tab not found: ${tab}`, true);
+                return;
+            }
+        }
+        
+        // Step 2: Wait for tab to render, then scroll to section/field
+        setTimeout(() => {
+            // Try to find section by various ID patterns
+            const sectionEl = document.getElementById(section) ||
+                              document.getElementById(`section-${section}`) ||
+                              document.querySelector(`[data-section="${section}"]`) ||
+                              document.querySelector(`[data-section-id="${section}"]`);
+            
+            if (sectionEl) {
+                // Expand section if it's collapsible
+                if (sectionEl.classList.contains('collapsed')) {
+                    sectionEl.classList.remove('collapsed');
+                }
+                
+                // Scroll into view
+                sectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                
+                // Highlight the section
+                sectionEl.classList.add('w-highlight-section');
+                setTimeout(() => sectionEl.classList.remove('w-highlight-section'), 3000);
+            }
+            
+            // Step 3: Try to focus the specific field
+            if (field) {
+                setTimeout(() => {
+                    const fieldEl = document.getElementById(field) ||
+                                   document.querySelector(`[name="${field}"]`) ||
+                                   document.querySelector(`[data-field="${field}"]`) ||
+                                   document.querySelector(`#${field}-input`) ||
+                                   document.querySelector(`input[id*="${field}"]`) ||
+                                   document.querySelector(`select[id*="${field}"]`) ||
+                                   document.querySelector(`textarea[id*="${field}"]`);
+                    
+                    if (fieldEl) {
+                        fieldEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        fieldEl.focus();
+                        
+                        // Add highlight effect
+                        fieldEl.classList.add('w-highlight-field');
+                        setTimeout(() => fieldEl.classList.remove('w-highlight-field'), 3000);
+                    } else {
+                        console.log('[WiringTab] Field not found, showing section only:', field);
+                    }
+                }, 300);
+            }
+            
+            // Update URL for shareability
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', tab);
+            url.searchParams.set('section', section);
+            if (field) url.searchParams.set('field', field);
+            window.history.replaceState({}, '', url.toString());
+            
+            toast(`Navigated to ${tab} → ${section}`);
+            
+        }, 200); // Give tab time to render
     }
     
     // ========================================================================
@@ -2472,6 +2598,8 @@
         showTestDiagnostics,
         hideTestDiagnostics,
         handleDeepLink,
+        // "Fix Now" navigation - navigates to specific tab/section/field
+        navigateToFix,
         // Expose getQuickDiagnostics API call
         async fetchDiagnostics(companyId) {
             const token = localStorage.getItem('adminToken');
