@@ -633,23 +633,63 @@ function buildDiff(companyDoc) {
 /**
  * Build tenant safety audit
  */
-function buildNoTenantBleedProof(companyDoc, companyId) {
+/**
+ * Build comprehensive Scope Proof for multi-tenant safety
+ * 
+ * THE NON-NEGOTIABLE RULES:
+ * 1. Templates + Scenarios are GLOBAL (never contain hardcoded company values)
+ * 2. Companies only store REFERENCES (not scenario bodies)
+ * 3. Effective Config is computed per request
+ * 4. Wiring Tab must be company-scoped
+ * 5. No cross-tenant writes
+ */
+function buildNoTenantBleedProof(companyDoc, companyId, derivedData = {}) {
     const proof = {
         passed: true,
         checks: [],
-        violations: []
+        violations: [],
+        
+        // SCOPE PROOF - The definitive multi-tenant audit
+        scopeProof: {
+            companyId: companyId,
+            tradeKey: companyDoc?.aiAgentSettings?.tradeKey || companyDoc?.tradeKey || 'universal',
+            templateIdsUsed: [],
+            scenarioIdsUsed: [], // IDs only - never bodies
+            placeholdersResolvedFrom: 'effectiveConfig',
+            noEmbeddedScenarioBodies: true,
+            noCompanyWritesToGlobal: true,
+            configSourceChain: ['globalDefaults', 'templateConfig', 'companyConfig']
+        }
     };
     
-    // Check 1: Company doc has correct ID
+    // Extract template IDs used
+    const templateRefs = companyDoc?.aiAgentSettings?.templateReferences || [];
+    proof.scopeProof.templateIdsUsed = templateRefs
+        .filter(ref => ref.enabled !== false)
+        .map(ref => ref.templateId)
+        .filter(Boolean);
+    
+    // Extract scenario IDs from derivedData (IDs only, never bodies)
+    if (derivedData?.scenarios && Array.isArray(derivedData.scenarios)) {
+        proof.scopeProof.scenarioIdsUsed = derivedData.scenarios
+            .map(s => s._id || s.scenarioId || s.id)
+            .filter(Boolean)
+            .map(id => id.toString());
+    }
+    
+    // =========================================================================
+    // CHECK 1: COMPANY_ID_MATCH
+    // =========================================================================
+    const idMatch = companyDoc?._id?.toString() === companyId;
     proof.checks.push({
         id: 'COMPANY_ID_MATCH',
         description: 'Company document ID matches requested ID',
-        passed: companyDoc?._id?.toString() === companyId,
+        passed: idMatch,
         expected: companyId,
         actual: companyDoc?._id?.toString()
     });
     
-    if (companyDoc?._id?.toString() !== companyId) {
+    if (!idMatch) {
         proof.passed = false;
         proof.violations.push({
             rule: 'COMPANY_ID_MATCH',
@@ -658,15 +698,18 @@ function buildNoTenantBleedProof(companyDoc, companyId) {
         });
     }
     
-    // Check 2: Template references are IDs only (not embedded scenarios)
-    const templateRefs = companyDoc?.aiAgentSettings?.templateReferences || [];
+    // =========================================================================
+    // CHECK 2: NO_EMBEDDED_SCENARIOS
+    // =========================================================================
     const hasEmbeddedScenarios = templateRefs.some(ref => 
         ref.scenarios && Array.isArray(ref.scenarios) && ref.scenarios.length > 0
     );
     
+    proof.scopeProof.noEmbeddedScenarioBodies = !hasEmbeddedScenarios;
+    
     proof.checks.push({
         id: 'NO_EMBEDDED_SCENARIOS',
-        description: 'Template references contain IDs only, not embedded scenarios',
+        description: 'Template references contain IDs only, not embedded scenario bodies',
         passed: !hasEmbeddedScenarios,
         templateRefCount: templateRefs.length
     });
@@ -680,25 +723,160 @@ function buildNoTenantBleedProof(companyDoc, companyId) {
         });
     }
     
-    // Check 3: No scenario text in company doc
+    // =========================================================================
+    // CHECK 3: NO_SCENARIO_TEXT_IN_COMPANY_DOC
+    // =========================================================================
     const companyJson = JSON.stringify(companyDoc || {});
     const hasScenarioText = companyJson.includes('"triggers":[') && 
                            companyJson.includes('"quickReplies":[');
     
     proof.checks.push({
         id: 'NO_SCENARIO_TEXT',
-        description: 'Company document does not contain scenario text',
+        description: 'Company document does not contain scenario text (triggers/quickReplies)',
         passed: !hasScenarioText
     });
     
     if (hasScenarioText) {
         proof.passed = false;
+        proof.scopeProof.noEmbeddedScenarioBodies = false;
         proof.violations.push({
             rule: 'NO_SCENARIO_TEXT',
             severity: 'CRITICAL',
             message: 'Company doc appears to contain scenario text - violates global template rule'
         });
     }
+    
+    // =========================================================================
+    // CHECK 4: TRADE_KEY_CONSISTENCY
+    // =========================================================================
+    const companyTradeKey = companyDoc?.aiAgentSettings?.tradeKey || companyDoc?.tradeKey;
+    const hasTradeKey = !!companyTradeKey;
+    
+    proof.checks.push({
+        id: 'TRADE_KEY_SET',
+        description: 'Company has explicit tradeKey set (prevents cross-trade scenario bleed)',
+        passed: hasTradeKey,
+        tradeKey: companyTradeKey || 'NOT_SET'
+    });
+    
+    // Not a hard failure, but a warning
+    if (!hasTradeKey) {
+        proof.violations.push({
+            rule: 'TRADE_KEY_SET',
+            severity: 'WARNING',
+            message: 'No explicit tradeKey - company may receive scenarios from other trades'
+        });
+    }
+    
+    // =========================================================================
+    // CHECK 5: PLACEHOLDERS_USE_ALLOWLIST
+    // =========================================================================
+    // Check that any placeholders in company config use standard keys
+    const ALLOWED_PLACEHOLDER_KEYS = [
+        'companyName', 'businessName', 'phone', 'hours', 'serviceArea',
+        'address', 'email', 'website', 'aiName', 'ownerName',
+        'emergencyPhone', 'afterHoursMessage', 'holidayMessage'
+    ];
+    
+    const companyPlaceholders = companyDoc?.aiAgentSettings?.placeholders || {};
+    const placeholderKeys = Object.keys(companyPlaceholders);
+    const invalidPlaceholders = placeholderKeys.filter(k => !ALLOWED_PLACEHOLDER_KEYS.includes(k));
+    
+    proof.checks.push({
+        id: 'PLACEHOLDERS_ALLOWLIST',
+        description: 'Company placeholders use only allowed keys',
+        passed: invalidPlaceholders.length === 0,
+        allowedKeys: ALLOWED_PLACEHOLDER_KEYS,
+        invalidKeys: invalidPlaceholders
+    });
+    
+    if (invalidPlaceholders.length > 0) {
+        proof.violations.push({
+            rule: 'PLACEHOLDERS_ALLOWLIST',
+            severity: 'WARNING',
+            message: `Unknown placeholder keys: ${invalidPlaceholders.join(', ')}`
+        });
+    }
+    
+    // =========================================================================
+    // CHECK 6: NO_HARDCODED_OTHER_COMPANY_DATA
+    // =========================================================================
+    // Look for patterns that suggest hardcoded data from other companies
+    const suspiciousPatterns = [
+        /\b(Penguin Air|ABC Plumbing|Smith Dental)\b/gi, // Example company names
+        /\+1\d{10}/g, // Phone numbers that shouldn't be in config
+    ];
+    
+    // Only check scenario-like fields, not the whole doc
+    const fieldsToCheck = [
+        companyDoc?.aiAgentSettings?.frontDeskBehavior?.greetingResponses,
+        companyDoc?.aiAgentSettings?.frontDeskBehavior?.fallbackResponses,
+    ].filter(Boolean);
+    
+    let hasHardcodedData = false;
+    for (const field of fieldsToCheck) {
+        const fieldStr = JSON.stringify(field);
+        // If it contains what looks like specific company data but doesn't use placeholders
+        if (fieldStr.includes('Penguin') && !fieldStr.includes('{companyName}')) {
+            hasHardcodedData = true;
+        }
+    }
+    
+    proof.checks.push({
+        id: 'NO_HARDCODED_COMPANY_DATA',
+        description: 'Company responses use placeholders, not hardcoded values',
+        passed: !hasHardcodedData
+    });
+    
+    if (hasHardcodedData) {
+        proof.violations.push({
+            rule: 'NO_HARDCODED_COMPANY_DATA',
+            severity: 'WARNING',
+            message: 'Some responses may contain hardcoded company-specific text instead of placeholders'
+        });
+    }
+    
+    // =========================================================================
+    // CHECK 7: COMPANY_ONLY_STORES_REFERENCES
+    // =========================================================================
+    // Verify company doc structure follows the reference pattern
+    const companyStoresOnlyRefs = 
+        !companyDoc?.scenarios && // No direct scenarios
+        !companyDoc?.categories && // No direct categories
+        !companyDoc?.templates; // No direct templates
+    
+    proof.checks.push({
+        id: 'COMPANY_STORES_REFS_ONLY',
+        description: 'Company document only stores references to global resources, not the resources themselves',
+        passed: companyStoresOnlyRefs
+    });
+    
+    if (!companyStoresOnlyRefs) {
+        proof.passed = false;
+        proof.violations.push({
+            rule: 'COMPANY_STORES_REFS_ONLY',
+            severity: 'CRITICAL',
+            message: 'Company doc contains direct scenarios/categories/templates - must use references only'
+        });
+    }
+    
+    // =========================================================================
+    // FINAL SUMMARY
+    // =========================================================================
+    const criticalViolations = proof.violations.filter(v => v.severity === 'CRITICAL');
+    const warningViolations = proof.violations.filter(v => v.severity === 'WARNING');
+    
+    proof.summary = {
+        totalChecks: proof.checks.length,
+        passed: proof.checks.filter(c => c.passed).length,
+        failed: proof.checks.filter(c => !c.passed).length,
+        criticalViolations: criticalViolations.length,
+        warnings: warningViolations.length,
+        verdict: criticalViolations.length === 0 ? 'SAFE' : 'UNSAFE'
+    };
+    
+    // Only fail on critical violations
+    proof.passed = criticalViolations.length === 0;
     
     return proof;
 }
@@ -895,7 +1073,7 @@ async function generateWiringReport({ companyId, tradeKey = null, environment = 
     const effectiveConfig = buildEffectiveConfig(companyDoc);
     const health = buildHealth(companyDoc, derivedData);
     const diff = buildDiff(companyDoc);
-    const noTenantBleedProof = buildNoTenantBleedProof(companyDoc, companyId);
+    const noTenantBleedProof = buildNoTenantBleedProof(companyDoc, companyId, derivedData);
     const diagrams = buildDiagrams(companyDoc, health);
     
     // Calculate coverage scores

@@ -1219,49 +1219,110 @@
         const el = $('#wiringGuardrails');
         if (!el || !_report) return;
 
-        // V2: show tenant safety checks + violations
+        // V2: show comprehensive Scope Proof + tenant safety checks
         if (isV2Report(_report)) {
             const t = _report.noTenantBleedProof || {};
             const checks = t.checks || [];
             const violations = t.violations || [];
+            const scopeProof = t.scopeProof || {};
+            const summary = t.summary || {};
+            
+            // Separate critical vs warning violations
+            const criticalViolations = violations.filter(v => v.severity === 'CRITICAL');
+            const warnings = violations.filter(v => v.severity === 'WARNING');
+            
             el.innerHTML = `
               <div class="w-panel">
-                <div class="w-panel-title">🛡️ Tenant Safety & Guardrails</div>
+                <div class="w-panel-title">🛡️ Multi-Tenant Scope Proof</div>
                 <div class="w-meta-small">Strict company scoping, global templates only, no tenant bleed.</div>
 
-                <div style="margin-top: 10px;">
-                  <div><strong>Overall:</strong> ${t.passed ? '<span class="text-green">PASSED</span>' : '<span class="text-red">FAILED</span>'}</div>
-                </div>
-
-                <div style="margin-top: 10px;">
-                  <div class="w-guard-section-title">Checks</div>
-                  ${checks.map(c => `
-                    <div class="w-guard-item ${c.passed ? 'pass' : 'violation'}">
-                      <div class="w-guard-header">
-                        <span class="w-guard-status">${c.passed ? '✅' : '🚫'}</span>
-                        <strong>${esc(c.id || 'CHECK')}</strong>
-                      </div>
-                      <div class="w-guard-details">${esc(c.description || '')}</div>
-                      ${c.expected !== undefined ? `<div class="w-guard-file">Expected: ${esc(String(c.expected))} | Actual: ${esc(String(c.actual))}</div>` : ''}
+                <!-- SCOPE PROOF BOX -->
+                <div class="w-scope-proof ${t.passed ? 'safe' : 'unsafe'}">
+                  <div class="w-scope-proof-header">
+                    <div class="w-scope-proof-verdict ${summary.verdict === 'SAFE' ? 'safe' : 'unsafe'}">
+                      ${summary.verdict === 'SAFE' ? '✅ SCOPE SAFE' : '🚨 SCOPE UNSAFE'}
                     </div>
-                  `).join('')}
+                    <div class="w-scope-proof-stats">
+                      <span>${summary.passed || 0}/${summary.totalChecks || 0} checks passed</span>
+                      ${summary.criticalViolations > 0 ? `<span class="text-red">${summary.criticalViolations} critical</span>` : ''}
+                      ${summary.warnings > 0 ? `<span class="text-yellow">${summary.warnings} warnings</span>` : ''}
+                    </div>
+                  </div>
+                  
+                  <div class="w-scope-proof-grid">
+                    <div class="w-scope-proof-item">
+                      <div class="w-scope-proof-label">Company ID</div>
+                      <div class="w-scope-proof-value">${esc(scopeProof.companyId || 'N/A')}</div>
+                    </div>
+                    <div class="w-scope-proof-item">
+                      <div class="w-scope-proof-label">Trade Key</div>
+                      <div class="w-scope-proof-value">${esc(scopeProof.tradeKey || 'universal')}</div>
+                    </div>
+                    <div class="w-scope-proof-item">
+                      <div class="w-scope-proof-label">Templates Used</div>
+                      <div class="w-scope-proof-value">${(scopeProof.templateIdsUsed || []).length} IDs</div>
+                    </div>
+                    <div class="w-scope-proof-item">
+                      <div class="w-scope-proof-label">Scenarios Used</div>
+                      <div class="w-scope-proof-value">${(scopeProof.scenarioIdsUsed || []).length} IDs only</div>
+                    </div>
+                    <div class="w-scope-proof-item">
+                      <div class="w-scope-proof-label">No Embedded Bodies</div>
+                      <div class="w-scope-proof-value ${scopeProof.noEmbeddedScenarioBodies ? 'text-green' : 'text-red'}">
+                        ${scopeProof.noEmbeddedScenarioBodies ? '✅ True' : '❌ False'}
+                      </div>
+                    </div>
+                    <div class="w-scope-proof-item">
+                      <div class="w-scope-proof-label">Config Chain</div>
+                      <div class="w-scope-proof-value">${(scopeProof.configSourceChain || []).join(' → ')}</div>
+                    </div>
+                  </div>
                 </div>
 
-                ${violations.length > 0 ? `
+                <!-- CRITICAL VIOLATIONS -->
+                ${criticalViolations.length > 0 ? `
                   <div style="margin-top: 14px;">
-                    <div class="w-guard-section-title">Violations (${violations.length})</div>
-                    ${violations.map(v => `
-                      <div class="w-guard-item violation">
+                    <div class="w-guard-section-title text-red">🚨 Critical Violations (${criticalViolations.length})</div>
+                    ${criticalViolations.map(v => `
+                      <div class="w-guard-item violation critical">
                         <div class="w-guard-header">
                           <span class="w-guard-status">🧨</span>
                           <strong>${esc(v.rule || 'TENANT_RISK')}</strong>
-                          <span class="w-guard-severity">${esc(v.severity || 'CRITICAL')}</span>
                         </div>
                         <div class="w-guard-details">${esc(v.message || '')}</div>
                       </div>
                     `).join('')}
                   </div>
                 ` : ''}
+
+                <!-- WARNINGS -->
+                ${warnings.length > 0 ? `
+                  <div style="margin-top: 14px;">
+                    <div class="w-guard-section-title text-yellow">⚠️ Warnings (${warnings.length})</div>
+                    ${warnings.map(v => `
+                      <div class="w-guard-item warning">
+                        <div class="w-guard-header">
+                          <span class="w-guard-status">⚠️</span>
+                          <strong>${esc(v.rule || 'WARNING')}</strong>
+                        </div>
+                        <div class="w-guard-details">${esc(v.message || '')}</div>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
+
+                <!-- ALL CHECKS -->
+                <div style="margin-top: 14px;">
+                  <div class="w-guard-section-title">All Checks (${checks.length})</div>
+                  <div class="w-checks-compact">
+                    ${checks.map(c => `
+                      <div class="w-check-compact ${c.passed ? 'pass' : 'fail'}">
+                        <span class="w-check-icon">${c.passed ? '✅' : '❌'}</span>
+                        <span class="w-check-id">${esc(c.id || 'CHECK')}</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
               </div>
             `;
             return;

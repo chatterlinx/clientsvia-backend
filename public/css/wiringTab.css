@@ -2033,3 +2033,133 @@
     }
 }
 
+/* ============================================================================
+   SCOPE PROOF - Multi-Tenant Safety Display
+   ============================================================================ */
+
+.w-scope-proof {
+    margin-top: 16px;
+    padding: 16px 20px;
+    border-radius: 12px;
+    border: 2px solid;
+}
+
+.w-scope-proof.safe {
+    background: rgba(34, 197, 94, 0.05);
+    border-color: #22c55e;
+}
+
+.w-scope-proof.unsafe {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: #ef4444;
+}
+
+.w-scope-proof-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.w-scope-proof-verdict {
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.w-scope-proof-verdict.safe {
+    color: #22c55e;
+}
+
+.w-scope-proof-verdict.unsafe {
+    color: #ef4444;
+}
+
+.w-scope-proof-stats {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+.w-scope-proof-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.w-scope-proof-item {
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    border: 1px solid #2a2a2e;
+}
+
+.w-scope-proof-label {
+    font-size: 10px;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+}
+
+.w-scope-proof-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    word-break: break-all;
+}
+
+.w-guard-item.critical {
+    border-left: 3px solid #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.w-guard-item.warning {
+    border-left: 3px solid #f59e0b;
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.text-yellow {
+    color: #f59e0b !important;
+}
+
+/* Compact checks display */
+.w-checks-compact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.w-check-compact {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 6px;
+    border: 1px solid #2a2a2e;
+    font-size: 11px;
+}
+
+.w-check-compact.pass {
+    border-color: rgba(34, 197, 94, 0.3);
+}
+
+.w-check-compact.fail {
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.05);
+}
+
+.w-check-icon {
+    font-size: 12px;
+}
+
+.w-check-id {
+    color: #9ca3af;
+    font-weight: 500;
+}
+
