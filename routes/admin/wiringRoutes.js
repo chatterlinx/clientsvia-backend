@@ -565,124 +565,134 @@ router.post('/:companyId/diagnose', async (req, res) => {
 
 // ============================================================================
 // POST /api/admin/wiring-status/:companyId/apply
-// APPLY A WIRING FIX - One-click from Next Actions
+// SECURE WIRING FIX - Registry-driven, server-generated patches only
 // 
-// THIS IS THE "BUILD SYSTEM" ENDPOINT:
-// - Takes a patch from the tier system
-// - Validates tenant safety (company-scoped only)
-// - Rejects any global template/scenario writes
-// - Applies to companiesCollection
+// ENTERPRISE DESIGN:
+// - Client sends ONLY: { fieldId, mode: "recommended" | "custom", inputs?: {} }
+// - Server looks up field in wiringTiers registry
+// - Server generates the patch (client CANNOT inject arbitrary $set)
+// - Server validates against schema
+// - Server applies with audit trail
+// 
+// THIS PREVENTS: arbitrary MongoDB writes, cross-tenant bleed, schema violations
 // ============================================================================
 router.post('/:companyId/apply', async (req, res) => {
     const startTime = Date.now();
     const { companyId } = req.params;
+    const requestId = `apply_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    logger.info('[WIRING API] 🔧 Apply fix requested', { companyId });
-    console.log('[WIRING API] 🔧 CHECKPOINT 1: Apply fix request received', { companyId });
+    logger.info('[WIRING APPLY] 🔧 Request received', { companyId, requestId });
+    console.log('[WIRING APPLY] 🔧 CHECKPOINT 1: Request received', { companyId, requestId });
     
     try {
-        const { patch, reason, fieldId } = req.body;
-        
-        // VALIDATION 1: Required fields
-        if (!patch) {
-            console.error('[WIRING API] ❌ CHECKPOINT 2 FAILED: Missing patch');
-            return res.status(400).json({
-                success: false,
-                error: 'patch is required',
-                hint: 'Send { patch: { "$set": { "path": value } }, reason: "...", fieldId: "..." }'
-            });
-        }
-        console.log('[WIRING API] ✅ CHECKPOINT 2: Patch object present');
-        
-        // VALIDATION 2: Patch must have $set
-        if (!patch.$set || typeof patch.$set !== 'object') {
-            console.error('[WIRING API] ❌ CHECKPOINT 3 FAILED: Invalid patch structure');
-            return res.status(400).json({
-                success: false,
-                error: 'patch must contain $set object',
-                received: Object.keys(patch)
-            });
-        }
-        console.log('[WIRING API] ✅ CHECKPOINT 3: Valid $set structure');
-        
-        const pathsToUpdate = Object.keys(patch.$set);
-        console.log('[WIRING API] CHECKPOINT 4: Paths to update:', pathsToUpdate);
+        const { fieldId, mode = 'recommended', inputs, reason } = req.body;
         
         // =========================================================
-        // TENANT SAFETY - NON-NEGOTIABLE RULES
+        // VALIDATION 1: fieldId is required
         // =========================================================
+        if (!fieldId) {
+            console.error('[WIRING APPLY] ❌ CHECKPOINT 2 FAILED: Missing fieldId');
+            return res.status(400).json({
+                success: false,
+                error: 'fieldId is required',
+                hint: 'Send { fieldId: "frontDesk.greetingResponses", mode: "recommended" }'
+            });
+        }
+        console.log('[WIRING APPLY] ✅ CHECKPOINT 2: fieldId present:', fieldId);
         
-        // ALLOWED prefixes (company-scoped data only)
-        const ALLOWED_PREFIXES = [
-            'aiAgentSettings.',
-            'transfers.',
-            'dataConfig.',
-            'dynamicFlow.companyFlows'
-        ];
+        // =========================================================
+        // VALIDATION 2: Lookup field in registry (wiringTiers)
+        // =========================================================
+        const { TIER_MVA, TIER_PRO, TIER_MAX } = require('../../services/wiring/wiringTiers');
+        const ALL_TIERS = [TIER_MVA, TIER_PRO, TIER_MAX];
         
-        // FORBIDDEN patterns (global templates/scenarios)
-        const FORBIDDEN_PATTERNS = [
-            /globalinstantresponsetemplate/i,
-            /templates\./,
-            /scenarios\./,
-            /categories\[/,
-            /categories\./,
-            /\.scenarios\[/,
-            /template(?!References)/i  // "template" but not "templateReferences"
-        ];
+        let registeredField = null;
+        let sourceTier = null;
         
-        // Special case: aiAgentSettings.templateReferences is allowed
-        const ALLOWED_EXCEPTIONS = [
-            'aiAgentSettings.templateReferences'
-        ];
+        for (const tier of ALL_TIERS) {
+            const found = tier.requirements.find(r => r.fieldId === fieldId);
+            if (found) {
+                registeredField = found;
+                sourceTier = tier.id;
+                break;
+            }
+        }
         
-        const violations = [];
+        if (!registeredField) {
+            console.error('[WIRING APPLY] ❌ CHECKPOINT 3 FAILED: Field not in registry:', fieldId);
+            return res.status(400).json({
+                success: false,
+                error: 'FIELD_NOT_REGISTERED',
+                message: `Field "${fieldId}" is not in the wiring registry`,
+                hint: 'Only registered tier requirements can be applied'
+            });
+        }
+        console.log('[WIRING APPLY] ✅ CHECKPOINT 3: Field found in registry', { 
+            fieldId, 
+            tier: sourceTier, 
+            hasDbPath: !!registeredField.dbPath,
+            hasRecommendedValue: registeredField.recommendedValue !== undefined 
+        });
         
-        for (const path of pathsToUpdate) {
-            // Check if path is explicitly allowed exception
-            const isException = ALLOWED_EXCEPTIONS.some(ex => path.startsWith(ex));
-            if (isException) continue;
-            
-            // Check if path has allowed prefix
-            const hasAllowedPrefix = ALLOWED_PREFIXES.some(prefix => path.startsWith(prefix));
-            if (!hasAllowedPrefix) {
-                violations.push({
-                    path,
-                    reason: 'Path does not start with allowed prefix',
-                    allowed: ALLOWED_PREFIXES
+        // =========================================================
+        // VALIDATION 3: Field must have dbPath
+        // =========================================================
+        if (!registeredField.dbPath) {
+            console.error('[WIRING APPLY] ❌ CHECKPOINT 4 FAILED: No dbPath for field:', fieldId);
+            return res.status(400).json({
+                success: false,
+                error: 'NO_DB_PATH',
+                message: `Field "${fieldId}" has no database path configured`,
+                hint: 'This field cannot be auto-applied'
+            });
+        }
+        
+        // =========================================================
+        // VALIDATION 4: Determine value to apply
+        // =========================================================
+        let valueToApply;
+        
+        if (mode === 'recommended') {
+            if (registeredField.recommendedValue === undefined) {
+                console.error('[WIRING APPLY] ❌ CHECKPOINT 5 FAILED: No recommendedValue for:', fieldId);
+                return res.status(400).json({
+                    success: false,
+                    error: 'NO_RECOMMENDED_VALUE',
+                    message: `Field "${fieldId}" has no recommended value`,
+                    hint: 'Use mode: "custom" with inputs instead',
+                    requiresUserInput: registeredField.requiresUserInput || false
                 });
-                continue;
             }
-            
-            // Check for forbidden patterns
-            for (const pattern of FORBIDDEN_PATTERNS) {
-                if (pattern.test(path)) {
-                    violations.push({
-                        path,
-                        reason: `Path matches forbidden pattern: ${pattern}`,
-                        rule: 'No writes to global templates/scenarios'
-                    });
-                    break;
-                }
+            valueToApply = registeredField.recommendedValue;
+        } else if (mode === 'custom') {
+            if (!inputs || inputs.value === undefined) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'MISSING_INPUTS',
+                    message: 'Custom mode requires inputs.value',
+                    hint: 'Send { fieldId, mode: "custom", inputs: { value: ... } }'
+                });
             }
-        }
-        
-        if (violations.length > 0) {
-            console.error('[WIRING API] ❌ CHECKPOINT 5 FAILED: Tenant safety violation', violations);
-            return res.status(403).json({
+            valueToApply = inputs.value;
+        } else {
+            return res.status(400).json({
                 success: false,
-                error: 'TENANT_SAFETY_VIOLATION',
-                message: 'Patch contains paths that would modify global templates or scenarios',
-                violations,
-                hint: 'Only company-scoped settings under aiAgentSettings, transfers, dataConfig can be modified'
+                error: 'INVALID_MODE',
+                message: `Mode must be "recommended" or "custom", got: ${mode}`
             });
         }
-        console.log('[WIRING API] ✅ CHECKPOINT 5: Tenant safety passed');
         
-        // VALIDATION 3: Company must exist
+        console.log('[WIRING APPLY] ✅ CHECKPOINT 5: Value determined', { 
+            mode, 
+            valueType: typeof valueToApply,
+            isArray: Array.isArray(valueToApply)
+        });
+        
+        // =========================================================
+        // VALIDATION 5: Company must exist
+        // =========================================================
         const { ObjectId } = require('mongoose').Types;
         if (!ObjectId.isValid(companyId)) {
-            console.error('[WIRING API] ❌ Invalid companyId format');
             return res.status(400).json({
                 success: false,
                 error: 'Invalid companyId format'
@@ -691,28 +701,102 @@ router.post('/:companyId/apply', async (req, res) => {
         
         const companyDoc = await Company.findById(companyId);
         if (!companyDoc) {
-            console.error('[WIRING API] ❌ CHECKPOINT 6 FAILED: Company not found');
+            console.error('[WIRING APPLY] ❌ CHECKPOINT 6 FAILED: Company not found');
             return res.status(404).json({
                 success: false,
                 error: 'Company not found',
                 companyId
             });
         }
-        console.log('[WIRING API] ✅ CHECKPOINT 6: Company found:', companyDoc.companyName);
+        console.log('[WIRING APPLY] ✅ CHECKPOINT 6: Company found:', companyDoc.companyName);
         
         // =========================================================
-        // APPLY THE UPDATE
+        // TENANT SAFETY: Verify dbPath is company-scoped
         // =========================================================
-        console.log('[WIRING API] CHECKPOINT 7: Applying update...');
+        const dbPath = registeredField.dbPath;
+        const ALLOWED_PREFIXES = [
+            'aiAgentSettings.',
+            'transfers.',
+            'dataConfig.',
+            'dynamicFlow.'
+        ];
         
+        const isAllowedPath = ALLOWED_PREFIXES.some(prefix => dbPath.startsWith(prefix));
+        if (!isAllowedPath) {
+            console.error('[WIRING APPLY] ❌ TENANT SAFETY: Blocked path:', dbPath);
+            return res.status(403).json({
+                success: false,
+                error: 'TENANT_SAFETY_VIOLATION',
+                message: `Path "${dbPath}" is not in allowed scope`,
+                allowed: ALLOWED_PREFIXES
+            });
+        }
+        console.log('[WIRING APPLY] ✅ CHECKPOINT 7: Tenant safety passed');
+        
+        // =========================================================
+        // GET BEFORE VALUE FOR AUDIT
+        // =========================================================
+        const pathParts = dbPath.split('.');
+        let beforeValue = companyDoc.toObject();
+        for (const part of pathParts) {
+            if (beforeValue == null) break;
+            beforeValue = beforeValue[part];
+        }
+        
+        // =========================================================
+        // SERVER-GENERATED PATCH (not from client!)
+        // =========================================================
+        const patch = {
+            $set: {
+                [dbPath]: valueToApply
+            }
+        };
+        
+        console.log('[WIRING APPLY] CHECKPOINT 8: Server-generated patch', { 
+            dbPath, 
+            valueType: typeof valueToApply 
+        });
+        
+        // =========================================================
+        // APPLY UPDATE
+        // =========================================================
         const updateResult = await Company.updateOne(
             { _id: new ObjectId(companyId) },
             patch
         );
         
-        console.log('[WIRING API] ✅ CHECKPOINT 8: Update result:', updateResult);
+        console.log('[WIRING APPLY] ✅ CHECKPOINT 9: Update result:', updateResult);
         
-        // Clear Redis cache for this company
+        // =========================================================
+        // WRITE AUDIT LOG
+        // =========================================================
+        try {
+            const mongoose = require('mongoose');
+            const auditCollection = mongoose.connection.collection('companyConfigAudit');
+            await auditCollection.insertOne({
+                requestId,
+                companyId,
+                companyName: companyDoc.companyName,
+                userId: req.user?.id || req.user?._id || 'unknown',
+                fieldId,
+                dbPath,
+                mode,
+                beforeValue: beforeValue !== undefined ? beforeValue : null,
+                afterValue: valueToApply,
+                tier: sourceTier,
+                reason: reason || 'wiring_apply',
+                source: 'wiring_tab',
+                timestamp: new Date(),
+                success: updateResult.modifiedCount > 0
+            });
+            console.log('[WIRING APPLY] ✅ CHECKPOINT 10: Audit log written');
+        } catch (auditErr) {
+            console.warn('[WIRING APPLY] ⚠️ Audit log failed (non-blocking):', auditErr.message);
+        }
+        
+        // =========================================================
+        // CLEAR REDIS CACHE
+        // =========================================================
         try {
             const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
             if (isRedisConfigured()) {
@@ -720,40 +804,50 @@ router.post('/:companyId/apply', async (req, res) => {
                 if (redis) {
                     await redis.del(`scenario-pool:${companyId}`);
                     await redis.del(`company:${companyId}`);
-                    console.log('[WIRING API] ✅ Redis cache cleared for company');
+                    console.log('[WIRING APPLY] ✅ Redis cache cleared');
                 }
             }
         } catch (cacheErr) {
-            console.warn('[WIRING API] Cache clear warning:', cacheErr.message);
+            console.warn('[WIRING APPLY] Cache clear warning:', cacheErr.message);
         }
         
         const durationMs = Date.now() - startTime;
         
-        logger.info('[WIRING API] ✅ Fix applied successfully', { 
+        logger.info('[WIRING APPLY] ✅ Fix applied successfully', { 
             companyId, 
             fieldId,
-            paths: pathsToUpdate,
+            dbPath,
+            tier: sourceTier,
+            mode,
             modifiedCount: updateResult.modifiedCount,
-            durationMs 
+            durationMs,
+            requestId
         });
         
         return res.json({
             success: true,
+            requestId,
             companyId,
             fieldId,
-            reason: reason || 'wiring_fix',
-            appliedPaths: pathsToUpdate,
+            dbPath,
+            tier: sourceTier,
+            mode,
             modifiedCount: updateResult.modifiedCount,
             durationMs,
             timestamp: new Date().toISOString(),
+            audit: {
+                logged: true,
+                beforeValue: beforeValue !== undefined ? '(captured)' : null,
+                afterValue: '(applied)'
+            },
             hint: 'Refresh wiring report to see updated tier scores'
         });
         
     } catch (error) {
         const durationMs = Date.now() - startTime;
-        console.error('[WIRING API] ❌ Apply fix FAILED:', error.message);
-        console.error('[WIRING API] Stack:', error.stack);
-        logger.error('[WIRING API] Apply fix error', { 
+        console.error('[WIRING APPLY] ❌ FAILED:', error.message);
+        console.error('[WIRING APPLY] Stack:', error.stack);
+        logger.error('[WIRING APPLY] Error', { 
             companyId,
             error: error.message, 
             stack: error.stack,

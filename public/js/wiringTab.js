@@ -1840,9 +1840,7 @@
                     <div class="w-next-action-buttons">
                       ${action.canAutoApply ? `
                         <button class="w-apply-fix-btn" 
-                                data-field-id="${esc(action.fieldId)}"
-                                data-db-path="${esc(action.dbPath || '')}"
-                                data-value='${JSON.stringify(action.recommendedValue || null)}'>
+                                data-field-id="${esc(action.fieldId)}">
                           ✨ Apply Recommended
                         </button>
                       ` : ''}
@@ -1882,20 +1880,13 @@
         `;
         
         // Bind "Apply Fix" buttons (one-click apply)
+        // SECURE: Button only sends fieldId, server generates patch from registry
         $$('.w-apply-fix-btn[data-field-id]', el).forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const fieldId = btn.dataset.fieldId;
-                const dbPath = btn.dataset.dbPath;
-                let value;
-                try {
-                    value = JSON.parse(btn.dataset.value);
-                } catch(err) {
-                    console.error('[WiringTab] ❌ Failed to parse recommendedValue:', err);
-                    toast('Invalid recommended value', true);
-                    return;
-                }
-                console.log('[WiringTab] ✨ APPLY FIX clicked:', { fieldId, dbPath, value });
+                
+                console.log('[WiringTab] ✨ APPLY_FIX_CLICK:', fieldId);
                 
                 // Disable button and show loading
                 btn.disabled = true;
@@ -1903,7 +1894,8 @@
                 btn.innerHTML = '⏳ Applying...';
                 
                 try {
-                    await applyWiringFix(dbPath, value, fieldId);
+                    // SECURE: Send only fieldId, server looks up recommended value
+                    await applyWiringFix(fieldId, 'recommended');
                     btn.innerHTML = '✅ Applied!';
                     setTimeout(() => {
                         btn.innerHTML = originalText;
@@ -1912,7 +1904,10 @@
                 } catch (err) {
                     console.error('[WiringTab] ❌ Apply failed:', err);
                     btn.innerHTML = '❌ Failed';
-                    btn.disabled = false;
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    }, 3000);
                 }
             });
         });
@@ -2209,24 +2204,29 @@
     
     /**
      * Apply a wiring fix via the /apply endpoint
-     * This is the "one-click to MAX 100%" feature
+     * SECURE: Client sends only fieldId, server generates patch from registry
      * 
-     * @param {string} dbPath - MongoDB path like "aiAgentSettings.frontDeskBehavior.greetingResponses"
-     * @param {any} value - The value to set
-     * @param {string} fieldId - The wiring field ID for logging
+     * @param {string} fieldId - The wiring field ID (e.g., "frontDesk.greetingResponses")
+     * @param {string} mode - "recommended" (default) or "custom"
+     * @param {Object} inputs - For custom mode, { value: ... }
      */
-    async function applyWiringFix(dbPath, value, fieldId) {
+    async function applyWiringFix(fieldId, mode = 'recommended', inputs = null) {
         if (!_companyId) {
             toast('Company ID missing', true);
             throw new Error('No companyId');
         }
         
-        if (!dbPath) {
-            toast('Missing database path', true);
-            throw new Error('No dbPath');
+        if (!fieldId) {
+            toast('Missing field ID', true);
+            throw new Error('No fieldId');
         }
         
-        console.log('[WiringTab] 🔧 applyWiringFix:', { companyId: _companyId, dbPath, fieldId, value });
+        console.log('[WiringTab] 🔧 applyWiringFix:', { 
+            companyId: _companyId, 
+            fieldId, 
+            mode,
+            hasInputs: !!inputs 
+        });
         
         const token = localStorage.getItem('adminToken');
         if (!token) {
@@ -2234,11 +2234,17 @@
             throw new Error('No auth token');
         }
         
-        const patch = {
-            $set: {
-                [dbPath]: value
-            }
+        // SECURE: Send only fieldId and mode, NOT the patch
+        // Server generates patch from wiringTiers registry
+        const body = {
+            fieldId,
+            mode,
+            reason: 'wiring_next_action'
         };
+        
+        if (mode === 'custom' && inputs) {
+            body.inputs = inputs;
+        }
         
         const resp = await fetch(`/api/admin/wiring-status/${_companyId}/apply`, {
             method: 'POST',
@@ -2246,23 +2252,25 @@
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({
-                patch,
-                reason: 'wiring_next_action',
-                fieldId
-            })
+            body: JSON.stringify(body)
         });
         
         const data = await resp.json();
         
         if (!resp.ok || !data.success) {
             console.error('[WiringTab] ❌ Apply failed:', data);
-            toast(data.error || 'Apply failed', true);
-            throw new Error(data.error || 'Apply failed');
+            const errorMsg = data.message || data.error || 'Apply failed';
+            toast(errorMsg, true);
+            throw new Error(errorMsg);
         }
         
-        console.log('[WiringTab] ✅ Apply succeeded:', data);
-        toast(`✅ Applied: ${fieldId}`, false);
+        console.log('[WiringTab] ✅ Apply succeeded:', {
+            requestId: data.requestId,
+            fieldId: data.fieldId,
+            tier: data.tier,
+            modifiedCount: data.modifiedCount
+        });
+        toast(`✅ Applied: ${fieldId} (${data.tier})`, false);
         
         // Auto-refresh the wiring report to show updated tier scores
         setTimeout(() => {
