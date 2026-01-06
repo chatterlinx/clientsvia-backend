@@ -1225,6 +1225,10 @@ ${separator}`;
                         style="flex: 1; padding: 10px; background: #21262d; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; cursor: pointer; font-size: 12px; font-weight: 600;">
                         📋 Copy PATCH JSON
                     </button>
+                    <button onclick="window.aiTestConsole.downloadPatchJson()" 
+                        style="flex: 1; padding: 10px; background: #21262d; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; cursor: pointer; font-size: 12px; font-weight: 600;">
+                        💾 Download .json
+                    </button>
                     <button onclick="window.aiTestConsole.openWiringTab()" 
                         style="flex: 1; padding: 10px; background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%); color: #000; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700;">
                         🔌 Full Wiring →
@@ -1304,6 +1308,48 @@ ${separator}`;
             console.error('[AI Test] Failed to copy:', err);
             alert('Failed to copy. Check console.');
         });
+    }
+    
+    /**
+     * Download PATCH JSON as a file
+     * Filename: wiring-patch-{companyId}-{timestamp}.json
+     */
+    downloadPatchJson() {
+        const patchJson = this.lastDiagnostics?.patchJson;
+        
+        if (!patchJson) {
+            alert('No diagnostics available. Run a test first.');
+            return;
+        }
+        
+        const jsonStr = JSON.stringify(patchJson, null, 2);
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const filename = `wiring-patch-${this.companyId}-${timestamp}.json`;
+        
+        // Create blob and download
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        // Flash success
+        const btn = document.querySelector('[onclick*="downloadPatchJson"]');
+        if (btn) {
+            const original = btn.innerHTML;
+            btn.innerHTML = '✅ Downloaded!';
+            btn.style.background = '#238636';
+            setTimeout(() => {
+                btn.innerHTML = original;
+                btn.style.background = '#21262d';
+            }, 1500);
+        }
+        
+        console.log(`[AI Test] Downloaded: ${filename}`);
     }
     
     /**
