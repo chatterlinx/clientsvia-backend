@@ -440,23 +440,42 @@ const DynamicFlowSchema = new Schema({
 // ════════════════════════════════════════════════════════════════════════════
 // INDEXES
 // ════════════════════════════════════════════════════════════════════════════
-DynamicFlowSchema.index({ companyId: 1, enabled: 1, priority: -1 });
-DynamicFlowSchema.index({ companyId: 1, flowKey: 1 }, { unique: true, sparse: true });
-DynamicFlowSchema.index({ isTemplate: 1, enabled: 1 });
-DynamicFlowSchema.index({ tradeType: 1, isTemplate: 1 });
-// V2 Trade Category indexes
-DynamicFlowSchema.index({ tradeCategoryId: 1, isTemplate: 1, enabled: 1 });
-DynamicFlowSchema.index({ tradeCategoryId: 1, flowKey: 1 }, { 
-    unique: true, 
-    sparse: true,
-    partialFilterExpression: { isTemplate: true }  // Only enforce uniqueness for templates
-});
 
-// HARD UNIQUENESS: Global templates must have unique flowKeys (prevents drift)
-DynamicFlowSchema.index({ flowKey: 1 }, { 
-    unique: true, 
-    partialFilterExpression: { isTemplate: true, companyId: null }
-});
+// Performance: query company flows by priority
+DynamicFlowSchema.index({ companyId: 1, enabled: 1, priority: -1 });
+
+// Query templates by status
+DynamicFlowSchema.index({ isTemplate: 1, enabled: 1 });
+
+// Legacy trade type index
+DynamicFlowSchema.index({ tradeType: 1, isTemplate: 1 });
+
+// V2 Trade Category query index
+DynamicFlowSchema.index({ tradeCategoryId: 1, isTemplate: 1, enabled: 1 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// UNIQUENESS INDEXES (Cannot mix sparse + partialFilterExpression)
+// ════════════════════════════════════════════════════════════════════════════
+
+// COMPANY FLOWS: Unique flowKey per company (non-templates)
+DynamicFlowSchema.index(
+    { companyId: 1, flowKey: 1 }, 
+    { 
+        unique: true,
+        name: 'uniq_company_flowKey',
+        partialFilterExpression: { isTemplate: { $ne: true } }
+    }
+);
+
+// GLOBAL TEMPLATES: Unique flowKey for templates (prevents duplicate templates)
+DynamicFlowSchema.index(
+    { flowKey: 1 }, 
+    { 
+        unique: true,
+        name: 'uniq_template_flowKey',
+        partialFilterExpression: { isTemplate: true }
+    }
+);
 
 // ════════════════════════════════════════════════════════════════════════════
 // STATIC METHODS
