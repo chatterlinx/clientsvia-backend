@@ -3685,7 +3685,7 @@ Sean → Shawn, Shaun`;
         }
     }
     
-    renderFlowCard(flow, isTemplate = false, isAlreadyCopied = false) {
+    renderFlowCard(flow, isTemplate = false, isAlreadyCopied = false, matchType = 'key') {
         const statusColor = flow.enabled ? '#238636' : '#6e7681';
         const statusText = flow.enabled ? 'ACTIVE' : 'DISABLED';
         
@@ -3695,26 +3695,58 @@ Sean → Shawn, Shaun`;
         
         const templateBadge = isTemplate ? '<span style="font-size: 11px; padding: 2px 8px; background: #6e40c9; border-radius: 10px; color: white;">TEMPLATE</span>' : '';
         const priorityBadge = flow.priority > 50 ? '<span style="font-size: 11px; padding: 2px 8px; background: #f85149; border-radius: 10px; color: white;">HIGH PRIORITY</span>' : '';
-        const alreadyCopiedBadge = isAlreadyCopied ? '<span style="font-size: 11px; padding: 2px 8px; background: #388bfd; border-radius: 10px; color: white;">✓ ADDED</span>' : '';
+        
+        // Show different badge based on match type
+        let alreadyCopiedBadge = '';
+        if (isAlreadyCopied) {
+            if (matchType === 'name') {
+                alreadyCopiedBadge = '<span style="font-size: 11px; padding: 2px 8px; background: #f59e0b; border-radius: 10px; color: black; font-weight: 600;">⚠️ SIMILAR EXISTS</span>';
+            } else {
+                alreadyCopiedBadge = '<span style="font-size: 11px; padding: 2px 8px; background: #388bfd; border-radius: 10px; color: white;">✓ ADDED</span>';
+            }
+        }
         
         // Card opacity for already-copied templates
-        const cardOpacity = isAlreadyCopied ? 'opacity: 0.5;' : '';
+        const cardOpacity = isAlreadyCopied ? 'opacity: 0.6;' : '';
         
         let buttons = '';
         if (isTemplate) {
             if (isAlreadyCopied) {
-                // Already copied - show disabled indicator
-                buttons = `
-                    <span style="
-                        padding: 8px 12px;
-                        background: #21262d;
-                        color: #388bfd;
-                        border: 1px solid #388bfd;
-                        border-radius: 4px;
-                        font-size: 12px;
-                        font-weight: 500;
-                    ">✓ Already Added</span>
-                `;
+                // Already copied or similar exists - show indicator
+                if (matchType === 'name') {
+                    // Similar name exists - still allow copying but warn
+                    buttons = `
+                        <button class="flow-copy-btn" data-flow-id="${flow._id}" style="
+                            padding: 8px 12px;
+                            background: #21262d;
+                            color: #f59e0b;
+                            border: 1px solid #f59e0b;
+                            border-radius: 4px;
+                            cursor: pointer;
+                            font-size: 12px;
+                        ">⚠️ Copy Anyway</button>
+                        <span style="
+                            padding: 8px 12px;
+                            background: #21262d;
+                            color: #8b949e;
+                            border-radius: 4px;
+                            font-size: 11px;
+                        ">Similar flow exists</span>
+                    `;
+                } else {
+                    // Exact key match - definitely already added
+                    buttons = `
+                        <span style="
+                            padding: 8px 12px;
+                            background: #21262d;
+                            color: #388bfd;
+                            border: 1px solid #388bfd;
+                            border-radius: 4px;
+                            font-size: 12px;
+                            font-weight: 500;
+                        ">✓ Already Added</span>
+                    `;
+                }
             } else {
                 buttons = `
                     <button class="flow-copy-btn" data-flow-id="${flow._id}" style="
@@ -3931,6 +3963,14 @@ Sean → Shawn, Shaun`;
                 .filter(Boolean)
         );
         
+        // Also track company flow names (normalized) for similarity detection
+        // This helps detect "Emergency Service Detection" template when company has similar flow
+        const copiedFlowNames = new Set(
+            (data.flows || [])
+                .map(f => f.name?.toLowerCase().replace(/[^a-z0-9]/g, ''))
+                .filter(Boolean)
+        );
+        
         // Render company flows
         if (data.flows && data.flows.length > 0) {
             flowsContainer.innerHTML = data.flows.map(f => this.renderFlowCard(f, false, false)).join('');
@@ -3983,8 +4023,13 @@ Sean → Shawn, Shaun`;
             
             if (allTemplates.length > 0) {
                 templatesContainer.innerHTML = allTemplates.map(t => {
-                    const isAlreadyCopied = copiedFlowKeys.has(t.flowKey?.toLowerCase());
-                    return this.renderFlowCard(t, true, isAlreadyCopied);
+                    // Check by flowKey OR by similar name
+                    const normalizedName = t.name?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+                    const matchedByKey = copiedFlowKeys.has(t.flowKey?.toLowerCase());
+                    const matchedByName = copiedFlowNames.has(normalizedName);
+                    const isAlreadyCopied = matchedByKey || matchedByName;
+                    const matchType = matchedByKey ? 'key' : (matchedByName ? 'name' : null);
+                    return this.renderFlowCard(t, true, isAlreadyCopied, matchType);
                 }).join('');
             } else {
                 const selectedCategory = this.tradeCategoriesCache.find(c => c._id === this.selectedTradeCategoryId);
