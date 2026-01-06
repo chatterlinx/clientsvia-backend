@@ -121,14 +121,20 @@ router.get('/:companyId/health', async (req, res) => {
         
         // Redis check
         try {
-            const redisFactory = require('../../utils/redisFactory');
-            const redis = redisFactory.getClient();
-            if (redis) {
-                const cached = await redis.get(`scenario-pool:${companyId}`);
-                checks.redisCached = !!cached;
-                if (cached) {
-                    const parsed = JSON.parse(cached);
-                    checks.cachedScenarioCount = parsed.scenarios?.length || 0;
+            const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+            if (!isRedisConfigured()) {
+                checks.redisError = 'REDIS_URL not configured';
+            } else {
+                const redis = await getSharedRedisClient();
+                if (redis) {
+                    const cached = await redis.get(`scenario-pool:${companyId}`);
+                    checks.redisCached = !!cached;
+                    if (cached) {
+                        const parsed = JSON.parse(cached);
+                        checks.cachedScenarioCount = parsed.scenarios?.length || 0;
+                    }
+                } else {
+                    checks.redisError = 'Redis client not available';
                 }
             }
         } catch (e) {
@@ -172,38 +178,86 @@ router.get('/:companyId/health', async (req, res) => {
 // Clear scenario pool cache for debugging
 // ============================================================================
 router.post('/:companyId/clear-cache', async (req, res) => {
+    const startTime = Date.now();
+    const { companyId } = req.params;
+    
+    logger.info('[WIRING API] 🗑️ CHECKPOINT: Cache clear requested', { companyId });
+    console.log('[WIRING API] 🗑️ CHECKPOINT: Cache clear requested for companyId:', companyId);
+    
     try {
-        const { companyId } = req.params;
+        // CHECKPOINT 1: Get redis client factory
+        console.log('[WIRING API] CHECKPOINT 1: Loading redisClientFactory...');
+        const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
         
-        logger.info('[WIRING API] Cache clear requested', { companyId });
-        
-        const redisFactory = require('../../utils/redisFactory');
-        const redis = redisFactory.getClient();
-        
-        if (!redis) {
+        // CHECKPOINT 2: Check if Redis is configured
+        console.log('[WIRING API] CHECKPOINT 2: Checking Redis config...');
+        if (!isRedisConfigured()) {
+            console.error('[WIRING API] ❌ CHECKPOINT 2 FAILED: Redis not configured');
             return res.status(503).json({
                 success: false,
-                error: 'Redis not available'
+                error: 'Redis not configured (REDIS_URL not set)',
+                checkpoint: 'REDIS_CONFIG_CHECK'
             });
         }
+        console.log('[WIRING API] ✅ CHECKPOINT 2: Redis is configured');
         
+        // CHECKPOINT 3: Get shared client
+        console.log('[WIRING API] CHECKPOINT 3: Getting shared Redis client...');
+        const redis = await getSharedRedisClient();
+        
+        if (!redis) {
+            console.error('[WIRING API] ❌ CHECKPOINT 3 FAILED: Could not get Redis client');
+            return res.status(503).json({
+                success: false,
+                error: 'Redis client not available (connection failed)',
+                checkpoint: 'REDIS_CLIENT_GET'
+            });
+        }
+        console.log('[WIRING API] ✅ CHECKPOINT 3: Redis client obtained');
+        
+        // CHECKPOINT 4: Build cache key and check existence
         const cacheKey = `scenario-pool:${companyId}`;
+        console.log('[WIRING API] CHECKPOINT 4: Checking cache key existence:', cacheKey);
         const existed = await redis.exists(cacheKey);
+        console.log('[WIRING API] ✅ CHECKPOINT 4: Cache key existed:', existed === 1);
+        
+        // CHECKPOINT 5: Delete cache
+        console.log('[WIRING API] CHECKPOINT 5: Deleting cache key...');
         await redis.del(cacheKey);
+        console.log('[WIRING API] ✅ CHECKPOINT 5: Cache key deleted');
+        
+        const durationMs = Date.now() - startTime;
+        
+        logger.info('[WIRING API] ✅ Cache cleared successfully', { 
+            companyId, 
+            wasPresent: existed === 1,
+            durationMs 
+        });
         
         return res.json({
             success: true,
             cacheKey,
             wasPresent: existed === 1,
             message: existed ? 'Cache cleared - next request will reload from MongoDB' : 'Cache was already empty',
+            durationMs,
             timestamp: new Date().toISOString()
         });
         
     } catch (error) {
-        logger.error('[WIRING API] Cache clear error', { error: error.message });
+        const durationMs = Date.now() - startTime;
+        console.error('[WIRING API] ❌ Cache clear FAILED:', error.message);
+        console.error('[WIRING API] Stack:', error.stack);
+        logger.error('[WIRING API] Cache clear error', { 
+            companyId,
+            error: error.message, 
+            stack: error.stack,
+            durationMs 
+        });
         return res.status(500).json({
             success: false,
-            error: error.message
+            error: error.message,
+            stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined,
+            durationMs
         });
     }
 });

@@ -1382,10 +1382,22 @@
     }
     
     async function clearCache(companyId) {
+        console.log('[WiringTab] 🗑️ CHECKPOINT: clearCache called', { companyId });
+        
         const url = `/api/admin/wiring-status/${companyId}/clear-cache`;
+        console.log('[WiringTab] CHECKPOINT: clearCache URL:', url);
+        
         // Control-plane stores admin JWT under 'adminToken' key
         const token = localStorage.getItem('adminToken') || localStorage.getItem('auth_token') || localStorage.getItem('token');
+        console.log('[WiringTab] CHECKPOINT: clearCache auth token present:', !!token);
         
+        if (!token) {
+            const error = new Error('No auth token found for clearCache');
+            console.error('[WiringTab] ❌ CHECKPOINT FAILED:', error.message);
+            throw error;
+        }
+        
+        console.log('[WiringTab] CHECKPOINT: Sending POST to clear-cache...');
         const res = await fetch(url, {
             method: 'POST',
             headers: {
@@ -1394,7 +1406,26 @@
             }
         });
         
-        return res.json();
+        console.log('[WiringTab] CHECKPOINT: clearCache response status:', res.status);
+        
+        const text = await res.text();
+        console.log('[WiringTab] CHECKPOINT: clearCache raw response:', text.substring(0, 500));
+        
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            console.error('[WiringTab] ❌ CHECKPOINT: Failed to parse clearCache response as JSON');
+            throw new Error(`Clear cache failed: Invalid JSON response (status ${res.status})`);
+        }
+        
+        if (!res.ok) {
+            console.error('[WiringTab] ❌ CHECKPOINT: clearCache HTTP error', { status: res.status, data });
+            throw new Error(data.error || `Clear cache failed with status ${res.status}`);
+        }
+        
+        console.log('[WiringTab] ✅ CHECKPOINT: clearCache SUCCESS', data);
+        return data;
     }
     
     // ========================================================================
@@ -1468,48 +1499,93 @@
         
         // Reload button
         const reloadBtn = $('#wiringReload');
-        bindOnce(reloadBtn, 'click', () => refresh(_companyId));
+        console.log('[WiringTab] CHECKPOINT: Reload button found:', !!reloadBtn);
+        bindOnce(reloadBtn, 'click', () => {
+            console.log('[WiringTab] 🔄 BUTTON CLICKED: Reload', { companyId: _companyId });
+            refresh(_companyId);
+        });
         
         // Clear focus button
         const clearFocusBtn = $('#wiringClearFocus');
-        bindOnce(clearFocusBtn, 'click', () => focusNode(null));
+        console.log('[WiringTab] CHECKPOINT: Clear Focus button found:', !!clearFocusBtn);
+        bindOnce(clearFocusBtn, 'click', () => {
+            console.log('[WiringTab] 🎯 BUTTON CLICKED: Clear Focus');
+            focusNode(null);
+            toast('Focus cleared');
+        });
         
         // Expand all button
         const expandAllBtn = $('#wiringExpandAll');
+        console.log('[WiringTab] CHECKPOINT: Expand All button found:', !!expandAllBtn);
         bindOnce(expandAllBtn, 'click', () => {
+            console.log('[WiringTab] 📂 BUTTON CLICKED: Expand All');
             // Works for both V1 and V2 (V2 has no `report.nodes`)
+            let count = 0;
             if (_index?.map) {
-                Array.from(_index.map.values()).forEach(n => _expandedNodes.add(n.id));
+                Array.from(_index.map.values()).forEach(n => {
+                    _expandedNodes.add(n.id);
+                    count++;
+                });
             } else if (_report?.nodes) {
-                _report.nodes.forEach(n => _expandedNodes.add(n.id));
+                _report.nodes.forEach(n => {
+                    _expandedNodes.add(n.id);
+                    count++;
+                });
             }
+            console.log('[WiringTab] ✅ Expanded nodes:', count);
             renderTree();
+            toast(`Expanded ${count} nodes`);
         });
         
         // Collapse all button
         const collapseAllBtn = $('#wiringCollapseAll');
+        console.log('[WiringTab] CHECKPOINT: Collapse All button found:', !!collapseAllBtn);
         bindOnce(collapseAllBtn, 'click', () => {
+            console.log('[WiringTab] 📁 BUTTON CLICKED: Collapse All');
+            const previousCount = _expandedNodes.size;
             _expandedNodes.clear();
+            console.log('[WiringTab] ✅ Collapsed nodes:', previousCount);
             renderTree();
+            toast(`Collapsed ${previousCount} nodes`);
         });
         
         // Search input
         const searchInput = $('#wiringSearch');
+        console.log('[WiringTab] CHECKPOINT: Search input found:', !!searchInput);
         bindOnce(searchInput, 'input', (e) => {
             _searchTerm = e.target.value || '';
+            console.log('[WiringTab] 🔍 SEARCH: term =', _searchTerm);
             renderTree();
         });
         
         // Copy JSON button
         const copyJsonBtn = $('#wiringCopyJson');
+        console.log('[WiringTab] CHECKPOINT: Copy JSON button found:', !!copyJsonBtn);
         bindOnce(copyJsonBtn, 'click', () => {
-            if (_report) copyText(JSON.stringify(_report, null, 2));
+            console.log('[WiringTab] 📋 BUTTON CLICKED: Copy JSON');
+            if (_report) {
+                const json = JSON.stringify(_report, null, 2);
+                console.log('[WiringTab] ✅ JSON length:', json.length);
+                copyText(json);
+            } else {
+                console.warn('[WiringTab] ⚠️ No report to copy');
+                toast('No report loaded', true);
+            }
         });
         
         // Copy Markdown button
         const copyMdBtn = $('#wiringCopyMd');
+        console.log('[WiringTab] CHECKPOINT: Copy MD button found:', !!copyMdBtn);
         bindOnce(copyMdBtn, 'click', () => {
-            if (_report) copyText(toMarkdown(_report));
+            console.log('[WiringTab] 📝 BUTTON CLICKED: Copy Markdown');
+            if (_report) {
+                const md = toMarkdown(_report);
+                console.log('[WiringTab] ✅ Markdown length:', md.length);
+                copyText(md);
+            } else {
+                console.warn('[WiringTab] ⚠️ No report to copy');
+                toast('No report loaded', true);
+            }
         });
 
         // Paste JSON + Validate panel
@@ -1525,23 +1601,39 @@
             validatePanel.style.display = on ? 'block' : 'none';
         };
 
+        console.log('[WiringTab] CHECKPOINT: Paste Validate button found:', !!validateToggleBtn);
+        console.log('[WiringTab] CHECKPOINT: Validate Close button found:', !!validateCloseBtn);
+        console.log('[WiringTab] CHECKPOINT: Validate Run button found:', !!validateRunBtn);
+        
         if (validateToggleBtn) {
             bindOnce(validateToggleBtn, 'click', () => {
+                console.log('[WiringTab] 📋 BUTTON CLICKED: Paste JSON + Validate (toggle)');
                 const isOpen = validatePanel && validatePanel.style.display !== 'none';
                 showValidatePanel(!isOpen);
                 if (validateInput && !validateInput.value && _report) {
                     validateInput.value = JSON.stringify(_report, null, 2);
+                    console.log('[WiringTab] ✅ Prefilled validate input with current report');
                 }
             });
         }
         if (validateCloseBtn) {
-            bindOnce(validateCloseBtn, 'click', () => showValidatePanel(false));
+            bindOnce(validateCloseBtn, 'click', () => {
+                console.log('[WiringTab] ❌ BUTTON CLICKED: Close Validate Panel');
+                showValidatePanel(false);
+            });
         }
         if (validateRunBtn) {
             bindOnce(validateRunBtn, 'click', async () => {
-                if (!validateInput) return;
+                console.log('[WiringTab] ✅ BUTTON CLICKED: Validate JSON');
+                if (!validateInput) {
+                    console.error('[WiringTab] ❌ validateInput element not found');
+                    return;
+                }
                 const raw = validateInput.value || '';
+                console.log('[WiringTab] CHECKPOINT: Input JSON length:', raw.length);
+                
                 if (!raw.trim()) {
+                    console.warn('[WiringTab] ⚠️ No JSON to validate');
                     toast('Paste JSON first', true);
                     return;
                 }
@@ -1549,8 +1641,10 @@
 
                 try {
                     const token = localStorage.getItem('adminToken') || localStorage.getItem('auth_token') || localStorage.getItem('token');
+                    console.log('[WiringTab] CHECKPOINT: Auth token present:', !!token);
                     if (!token) throw new Error('No auth token found (adminToken). Please log in again.');
 
+                    console.log('[WiringTab] CHECKPOINT: Sending POST to /api/admin/wiring-status/validate...');
                     const res = await fetch('/api/admin/wiring-status/validate', {
                         method: 'POST',
                         headers: {
@@ -1559,17 +1653,24 @@
                         },
                         body: JSON.stringify({ json: raw })
                     });
+                    console.log('[WiringTab] CHECKPOINT: Validate response status:', res.status);
+                    
                     const text = await res.text();
+                    console.log('[WiringTab] CHECKPOINT: Validate response length:', text.length);
+                    
                     let parsed;
                     try { parsed = JSON.parse(text); } catch { parsed = { error: 'Invalid JSON response', raw: text }; }
 
                     if (!res.ok) {
+                        console.error('[WiringTab] ❌ Validate API error:', parsed);
                         throw new Error(parsed?.error || parsed?.message || `HTTP ${res.status}`);
                     }
 
                     const errs = parsed.errors || [];
                     const warns = parsed.warnings || [];
                     const ok = parsed.valid === true;
+                    
+                    console.log('[WiringTab] ✅ Validation result:', { valid: ok, errors: errs.length, warnings: warns.length });
 
                     if (validateOutput) {
                         validateOutput.innerHTML = `
@@ -1584,6 +1685,7 @@
                     }
                     toast(ok ? 'Validation passed' : 'Validation failed', !ok);
                 } catch (e) {
+                    console.error('[WiringTab] ❌ Validate FAILED:', e.message, e);
                     if (validateOutput) validateOutput.innerHTML = `<div class="w-issue-item" style="border-color:#7f1d1d;background:#1b0b0b;"><div><strong>Error:</strong> ${esc(e.message || String(e))}</div></div>`;
                     toast(e.message || 'Validate failed', true);
                 }
@@ -1592,22 +1694,40 @@
         
         // Download JSON button
         const downloadBtn = $('#wiringDownloadJson');
+        console.log('[WiringTab] CHECKPOINT: Download JSON button found:', !!downloadBtn);
         bindOnce(downloadBtn, 'click', () => {
+            console.log('[WiringTab] ⬇️ BUTTON CLICKED: Download JSON');
             if (_report) {
                 const cid = _report?.scope?.companyId || _report?.companyId || 'unknown';
                 const filename = `wiring-${cid}-${new Date().toISOString().slice(0, 10)}.json`;
+                console.log('[WiringTab] ✅ Downloading file:', filename);
                 downloadJson(filename, _report);
+                toast(`Downloaded: ${filename}`);
+            } else {
+                console.warn('[WiringTab] ⚠️ No report to download');
+                toast('No report loaded', true);
             }
         });
         
         // Clear cache button
         const clearCacheBtn = $('#wiringClearCache');
+        console.log('[WiringTab] CHECKPOINT: Clear Cache button found:', !!clearCacheBtn);
         bindOnce(clearCacheBtn, 'click', async () => {
+            console.log('[WiringTab] 🗑️ BUTTON CLICKED: Clear Cache', { companyId: _companyId });
+            if (!_companyId) {
+                console.error('[WiringTab] ❌ No company ID for cache clear');
+                toast('No company ID', true);
+                return;
+            }
             try {
+                console.log('[WiringTab] CHECKPOINT: Calling clearCache API...');
                 const result = await clearCache(_companyId);
+                console.log('[WiringTab] ✅ Cache cleared:', result);
                 toast(result.message || 'Cache cleared');
+                console.log('[WiringTab] CHECKPOINT: Refreshing after cache clear...');
                 await refresh(_companyId);
             } catch (e) {
+                console.error('[WiringTab] ❌ Clear cache FAILED:', e.message, e);
                 toast(e.message, true);
             }
         });
