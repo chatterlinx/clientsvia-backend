@@ -384,19 +384,33 @@
             const children = new Map();
 
             const healthById = getV2FieldHealthById(report);
+            
+            // Track IDs to prevent duplicates and circular refs
+            const tabIds = new Set();
+            const sectionIds = new Set();
 
             const addChild = (parentId, childId) => {
                 if (!parentId) return;
+                // Prevent self-reference
+                if (parentId === childId) {
+                    console.warn('[WiringTab] Skipping self-reference:', childId);
+                    return;
+                }
                 if (!children.has(parentId)) children.set(parentId, []);
-                children.get(parentId).push(childId);
+                // Prevent duplicate children
+                if (!children.get(parentId).includes(childId)) {
+                    children.get(parentId).push(childId);
+                }
             };
 
-            // Tabs
+            // Tabs (root level - no parent)
             for (const t of (report?.uiMap?.tabs || [])) {
+                if (!t.id) continue;
+                tabIds.add(t.id);
                 const node = {
                     id: t.id,
                     type: 'TAB',
-                    label: t.label,
+                    label: t.label || t.id,
                     description: '',
                     parentId: null,
                     status: 'WIRED', // Tabs are structural; status driven by children counts
@@ -407,14 +421,18 @@
                 if (!children.has(node.id)) children.set(node.id, []);
             }
 
-            // Sections
+            // Sections (parent must be a TAB)
             for (const s of (report?.uiMap?.sections || [])) {
+                if (!s.id) continue;
+                sectionIds.add(s.id);
+                // Only accept valid tab parents
+                const parentId = (s.tabId && tabIds.has(s.tabId)) ? s.tabId : null;
                 const node = {
                     id: s.id,
                     type: 'SECTION',
-                    label: s.label,
+                    label: s.label || s.id,
                     description: '',
-                    parentId: s.tabId || null,
+                    parentId,
                     status: 'WIRED',
                     critical: !!s.critical,
                     uiPath: s?.ui?.path || null
@@ -424,15 +442,18 @@
                 if (!children.has(node.id)) children.set(node.id, []);
             }
 
-            // Fields
+            // Fields (parent must be a SECTION)
             for (const f of (report?.uiMap?.fields || [])) {
+                if (!f.id) continue;
                 const h = healthById.get(f.id);
+                // Only accept valid section parents
+                const parentId = (f.sectionId && sectionIds.has(f.sectionId)) ? f.sectionId : null;
                 const node = {
                     id: f.id,
                     type: 'FIELD',
-                    label: f.label,
+                    label: f.label || f.id,
                     description: '',
-                    parentId: f.sectionId || null,
+                    parentId,
                     status: h?.status || 'UNKNOWN',
                     critical: !!f.critical,
                     required: !!f.required,
@@ -442,17 +463,30 @@
                 addChild(node.parentId, node.id);
             }
 
+            console.log('[WiringTab] Index built:', { 
+                tabs: tabIds.size, 
+                sections: sectionIds.size, 
+                fields: map.size - tabIds.size - sectionIds.size,
+                totalNodes: map.size 
+            });
+            
             return { map, children };
         }
 
         const map = new Map();
-        (report.nodes || []).forEach(n => map.set(n.id, n));
+        (report.nodes || []).forEach(n => {
+            if (n && n.id) map.set(n.id, n);
+        });
         
         const children = new Map();
         (report.nodes || []).forEach(n => {
-            if (!n.parentId) return;
+            if (!n?.parentId || !n?.id) return;
+            // Prevent self-reference
+            if (n.parentId === n.id) return;
             if (!children.has(n.parentId)) children.set(n.parentId, []);
-            children.get(n.parentId).push(n.id);
+            if (!children.get(n.parentId).includes(n.id)) {
+                children.get(n.parentId).push(n.id);
+            }
         });
         
         return { map, children };
@@ -938,28 +972,46 @@
             ? (Array.from(map.values()).filter(n => n.type === 'TAB'))
             : (_report.nodes || []).filter(n => n.type === 'TAB');
         
+        // Max depth to prevent infinite recursion from circular refs
+        const MAX_DEPTH = 20;
+        
         function nodeMatches(n) {
             if (!_searchTerm) return true;
             const s = _searchTerm.toLowerCase();
             return (n.label || '').toLowerCase().includes(s) || (n.id || '').toLowerCase().includes(s);
         }
         
-        function subtreeMatches(id) {
+        function subtreeMatches(id, visited = new Set()) {
+            // Guard against circular refs
+            if (visited.has(id) || visited.size > 200) return false;
+            visited.add(id);
+            
             const n = map.get(id);
             if (n && nodeMatches(n)) return true;
             const kids = children.get(id) || [];
-            return kids.some(k => subtreeMatches(k));
+            return kids.some(k => subtreeMatches(k, visited));
         }
         
-        function renderNode(id, depth = 0) {
+        function renderNode(id, depth = 0, visited = new Set()) {
+            // Guard against circular refs and excessive depth
+            if (visited.has(id)) {
+                console.warn('[WiringTab] Circular ref detected:', id);
+                return '';
+            }
+            if (depth > MAX_DEPTH) {
+                console.warn('[WiringTab] Max depth exceeded at:', id);
+                return '';
+            }
+            visited.add(id);
+            
             const n = map.get(id);
             if (!n) return '';
             
-            // Focus filter
-            if (_focusedNodeId && !isDescendantOrSelf(id, _focusedNodeId)) return '';
+            // Focus filter (with circular ref guard)
+            if (_focusedNodeId && !isDescendantOrSelf(id, _focusedNodeId, new Set())) return '';
             
             // Search filter
-            if (_searchTerm && !subtreeMatches(id)) return '';
+            if (_searchTerm && !subtreeMatches(id, new Set())) return '';
             
             const kids = children.get(id) || [];
             const hasKids = kids.length > 0;
@@ -991,18 +1043,22 @@
                     
                     ${hasKids && isExpanded ? `
                         <div class="w-children">
-                            ${kids.map(k => renderNode(k, depth + 1)).join('')}
+                            ${kids.map(k => renderNode(k, depth + 1, new Set(visited))).join('')}
                         </div>
                     ` : ''}
                 </div>
             `;
         }
         
-        function isDescendantOrSelf(id, target) {
+        function isDescendantOrSelf(id, target, visited = new Set()) {
+            // Guard against circular parentId chains
+            if (visited.has(id) || visited.size > 50) return false;
+            visited.add(id);
+            
             if (id === target) return true;
             const node = map.get(id);
             if (node?.parentId === target) return true;
-            if (node?.parentId) return isDescendantOrSelf(node.parentId, target);
+            if (node?.parentId) return isDescendantOrSelf(node.parentId, target, visited);
             return false;
         }
         
@@ -1359,10 +1415,22 @@
             _report = await loadWiringReport(_companyId);
             _index = buildIndex(_report);
             
-            const nodeCount = Array.isArray(_report?.nodes) ? _report.nodes.length : 0;
-            console.log('[WiringTab] Loaded report', { companyId: _companyId, nodeCount });
+            // V2 reports use uiMap.fields; V1 uses nodes array
+            const nodeCount = isV2Report(_report)
+                ? ((_report?.uiMap?.tabs?.length || 0) + (_report?.uiMap?.sections?.length || 0) + (_report?.uiMap?.fields?.length || 0))
+                : (Array.isArray(_report?.nodes) ? _report.nodes.length : 0);
             
-            if (!nodeCount) {
+            console.log('[WiringTab] Loaded report', { 
+                companyId: _companyId, 
+                nodeCount,
+                isV2: isV2Report(_report),
+                hasTabs: !!_report?.uiMap?.tabs?.length,
+                hasSections: !!_report?.uiMap?.sections?.length,
+                hasFields: !!_report?.uiMap?.fields?.length,
+                indexMapSize: _index?.map?.size || 0
+            });
+            
+            if (!nodeCount && !(_index?.map?.size > 0)) {
                 setState('empty', { companyId: _companyId, url: _lastLoad.url, status: _lastLoad.status, payload: _report });
             } else {
                 setState('success');
