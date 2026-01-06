@@ -41,7 +41,18 @@ const TriggerSchema = new Schema({
             'time_elapsed',     // After N seconds
             'previous_flow',    // After another flow completes
             'customer_flag',    // Customer has specific flag (returning, VIP, etc.)
-            'composite'         // Multiple conditions (AND/OR)
+            'composite',        // Multiple conditions (AND/OR)
+            // ═══════════════════════════════════════════════════════════════
+            // TEMPLATE TRIGGER TYPES (used by seeded templates)
+            // ═══════════════════════════════════════════════════════════════
+            'after_hours',      // Outside business hours
+            'emergency',        // Emergency situation detected
+            'returning_customer', // Returning customer detected
+            'booking_intent',   // Caller wants to schedule
+            'pricing_inquiry',  // Price question
+            'hours_inquiry',    // Business hours question
+            'frustration',      // Customer frustration detected
+            'technician_request' // Specific technician requested
         ],
         required: true
     },
@@ -454,26 +465,39 @@ DynamicFlowSchema.index({ tradeType: 1, isTemplate: 1 });
 DynamicFlowSchema.index({ tradeCategoryId: 1, isTemplate: 1, enabled: 1 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// UNIQUENESS INDEXES
-// Note: MongoDB partial indexes don't support $ne, must use explicit value
+// UNIQUENESS INDEXES (Enterprise / Deterministic)
 // ════════════════════════════════════════════════════════════════════════════
+//
+// IMPORTANT (MongoDB constraints):
+// - Do NOT combine `sparse` with `partialFilterExpression` (Mongo rejects it).
+// - Do NOT use `$ne`/`$not` in partialFilterExpression across all environments.
+// - Ensure `isTemplate` is always present (default false) so partial filters are stable.
+//
+// RULES:
+// 1) Company flows: unique (companyId + flowKey) where isTemplate=false
+// 2) Templates: unique (flowKey) where isTemplate=true
+//
+// This matches the platform contract:
+// - Templates are global “golden” definitions
+// - Companies copy templates to create tenant-scoped flows
+//
 
 // COMPANY FLOWS: Unique flowKey per company (where isTemplate = false)
 DynamicFlowSchema.index(
-    { companyId: 1, flowKey: 1 }, 
-    { 
+    { companyId: 1, flowKey: 1 },
+    {
         unique: true,
         name: 'uniq_company_flowKey',
         partialFilterExpression: { isTemplate: false }
     }
 );
 
-// GLOBAL TEMPLATES: Unique flowKey per tradeType for templates
+// GLOBAL TEMPLATES: Unique flowKey among templates (where isTemplate = true)
 DynamicFlowSchema.index(
-    { tradeType: 1, flowKey: 1 }, 
-    { 
+    { flowKey: 1 },
+    {
         unique: true,
-        name: 'uniq_template_tradeType_flowKey',
+        name: 'uniq_template_flowKey',
         partialFilterExpression: { isTemplate: true }
     }
 );
@@ -538,17 +562,23 @@ DynamicFlowSchema.statics.createFromTemplate = async function(templateId, compan
     delete template.updatedAt;
     
     // Create company copy (carries tradeCategoryId for audit trail)
+    // ENTERPRISE SAFETY:
+    // - Never allow overrides to flip isTemplate=true
+    // - Never allow overrides to change companyId/templateId
     const companyFlow = {
         ...template,
+        // allow overrides (e.g. name/description/settings tweaks), but hard-enforce tenant scoping below
+        ...overrides,
+        // HARD ENFORCE (multi-tenant isolation)
         companyId,
         templateId,
         isTemplate: false,
         // IMPORTANT: Carry trade category for audit trail
         tradeCategoryId: template.tradeCategoryId,
         tradeCategoryName: template.tradeCategoryName,
-        ...overrides,
         metadata: {
             ...template.metadata,
+            ...(overrides?.metadata || {}),
             version: 1,
             usageCount: 0,
             lastUsedAt: null,

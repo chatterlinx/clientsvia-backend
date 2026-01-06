@@ -482,6 +482,24 @@ const companySchema = new mongoose.Schema({
                 default: Date.now 
             }
         }],
+
+        // -------------------------------------------------------------------
+        // BUSINESS HOURS (canonical, trade-agnostic)
+        // -------------------------------------------------------------------
+        // Used by:
+        // - AfterHoursEvaluator (single source of truth)
+        // - DynamicFlowEngine trigger: after_hours
+        //
+        // Shape (validated in runtime/evaluator; stored as object):
+        // {
+        //   timezone: "America/New_York",
+        //   weekly: { mon:{open:"08:00",close:"17:00"}, ... , sat:null, sun:null },
+        //   holidays: ["2026-01-01"]
+        // }
+        businessHours: {
+            type: mongoose.Schema.Types.Mixed,
+            default: null
+        },
         
         // -------------------------------------------------------------------
         // VARIABLE DEFINITIONS - Auto-detected placeholders from templates

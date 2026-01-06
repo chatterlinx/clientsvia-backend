@@ -522,7 +522,7 @@ router.post('/:flowId/toggle', async (req, res) => {
 router.post('/from-template', async (req, res) => {
     try {
         const { companyId } = req.params;
-        const { templateId, overrides = {} } = req.body;
+        const { templateId, overrides = {}, tradeCategoryId = null, tradeCategoryName = null } = req.body;
         
         logger.info('[DYNAMIC FLOWS API] Create from template', {
             companyId,
@@ -579,13 +579,25 @@ router.post('/from-template', async (req, res) => {
         }
         
         // Create from template
+        // ─────────────────────────────────────────────────────────────────────
+        // IMPORTANT: Build overrides in a way Mongoose will actually persist.
+        // Do NOT use dot-notation keys (e.g. "metadata.createdBy") inside objects;
+        // those become literal keys and are silently lost.
+        // ─────────────────────────────────────────────────────────────────────
+        const mergedOverrides = {
+            ...overrides,
+            ...(tradeCategoryId ? { tradeCategoryId } : {}),
+            ...(tradeCategoryName ? { tradeCategoryName } : {}),
+            metadata: {
+                ...(overrides?.metadata || {}),
+                createdBy: req.user?.userId || null
+            }
+        };
+
         const flow = await DynamicFlow.createFromTemplate(
             templateId,
             new mongoose.Types.ObjectId(companyId),
-            {
-                ...overrides,
-                'metadata.createdBy': req.user?.userId
-            }
+            mergedOverrides
         );
         
         logger.info('[DYNAMIC FLOWS API] Flow created from template', {
@@ -597,9 +609,38 @@ router.post('/from-template', async (req, res) => {
         res.status(201).json({ success: true, flow });
         
     } catch (error) {
+        // Schema validation errors must be returned as 400 with actionable details (never a blind 500).
+        if (error && (error.name === 'ValidationError' || error._message?.includes('validation failed'))) {
+            const errs = error.errors ? Object.values(error.errors) : [];
+            const validationErrors = errs.map(e => {
+                const path = e?.path || e?.properties?.path || 'unknown';
+                const value = e?.value;
+                const kind = e?.kind || e?.properties?.type || 'validation';
+                const message = e?.message || `${path}: ${String(value)} failed ${kind}`;
+                return `${path}: ${message}`;
+            });
+
+            logger.warn('[DYNAMIC FLOWS API] Create from template validation failed', {
+                companyId: req.params.companyId,
+                templateId: req.body?.templateId,
+                validationErrors
+            });
+
+            return res.status(400).json({
+                success: false,
+                error: `DynamicFlow validation failed`,
+                validationErrors,
+                raw: {
+                    name: error.name,
+                    message: error.message
+                }
+            });
+        }
+
         logger.error('[DYNAMIC FLOWS API] Create from template failed', {
             companyId: req.params.companyId,
-            error: error.message
+            error: error.message,
+            stack: error.stack
         });
         res.status(500).json({ success: false, error: error.message });
     }

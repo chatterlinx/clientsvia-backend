@@ -1522,14 +1522,21 @@
          ═══════════════════════════════════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="dynamic-flow">
       <div class="card">
-        <div id="dynamic-flow-container">
+        <!--
+          Deep-link contract (ControlPlaneNav):
+          - tab=dynamic-flow
+          - section=company-flows
+          - field=companyFlows
+          This tab must expose stable anchors so Wiring "Fix" links can highlight correctly.
+        -->
+        <div id="dynamic-flow-container" data-section-id="company-flows" data-field-id="companyFlows">
           <div class="loading-container">
             <i class="fas fa-code-branch fa-spin"></i>
             <p>Loading Dynamic Flow Configuration...</p>
-            </div>
           </div>
         </div>
       </div>
+    </div>
 
     <!-- ═══════════════════════════════════════════════════════════════════════
          DATA & CONFIG - Placeholders, Templates, Scenarios
@@ -2611,23 +2618,39 @@
           }
           
           // 5) Highlight specific field
+          // ENTERPRISE: support canonical ids + dotted registry ids (e.g. dynamicFlow.companyFlows → companyFlows)
           if (field) {
             setTimeout(() => {
-              const fieldEl = document.querySelector(`[data-field-id="${field}"]`)
-                           || document.querySelector(`[data-field="${field}"]`)
-                           || document.getElementById(field)
-                           || document.getElementById(`fdb-${field}`)
-                           || document.querySelector(`[name="${field}"]`)
-                           || document.querySelector(`#${field}-input`)
-                           || document.querySelector(`#${field}-container`);
+              const candidates = Array.from(new Set([
+                field,
+                // If wiring uses registry ids, also try the last segment
+                String(field).includes('.') ? String(field).split('.').pop() : null
+              ].filter(Boolean)));
+
+              const findFieldEl = (f) => (
+                document.querySelector(`[data-field-id="${f}"]`) ||
+                document.querySelector(`[data-field="${f}"]`) ||
+                document.getElementById(f) ||
+                document.getElementById(`fdb-${f}`) ||
+                document.querySelector(`[name="${f}"]`) ||
+                document.querySelector(`#${f}-input`) ||
+                document.querySelector(`#${f}-container`)
+              );
+
+              let fieldEl = null;
+              let matched = null;
+              for (const c of candidates) {
+                fieldEl = findFieldEl(c);
+                if (fieldEl) { matched = c; break; }
+              }
               
               if (fieldEl) {
-                console.log('🎯 [ControlPlaneNav] Found field:', field);
+                console.log('🎯 [ControlPlaneNav] Found field:', { requested: field, matched });
                 fieldEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 fieldEl.classList.add('cp-highlight');
                 setTimeout(() => fieldEl.classList.remove('cp-highlight'), 2500);
               } else {
-                console.warn('⚠️ [ControlPlaneNav] Field not found:', field);
+                console.warn('⚠️ [ControlPlaneNav] Field not found:', { requested: field, candidates });
               }
             }, 200);
           }

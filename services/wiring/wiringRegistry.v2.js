@@ -637,7 +637,9 @@ const wiringRegistryV2 = {
                     id: 'dynamicFlow.companyFlows',
                     label: 'Company Flows',
                     description: 'Active flows for this company',
-                    ui: { sectionId: 'companyFlows', path: 'Dynamic Flow → Company Flows' },
+                    // IMPORTANT: Match ControlPlaneNav deep-link contract
+                    // section=company-flows (URL / Wiring Next Actions)
+                    ui: { sectionId: 'company-flows', path: 'Dynamic Flow → Company Flows' },
                     fields: [
                         {
                             id: 'dynamicFlow.companyFlows',

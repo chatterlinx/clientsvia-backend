@@ -45,6 +45,7 @@
 
 const DynamicFlow = require('../models/DynamicFlow');
 const logger = require('../utils/logger');
+const { evaluateAfterHours } = require('./hours/AfterHoursEvaluator');
 
 // ════════════════════════════════════════════════════════════════════════════
 // ENGINE VERSION
@@ -524,6 +525,20 @@ function evaluateTrigger(trigger, context) {
     const userTextLower = (userText || '').toLowerCase().trim();
     
     switch (trigger.type) {
+        case 'after_hours': {
+            // Single Source of Truth: delegate to AfterHoursEvaluator
+            const company = context.company || null;
+            const out = evaluateAfterHours({ company, now: new Date(), triggerConfig: trigger.config || {} });
+            if (out.isAfterHours) {
+                return {
+                    matched: true,
+                    matchScore: 1.0,
+                    matchScoreSource: 'deterministic_after_hours',
+                    matchedValue: out.meta
+                };
+            }
+            return { matched: false, matchScore: 0, matchScoreSource: 'deterministic_after_hours', matchedValue: out.meta };
+        }
         case 'phrase': {
             const phrases = trigger.config?.phrases || [];
             for (const phrase of phrases) {

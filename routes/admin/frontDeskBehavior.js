@@ -219,6 +219,7 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
         
         // Merge saved config with defaults
         const saved = company.aiAgentSettings?.frontDeskBehavior || {};
+        const businessHours = company.aiAgentSettings?.businessHours || null;
         
         // 👤 DEBUG: Log RAW saved data before merge
         logger.info('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: RAW SAVED commonFirstNames:', {
@@ -323,6 +324,8 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 // 🚫 V36: Name Stop Words (words that should NEVER be extracted as names)
                 nameStopWords: company.aiAgentSettings?.nameStopWords || { enabled: true, custom: [] },
                 nameStopWordsEnabled: config.nameStopWordsEnabled !== false, // Default to true
+                // 🕒 Canonical business hours (used by after_hours trigger + AfterHours handler)
+                businessHours,
                 lastUpdated: saved.lastUpdated || null
             }
         });
@@ -448,6 +451,22 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
         // 🌙 After-hours message contract (deterministic)
         if (updates.afterHoursMessageContract && typeof updates.afterHoursMessageContract === 'object') {
             updateObj['aiAgentSettings.frontDeskBehavior.afterHoursMessageContract'] = updates.afterHoursMessageContract;
+        }
+
+        // 🕒 Canonical business hours (company-scoped, trade-agnostic)
+        // Stored at: aiAgentSettings.businessHours
+        // Shape validated in AfterHoursEvaluator; here we only enforce basic object-ness to prevent null/strings.
+        if (updates.businessHours !== undefined) {
+            if (updates.businessHours === null) {
+                updateObj['aiAgentSettings.businessHours'] = null;
+            } else if (updates.businessHours && typeof updates.businessHours === 'object') {
+                updateObj['aiAgentSettings.businessHours'] = updates.businessHours;
+            } else {
+                return res.status(400).json({
+                    success: false,
+                    error: 'businessHours must be an object or null'
+                });
+            }
         }
 
         // 🧾 Booking Contract V2 (feature-flagged)

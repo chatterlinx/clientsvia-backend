@@ -20,6 +20,7 @@
 
 const logger = require('../utils/logger');
 const BookingScriptEngine = require('./BookingScriptEngine');
+const { evaluateAfterHours } = require('./hours/AfterHoursEvaluator');
 
 const FLOW_STEPS = {
   ASK_FIELD: 'ASK_FIELD',
@@ -146,17 +147,25 @@ class AfterHoursCallTurnHandler {
   static async handleTurn({ companyId, company, callSid, userText, callState }) {
     const state = callState || {};
     const contract = resolveAfterHoursContract(company);
+
+    // Enterprise truth: even if the caller is in an "after-hours" flow already,
+    // we compute after-hours using the SAME evaluator used by DynamicFlowEngine.
+    // This is debug-only metadata; routing decisions happen outside this handler.
+    const afterHoursEval = evaluateAfterHours({ company, now: new Date(), triggerConfig: { useCompanyHours: true } });
     state.afterHoursFlow = state.afterHoursFlow || {
       step: FLOW_STEPS.ASK_FIELD,
       index: 0,
       contract,
       completed: false,
       confirmed: false,
+      afterHoursEval,
       message: {},
       slots: {}
     };
 
     const flow = state.afterHoursFlow;
+    // Refresh evaluation each turn for truth/debug
+    flow.afterHoursEval = evaluateAfterHours({ company, now: new Date(), triggerConfig: { useCompanyHours: true } });
     if (!flow.contract || !Array.isArray(flow.contract.effectiveFieldKeys)) {
       flow.contract = contract;
     }
