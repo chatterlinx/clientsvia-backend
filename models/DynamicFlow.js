@@ -454,25 +454,26 @@ DynamicFlowSchema.index({ tradeType: 1, isTemplate: 1 });
 DynamicFlowSchema.index({ tradeCategoryId: 1, isTemplate: 1, enabled: 1 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// UNIQUENESS INDEXES (Cannot mix sparse + partialFilterExpression)
+// UNIQUENESS INDEXES
+// Note: MongoDB partial indexes don't support $ne, must use explicit value
 // ════════════════════════════════════════════════════════════════════════════
 
-// COMPANY FLOWS: Unique flowKey per company (non-templates)
+// COMPANY FLOWS: Unique flowKey per company (where isTemplate = false)
 DynamicFlowSchema.index(
     { companyId: 1, flowKey: 1 }, 
     { 
         unique: true,
         name: 'uniq_company_flowKey',
-        partialFilterExpression: { isTemplate: { $ne: true } }
+        partialFilterExpression: { isTemplate: false }
     }
 );
 
-// GLOBAL TEMPLATES: Unique flowKey for templates (prevents duplicate templates)
+// GLOBAL TEMPLATES: Unique flowKey per tradeType for templates
 DynamicFlowSchema.index(
-    { flowKey: 1 }, 
+    { tradeType: 1, flowKey: 1 }, 
     { 
         unique: true,
-        name: 'uniq_template_flowKey',
+        name: 'uniq_template_tradeType_flowKey',
         partialFilterExpression: { isTemplate: true }
     }
 );
