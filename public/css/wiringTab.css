@@ -1940,6 +1940,42 @@
     margin: 12px 0;
 }
 
+/* === Apply Recommended Button (one-click fix) === */
+.w-apply-fix-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    pointer-events: auto;
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+}
+
+.w-apply-fix-btn:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 20px rgba(139, 92, 246, 0.5);
+    background: linear-gradient(135deg, #9d6eff 0%, #8b5cf6 100%);
+}
+
+.w-apply-fix-btn:active {
+    transform: scale(0.98);
+}
+
+.w-apply-fix-btn:disabled {
+    opacity: 0.7;
+    cursor: wait;
+    transform: none;
+}
+
+/* === Fix Now Button (deep link) === */
 .w-fix-now-btn {
     display: inline-flex;
     align-items: center;
@@ -1964,6 +2000,18 @@
 
 .w-fix-now-btn:active {
     transform: translateX(2px);
+}
+
+/* === User Input Required Hint === */
+.w-next-action-user-input-hint {
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 6px;
+    font-size: 11px;
+    color: #f59e0b;
+    display: inline-block;
 }
 
 .w-inspect-btn {

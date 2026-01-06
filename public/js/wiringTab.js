@@ -1838,18 +1838,31 @@
                     
                     <!-- ACTIONABLE BUTTONS -->
                     <div class="w-next-action-buttons">
+                      ${action.canAutoApply ? `
+                        <button class="w-apply-fix-btn" 
+                                data-field-id="${esc(action.fieldId)}"
+                                data-db-path="${esc(action.dbPath || '')}"
+                                data-value='${JSON.stringify(action.recommendedValue || null)}'>
+                          ✨ Apply Recommended
+                        </button>
+                      ` : ''}
                       ${hasNav ? `
                         <button class="w-fix-now-btn" 
                                 data-nav-tab="${esc(navTab)}" 
                                 data-nav-section="${esc(navSection)}" 
                                 data-nav-field="${esc(navField)}">
-                          🔧 Fix Now → ${esc(tabLabel)}
+                          🔧 ${action.requiresUserInput ? 'Configure' : 'Fix Now'} → ${esc(tabLabel)}
                         </button>
                       ` : ''}
                       <button class="w-inspect-btn" data-focus="${esc(action.fieldId)}">
                         🔍 Inspect
                       </button>
                     </div>
+                    ${action.requiresUserInput ? `
+                      <div class="w-next-action-user-input-hint">
+                        ⚠️ Requires your input - cannot auto-apply
+                      </div>
+                    ` : ''}
                     
                     <div class="w-next-action-fix-hint">
                       💡 ${esc(action.fixInstructions)}
@@ -1867,6 +1880,42 @@
             </div>
           </div>
         `;
+        
+        // Bind "Apply Fix" buttons (one-click apply)
+        $$('.w-apply-fix-btn[data-field-id]', el).forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const fieldId = btn.dataset.fieldId;
+                const dbPath = btn.dataset.dbPath;
+                let value;
+                try {
+                    value = JSON.parse(btn.dataset.value);
+                } catch(err) {
+                    console.error('[WiringTab] ❌ Failed to parse recommendedValue:', err);
+                    toast('Invalid recommended value', true);
+                    return;
+                }
+                console.log('[WiringTab] ✨ APPLY FIX clicked:', { fieldId, dbPath, value });
+                
+                // Disable button and show loading
+                btn.disabled = true;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '⏳ Applying...';
+                
+                try {
+                    await applyWiringFix(dbPath, value, fieldId);
+                    btn.innerHTML = '✅ Applied!';
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    }, 2000);
+                } catch (err) {
+                    console.error('[WiringTab] ❌ Apply failed:', err);
+                    btn.innerHTML = '❌ Failed';
+                    btn.disabled = false;
+                }
+            });
+        });
         
         // Bind "Fix Now" deep link buttons
         $$('.w-fix-now-btn[data-nav-tab]', el).forEach(btn => {
@@ -2157,6 +2206,72 @@
     // ========================================================================
     // INITIALIZATION
     // ========================================================================
+    
+    /**
+     * Apply a wiring fix via the /apply endpoint
+     * This is the "one-click to MAX 100%" feature
+     * 
+     * @param {string} dbPath - MongoDB path like "aiAgentSettings.frontDeskBehavior.greetingResponses"
+     * @param {any} value - The value to set
+     * @param {string} fieldId - The wiring field ID for logging
+     */
+    async function applyWiringFix(dbPath, value, fieldId) {
+        if (!_companyId) {
+            toast('Company ID missing', true);
+            throw new Error('No companyId');
+        }
+        
+        if (!dbPath) {
+            toast('Missing database path', true);
+            throw new Error('No dbPath');
+        }
+        
+        console.log('[WiringTab] 🔧 applyWiringFix:', { companyId: _companyId, dbPath, fieldId, value });
+        
+        const token = localStorage.getItem('adminToken');
+        if (!token) {
+            toast('Not authenticated', true);
+            throw new Error('No auth token');
+        }
+        
+        const patch = {
+            $set: {
+                [dbPath]: value
+            }
+        };
+        
+        const resp = await fetch(`/api/admin/wiring-status/${_companyId}/apply`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                patch,
+                reason: 'wiring_next_action',
+                fieldId
+            })
+        });
+        
+        const data = await resp.json();
+        
+        if (!resp.ok || !data.success) {
+            console.error('[WiringTab] ❌ Apply failed:', data);
+            toast(data.error || 'Apply failed', true);
+            throw new Error(data.error || 'Apply failed');
+        }
+        
+        console.log('[WiringTab] ✅ Apply succeeded:', data);
+        toast(`✅ Applied: ${fieldId}`, false);
+        
+        // Auto-refresh the wiring report to show updated tier scores
+        setTimeout(() => {
+            console.log('[WiringTab] 🔄 Auto-refreshing wiring report...');
+            refresh(_companyId);
+        }, 500);
+        
+        return data;
+    }
     
     async function refresh(companyId) {
         if (companyId) _companyId = companyId;

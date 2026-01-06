@@ -40,7 +40,9 @@ const TIER_MVA = {
             impact: 'reliability',
             priority: 1,
             fixInstructions: 'Set AI Name',
-            nav: { tab: 'front-desk', section: 'personality', field: 'aiName' }
+            nav: { tab: 'front-desk', section: 'personality', field: 'aiName' },
+            dbPath: 'aiAgentSettings.aiName',
+            recommendedValue: '{companyName} Assistant' // Will be replaced with actual company name
         },
         {
             fieldId: 'frontDesk.discoveryConsent.forceLLMDiscovery',
@@ -51,7 +53,9 @@ const TIER_MVA = {
             critical: true,
             mustBe: false,
             fixInstructions: 'Set "Force LLM Discovery" to OFF',
-            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'forceLLMDiscovery' }
+            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'forceLLMDiscovery' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.forceLLMDiscovery',
+            recommendedValue: false
         },
         {
             fieldId: 'frontDesk.discoveryConsent.disableScenarioAutoResponses',
@@ -62,7 +66,9 @@ const TIER_MVA = {
             critical: true,
             mustBe: false,
             fixInstructions: 'Set "Disable Auto-Responses" to OFF',
-            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'disableScenarioAutoResponses' }
+            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'disableScenarioAutoResponses' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.disableScenarioAutoResponses',
+            recommendedValue: false
         },
         {
             fieldId: 'dataConfig.templateReferences',
@@ -73,7 +79,10 @@ const TIER_MVA = {
             critical: true,
             validator: (val) => Array.isArray(val) && val.length > 0 && val.some(r => r.enabled !== false),
             fixInstructions: 'Link an active template',
-            nav: { tab: 'data-config', section: 'template-references', field: 'templateReferences' }
+            nav: { tab: 'data-config', section: 'template-references', field: 'templateReferences' },
+            dbPath: 'aiAgentSettings.templateReferences',
+            // No recommendedValue - must be selected by user
+            requiresUserInput: true
         },
         {
             fieldId: 'frontDesk.bookingEnabled',
@@ -82,7 +91,9 @@ const TIER_MVA = {
             impact: 'conversion',
             priority: 2,
             fixInstructions: 'Enable booking',
-            nav: { tab: 'front-desk', section: 'booking-prompts', field: 'bookingEnabled' }
+            nav: { tab: 'front-desk', section: 'booking-prompts', field: 'bookingEnabled' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.bookingEnabled',
+            recommendedValue: true
         },
         {
             fieldId: 'frontDesk.bookingSlots',
@@ -92,7 +103,17 @@ const TIER_MVA = {
             priority: 2,
             validator: (val) => Array.isArray(val) && val.length > 0 && val.every(s => s.question),
             fixInstructions: 'Add slots with questions',
-            nav: { tab: 'front-desk', section: 'booking-prompts', field: 'bookingSlots' }
+            nav: { tab: 'front-desk', section: 'booking-prompts', field: 'bookingSlots' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
+            recommendedValue: [
+                { id: 'firstName', type: 'text', label: 'First Name', question: "What's your first name?", required: true },
+                { id: 'lastName', type: 'text', label: 'Last Name', question: 'And your last name?', required: true },
+                { id: 'phone', type: 'phone', label: 'Phone', question: "What's the best phone number for the technician to reach you?", required: true },
+                { id: 'address', type: 'address', label: 'Service Address', question: "What's the service address?", required: true },
+                { id: 'serviceType', type: 'select', label: 'Service Type', question: 'Is this for repair, maintenance, or a new installation?', required: true },
+                { id: 'problemDescription', type: 'text', label: 'Problem Description', question: 'Can you briefly describe what the system is doing?', required: true },
+                { id: 'timeWindow', type: 'select', label: 'Preferred Time Window', question: 'Do you prefer morning (8-12) or afternoon (12-5)?', required: true }
+            ]
         },
         {
             fieldId: 'frontDesk.discoveryConsent.bookingRequiresExplicitConsent',
@@ -101,7 +122,9 @@ const TIER_MVA = {
             impact: 'safety',
             priority: 2,
             fixInstructions: 'Enable booking consent',
-            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'bookingRequiresExplicitConsent' }
+            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'bookingRequiresExplicitConsent' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.bookingRequiresExplicitConsent',
+            recommendedValue: true
         }
     ]
 };
@@ -121,7 +144,9 @@ const TIER_PRO = {
             impact: 'reliability',
             priority: 1,
             fixInstructions: 'Enable escalation',
-            nav: { tab: 'front-desk', section: 'escalation', field: 'escalationEnabled' }
+            nav: { tab: 'front-desk', section: 'escalation', field: 'escalationEnabled' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.escalation.enabled',
+            recommendedValue: true
         },
         {
             fieldId: 'frontDesk.escalation.triggerPhrases',
@@ -131,7 +156,9 @@ const TIER_PRO = {
             priority: 1,
             validator: (val) => Array.isArray(val) && val.length >= 3,
             fixInstructions: 'Add trigger phrases (manager, supervisor, human)',
-            nav: { tab: 'front-desk', section: 'escalation', field: 'escalationPhrases' }
+            nav: { tab: 'front-desk', section: 'escalation', field: 'escalationPhrases' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.escalation.triggerPhrases',
+            recommendedValue: ['manager', 'supervisor', 'real person', 'human', 'speak to someone', 'talk to someone', 'live person', 'operator']
         },
         {
             fieldId: 'transfers.transferTargets',
@@ -141,7 +168,10 @@ const TIER_PRO = {
             priority: 1,
             validator: (val) => Array.isArray(val) && val.length > 0,
             fixInstructions: 'Add at least one transfer target',
-            nav: { tab: 'transfer-calls', section: 'directory', field: 'transferTargets' }
+            nav: { tab: 'transfer-calls', section: 'directory', field: 'transferTargets' },
+            dbPath: 'aiAgentSettings.transferTargets',
+            // No recommendedValue - requires user's phone numbers
+            requiresUserInput: true
         },
         {
             fieldId: 'frontDesk.loopPrevention',
@@ -151,7 +181,9 @@ const TIER_PRO = {
             priority: 2,
             validator: (val) => val && val.enabled === true,
             fixInstructions: 'Enable loop prevention',
-            nav: { tab: 'front-desk', section: 'loops', field: 'loopPrevention' }
+            nav: { tab: 'front-desk', section: 'loops', field: 'loopPrevention' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.loopPrevention',
+            recommendedValue: { enabled: true, maxSameQuestion: 2, onLoop: 'rephrase', rephraseIntro: 'Let me try this differently -' }
         },
         {
             fieldId: 'frontDesk.forbiddenPhrases',
@@ -161,7 +193,9 @@ const TIER_PRO = {
             priority: 2,
             validator: (val) => Array.isArray(val) && val.length >= 3,
             fixInstructions: 'Add forbidden phrases',
-            nav: { tab: 'front-desk', section: 'forbidden', field: 'forbiddenPhrases' }
+            nav: { tab: 'front-desk', section: 'forbidden', field: 'forbiddenPhrases' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.forbiddenPhrases',
+            recommendedValue: ["I don't know", "I can't help", "That's not my job", "Call back later", "We're too busy", "I'm just an AI", "I can't do that"]
         },
         {
             fieldId: 'frontDesk.discoveryConsent.consentPhrases',
@@ -171,7 +205,9 @@ const TIER_PRO = {
             priority: 3,
             validator: (val) => Array.isArray(val) && val.length >= 5,
             fixInstructions: 'Add consent phrases',
-            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'consentPhrases' }
+            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'consentPhrases' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.consentPhrases',
+            recommendedValue: ['yes', 'yeah', 'yep', 'yupp', 'ok', 'okay', 'alright', 'sounds good', 'go ahead', 'please do', 'do it', "let's do it", "let's do that", 'schedule it', 'book it', 'set it up', 'proceed', 'correct', 'that works', 'sure', 'absolutely', 'definitely', '100%', 'you can', 'you may', 'i agree', 'i consent']
         },
         {
             fieldId: 'frontDesk.escalation.transferMessage',
@@ -180,7 +216,9 @@ const TIER_PRO = {
             impact: 'reliability',
             priority: 3,
             fixInstructions: 'Set transfer message',
-            nav: { tab: 'front-desk', section: 'escalation', field: 'transferMessage' }
+            nav: { tab: 'front-desk', section: 'escalation', field: 'transferMessage' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.escalation.transferMessage',
+            recommendedValue: 'Let me connect you to our team now. Please hold for just a moment.'
         }
     ]
 };
@@ -202,7 +240,14 @@ const TIER_MAX = {
             payoff: 'Reduces "hello?" dead air by 80%',
             validator: (val) => Array.isArray(val) && val.length > 0,
             fixInstructions: 'Add greeting responses',
-            nav: { tab: 'front-desk', section: 'greetings', field: 'greetingResponses' }
+            nav: { tab: 'front-desk', section: 'greetings', field: 'greetingResponses' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.greetingResponses',
+            recommendedValue: [
+                'Hi! Thanks for calling {companyName}. How can I help you today?',
+                'Hello! This is {companyName}. What can I help you with today?',
+                'Good morning! Thanks for calling {companyName}. How may I assist you?',
+                'Good afternoon! {companyName}, how can I help?'
+            ]
         },
         {
             fieldId: 'frontDesk.fastPathBooking.enabled',
@@ -212,7 +257,9 @@ const TIER_MAX = {
             priority: 1,
             payoff: 'Increases booking rate 20-30%',
             fixInstructions: 'Enable fast-path',
-            nav: { tab: 'front-desk', section: 'fast-path', field: 'fastPathEnabled' }
+            nav: { tab: 'front-desk', section: 'fast-path', field: 'fastPathEnabled' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.fastPathBooking.enabled',
+            recommendedValue: true
         },
         {
             fieldId: 'frontDesk.fastPathBooking.triggerKeywords',
@@ -222,7 +269,9 @@ const TIER_MAX = {
             priority: 1,
             validator: (val) => Array.isArray(val) && val.length >= 10,
             fixInstructions: 'Add trigger keywords (schedule, book, come out)',
-            nav: { tab: 'front-desk', section: 'fast-path', field: 'fastPathKeywords' }
+            nav: { tab: 'front-desk', section: 'fast-path', field: 'fastPathKeywords' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.fastPathBooking.triggerKeywords',
+            recommendedValue: ['send someone', 'send somebody', 'get someone out', 'get somebody out', 'need you out', 'need someone out', 'want someone out', 'come out', 'come today', 'schedule', 'book', 'appointment', 'technician', 'fix it', 'just fix it', 'need service', 'need help now', 'asap', 'emergency', 'urgent', "i'm done", 'just get someone']
         },
         {
             fieldId: 'frontDesk.fallbackResponses',
@@ -233,7 +282,13 @@ const TIER_MAX = {
             payoff: 'Eliminates weird LLM fallback phrases',
             validator: (val) => val && Object.keys(val).length > 0,
             fixInstructions: 'Add fallback responses',
-            nav: { tab: 'front-desk', section: 'fallbacks', field: 'fallbackResponses' }
+            nav: { tab: 'front-desk', section: 'fallbacks', field: 'fallbackResponses' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.fallbackResponses',
+            recommendedValue: {
+                noMatch: "I want to make sure I help you correctly. Could you tell me a bit more about what you need?",
+                unclear: "I didn't quite catch that. Are you calling about a service issue, or would you like to schedule an appointment?",
+                error: "I apologize - let me get you to someone who can help right away."
+            }
         },
         {
             fieldId: 'frontDesk.vocabulary',
@@ -244,7 +299,18 @@ const TIER_MAX = {
             payoff: 'Better scenario matching for colloquial speech',
             validator: (val) => val && Object.keys(val).length > 0,
             fixInstructions: 'Add term mappings',
-            nav: { tab: 'front-desk', section: 'vocabulary', field: 'vocabulary' }
+            nav: { tab: 'front-desk', section: 'vocabulary', field: 'vocabulary' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.vocabulary',
+            recommendedValue: {
+                ac: 'air conditioner',
+                'not cooling': 'blowing warm air',
+                leaking: 'water leaking',
+                frozen: 'ice on coil',
+                busted: 'not working',
+                broke: 'broken',
+                'acting up': 'malfunctioning',
+                wonky: 'not working properly'
+            }
         },
         {
             fieldId: 'frontDesk.emotions',
@@ -255,7 +321,14 @@ const TIER_MAX = {
             payoff: 'Better handling of frustrated callers',
             validator: (val) => val && Object.keys(val).length > 0,
             fixInstructions: 'Configure emotion detection',
-            nav: { tab: 'front-desk', section: 'emotions', field: 'emotions' }
+            nav: { tab: 'front-desk', section: 'emotions', field: 'emotions' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.emotions',
+            recommendedValue: {
+                enabled: true,
+                detectAnger: true,
+                detectFrustration: true,
+                deescalationResponse: "I completely understand your frustration. Let me make sure we take care of this for you right away."
+            }
         },
         {
             fieldId: 'frontDesk.frustration',
@@ -266,7 +339,13 @@ const TIER_MAX = {
             payoff: 'Reduces call abandonment from frustration',
             validator: (val) => val && Object.keys(val).length > 0,
             fixInstructions: 'Configure frustration handling',
-            nav: { tab: 'front-desk', section: 'frustration', field: 'frustration' }
+            nav: { tab: 'front-desk', section: 'frustration', field: 'frustration' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.frustration',
+            recommendedValue: {
+                enabled: true,
+                triggerWords: ['frustrated', 'angry', 'upset', 'furious', 'ridiculous', 'unacceptable', 'terrible', 'awful', 'sick of this'],
+                response: "I'm so sorry you're dealing with this. Your comfort is our priority - let me get this resolved for you right now."
+            }
         },
         {
             fieldId: 'dataConfig.cheatSheets',
@@ -275,9 +354,18 @@ const TIER_MAX = {
             impact: 'speed',
             priority: 3,
             payoff: 'Faster FAQ responses, lower LLM costs',
-            validator: (val) => val !== null && val !== undefined,
+            validator: (val) => val && (val.enabled === true || (Array.isArray(val.items) && val.items.length > 0)),
             fixInstructions: 'Add FAQ content',
-            nav: { tab: 'data-config', section: 'cheat-sheets', field: 'cheatSheets' }
+            nav: { tab: 'data-config', section: 'cheat-sheets', field: 'cheatSheets' },
+            dbPath: 'aiAgentSettings.dataConfig.cheatSheets',
+            recommendedValue: {
+                enabled: true,
+                items: [
+                    { question: 'What are your hours?', answer: 'We are available 24/7 for emergencies. Regular business hours are Monday through Friday, 8 AM to 5 PM.' },
+                    { question: 'Do you offer free estimates?', answer: 'Yes, we offer free estimates for most services. The technician will provide a detailed quote before any work begins.' },
+                    { question: 'What areas do you service?', answer: 'We service the greater metro area. Let me get your address to confirm we can help you.' }
+                ]
+            }
         },
         {
             fieldId: 'dataConfig.placeholders',
@@ -287,7 +375,10 @@ const TIER_MAX = {
             priority: 4,
             validator: (val) => val && Object.keys(val).length > 0,
             fixInstructions: 'Add company placeholders',
-            nav: { tab: 'data-config', section: 'placeholders', field: 'placeholders' }
+            nav: { tab: 'data-config', section: 'placeholders', field: 'placeholders' },
+            dbPath: 'aiAgentSettings.dataConfig.placeholders',
+            // No recommendedValue - requires user's actual company info
+            requiresUserInput: true
         },
         {
             fieldId: 'dynamicFlow.companyFlows',
@@ -298,7 +389,10 @@ const TIER_MAX = {
             payoff: 'Custom flows for specific business needs',
             validator: (val) => Array.isArray(val) && val.length > 0,
             fixInstructions: 'Create company-specific flows',
-            nav: { tab: 'dynamic-flow', section: 'company-flows', field: 'companyFlows' }
+            nav: { tab: 'dynamic-flow', section: 'company-flows', field: 'companyFlows' },
+            dbPath: 'aiAgentSettings.dynamicFlow.companyFlows',
+            // No recommendedValue - too business-specific
+            requiresUserInput: true
         }
     ]
 };
@@ -385,7 +479,12 @@ function evaluateTiers(healthFields) {
                     fixInstructions: req.fixInstructions,
                     nav: req.nav || null, // Navigation data for deep linking
                     currentValue: fieldValue,
-                    currentStatus: fieldStatus
+                    currentStatus: fieldStatus,
+                    // NEW: Include patch data for "Apply Fix" button
+                    dbPath: req.dbPath || null,
+                    recommendedValue: req.recommendedValue,
+                    requiresUserInput: req.requiresUserInput || false,
+                    canAutoApply: req.dbPath && req.recommendedValue !== undefined && !req.requiresUserInput
                 });
             }
         }

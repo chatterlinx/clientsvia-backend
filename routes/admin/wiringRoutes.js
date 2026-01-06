@@ -564,6 +564,210 @@ router.post('/:companyId/diagnose', async (req, res) => {
 });
 
 // ============================================================================
+// POST /api/admin/wiring-status/:companyId/apply
+// APPLY A WIRING FIX - One-click from Next Actions
+// 
+// THIS IS THE "BUILD SYSTEM" ENDPOINT:
+// - Takes a patch from the tier system
+// - Validates tenant safety (company-scoped only)
+// - Rejects any global template/scenario writes
+// - Applies to companiesCollection
+// ============================================================================
+router.post('/:companyId/apply', async (req, res) => {
+    const startTime = Date.now();
+    const { companyId } = req.params;
+    
+    logger.info('[WIRING API] 🔧 Apply fix requested', { companyId });
+    console.log('[WIRING API] 🔧 CHECKPOINT 1: Apply fix request received', { companyId });
+    
+    try {
+        const { patch, reason, fieldId } = req.body;
+        
+        // VALIDATION 1: Required fields
+        if (!patch) {
+            console.error('[WIRING API] ❌ CHECKPOINT 2 FAILED: Missing patch');
+            return res.status(400).json({
+                success: false,
+                error: 'patch is required',
+                hint: 'Send { patch: { "$set": { "path": value } }, reason: "...", fieldId: "..." }'
+            });
+        }
+        console.log('[WIRING API] ✅ CHECKPOINT 2: Patch object present');
+        
+        // VALIDATION 2: Patch must have $set
+        if (!patch.$set || typeof patch.$set !== 'object') {
+            console.error('[WIRING API] ❌ CHECKPOINT 3 FAILED: Invalid patch structure');
+            return res.status(400).json({
+                success: false,
+                error: 'patch must contain $set object',
+                received: Object.keys(patch)
+            });
+        }
+        console.log('[WIRING API] ✅ CHECKPOINT 3: Valid $set structure');
+        
+        const pathsToUpdate = Object.keys(patch.$set);
+        console.log('[WIRING API] CHECKPOINT 4: Paths to update:', pathsToUpdate);
+        
+        // =========================================================
+        // TENANT SAFETY - NON-NEGOTIABLE RULES
+        // =========================================================
+        
+        // ALLOWED prefixes (company-scoped data only)
+        const ALLOWED_PREFIXES = [
+            'aiAgentSettings.',
+            'transfers.',
+            'dataConfig.',
+            'dynamicFlow.companyFlows'
+        ];
+        
+        // FORBIDDEN patterns (global templates/scenarios)
+        const FORBIDDEN_PATTERNS = [
+            /globalinstantresponsetemplate/i,
+            /templates\./,
+            /scenarios\./,
+            /categories\[/,
+            /categories\./,
+            /\.scenarios\[/,
+            /template(?!References)/i  // "template" but not "templateReferences"
+        ];
+        
+        // Special case: aiAgentSettings.templateReferences is allowed
+        const ALLOWED_EXCEPTIONS = [
+            'aiAgentSettings.templateReferences'
+        ];
+        
+        const violations = [];
+        
+        for (const path of pathsToUpdate) {
+            // Check if path is explicitly allowed exception
+            const isException = ALLOWED_EXCEPTIONS.some(ex => path.startsWith(ex));
+            if (isException) continue;
+            
+            // Check if path has allowed prefix
+            const hasAllowedPrefix = ALLOWED_PREFIXES.some(prefix => path.startsWith(prefix));
+            if (!hasAllowedPrefix) {
+                violations.push({
+                    path,
+                    reason: 'Path does not start with allowed prefix',
+                    allowed: ALLOWED_PREFIXES
+                });
+                continue;
+            }
+            
+            // Check for forbidden patterns
+            for (const pattern of FORBIDDEN_PATTERNS) {
+                if (pattern.test(path)) {
+                    violations.push({
+                        path,
+                        reason: `Path matches forbidden pattern: ${pattern}`,
+                        rule: 'No writes to global templates/scenarios'
+                    });
+                    break;
+                }
+            }
+        }
+        
+        if (violations.length > 0) {
+            console.error('[WIRING API] ❌ CHECKPOINT 5 FAILED: Tenant safety violation', violations);
+            return res.status(403).json({
+                success: false,
+                error: 'TENANT_SAFETY_VIOLATION',
+                message: 'Patch contains paths that would modify global templates or scenarios',
+                violations,
+                hint: 'Only company-scoped settings under aiAgentSettings, transfers, dataConfig can be modified'
+            });
+        }
+        console.log('[WIRING API] ✅ CHECKPOINT 5: Tenant safety passed');
+        
+        // VALIDATION 3: Company must exist
+        const { ObjectId } = require('mongoose').Types;
+        if (!ObjectId.isValid(companyId)) {
+            console.error('[WIRING API] ❌ Invalid companyId format');
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid companyId format'
+            });
+        }
+        
+        const companyDoc = await Company.findById(companyId);
+        if (!companyDoc) {
+            console.error('[WIRING API] ❌ CHECKPOINT 6 FAILED: Company not found');
+            return res.status(404).json({
+                success: false,
+                error: 'Company not found',
+                companyId
+            });
+        }
+        console.log('[WIRING API] ✅ CHECKPOINT 6: Company found:', companyDoc.companyName);
+        
+        // =========================================================
+        // APPLY THE UPDATE
+        // =========================================================
+        console.log('[WIRING API] CHECKPOINT 7: Applying update...');
+        
+        const updateResult = await Company.updateOne(
+            { _id: new ObjectId(companyId) },
+            patch
+        );
+        
+        console.log('[WIRING API] ✅ CHECKPOINT 8: Update result:', updateResult);
+        
+        // Clear Redis cache for this company
+        try {
+            const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+            if (isRedisConfigured()) {
+                const redis = await getSharedRedisClient();
+                if (redis) {
+                    await redis.del(`scenario-pool:${companyId}`);
+                    await redis.del(`company:${companyId}`);
+                    console.log('[WIRING API] ✅ Redis cache cleared for company');
+                }
+            }
+        } catch (cacheErr) {
+            console.warn('[WIRING API] Cache clear warning:', cacheErr.message);
+        }
+        
+        const durationMs = Date.now() - startTime;
+        
+        logger.info('[WIRING API] ✅ Fix applied successfully', { 
+            companyId, 
+            fieldId,
+            paths: pathsToUpdate,
+            modifiedCount: updateResult.modifiedCount,
+            durationMs 
+        });
+        
+        return res.json({
+            success: true,
+            companyId,
+            fieldId,
+            reason: reason || 'wiring_fix',
+            appliedPaths: pathsToUpdate,
+            modifiedCount: updateResult.modifiedCount,
+            durationMs,
+            timestamp: new Date().toISOString(),
+            hint: 'Refresh wiring report to see updated tier scores'
+        });
+        
+    } catch (error) {
+        const durationMs = Date.now() - startTime;
+        console.error('[WIRING API] ❌ Apply fix FAILED:', error.message);
+        console.error('[WIRING API] Stack:', error.stack);
+        logger.error('[WIRING API] Apply fix error', { 
+            companyId,
+            error: error.message, 
+            stack: error.stack,
+            durationMs 
+        });
+        return res.status(500).json({
+            success: false,
+            error: error.message,
+            durationMs
+        });
+    }
+});
+
+// ============================================================================
 // POST /api/admin/wiring-status/:companyId/patch-json
 // Generate PATCH JSON for actionable fixes
 // Input: debugSnapshot or issues array
