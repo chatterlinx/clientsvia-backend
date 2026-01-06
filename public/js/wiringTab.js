@@ -391,9 +391,10 @@
 
             const addChild = (parentId, childId) => {
                 if (!parentId) return;
-                // Prevent self-reference
+                // Prevent self-reference (expected for some section nodes - not an error, just data quirk)
                 if (parentId === childId) {
-                    console.warn('[WiringTab] Skipping self-reference:', childId);
+                    // Debug level - these are expected for certain section nodes that reference themselves
+                    // The guard handles this correctly - node becomes root-level instead of infinite loop
                     return;
                 }
                 if (!children.has(parentId)) children.set(parentId, []);
