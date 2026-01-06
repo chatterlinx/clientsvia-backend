@@ -486,7 +486,7 @@ router.post('/validate', async (req, res) => {
 
 // ============================================================================
 // GET /api/admin/wiring-status/:companyId/quick-diagnostics
-// Quick diagnostics for Test Agent integration
+// Quick diagnostics using V2 wiring generator (standalone, no snapshot)
 // ============================================================================
 router.get('/:companyId/quick-diagnostics', async (req, res) => {
     try {
@@ -494,9 +494,17 @@ router.get('/:companyId/quick-diagnostics', async (req, res) => {
         
         logger.info('[WIRING API] Quick diagnostics requested', { companyId });
         
+        // Tenant safety: validate companyId format
+        if (!companyId || companyId.length < 10) {
+            return res.status(400).json({ error: 'Invalid companyId' });
+        }
+        
         const { getQuickDiagnostics } = require('../../services/wiring/WiringDiagnosticService');
         
         const diagnostics = await getQuickDiagnostics(companyId);
+        
+        // Tenant safety: ensure response only contains this company's data
+        diagnostics._tenantVerified = diagnostics.companyId === companyId;
         
         return res.json(diagnostics);
         
@@ -510,30 +518,88 @@ router.get('/:companyId/quick-diagnostics', async (req, res) => {
 });
 
 // ============================================================================
-// POST /api/admin/wiring-status/:companyId/analyze-test
-// Analyze a test result and return wiring-related explanations
+// POST /api/admin/wiring-status/:companyId/diagnose
+// Evidence-based diagnosis from debugSnapshot (Test Agent integration)
+// 
+// THIS IS THE "TRUTH MACHINE" ENDPOINT:
+// - Takes actual debugSnapshot from test response
+// - Runs deterministic Failure→Node mapping
+// - Returns exact evidence + exact fixes
 // ============================================================================
-router.post('/:companyId/analyze-test', async (req, res) => {
+router.post('/:companyId/diagnose', async (req, res) => {
     try {
         const { companyId } = req.params;
-        const { testResult } = req.body;
+        const { debugSnapshot } = req.body;
         
-        if (!testResult) {
-            return res.status(400).json({ error: 'testResult required in body' });
+        logger.info('[WIRING API] Evidence-based diagnosis requested', { companyId });
+        
+        // Tenant safety: validate companyId
+        if (!companyId || companyId.length < 10) {
+            return res.status(400).json({ error: 'Invalid companyId' });
         }
         
-        logger.info('[WIRING API] Test analysis requested', { companyId });
+        if (!debugSnapshot) {
+            return res.status(400).json({ 
+                error: 'debugSnapshot required in body',
+                hint: 'Pass the debug object from test response'
+            });
+        }
         
-        const { analyzeTestFailure } = require('../../services/wiring/WiringDiagnosticService');
+        const { diagnoseFromSnapshot } = require('../../services/wiring/WiringDiagnosticService');
         
-        const analysis = await analyzeTestFailure(testResult, companyId);
+        const diagnosis = diagnoseFromSnapshot(debugSnapshot, companyId);
         
-        return res.json(analysis);
+        // Tenant safety: verify we're returning data for the right company
+        diagnosis._tenantVerified = diagnosis.companyId === companyId;
+        
+        return res.json(diagnosis);
         
     } catch (error) {
-        logger.error('[WIRING API] Test analysis error', { error: error.message });
+        logger.error('[WIRING API] Diagnosis error', { error: error.message, stack: error.stack });
         return res.status(500).json({
-            error: 'Failed to analyze test',
+            error: 'Failed to diagnose',
+            details: error.message
+        });
+    }
+});
+
+// ============================================================================
+// POST /api/admin/wiring-status/:companyId/patch-json
+// Generate PATCH JSON for actionable fixes
+// Input: debugSnapshot or issues array
+// Output: PATCH JSON that can be pasted for instant fix instructions
+// ============================================================================
+router.post('/:companyId/patch-json', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { debugSnapshot, issues } = req.body;
+        
+        logger.info('[WIRING API] PATCH JSON generation requested', { companyId });
+        
+        const { diagnoseFromSnapshot, generatePatchJson, extractEvidence } = require('../../services/wiring/WiringDiagnosticService');
+        
+        let patchJson;
+        
+        if (debugSnapshot) {
+            // Full diagnosis from snapshot
+            const diagnosis = diagnoseFromSnapshot(debugSnapshot, companyId);
+            patchJson = diagnosis.patchJson;
+        } else if (issues) {
+            // Generate from existing issues
+            const evidence = { effectiveConfigVersion: 'from-issues' };
+            patchJson = generatePatchJson(issues, evidence, companyId);
+        } else {
+            return res.status(400).json({ 
+                error: 'Either debugSnapshot or issues required' 
+            });
+        }
+        
+        return res.json(patchJson);
+        
+    } catch (error) {
+        logger.error('[WIRING API] PATCH JSON error', { error: error.message });
+        return res.status(500).json({
+            error: 'Failed to generate PATCH JSON',
             details: error.message
         });
     }

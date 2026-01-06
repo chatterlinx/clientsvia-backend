@@ -1039,8 +1039,8 @@ ${separator}`;
     }
     
     /**
-     * Load wiring diagnostics for this company
-     * Shows configuration issues that might affect AI responses
+     * Load wiring diagnostics - EVIDENCE-BASED using last debugSnapshot
+     * NOT heuristic guessing - uses actual test evidence
      */
     async loadWiringDiagnostics() {
         const content = document.getElementById('report-content');
@@ -1052,11 +1052,39 @@ ${separator}`;
         
         try {
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const response = await fetch(`/api/admin/wiring-status/${this.companyId}/quick-diagnostics`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
             
-            const diagnostics = await response.json();
+            // Get last debug snapshot from test session (evidence-first)
+            const lastDebugEntry = this.debugLog.length > 0 ? this.debugLog[this.debugLog.length - 1] : null;
+            const debugSnapshot = lastDebugEntry?.debug || null;
+            
+            let diagnostics;
+            
+            if (debugSnapshot) {
+                // EVIDENCE-BASED: Use actual debugSnapshot from test
+                console.log('[AI Test] 🔬 Running evidence-based diagnosis with debugSnapshot');
+                const response = await fetch(`/api/admin/wiring-status/${this.companyId}/diagnose`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ debugSnapshot })
+                });
+                diagnostics = await response.json();
+                diagnostics._hasEvidence = true;
+            } else {
+                // FALLBACK: Quick diagnostics (no test evidence yet)
+                console.log('[AI Test] ⚠️ No test run yet, using quick diagnostics');
+                const response = await fetch(`/api/admin/wiring-status/${this.companyId}/quick-diagnostics`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                diagnostics = await response.json();
+                diagnostics._hasEvidence = false;
+            }
+            
+            // Store for PATCH JSON export
+            this.lastDiagnostics = diagnostics;
+            
             this.renderWiringDiagnostics(diagnostics);
             
         } catch (error) {
@@ -1070,102 +1098,212 @@ ${separator}`;
     }
     
     /**
-     * Render wiring diagnostics in the panel
+     * Render wiring diagnostics - EVIDENCE-BASED with raw values
+     * Shows: Evidence → Rule → Fix → Deep Link
      */
     renderWiringDiagnostics(diagnostics) {
         const content = document.getElementById('report-content');
         const isHealthy = diagnostics.healthy;
-        const issueCount = (diagnostics.issues || []).length;
-        const warningCount = (diagnostics.warnings || []).length;
+        const issues = diagnostics.issues || [];
+        const evidence = diagnostics.evidence || {};
+        const hasEvidence = diagnostics._hasEvidence;
+        
+        // Group issues by severity
+        const critical = issues.filter(i => i.severity === 'CRITICAL');
+        const high = issues.filter(i => i.severity === 'HIGH');
+        const medium = issues.filter(i => i.severity === 'MEDIUM');
         
         content.innerHTML = `
-            <div style="display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                
+                <!-- Evidence Source Banner -->
+                <div style="background: ${hasEvidence ? '#1c2128' : '#2d2712'}; border: 1px solid ${hasEvidence ? '#a371f7' : '#f0883e'}; border-radius: 6px; padding: 8px 12px; font-size: 11px;">
+                    ${hasEvidence 
+                        ? `<span style="color: #a371f7;">🔬 Evidence-Based:</span> <span style="color: #8b949e;">Diagnosis from actual test debugSnapshot</span>`
+                        : `<span style="color: #f0883e;">⚠️ No Test Yet:</span> <span style="color: #8b949e;">Run a test to see evidence-based diagnosis</span>`
+                    }
+                </div>
+                
                 <!-- Health Status -->
-                <div style="background: ${isHealthy ? '#1c2d1c' : '#2d1c1c'}; border: 1px solid ${isHealthy ? '#238636' : '#f85149'}; border-radius: 8px; padding: 16px; text-align: center;">
-                    <div style="font-size: 24px; margin-bottom: 8px;">${isHealthy ? '✅' : '🔴'}</div>
-                    <div style="font-size: 14px; font-weight: 700; color: ${isHealthy ? '#3fb950' : '#f85149'};">
-                        ${isHealthy ? 'Wiring Healthy' : 'Issues Detected'}
-                    </div>
-                    <div style="font-size: 11px; color: #8b949e; margin-top: 4px;">
-                        ${diagnostics.generationTimeMs || 0}ms
+                <div style="background: ${isHealthy ? '#1c2d1c' : '#2d1c1c'}; border: 1px solid ${isHealthy ? '#238636' : '#f85149'}; border-radius: 8px; padding: 12px; display: flex; align-items: center; gap: 12px;">
+                    <div style="font-size: 28px;">${isHealthy ? '✅' : '🔴'}</div>
+                    <div>
+                        <div style="font-size: 14px; font-weight: 700; color: ${isHealthy ? '#3fb950' : '#f85149'};">
+                            ${isHealthy ? 'Wiring Healthy' : `${critical.length} Critical Issues`}
+                        </div>
+                        <div style="font-size: 10px; color: #8b949e;">
+                            ${diagnostics.summary?.total || 0} total • ${diagnostics.generationTimeMs || 0}ms
+                        </div>
                     </div>
                 </div>
                 
-                <!-- Quick Stats -->
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px; text-align: center;">
-                        <div style="font-size: 16px; font-weight: 700; color: ${diagnostics.stats?.killSwitches?.scenariosBlocked ? '#f85149' : '#3fb950'};">
-                            ${diagnostics.stats?.killSwitches?.scenariosBlocked ? '🔴' : '✅'}
+                <!-- RAW EVIDENCE PANEL (THE TRUTH) -->
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px;">
+                    <h4 style="margin: 0 0 10px 0; color: #58a6ff; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
+                        📊 Raw Evidence (What Was Observed)
+                    </h4>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; font-size: 11px;">
+                        <div style="background: #0d1117; padding: 6px 8px; border-radius: 4px;">
+                            <span style="color: #8b949e;">responseSource:</span>
+                            <span style="color: ${evidence.responseSource === 'LLM' || evidence.responseSource === 'FALLBACK' ? '#f85149' : '#3fb950'}; font-weight: 600; margin-left: 4px;">
+                                ${evidence.responseSource || 'N/A'}
+                            </span>
                         </div>
-                        <div style="font-size: 10px; color: #8b949e; text-transform: uppercase;">Kill Switches</div>
-                    </div>
-                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px; text-align: center;">
-                        <div style="font-size: 16px; font-weight: 700; color: ${(diagnostics.stats?.templates?.enabled || 0) > 0 ? '#3fb950' : '#f85149'};">
-                            ${diagnostics.stats?.templates?.enabled || 0}
+                        <div style="background: #0d1117; padding: 6px 8px; border-radius: 4px;">
+                            <span style="color: #8b949e;">mode:</span>
+                            <span style="color: #58a6ff; font-weight: 600; margin-left: 4px;">${evidence.mode || 'N/A'}</span>
                         </div>
-                        <div style="font-size: 10px; color: #8b949e; text-transform: uppercase;">Templates</div>
-                    </div>
-                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px; text-align: center;">
-                        <div style="font-size: 16px; font-weight: 700; color: ${(diagnostics.stats?.scenarios?.count || 0) > 0 ? '#3fb950' : '#f85149'};">
-                            ${diagnostics.stats?.scenarios?.count || 0}
+                        <div style="background: #0d1117; padding: 6px 8px; border-radius: 4px;">
+                            <span style="color: #8b949e;">scenarioCount:</span>
+                            <span style="color: ${(evidence.scenarioCount || 0) > 0 ? '#3fb950' : '#f85149'}; font-weight: 600; margin-left: 4px;">
+                                ${evidence.scenarioCount ?? 'N/A'}
+                            </span>
                         </div>
-                        <div style="font-size: 10px; color: #8b949e; text-transform: uppercase;">Scenarios</div>
+                        <div style="background: #0d1117; padding: 6px 8px; border-radius: 4px;">
+                            <span style="color: #8b949e;">templateRefs:</span>
+                            <span style="color: ${(evidence.templateReferences || 0) > 0 ? '#3fb950' : '#f85149'}; font-weight: 600; margin-left: 4px;">
+                                ${evidence.templateReferences ?? 'N/A'}
+                            </span>
+                        </div>
+                        <div style="background: #0d1117; padding: 6px 8px; border-radius: 4px; grid-column: span 2;">
+                            <span style="color: #8b949e;">killSwitches:</span>
+                            <span style="color: ${evidence.killSwitches?.forceLLMDiscovery || evidence.killSwitches?.disableScenarioAutoResponses ? '#f85149' : '#3fb950'}; font-weight: 600; margin-left: 4px;">
+                                forceLLM=${evidence.killSwitches?.forceLLMDiscovery ?? 'N/A'}, disableAuto=${evidence.killSwitches?.disableScenarioAutoResponses ?? 'N/A'}
+                            </span>
+                        </div>
                     </div>
                 </div>
                 
-                <!-- Issues -->
-                ${issueCount > 0 ? `
+                <!-- CRITICAL ISSUES -->
+                ${critical.length > 0 ? `
                     <div style="background: #161b22; border: 1px solid #f85149; border-radius: 8px; padding: 12px;">
-                        <h4 style="margin: 0 0 10px 0; color: #f85149; font-size: 12px; display: flex; align-items: center; gap: 6px;">
-                            🔴 Critical Issues (${issueCount})
+                        <h4 style="margin: 0 0 10px 0; color: #f85149; font-size: 11px; text-transform: uppercase;">
+                            🔴 Critical (${critical.length})
                         </h4>
                         <div style="display: flex; flex-direction: column; gap: 8px;">
-                            ${(diagnostics.issues || []).map(issue => `
-                                <div style="background: #2a1c1c; border: 1px solid #f8514930; border-radius: 6px; padding: 10px;">
-                                    <div style="font-size: 12px; font-weight: 700; color: #f85149;">${issue.title}</div>
-                                    <div style="font-size: 11px; color: #8b949e; margin: 4px 0;">${issue.message}</div>
-                                    <div style="font-size: 10px; color: #58a6ff; background: rgba(88,166,255,0.1); padding: 6px 8px; border-radius: 4px; margin-top: 6px;">
-                                        💡 ${issue.fix}
-                                    </div>
-                                </div>
-                            `).join('')}
+                            ${critical.map(issue => this.renderDiagnosticIssue(issue)).join('')}
                         </div>
                     </div>
                 ` : ''}
                 
-                <!-- Warnings -->
-                ${warningCount > 0 ? `
+                <!-- HIGH ISSUES -->
+                ${high.length > 0 ? `
                     <div style="background: #161b22; border: 1px solid #f0883e; border-radius: 8px; padding: 12px;">
-                        <h4 style="margin: 0 0 10px 0; color: #f0883e; font-size: 12px;">
-                            ⚠️ Warnings (${warningCount})
+                        <h4 style="margin: 0 0 10px 0; color: #f0883e; font-size: 11px; text-transform: uppercase;">
+                            🟠 High (${high.length})
+                        </h4>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            ${high.map(issue => this.renderDiagnosticIssue(issue)).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- MEDIUM ISSUES -->
+                ${medium.length > 0 ? `
+                    <div style="background: #161b22; border: 1px solid #8b949e; border-radius: 8px; padding: 12px;">
+                        <h4 style="margin: 0 0 10px 0; color: #8b949e; font-size: 11px; text-transform: uppercase;">
+                            ⚪ Medium (${medium.length})
                         </h4>
                         <div style="display: flex; flex-direction: column; gap: 6px;">
-                            ${(diagnostics.warnings || []).map(warn => `
-                                <div style="font-size: 11px; color: #c9d1d9; padding: 8px; background: #2d2712; border-radius: 4px;">
-                                    <strong>${warn.title}</strong>
-                                    ${warn.message ? `<div style="color: #8b949e; margin-top: 2px;">${warn.message}</div>` : ''}
-                                </div>
-                            `).join('')}
+                            ${medium.map(issue => this.renderDiagnosticIssue(issue)).join('')}
                         </div>
                     </div>
                 ` : ''}
                 
-                <!-- No Issues -->
-                ${issueCount === 0 && warningCount === 0 ? `
-                    <div style="background: #1c2d1c; border: 1px solid #238636; border-radius: 8px; padding: 20px; text-align: center;">
-                        <div style="font-size: 24px; margin-bottom: 8px;">🎉</div>
-                        <div style="font-size: 14px; color: #3fb950;">All systems operational</div>
+                <!-- NO ISSUES -->
+                ${issues.length === 0 ? `
+                    <div style="background: #1c2d1c; border: 1px solid #238636; border-radius: 8px; padding: 16px; text-align: center;">
+                        <div style="font-size: 20px; margin-bottom: 6px;">🎉</div>
+                        <div style="font-size: 13px; color: #3fb950; font-weight: 600;">All Systems Operational</div>
                         <div style="font-size: 11px; color: #8b949e; margin-top: 4px;">No configuration issues detected</div>
                     </div>
                 ` : ''}
                 
-                <!-- Open Full Wiring Tab -->
-                <button onclick="window.aiTestConsole.openWiringTab()" 
-                    style="width: 100%; padding: 12px; background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%); color: #000; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 13px; transition: all 0.2s;">
-                    🔌 Open Full Wiring Diagnostics →
-                </button>
+                <!-- EXPORT BUTTONS -->
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="window.aiTestConsole.copyPatchJson()" 
+                        style="flex: 1; padding: 10px; background: #21262d; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; cursor: pointer; font-size: 12px; font-weight: 600;">
+                        📋 Copy PATCH JSON
+                    </button>
+                    <button onclick="window.aiTestConsole.openWiringTab()" 
+                        style="flex: 1; padding: 10px; background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%); color: #000; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700;">
+                        🔌 Full Wiring →
+                    </button>
+                </div>
             </div>
         `;
+    }
+    
+    /**
+     * Render a single diagnostic issue with evidence
+     */
+    renderDiagnosticIssue(issue) {
+        const evidenceStr = issue.evidence 
+            ? Object.entries(issue.evidence).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ')
+            : '';
+        
+        return `
+            <div style="background: #0d1117; border-radius: 6px; padding: 10px;">
+                <div style="font-size: 12px; font-weight: 700; color: #c9d1d9; margin-bottom: 4px;">
+                    ${issue.title}
+                </div>
+                ${evidenceStr ? `
+                    <div style="font-size: 10px; color: #f85149; background: rgba(248,81,73,0.1); padding: 4px 6px; border-radius: 4px; margin-bottom: 6px; font-family: monospace;">
+                        📌 Evidence: ${evidenceStr}
+                    </div>
+                ` : ''}
+                <div style="font-size: 10px; color: #8b949e; margin-bottom: 6px;">
+                    ${issue.rule || ''}
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <div style="font-size: 10px; color: #58a6ff; background: rgba(88,166,255,0.1); padding: 4px 8px; border-radius: 4px; flex: 1;">
+                        💡 ${issue.fix}
+                    </div>
+                    ${issue.deepLink ? `
+                        <a href="${issue.deepLink}" target="_blank" style="font-size: 10px; color: #a371f7; text-decoration: none;">
+                            🔗 →
+                        </a>
+                    ` : ''}
+                </div>
+                ${issue.nodeId ? `
+                    <div style="font-size: 9px; color: #6e7681; margin-top: 4px; font-family: monospace;">
+                        nodeId: ${issue.nodeId}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    /**
+     * Copy PATCH JSON to clipboard
+     * This is the actionable export for instant fix instructions
+     */
+    copyPatchJson() {
+        const patchJson = this.lastDiagnostics?.patchJson;
+        
+        if (!patchJson) {
+            alert('No diagnostics available. Run a test first.');
+            return;
+        }
+        
+        const jsonStr = JSON.stringify(patchJson, null, 2);
+        
+        navigator.clipboard.writeText(jsonStr).then(() => {
+            // Flash success
+            const btn = document.querySelector('[onclick*="copyPatchJson"]');
+            if (btn) {
+                const original = btn.innerHTML;
+                btn.innerHTML = '✅ Copied!';
+                btn.style.background = '#238636';
+                setTimeout(() => {
+                    btn.innerHTML = original;
+                    btn.style.background = '#21262d';
+                }, 1500);
+            }
+        }).catch(err => {
+            console.error('[AI Test] Failed to copy:', err);
+            alert('Failed to copy. Check console.');
+        });
     }
     
     /**
