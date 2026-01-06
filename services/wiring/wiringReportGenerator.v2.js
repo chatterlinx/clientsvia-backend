@@ -331,6 +331,28 @@ function buildHealth(companyDoc, derivedData = {}) {
             [STATUS.DEAD_READ]: 0,
             [STATUS.TENANT_RISK]: 0
         },
+        // NEW: Required vs Optional breakdown
+        requiredCoverage: {
+            total: 0,
+            wired: 0,
+            missing: 0,
+            percent: 0,
+            missingFields: []
+        },
+        optionalCoverage: {
+            total: 0,
+            configured: 0,
+            notConfigured: 0,
+            percent: 0
+        },
+        // NEW: Golden Blueprint status
+        goldenBlueprint: {
+            ready: false,
+            score: 0,
+            requiredMet: false,
+            recommendedMet: false,
+            missingForGolden: []
+        },
         fields: [],
         criticalIssues: [],
         warnings: []
@@ -458,6 +480,88 @@ function buildHealth(companyDoc, derivedData = {}) {
         health.overall = 'RED';
     } else if (health.byStatus[STATUS.UI_ONLY] > 0 || health.byStatus[STATUS.PARTIAL] > 0) {
         health.overall = 'YELLOW';
+    }
+    
+    // =========================================================================
+    // CALCULATE REQUIRED vs OPTIONAL COVERAGE
+    // =========================================================================
+    for (const field of health.fields) {
+        if (field.required) {
+            health.requiredCoverage.total++;
+            if (field.status === STATUS.WIRED) {
+                health.requiredCoverage.wired++;
+            } else if (field.status === STATUS.NOT_CONFIGURED || field.status === STATUS.MISCONFIGURED) {
+                health.requiredCoverage.missing++;
+                health.requiredCoverage.missingFields.push({
+                    id: field.id,
+                    label: field.label,
+                    status: field.status,
+                    dbPath: field.dbPath,
+                    defaultValue: field.defaultValue
+                });
+            }
+        } else {
+            health.optionalCoverage.total++;
+            if (field.status === STATUS.WIRED || field.status === STATUS.PARTIAL) {
+                health.optionalCoverage.configured++;
+            } else {
+                health.optionalCoverage.notConfigured++;
+            }
+        }
+    }
+    
+    // Calculate percentages
+    if (health.requiredCoverage.total > 0) {
+        health.requiredCoverage.percent = Math.round(
+            (health.requiredCoverage.wired / health.requiredCoverage.total) * 100
+        );
+    }
+    if (health.optionalCoverage.total > 0) {
+        health.optionalCoverage.percent = Math.round(
+            (health.optionalCoverage.configured / health.optionalCoverage.total) * 100
+        );
+    }
+    
+    // =========================================================================
+    // GOLDEN BLUEPRINT EVALUATION
+    // =========================================================================
+    // A company is "Golden Blueprint Ready" when:
+    // 1. All REQUIRED fields are WIRED (100% required coverage)
+    // 2. No CRITICAL_ISSUES
+    // 3. No MISCONFIGURED fields
+    // 4. Recommended: Key optional fields configured (>50% optional)
+    
+    const requiredMet = health.requiredCoverage.percent === 100;
+    const noCriticalIssues = health.criticalIssues.length === 0;
+    const noMisconfigured = health.byStatus[STATUS.MISCONFIGURED] === 0;
+    const recommendedMet = health.optionalCoverage.percent >= 50;
+    
+    health.goldenBlueprint.requiredMet = requiredMet;
+    health.goldenBlueprint.recommendedMet = recommendedMet;
+    health.goldenBlueprint.ready = requiredMet && noCriticalIssues && noMisconfigured;
+    
+    // Calculate golden blueprint score (0-100)
+    let score = 0;
+    if (requiredMet) score += 60;  // 60% weight on required fields
+    if (noCriticalIssues) score += 20;  // 20% weight on no critical issues
+    if (noMisconfigured) score += 10;  // 10% weight on no misconfigurations
+    if (recommendedMet) score += 10;  // 10% weight on optional fields
+    health.goldenBlueprint.score = score;
+    
+    // List what's missing for golden blueprint
+    if (!requiredMet) {
+        health.goldenBlueprint.missingForGolden.push({
+            category: 'REQUIRED_FIELDS',
+            message: `${health.requiredCoverage.missing} required fields not configured`,
+            fields: health.requiredCoverage.missingFields.map(f => f.id)
+        });
+    }
+    if (health.criticalIssues.length > 0) {
+        health.goldenBlueprint.missingForGolden.push({
+            category: 'CRITICAL_ISSUES',
+            message: `${health.criticalIssues.length} critical issues to fix`,
+            issues: health.criticalIssues.map(i => i.fieldId)
+        });
     }
     
     return health;

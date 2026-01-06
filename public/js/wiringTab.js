@@ -508,18 +508,25 @@
         
         const health = _report.health?.overall || 'UNKNOWN';
         const scope = _report.scope || {};
-        const sb = _report.scoreboard || {};
         const critCount = _report.health?.criticalIssues?.length || 0;
-        const warnCount = _report.health?.warnings?.length || 0;
         const fieldCount = _report.health?.fields?.length || 0;
         const wiredCount = _report.health?.byStatus?.WIRED || 0;
         const uiOnlyCount = _report.health?.byStatus?.UI_ONLY || 0;
         const misconfiguredCount = _report.health?.byStatus?.MISCONFIGURED || 0;
         
+        // NEW: Required vs Optional coverage
+        const reqCoverage = _report.health?.requiredCoverage || { total: 0, wired: 0, percent: 0, missingFields: [] };
+        const optCoverage = _report.health?.optionalCoverage || { total: 0, configured: 0, percent: 0 };
+        const goldenBlueprint = _report.health?.goldenBlueprint || { ready: false, score: 0 };
+        
         const statusClass = health === 'GREEN' ? 'green' : health === 'YELLOW' ? 'yellow' : 'red';
         const statusText = health === 'GREEN' ? '✅ ALL SYSTEMS OPERATIONAL' : 
                           health === 'YELLOW' ? '⚠️ ISSUES DETECTED' : 
                           '🔴 CRITICAL ISSUES';
+        
+        // Golden Blueprint status
+        const goldenClass = goldenBlueprint.ready ? 'golden-ready' : 'golden-pending';
+        const goldenText = goldenBlueprint.ready ? '🏆 GOLDEN BLUEPRINT READY' : '📋 BLUEPRINT INCOMPLETE';
         
         el.innerHTML = `
           <div class="w-exec-banner status-${statusClass}">
@@ -536,6 +543,37 @@
                 <div><strong>ECV:</strong> ${esc((scope.effectiveConfigVersion || 'n/a').toString().substring(0, 16))}</div>
                 <div class="w-meta-small">Report generated: ${esc(_report.meta?.generatedAt || '')} (${_report.meta?.generationTimeMs || 0}ms)</div>
               </div>
+            </div>
+            
+            <!-- GOLDEN BLUEPRINT STATUS - The answer to "is this actually good?" -->
+            <div class="w-golden-blueprint ${goldenClass}">
+              <div class="w-golden-header">
+                <span class="w-golden-badge">${goldenText}</span>
+                <span class="w-golden-score">${goldenBlueprint.score}%</span>
+              </div>
+              <div class="w-golden-bars">
+                <div class="w-golden-bar">
+                  <span class="w-golden-bar-label">Required (${reqCoverage.wired}/${reqCoverage.total})</span>
+                  <div class="w-golden-bar-track">
+                    <div class="w-golden-bar-fill ${reqCoverage.percent === 100 ? 'complete' : 'incomplete'}" style="width: ${reqCoverage.percent}%"></div>
+                  </div>
+                  <span class="w-golden-bar-percent">${reqCoverage.percent}%</span>
+                </div>
+                <div class="w-golden-bar">
+                  <span class="w-golden-bar-label">Optional (${optCoverage.configured}/${optCoverage.total})</span>
+                  <div class="w-golden-bar-track">
+                    <div class="w-golden-bar-fill optional" style="width: ${optCoverage.percent}%"></div>
+                  </div>
+                  <span class="w-golden-bar-percent">${optCoverage.percent}%</span>
+                </div>
+              </div>
+              ${reqCoverage.missingFields?.length > 0 ? `
+                <div class="w-golden-missing">
+                  <span class="w-golden-missing-label">Missing required:</span>
+                  ${reqCoverage.missingFields.slice(0, 3).map(f => `<span class="w-golden-missing-field">${esc(f.label || f.id)}</span>`).join('')}
+                  ${reqCoverage.missingFields.length > 3 ? `<span class="w-golden-missing-more">+${reqCoverage.missingFields.length - 3} more</span>` : ''}
+                </div>
+              ` : ''}
             </div>
             
             <div class="w-exec-metrics">
