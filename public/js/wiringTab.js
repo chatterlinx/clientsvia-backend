@@ -2086,6 +2086,183 @@
     }
     
     // ========================================================================
+    // DEEP LINKING & SECTION FOCUS (for Test Agent integration)
+    // ========================================================================
+    
+    /**
+     * Scroll to and highlight a specific section in the Wiring Tab
+     * Called from Test Agent when showing wiring issues
+     * 
+     * @param {string} sectionId - One of: 'executiveBanner', 'killSwitches', 'gapAnalysis', 'actionQueue', 'inspector'
+     */
+    function focusSection(sectionId) {
+        console.log('[WiringTab] 🎯 Focusing section:', sectionId);
+        
+        const sectionMap = {
+            'executiveBanner': '#wiringExecutiveBanner',
+            'scoreboard': '#wiringScoreboard',
+            'killSwitches': '#wiringKillSwitches',
+            'gapAnalysis': '#wiringGapAnalysis',
+            'actionQueue': '#wiringActionQueue',
+            'specialChecks': '#wiringSpecialChecks',
+            'issues': '#wiringIssues',
+            'guardrails': '#wiringGuardrails',
+            'tree': '#wiringTree',
+            'inspector': '#wiringInspector'
+        };
+        
+        const selector = sectionMap[sectionId];
+        if (!selector) {
+            console.warn('[WiringTab] Unknown section:', sectionId);
+            return;
+        }
+        
+        const el = $(selector);
+        if (!el) {
+            console.warn('[WiringTab] Section not found:', selector);
+            return;
+        }
+        
+        // Scroll into view
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        
+        // Highlight effect
+        el.style.transition = 'box-shadow 0.3s ease, outline 0.3s ease';
+        el.style.outline = '3px solid #38bdf8';
+        el.style.boxShadow = '0 0 20px rgba(56, 189, 248, 0.3)';
+        
+        // Remove highlight after 3 seconds
+        setTimeout(() => {
+            el.style.outline = 'none';
+            el.style.boxShadow = 'none';
+        }, 3000);
+        
+        toast(`Focused: ${sectionId}`);
+    }
+    
+    /**
+     * Show a diagnostic overlay from Test Agent
+     * Displays wiring issues that might have caused a test failure
+     * 
+     * @param {Object} diagnostics - Diagnostics from WiringDiagnosticService.getQuickDiagnostics()
+     */
+    function showTestDiagnostics(diagnostics) {
+        console.log('[WiringTab] 🧪 Showing test diagnostics:', diagnostics);
+        
+        // Create overlay if it doesn't exist
+        let overlay = $('#wiringTestDiagnosticsOverlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'wiringTestDiagnosticsOverlay';
+            overlay.className = 'w-test-diagnostics-overlay';
+            document.body.appendChild(overlay);
+        }
+        
+        const issueCount = (diagnostics.issues || []).length;
+        const warningCount = (diagnostics.warnings || []).length;
+        const isHealthy = diagnostics.healthy;
+        
+        overlay.innerHTML = `
+            <div class="w-test-diagnostics-modal">
+                <div class="w-test-diagnostics-header">
+                    <h3>🔬 Test Diagnostics → Wiring Analysis</h3>
+                    <button class="w-btn" onclick="window.ClientViaWiringTab.hideTestDiagnostics()">✕ Close</button>
+                </div>
+                
+                <div class="w-test-diagnostics-status ${isHealthy ? 'healthy' : 'unhealthy'}">
+                    ${isHealthy ? '✅ Wiring Healthy' : '🔴 Wiring Issues Detected'}
+                </div>
+                
+                ${issueCount > 0 ? `
+                    <div class="w-test-diagnostics-section">
+                        <h4>🔴 Critical Issues (${issueCount})</h4>
+                        <div class="w-test-diagnostics-list">
+                            ${(diagnostics.issues || []).map(issue => `
+                                <div class="w-test-diagnostics-item critical" data-section="${issue.wiringLink || ''}">
+                                    <div class="w-test-diagnostics-item-title">${esc(issue.title)}</div>
+                                    <div class="w-test-diagnostics-item-message">${esc(issue.message)}</div>
+                                    <div class="w-test-diagnostics-item-fix">💡 Fix: ${esc(issue.fix)}</div>
+                                    ${issue.wiringLink ? `<button class="w-mini-btn" onclick="window.ClientViaWiringTab.focusSection('${issue.wiringLink}'); window.ClientViaWiringTab.hideTestDiagnostics();">Jump to Section →</button>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${warningCount > 0 ? `
+                    <div class="w-test-diagnostics-section">
+                        <h4>⚠️ Warnings (${warningCount})</h4>
+                        <div class="w-test-diagnostics-list">
+                            ${(diagnostics.warnings || []).map(warn => `
+                                <div class="w-test-diagnostics-item warning">
+                                    <div class="w-test-diagnostics-item-title">${esc(warn.title)}</div>
+                                    <div class="w-test-diagnostics-item-message">${esc(warn.message || '')}</div>
+                                    ${warn.fix ? `<div class="w-test-diagnostics-item-fix">💡 ${esc(warn.fix)}</div>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <div class="w-test-diagnostics-stats">
+                    <div class="w-test-diagnostics-stat">
+                        <span class="label">Kill Switches:</span>
+                        <span class="${diagnostics.stats?.killSwitches?.scenariosBlocked ? 'text-red' : 'text-green'}">
+                            ${diagnostics.stats?.killSwitches?.scenariosBlocked ? '🔴 BLOCKING' : '✅ OK'}
+                        </span>
+                    </div>
+                    <div class="w-test-diagnostics-stat">
+                        <span class="label">Templates:</span>
+                        <span class="${diagnostics.stats?.templates?.hasTemplates ? 'text-green' : 'text-red'}">
+                            ${diagnostics.stats?.templates?.enabled || 0} linked
+                        </span>
+                    </div>
+                    <div class="w-test-diagnostics-stat">
+                        <span class="label">Scenarios:</span>
+                        <span class="${(diagnostics.stats?.scenarios?.count || 0) > 0 ? 'text-green' : 'text-red'}">
+                            ${diagnostics.stats?.scenarios?.count || 0} available
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        overlay.style.display = 'flex';
+        
+        // Close on overlay click (outside modal)
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                hideTestDiagnostics();
+            }
+        });
+    }
+    
+    /**
+     * Hide the test diagnostics overlay
+     */
+    function hideTestDiagnostics() {
+        const overlay = $('#wiringTestDiagnosticsOverlay');
+        if (overlay) {
+            overlay.style.display = 'none';
+        }
+    }
+    
+    /**
+     * Handle URL hash for deep linking
+     * Example: ?section=killSwitches
+     */
+    function handleDeepLink() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const section = urlParams.get('section');
+        
+        if (section) {
+            console.log('[WiringTab] Deep link detected, focusing:', section);
+            // Small delay to let the tab render first
+            setTimeout(() => focusSection(section), 500);
+        }
+    }
+    
+    // ========================================================================
     // EXPORT
     // ========================================================================
     
@@ -2093,7 +2270,20 @@
         initWiringTab,
         refresh,
         focusNode,
-        clearCache
+        clearCache,
+        // Deep linking & Test Agent integration
+        focusSection,
+        showTestDiagnostics,
+        hideTestDiagnostics,
+        handleDeepLink,
+        // Expose getQuickDiagnostics API call
+        async fetchDiagnostics(companyId) {
+            const token = localStorage.getItem('adminToken');
+            const res = await fetch(`/api/admin/wiring-status/${companyId}/quick-diagnostics`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            return res.json();
+        }
     };
     
     console.log('[WiringTab] Module loaded');

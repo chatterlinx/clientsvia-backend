@@ -484,5 +484,60 @@ router.post('/validate', async (req, res) => {
     }
 });
 
+// ============================================================================
+// GET /api/admin/wiring-status/:companyId/quick-diagnostics
+// Quick diagnostics for Test Agent integration
+// ============================================================================
+router.get('/:companyId/quick-diagnostics', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        logger.info('[WIRING API] Quick diagnostics requested', { companyId });
+        
+        const { getQuickDiagnostics } = require('../../services/wiring/WiringDiagnosticService');
+        
+        const diagnostics = await getQuickDiagnostics(companyId);
+        
+        return res.json(diagnostics);
+        
+    } catch (error) {
+        logger.error('[WIRING API] Quick diagnostics error', { error: error.message });
+        return res.status(500).json({
+            error: 'Failed to generate diagnostics',
+            details: error.message
+        });
+    }
+});
+
+// ============================================================================
+// POST /api/admin/wiring-status/:companyId/analyze-test
+// Analyze a test result and return wiring-related explanations
+// ============================================================================
+router.post('/:companyId/analyze-test', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { testResult } = req.body;
+        
+        if (!testResult) {
+            return res.status(400).json({ error: 'testResult required in body' });
+        }
+        
+        logger.info('[WIRING API] Test analysis requested', { companyId });
+        
+        const { analyzeTestFailure } = require('../../services/wiring/WiringDiagnosticService');
+        
+        const analysis = await analyzeTestFailure(testResult, companyId);
+        
+        return res.json(analysis);
+        
+    } catch (error) {
+        logger.error('[WIRING API] Test analysis error', { error: error.message });
+        return res.status(500).json({
+            error: 'Failed to analyze test',
+            details: error.message
+        });
+    }
+});
+
 module.exports = router;
 

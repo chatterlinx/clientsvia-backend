@@ -1249,3 +1249,180 @@
     font-weight: 700;
 }
 
+/* ============================================================================
+   TEST DIAGNOSTICS OVERLAY (Test Agent Integration)
+   ============================================================================ */
+
+.w-test-diagnostics-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.w-test-diagnostics-modal {
+    background: linear-gradient(145deg, #0f0f13 0%, #1a1a20 100%);
+    border: 1px solid #38bdf8;
+    border-radius: 16px;
+    max-width: 650px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 0 60px rgba(56, 189, 248, 0.2);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(30px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.w-test-diagnostics-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #2a2a2e;
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.1) 0%, transparent 100%);
+}
+
+.w-test-diagnostics-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.02em;
+}
+
+.w-test-diagnostics-status {
+    padding: 16px 24px;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.w-test-diagnostics-status.healthy {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, transparent 100%);
+    color: #22c55e;
+}
+
+.w-test-diagnostics-status.unhealthy {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, transparent 100%);
+    color: #ef4444;
+}
+
+.w-test-diagnostics-section {
+    padding: 16px 24px;
+    border-bottom: 1px solid #2a2a2e;
+}
+
+.w-test-diagnostics-section h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.w-test-diagnostics-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.w-test-diagnostics-item {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 10px;
+    padding: 14px;
+    border-left: 3px solid #ef4444;
+}
+
+.w-test-diagnostics-item.warning {
+    border-left-color: #f59e0b;
+}
+
+.w-test-diagnostics-item-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 6px;
+}
+
+.w-test-diagnostics-item-message {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+.w-test-diagnostics-item-fix {
+    font-size: 12px;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.1);
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.w-test-diagnostics-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    padding: 16px 24px;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.w-test-diagnostics-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    text-align: center;
+}
+
+.w-test-diagnostics-stat .label {
+    font-size: 11px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.w-test-diagnostics-stat .text-green {
+    color: #22c55e;
+    font-weight: 700;
+}
+
+.w-test-diagnostics-stat .text-red {
+    color: #ef4444;
+    font-weight: 700;
+}
+
+.w-mini-btn {
+    background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #000;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.w-mini-btn:hover {
+    transform: translateX(3px);
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+}
+

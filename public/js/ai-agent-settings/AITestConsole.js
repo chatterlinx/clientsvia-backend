@@ -373,6 +373,10 @@ class AITestConsole {
                                     style="flex: 1; padding: 12px; background: transparent; border: none; color: #8b949e; cursor: pointer;">
                                     ⚠️ Failures
                                 </button>
+                                <button id="tab-wiring" onclick="window.aiTestConsole.switchTab('wiring')" 
+                                    style="flex: 1; padding: 12px; background: transparent; border: none; color: #8b949e; cursor: pointer;">
+                                    🔌 Wiring
+                                </button>
                             </div>
                             
                             <!-- Tab Content -->
@@ -619,6 +623,12 @@ class AITestConsole {
             const debugInfo = debug || this.lastDebug || {};
             const source = this.getResponseSource(debugInfo, metadata);
             
+            // Check if this might be a wiring issue (fallback, no scenarios, etc.)
+            const mightBeWiringIssue = source.label === 'FALLBACK' || 
+                                       source.label === 'LLM' ||
+                                       debugInfo.scenarioCount === 0 ||
+                                       debugInfo.noScenariosAvailable;
+            
             html += `
                 <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
                     <!-- Source Badge -->
@@ -628,6 +638,24 @@ class AITestConsole {
                     ${metadata.latencyMs ? `<span style="color: ${metadata.latencyMs < 500 ? '#3fb950' : metadata.latencyMs < 1500 ? '#f0883e' : '#f85149'};">⚡ ${metadata.latencyMs}ms</span>` : ''}
                     ${metadata.tokensUsed ? `<span style="color: #8b949e;">🎯 ${metadata.tokensUsed} tokens</span>` : ''}
                     ${metadata.mode ? `<span style="color: #58a6ff;">📍 ${metadata.mode}</span>` : ''}
+                    ${mightBeWiringIssue ? `
+                        <button onclick="window.aiTestConsole.switchTab('wiring')" 
+                            style="background: #38bdf8; color: #000; border: none; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer;">
+                            🔌 Check Wiring
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        // Add "Check Wiring" for error responses
+        if (isError) {
+            html += `
+                <div style="margin-top: 8px;">
+                    <button onclick="window.aiTestConsole.switchTab('wiring')" 
+                        style="background: #38bdf8; color: #000; border: none; padding: 6px 12px; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer;">
+                        🔌 Check Wiring for Issues
+                    </button>
                 </div>
             `;
         }
@@ -985,21 +1013,176 @@ ${separator}`;
     }
 
     /**
-     * Switch between analysis and failures tabs
+     * Switch between analysis, failures, and wiring tabs
      */
     switchTab(tab) {
-        document.getElementById('tab-analysis').style.background = tab === 'analysis' ? '#161b22' : 'transparent';
-        document.getElementById('tab-analysis').style.color = tab === 'analysis' ? '#58a6ff' : '#8b949e';
-        document.getElementById('tab-analysis').style.borderBottom = tab === 'analysis' ? '2px solid #58a6ff' : 'none';
+        // Reset all tabs
+        const tabs = ['analysis', 'failures', 'wiring'];
+        const colors = { analysis: '#58a6ff', failures: '#f85149', wiring: '#38bdf8' };
         
-        document.getElementById('tab-failures').style.background = tab === 'failures' ? '#161b22' : 'transparent';
-        document.getElementById('tab-failures').style.color = tab === 'failures' ? '#f85149' : '#8b949e';
-        document.getElementById('tab-failures').style.borderBottom = tab === 'failures' ? '2px solid #f85149' : 'none';
+        tabs.forEach(t => {
+            const btn = document.getElementById(`tab-${t}`);
+            if (btn) {
+                btn.style.background = tab === t ? '#161b22' : 'transparent';
+                btn.style.color = tab === t ? colors[t] : '#8b949e';
+                btn.style.borderBottom = tab === t ? `2px solid ${colors[t]}` : 'none';
+            }
+        });
         
         if (tab === 'analysis') {
             this.updateAnalysis();
-        } else {
+        } else if (tab === 'failures') {
             this.loadFailureReport();
+        } else if (tab === 'wiring') {
+            this.loadWiringDiagnostics();
+        }
+    }
+    
+    /**
+     * Load wiring diagnostics for this company
+     * Shows configuration issues that might affect AI responses
+     */
+    async loadWiringDiagnostics() {
+        const content = document.getElementById('report-content');
+        content.innerHTML = `
+            <div style="text-align: center; color: #8b949e; padding: 20px;">
+                <span style="animation: pulse 1s infinite;">●</span> Loading wiring diagnostics...
+            </div>
+        `;
+        
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const response = await fetch(`/api/admin/wiring-status/${this.companyId}/quick-diagnostics`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            const diagnostics = await response.json();
+            this.renderWiringDiagnostics(diagnostics);
+            
+        } catch (error) {
+            console.error('[AI Test] Failed to load wiring diagnostics:', error);
+            content.innerHTML = `
+                <div style="color: #f85149; padding: 20px; text-align: center;">
+                    ❌ Failed to load diagnostics: ${error.message}
+                </div>
+            `;
+        }
+    }
+    
+    /**
+     * Render wiring diagnostics in the panel
+     */
+    renderWiringDiagnostics(diagnostics) {
+        const content = document.getElementById('report-content');
+        const isHealthy = diagnostics.healthy;
+        const issueCount = (diagnostics.issues || []).length;
+        const warningCount = (diagnostics.warnings || []).length;
+        
+        content.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                <!-- Health Status -->
+                <div style="background: ${isHealthy ? '#1c2d1c' : '#2d1c1c'}; border: 1px solid ${isHealthy ? '#238636' : '#f85149'}; border-radius: 8px; padding: 16px; text-align: center;">
+                    <div style="font-size: 24px; margin-bottom: 8px;">${isHealthy ? '✅' : '🔴'}</div>
+                    <div style="font-size: 14px; font-weight: 700; color: ${isHealthy ? '#3fb950' : '#f85149'};">
+                        ${isHealthy ? 'Wiring Healthy' : 'Issues Detected'}
+                    </div>
+                    <div style="font-size: 11px; color: #8b949e; margin-top: 4px;">
+                        ${diagnostics.generationTimeMs || 0}ms
+                    </div>
+                </div>
+                
+                <!-- Quick Stats -->
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px; text-align: center;">
+                        <div style="font-size: 16px; font-weight: 700; color: ${diagnostics.stats?.killSwitches?.scenariosBlocked ? '#f85149' : '#3fb950'};">
+                            ${diagnostics.stats?.killSwitches?.scenariosBlocked ? '🔴' : '✅'}
+                        </div>
+                        <div style="font-size: 10px; color: #8b949e; text-transform: uppercase;">Kill Switches</div>
+                    </div>
+                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px; text-align: center;">
+                        <div style="font-size: 16px; font-weight: 700; color: ${(diagnostics.stats?.templates?.enabled || 0) > 0 ? '#3fb950' : '#f85149'};">
+                            ${diagnostics.stats?.templates?.enabled || 0}
+                        </div>
+                        <div style="font-size: 10px; color: #8b949e; text-transform: uppercase;">Templates</div>
+                    </div>
+                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px; text-align: center;">
+                        <div style="font-size: 16px; font-weight: 700; color: ${(diagnostics.stats?.scenarios?.count || 0) > 0 ? '#3fb950' : '#f85149'};">
+                            ${diagnostics.stats?.scenarios?.count || 0}
+                        </div>
+                        <div style="font-size: 10px; color: #8b949e; text-transform: uppercase;">Scenarios</div>
+                    </div>
+                </div>
+                
+                <!-- Issues -->
+                ${issueCount > 0 ? `
+                    <div style="background: #161b22; border: 1px solid #f85149; border-radius: 8px; padding: 12px;">
+                        <h4 style="margin: 0 0 10px 0; color: #f85149; font-size: 12px; display: flex; align-items: center; gap: 6px;">
+                            🔴 Critical Issues (${issueCount})
+                        </h4>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            ${(diagnostics.issues || []).map(issue => `
+                                <div style="background: #2a1c1c; border: 1px solid #f8514930; border-radius: 6px; padding: 10px;">
+                                    <div style="font-size: 12px; font-weight: 700; color: #f85149;">${issue.title}</div>
+                                    <div style="font-size: 11px; color: #8b949e; margin: 4px 0;">${issue.message}</div>
+                                    <div style="font-size: 10px; color: #58a6ff; background: rgba(88,166,255,0.1); padding: 6px 8px; border-radius: 4px; margin-top: 6px;">
+                                        💡 ${issue.fix}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- Warnings -->
+                ${warningCount > 0 ? `
+                    <div style="background: #161b22; border: 1px solid #f0883e; border-radius: 8px; padding: 12px;">
+                        <h4 style="margin: 0 0 10px 0; color: #f0883e; font-size: 12px;">
+                            ⚠️ Warnings (${warningCount})
+                        </h4>
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            ${(diagnostics.warnings || []).map(warn => `
+                                <div style="font-size: 11px; color: #c9d1d9; padding: 8px; background: #2d2712; border-radius: 4px;">
+                                    <strong>${warn.title}</strong>
+                                    ${warn.message ? `<div style="color: #8b949e; margin-top: 2px;">${warn.message}</div>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- No Issues -->
+                ${issueCount === 0 && warningCount === 0 ? `
+                    <div style="background: #1c2d1c; border: 1px solid #238636; border-radius: 8px; padding: 20px; text-align: center;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">🎉</div>
+                        <div style="font-size: 14px; color: #3fb950;">All systems operational</div>
+                        <div style="font-size: 11px; color: #8b949e; margin-top: 4px;">No configuration issues detected</div>
+                    </div>
+                ` : ''}
+                
+                <!-- Open Full Wiring Tab -->
+                <button onclick="window.aiTestConsole.openWiringTab()" 
+                    style="width: 100%; padding: 12px; background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%); color: #000; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 13px; transition: all 0.2s;">
+                    🔌 Open Full Wiring Diagnostics →
+                </button>
+            </div>
+        `;
+    }
+    
+    /**
+     * Open the Wiring Tab in the Control Plane
+     */
+    openWiringTab() {
+        const modal = document.getElementById('ai-test-modal');
+        if (modal) modal.remove();
+        
+        // Switch to Wiring tab in Control Plane
+        if (typeof switchTab === 'function') {
+            switchTab('wiring');
+        } else if (window.switchTab) {
+            window.switchTab('wiring');
+        } else {
+            // Fallback: navigate with query param
+            window.location.href = `/control-plane-v2.html?companyId=${this.companyId}&tab=wiring`;
         }
     }
 
