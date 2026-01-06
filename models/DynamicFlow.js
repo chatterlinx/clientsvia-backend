@@ -452,6 +452,12 @@ DynamicFlowSchema.index({ tradeCategoryId: 1, flowKey: 1 }, {
     partialFilterExpression: { isTemplate: true }  // Only enforce uniqueness for templates
 });
 
+// HARD UNIQUENESS: Global templates must have unique flowKeys (prevents drift)
+DynamicFlowSchema.index({ flowKey: 1 }, { 
+    unique: true, 
+    partialFilterExpression: { isTemplate: true, companyId: null }
+});
+
 // ════════════════════════════════════════════════════════════════════════════
 // STATIC METHODS
 // ════════════════════════════════════════════════════════════════════════════
