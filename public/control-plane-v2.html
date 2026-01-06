@@ -9495,7 +9495,7 @@ END OF SCENARIO OPS MANUAL
       
       try {
         const response = await fetch(`/api/company/${currentCompanyId}/runtime-truth`, {
-          headers: getAuthHeaders()
+          headers: { 'Authorization': `Bearer ${authToken}` }
         });
         
         if (!response.ok) {
