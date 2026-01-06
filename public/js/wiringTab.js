@@ -494,6 +494,322 @@
     }
     
     // ========================================================================
+    // EXECUTIVE HEALTH BANNER - Salesforce-Grade First Impression
+    // ========================================================================
+    
+    function renderExecutiveBanner() {
+        const el = $('#wiringExecutiveBanner');
+        if (!el || !_report) return;
+        
+        if (!isV2Report(_report)) {
+            el.innerHTML = '';
+            return;
+        }
+        
+        const health = _report.health?.overall || 'UNKNOWN';
+        const scope = _report.scope || {};
+        const sb = _report.scoreboard || {};
+        const critCount = _report.health?.criticalIssues?.length || 0;
+        const warnCount = _report.health?.warnings?.length || 0;
+        const fieldCount = _report.health?.fields?.length || 0;
+        const wiredCount = _report.health?.byStatus?.WIRED || 0;
+        const uiOnlyCount = _report.health?.byStatus?.UI_ONLY || 0;
+        const misconfiguredCount = _report.health?.byStatus?.MISCONFIGURED || 0;
+        
+        const statusClass = health === 'GREEN' ? 'green' : health === 'YELLOW' ? 'yellow' : 'red';
+        const statusText = health === 'GREEN' ? '✅ ALL SYSTEMS OPERATIONAL' : 
+                          health === 'YELLOW' ? '⚠️ ISSUES DETECTED' : 
+                          '🔴 CRITICAL ISSUES';
+        
+        el.innerHTML = `
+          <div class="w-exec-banner status-${statusClass}">
+            <div class="w-exec-status-indicator ${statusClass}"></div>
+            
+            <div class="w-exec-header">
+              <div class="w-exec-title-group">
+                <span class="w-exec-status-badge ${statusClass}">${statusText}</span>
+                <span class="w-exec-company">${esc(scope.companyName || 'Unknown Company')}</span>
+              </div>
+              <div class="w-exec-meta">
+                <div><strong>Trade:</strong> ${esc(scope.tradeKey || 'universal')} (${esc(scope.tradeKeySource || 'default')})</div>
+                <div><strong>Environment:</strong> ${esc(scope.environment || 'production')}</div>
+                <div><strong>ECV:</strong> ${esc((scope.effectiveConfigVersion || 'n/a').toString().substring(0, 16))}</div>
+                <div class="w-meta-small">Report generated: ${esc(_report.meta?.generatedAt || '')} (${_report.meta?.generationTimeMs || 0}ms)</div>
+              </div>
+            </div>
+            
+            <div class="w-exec-metrics">
+              <div class="w-exec-metric ${wiredCount > 0 ? 'highlight-green' : ''}">
+                <div class="w-exec-metric-value">${wiredCount}</div>
+                <div class="w-exec-metric-label">Fully Wired</div>
+                <div class="w-exec-metric-detail">End-to-end connected</div>
+              </div>
+              <div class="w-exec-metric ${uiOnlyCount > 0 ? 'highlight-yellow' : ''}">
+                <div class="w-exec-metric-value">${uiOnlyCount}</div>
+                <div class="w-exec-metric-label">UI Only</div>
+                <div class="w-exec-metric-detail">No runtime reader</div>
+              </div>
+              <div class="w-exec-metric ${misconfiguredCount > 0 ? 'highlight-red' : ''}">
+                <div class="w-exec-metric-value">${misconfiguredCount}</div>
+                <div class="w-exec-metric-label">Misconfigured</div>
+                <div class="w-exec-metric-detail">Needs attention</div>
+              </div>
+              <div class="w-exec-metric ${critCount > 0 ? 'highlight-red' : ''}">
+                <div class="w-exec-metric-value">${critCount}</div>
+                <div class="w-exec-metric-label">Critical Issues</div>
+                <div class="w-exec-metric-detail">Blocking problems</div>
+              </div>
+              <div class="w-exec-metric">
+                <div class="w-exec-metric-value">${fieldCount}</div>
+                <div class="w-exec-metric-label">Total Fields</div>
+                <div class="w-exec-metric-detail">In registry</div>
+              </div>
+            </div>
+          </div>
+        `;
+    }
+    
+    // ========================================================================
+    // KILL SWITCHES STATUS
+    // ========================================================================
+    
+    function renderKillSwitches() {
+        const el = $('#wiringKillSwitches');
+        if (!el || !_report) return;
+        
+        if (!isV2Report(_report)) {
+            el.innerHTML = '';
+            return;
+        }
+        
+        const killSwitches = _report.effectiveConfig?.killSwitches || {};
+        const ksEntries = Object.entries(killSwitches);
+        
+        if (ksEntries.length === 0) {
+            el.innerHTML = '';
+            return;
+        }
+        
+        const hasBlocking = ksEntries.some(([_, v]) => v.isBlocking);
+        
+        el.innerHTML = `
+          <div class="w-killswitch-panel">
+            <div class="w-panel-title">🔑 Kill Switches ${hasBlocking ? '<span style="color:#f87171;font-weight:400;font-size:12px;">(BLOCKING ACTIVE)</span>' : '<span style="color:#22c55e;font-weight:400;font-size:12px;">(All Clear)</span>'}</div>
+            <div class="w-killswitch-grid">
+              ${ksEntries.map(([id, ks]) => `
+                <div class="w-killswitch-card ${ks.isBlocking ? 'blocking' : 'safe'}">
+                  <div class="w-killswitch-info">
+                    <div class="w-killswitch-name">${esc(id.split('.').pop())}</div>
+                    <div class="w-killswitch-effect">${esc(ks.effect || 'Controls behavior')}</div>
+                  </div>
+                  <div class="w-killswitch-status ${ks.isBlocking ? 'on' : 'off'}">
+                    ${ks.isBlocking ? '🔴 ON' : '✅ OFF'}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+    }
+    
+    // ========================================================================
+    // GAP ANALYSIS - The Heart of Diagnostics
+    // ========================================================================
+    
+    function renderGapAnalysis() {
+        const el = $('#wiringGapAnalysis');
+        if (!el || !_report) return;
+        
+        if (!isV2Report(_report)) {
+            el.innerHTML = '';
+            return;
+        }
+        
+        const diff = _report.diff || {};
+        const coverage = _report.coverage || {};
+        const health = _report.health || {};
+        
+        // MISCONFIGURED - Critical issues
+        const misconfigured = (health.criticalIssues || []).map(i => ({
+            id: i.fieldId,
+            label: i.label,
+            reason: i.reason,
+            fix: i.fix,
+            dbPath: i.dbPath,
+            uiPath: i.uiPath
+        }));
+        
+        // UI_ONLY - Configured but no runtime reader
+        const uiOnly = (coverage.uiOnlyPaths || []).map(id => {
+            const field = (health.fields || []).find(f => f.id === id) || {};
+            return {
+                id,
+                label: field.label || id,
+                reason: 'No runtime code reads this field',
+                fix: 'Add runtime reader or remove from UI'
+            };
+        });
+        
+        // DEAD_READ - Runtime reads but no UI
+        const deadRead = (coverage.deadReadPaths || []).map(id => {
+            const reader = _report.runtimeMap?.readers?.find(r => r.configPath === id) || {};
+            return {
+                id,
+                label: id,
+                reason: 'Code reads this but UI doesn\'t expose it',
+                fix: 'Add to wiringRegistry or remove runtime reader',
+                readers: reader.readers || []
+            };
+        });
+        
+        const renderGapItem = (item, type) => `
+          <div class="w-gap-item" data-focus="${esc(item.id)}">
+            <div class="w-gap-item-id">${esc(item.id)}</div>
+            <div class="w-gap-item-label">${esc(item.label || item.reason)}</div>
+            ${item.fix ? `<div class="w-gap-item-fix">💡 ${esc(item.fix)}</div>` : ''}
+          </div>
+        `;
+        
+        el.innerHTML = `
+          <div class="w-gap-panel">
+            <div class="w-gap-header">
+              <div>
+                <div class="w-gap-title">🔬 Gap Analysis</div>
+                <div class="w-gap-subtitle">Registry vs MongoDB vs Runtime - Where are the mismatches?</div>
+              </div>
+            </div>
+            
+            <div class="w-gap-grid">
+              <!-- MISCONFIGURED Column -->
+              <div class="w-gap-column critical">
+                <div class="w-gap-column-header">
+                  <div class="w-gap-column-title">🔴 MISCONFIGURED</div>
+                  <div class="w-gap-column-count">${misconfigured.length}</div>
+                </div>
+                <div class="w-gap-list">
+                  ${misconfigured.length === 0 
+                    ? '<div class="w-gap-empty success">✅ All required fields valid</div>'
+                    : misconfigured.map(i => renderGapItem(i, 'critical')).join('')
+                  }
+                </div>
+              </div>
+              
+              <!-- UI_ONLY Column -->
+              <div class="w-gap-column warning">
+                <div class="w-gap-column-header">
+                  <div class="w-gap-column-title">🟡 UI_ONLY (Dead Config)</div>
+                  <div class="w-gap-column-count">${uiOnly.length}</div>
+                </div>
+                <div class="w-gap-list">
+                  ${uiOnly.length === 0 
+                    ? '<div class="w-gap-empty success">✅ All UI fields have runtime readers</div>'
+                    : uiOnly.map(i => renderGapItem(i, 'warning')).join('')
+                  }
+                </div>
+              </div>
+              
+              <!-- DEAD_READ Column -->
+              <div class="w-gap-column info">
+                <div class="w-gap-column-header">
+                  <div class="w-gap-column-title">🔵 DEAD_READ (Hidden Config)</div>
+                  <div class="w-gap-column-count">${deadRead.length}</div>
+                </div>
+                <div class="w-gap-list">
+                  ${deadRead.length === 0 
+                    ? '<div class="w-gap-empty success">✅ All runtime reads exposed in UI</div>'
+                    : deadRead.map(i => renderGapItem(i, 'info')).join('')
+                  }
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        // Bind click handlers for gap items
+        $$('.w-gap-item[data-focus]', el).forEach(item => {
+            item.addEventListener('click', () => selectNode(item.dataset.focus));
+        });
+    }
+    
+    // ========================================================================
+    // ACTION QUEUE - Prioritized Fixes
+    // ========================================================================
+    
+    function renderActionQueue() {
+        const el = $('#wiringActionQueue');
+        if (!el || !_report) return;
+        
+        if (!isV2Report(_report)) {
+            el.innerHTML = '';
+            return;
+        }
+        
+        const actions = [];
+        
+        // Add critical issues as highest priority
+        (_report.health?.criticalIssues || []).forEach((issue, idx) => {
+            actions.push({
+                priority: 'critical',
+                order: idx + 1,
+                field: issue.label || issue.fieldId,
+                fieldId: issue.fieldId,
+                reason: issue.reason,
+                fix: issue.fix,
+                dbPath: issue.dbPath,
+                uiPath: issue.uiPath
+            });
+        });
+        
+        // Add warnings as medium priority
+        (_report.health?.warnings || []).slice(0, 10).forEach((warn, idx) => {
+            actions.push({
+                priority: 'medium',
+                order: actions.length + 1,
+                field: warn.label || warn.fieldId,
+                fieldId: warn.fieldId,
+                reason: warn.reason || warn.message,
+                fix: warn.fix,
+                dbPath: warn.dbPath
+            });
+        });
+        
+        if (actions.length === 0) {
+            el.innerHTML = `
+              <div class="w-action-panel">
+                <div class="w-action-header">
+                  <div class="w-action-title">📋 Action Queue</div>
+                </div>
+                <div class="w-action-empty">✅ No actions required - system is healthy!</div>
+              </div>
+            `;
+            return;
+        }
+        
+        el.innerHTML = `
+          <div class="w-action-panel">
+            <div class="w-action-header">
+              <div class="w-action-title">📋 Action Queue</div>
+              <div class="w-action-count">${actions.length} fixes needed</div>
+            </div>
+            <div class="w-action-list">
+              ${actions.slice(0, 15).map(a => `
+                <div class="w-action-item priority-${a.priority}">
+                  <div class="w-action-priority">#${a.order}</div>
+                  <div class="w-action-content">
+                    <div class="w-action-field">${esc(a.field)}</div>
+                    <div class="w-action-reason">${esc(a.reason)}</div>
+                    ${a.fix ? `<div class="w-action-fix">💡 ${esc(a.fix)}</div>` : ''}
+                    ${a.uiPath ? `<div class="w-action-path">UI: ${esc(a.uiPath)}</div>` : ''}
+                    ${a.dbPath ? `<div class="w-action-path">DB: ${esc(a.dbPath)}</div>` : ''}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+    }
+    
+    // ========================================================================
     // SCOREBOARD RENDER
     // ========================================================================
     
@@ -1172,12 +1488,24 @@
             </div>
 
             <div style="margin-top:12px;">
-              <div><strong>Runtime Readers</strong></div>
-              ${runtimeReaders.length === 0 ? `<div class="w-meta-small">No runtime reader mapping found (would be UI_ONLY).</div>` : `
-                <div class="w-meta-small">Mapped readers: ${runtimeReaders.length}</div>
-                <ul style="margin: 6px 0 0 18px;">
-                  ${runtimeReaders.map(r => `<li><code>${esc(r.file || '')}</code> — <strong>${esc(r.function || '')}</strong>${r.line ? ` (L${esc(String(r.line))})` : ''}${r.description ? `: ${esc(r.description)}` : ''}</li>`).join('')}
-                </ul>
+              <div><strong>🔌 Runtime Readers</strong> ${runtimeReaders.length === 0 ? '<span class="w-badge yellow">UI_ONLY</span>' : `<span class="w-badge green">${runtimeReaders.length} readers</span>`}</div>
+              ${runtimeReaders.length === 0 ? `
+                <div class="w-runtime-readers" style="border-color:#5a4a1a;">
+                  <div style="text-align:center;padding:16px;color:#fbbf24;">
+                    ⚠️ No runtime code reads this field<br>
+                    <span style="font-size:11px;color:#888;">This configuration is saved but never used by the system</span>
+                  </div>
+                </div>
+              ` : `
+                <div class="w-runtime-readers">
+                  ${runtimeReaders.map(r => `
+                    <div class="w-runtime-reader">
+                      <div class="w-runtime-file">${esc(r.file || 'unknown')}</div>
+                      <div class="w-runtime-function">${esc(r.function || 'unknown')}()${r.line ? ` :${r.line}` : ''}</div>
+                      <div class="w-runtime-desc">${esc(r.description || '')}${r.critical ? ' <span class="w-runtime-critical">CRITICAL</span>' : ''}${r.checkpoint ? ` [${esc(r.checkpoint)}]` : ''}</div>
+                    </div>
+                  `).join('')}
+                </div>
               `}
             </div>
 
@@ -1276,15 +1604,29 @@
             }
         }
         
-        renderScoreboard();
-        renderSpecialChecks();
-        renderIssues();
-        renderGuardrails();
-        renderTree();
-        renderInspector();
-        renderDiagrams();
-        renderCheckpoints();
+        console.log('[WiringTab] 🎨 renderAll() - Salesforce-Grade Dashboard');
+        
+        // === EXECUTIVE LAYER (First thing you see) ===
+        renderExecutiveBanner();      // Big status banner
+        renderScoreboard();           // Quick metrics tiles
+        
+        // === OPERATIONAL LAYER (What needs attention) ===
+        renderKillSwitches();         // Kill switch status
+        renderGapAnalysis();          // Registry vs DB vs Runtime gaps
+        renderActionQueue();          // Prioritized fixes
+        
+        // === DETAIL LAYER (Deep dive) ===
+        renderSpecialChecks();        // Source-of-truth checks
+        renderIssues();               // Full issues list
+        renderGuardrails();           // Tenant safety
+        renderTree();                 // Field tree view
+        renderInspector();            // Selected node details
+        renderDiagrams();             // Mermaid visualizations
+        renderCheckpoints();          // Code checkpoints
+        
         updateFocusPill();
+        
+        console.log('[WiringTab] ✅ Dashboard rendered');
     }
     
     function updateFocusPill() {
