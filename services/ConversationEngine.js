@@ -4627,7 +4627,8 @@ async function processTurn({
                     // User provided area code, now ask for rest
                     phoneMeta.areaCode = extractedThisTurn.phone;
                     phoneMeta.breakdownStep = 'rest';
-                    finalReply = "Got it. And the rest of the number?";
+                    // V54: Use UI-configured prompt (no hardcodes!)
+                    finalReply = phoneSlotConfig?.restOfNumberPrompt || "Got it. And the rest of the number?";
                     nextSlotId = 'phone';
                     log('📞 PHONE: Got area code, asking for rest');
                 }
@@ -4693,7 +4694,8 @@ async function processTurn({
                 else if (!finalReply && session.booking.activeSlot === 'phone' && !currentSlots.phone && !phoneMeta.breakdownStep && 
                          phoneSlotConfig?.breakDownIfUnclear && userText.length > 0 && !extractedThisTurn.phone) {
                     phoneMeta.breakdownStep = 'area_code';
-                    finalReply = "I didn't quite catch that. Let's go step by step - what's the area code?";
+                    // V54: Use UI-configured prompt (no hardcodes!)
+                    finalReply = "I didn't quite catch that. " + (phoneSlotConfig?.areaCodePrompt || "Let's go step by step - what's the area code?");
                     nextSlotId = 'phone';
                     log('📞 PHONE: Triggering breakdown due to unclear input');
                 }
@@ -4784,7 +4786,8 @@ async function processTurn({
                 else if (addressMeta.breakdownStep === 'street' && userText.length > 3) {
                     addressMeta.street = userText.trim();
                     addressMeta.breakdownStep = 'city';
-                    finalReply = "Got it. And what city?";
+                    // V54: Use UI-configured prompt (no hardcodes!)
+                    finalReply = addressSlotConfig?.cityPrompt || "And what city?";
                     nextSlotId = 'address';
                     log('🏠 ADDRESS: Got street, asking for city');
                 }
@@ -4793,7 +4796,8 @@ async function processTurn({
                     // Check addressConfirmLevel to see if we need zip
                     if (addressSlotConfig?.addressConfirmLevel === 'full') {
                         addressMeta.breakdownStep = 'zip';
-                        finalReply = "And the zip code?";
+                        // V54: Use UI-configured prompt (no hardcodes!)
+                        finalReply = addressSlotConfig?.zipPrompt || "And the zip code?";
                         nextSlotId = 'address';
                         log('🏠 ADDRESS: Got city, asking for zip');
                     } else {
@@ -4945,7 +4949,8 @@ async function processTurn({
                     }
                     
                     if (isPartialAddress && !addressSlotConfig?.acceptPartialAddress) {
-                        finalReply = "I got part of that. Can you give me the full address including city?";
+                        // V54: Use UI-configured prompt (no hardcodes!)
+                        finalReply = addressSlotConfig?.partialAddressPrompt || "I got part of that. Can you give me the full address including city?";
                         nextSlotId = 'address';
                         log('🏠 ADDRESS: Partial address not accepted, asking for full');
                     } 
@@ -5025,7 +5030,8 @@ async function processTurn({
                     } else {
                         // No address captured yet - apologize and ask simply
                         addressMeta.breakdownStep = null;
-                        finalReply = "I apologize for the confusion. What's the full service address?";
+                        // V54: Use UI-configured prompt (no hardcodes!)
+                    finalReply = "I apologize for the confusion. " + (addressSlotConfig?.question || "What's the address for the service?");
                         nextSlotId = 'address';
                         log('🏠 ADDRESS: User frustrated but no address captured, asking simply');
                     }
@@ -5035,7 +5041,8 @@ async function processTurn({
                 else if (!finalReply && session.booking.activeSlot === 'address' && !currentSlots.address && !addressMeta.breakdownStep &&
                          addressSlotConfig?.breakDownIfUnclear && userText.length > 0 && !extractedThisTurn.address) {
                     addressMeta.breakdownStep = 'street';
-                    finalReply = "I didn't quite catch that. Let's go step by step - what's the street address?";
+                    // V54: Use UI-configured prompt (no hardcodes!)
+                    finalReply = "I didn't quite catch that. " + (addressSlotConfig?.streetBreakdownPrompt || "Let's go step by step - what's the street address?");
                     nextSlotId = 'address';
                     log('🏠 ADDRESS: Triggering breakdown due to unclear input');
                 }
@@ -5321,14 +5328,16 @@ async function processTurn({
                     const nameMatch = userTextLower.match(/^(my\s+)?name\s+(is|would be)\s*(.*)$/i);
                     const isPartialName = nameMatch && (!nameMatch[3] || nameMatch[3].trim().length < 2);
                     
+                    // V54: Use UI-configured nudge prompts (no hardcodes!)
+                    const loopPrevention = company?.aiAgentSettings?.frontDeskBehavior?.loopPrevention || {};
                     if (isPartialAddress) {
-                        finalReply = "No problem — go ahead with the street address, and include unit number if you have one. ";
+                        finalReply = loopPrevention.nudgeAddressPrompt || "No problem — go ahead with the street address, and include unit number if you have one.";
                         log('📝 NUDGE: Partial address detected, giving gentle nudge');
                     } else if (isPartialPhone) {
-                        finalReply = "Sure — go ahead with the area code first. ";
+                        finalReply = loopPrevention.nudgePhonePrompt || "Sure — go ahead with the area code first.";
                         log('📝 NUDGE: Partial phone detected, giving gentle nudge');
                     } else if (isPartialName) {
-                        finalReply = "Sure — go ahead. ";
+                        finalReply = loopPrevention.nudgeNamePrompt || "Sure — go ahead.";
                         log('📝 NUDGE: Partial name detected, giving gentle nudge');
                     }
                 }

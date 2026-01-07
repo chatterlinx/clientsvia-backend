@@ -1829,6 +1829,9 @@ const companySchema = new mongoose.Schema({
                     askFullName: { type: Boolean, default: true }, // Ask for first + last name
                     useFirstNameOnly: { type: Boolean, default: true }, // When referring back, use first name only
                     askMissingNamePart: { type: Boolean, default: false }, // 🔴 Ask once for missing first/last name
+                    // V54: UI-configurable name prompts (no hardcodes!)
+                    lastNameQuestion: { type: String, default: "And what's your last name?", trim: true },
+                    firstNameQuestion: { type: String, default: "And what's your first name?", trim: true }
                     
                     // ═══════════════════════════════════════════════════════════════
                     // PHONE-SPECIFIC OPTIONS
@@ -1837,6 +1840,9 @@ const companySchema = new mongoose.Schema({
                     callerIdPrompt: { type: String, default: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?" },
                     acceptTextMe: { type: Boolean, default: true }, // Accept "text me" as confirmation
                     breakDownIfUnclear: { type: Boolean, default: false }, // If unclear, ask area code first then rest of number
+                    // V54: UI-configurable phone prompts (no hardcodes!)
+                    areaCodePrompt: { type: String, default: "Let's go step by step - what's the area code?", trim: true },
+                    restOfNumberPrompt: { type: String, default: "Got it. And the rest of the number?", trim: true }
                     
                     // ═══════════════════════════════════════════════════════════════
                     // ADDRESS-SPECIFIC OPTIONS
@@ -1844,6 +1850,11 @@ const companySchema = new mongoose.Schema({
                     addressConfirmLevel: { type: String, enum: ['street_only', 'street_city', 'full'], default: 'street_city' },
                     acceptPartialAddress: { type: Boolean, default: false }, // Accept partial if caller unsure
                     breakDownIfUnclear: { type: Boolean, default: false }, // If unclear, ask street → city → zip step by step
+                    // V54: UI-configurable address prompts (no hardcodes!)
+                    partialAddressPrompt: { type: String, default: "I got part of that. Can you give me the full address including city?", trim: true },
+                    cityPrompt: { type: String, default: "And what city?", trim: true },
+                    zipPrompt: { type: String, default: "And the zip code?", trim: true },
+                    streetBreakdownPrompt: { type: String, default: "Let's go step by step - what's the street address?", trim: true }
                     
                     // 🆕 V35: GOOGLE MAPS ADDRESS VALIDATION
                     // Silent background validation - does NOT drive conversation
@@ -2214,7 +2225,11 @@ const companySchema = new mongoose.Schema({
                 enabled: { type: Boolean, default: true },
                 maxSameQuestion: { type: Number, default: 2 },
                 onLoop: { type: String, enum: ['rephrase', 'skip', 'escalate'], default: 'rephrase' },
-                rephraseIntro: { type: String, default: "Let me try this differently - ", trim: true }
+                rephraseIntro: { type: String, default: "Let me try this differently - ", trim: true },
+                // V54: Nudge prompts for partial input (no hardcodes!)
+                nudgeAddressPrompt: { type: String, default: "No problem — go ahead with the street address, and include unit number if you have one.", trim: true },
+                nudgePhonePrompt: { type: String, default: "Sure — go ahead with the area code first.", trim: true },
+                nudgeNamePrompt: { type: String, default: "Sure — go ahead.", trim: true }
             },
             
             // ═══════════════════════════════════════════════════════════════
