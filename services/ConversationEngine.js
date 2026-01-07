@@ -1702,7 +1702,10 @@ async function processTurn({
             extractedThisTurn = null,
             flow = null,
             scenarios = null,
-            blackBox = null
+            blackBox = null,
+            // V51: Add templateReferences for wiring diagnostic
+            templateReferences = null,
+            scenarioCount = null
         } = truth;
 
         // Always return required shape, with nulls if missing.
@@ -1755,7 +1758,12 @@ async function processTurn({
             blackBox: {
                 callId: blackBox?.callId ?? (session?._id?.toString?.() || truth.sessionId || null),
                 source: blackBox?.source ?? null
-            }
+            },
+            
+            // V51: Template references for wiring diagnostic
+            // This allows WiringDiagnosticService to see actual template state
+            templateReferences: Array.isArray(templateReferences) ? templateReferences : [],
+            scenarioCount: typeof scenarioCount === 'number' ? scenarioCount : 0
         };
     }
 
@@ -4114,6 +4122,70 @@ async function processTurn({
                         finalReply = `Sorry, I didn't catch that. What's your ${askingFor} name?`;
                         nextSlotId = 'name';
                         log('📝 V33: Could not extract name part, re-asking', { userText, askingFor });
+                    }
+                }
+                // ═══════════════════════════════════════════════════════════════════
+                // V51 FIX: SPELLING VARIANT RESPONSE HANDLER (PRIORITY)
+                // Must check BEFORE name collection branch to prevent loop
+                // When user says "Marc with a C", we should process the variant answer,
+                // NOT treat it as a new name being provided
+                // ═══════════════════════════════════════════════════════════════════
+                else if (nameMeta?.askedSpellingVariant && nameMeta?.pendingSpellingVariant && !nameMeta?.spellingVariantAnswer) {
+                    const variant = nameMeta.pendingSpellingVariant;
+                    const userTextLower = userText.toLowerCase().trim();
+                    
+                    // Check what the user answered
+                    let chosenName = null;
+                    
+                    log('📝 V51: Processing spelling variant response', {
+                        userText,
+                        optionA: variant.optionA,
+                        optionB: variant.optionB,
+                        letterA: variant.letterA,
+                        letterB: variant.letterB
+                    });
+                    
+                    // Check for letter answers: "K", "C", "with a K", "the K"
+                    const hasLetterA = userTextLower.includes(variant.letterA.toLowerCase());
+                    const hasLetterB = userTextLower.includes(variant.letterB.toLowerCase());
+                    
+                    if (hasLetterB && !hasLetterA) {
+                        chosenName = variant.optionB;
+                    } else if (hasLetterA && !hasLetterB) {
+                        chosenName = variant.optionA;
+                    }
+                    // Check for name answers: "Mark", "Marc"
+                    else if (userTextLower.includes(variant.optionB.toLowerCase())) {
+                        chosenName = variant.optionB;
+                    } else if (userTextLower.includes(variant.optionA.toLowerCase())) {
+                        chosenName = variant.optionA;
+                    }
+                    // Default to optionA if unclear
+                    else {
+                        chosenName = variant.optionA;
+                        log('📝 V51 SPELLING: Unclear answer, defaulting to optionA', { userText, optionA: variant.optionA });
+                    }
+                    
+                    // Update the name with the correct spelling
+                    nameMeta.spellingVariantAnswer = chosenName;
+                    nameMeta.first = chosenName;
+                    currentSlots.partialName = chosenName;
+                    
+                    log('📝 V51 SPELLING VARIANT: User chose', { chosenName, userText });
+                    
+                    // Now proceed to ask for last name or move on
+                    if (askFullName) {
+                        nameMeta.askedMissingPartOnce = true;
+                        // V47: Use UI-configured last name question
+                        const lastNameQSpelling = nameSlotConfig?.lastNameQuestion || "What's your last name?";
+                        finalReply = `Got it, ${chosenName}. ${lastNameQSpelling.replace('{firstName}', chosenName)}`;
+                        nextSlotId = 'name';
+                    } else {
+                        // Accept as complete
+                        currentSlots.name = chosenName;
+                        session.booking.activeSlot = getSlotIdByType('phone'); session.booking.activeSlotType = 'phone';
+                        finalReply = `Got it, ${chosenName}. `;
+                        nextSlotId = null;
                     }
                 }
                 // Check if we're in the middle of name collection
@@ -6854,6 +6926,10 @@ async function processTurn({
                 }))
                 : [];
 
+            // V51: Get templateReferences from company for wiring diagnostic
+            const templateRefs = company?.aiAgentSettings?.templateReferences || [];
+            const enabledTemplateRefs = templateRefs.filter(ref => ref.enabled !== false);
+            
             response.debugSnapshot = safeBuildDebugSnapshotV1({
                 session,
                 sessionId: session._id.toString(),
@@ -6889,7 +6965,10 @@ async function processTurn({
                     toolCount: scenarioToolsExpanded.length,
                     tools: scenarioToolsExpanded
                 },
-                blackBox: { callId: session._id.toString(), source: sourceTruth }
+                blackBox: { callId: session._id.toString(), source: sourceTruth },
+                // V51: Include templateReferences for wiring diagnostic
+                templateReferences: enabledTemplateRefs,
+                scenarioCount: scenarioToolsExpanded.length
             });
         }
         
