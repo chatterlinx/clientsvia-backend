@@ -68,17 +68,22 @@ class BookingStateMachine {
      * @returns {Object} Action object with: action, slotId, exactQuestion, trace
      */
     getNextAction() {
-        // Fixed slot order - NEVER changes
+        // Fixed slot order - NEVER changes (these are TYPES, not slot IDs)
         const slotOrder = ['name', 'phone', 'address', 'time'];
         
-        for (const slotId of slotOrder) {
-            // Find slot config from UI
+        for (const slotType of slotOrder) {
+            // Find slot config from UI - check BOTH slotId/id AND type
+            // UI may use custom IDs like 'firstName' with type='name'
             const slotConfig = this.bookingConfig.find(s => 
-                (s.slotId || s.id) === slotId
+                (s.slotId || s.id) === slotType ||
+                s.type === slotType
             );
             
-            // Skip if already collected
-            if (this.slots[slotId]) {
+            // Get the actual slot ID (could be custom like 'firstName' or standard like 'name')
+            const actualSlotId = slotConfig?.slotId || slotConfig?.id || slotType;
+            
+            // Skip if already collected - check BOTH the type key and actual slot ID
+            if (this.slots[slotType] || this.slots[actualSlotId]) {
                 continue;
             }
             
@@ -87,18 +92,19 @@ class BookingStateMachine {
                 continue;
             }
             
-            // Check loop breaker - how many times have we asked?
-            const timesAsked = this.askCount[slotId] || 0;
+            // Check loop breaker - how many times have we asked? (use slotType for consistency)
+            const timesAsked = this.askCount[slotType] || this.askCount[actualSlotId] || 0;
             
             // ══════════════════════════════════════════════════════════════
             // 3-STRIKE RULE: Escalate after 3 failed attempts
             // ══════════════════════════════════════════════════════════════
             if (timesAsked >= 3) {
-                logger.warn('[STATE MACHINE] ESCALATE - 3 strikes', { slotId, timesAsked });
+                logger.warn('[STATE MACHINE] ESCALATE - 3 strikes', { slotType, actualSlotId, timesAsked });
                 return {
                     action: 'ESCALATE',
-                    reason: `Failed to collect ${slotId} after 3 attempts`,
-                    slotId,
+                    reason: `Failed to collect ${slotType} after 3 attempts`,
+                    slotId: actualSlotId,
+                    slotType,
                     trace: { 
                         timesAsked, 
                         state: this.state,
@@ -111,13 +117,14 @@ class BookingStateMachine {
             // 2-STRIKE RULE: Clarify mode after 2 failed attempts
             // ══════════════════════════════════════════════════════════════
             if (timesAsked >= 2) {
-                logger.info('[STATE MACHINE] CLARIFY mode - 2nd attempt failed', { slotId, timesAsked });
+                logger.info('[STATE MACHINE] CLARIFY mode - 2nd attempt failed', { slotType, actualSlotId, timesAsked });
                 return {
                     action: 'CLARIFY',
-                    slotId,
-                    exactQuestion: slotConfig?.question || this.getDefaultQuestion(slotId),
-                    clarifyPhrase: this.getClarifyPhrase(slotId),
-                    expecting: slotId,
+                    slotId: actualSlotId,
+                    slotType,
+                    exactQuestion: slotConfig?.question || this.getDefaultQuestion(slotType),
+                    clarifyPhrase: this.getClarifyPhrase(slotType),
+                    expecting: slotType,
                     trace: { 
                         timesAsked, 
                         state: this.state,
@@ -129,12 +136,13 @@ class BookingStateMachine {
             // ══════════════════════════════════════════════════════════════
             // NORMAL: Ask for this slot
             // ══════════════════════════════════════════════════════════════
-            logger.info('[STATE MACHINE] ASK_SLOT', { slotId, timesAsked });
+            logger.info('[STATE MACHINE] ASK_SLOT', { slotType, actualSlotId, timesAsked });
             return {
                 action: 'ASK_SLOT',
-                slotId,
-                exactQuestion: slotConfig?.question || this.getDefaultQuestion(slotId),
-                expecting: slotId,
+                slotId: actualSlotId,
+                slotType,
+                exactQuestion: slotConfig?.question || this.getDefaultQuestion(slotType),
+                expecting: slotType,
                 trace: { 
                     timesAsked, 
                     state: this.state,
