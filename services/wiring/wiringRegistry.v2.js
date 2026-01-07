@@ -301,7 +301,23 @@ const wiringRegistryV2 = {
                                 { fn: VALIDATORS.isNonEmptyArray, message: 'At least one booking slot required' },
                                 { fn: VALIDATORS.allSlotsValid, message: 'All slots must have id, type, and question' }
                             ],
-                            defaultValue: []
+                            defaultValue: [],
+                            // V54: Per-slot configurable prompts - ALL prompts must come from here, NO HARDCODES
+                            subFieldsDoc: `
+                                Per-slot V54 configurable fields (stored in each slot object):
+                                - question: Main prompt for this slot (REQUIRED)
+                                - lastNameQuestion: "And what's your last name?" (name slots only)
+                                - firstNameQuestion: "And what's your first name?" (name slots only)
+                                - areaCodePrompt: "Let's go step by step - what's the area code?" (phone slots only)
+                                - restOfNumberPrompt: "Got it. And the rest of the number?" (phone slots only)
+                                - partialAddressPrompt: "I got part of that. Can you give me the full address including city?" (address slots only)
+                                - streetBreakdownPrompt: "Let's go step by step - what's the street address?" (address slots only)
+                                - cityPrompt: "And what city?" (address slots only)
+                                - zipPrompt: "And the zip code?" (address slots only)
+                                
+                                RULE: If ConversationEngine needs a prompt string, it MUST read from bookingSlots[].field
+                                      NEVER hardcode text in code. Use || fallback ONLY as schema default reference.
+                            `
                         }
                     ]
                 },
@@ -501,7 +517,17 @@ const wiringRegistryV2 = {
                             scope: 'company',
                             required: false,
                             validators: [],
-                            defaultValue: {}
+                            defaultValue: {},
+                            // V54: Configurable nudge prompts - NO HARDCODES
+                            subFieldsDoc: `
+                                V54 nudge prompts (when caller says "just a second" or pauses):
+                                - nudgeNamePrompt: "Sure — go ahead." (during name collection)
+                                - nudgePhonePrompt: "Sure — go ahead with the area code first." (during phone collection)
+                                - nudgeAddressPrompt: "No problem — go ahead with the street address, and include unit number if you have one." (during address collection)
+                                
+                                RULE: ConversationEngine MUST read from loopPrevention.nudge*Prompt
+                                      NEVER hardcode nudge text in code.
+                            `
                         }
                     ]
                 },

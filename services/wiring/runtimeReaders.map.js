@@ -197,7 +197,21 @@ const RUNTIME_READERS_MAP = {
         dbPath: 'company.aiAgentSettings.frontDeskBehavior.bookingSlots',
         scope: 'company',
         defaultValue: [],
-        validators: ['hasId', 'hasType', 'hasQuestion']
+        validators: ['hasId', 'hasType', 'hasQuestion'],
+        // V54: Per-slot configurable prompts (NO HARDCODES)
+        subFields: {
+            // Name slot prompts
+            'lastNameQuestion': { default: "And what's your last name?", description: 'Prompt when asking for last name after first name' },
+            'firstNameQuestion': { default: "And what's your first name?", description: 'Prompt when asking for first name after last name' },
+            // Phone slot prompts
+            'areaCodePrompt': { default: "Let's go step by step - what's the area code?", description: 'Prompt when breaking down phone number' },
+            'restOfNumberPrompt': { default: "Got it. And the rest of the number?", description: 'Prompt after area code collected' },
+            // Address slot prompts
+            'partialAddressPrompt': { default: "I got part of that. Can you give me the full address including city?", description: 'Prompt when only partial address captured' },
+            'streetBreakdownPrompt': { default: "Let's go step by step - what's the street address?", description: 'Prompt when breaking down address' },
+            'cityPrompt': { default: "And what city?", description: 'Prompt when asking for city after street' },
+            'zipPrompt': { default: "And the zip code?", description: 'Prompt when asking for zip after city' }
+        }
     },
 
     'frontDesk.bookingEnabled': {
@@ -397,11 +411,25 @@ const RUNTIME_READERS_MAP = {
                 line: 25,
                 description: 'Detects and breaks conversation loops',
                 required: false
+            },
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'processTurn',
+                line: 3600,
+                description: 'V54: Reads nudge prompts when caller says "just a second"',
+                checkpoint: 'V54_LOOP_NUDGE',
+                required: false
             }
         ],
         dbPath: 'company.aiAgentSettings.frontDeskBehavior.loopPrevention',
         scope: 'company',
-        defaultValue: {}
+        defaultValue: {},
+        // V54: Configurable nudge prompts when caller pauses (NO HARDCODES)
+        subFields: {
+            'nudgeNamePrompt': { default: 'Sure — go ahead. ', description: 'Nudge when caller pauses during name collection' },
+            'nudgePhonePrompt': { default: 'Sure — go ahead with the area code first. ', description: 'Nudge when caller pauses during phone collection' },
+            'nudgeAddressPrompt': { default: 'No problem — go ahead with the street address, and include unit number if you have one. ', description: 'Nudge when caller pauses during address collection' }
+        }
     },
 
     // =========================================================================
