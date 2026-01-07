@@ -4008,9 +4008,30 @@ async function processTurn({
                     // We asked for the missing part - extract name from various phrasings
                     let extractedNamePart = null;
                     
+                    // ═══════════════════════════════════════════════════════════════════
+                    // V50 FIX: Stop words that are NEVER valid names
+                    // Prevents "my last name is" from extracting "is" as the name
+                    // ═══════════════════════════════════════════════════════════════════
+                    const NAME_STOP_WORDS = new Set([
+                        'is', 'are', 'was', 'were', 'be', 'been', 'am', 'has', 'have', 'had',
+                        'the', 'my', 'its', "it's", 'a', 'an', 'name', 'last', 'first',
+                        'yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'no', 'nope',
+                        'hi', 'hello', 'hey', 'please', 'thanks', 'thank', 'you',
+                        'it', 'that', 'this', 'what', 'and', 'or', 'but', 'to', 'for'
+                    ]);
+                    
+                    // Helper: validate extracted name isn't a stop word or too short
+                    const isValidNameExtraction = (name) => {
+                        if (!name || name.length < 2) return false;
+                        if (NAME_STOP_WORDS.has(name.toLowerCase())) return false;
+                        // Also reject if it matches common verbs/articles
+                        if (/^(is|are|was|were|be|am|has|have|had|do|does|did|will|would|could|should|can|may|might)$/i.test(name)) return false;
+                        return true;
+                    };
+                    
                     // Pattern 1: "the last name is Walter" / "my last name is Walter" / "last name is Walter"
                     const lastNameIsMatch = userText.match(/(?:the\s+)?(?:my\s+)?last\s+name\s+(?:is\s+)?([A-Za-z]+)/i);
-                    if (lastNameIsMatch && lastNameIsMatch[1]) {
+                    if (lastNameIsMatch && lastNameIsMatch[1] && isValidNameExtraction(lastNameIsMatch[1])) {
                         extractedNamePart = lastNameIsMatch[1];
                         log('📝 V33: Extracted from "last name is X" pattern', { extracted: extractedNamePart });
                     }
@@ -4018,7 +4039,7 @@ async function processTurn({
                     // Pattern 2: "the first name is Mark" / "my first name is Mark"
                     if (!extractedNamePart) {
                         const firstNameIsMatch = userText.match(/(?:the\s+)?(?:my\s+)?first\s+name\s+(?:is\s+)?([A-Za-z]+)/i);
-                        if (firstNameIsMatch && firstNameIsMatch[1]) {
+                        if (firstNameIsMatch && firstNameIsMatch[1] && isValidNameExtraction(firstNameIsMatch[1])) {
                             extractedNamePart = firstNameIsMatch[1];
                             log('📝 V33: Extracted from "first name is X" pattern', { extracted: extractedNamePart });
                         }
@@ -4027,7 +4048,7 @@ async function processTurn({
                     // Pattern 3: "it's Walter" / "it is Walter"
                     if (!extractedNamePart) {
                         const itsMatch = userText.match(/(?:it'?s|it\s+is)\s+([A-Za-z]+)/i);
-                        if (itsMatch && itsMatch[1]) {
+                        if (itsMatch && itsMatch[1] && isValidNameExtraction(itsMatch[1])) {
                             extractedNamePart = itsMatch[1];
                             log('📝 V33: Extracted from "it\'s X" pattern', { extracted: extractedNamePart });
                         }
@@ -4036,17 +4057,24 @@ async function processTurn({
                     // Pattern 4: Just a single name word (filter out filler words, take LAST meaningful word)
                     if (!extractedNamePart) {
                         const words = userText.trim().split(/\s+/);
-                        const fillerWords = new Set(['the', 'my', 'is', 'its', "it's", 'a', 'an', 'name', 'last', 'first', 'yes', 'yeah', 'yep', 'sure', 'ok', 'okay']);
                         const nameWords = words.filter(w => {
                             const clean = w.replace(/[^a-zA-Z]/g, '').toLowerCase();
-                            return clean.length >= 2 && !fillerWords.has(clean);
+                            return clean.length >= 2 && !NAME_STOP_WORDS.has(clean);
                         });
                         
                         if (nameWords.length > 0) {
                             // Take the last meaningful word (most likely the actual name)
-                            extractedNamePart = nameWords[nameWords.length - 1].replace(/[^a-zA-Z]/g, '');
-                            log('📝 V33: Extracted last meaningful word', { extracted: extractedNamePart, allWords: nameWords });
+                            const candidate = nameWords[nameWords.length - 1].replace(/[^a-zA-Z]/g, '');
+                            if (isValidNameExtraction(candidate)) {
+                                extractedNamePart = candidate;
+                                log('📝 V33: Extracted last meaningful word', { extracted: extractedNamePart, allWords: nameWords });
+                            }
                         }
+                    }
+                    
+                    // V50: Log if extraction was blocked
+                    if (!extractedNamePart) {
+                        log('📝 V50: No valid name extracted (stop word or incomplete input)', { userText });
                     }
                     
                     if (extractedNamePart && extractedNamePart.length >= 2) {
