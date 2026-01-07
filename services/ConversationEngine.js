@@ -332,10 +332,28 @@ function isSlotComplete(slotId, currentSlots, session, slotConfig) {
     const slotMeta = session?.booking?.meta?.[slotId] || {};
     const value = currentSlots?.[slotId] || currentSlots?.[slotConfig?.type] || '';
     
-    // Special handling for name slot - check by TYPE not by slotId
-    // The Type dropdown (name, phone, address, etc.) determines behavior
-    if (slotConfig?.type === 'name' || slotId === 'name') {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V49 FIX: Name slot detection - check multiple indicators
+    // The slot might have:
+    //   - type: "name" (correct semantic type)
+    //   - type: "text" with id: "firstName" or "lastName" (UI config)
+    //   - slotId: "name" (legacy format)
+    // Data is ALWAYS stored under currentSlots.name, not currentSlots.firstName
+    // ═══════════════════════════════════════════════════════════════════════════
+    const isNameSlot = 
+        slotConfig?.type === 'name' || 
+        slotId === 'name' ||
+        slotId === 'firstName' ||
+        slotId === 'lastName' ||
+        (slotId && slotId.toLowerCase().includes('name'));
+    
+    if (isNameSlot) {
         const nameMeta = session?.booking?.meta?.name || {};
+        // V49: For name slots, also check currentSlots.name directly
+        const hasNameValue = currentSlots?.name || currentSlots?.[slotId] || currentSlots?.[slotConfig?.type];
+        if (hasNameValue && isNameSlotComplete(currentSlots, nameMeta, slotConfig)) {
+            return true;
+        }
         return isNameSlotComplete(currentSlots, nameMeta, slotConfig);
     }
     
