@@ -495,9 +495,20 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
         }
         
         // Save fallback responses
+        // V49 FIX: Sanitize values - schema expects strings, not arrays
         if (updates.fallbackResponses) {
             Object.entries(updates.fallbackResponses).forEach(([key, value]) => {
-                updateObj[`aiAgentSettings.frontDeskBehavior.fallbackResponses.${key}`] = value;
+                // If value is an array, convert to string (join with space or take first element)
+                let sanitizedValue = value;
+                if (Array.isArray(value)) {
+                    sanitizedValue = value.join(' ').trim() || '';
+                    logger.warn(`[FRONT DESK] Converted array to string for fallbackResponses.${key}:`, { original: value, converted: sanitizedValue });
+                }
+                // Ensure it's a string
+                if (typeof sanitizedValue !== 'string') {
+                    sanitizedValue = String(sanitizedValue || '');
+                }
+                updateObj[`aiAgentSettings.frontDeskBehavior.fallbackResponses.${key}`] = sanitizedValue;
             });
         }
         
