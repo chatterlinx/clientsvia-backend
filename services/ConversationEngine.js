@@ -4099,6 +4099,17 @@ async function processTurn({
                             log('📝 V33: Got FIRST name after asking', { firstName: formattedName });
                         }
                         
+                        // V52 FIX: Clear spelling variant wait state
+                        // If user provided last name instead of answering spelling variant question,
+                        // consider the spelling question implicitly resolved
+                        if (nameMeta.askedSpellingVariant && !nameMeta.spellingVariantAnswer) {
+                            nameMeta.spellingVariantAnswer = 'implicit_resolved';
+                            log('📝 V52: Spelling variant implicitly resolved by last name', {
+                                first: nameMeta.first,
+                                last: formattedName
+                            });
+                        }
+                        
                         // Build full name safely (no undefined)
                         const firstName = nameMeta.first || '';
                         const lastName = nameMeta.last || '';
@@ -4444,6 +4455,12 @@ async function processTurn({
                         } else {
                             // We had last name (e.g., "Subach"), now got first name
                             nameMeta.first = extractedName;
+                        }
+                        
+                        // V52 FIX: Clear spelling variant wait state if pending
+                        if (nameMeta.askedSpellingVariant && !nameMeta.spellingVariantAnswer) {
+                            nameMeta.spellingVariantAnswer = 'implicit_resolved';
+                            log('📝 V52: Spelling variant implicitly resolved');
                         }
                         
                         // Build full name safely (no undefined)
