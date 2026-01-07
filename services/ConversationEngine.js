@@ -3592,9 +3592,13 @@ async function processTurn({
                 const needsLastName = askFullNameEnabled && hasName && !hasFullName && !nameMeta?.last;
                 
                 // V43: Check if spelling variant check is needed
+                // V53 FIX: If we already have BOTH first AND last name, skip spelling check entirely
+                // Spelling variants only matter for single-word names (Mark vs Marc)
+                // Once we have "Mark Gonzales", the first name spelling is locked in
                 const spellingConfig = company.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants || {};
                 const spellingEnabled = spellingConfig.enabled === true;
-                const needsSpellingVariantCheck = spellingEnabled && hasName && !nameMeta?.askedSpellingVariant && !nameMeta?.spellingVariantAnswer;
+                const hasFullNameFromMeta = nameMeta?.first && nameMeta?.last;
+                const needsSpellingVariantCheck = spellingEnabled && hasName && !hasFullNameFromMeta && !nameMeta?.askedSpellingVariant && !nameMeta?.spellingVariantAnswer;
                 
                 if (hasName && (session.booking.activeSlotType === 'name' || session.booking.activeSlot === 'name')) {
                     if (needsConfirmBack || needsLastName || needsSpellingVariantCheck) {
@@ -3945,6 +3949,12 @@ async function processTurn({
                         const lastName = nameMeta.last || '';
                         currentSlots.name = `${firstName} ${lastName}`.trim();
                     }
+                    // V53 FIX: Sync extractedThisTurn and clear partialName
+                    if (currentSlots.name) {
+                        extractedThisTurn.name = currentSlots.name;
+                        delete currentSlots.partialName;
+                        delete extractedThisTurn.partialName;
+                    }
                     session.booking.activeSlot = getSlotIdByType('phone'); session.booking.activeSlotType = 'phone';
                     log('📝 NAME COMPLETE, moving to phone', { name: currentSlots.name });
                 }
@@ -4000,6 +4010,12 @@ async function processTurn({
                             const firstName = nameMeta.first || '';
                             const lastName = nameMeta.last || '';
                             currentSlots.name = `${firstName} ${lastName}`.trim();
+                        }
+                        // V53 FIX: Sync extractedThisTurn and clear partialName
+                        if (currentSlots.name) {
+                            extractedThisTurn.name = currentSlots.name;
+                            delete currentSlots.partialName;
+                            delete extractedThisTurn.partialName;
                         }
                         
                         session.booking.activeSlot = getSlotIdByType('phone'); 
@@ -4114,6 +4130,11 @@ async function processTurn({
                         const firstName = nameMeta.first || '';
                         const lastName = nameMeta.last || '';
                         currentSlots.name = `${firstName} ${lastName}`.trim();
+                        // V53 FIX: Also update extractedThisTurn so it doesn't overwrite at save time
+                        extractedThisTurn.name = currentSlots.name;
+                        // V53 FIX: Clear partialName since we now have full name
+                        delete currentSlots.partialName;
+                        delete extractedThisTurn.partialName;
                         session.booking.activeSlot = getSlotIdByType('phone'); session.booking.activeSlotType = 'phone';
                         
                         // 🎯 DISPLAY NAME: Always use first name for personalization
@@ -4467,6 +4488,11 @@ async function processTurn({
                         const firstName = nameMeta.first || '';
                         const lastName = nameMeta.last || '';
                         currentSlots.name = `${firstName} ${lastName}`.trim();
+                        // V53 FIX: Also update extractedThisTurn so it doesn't overwrite at save time
+                        extractedThisTurn.name = currentSlots.name;
+                        // V53 FIX: Clear partialName since we now have full name
+                        delete currentSlots.partialName;
+                        delete extractedThisTurn.partialName;
                         session.booking.activeSlot = getSlotIdByType('phone'); session.booking.activeSlotType = 'phone';
                         
                         // 🎯 DISPLAY NAME: Always use first name for personalization
