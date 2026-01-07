@@ -903,5 +903,135 @@ router.post('/:companyId/patch-json', async (req, res) => {
     }
 });
 
+// ============================================================================
+// POST /api/admin/wiring-status/:companyId/fix-template-references
+// Quick fix for NO_TEMPLATE_REFERENCES critical issue
+// ============================================================================
+router.post('/:companyId/fix-template-references', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { templateId } = req.body;
+        
+        logger.info('[WIRING API] Fix Template References requested', { companyId, templateId });
+        
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Check current state
+        const currentRefs = company.aiAgentSettings?.templateReferences || [];
+        logger.info('[WIRING API] Current templateReferences:', { count: currentRefs.length, refs: currentRefs });
+        
+        // If templateId provided, use it. Otherwise try to find from legacy locations
+        let targetTemplateId = templateId;
+        let templateName = 'Unknown Template';
+        
+        if (!targetTemplateId) {
+            // Try to find from legacy locations
+            const legacyTemplates = company.configuration?.templates || 
+                                   company.dataConfig?.templates || [];
+            
+            if (legacyTemplates.length > 0) {
+                const first = legacyTemplates[0];
+                targetTemplateId = first.templateId || first._id || first.id;
+                templateName = first.name || first.templateName || 'Legacy Template';
+                logger.info('[WIRING API] Found legacy template:', { targetTemplateId, templateName });
+            }
+        }
+        
+        // If still no template, try to load from Global AI Brain (get first HVAC template)
+        if (!targetTemplateId) {
+            const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+            const hvacTemplate = await GlobalInstantResponseTemplate.findOne({
+                $or: [
+                    { tradeType: 'hvac' },
+                    { tradeType: 'HVAC' },
+                    { industry: 'hvac' },
+                    { name: /HVAC/i }
+                ],
+                status: 'published'
+            }).lean();
+            
+            if (hvacTemplate) {
+                targetTemplateId = hvacTemplate._id.toString();
+                templateName = hvacTemplate.name;
+                logger.info('[WIRING API] Found HVAC template from Global AI Brain:', { targetTemplateId, templateName });
+            }
+        }
+        
+        if (!targetTemplateId) {
+            return res.status(400).json({
+                error: 'No template found to link. Please provide templateId in request body.',
+                hint: 'POST with body: { "templateId": "your-template-id" }'
+            });
+        }
+        
+        // Check if already linked
+        const alreadyLinked = currentRefs.some(ref => 
+            ref.templateId?.toString() === targetTemplateId.toString()
+        );
+        
+        if (alreadyLinked) {
+            return res.json({
+                status: 'ALREADY_LINKED',
+                message: 'Template is already linked',
+                templateId: targetTemplateId,
+                currentRefs: currentRefs.length
+            });
+        }
+        
+        // Add the template reference
+        if (!company.aiAgentSettings) {
+            company.aiAgentSettings = {};
+        }
+        if (!company.aiAgentSettings.templateReferences) {
+            company.aiAgentSettings.templateReferences = [];
+        }
+        
+        company.aiAgentSettings.templateReferences.push({
+            templateId: targetTemplateId,
+            templateName: templateName,
+            enabled: true,
+            priority: 1,
+            addedAt: new Date(),
+            addedBy: 'wiring-fix-endpoint'
+        });
+        
+        company.markModified('aiAgentSettings.templateReferences');
+        await company.save();
+        
+        // Clear Redis cache
+        try {
+            const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+            if (isRedisConfigured()) {
+                const redis = await getSharedRedisClient();
+                await redis.del(`company:${companyId}`);
+                logger.info('[WIRING API] Redis cache cleared for company');
+            }
+        } catch (cacheErr) {
+            logger.warn('[WIRING API] Could not clear Redis cache:', cacheErr.message);
+        }
+        
+        logger.info('[WIRING API] ✅ Template reference added successfully');
+        
+        return res.json({
+            status: 'FIXED',
+            message: 'Template reference added successfully',
+            templateId: targetTemplateId,
+            templateName: templateName,
+            newRefsCount: company.aiAgentSettings.templateReferences.length,
+            action: 'Re-run Wiring diagnostic to verify critical issue is resolved'
+        });
+        
+    } catch (error) {
+        logger.error('[WIRING API] Fix Template References error', { error: error.message, stack: error.stack });
+        return res.status(500).json({
+            error: 'Failed to fix template references',
+            details: error.message
+        });
+    }
+});
+
 module.exports = router;
 
