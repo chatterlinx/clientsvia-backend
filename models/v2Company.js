@@ -1831,7 +1831,7 @@ const companySchema = new mongoose.Schema({
                     askMissingNamePart: { type: Boolean, default: false }, // 🔴 Ask once for missing first/last name
                     // V54: UI-configurable name prompts (no hardcodes!)
                     lastNameQuestion: { type: String, default: "And what's your last name?", trim: true },
-                    firstNameQuestion: { type: String, default: "And what's your first name?", trim: true }
+                    firstNameQuestion: { type: String, default: "And what's your first name?", trim: true },
                     
                     // ═══════════════════════════════════════════════════════════════
                     // PHONE-SPECIFIC OPTIONS
@@ -1842,7 +1842,7 @@ const companySchema = new mongoose.Schema({
                     breakDownIfUnclear: { type: Boolean, default: false }, // If unclear, ask area code first then rest of number
                     // V54: UI-configurable phone prompts (no hardcodes!)
                     areaCodePrompt: { type: String, default: "Let's go step by step - what's the area code?", trim: true },
-                    restOfNumberPrompt: { type: String, default: "Got it. And the rest of the number?", trim: true }
+                    restOfNumberPrompt: { type: String, default: "Got it. And the rest of the number?", trim: true },
                     
                     // ═══════════════════════════════════════════════════════════════
                     // ADDRESS-SPECIFIC OPTIONS
@@ -1854,7 +1854,7 @@ const companySchema = new mongoose.Schema({
                     partialAddressPrompt: { type: String, default: "I got part of that. Can you give me the full address including city?", trim: true },
                     cityPrompt: { type: String, default: "And what city?", trim: true },
                     zipPrompt: { type: String, default: "And the zip code?", trim: true },
-                    streetBreakdownPrompt: { type: String, default: "Let's go step by step - what's the street address?", trim: true }
+                    streetBreakdownPrompt: { type: String, default: "Let's go step by step - what's the street address?", trim: true },
                     
                     // 🆕 V35: GOOGLE MAPS ADDRESS VALIDATION
                     // Silent background validation - does NOT drive conversation
