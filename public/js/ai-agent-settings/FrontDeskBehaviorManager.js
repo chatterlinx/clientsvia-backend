@@ -110,14 +110,30 @@ class FrontDeskBehaviorManager {
             
             // 🔍 DEBUG: Log exactly what bookingSlots came from API
             if (this.config.bookingSlots) {
-                const nameSlot = this.config.bookingSlots.find(s => s.id === 'name');
-                console.log('[FRONT DESK BEHAVIOR] 📥 NAME SLOT FROM API:', {
-                    id: nameSlot?.id,
-                    type: nameSlot?.type,
-                    askFullName: nameSlot?.askFullName,
-                    useFirstNameOnly: nameSlot?.useFirstNameOnly,
-                    askMissingNamePart: nameSlot?.askMissingNamePart,
-                    '🔴 askMissingNamePart value': nameSlot?.askMissingNamePart === true ? '✅ TRUE' : '❌ FALSE/UNDEFINED'
+                const nameSlot = this.config.bookingSlots.find(s => s.id === 'name' || s.type === 'name');
+                const phoneSlot = this.config.bookingSlots.find(s => s.id === 'phone' || s.type === 'phone');
+                const addressSlot = this.config.bookingSlots.find(s => s.id === 'address' || s.type === 'address');
+                
+                console.log('[FRONT DESK BEHAVIOR] 📥 BOOKING SLOTS WIRING CHECK:', {
+                    totalSlots: this.config.bookingSlots.length,
+                    nameSlot: nameSlot ? {
+                        id: nameSlot.id,
+                        type: nameSlot.type,
+                        question: nameSlot.question,  // ✅ Now shows the question!
+                        askFullName: nameSlot.askFullName,
+                        askMissingNamePart: nameSlot.askMissingNamePart,
+                        hasQuestion: !!nameSlot.question ? '✅ WIRED' : '❌ MISSING'
+                    } : '❌ NOT FOUND',
+                    phoneSlot: phoneSlot ? {
+                        id: phoneSlot.id,
+                        question: phoneSlot.question,
+                        hasQuestion: !!phoneSlot.question ? '✅ WIRED' : '❌ MISSING'
+                    } : '❌ NOT FOUND',
+                    addressSlot: addressSlot ? {
+                        id: addressSlot.id,
+                        question: addressSlot.question,
+                        hasQuestion: !!addressSlot.question ? '✅ WIRED' : '❌ MISSING'
+                    } : '❌ NOT FOUND'
                 });
             } else {
                 console.log('[FRONT DESK BEHAVIOR] ⚠️ No bookingSlots in API response!');

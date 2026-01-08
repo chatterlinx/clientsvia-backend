@@ -688,6 +688,75 @@ const VERIFICATION_RULES = {
                             `Add questions to: ${slotsWithoutQuestions.map(s => s.type || s.slotId).join(', ')}`
                     };
                 }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 8: QUESTIONS_NOT_HARDCODED - UI questions != fallbacks
+            // 🚨 CRITICAL: Ensures AI uses YOUR configured prompts
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'QUESTIONS_NOT_HARDCODED',
+                description: 'Slot questions are UI-configured (not hardcoded fallbacks)',
+                severity: 'error',
+                weight: 20,
+                check: (config) => {
+                    const slots = config?.frontDeskBehavior?.bookingSlots || [];
+                    const enabledSlots = slots.filter(s => s.enabled !== false);
+                    
+                    // Known hardcoded fallbacks from ConversationEngine.js
+                    // If the slot question MATCHES these, it's likely using defaults
+                    const HARDCODED_FALLBACKS = [
+                        "what is your name?",
+                        "may i have your name please?",
+                        "and what's your first name?",
+                        "what's your first name?",
+                        "what's your last name?",
+                        "what's the best phone number to reach you?",
+                        "what is the best phone number to reach you?",
+                        "what's your phone number?",
+                        "what is your phone?",
+                        "what is your address?",
+                        "what's the address for the service?",
+                        "when works best for you?"
+                    ];
+                    
+                    const slotsUsingHardcodedQuestion = enabledSlots.filter(s => {
+                        const q = (s.question || '').toLowerCase().trim();
+                        // Check if question matches or is very similar to hardcoded
+                        return HARDCODED_FALLBACKS.some(hc => {
+                            const hcNorm = hc.toLowerCase().trim();
+                            // Exact match or very close (handles punctuation differences)
+                            return q === hcNorm || 
+                                   q.replace(/[?.,!]/g, '') === hcNorm.replace(/[?.,!]/g, '');
+                        });
+                    });
+                    
+                    const allCustomized = slotsUsingHardcodedQuestion.length === 0;
+                    
+                    // Build details with actual question text for verification
+                    const questionDetails = enabledSlots.map(s => ({
+                        slot: s.type || s.slotId || s.id,
+                        question: s.question?.substring(0, 50) + (s.question?.length > 50 ? '...' : ''),
+                        isCustom: !HARDCODED_FALLBACKS.some(hc => 
+                            (s.question || '').toLowerCase().includes(hc.replace(/\?/g, '').trim())
+                        )
+                    }));
+                    
+                    return {
+                        passed: allCustomized,
+                        value: allCustomized ? 
+                            `✅ All ${enabledSlots.length} slots have CUSTOM questions` : 
+                            `⚠️ ${slotsUsingHardcodedQuestion.length} slots MAY use hardcoded fallbacks`,
+                        details: {
+                            questionDetails,
+                            potentialHardcodedSlots: slotsUsingHardcodedQuestion.map(s => ({
+                                slot: s.type || s.slotId || s.id,
+                                question: s.question
+                            }))
+                        },
+                        fix: allCustomized ? null : 
+                            `Review & customize questions for: ${slotsUsingHardcodedQuestion.map(s => s.type || s.slotId).join(', ')}`
+                    };
+                }
             }
         ]
     },
