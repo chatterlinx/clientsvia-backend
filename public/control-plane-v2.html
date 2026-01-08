@@ -1646,7 +1646,7 @@
             <div>
               <h3 style="font-size: 18px; font-weight: 700; margin: 0;">🧭 Onboarding Checklist</h3>
               <p style="font-size: 13px; color: #64748b; margin-top: 6px; line-height: 1.4;">
-                This is the official “start → finish” setup flow. Each step is powered by <strong>Runtime Truth</strong> so you can prove what’s actually wired.
+                This is the official "start → finish" setup flow. Each step is powered by <strong>Runtime Truth</strong> so you can prove what's actually wired.
               </p>
               <div id="onboarding-stamp" style="font-size: 12px; color: #94a3b8; margin-top: 6px;">
                 Loading runtime status...
@@ -1656,6 +1656,43 @@
               <button onclick="loadOnboardingTab(true)" class="btn btn-secondary" style="padding: 8px 14px;">
                 <i class="fas fa-sync-alt"></i> Refresh Status
               </button>
+            </div>
+          </div>
+
+          <!-- V55: TRADE KEY SELECTOR (Critical for Multi-Tenant Safety) -->
+          <div id="trade-key-section" 
+               data-section-id="trade-key" 
+               data-field-id="tradeKey"
+               style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 2px solid #f59e0b; border-radius: 14px; padding: 16px; margin-bottom: 14px;">
+            <div style="display:flex; align-items:flex-start; justify-content: space-between; gap: 12px;">
+              <div>
+                <div style="font-weight: 900; color: #92400e; font-size: 14px;">
+                  🏷️ Trade Key <span style="font-size: 10px; background: #dc2626; color: white; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">CRITICAL</span>
+                </div>
+                <div style="margin-top: 6px; font-size: 12px; color: #78350f; line-height: 1.5;">
+                  <strong>What industry is this company?</strong> This determines which templates, scenarios, and vocabulary the AI uses.
+                  <br>An HVAC company should <em>never</em> see dental scenarios.
+                </div>
+              </div>
+            </div>
+            
+            <div style="margin-top: 12px; display:flex; gap: 12px; align-items:center; flex-wrap: wrap;">
+              <select id="trade-key-select" 
+                      style="min-width: 280px; padding: 10px 14px; border: 2px solid #f59e0b; border-radius: 10px; background: white; font-weight: 600; font-size: 14px;"
+                      onchange="updateTradeKey(this.value)">
+                <option value="">Loading...</option>
+              </select>
+              <span id="trade-key-status" style="font-size: 12px; color: #92400e; font-weight: 600;"></span>
+              <button onclick="saveTradeKey()" class="btn btn-primary" style="padding: 10px 16px; background: #f59e0b; border-color: #d97706;">
+                <i class="fas fa-save"></i> Save Trade Key
+              </button>
+            </div>
+            
+            <div style="margin-top: 10px; font-size: 11px; color: #92400e; display: flex; align-items: center; gap: 8px;">
+              <i class="fas fa-info-circle"></i>
+              <span>Current: <strong id="trade-key-current">Loading...</strong></span>
+              <span style="color: #78350f;">|</span>
+              <span>Affects: Template filtering, scenario matching, vocabulary guardrails</span>
             </div>
           </div>
 
@@ -3227,7 +3264,136 @@
       }
     }
 
+    // =========================================================================
+    // V55: TRADE KEY MANAGEMENT
+    // =========================================================================
+    const AVAILABLE_TRADES = [
+      { key: 'hvac', label: 'HVAC (Heating, Ventilation, AC)', icon: '❄️' },
+      { key: 'plumbing', label: 'Plumbing', icon: '🔧' },
+      { key: 'electrical', label: 'Electrical', icon: '⚡' },
+      { key: 'dental', label: 'Dental', icon: '🦷' },
+      { key: 'medical', label: 'Medical / Healthcare', icon: '🏥' },
+      { key: 'legal', label: 'Legal / Law Firm', icon: '⚖️' },
+      { key: 'real_estate', label: 'Real Estate', icon: '🏠' },
+      { key: 'auto', label: 'Auto Repair / Automotive', icon: '🚗' },
+      { key: 'roofing', label: 'Roofing', icon: '🏗️' },
+      { key: 'landscaping', label: 'Landscaping', icon: '🌳' },
+      { key: 'pest_control', label: 'Pest Control', icon: '🐜' },
+      { key: 'cleaning', label: 'Cleaning Services', icon: '🧹' },
+      { key: 'universal', label: 'Universal (Generic)', icon: '🌐' }
+    ];
+    
+    let currentTradeKey = null;
+    
+    async function loadTradeKeySelector() {
+      const select = document.getElementById('trade-key-select');
+      const currentEl = document.getElementById('trade-key-current');
+      const statusEl = document.getElementById('trade-key-status');
+      if (!select) return;
+      
+      // Populate dropdown
+      select.innerHTML = AVAILABLE_TRADES.map(t => 
+        `<option value="${t.key}">${t.icon} ${t.label}</option>`
+      ).join('');
+      
+      // Load current value from company
+      try {
+        const resp = await fetch(`/api/company/${companyId}`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (resp.ok) {
+          const company = await resp.json();
+          currentTradeKey = company.aiAgentSettings?.tradeKey || company.trade || 'universal';
+          select.value = currentTradeKey;
+          if (currentEl) currentEl.textContent = currentTradeKey.toUpperCase();
+          if (statusEl) statusEl.textContent = '✅ Loaded from DB';
+        }
+      } catch (err) {
+        console.error('[TRADE KEY] Failed to load:', err);
+        if (statusEl) statusEl.textContent = '❌ Failed to load';
+      }
+    }
+    
+    function updateTradeKey(newValue) {
+      const statusEl = document.getElementById('trade-key-status');
+      if (statusEl) {
+        if (newValue !== currentTradeKey) {
+          statusEl.textContent = '⚠️ Unsaved change';
+          statusEl.style.color = '#dc2626';
+        } else {
+          statusEl.textContent = '✅ Current value';
+          statusEl.style.color = '#92400e';
+        }
+      }
+    }
+    
+    async function saveTradeKey() {
+      const select = document.getElementById('trade-key-select');
+      const statusEl = document.getElementById('trade-key-status');
+      const currentEl = document.getElementById('trade-key-current');
+      if (!select) return;
+      
+      const newTradeKey = select.value;
+      if (!newTradeKey) {
+        alert('Please select a trade key');
+        return;
+      }
+      
+      if (statusEl) statusEl.textContent = '⏳ Saving...';
+      
+      try {
+        const resp = await fetch(`/api/company/${companyId}`, {
+          method: 'PATCH',
+          headers: { 
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            aiAgentSettings: {
+              tradeKey: newTradeKey
+            }
+          })
+        });
+        
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}`);
+        }
+        
+        currentTradeKey = newTradeKey;
+        if (currentEl) currentEl.textContent = newTradeKey.toUpperCase();
+        if (statusEl) {
+          statusEl.textContent = '✅ Saved!';
+          statusEl.style.color = '#059669';
+        }
+        
+        // Clear Redis cache so runtime picks up new value
+        try {
+          await fetch(`/api/admin/wiring-status/${companyId}/clear-cache`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+          });
+          console.log('[TRADE KEY] Redis cache cleared');
+        } catch (cacheErr) {
+          console.warn('[TRADE KEY] Cache clear warning:', cacheErr);
+        }
+        
+        // Show success toast
+        showSnapshotToast('Trade Key Saved', `Set to: ${newTradeKey.toUpperCase()}`, 'success');
+        
+      } catch (err) {
+        console.error('[TRADE KEY] Save failed:', err);
+        if (statusEl) {
+          statusEl.textContent = '❌ Save failed';
+          statusEl.style.color = '#dc2626';
+        }
+        alert('Failed to save trade key: ' + err.message);
+      }
+    }
+    
     async function loadOnboardingTab(forceRefresh = false) {
+      // V55: Load trade key selector
+      await loadTradeKeySelector();
+      
       const stepsEl = document.getElementById('onboarding-steps');
       const stampEl = document.getElementById('onboarding-stamp');
       if (!stepsEl || !stampEl) return;
