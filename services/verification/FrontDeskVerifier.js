@@ -408,80 +408,284 @@ const VERIFICATION_RULES = {
     },
 
     // ═══════════════════════════════════════════════════════════════════
-    // BOOKING SLOTS TAB
+    // BOOKING SLOTS TAB - V57 Deep Slot Integrity
+    // This is where "Mark" vs "Gonzales" confusion happens
     // ═══════════════════════════════════════════════════════════════════
     bookingSlots: {
         name: 'Booking Slots',
         icon: '📋',
         checks: [
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 1: SLOTS_EXIST - Are slots defined at all?
+            // ─────────────────────────────────────────────────────────────
             {
-                id: 'BOOKING_SLOTS_DEFINED',
+                id: 'SLOTS_EXIST',
                 description: 'Booking slots are defined',
-                severity: 'error',
-                weight: 40,
-                check: (config) => {
-                    const slots = config?.frontDeskBehavior?.bookingSlots;
-                    const hasSlots = Array.isArray(slots) && slots.length > 0;
-                    return {
-                        passed: hasSlots,
-                        value: hasSlots ? `${slots.length} slots` : 'NO_SLOTS',
-                        fix: 'Configure at least one booking slot (name, phone, address)'
-                    };
-                }
-            },
-            {
-                id: 'NAME_SLOT_CONFIGURED',
-                description: 'Name slot has question configured',
                 severity: 'error',
                 weight: 20,
                 check: (config) => {
                     const slots = config?.frontDeskBehavior?.bookingSlots || [];
-                    const nameSlot = slots.find(s => s.type === 'name' || s.slotId === 'name' || s.id === 'name');
-                    const hasQuestion = nameSlot?.firstNameQuestion || nameSlot?.question;
+                    const enabledSlots = slots.filter(s => s.enabled !== false);
+                    const hasSlots = enabledSlots.length > 0;
+                    
                     return {
-                        passed: !!nameSlot && !!hasQuestion,
-                        value: hasQuestion ? 'Configured' : (nameSlot ? 'Missing question' : 'Slot not found'),
-                        fix: 'Add name slot with firstNameQuestion configured'
+                        passed: hasSlots,
+                        value: hasSlots ? `${enabledSlots.length} active slots` : 'NO_SLOTS',
+                        details: {
+                            total: slots.length,
+                            enabled: enabledSlots.length,
+                            slotTypes: enabledSlots.map(s => s.type || s.slotId || s.id)
+                        },
+                        fix: hasSlots ? null : 'Configure booking slots (name, phone, address)'
                     };
                 }
             },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 2: NAME_SLOT_COMPLETE - Name extraction fully wired
+            // This is where "Mark" vs "Gonzales" confusion happens
+            // ─────────────────────────────────────────────────────────────
             {
-                id: 'PHONE_SLOT_CONFIGURED',
-                description: 'Phone slot has question configured',
+                id: 'NAME_SLOT_COMPLETE',
+                description: 'Name slot is fully configured (first + last)',
                 severity: 'error',
                 weight: 20,
+                check: (config) => {
+                    const slots = config?.frontDeskBehavior?.bookingSlots || [];
+                    const nameSlot = slots.find(s => 
+                        s.type === 'name' || s.slotId === 'name' || s.id === 'name' ||
+                        s.type === 'firstName' || s.slotId === 'firstName'
+                    );
+                    
+                    if (!nameSlot) {
+                        return {
+                            passed: false,
+                            value: 'NO_NAME_SLOT',
+                            fix: 'Add a name slot to collect caller name'
+                        };
+                    }
+                    
+                    // Check all name-related questions
+                    const hasFirstNameQ = !!nameSlot.firstNameQuestion || !!nameSlot.question;
+                    const hasLastNameQ = !!nameSlot.lastNameQuestion;
+                    const hasSpellingConfig = nameSlot.askSpellingVariant !== undefined;
+                    
+                    // Calculate completeness
+                    let completeness = 0;
+                    if (hasFirstNameQ) completeness += 40;
+                    if (hasLastNameQ) completeness += 40;
+                    if (hasSpellingConfig) completeness += 20;
+                    
+                    const isComplete = completeness >= 80;
+                    
+                    return {
+                        passed: isComplete,
+                        value: isComplete ? `${completeness}% complete` : `${completeness}% - INCOMPLETE`,
+                        details: {
+                            hasFirstNameQuestion: hasFirstNameQ,
+                            hasLastNameQuestion: hasLastNameQ,
+                            hasSpellingVariantConfig: hasSpellingConfig,
+                            askFullName: nameSlot.askFullName,
+                            useFirstNameOnly: nameSlot.useFirstNameOnly
+                        },
+                        fix: isComplete ? null : 
+                            !hasFirstNameQ ? 'Add firstNameQuestion to name slot' :
+                            !hasLastNameQ ? 'Add lastNameQuestion to name slot' :
+                            'Configure spelling variant handling'
+                    };
+                }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 3: SPELLING_VARIANT_WIRING - "Marc with C" handling
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'SPELLING_VARIANT_WIRING',
+                description: 'Spelling variant confirmation is wired',
+                severity: 'warning',
+                weight: 15,
+                check: (config) => {
+                    const slots = config?.frontDeskBehavior?.bookingSlots || [];
+                    const nameSlot = slots.find(s => s.type === 'name' || s.slotId === 'name');
+                    
+                    if (!nameSlot) {
+                        return { passed: true, value: 'N/A (no name slot)', fix: null };
+                    }
+                    
+                    // Check for spelling variant configuration
+                    const hasSpellingPrompt = !!nameSlot.spellingVariantPrompt;
+                    const hasCommonVariants = Array.isArray(nameSlot.commonSpellingVariants) && 
+                                              nameSlot.commonSpellingVariants.length > 0;
+                    const askSpellingVariant = nameSlot.askSpellingVariant !== false;
+                    
+                    const isWired = hasSpellingPrompt || hasCommonVariants || askSpellingVariant;
+                    
+                    return {
+                        passed: isWired,
+                        value: isWired ? 
+                            `Enabled${hasCommonVariants ? ` (${nameSlot.commonSpellingVariants.length} variants)` : ''}` : 
+                            'NOT_CONFIGURED',
+                        details: {
+                            hasSpellingPrompt,
+                            hasCommonVariants,
+                            askSpellingVariant
+                        },
+                        fix: isWired ? null : 'Configure spelling variant handling for names like Marc/Mark'
+                    };
+                }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 4: PHONE_SLOT_COMPLETE - Phone extraction wired
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'PHONE_SLOT_COMPLETE',
+                description: 'Phone slot is fully configured',
+                severity: 'error',
+                weight: 15,
                 check: (config) => {
                     const slots = config?.frontDeskBehavior?.bookingSlots || [];
                     const phoneSlot = slots.find(s => s.type === 'phone' || s.slotId === 'phone' || s.id === 'phone');
-                    const hasQuestion = phoneSlot?.question;
+                    
+                    if (!phoneSlot) {
+                        return {
+                            passed: false,
+                            value: 'NO_PHONE_SLOT',
+                            fix: 'Add a phone slot to collect callback number'
+                        };
+                    }
+                    
+                    const hasQuestion = !!phoneSlot.question;
+                    const hasAreaCodePrompt = !!phoneSlot.areaCodePrompt;
+                    const hasValidation = phoneSlot.validateFormat !== false;
+                    
                     return {
-                        passed: !!phoneSlot && !!hasQuestion,
-                        value: hasQuestion ? 'Configured' : (phoneSlot ? 'Missing question' : 'Slot not found'),
-                        fix: 'Add phone slot with question configured'
+                        passed: hasQuestion,
+                        value: hasQuestion ? 
+                            `Configured${hasAreaCodePrompt ? ' (with breakdown)' : ''}` : 
+                            'MISSING_QUESTION',
+                        details: {
+                            hasQuestion,
+                            hasAreaCodePrompt,
+                            hasValidation
+                        },
+                        fix: hasQuestion ? null : 'Add question to phone slot'
                     };
                 }
             },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 5: ADDRESS_SLOT_COMPLETE - Address for service trades
+            // ─────────────────────────────────────────────────────────────
             {
-                id: 'ADDRESS_SLOT_CONFIGURED',
-                description: 'Address slot has question configured',
+                id: 'ADDRESS_SLOT_COMPLETE',
+                description: 'Address slot configured (required for service trades)',
                 severity: 'warning',
-                weight: 20,
+                weight: 15,
                 check: (config, tradeKey) => {
-                    // Address is required for service trades (HVAC, plumbing, etc.)
-                    const serviceTradeKeys = ['hvac', 'plumbing', 'electrical', 'roofing', 'landscaping', 'cleaning'];
+                    const serviceTradeKeys = ['hvac', 'plumbing', 'electrical', 'roofing', 'landscaping', 'cleaning', 'pest', 'appliance'];
                     const isServiceTrade = serviceTradeKeys.includes(tradeKey?.toLowerCase());
-                    
-                    if (!isServiceTrade) {
-                        return { passed: true, value: 'N/A (not service trade)', fix: null };
-                    }
                     
                     const slots = config?.frontDeskBehavior?.bookingSlots || [];
                     const addressSlot = slots.find(s => s.type === 'address' || s.slotId === 'address' || s.id === 'address');
-                    const hasQuestion = addressSlot?.question;
+                    
+                    if (!isServiceTrade && !addressSlot) {
+                        return { passed: true, value: 'N/A (not service trade)', fix: null };
+                    }
+                    
+                    if (!addressSlot) {
+                        return {
+                            passed: false,
+                            value: `REQUIRED_FOR_${tradeKey?.toUpperCase()}`,
+                            fix: `Add address slot - ${tradeKey} technicians need a service location`
+                        };
+                    }
+                    
+                    const hasQuestion = !!addressSlot.question;
+                    const hasBreakdown = !!addressSlot.streetBreakdownPrompt || !!addressSlot.cityPrompt;
+                    
                     return {
-                        passed: !!addressSlot && !!hasQuestion,
-                        value: hasQuestion ? 'Configured' : (addressSlot ? 'Missing question' : 'Slot not found'),
-                        fix: `Add address slot with question (required for ${tradeKey} trade)`
+                        passed: hasQuestion,
+                        value: hasQuestion ? 
+                            `Configured${hasBreakdown ? ' (with breakdown)' : ''}` : 
+                            'MISSING_QUESTION',
+                        details: {
+                            hasQuestion,
+                            hasBreakdown,
+                            hasPartialPrompt: !!addressSlot.partialAddressPrompt
+                        },
+                        fix: hasQuestion ? null : 'Add question to address slot'
+                    };
+                }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 6: SLOT_ORDER_VALID - Slots asked in correct order
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'SLOT_ORDER_VALID',
+                description: 'Slot collection order is logical',
+                severity: 'warning',
+                weight: 10,
+                check: (config) => {
+                    const slots = config?.frontDeskBehavior?.bookingSlots || [];
+                    const enabledSlots = slots.filter(s => s.enabled !== false);
+                    
+                    if (enabledSlots.length < 2) {
+                        return { passed: true, value: 'N/A (< 2 slots)', fix: null };
+                    }
+                    
+                    // Get slot order
+                    const order = enabledSlots.map(s => ({
+                        type: s.type || s.slotId || s.id,
+                        order: s.order ?? s.priority ?? 999
+                    })).sort((a, b) => a.order - b.order);
+                    
+                    // Ideal order: name → phone → address → issue
+                    const idealOrder = ['name', 'firstName', 'phone', 'address', 'issue', 'notes'];
+                    const typeOrder = order.map(o => o.type);
+                    
+                    // Check if name comes before phone
+                    const nameIdx = typeOrder.findIndex(t => t === 'name' || t === 'firstName');
+                    const phoneIdx = typeOrder.findIndex(t => t === 'phone');
+                    
+                    const nameBeforePhone = nameIdx === -1 || phoneIdx === -1 || nameIdx < phoneIdx;
+                    
+                    return {
+                        passed: nameBeforePhone,
+                        value: nameBeforePhone ? `Order: ${typeOrder.join(' → ')}` : 'PHONE_BEFORE_NAME',
+                        details: { order: typeOrder },
+                        fix: nameBeforePhone ? null : 'Reorder slots: Name should come before Phone'
+                    };
+                }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 7: ALL_SLOTS_HAVE_QUESTIONS - No silent slots
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'ALL_SLOTS_HAVE_QUESTIONS',
+                description: 'Every enabled slot has a question defined',
+                severity: 'error',
+                weight: 5,
+                check: (config) => {
+                    const slots = config?.frontDeskBehavior?.bookingSlots || [];
+                    const enabledSlots = slots.filter(s => s.enabled !== false);
+                    
+                    const slotsWithoutQuestions = enabledSlots.filter(s => {
+                        // Name slots can use firstNameQuestion
+                        if (s.type === 'name' || s.slotId === 'name') {
+                            return !s.question && !s.firstNameQuestion;
+                        }
+                        return !s.question;
+                    });
+                    
+                    const allHaveQuestions = slotsWithoutQuestions.length === 0;
+                    
+                    return {
+                        passed: allHaveQuestions,
+                        value: allHaveQuestions ? 
+                            `All ${enabledSlots.length} slots have questions` : 
+                            `${slotsWithoutQuestions.length} SILENT SLOTS`,
+                        details: {
+                            slotsWithoutQuestions: slotsWithoutQuestions.map(s => s.type || s.slotId || s.id)
+                        },
+                        fix: allHaveQuestions ? null : 
+                            `Add questions to: ${slotsWithoutQuestions.map(s => s.type || s.slotId).join(', ')}`
                     };
                 }
             }
