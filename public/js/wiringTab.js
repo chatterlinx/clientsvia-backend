@@ -1727,63 +1727,7 @@
             return kids.some(k => subtreeMatches(k, visited));
         }
         
-        function renderNode(id, depth = 0, visited = new Set()) {
-            // Guard against circular refs and excessive depth
-            if (visited.has(id)) {
-                console.warn('[WiringTab] Circular ref detected:', id);
-                return '';
-            }
-            if (depth > MAX_DEPTH) {
-                console.warn('[WiringTab] Max depth exceeded at:', id);
-                return '';
-            }
-            visited.add(id);
-            
-            const n = map.get(id);
-            if (!n) return '';
-            
-            // Focus filter (with circular ref guard)
-            if (_focusedNodeId && !isDescendantOrSelf(id, _focusedNodeId, new Set())) return '';
-            
-            // Search filter
-            if (_searchTerm && !subtreeMatches(id, new Set())) return '';
-            
-            const kids = children.get(id) || [];
-            const hasKids = kids.length > 0;
-            const isExpanded = _expandedNodes.has(id);
-            
-            return `
-                <div class="w-node" data-node="${esc(id)}" style="margin-left:${depth * 16}px">
-                    <div class="w-node-row" data-select="${esc(id)}" style="cursor:pointer;">
-                        ${hasKids ? `
-                            <button class="w-expander" data-expand="${esc(id)}">${isExpanded ? '▾' : '▸'}</button>
-                        ` : '<span class="w-expander-spacer"></span>'}
-                        <span class="w-node-type">${esc(n.type)}</span>
-                        <span class="w-node-label">${esc(n.label)}</span>
-                        ${statusBadge(n.status)}
-                        ${n.critical ? '<span class="w-critical-flag">CRITICAL</span>' : ''}
-                    </div>
-                    ${n.description ? `<div class="w-node-desc">${esc(n.description)}</div>` : ''}
-                    ${n.reasons?.length ? `<div class="w-node-reasons">${esc(n.reasons.join(' | '))}</div>` : ''}
-                    
-                    ${isExpanded ? `
-                        <div class="w-node-details">
-                            ${n.expectedDbPaths?.length ? `<div><strong>DB:</strong> ${esc(n.expectedDbPaths.join(', '))}</div>` : ''}
-                            ${n.expectedConsumers?.length ? `<div><strong>Consumers:</strong> ${esc(n.expectedConsumers.join(', '))}</div>` : ''}
-                            ${n.expectedTraceKeys?.length ? `<div><strong>Trace Keys:</strong> ${esc(n.expectedTraceKeys.join(', '))}</div>` : ''}
-                            ${n.uiPath ? `<div><strong>UI:</strong> ${esc(n.uiPath)}</div>` : ''}
-                            ${n.required ? `<div><strong>Required:</strong> true</div>` : ''}
-                        </div>
-                    ` : ''}
-                    
-                    ${hasKids && isExpanded ? `
-                        <div class="w-children">
-                            ${kids.map(k => renderNode(k, depth + 1, new Set(visited))).join('')}
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        }
+        // Old renderNode removed - replaced by renderNodeWithHealth below
         
         function isDescendantOrSelf(id, target, visited = new Set()) {
             // Guard against circular parentId chains
@@ -1797,14 +1741,161 @@
             return false;
         }
         
+        // V56: Calculate health per tab
+        function calculateTabHealth(tabId) {
+            const tabNode = map.get(tabId);
+            if (!tabNode) return { total: 0, configured: 0, percent: 0, issues: [] };
+            
+            const kids = children.get(tabId) || [];
+            let total = 0;
+            let configured = 0;
+            const issues = [];
+            
+            // Check direct fields
+            if (tabNode.status === 'WIRED') configured++;
+            if (tabNode.status === 'MISCONFIGURED' || tabNode.status === 'NOT_CONFIGURED') {
+                issues.push({ id: tabId, label: tabNode.label, status: tabNode.status });
+            }
+            total++;
+            
+            // Check children recursively
+            function checkChildren(parentId, depth = 0) {
+                if (depth > 10) return; // Prevent infinite recursion
+                const childIds = children.get(parentId) || [];
+                for (const childId of childIds) {
+                    const child = map.get(childId);
+                    if (!child) continue;
+                    total++;
+                    if (child.status === 'WIRED' || child.status === 'CONFIGURED') {
+                        configured++;
+                    } else if (child.status === 'MISCONFIGURED' || child.status === 'NOT_CONFIGURED' || child.status === 'EMPTY') {
+                        issues.push({ id: childId, label: child.label, status: child.status, type: child.type });
+                    } else if (child.status) {
+                        configured++; // Partial, etc. count as configured
+                    }
+                    checkChildren(childId, depth + 1);
+                }
+            }
+            checkChildren(tabId);
+            
+            const percent = total > 0 ? Math.round((configured / total) * 100) : 0;
+            return { total, configured, percent, issues };
+        }
+        
+        // V56: Build health data for all tabs
+        const tabHealthData = new Map();
+        roots.forEach(r => {
+            tabHealthData.set(r.id, calculateTabHealth(r.id));
+        });
+        
+        // Calculate overall health
+        const overallConfigured = Array.from(tabHealthData.values()).reduce((sum, h) => sum + h.configured, 0);
+        const overallTotal = Array.from(tabHealthData.values()).reduce((sum, h) => sum + h.total, 0);
+        const overallPercent = overallTotal > 0 ? Math.round((overallConfigured / overallTotal) * 100) : 0;
+        const overallColor = overallPercent === 100 ? '#22c55e' : overallPercent >= 70 ? '#f59e0b' : '#ef4444';
+        
         el.innerHTML = `
             <div class="w-panel">
-                <div class="w-panel-title">🌳 Wiring Tree</div>
+                <div class="w-panel-title" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>🌳 Wiring Tree</span>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div class="w-tree-overall-score" style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 20px; font-weight: 800; color: ${overallColor};">${overallPercent}%</span>
+                            <span style="font-size: 11px; color: #9ca3af;">(${overallConfigured}/${overallTotal} fields)</span>
+                        </div>
+                        <button id="verify-all-tabs-btn" class="w-btn w-btn-verify" style="padding: 6px 12px; background: linear-gradient(135deg, #3b82f6, #2563eb); border: none; border-radius: 6px; color: white; font-size: 11px; font-weight: 600; cursor: pointer;">
+                            🔬 Verify All
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Overall Progress Bar -->
+                <div style="margin-bottom: 16px;">
+                    <div class="w-tree-progress-bar" style="height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                        <div style="height: 100%; width: ${overallPercent}%; background: ${overallColor}; transition: width 0.5s;"></div>
+                    </div>
+                </div>
+                
                 <div class="w-tree-container">
-                    ${roots.map(r => renderNode(r.id)).join('')}
+                    ${roots.map(r => {
+                        const health = tabHealthData.get(r.id);
+                        return renderNodeWithHealth(r.id, health);
+                    }).join('')}
                 </div>
             </div>
         `;
+        
+        // V56: Enhanced renderNode with health badge
+        function renderNodeWithHealth(id, health, depth = 0, visited = new Set()) {
+            if (visited.has(id) || depth > MAX_DEPTH) return '';
+            visited.add(id);
+            
+            const n = map.get(id);
+            if (!n) return '';
+            
+            if (_focusedNodeId && !isDescendantOrSelf(id, _focusedNodeId, new Set())) return '';
+            if (_searchTerm && !subtreeMatches(id, new Set())) return '';
+            
+            const kids = children.get(id) || [];
+            const hasKids = kids.length > 0;
+            const isExpanded = _expandedNodes.has(id);
+            const isTab = n.type === 'TAB';
+            
+            // Health badge for tabs
+            const healthBadge = isTab && health ? `
+                <span class="w-tab-health" style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
+                    <span class="w-tab-health-percent" style="font-size: 12px; font-weight: 700; color: ${health.percent === 100 ? '#22c55e' : health.percent >= 70 ? '#f59e0b' : '#ef4444'};">
+                        ${health.percent}%
+                    </span>
+                    <span class="w-tab-health-bar" style="width: 40px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
+                        <span style="display: block; height: 100%; width: ${health.percent}%; background: ${health.percent === 100 ? '#22c55e' : health.percent >= 70 ? '#f59e0b' : '#ef4444'};"></span>
+                    </span>
+                    ${health.issues.length > 0 ? `<span style="font-size: 10px; color: #f59e0b;">(${health.issues.length} issues)</span>` : ''}
+                </span>
+            ` : '';
+            
+            return `
+                <div class="w-node" data-node="${esc(id)}" style="margin-left:${depth * 16}px">
+                    <div class="w-node-row ${isTab ? 'w-node-tab-row' : ''}" data-select="${esc(id)}" style="cursor:pointer;">
+                        ${hasKids ? `
+                            <button class="w-expander" data-expand="${esc(id)}">${isExpanded ? '▾' : '▸'}</button>
+                        ` : '<span class="w-expander-spacer"></span>'}
+                        <span class="w-node-type">${esc(n.type)}</span>
+                        <span class="w-node-label">${esc(n.label)}</span>
+                        ${statusBadge(n.status)}
+                        ${n.critical ? '<span class="w-critical-flag">CRITICAL</span>' : ''}
+                        ${healthBadge}
+                    </div>
+                    ${n.description ? `<div class="w-node-desc">${esc(n.description)}</div>` : ''}
+                    ${n.reasons?.length ? `<div class="w-node-reasons">${esc(n.reasons.join(' | '))}</div>` : ''}
+                    
+                    ${isExpanded ? `
+                        <div class="w-node-details">
+                            ${n.expectedDbPaths?.length ? `<div><strong>DB:</strong> ${esc(n.expectedDbPaths.join(', '))}</div>` : ''}
+                            ${n.expectedConsumers?.length ? `<div><strong>Consumers:</strong> ${esc(n.expectedConsumers.join(', '))}</div>` : ''}
+                            ${n.expectedTraceKeys?.length ? `<div><strong>Trace Keys:</strong> ${esc(n.expectedTraceKeys.join(', '))}</div>` : ''}
+                            ${n.uiPath ? `<div><strong>UI:</strong> ${esc(n.uiPath)}</div>` : ''}
+                            ${n.required ? `<div><strong>Required:</strong> true</div>` : ''}
+                            ${isTab && health?.issues?.length > 0 ? `
+                                <div class="w-tab-issues" style="margin-top: 8px; padding: 8px; background: rgba(239, 68, 68, 0.1); border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.3);">
+                                    <div style="font-size: 11px; font-weight: 600; color: #f87171; margin-bottom: 6px;">⚠️ Issues Found (${health.issues.length})</div>
+                                    ${health.issues.slice(0, 5).map(i => `
+                                        <div style="font-size: 10px; color: #fca5a5; margin-bottom: 2px;">• ${esc(i.label || i.id)}: ${esc(i.status)}</div>
+                                    `).join('')}
+                                    ${health.issues.length > 5 ? `<div style="font-size: 10px; color: #9ca3af;">... and ${health.issues.length - 5} more</div>` : ''}
+                                </div>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+                    
+                    ${hasKids && isExpanded ? `
+                        <div class="w-children">
+                            ${kids.map(k => renderNodeWithHealth(k, null, depth + 1, new Set(visited))).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
         
         // Bind expanders
         $$('.w-expander[data-expand]', el).forEach(btn => {
@@ -1822,11 +1913,137 @@
         // Bind node selection (inspector)
         $$('.w-node-row[data-select]', el).forEach(row => {
             row.addEventListener('click', (e) => {
-                // Don’t treat expander click as selection click
+                // Don't treat expander click as selection click
                 if (e.target && e.target.matches('.w-expander')) return;
                 selectNode(row.dataset.select);
             });
         });
+        
+        // V56: Verify All button
+        const verifyBtn = el.querySelector('#verify-all-tabs-btn');
+        if (verifyBtn) {
+            verifyBtn.addEventListener('click', async () => {
+                verifyBtn.disabled = true;
+                verifyBtn.innerHTML = '⏳ Verifying...';
+                
+                try {
+                    // Expand all tabs to show issues
+                    roots.forEach(r => _expandedNodes.add(r.id));
+                    renderTree();
+                    
+                    // Show summary modal
+                    const allIssues = [];
+                    let totalConfigured = 0;
+                    let totalFields = 0;
+                    
+                    roots.forEach(r => {
+                        const health = tabHealthData.get(r.id);
+                        if (health) {
+                            totalConfigured += health.configured;
+                            totalFields += health.total;
+                            health.issues.forEach(i => allIssues.push({ tab: r.label || r.id, ...i }));
+                        }
+                    });
+                    
+                    showVerificationResultsModal({
+                        totalFields,
+                        totalConfigured,
+                        percent: totalFields > 0 ? Math.round((totalConfigured / totalFields) * 100) : 0,
+                        issues: allIssues,
+                        tabs: roots.map(r => ({ id: r.id, label: r.label, ...tabHealthData.get(r.id) }))
+                    });
+                    
+                } finally {
+                    verifyBtn.disabled = false;
+                    verifyBtn.innerHTML = '🔬 Verify All';
+                }
+            });
+        }
+    }
+    
+    /**
+     * V56: Show verification results modal
+     */
+    function showVerificationResultsModal(results) {
+        const existing = document.getElementById('verification-modal');
+        if (existing) existing.remove();
+        
+        const scoreColor = results.percent === 100 ? '#22c55e' : results.percent >= 70 ? '#f59e0b' : '#ef4444';
+        const statusText = results.percent === 100 ? '✅ FULLY WIRED' : results.percent >= 70 ? '⚠️ MOSTLY WIRED' : '❌ NEEDS ATTENTION';
+        
+        const modal = document.createElement('div');
+        modal.id = 'verification-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+        modal.innerHTML = `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 16px; padding: 28px; max-width: 700px; width: 95%; max-height: 85vh; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="margin: 0; color: #fff; font-size: 20px;">🔬 Wiring Verification Report</h3>
+                    <button id="close-verify-modal" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 24px;">✕</button>
+                </div>
+                
+                <!-- Overall Score -->
+                <div style="text-align: center; padding: 24px; background: linear-gradient(135deg, rgba(0,0,0,0.3), rgba(0,0,0,0.2)); border-radius: 12px; margin-bottom: 24px;">
+                    <div style="font-size: 56px; font-weight: 800; color: ${scoreColor};">${results.percent}%</div>
+                    <div style="font-size: 14px; color: ${scoreColor}; font-weight: 600; margin-top: 4px;">${statusText}</div>
+                    <div style="font-size: 12px; color: #9ca3af; margin-top: 8px;">${results.totalConfigured} of ${results.totalFields} fields configured</div>
+                    
+                    <!-- Progress bar -->
+                    <div style="margin-top: 16px; height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden;">
+                        <div style="height: 100%; width: ${results.percent}%; background: ${scoreColor}; transition: width 0.5s;"></div>
+                    </div>
+                </div>
+                
+                <!-- Per-Tab Breakdown -->
+                <div style="margin-bottom: 24px;">
+                    <h4 style="color: #e0e0e0; font-size: 14px; margin: 0 0 12px 0;">📊 Tab-by-Tab Breakdown</h4>
+                    <div style="display: grid; gap: 8px;">
+                        ${results.tabs.map(t => {
+                            const tabColor = t.percent === 100 ? '#22c55e' : t.percent >= 70 ? '#f59e0b' : '#ef4444';
+                            return `
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid #2a2a2e;">
+                                <span style="font-size: 13px; color: #e0e0e0; flex: 1;">${esc(t.label || t.id)}</span>
+                                <span style="font-size: 12px; font-weight: 700; color: ${tabColor};">${t.percent}%</span>
+                                <div style="width: 60px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                                    <div style="height: 100%; width: ${t.percent}%; background: ${tabColor};"></div>
+                                </div>
+                                <span style="font-size: 10px; color: #9ca3af; width: 50px; text-align: right;">${t.configured}/${t.total}</span>
+                                ${t.issues?.length > 0 ? `<span style="font-size: 10px; color: #f59e0b;">⚠️ ${t.issues.length}</span>` : '<span style="font-size: 10px; color: #22c55e;">✓</span>'}
+                            </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+                
+                ${results.issues.length > 0 ? `
+                <!-- Issues List -->
+                <div style="margin-bottom: 20px;">
+                    <h4 style="color: #f87171; font-size: 14px; margin: 0 0 12px 0;">⚠️ Issues to Fix (${results.issues.length})</h4>
+                    <div style="max-height: 200px; overflow-y: auto; background: rgba(239, 68, 68, 0.05); border-radius: 8px; padding: 12px; border: 1px solid rgba(239, 68, 68, 0.2);">
+                        ${results.issues.map(i => `
+                            <div style="font-size: 12px; color: #fca5a5; margin-bottom: 6px; padding-left: 12px; border-left: 2px solid #ef4444;">
+                                <strong>${esc(i.tab)}</strong> → ${esc(i.label || i.id)}: <span style="color: #f87171;">${esc(i.status)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : `
+                <div style="padding: 20px; background: rgba(34, 197, 94, 0.1); border-radius: 8px; border: 1px solid rgba(34, 197, 94, 0.3); text-align: center; margin-bottom: 20px;">
+                    <span style="font-size: 24px;">🎉</span>
+                    <div style="color: #4ade80; font-size: 14px; font-weight: 600; margin-top: 8px;">All systems wired correctly!</div>
+                </div>
+                `}
+                
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button id="close-verify-btn" style="padding: 10px 24px; background: #238636; border: none; border-radius: 8px; color: #fff; cursor: pointer; font-size: 13px; font-weight: 600;">Done</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        modal.querySelector('#close-verify-modal').onclick = () => modal.remove();
+        modal.querySelector('#close-verify-btn').onclick = () => modal.remove();
+        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
     }
 
     // ========================================================================
