@@ -472,6 +472,7 @@ function registerRoutes(routes) {
     app.use('/api/openai-health', require('./routes/api/openai-health')); // 🏥 OpenAI Health - ACTUALLY tests if OpenAI API works
     app.use('/api/admin/call-center', require('./routes/admin/callCenter')); // 📞 Call Center Module V2 (Call History, Customers, Analytics)
     app.use('/api/admin/wiring-status', require('./routes/admin/wiringRoutes')); // 🔌 Wiring Tab - Single Source of Truth (Enterprise Visibility)
+    app.use('/api/admin/front-desk', require('./routes/admin/frontDeskVerification')); // ✅ V57: Front Desk Deep Verification
     app.use('/api/v2global/admin', routes.v2GlobalAdminRoutes); // V2 Global Admin Dashboard
     // REMOVED: Legacy v2global/directory and v2global/addcompany routes - replaced with new versions
     app.use('/api/v2global/trade-categories', routes.v2GlobalTradeCategoriesRoutes); // V2 Global Trade Categories

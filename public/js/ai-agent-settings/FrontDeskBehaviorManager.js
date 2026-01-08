@@ -787,6 +787,33 @@ class FrontDeskBehaviorManager {
                     </div>
                 </div>
 
+                <!-- V57: Deep Verification Health Bar -->
+                <div id="fdb-verification-bar" style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, #0d1117, #161b22); border: 1px solid #30363d; border-radius: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span id="fdb-verify-score" style="font-size: 24px; font-weight: 800; color: #9ca3af;">—%</span>
+                            <div>
+                                <div id="fdb-verify-status" style="font-size: 13px; font-weight: 600; color: #9ca3af;">Loading verification...</div>
+                                <div id="fdb-verify-trade" style="font-size: 11px; color: #6b7280;">Trade: —</div>
+                            </div>
+                        </div>
+                        <button id="fdb-verify-btn" style="padding: 8px 14px; background: linear-gradient(135deg, #3b82f6, #2563eb); border: none; border-radius: 8px; color: white; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                            🔬 Verify Now
+                        </button>
+                    </div>
+                    <div style="margin-top: 12px;">
+                        <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                            <div id="fdb-verify-progress" style="height: 100%; width: 0%; background: #9ca3af; transition: width 0.5s, background 0.3s;"></div>
+                        </div>
+                    </div>
+                    <div id="fdb-verify-subtabs" style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px;">
+                        <!-- Sub-tab badges will be injected here -->
+                    </div>
+                    <div id="fdb-verify-issues" style="margin-top: 12px; display: none;">
+                        <!-- Issues will be shown here -->
+                    </div>
+                </div>
+
                 <!-- Tab Navigation -->
                 <div id="fdb-tabs" style="display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap;">
                     ${this.renderTab('personality', '🎭 Personality', true)}
@@ -7181,6 +7208,12 @@ Sean → Shawn, Shaun`;
         // Reset button
         container.querySelector('#fdb-reset-btn')?.addEventListener('click', () => this.resetToDefaults());
 
+        // V57: Deep Verification
+        container.querySelector('#fdb-verify-btn')?.addEventListener('click', () => this.runDeepVerification());
+        
+        // Auto-run verification on load
+        setTimeout(() => this.runDeepVerification(), 500);
+
         // Slider updates
         const maxWordsSlider = container.querySelector('#fdb-max-words');
         if (maxWordsSlider) {
@@ -8172,6 +8205,149 @@ Sean → Shawn, Shaun`;
             }
         } catch (error) {
             resultDiv.innerHTML = `<div style="color: #f85149;">Error: ${error.message}</div>`;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // V57: DEEP VERIFICATION
+    // ═══════════════════════════════════════════════════════════════════
+    
+    async runDeepVerification() {
+        console.log('[FRONT DESK] 🔬 Running deep verification...');
+        
+        const scoreEl = document.getElementById('fdb-verify-score');
+        const statusEl = document.getElementById('fdb-verify-status');
+        const tradeEl = document.getElementById('fdb-verify-trade');
+        const progressEl = document.getElementById('fdb-verify-progress');
+        const subtabsEl = document.getElementById('fdb-verify-subtabs');
+        const issuesEl = document.getElementById('fdb-verify-issues');
+        const verifyBtn = document.getElementById('fdb-verify-btn');
+        
+        if (!scoreEl) return;
+        
+        // Show loading state
+        scoreEl.textContent = '...';
+        scoreEl.style.color = '#9ca3af';
+        statusEl.textContent = 'Verifying configuration...';
+        if (verifyBtn) {
+            verifyBtn.disabled = true;
+            verifyBtn.innerHTML = '⏳ Checking...';
+        }
+        
+        try {
+            const token = localStorage.getItem('adminToken');
+            const response = await fetch(`/api/admin/front-desk/${this.companyId}/verify`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!response.ok) throw new Error('Verification failed');
+            
+            const report = await response.json();
+            console.log('[FRONT DESK] 🔬 Verification report:', report);
+            
+            // Update score
+            const score = report.overallScore || 0;
+            const scoreColor = score === 100 ? '#22c55e' : score >= 70 ? '#f59e0b' : '#ef4444';
+            
+            scoreEl.textContent = `${score}%`;
+            scoreEl.style.color = scoreColor;
+            
+            // Update status
+            const statusText = score === 100 ? '✅ Production Ready' : 
+                               score >= 70 ? '⚠️ Mostly Ready' : '❌ Needs Configuration';
+            statusEl.textContent = statusText;
+            statusEl.style.color = scoreColor;
+            
+            // Update trade key
+            tradeEl.textContent = `Trade: ${report.tradeKey || 'universal'}`;
+            
+            // Update progress bar
+            progressEl.style.width = `${score}%`;
+            progressEl.style.background = scoreColor;
+            
+            // Render sub-tab badges
+            const subTabs = report.subTabs || {};
+            subtabsEl.innerHTML = Object.entries(subTabs).map(([key, tab]) => {
+                const tabColor = tab.score === 100 ? '#22c55e' : tab.score >= 70 ? '#f59e0b' : '#ef4444';
+                const tabBg = tab.score === 100 ? 'rgba(34, 197, 94, 0.15)' : 
+                              tab.score >= 70 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+                return `
+                    <div class="fdb-verify-badge" style="
+                        padding: 6px 10px;
+                        background: ${tabBg};
+                        border: 1px solid ${tabColor}33;
+                        border-radius: 6px;
+                        font-size: 11px;
+                        display: flex;
+                        align-items: center;
+                        gap: 6px;
+                        cursor: pointer;
+                    " data-subtab="${key}" title="Click to view ${tab.name} tab">
+                        <span>${tab.icon || '📋'}</span>
+                        <span style="color: #e0e0e0;">${tab.name}</span>
+                        <span style="color: ${tabColor}; font-weight: 700;">${tab.score}%</span>
+                        ${tab.issues?.length > 0 ? `<span style="color: ${tabColor};">⚠️</span>` : ''}
+                    </div>
+                `;
+            }).join('');
+            
+            // Click handler for sub-tab badges
+            subtabsEl.querySelectorAll('.fdb-verify-badge').forEach(badge => {
+                badge.addEventListener('click', () => {
+                    const tabKey = badge.dataset.subtab;
+                    // Map verification keys to tab IDs
+                    const tabMap = {
+                        'personality': 'personality',
+                        'bookingSlots': 'booking',
+                        'responses': 'fallbacks',
+                        'greeting': 'personality', // Greeting is in personality
+                        'dynamicFlows': 'flows',
+                        'vocabulary': 'vocabulary',
+                        'loopPrevention': 'loops'
+                    };
+                    const targetTab = tabMap[tabKey] || tabKey;
+                    const tabBtn = document.querySelector(`.fdb-tab[data-tab="${targetTab}"]`);
+                    if (tabBtn) tabBtn.click();
+                });
+            });
+            
+            // Show issues if any
+            const allIssues = report.issues || [];
+            const allWarnings = report.warnings || [];
+            
+            if (allIssues.length > 0 || allWarnings.length > 0) {
+                issuesEl.style.display = 'block';
+                issuesEl.innerHTML = `
+                    <div style="padding: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px;">
+                        <div style="font-size: 12px; font-weight: 600; color: #f87171; margin-bottom: 8px;">
+                            ${allIssues.length > 0 ? `❌ ${allIssues.length} Error${allIssues.length > 1 ? 's' : ''}` : ''}
+                            ${allWarnings.length > 0 ? `⚠️ ${allWarnings.length} Warning${allWarnings.length > 1 ? 's' : ''}` : ''}
+                        </div>
+                        <div style="max-height: 120px; overflow-y: auto;">
+                            ${allIssues.slice(0, 5).map(i => `
+                                <div style="font-size: 11px; color: #fca5a5; margin-bottom: 4px; padding-left: 8px; border-left: 2px solid #ef4444;">
+                                    <strong>${i.tab}</strong>: ${i.description}
+                                    ${i.fix ? `<div style="color: #9ca3af; margin-top: 2px;">Fix: ${i.fix}</div>` : ''}
+                                </div>
+                            `).join('')}
+                            ${allIssues.length > 5 ? `<div style="font-size: 10px; color: #9ca3af;">...and ${allIssues.length - 5} more</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            } else {
+                issuesEl.style.display = 'none';
+            }
+            
+        } catch (error) {
+            console.error('[FRONT DESK] 🔬 Verification error:', error);
+            scoreEl.textContent = '?';
+            statusEl.textContent = 'Verification failed';
+            statusEl.style.color = '#f85149';
+        } finally {
+            if (verifyBtn) {
+                verifyBtn.disabled = false;
+                verifyBtn.innerHTML = '🔬 Verify Now';
+            }
         }
     }
 
