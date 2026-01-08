@@ -140,6 +140,112 @@
         const el = $('#wiringToast');
         if (!el) return;
         el.textContent = msg;
+    }
+    
+    /**
+     * Show compliance check results in a modal
+     */
+    function showComplianceModal(result) {
+        // Remove existing modal if any
+        const existing = document.getElementById('compliance-modal');
+        if (existing) existing.remove();
+        
+        const score = result.summary?.complianceScore || 0;
+        const status = result.summary?.status || 'UNKNOWN';
+        const violations = result.violations || [];
+        const files = result.files || [];
+        
+        // Color based on score
+        const scoreColor = score === 100 ? '#22c55e' : score >= 80 ? '#f59e0b' : '#ef4444';
+        const statusEmoji = score === 100 ? '✅' : '⚠️';
+        
+        const violationsHtml = violations.length > 0 ? `
+            <div style="margin-top: 16px;">
+                <h4 style="color: #f87171; margin: 0 0 8px 0;">❌ Violations Found (${violations.length})</h4>
+                <div style="max-height: 300px; overflow-y: auto; background: #0d1117; border-radius: 8px; padding: 12px;">
+                    ${violations.map(v => `
+                        <div style="margin-bottom: 12px; padding: 8px; background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; border-radius: 4px;">
+                            <div style="font-weight: 600; color: #f87171;">${esc(v.file)}:${v.line}</div>
+                            <div style="font-size: 12px; color: #9ca3af; margin-top: 4px;">
+                                <strong>Rule:</strong> ${esc(v.ruleId)} | <strong>Severity:</strong> ${esc(v.severity)}
+                            </div>
+                            <div style="font-size: 12px; color: #fff; margin-top: 4px;">
+                                <strong>Found:</strong> <code style="background: #21262d; padding: 2px 6px; border-radius: 4px;">${esc(v.matched)}</code>
+                            </div>
+                            <div style="font-size: 11px; color: #58a6ff; margin-top: 4px;">
+                                → Should come from: <code>${esc(v.shouldComeFrom)}</code>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : '';
+        
+        const filesHtml = `
+            <div style="margin-top: 16px;">
+                <h4 style="color: #9ca3af; margin: 0 0 8px 0;">📁 Files Scanned (${files.filter(f => f.status !== 'NOT_FOUND').length})</h4>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                    ${files.map(f => {
+                        if (f.status === 'NOT_FOUND') return '';
+                        const color = f.status === 'COMPLIANT' ? '#22c55e' : '#ef4444';
+                        const icon = f.status === 'COMPLIANT' ? '✓' : '✗';
+                        return `<span style="font-size: 11px; padding: 4px 8px; background: rgba(${color === '#22c55e' ? '34, 197, 94' : '239, 68, 68'}, 0.2); color: ${color}; border-radius: 4px;">${icon} ${f.file.split('/').pop()}</span>`;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+        
+        const modal = document.createElement('div');
+        modal.id = 'compliance-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+        modal.innerHTML = `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 24px; max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 style="margin: 0; color: #fff; font-size: 18px;">🔍 Code Compliance Report</h3>
+                    <button id="close-compliance-modal" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 20px;">✕</button>
+                </div>
+                
+                <div style="display: flex; gap: 20px; margin-bottom: 16px;">
+                    <div style="flex: 1; background: #0d1117; border-radius: 8px; padding: 16px; text-align: center;">
+                        <div style="font-size: 36px; font-weight: 700; color: ${scoreColor};">${score}%</div>
+                        <div style="font-size: 12px; color: #9ca3af;">Compliance Score</div>
+                    </div>
+                    <div style="flex: 1; background: #0d1117; border-radius: 8px; padding: 16px; text-align: center;">
+                        <div style="font-size: 24px;">${statusEmoji}</div>
+                        <div style="font-size: 14px; font-weight: 600; color: ${scoreColor};">${status}</div>
+                    </div>
+                </div>
+                
+                <div style="padding: 12px; background: ${score === 100 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)'}; border-radius: 8px; border-left: 3px solid ${scoreColor};">
+                    <div style="color: #fff; font-size: 13px;">
+                        ${score === 100 
+                            ? '<strong>All clear!</strong> No hardcoded values found. All config values are properly wired to the database.'
+                            : '<strong>Action Required:</strong> Found hardcoded values that should be reading from config. Fix these to ensure consistent behavior across tenants.'}
+                    </div>
+                </div>
+                
+                ${violationsHtml}
+                ${filesHtml}
+                
+                <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #30363d; display: flex; gap: 8px; justify-content: flex-end;">
+                    <button id="copy-compliance-json" style="padding: 8px 16px; background: #21262d; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; cursor: pointer; font-size: 12px;">📋 Copy JSON</button>
+                    <button id="close-compliance-btn" style="padding: 8px 16px; background: #238636; border: none; border-radius: 6px; color: #fff; cursor: pointer; font-size: 12px;">Done</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Close handlers
+        modal.querySelector('#close-compliance-modal').onclick = () => modal.remove();
+        modal.querySelector('#close-compliance-btn').onclick = () => modal.remove();
+        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+        
+        // Copy JSON
+        modal.querySelector('#copy-compliance-json').onclick = () => {
+            navigator.clipboard.writeText(JSON.stringify(result, null, 2));
+            toast('Compliance report copied to clipboard');
+        };
         el.className = `w-toast ${isErr ? 'err' : 'ok'} visible`;
         setTimeout(() => el.classList.remove('visible'), 2500);
     }
@@ -2638,6 +2744,45 @@
         });
         
         // Clear cache button
+        // Compliance Check button
+        const complianceBtn = $('#wiringComplianceCheck');
+        console.log('[WiringTab] CHECKPOINT: Compliance Check button found:', !!complianceBtn);
+        bindOnce(complianceBtn, 'click', async () => {
+            console.log('[WiringTab] 🔍 BUTTON CLICKED: Compliance Check', { companyId: _companyId });
+            if (!_companyId) {
+                toast('No company ID', true);
+                return;
+            }
+            
+            complianceBtn.disabled = true;
+            const originalText = complianceBtn.innerHTML;
+            complianceBtn.innerHTML = '⏳ Scanning...';
+            
+            try {
+                const token = localStorage.getItem('adminToken');
+                const resp = await fetch(`/api/admin/wiring-status/${_companyId}/compliance`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!resp.ok) {
+                    throw new Error(`Compliance check failed: ${resp.statusText}`);
+                }
+                
+                const result = await resp.json();
+                console.log('[WiringTab] ✅ Compliance check result:', result);
+                
+                // Show modal with results
+                showComplianceModal(result);
+                
+            } catch (err) {
+                console.error('[WiringTab] ❌ Compliance check error:', err);
+                toast('Compliance check failed: ' + err.message, true);
+            } finally {
+                complianceBtn.innerHTML = originalText;
+                complianceBtn.disabled = false;
+            }
+        });
+        
         const clearCacheBtn = $('#wiringClearCache');
         console.log('[WiringTab] CHECKPOINT: Clear Cache button found:', !!clearCacheBtn);
         bindOnce(clearCacheBtn, 'click', async () => {

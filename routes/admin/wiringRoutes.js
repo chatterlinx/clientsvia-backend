@@ -1033,5 +1033,43 @@ router.post('/:companyId/fix-template-references', async (req, res) => {
     }
 });
 
+// ============================================================================
+// GET /api/admin/wiring-status/:companyId/compliance
+// Code compliance check - detects hardcoded values that should come from config
+// ============================================================================
+router.get('/:companyId/compliance', async (req, res) => {
+    const startTime = Date.now();
+    
+    try {
+        const { companyId } = req.params;
+        const { format = 'json' } = req.query;
+        
+        logger.info('[WIRING API] Compliance check requested', { companyId });
+        
+        // Run the compliance checker
+        const { runComplianceCheck, formatAsMarkdown } = require('../../services/wiring/WiringComplianceChecker');
+        const projectRoot = require('path').resolve(__dirname, '../..');
+        
+        const results = runComplianceCheck(projectRoot);
+        results.companyId = companyId;
+        results.durationMs = Date.now() - startTime;
+        
+        // Return in requested format
+        if (format === 'md' || format === 'markdown') {
+            res.setHeader('Content-Type', 'text/markdown');
+            return res.send(formatAsMarkdown(results));
+        }
+        
+        return res.json(results);
+        
+    } catch (error) {
+        logger.error('[WIRING API] Compliance check error', { error: error.message, stack: error.stack });
+        return res.status(500).json({
+            error: 'Compliance check failed',
+            details: error.message
+        });
+    }
+});
+
 module.exports = router;
 
