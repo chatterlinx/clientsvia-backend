@@ -1821,8 +1821,15 @@
                 const tabLabel = tabNames[navTab] || navTab;
                 const hasNav = navTab && navSection;
                 
+                // Format recommendedValue for preview
+                const previewJson = action.recommendedValue 
+                    ? JSON.stringify(action.recommendedValue, null, 2)
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                    : null;
+                
                 return `
-                <div class="w-next-action-card">
+                <div class="w-next-action-card" data-field-id="${esc(action.fieldId)}">
                   <div class="w-next-action-number">${idx + 1}</div>
                   <div class="w-next-action-content">
                     <div class="w-next-action-top">
@@ -1840,8 +1847,14 @@
                     <div class="w-next-action-buttons">
                       ${action.canAutoApply ? `
                         <button class="w-apply-fix-btn" 
-                                data-field-id="${esc(action.fieldId)}">
+                                data-field-id="${esc(action.fieldId)}"
+                                title="Click to apply recommended configuration">
                           ✨ Apply Recommended
+                        </button>
+                        <button class="w-preview-btn" 
+                                data-field-id="${esc(action.fieldId)}"
+                                title="Show what will be applied">
+                          👁️ Preview
                         </button>
                       ` : ''}
                       ${hasNav ? `
@@ -1856,6 +1869,14 @@
                         🔍 Inspect
                       </button>
                     </div>
+                    
+                    ${action.canAutoApply && previewJson ? `
+                      <div class="w-next-action-preview" data-field-id="${esc(action.fieldId)}" style="display: none;">
+                        <div class="w-preview-header">📋 Recommended Value (will be applied):</div>
+                        <pre class="w-preview-code">${previewJson}</pre>
+                      </div>
+                    ` : ''}
+                    
                     ${action.requiresUserInput ? `
                       <div class="w-next-action-user-input-hint">
                         ⚠️ Requires your input - cannot auto-apply
@@ -1879,12 +1900,27 @@
           </div>
         `;
         
+        // Bind "Preview" buttons - toggle visibility of recommended value
+        $$('.w-preview-btn[data-field-id]', el).forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const fieldId = btn.dataset.fieldId;
+                const previewEl = el.querySelector(`.w-next-action-preview[data-field-id="${fieldId}"]`);
+                if (previewEl) {
+                    const isHidden = previewEl.style.display === 'none';
+                    previewEl.style.display = isHidden ? 'block' : 'none';
+                    btn.innerHTML = isHidden ? '👁️ Hide' : '👁️ Preview';
+                }
+            });
+        });
+        
         // Bind "Apply Fix" buttons (one-click apply)
         // SECURE: Button only sends fieldId, server generates patch from registry
         $$('.w-apply-fix-btn[data-field-id]', el).forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const fieldId = btn.dataset.fieldId;
+                const card = el.querySelector(`.w-next-action-card[data-field-id="${fieldId}"]`);
                 
                 console.log('[WiringTab] ✨ APPLY_FIX_CLICK:', fieldId);
                 
@@ -1895,19 +1931,43 @@
                 
                 try {
                     // SECURE: Send only fieldId, server looks up recommended value
-                    await applyWiringFix(fieldId, 'recommended');
+                    const result = await applyWiringFix(fieldId, 'recommended');
+                    
+                    // SUCCESS: Update button and card to show completion
                     btn.innerHTML = '✅ Applied!';
-                    setTimeout(() => {
-                        btn.innerHTML = originalText;
-                        btn.disabled = false;
-                    }, 2000);
+                    btn.style.background = '#22c55e';
+                    btn.style.color = '#fff';
+                    
+                    // Mark the card as complete (visual feedback)
+                    if (card) {
+                        card.style.opacity = '0.6';
+                        card.style.borderColor = '#22c55e';
+                        card.style.background = 'linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(34, 197, 94, 0.05))';
+                        
+                        // Add completion badge
+                        const badge = document.createElement('div');
+                        badge.className = 'w-applied-badge';
+                        badge.innerHTML = '✅ CONFIGURED - Refreshing...';
+                        badge.style.cssText = 'position:absolute;top:10px;right:10px;background:#22c55e;color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;';
+                        card.style.position = 'relative';
+                        card.appendChild(badge);
+                    }
+                    
+                    // Note: The applyWiringFix function already triggers a refresh
+                    // which will remove this card from the list if successful
+                    
                 } catch (err) {
                     console.error('[WiringTab] ❌ Apply failed:', err);
-                    btn.innerHTML = '❌ Failed';
+                    btn.innerHTML = '❌ Failed: ' + (err.message || 'Unknown error');
+                    btn.style.background = '#ef4444';
+                    btn.style.color = '#fff';
+                    
                     setTimeout(() => {
                         btn.innerHTML = originalText;
+                        btn.style.background = '';
+                        btn.style.color = '';
                         btn.disabled = false;
-                    }, 3000);
+                    }, 4000);
                 }
             });
         });
