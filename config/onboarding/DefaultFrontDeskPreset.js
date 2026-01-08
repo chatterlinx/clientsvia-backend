@@ -1,0 +1,373 @@
+/**
+ * DefaultFrontDeskPreset.js
+ * V59: COMPREHENSIVE preset for new company onboarding
+ * 
+ * PHILOSOPHY (per memory 12148303):
+ * - NO hardcoded fallbacks in runtime code
+ * - ALL AI behavior visible and configurable in UI
+ * - This preset seeds COMPLETE config on company creation
+ * - If a field is empty at runtime, LOG ERROR (don't silently fallback)
+ * 
+ * TRADE-SPECIFIC PRESETS:
+ * - HVAC, Plumbing, Electrical, Dental, Legal, etc.
+ * - Each has appropriate questions and tone
+ * - Selected during onboarding based on trade key
+ */
+
+const logger = require('../../utils/logger');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UNIVERSAL BOOKING SLOTS PRESET
+// Every new company gets these - customize after onboarding
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_BOOKING_SLOTS = [
+    {
+        id: 'name',
+        slotId: 'name',
+        label: 'Customer Name',
+        type: 'name',
+        question: 'May I have your name, please?',
+        required: true,
+        order: 0,
+        enabled: true,
+        confirmBack: true,
+        // ─────────────────────────────────────────────────────────────
+        // V59: ALL name-related questions - NO FALLBACKS IN RUNTIME
+        // ─────────────────────────────────────────────────────────────
+        askFullName: true,
+        useFirstNameOnly: false,
+        askMissingNamePart: true,
+        firstNameQuestion: "And what's your first name?",
+        lastNameQuestion: "And what's your last name?",
+        // Spelling variant handling (Marc vs Mark)
+        askSpellingVariant: true,
+        spellingVariantPrompt: "Is that {name} with a {variant1} or {variant2}?",
+        // Reprompts if user is unclear
+        repromptVariants: [
+            "I didn't quite catch that. What's your name?",
+            "Sorry, could you repeat your name for me?"
+        ]
+    },
+    {
+        id: 'phone',
+        slotId: 'phone',
+        label: 'Phone Number',
+        type: 'phone',
+        question: "What's the best phone number to reach you?",
+        required: true,
+        order: 1,
+        enabled: true,
+        confirmBack: true,
+        confirmPrompt: "Just to confirm, that's {value}, correct?",
+        // ─────────────────────────────────────────────────────────────
+        // V59: ALL phone-related questions - NO FALLBACKS IN RUNTIME
+        // ─────────────────────────────────────────────────────────────
+        offerCallerId: true,
+        callerIdPrompt: "I see you're calling from {callerId} — is that a good number for text confirmations, or would you prefer a different one?",
+        callerIdAcceptPhrases: ['yes', 'yeah', 'that works', 'sure', 'correct', "that's fine", 'yep'],
+        callerIdDeclinePhrases: ['no', 'different', 'another', 'not that one', 'use a different'],
+        // Breakdown prompts for unclear input
+        breakDownIfUnclear: true,
+        areaCodePrompt: "What's the area code?",
+        restOfNumberPrompt: "And the rest of the number?",
+        // Validation
+        validateFormat: true,
+        invalidPhonePrompt: "That doesn't look like a valid phone number. Could you try again?",
+        // Reprompts
+        repromptVariants: [
+            "I didn't catch that. What's a good callback number?",
+            "Sorry, could you repeat that phone number?"
+        ]
+    },
+    {
+        id: 'address',
+        slotId: 'address',
+        label: 'Service Address',
+        type: 'address',
+        question: "What's the address for the service?",
+        required: true,
+        order: 2,
+        enabled: true,
+        confirmBack: true,
+        confirmPrompt: "Got it, that's {value}. Is that correct?",
+        // ─────────────────────────────────────────────────────────────
+        // V59: ALL address-related questions - NO FALLBACKS IN RUNTIME
+        // ─────────────────────────────────────────────────────────────
+        addressConfirmLevel: 'street_city', // street_only, street_city, full
+        acceptPartialAddress: true,
+        partialAddressPrompt: "I got part of that. Can you give me the full address including city?",
+        // Breakdown prompts
+        breakDownIfUnclear: true,
+        streetBreakdownPrompt: "What's the street address?",
+        cityPrompt: "And what city is that in?",
+        zipPrompt: "Do you know the zip code?",
+        // Reprompts
+        repromptVariants: [
+            "I didn't quite get the address. Could you repeat it?",
+            "Sorry, where will the technician be going?"
+        ]
+    },
+    {
+        id: 'time',
+        slotId: 'time',
+        label: 'Preferred Time',
+        type: 'datetime',
+        question: "When would be a good time for the technician to come out?",
+        required: true,
+        order: 3,
+        enabled: true,
+        confirmBack: true,
+        confirmPrompt: "So you're looking at {value}. Does that work?",
+        // ─────────────────────────────────────────────────────────────
+        // V59: Time-related questions
+        // ─────────────────────────────────────────────────────────────
+        acceptFlexible: true,
+        flexiblePhrases: ['whenever', 'asap', 'as soon as possible', 'any time', 'flexible'],
+        flexibleResponse: "Got it, I'll mark you down as flexible. We'll reach out with available times.",
+        // Reprompts
+        repromptVariants: [
+            "When works best for you?",
+            "What time frame are you looking at?"
+        ]
+    }
+];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT GREETING RESPONSES
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_GREETING_RESPONSES = {
+    morning: "Good morning! How can I help you today?",
+    afternoon: "Good afternoon! How can I help you today?",
+    evening: "Good evening! How can I help you today?",
+    generic: "Hello! How can I help you today?",
+    // Casual greetings
+    casual: {
+        hi: "Hi there! How can I help you?",
+        hey: "Hey! What can I do for you today?",
+        hello: "Hello! How can I help you today?"
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT FALLBACK RESPONSES
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_FALLBACK_RESPONSES = {
+    generic: "I'm sorry, I didn't quite catch that. Could you say that again?",
+    lowConfidence: "I want to make sure I understand correctly. Could you rephrase that?",
+    offTopic: "I'm here to help with scheduling and service questions. Is there something specific I can help you with?",
+    noScenario: "Let me make sure I can help with that. Could you tell me more about what you need?",
+    engineFailure: "I apologize for the technical difficulty. Let me connect you with someone who can help.",
+    silenceResponse: "Are you still there? I'm happy to help whenever you're ready."
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT LOOP PREVENTION
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_LOOP_PREVENTION = {
+    enabled: true,
+    maxSameQuestion: 2,
+    rephraseIntro: "Let me try this differently — ",
+    escalationThreshold: 3,
+    escalationScript: "No problem. If you'd rather, I can transfer you to a service advisor to help get you booked.",
+    // V54: Slot-specific nudge prompts
+    nudgeNamePrompt: "I just need your name to get started.",
+    nudgePhonePrompt: "I just need a good number to reach you at.",
+    nudgeAddressPrompt: "I just need the service address."
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT BOOKING OUTCOME SCRIPTS
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_BOOKING_OUTCOME = {
+    mode: 'confirmed_on_call',
+    scripts: {
+        confirmed_on_call: "Perfect! You're all set. A technician will be out {time}. Is there anything else I can help with?",
+        callback_promised: "Great! We'll call you back shortly to confirm the appointment. Is there anything else?",
+        estimate_first: "Wonderful! Someone will reach out with an estimate, and then we'll get you scheduled. Anything else?",
+        message_taken: "Got it! I've taken down your information. Someone will be in touch soon. Is there anything else?"
+    },
+    // ASAP variants
+    asapVariants: {
+        confirmed_on_call: "Perfect! You're all set. We'll have a technician out as soon as possible. Is there anything else?",
+        callback_promised: "Great! We'll call you back shortly with the first available time. Anything else?"
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT ESCALATION CONFIG
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_ESCALATION = {
+    enabled: true,
+    triggers: ['talk to someone', 'speak to a person', 'real person', 'human', 'transfer me', 'manager', 'supervisor'],
+    transferMessage: "Absolutely, one moment while I transfer you to our team.",
+    noAgentAvailableMessage: "I apologize, but no one is available right now. Can I take a message and have someone call you back?"
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT UNIT OF WORK PROMPTS (Multi-location booking)
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_UNIT_OF_WORK = {
+    enabled: false,
+    maxUnits: 3,
+    labelSingular: 'Job',
+    labelPlural: 'Jobs',
+    askAddAnotherPrompt: "Is this for just this location, or do you have another location to add today?",
+    clarifyPrompt: "Just to confirm — do you have another location or job to add today?",
+    nextUnitIntro: "Okay — let's get the details for the next one.",
+    finalScriptMulti: "Perfect — I've got both locations. Our team will take it from here.",
+    yesWords: ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'correct', 'another', 'one more'],
+    noWords: ['no', 'nope', 'nah', 'just this', 'only this', "that's it", 'all set']
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT DISCOVERY & CONSENT
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_DISCOVERY_CONSENT = {
+    bookingRequiresExplicitConsent: false,
+    consentPhrases: [
+        'schedule', 'book', 'appointment', 'come out', 'send someone',
+        "let's do it", "let's schedule", 'yes please', 'sounds good'
+    ],
+    persistConsent: true,
+    lockModeAfterConsent: true,
+    extractIssuesDuringDiscovery: true,
+    passIssuesToBooking: true,
+    // Kill switches (should be OFF for normal operation)
+    forceLLMDiscovery: false,
+    disableScenarioAutoResponses: false,
+    // Booking intent detection
+    bookingIntentPhrases: [
+        'schedule', 'appointment', 'book', 'service', 'come out',
+        'someone to come', 'technician', 'repair', 'maintenance', 'installation'
+    ]
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TRADE-SPECIFIC PRESETS
+// ═══════════════════════════════════════════════════════════════════════════
+const TRADE_PRESETS = {
+    hvac: {
+        name: 'HVAC',
+        bookingSlots: DEFAULT_BOOKING_SLOTS.map(slot => {
+            if (slot.id === 'time') {
+                return { ...slot, question: "When would be a good time for the technician to come take a look?" };
+            }
+            return slot;
+        }),
+        greetingResponses: {
+            ...DEFAULT_GREETING_RESPONSES,
+            // HVAC-specific casual greetings could go here
+        }
+    },
+    plumbing: {
+        name: 'Plumbing',
+        bookingSlots: DEFAULT_BOOKING_SLOTS.map(slot => {
+            if (slot.id === 'time') {
+                return { ...slot, question: "When would be a good time for the plumber to come out?" };
+            }
+            return slot;
+        })
+    },
+    electrical: {
+        name: 'Electrical',
+        bookingSlots: DEFAULT_BOOKING_SLOTS.map(slot => {
+            if (slot.id === 'time') {
+                return { ...slot, question: "When would be a good time for the electrician to come by?" };
+            }
+            return slot;
+        })
+    },
+    dental: {
+        name: 'Dental',
+        bookingSlots: DEFAULT_BOOKING_SLOTS.map(slot => {
+            if (slot.id === 'address') {
+                // Dental doesn't need address (patients come to office)
+                return { ...slot, required: false, enabled: false };
+            }
+            if (slot.id === 'time') {
+                return { ...slot, question: "What day and time works best for your appointment?" };
+            }
+            return slot;
+        })
+    },
+    legal: {
+        name: 'Legal',
+        bookingSlots: DEFAULT_BOOKING_SLOTS.map(slot => {
+            if (slot.id === 'address') {
+                return { ...slot, required: false, enabled: false };
+            }
+            if (slot.id === 'time') {
+                return { ...slot, question: "When would you like to schedule your consultation?" };
+            }
+            return slot;
+        })
+    },
+    universal: {
+        name: 'Universal',
+        bookingSlots: DEFAULT_BOOKING_SLOTS
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN EXPORT: Get complete preset for a trade
+// ═══════════════════════════════════════════════════════════════════════════
+function getPresetForTrade(tradeKey = 'universal') {
+    const normalizedKey = (tradeKey || 'universal').toLowerCase().trim();
+    const tradePreset = TRADE_PRESETS[normalizedKey] || TRADE_PRESETS.universal;
+    
+    logger.info('[ONBOARDING PRESET] Loading preset for trade:', {
+        requestedTrade: tradeKey,
+        normalizedKey,
+        usingPreset: tradePreset.name || 'Universal'
+    });
+    
+    return {
+        // Core booking config
+        bookingSlots: tradePreset.bookingSlots || DEFAULT_BOOKING_SLOTS,
+        
+        // Greeting responses
+        greetingResponses: tradePreset.greetingResponses || DEFAULT_GREETING_RESPONSES,
+        
+        // Fallback responses
+        fallbackResponses: DEFAULT_FALLBACK_RESPONSES,
+        
+        // Loop prevention
+        loopPrevention: DEFAULT_LOOP_PREVENTION,
+        
+        // Booking outcome
+        bookingOutcome: DEFAULT_BOOKING_OUTCOME,
+        
+        // Escalation
+        escalation: DEFAULT_ESCALATION,
+        
+        // Unit of work
+        unitOfWork: DEFAULT_UNIT_OF_WORK,
+        
+        // Discovery & consent
+        discoveryConsent: DEFAULT_DISCOVERY_CONSENT,
+        
+        // Personality (trade-aware)
+        personality: {
+            conversationStyle: 'balanced',
+            agentName: null, // Set during onboarding
+            tone: 'professional_friendly'
+        }
+    };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Export individual defaults for schema defaults
+// ═══════════════════════════════════════════════════════════════════════════
+module.exports = {
+    getPresetForTrade,
+    DEFAULT_BOOKING_SLOTS,
+    DEFAULT_GREETING_RESPONSES,
+    DEFAULT_FALLBACK_RESPONSES,
+    DEFAULT_LOOP_PREVENTION,
+    DEFAULT_BOOKING_OUTCOME,
+    DEFAULT_ESCALATION,
+    DEFAULT_UNIT_OF_WORK,
+    DEFAULT_DISCOVERY_CONSENT,
+    TRADE_PRESETS
+};
+

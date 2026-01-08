@@ -2854,6 +2854,8 @@ Sean → Shawn, Shaun`;
         if (el.querySelector('.slot-useFirstNameOnly')) slotData.useFirstNameOnly = getCheckedDefault('.slot-useFirstNameOnly', true);
         if (el.querySelector('.slot-askMissingNamePart')) slotData.askMissingNamePart = getChecked('.slot-askMissingNamePart');
         if (el.querySelector('.slot-confirmSpelling')) slotData.confirmSpelling = getChecked('.slot-confirmSpelling');
+        // V59 NUKE: Both first and last name questions MUST be from UI
+        if (el.querySelector('.slot-firstNameQuestion')) slotData.firstNameQuestion = getVal('.slot-firstNameQuestion') || "And what's your first name?";
         if (el.querySelector('.slot-lastNameQuestion')) slotData.lastNameQuestion = getVal('.slot-lastNameQuestion') || "And what's your last name?";
 
         // PHONE options
@@ -2981,16 +2983,35 @@ Sean → Shawn, Shaun`;
                         </label>
                     </div>
                     
-                    <!-- V47: Last Name Question - UI configurable, not hardcoded -->
-                    <div style="display: ${slot.askFullName === true ? 'flex' : 'none'}; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid #30363d;" id="lastNameQuestionSection-${index}">
-                        <label style="font-size: 11px; color: #58a6ff; font-weight: 600;">
-                            📝 Last Name Question (when asking for missing last name):
-                        </label>
-                        <input type="text" class="slot-lastNameQuestion" data-index="${index}" 
-                            value="${slot.lastNameQuestion || "And what is your last name?"}" 
-                            placeholder="And what is your last name?"
-                            style="width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
-                        <span style="font-size: 10px; color: #8b949e;">Use {firstName} to include caller name, e.g. "Got it, {firstName}. And what is your last name?"</span>
+                    <!-- V59: Name Questions - UI configurable, NO HARDCODED FALLBACKS -->
+                    <div style="display: ${slot.askFullName === true || slot.askMissingNamePart === true ? 'flex' : 'none'}; flex-direction: column; gap: 12px; padding-top: 8px; border-top: 1px solid #30363d;" id="nameQuestionsSection-${index}">
+                        <div style="font-size: 11px; color: #f85149; font-weight: 600;">
+                            🚨 V59: These questions are REQUIRED when "Ask once for missing part" is enabled. NO hardcoded fallbacks!
+                        </div>
+                        
+                        <!-- First Name Question -->
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <label style="font-size: 11px; color: #58a6ff; font-weight: 600;">
+                                📝 First Name Question (when caller gives last name first):
+                            </label>
+                            <input type="text" class="slot-firstNameQuestion" data-index="${index}" 
+                                value="${this.escapeHtml(slot.firstNameQuestion || "And what's your first name?")}" 
+                                placeholder="And what's your first name?"
+                                style="width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
+                            <span style="font-size: 10px; color: #8b949e;">Asked when caller says "My name is Smith" (last name only)</span>
+                        </div>
+                        
+                        <!-- Last Name Question -->
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <label style="font-size: 11px; color: #58a6ff; font-weight: 600;">
+                                📝 Last Name Question (when asking for missing last name):
+                            </label>
+                            <input type="text" class="slot-lastNameQuestion" data-index="${index}" 
+                                value="${this.escapeHtml(slot.lastNameQuestion || "And what's your last name?")}" 
+                                placeholder="And what's your last name?"
+                                style="width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
+                            <span style="font-size: 10px; color: #8b949e;">Use {firstName} to include caller name, e.g. "Got it, {firstName}. And what's your last name?"</span>
+                        </div>
                     </div>
                     
                     <!-- V46: Spelling Variant Check - creates a sub-requirement -->

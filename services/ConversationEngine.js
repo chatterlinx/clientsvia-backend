@@ -179,10 +179,65 @@ function getSlotPromptVariant(slotConfig, slotId, askedCount = 0) {
         return uiVariants[askedCount % uiVariants.length];
     }
     
-    // 🚨 NO HARDCODED FALLBACKS - Log error and use generic
-    logger.error(`[PROMPT AS LAW] ⚠️ NO UI CONFIG for slot "${slotId}"! Add question in Front Desk Behavior → Booking Prompts`);
-    // DEFAULT - OVERRIDE IN UI: This is a last-resort safety net only.
-    return `What is your ${slotId}?`;
+    // 🚨 V59 NUKE: NO FALLBACKS - Log error and use getMissingConfigPrompt
+    return getMissingConfigPrompt('slot_question', slotId, { slotId });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// V59 NUKE: Missing Config Handler - NO SILENT FALLBACKS
+// ═══════════════════════════════════════════════════════════════════════════
+// PHILOSOPHY: If config is missing, it's a BUG that must be fixed.
+// We log loudly and return a generic prompt so the call doesn't break,
+// but the error log makes it IMPOSSIBLE to miss the issue.
+// ═══════════════════════════════════════════════════════════════════════════
+function getMissingConfigPrompt(configType, fieldName, context = {}) {
+    const errorId = `MISSING_CONFIG_${Date.now()}`;
+    
+    logger.error(`[V59 NUKE] 🚨 MISSING UI CONFIG - This should NEVER happen in production!`, {
+        errorId,
+        configType,
+        fieldName,
+        context,
+        fix: `Configure this in Control Plane → Front Desk Behavior → Booking Prompts`,
+        urgency: 'HIGH - Company onboarding incomplete or config was deleted'
+    });
+    
+    // Return a safe generic prompt - but the error log above will alert us
+    const safeDefaults = {
+        // Slot questions
+        'slot_question': `What is your ${fieldName || 'information'}?`,
+        'firstNameQuestion': "And your first name?",
+        'lastNameQuestion': "And your last name?",
+        'phone_question': "What's a good callback number?",
+        'address_question': "What's the service address?",
+        // Phone breakdown
+        'areaCodePrompt': "What's the area code?",
+        'restOfNumberPrompt': "And the rest of the number?",
+        // Address breakdown
+        'cityPrompt': "And what city?",
+        'zipPrompt': "And the zip code?",
+        'partialAddressPrompt': "Can you give me the full address?",
+        'unitNumberPrompt': "Is there a unit number?",
+        // Greeting responses
+        'greeting_morning': "Good morning! How can I help?",
+        'greeting_afternoon': "Good afternoon! How can I help?",
+        'greeting_evening': "Good evening! How can I help?",
+        'greeting_generic': "Hello! How can I help?",
+        // Fallbacks
+        'fallback_generic': "I'm sorry, could you repeat that?",
+        'transfer_message': "One moment while I transfer you.",
+        // Loop prevention
+        'rephrase_intro': "Let me try this differently — ",
+        // Unit of work
+        'clarify_prompt': "Do you have another request?",
+        'next_unit_intro': "Let's get the next one.",
+        'final_script': "You're all set.",
+        'askAddAnotherPrompt': "Is there anything else?",
+        // Confirm prompts
+        'confirmPrompt': "Just to confirm, {value}. Is that right?"
+    };
+    
+    return safeDefaults[configType] || safeDefaults[fieldName] || `[CONFIG MISSING: ${configType}]`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2054,31 +2109,30 @@ async function processTurn({
             // Fallback to legacy format if no rule matched
             if (!greetingResponse) {
                 const hour = new Date().getHours();
-                // V35 FIX: Use \b word boundary instead of ^ to match "hi good afternoon" etc.
+                // V59 NUKE: Use UI-configured greetings ONLY (no hardcoded fallbacks)
                 // Check for time-of-day keywords ANYWHERE in the greeting, not just at start
                 if (/\b(good\s*morning|morning)\b/i.test(userTextLower)) {
-                    greetingResponse = legacyResponses.morning || "Good morning! How can I help you today?";
+                    greetingResponse = legacyResponses.morning || getMissingConfigPrompt('greeting_morning', 'greeting');
                     matchedTrigger = 'morning (legacy)';
                 } else if (/\b(good\s*afternoon|afternoon)\b/i.test(userTextLower)) {
-                    greetingResponse = legacyResponses.afternoon || "Good afternoon! How can I help you today?";
+                    greetingResponse = legacyResponses.afternoon || getMissingConfigPrompt('greeting_afternoon', 'greeting');
                     matchedTrigger = 'afternoon (legacy)';
                 } else if (/\b(good\s*evening|evening)\b/i.test(userTextLower)) {
-                    greetingResponse = legacyResponses.evening || "Good evening! How can I help you today?";
+                    greetingResponse = legacyResponses.evening || getMissingConfigPrompt('greeting_evening', 'greeting');
                     matchedTrigger = 'evening (legacy)';
                 } else {
                     // Generic greeting (hi, hello, hey) - MIRROR the caller's greeting style
-                    // Don't use time-of-day, just say "Hello!" or similar
                     if (/^(hi|hello|hey)\b/i.test(userTextLower)) {
-                        greetingResponse = legacyResponses.generic || "Hello! How can I help you today?";
+                        greetingResponse = legacyResponses.generic || getMissingConfigPrompt('greeting_generic', 'greeting');
                         matchedTrigger = 'generic-hello (legacy)';
                     } else {
                         // Truly generic - use time-appropriate
                         if (hour < 12) {
-                            greetingResponse = legacyResponses.morning || "Good morning! How can I help you today?";
+                            greetingResponse = legacyResponses.morning || getMissingConfigPrompt('greeting_morning', 'greeting');
                         } else if (hour < 17) {
-                            greetingResponse = legacyResponses.afternoon || "Good afternoon! How can I help you today?";
+                            greetingResponse = legacyResponses.afternoon || getMissingConfigPrompt('greeting_afternoon', 'greeting');
                         } else {
-                            greetingResponse = legacyResponses.evening || "Good evening! How can I help you today?";
+                            greetingResponse = legacyResponses.evening || getMissingConfigPrompt('greeting_evening', 'greeting');
                         }
                         matchedTrigger = 'time-based (legacy)';
                     }
@@ -2947,7 +3001,8 @@ async function processTurn({
                 const lp = company.aiAgentSettings?.frontDeskBehavior?.loopPrevention || {};
                 const lpEnabled = lp.enabled !== false;
                 const maxSame = typeof lp.maxSameQuestion === 'number' ? lp.maxSameQuestion : 2;
-                const rephraseIntro = (lp.rephraseIntro || 'Let me try this differently - ').toString();
+                // V59 NUKE: UI-configured rephrase intro ONLY
+                const rephraseIntro = (lp.rephraseIntro || getMissingConfigPrompt('rephrase_intro', 'loopPrevention')).toString();
                 if (lpEnabled && askedCount >= maxSame) {
                     exactQuestion = `${rephraseIntro}${exactQuestion}`.replace(/\s{2,}/g, ' ').trim();
                     log('🔁 LOOP PREVENTION: Rephrasing intro applied (booking snap)', { slotId, askedCount, maxSame });
@@ -3070,7 +3125,8 @@ async function processTurn({
                 });
                 
                 aiResult = {
-                    reply: llmResult.reply || "Is there anything else I can help you with today?",
+                    // V59 NUKE: LLM response should always have reply, but keep minimal fallback
+                    reply: llmResult.reply || getMissingConfigPrompt('fallback_generic', 'response'),
                     conversationMode: 'complete',
                     intent: 'post_booking_qa',
                     nextGoal: 'END_CALL',
@@ -3195,7 +3251,8 @@ async function processTurn({
                             });
                             const slotId = firstMissing ? (firstMissing.slotId || firstMissing.id || firstMissing.type) : null;
                             const question = firstMissing ? getSlotPromptVariant(firstMissing, slotId, 0) : null;
-                            const intro = uowConfirm.nextUnitIntro || "Okay — let’s get the details for the next one.";
+                            // V59 NUKE: UI-configured unit of work intro ONLY
+                            const intro = uowConfirm.nextUnitIntro || getMissingConfigPrompt('next_unit_intro', 'unitOfWork');
                             const reply = question ? `${intro} ${question}` : intro;
 
                             aiResult = {
@@ -3226,9 +3283,10 @@ async function processTurn({
 
                         const unitCount = session.unitOfWork.units?.length || 1;
                         const lastUnit = (session.unitOfWork.units || [])[unitCount - 1] || {};
+                        // V59 NUKE: UI-configured final scripts ONLY
                         const finalScript = unitCount > 1
-                            ? (uowConfirm.finalScriptMulti || lastUnit.finalScript || "Perfect — I’ve got everything.")
-                            : (lastUnit.finalScript || "Perfect — you’re all set.");
+                            ? (uowConfirm.finalScriptMulti || lastUnit.finalScript || getMissingConfigPrompt('final_script', 'unitOfWork'))
+                            : (lastUnit.finalScript || getMissingConfigPrompt('final_script', 'unitOfWork'));
 
                         session.mode = 'COMPLETE';
                         session.booking.completedAt = new Date();
@@ -3256,7 +3314,8 @@ async function processTurn({
                         break BOOKING_MODE;
                     } else {
                         // Ambiguous, ask clarify prompt
-                        const clarify = uowConfirm.clarifyPrompt || "Just to confirm — do you have another location or job to add today?";
+                        // V59 NUKE: UI-configured clarify prompt ONLY
+                        const clarify = uowConfirm.clarifyPrompt || getMissingConfigPrompt('clarify_prompt', 'unitOfWork');
                         aiResult = {
                             reply: clarify,
                             conversationMode: 'booking',
@@ -3324,7 +3383,8 @@ async function processTurn({
                     const isCollected = currentSlots[slotId] || currentSlots[slot.type];
                     return slot.required && !isCollected;
                 });
-                const nextSlotQuestion = nextMissingSlotInt?.question || 'What else can I help you with?';
+                // V59 NUKE: Slot question must come from UI config
+                const nextSlotQuestion = nextMissingSlotInt?.question || getMissingConfigPrompt('slot_question', nextMissingSlotInt?.id || 'unknown');
                 
                 // ═══════════════════════════════════════════════════════════════════
                 // PHASE 1: CHEAT SHEET FOR BOOKING INTERRUPTS
@@ -3778,7 +3838,8 @@ async function processTurn({
                                 nameMeta.spellingAsksCount = (nameMeta.spellingAsksCount || 0) + 1;
                                 nameMeta.pendingSpellingVariant = variantV45;
                                 
-                                const scriptV45 = spellingConfigV45.script || 'Just to confirm — {optionA} with a {letterA} or {optionB} with a {letterB}?';
+                                // V59 NUKE: UI-configured spelling variant script ONLY
+                                const scriptV45 = spellingConfigV45.script || 'Is that {optionA} with a {letterA} or {optionB} with a {letterB}?';
                                 finalReply = scriptV45
                                     .replace('{optionA}', variantV45.optionA)
                                     .replace('{optionB}', variantV45.optionB)
@@ -3828,8 +3889,8 @@ async function processTurn({
                     const nameToUse = currentSlots.partialName || nameMeta.first || currentSlots.name;
                     
                     if (nameToUse && !nameToUse.includes(' ')) {
-                        // V47: Use UI-configured last name question - NOT hardcoded
-                        const lastNameQuestion = nameSlotConfig?.lastNameQuestion || "And what's your last name?";
+                        // V59 NUKE: Use UI-configured last name question ONLY
+                        const lastNameQuestion = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
                         const lastNameQuestionFormatted = lastNameQuestion.replace('{firstName}', nameToUse);
                         
                         // V36 PROMPT AS LAW: Use UI template if it asks for last name, otherwise use configured lastNameQuestion
@@ -3883,8 +3944,9 @@ async function processTurn({
                     const firstName = nameMeta.first || currentSlots.partialName || '';
                     
                     // V47: Use UI-configured questions - NOT hardcoded
-                    const lastNameQ = nameSlotConfig?.lastNameQuestion || "And what's your last name?";
-                    const firstNameQ = nameSlotConfig?.firstNameQuestion || "And what's your first name?";
+                    // V59 NUKE: UI-configured questions ONLY
+                    const lastNameQ = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
+                    const firstNameQ = nameSlotConfig?.firstNameQuestion || getMissingConfigPrompt('firstNameQuestion', 'name');
                     
                     if (nameMeta.assumedSingleTokenAs === 'last') {
                         // We have last name, need first
@@ -3936,7 +3998,8 @@ async function processTurn({
                     const nameSlotConfig = bookingSlotsSafe.find(s => 
                         (s.slotId || s.id || s.type) === 'name'
                     );
-                    finalReply = "I apologize for the confusion. " + (nameSlotConfig?.question || "May I have your name please?");
+                    // V59 NUKE: UI-configured question ONLY
+                    finalReply = "I apologize for the confusion. " + (nameSlotConfig?.question || getMissingConfigPrompt('slot_question', 'name'));
                     nextSlotId = 'name';
                 }
                 // Check if name slot is already complete
@@ -3987,7 +4050,8 @@ async function processTurn({
                         nameMeta.spellingAsksCount = (nameMeta.spellingAsksCount || 0) + 1;
                         nameMeta.pendingSpellingVariant = variantV44;
                         
-                        const scriptV44 = spellingConfigV44.script || 'Just to confirm — {optionA} with a {letterA} or {optionB} with a {letterB}?';
+                        // V59 NUKE: UI-configured spelling variant script ONLY
+                        const scriptV44 = spellingConfigV44.script || 'Is that {optionA} with a {letterA} or {optionB} with a {letterB}?';
                         finalReply = scriptV44
                             .replace('{optionA}', variantV44.optionA)
                             .replace('{optionB}', variantV44.optionB)
@@ -4337,7 +4401,8 @@ async function processTurn({
                                 nameMeta.spellingAsksCount = spellingAsksThisCall + 1;
                                 nameMeta.pendingSpellingVariant = variant;
                                 
-                                const script = spellingConfig.script || 'Just to confirm — {optionA} with a {letterA} or {optionB} with a {letterB}?';
+                                // V59 NUKE: UI-configured spelling variant script ONLY
+                                const script = spellingConfig.script || 'Is that {optionA} with a {letterA} or {optionB} with a {letterB}?';
                                 finalReply = script
                                     .replace('{optionA}', variant.optionA)
                                     .replace('{optionB}', variant.optionB)
@@ -4449,8 +4514,9 @@ async function processTurn({
                             nameMeta.askedMissingPartOnce = true;
                             
                             const firstName = nameMeta.first || currentSlots.partialName || '';
-                            const lastNameQMissing = nameSlotConfig?.lastNameQuestion || "And what's your last name?";
-                            const firstNameQMissing = nameSlotConfig?.firstNameQuestion || "And what's your first name?";
+                            // V59 NUKE: UI-configured questions ONLY
+                            const lastNameQMissing = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
+                            const firstNameQMissing = nameSlotConfig?.firstNameQuestion || getMissingConfigPrompt('firstNameQuestion', 'name');
                             
                             if (nameMeta.assumedSingleTokenAs === 'last') {
                                 finalReply = firstName 
@@ -4612,7 +4678,8 @@ async function processTurn({
                         } else {
                             currentSlots.phone = null;
                             phoneMeta.pendingConfirm = false;
-                            finalReply = "I apologize. " + (phoneSlotConfig?.question || "What's the best phone number to reach you?");
+                            // V59 NUKE: UI-configured question ONLY
+                            finalReply = "I apologize. " + (phoneSlotConfig?.question || getMissingConfigPrompt('phone_question', 'phone'));
                             nextSlotId = 'phone';
                             log('📞 PHONE: User denied confirmation, re-asking');
                         }
@@ -4628,7 +4695,8 @@ async function processTurn({
                     phoneMeta.areaCode = extractedThisTurn.phone;
                     phoneMeta.breakdownStep = 'rest';
                     // V54: Use UI-configured prompt (no hardcodes!)
-                    finalReply = phoneSlotConfig?.restOfNumberPrompt || "Got it. And the rest of the number?";
+                    // V59 NUKE: UI-configured phone breakdown prompt ONLY
+                    finalReply = phoneSlotConfig?.restOfNumberPrompt || getMissingConfigPrompt('restOfNumberPrompt', 'phone');
                     nextSlotId = 'phone';
                     log('📞 PHONE: Got area code, asking for rest');
                 }
@@ -4668,7 +4736,8 @@ async function processTurn({
                     log('📞 PHONE: User accepted caller ID', { phone: callerId });
                 }
                 else if (phoneMeta.offeredCallerId && !currentSlots.phone && userSaysNoGeneric) {
-                    finalReply = "No problem. " + (phoneSlotConfig?.question || "What's the best phone number to reach you?");
+                    // V59 NUKE: UI-configured question ONLY
+                    finalReply = "No problem. " + (phoneSlotConfig?.question || getMissingConfigPrompt('phone_question', 'phone'));
                     nextSlotId = 'phone';
                     log('📞 PHONE: User declined caller ID, asking for number');
                 }
@@ -4722,7 +4791,8 @@ async function processTurn({
                         // V35 FIX: Set finalReply to ask for time (prevents fall-through to breakdown)
                         const timeSlotConfigForPrompt = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'time');
                         if (timeSlotConfigForPrompt?.required !== false) {
-                            finalReply = "Perfect. " + (timeSlotConfigForPrompt?.question || "When works best for you?");
+                            // V59 NUKE: UI-configured time slot question ONLY
+                            finalReply = "Perfect. " + (timeSlotConfigForPrompt?.question || getMissingConfigPrompt('slot_question', 'time'));
                             nextSlotId = 'time';
                         } else {
                             // Time is optional - finalize booking
@@ -4787,7 +4857,8 @@ async function processTurn({
                     addressMeta.street = userText.trim();
                     addressMeta.breakdownStep = 'city';
                     // V54: Use UI-configured prompt (no hardcodes!)
-                    finalReply = addressSlotConfig?.cityPrompt || "And what city?";
+                    // V59 NUKE: UI-configured city prompt ONLY
+                    finalReply = addressSlotConfig?.cityPrompt || getMissingConfigPrompt('cityPrompt', 'address');
                     nextSlotId = 'address';
                     log('🏠 ADDRESS: Got street, asking for city');
                 }
@@ -4797,7 +4868,8 @@ async function processTurn({
                     if (addressSlotConfig?.addressConfirmLevel === 'full') {
                         addressMeta.breakdownStep = 'zip';
                         // V54: Use UI-configured prompt (no hardcodes!)
-                        finalReply = addressSlotConfig?.zipPrompt || "And the zip code?";
+                        // V59 NUKE: UI-configured zip prompt ONLY
+                        finalReply = addressSlotConfig?.zipPrompt || getMissingConfigPrompt('zipPrompt', 'address');
                         nextSlotId = 'address';
                         log('🏠 ADDRESS: Got city, asking for zip');
                     } else {
@@ -4950,7 +5022,8 @@ async function processTurn({
                     
                     if (isPartialAddress && !addressSlotConfig?.acceptPartialAddress) {
                         // V54: Use UI-configured prompt (no hardcodes!)
-                        finalReply = addressSlotConfig?.partialAddressPrompt || "I got part of that. Can you give me the full address including city?";
+                        // V59 NUKE: UI-configured partial address prompt ONLY
+                        finalReply = addressSlotConfig?.partialAddressPrompt || getMissingConfigPrompt('partialAddressPrompt', 'address');
                         nextSlotId = 'address';
                         log('🏠 ADDRESS: Partial address not accepted, asking for full');
                     } 
@@ -4967,7 +5040,8 @@ async function processTurn({
                         ];
                         const unitPrompt = promptVariants.length > 0 
                             ? promptVariants[Math.floor(Math.random() * promptVariants.length)]
-                            : (addressSlotConfig?.unitNumberPrompt || 'Is there an apartment or unit number?');
+                            // V59 NUKE: UI-configured unit number prompt ONLY
+                            : (addressSlotConfig?.unitNumberPrompt || getMissingConfigPrompt('unitNumberPrompt', 'address'));
                         
                         const displayAddress = googleMapsResult?.components?.street && googleMapsResult?.components?.city
                             ? `${googleMapsResult.components.street} in ${googleMapsResult.components.city}`
@@ -5061,7 +5135,8 @@ async function processTurn({
                     } else if (userSaysNoGeneric) {
                         currentSlots.time = null;
                         timeMeta.pendingConfirm = false;
-                        finalReply = "No problem. " + (timeSlotConfig?.question || "When works best for you?");
+                        // V59 NUKE: UI-configured time question ONLY
+                        finalReply = "No problem. " + (timeSlotConfig?.question || getMissingConfigPrompt('slot_question', 'time'));
                         nextSlotId = 'time';
                         log('⏰ TIME: User denied confirmation, re-asking');
                     } else if (extractedThisTurn.time) {
@@ -5123,7 +5198,8 @@ async function processTurn({
                 }
                 else if (extractedThisTurn.time && !timeMeta.confirmed) {
                     const timeConfirmBack = timeSlotConfig?.confirmBack === true || timeSlotConfig?.confirmBack === 'true';
-                    const timeConfirmPrompt = timeSlotConfig?.confirmPrompt || "Just to confirm, {value} works for you?";
+                    // V59 NUKE: UI-configured confirm prompt ONLY
+                    const timeConfirmPrompt = timeSlotConfig?.confirmPrompt || getMissingConfigPrompt('confirmPrompt', 'time');
                     
                     if (timeConfirmBack) {
                         timeMeta.pendingConfirm = true;
@@ -5430,7 +5506,8 @@ async function processTurn({
                         const maxAttemptsPerSlot = lpEnabled
                             ? (typeof lp.maxSameQuestion === 'number' ? lp.maxSameQuestion : 2)
                             : 999; // effectively disabled
-                        const rephraseIntro = (lp.rephraseIntro || 'Let me try this differently - ').toString();
+                        // V59 NUKE: UI-configured rephrase intro ONLY
+                        const rephraseIntro = (lp.rephraseIntro || getMissingConfigPrompt('rephrase_intro', 'loopPrevention')).toString();
                         const escalationCfg = company.aiAgentSettings?.frontDeskBehavior?.escalation || {};
                         const escalationScript =
                             lp.onLoop ||
@@ -5634,7 +5711,8 @@ async function processTurn({
                             session.markModified('mode');
                             session.markModified('unitOfWork');
 
-                            const askAnother = uowConfirm.askAddAnotherPrompt || "Is this for just this location, or do you have another location to add today?";
+                            // V59 NUKE: UI-configured ask another prompt ONLY
+                            const askAnother = uowConfirm.askAddAnotherPrompt || getMissingConfigPrompt('askAddAnotherPrompt', 'unitOfWork');
 
                             aiResult = {
                                 reply: askAnother,

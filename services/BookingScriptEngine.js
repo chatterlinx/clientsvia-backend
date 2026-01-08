@@ -19,55 +19,8 @@
 const logger = require('../utils/logger');
 const BookingContractCompiler = require('./BookingContractCompiler');
 
-/**
- * DEFAULT_BOOKING_SLOTS - Applied to NEW companies via Mongoose schema
- * These are NOT hardcoded fallbacks - they're seeded on company creation
- * If a company has no slots, it means they haven't configured yet
- */
-const DEFAULT_BOOKING_SLOTS = [
-    { 
-        slotId: 'name', 
-        label: 'Full Name', 
-        question: 'May I have your full name?', 
-        required: true, 
-        order: 0, 
-        type: 'text',
-        confirmBack: false,
-        askFullName: true,
-        useFirstNameOnly: true
-    },
-    { 
-        slotId: 'phone', 
-        label: 'Phone Number', 
-        question: 'What is the best phone number to reach you?', 
-        required: true, 
-        order: 1, 
-        type: 'phone',
-        confirmBack: true,
-        confirmPrompt: "Just to confirm, that's {value}, correct?",
-        offerCallerId: true,
-        callerIdPrompt: "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?"
-    },
-    { 
-        slotId: 'address', 
-        label: 'Service Address', 
-        question: 'What is the service address?', 
-        required: true, 
-        order: 2, 
-        type: 'address',
-        confirmBack: false,
-        addressConfirmLevel: 'street_city'
-    },
-    { 
-        slotId: 'time', 
-        label: 'Preferred Time', 
-        question: 'When works best for you?', 
-        required: false, 
-        order: 3, 
-        type: 'time',
-        confirmBack: false
-    }
-];
+// V59: Import centralized preset - NO duplicate hardcoded defaults
+const { DEFAULT_BOOKING_SLOTS } = require('../config/onboarding/DefaultFrontDeskPreset');
 
 /**
  * Normalize slot ID - handles 'slotId', 'id', and 'key' field names
