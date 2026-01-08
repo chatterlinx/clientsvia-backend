@@ -22,70 +22,187 @@ const logger = require('../../utils/logger');
 const VERIFICATION_RULES = {
     
     // ═══════════════════════════════════════════════════════════════════
-    // PERSONALITY TAB
+    // PERSONALITY TAB - V57 Deep Structural Integrity Checks
     // ═══════════════════════════════════════════════════════════════════
     personality: {
         name: 'Personality',
         icon: '🎭',
         checks: [
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 1: PROMPT_HYDRATION - Is personality wired to LLM?
+            // ─────────────────────────────────────────────────────────────
             {
-                id: 'CONVERSATION_STYLE_SET',
-                description: 'Conversation style is selected',
+                id: 'PROMPT_HYDRATION',
+                description: 'Personality profile exists and is hydrated for LLM',
                 severity: 'error',
-                weight: 30,
+                weight: 25,
                 check: (config) => {
-                    const style = config?.frontDeskBehavior?.conversationStyle;
+                    const personality = config?.frontDeskBehavior?.personality;
+                    const promptTemplate = personality?.promptTemplate;
+                    const agentName = personality?.agentName;
+                    const tone = personality?.tone || config?.frontDeskBehavior?.conversationStyle;
+                    
+                    // Personality must have at least tone OR agentName OR promptTemplate
+                    const hasMinimalPersonality = !!tone || !!agentName || !!promptTemplate;
+                    
+                    // For "world class" - need more substance
+                    const hasRichPersonality = promptTemplate && promptTemplate.length > 50;
+                    
                     return {
-                        passed: !!style && ['confident', 'balanced', 'polite'].includes(style),
-                        value: style || 'NOT_SET',
-                        fix: 'Select a conversation style (Confident, Balanced, or Polite)'
+                        passed: hasMinimalPersonality,
+                        value: hasRichPersonality ? 'Rich profile' : (hasMinimalPersonality ? 'Minimal profile' : 'NOT_WIRED'),
+                        details: { 
+                            hasTone: !!tone, 
+                            hasAgentName: !!agentName, 
+                            hasPromptTemplate: !!promptTemplate,
+                            promptLength: promptTemplate?.length || 0
+                        },
+                        fix: hasMinimalPersonality ? null : 'Configure personality profile (tone, agent name, or prompt template)'
                     };
                 }
             },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 2: KNOWLEDGE_BASE_SYNC - Trade knowledge wired?
+            // ─────────────────────────────────────────────────────────────
             {
-                id: 'STYLE_ACKNOWLEDGMENTS_SET',
-                description: 'Style acknowledgments configured',
-                severity: 'warning',
+                id: 'KNOWLEDGE_BASE_SYNC',
+                description: 'Trade knowledge is linked (not hardcoded)',
+                severity: 'error',
+                weight: 20,
+                check: (config, tradeKey) => {
+                    // Check if trade key exists
+                    const hasTradeKey = !!tradeKey && tradeKey !== 'universal';
+                    
+                    // Check if templates are linked (templates provide trade knowledge)
+                    const templateRefs = config?.templateReferences || [];
+                    const hasLinkedTemplates = templateRefs.some(t => t.enabled !== false);
+                    
+                    // Trade knowledge should come from templates, not hardcoded
+                    const isWiredCorrectly = hasTradeKey && hasLinkedTemplates;
+                    
+                    return {
+                        passed: isWiredCorrectly,
+                        value: isWiredCorrectly ? `${tradeKey} via templates` : (hasTradeKey ? 'Trade set but no templates' : 'NO_TRADE_KEY'),
+                        details: {
+                            tradeKey,
+                            linkedTemplates: templateRefs.filter(t => t.enabled !== false).length
+                        },
+                        fix: !hasTradeKey ? 'Set trade key in Data & Config → Onboarding' :
+                             !hasLinkedTemplates ? 'Link a trade template in Data & Config → Template References' : null
+                    };
+                }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 3: LLM_TONE_BINDING - Tone controls LLM temperature
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'LLM_TONE_BINDING',
+                description: 'Conversation style is set and bound to LLM behavior',
+                severity: 'error',
                 weight: 20,
                 check: (config) => {
+                    const style = config?.frontDeskBehavior?.conversationStyle;
+                    const validStyles = ['confident', 'balanced', 'polite'];
+                    const isValid = !!style && validStyles.includes(style);
+                    
+                    // Check if style acknowledgments exist for the selected style
                     const acks = config?.frontDeskBehavior?.styleAcknowledgments;
-                    const hasAcks = acks && (
-                        (acks.confident?.length > 0) ||
-                        (acks.balanced?.length > 0) ||
-                        (acks.polite?.length > 0)
-                    );
+                    const hasAcksForStyle = style && acks?.[style]?.length > 0;
+                    
                     return {
-                        passed: hasAcks,
-                        value: hasAcks ? 'Configured' : 'Using defaults',
-                        fix: 'Add custom acknowledgment phrases for selected style'
+                        passed: isValid,
+                        value: isValid ? `${style}${hasAcksForStyle ? ' (with acks)' : ''}` : 'NOT_SET',
+                        details: {
+                            style,
+                            hasAcknowledgments: hasAcksForStyle,
+                            // These would map to LLM temperature in runtime
+                            expectedTemp: style === 'confident' ? 0.3 : style === 'balanced' ? 0.5 : 0.7
+                        },
+                        fix: isValid ? null : 'Select a conversation style (Confident, Balanced, or Polite)'
                     };
                 }
             },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 4: FALLBACK_PERSONALITY - Recovery mode for failures
+            // ─────────────────────────────────────────────────────────────
             {
-                id: 'PERSONALITY_WARMTH_SET',
-                description: 'Personality warmth level configured',
+                id: 'FALLBACK_PERSONALITY',
+                description: 'Fallback/recovery personality for engine failures',
                 severity: 'warning',
-                weight: 25,
+                weight: 15,
                 check: (config) => {
-                    const warmth = config?.frontDeskBehavior?.personality?.warmth;
+                    const fallbacks = config?.frontDeskBehavior?.fallbackResponses;
+                    const hasGeneric = fallbacks?.generic && fallbacks.generic.trim().length > 0;
+                    const hasLowConf = fallbacks?.lowConfidence && fallbacks.lowConfidence.trim().length > 0;
+                    
+                    // For "recovery mode" - should have specific error handling responses
+                    const hasRecoveryMode = hasGeneric && hasLowConf;
+                    
                     return {
-                        passed: warmth !== undefined && warmth !== null,
-                        value: warmth ?? 'NOT_SET',
-                        fix: 'Set personality warmth level (0-100)'
+                        passed: hasGeneric,
+                        value: hasRecoveryMode ? 'Full recovery mode' : (hasGeneric ? 'Basic fallback only' : 'NO_FALLBACK'),
+                        details: {
+                            hasGenericFallback: hasGeneric,
+                            hasLowConfidenceFallback: hasLowConf
+                        },
+                        fix: hasGeneric ? null : 'Configure generic fallback response for when AI doesn\'t understand'
                     };
                 }
             },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 5: AGENT_IDENTITY - Agent has a name and identity
+            // ─────────────────────────────────────────────────────────────
             {
-                id: 'SPEAKING_PACE_SET',
-                description: 'Speaking pace configured',
+                id: 'AGENT_IDENTITY',
+                description: 'AI agent has a name/identity configured',
                 severity: 'warning',
-                weight: 25,
+                weight: 10,
                 check: (config) => {
-                    const pace = config?.frontDeskBehavior?.personality?.speakingPace;
+                    const agentName = config?.frontDeskBehavior?.personality?.agentName || 
+                                      config?.aiName;
+                    const hasName = !!agentName && agentName.trim().length > 0;
+                    
                     return {
-                        passed: pace !== undefined && pace !== null,
-                        value: pace ?? 'NOT_SET',
-                        fix: 'Set speaking pace (slow, normal, fast)'
+                        passed: hasName,
+                        value: hasName ? agentName : 'Anonymous',
+                        fix: hasName ? null : 'Give your AI agent a name (e.g., Sarah, Alex)'
+                    };
+                }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 6: STYLE_DEPTH - Rich style configuration (world class)
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'STYLE_DEPTH',
+                description: 'Style has depth (acknowledgments, warmth, pace)',
+                severity: 'warning',
+                weight: 10,
+                check: (config) => {
+                    const p = config?.frontDeskBehavior?.personality || {};
+                    const style = config?.frontDeskBehavior?.conversationStyle;
+                    const acks = config?.frontDeskBehavior?.styleAcknowledgments;
+                    
+                    let depth = 0;
+                    if (style) depth++;
+                    if (p.warmth !== undefined) depth++;
+                    if (p.speakingPace) depth++;
+                    if (acks?.[style]?.length > 0) depth++;
+                    if (p.agentName) depth++;
+                    
+                    const maxDepth = 5;
+                    const percent = Math.round((depth / maxDepth) * 100);
+                    
+                    return {
+                        passed: depth >= 3, // At least 3 of 5 for "good"
+                        value: `${depth}/${maxDepth} attributes (${percent}%)`,
+                        details: {
+                            hasStyle: !!style,
+                            hasWarmth: p.warmth !== undefined,
+                            hasPace: !!p.speakingPace,
+                            hasAcks: acks?.[style]?.length > 0,
+                            hasName: !!p.agentName
+                        },
+                        fix: depth < 3 ? 'Add more personality depth: warmth, pace, acknowledgments' : null
                     };
                 }
             }
@@ -229,72 +346,159 @@ const VERIFICATION_RULES = {
     },
 
     // ═══════════════════════════════════════════════════════════════════
-    // GREETING TAB
+    // GREETING TAB - V57 Deep Structural Integrity (Instructions for what to do first)
     // ═══════════════════════════════════════════════════════════════════
     greeting: {
         name: 'Greeting',
         icon: '👋',
         checks: [
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 1: GREETING_HYDRATION - Greeting exists and has content
+            // ─────────────────────────────────────────────────────────────
             {
-                id: 'GREETING_RULES_EXIST',
-                description: 'At least one greeting rule configured',
+                id: 'GREETING_HYDRATION',
+                description: 'Greeting response is configured with content',
                 severity: 'error',
-                weight: 50,
+                weight: 35,
+                check: (config) => {
+                    // Check multiple possible greeting locations
+                    const rules = config?.frontDeskBehavior?.conversationStages?.greeting?.rules ||
+                                  config?.frontDeskBehavior?.greetingRules ||
+                                  [];
+                    
+                    // Also check connectionMessages (often used for greeting)
+                    const connectionMsg = config?.connectionMessages?.voice?.text;
+                    
+                    const hasGreetingRules = Array.isArray(rules) && rules.length > 0;
+                    const hasConnectionGreeting = connectionMsg && connectionMsg.trim().length > 10;
+                    
+                    // At least one source of greeting must exist
+                    const hasAnyGreeting = hasGreetingRules || hasConnectionGreeting;
+                    
+                    // Check if greeting has substance (not just "Hi")
+                    let greetingQuality = 'none';
+                    if (hasGreetingRules) {
+                        const firstRule = rules[0];
+                        const responseLength = (firstRule?.response || firstRule?.text || '').length;
+                        greetingQuality = responseLength > 50 ? 'rich' : responseLength > 10 ? 'basic' : 'minimal';
+                    } else if (hasConnectionGreeting) {
+                        greetingQuality = connectionMsg.length > 50 ? 'rich' : 'basic';
+                    }
+                    
+                    return {
+                        passed: hasAnyGreeting,
+                        value: hasAnyGreeting ? `${greetingQuality} (${rules.length} rules)` : 'NO_GREETING',
+                        details: {
+                            hasGreetingRules,
+                            ruleCount: rules.length,
+                            hasConnectionGreeting,
+                            quality: greetingQuality
+                        },
+                        fix: hasAnyGreeting ? null : 'Add a greeting response - this is what the agent says first!'
+                    };
+                }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 2: DEFAULT_GREETING_BINDING - Always-apply greeting exists
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'DEFAULT_GREETING_BINDING',
+                description: 'Default greeting exists (always applies)',
+                severity: 'error',
+                weight: 25,
                 check: (config) => {
                     const rules = config?.frontDeskBehavior?.conversationStages?.greeting?.rules ||
                                   config?.frontDeskBehavior?.greetingRules ||
                                   [];
-                    const hasRules = Array.isArray(rules) && rules.length > 0;
+                    
+                    // Find a rule that applies by default (no condition or isDefault)
+                    const defaultRule = rules.find(r => 
+                        r.isDefault === true || 
+                        r.condition === 'always' || 
+                        !r.condition ||
+                        r.condition === ''
+                    );
+                    
+                    // Also acceptable if there's only one rule (it's implicitly default)
+                    const hasImplicitDefault = rules.length === 1;
+                    
+                    const hasDefault = !!defaultRule || hasImplicitDefault;
+                    
                     return {
-                        passed: hasRules,
-                        value: hasRules ? `${rules.length} rules` : 'NO_RULES',
-                        fix: 'Add at least one greeting rule'
+                        passed: hasDefault,
+                        value: hasDefault ? (defaultRule ? 'Explicit default' : 'Implicit (single rule)') : 'NO_DEFAULT',
+                        fix: hasDefault ? null : 'Add a default greeting rule that always applies'
                     };
                 }
             },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 3: GREETING_FLOW_CONTINUITY - Greeting leads somewhere
+            // ─────────────────────────────────────────────────────────────
             {
-                id: 'DEFAULT_GREETING_EXISTS',
-                description: 'Default/fallback greeting exists',
-                severity: 'error',
-                weight: 30,
+                id: 'GREETING_FLOW_CONTINUITY',
+                description: 'Greeting leads to next action (not dead-end)',
+                severity: 'warning',
+                weight: 20,
                 check: (config) => {
+                    // Check if greeting ends with a question or prompt
                     const rules = config?.frontDeskBehavior?.conversationStages?.greeting?.rules ||
                                   config?.frontDeskBehavior?.greetingRules ||
                                   [];
-                    const defaultRule = rules.find(r => r.isDefault || r.condition === 'always' || !r.condition);
+                    const connectionMsg = config?.connectionMessages?.voice?.text || '';
+                    
+                    // Look for question marks or call-to-action phrases
+                    const hasQuestionInRules = rules.some(r => {
+                        const text = r.response || r.text || '';
+                        return text.includes('?') || 
+                               text.toLowerCase().includes('how can') ||
+                               text.toLowerCase().includes('what can') ||
+                               text.toLowerCase().includes('help you');
+                    });
+                    
+                    const hasQuestionInConnection = connectionMsg.includes('?') ||
+                                                    connectionMsg.toLowerCase().includes('how can') ||
+                                                    connectionMsg.toLowerCase().includes('help');
+                    
+                    const hasContinuity = hasQuestionInRules || hasQuestionInConnection || rules.length === 0;
+                    
                     return {
-                        passed: !!defaultRule,
-                        value: defaultRule ? 'Found' : 'NOT_FOUND',
-                        fix: 'Add a default greeting rule that always applies'
+                        passed: hasContinuity,
+                        value: hasContinuity ? 'Prompts caller' : 'Dead-end greeting',
+                        fix: hasContinuity ? null : 'Greeting should end with "How can I help you?" or similar'
                     };
                 }
             },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 4: AFTER_HOURS_COVERAGE - Time-based greeting
+            // ─────────────────────────────────────────────────────────────
             {
-                id: 'AFTER_HOURS_GREETING',
-                description: 'After-hours greeting configured (if business hours set)',
+                id: 'AFTER_HOURS_COVERAGE',
+                description: 'After-hours greeting (if business hours set)',
                 severity: 'warning',
                 weight: 20,
                 check: (config, tradeKey, companyDoc) => {
-                    // Check if business hours are configured
                     const hasBusinessHours = companyDoc?.businessHours?.enabled ||
                                              companyDoc?.configuration?.businessHours?.enabled;
                     
                     if (!hasBusinessHours) {
-                        return { passed: true, value: 'N/A (no business hours set)', fix: null };
+                        return { passed: true, value: 'N/A (24/7 operation)', fix: null };
                     }
                     
                     const rules = config?.frontDeskBehavior?.conversationStages?.greeting?.rules ||
                                   config?.frontDeskBehavior?.greetingRules ||
                                   [];
+                    
                     const afterHoursRule = rules.find(r => 
-                        r.condition?.includes('after_hours') || 
-                        r.condition?.includes('afterHours') ||
-                        r.name?.toLowerCase().includes('after')
+                        r.condition?.toLowerCase().includes('after') || 
+                        r.condition?.toLowerCase().includes('closed') ||
+                        r.name?.toLowerCase().includes('after') ||
+                        r.name?.toLowerCase().includes('closed')
                     );
+                    
                     return {
                         passed: !!afterHoursRule,
-                        value: afterHoursRule ? 'Found' : 'NOT_FOUND',
-                        fix: 'Add an after-hours greeting (you have business hours configured)'
+                        value: afterHoursRule ? 'Configured' : 'MISSING',
+                        fix: afterHoursRule ? null : 'Add after-hours greeting (you have business hours set)'
                     };
                 }
             }
@@ -302,25 +506,61 @@ const VERIFICATION_RULES = {
     },
 
     // ═══════════════════════════════════════════════════════════════════
-    // DYNAMIC FLOWS TAB
+    // DYNAMIC FLOWS TAB - V57 "Instructions" - What the agent does
     // ═══════════════════════════════════════════════════════════════════
     dynamicFlows: {
         name: 'Dynamic Flows',
         icon: '🔀',
         checks: [
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 1: FLOWS_EXIST - Does the agent have instructions?
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'FLOWS_EXIST',
+                description: 'Dynamic flows are configured (agent has instructions)',
+                severity: 'error',
+                weight: 30,
+                check: async (config, tradeKey, companyDoc, companyId) => {
+                    try {
+                        const DynamicFlow = require('../../models/DynamicFlow');
+                        const allFlows = await DynamicFlow.find({ companyId });
+                        const enabledFlows = allFlows.filter(f => f.enabled);
+                        
+                        // Agent needs at least SOME flows to know what to do
+                        const hasFlows = allFlows.length > 0;
+                        const hasEnabledFlows = enabledFlows.length > 0;
+                        
+                        return {
+                            passed: hasFlows,
+                            value: hasFlows ? `${allFlows.length} total, ${enabledFlows.length} enabled` : 'NO_FLOWS',
+                            details: {
+                                totalFlows: allFlows.length,
+                                enabledFlows: enabledFlows.length,
+                                flowNames: enabledFlows.slice(0, 5).map(f => f.name)
+                            },
+                            fix: hasFlows ? null : 'Create dynamic flows to give the agent instructions'
+                        };
+                    } catch (err) {
+                        logger.error('[FrontDeskVerifier] Error checking flows exist:', err);
+                        return { passed: false, value: 'CHECK_ERROR', fix: 'Unable to check dynamic flows' };
+                    }
+                }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 2: ENABLED_FLOWS_VALID - Enabled flows are complete
+            // ─────────────────────────────────────────────────────────────
             {
                 id: 'ENABLED_FLOWS_VALID',
                 description: 'All enabled flows have complete actions',
                 severity: 'error',
-                weight: 100,
+                weight: 30,
                 check: async (config, tradeKey, companyDoc, companyId) => {
-                    // This check requires loading DynamicFlow collection
                     try {
                         const DynamicFlow = require('../../models/DynamicFlow');
                         const flows = await DynamicFlow.find({ companyId, enabled: true });
                         
                         if (flows.length === 0) {
-                            return { passed: true, value: 'No enabled flows', fix: null };
+                            return { passed: true, value: 'No enabled flows to validate', fix: null };
                         }
                         
                         const requiredActions = ['set_flag', 'append_ledger', 'ack_once', 'transition_mode'];
@@ -336,14 +576,89 @@ const VERIFICATION_RULES = {
                         
                         return {
                             passed: invalidFlows.length === 0,
-                            value: invalidFlows.length === 0 ? `${flows.length} flows valid` : `${invalidFlows.length} invalid`,
-                            details: invalidFlows,
+                            value: invalidFlows.length === 0 ? `${flows.length} flows valid` : `${invalidFlows.length}/${flows.length} invalid`,
+                            details: { invalidFlows },
                             fix: invalidFlows.length > 0 ? 
                                 `Fix flows: ${invalidFlows.map(f => f.name).join(', ')}` : null
                         };
                     } catch (err) {
-                        logger.error('[FrontDeskVerifier] Error checking dynamic flows:', err);
+                        logger.error('[FrontDeskVerifier] Error checking flow validity:', err);
                         return { passed: true, value: 'Check skipped (error)', fix: null };
+                    }
+                }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 3: BOOKING_FLOW_EXISTS - Has a booking/appointment flow
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'BOOKING_FLOW_EXISTS',
+                description: 'Booking/appointment flow is configured',
+                severity: 'warning',
+                weight: 20,
+                check: async (config, tradeKey, companyDoc, companyId) => {
+                    try {
+                        const DynamicFlow = require('../../models/DynamicFlow');
+                        const flows = await DynamicFlow.find({ companyId, enabled: true });
+                        
+                        // Look for booking-related flows
+                        const bookingFlow = flows.find(f => 
+                            f.name?.toLowerCase().includes('book') ||
+                            f.name?.toLowerCase().includes('appoint') ||
+                            f.name?.toLowerCase().includes('schedul') ||
+                            f.category?.toLowerCase().includes('book')
+                        );
+                        
+                        // Also check if booking is enabled in frontDeskBehavior
+                        const bookingEnabled = config?.frontDeskBehavior?.bookingEnabled;
+                        
+                        // If booking is enabled, we should have a booking flow
+                        if (bookingEnabled && !bookingFlow) {
+                            return {
+                                passed: false,
+                                value: 'Booking enabled but no flow',
+                                fix: 'Create a booking flow to handle appointment requests'
+                            };
+                        }
+                        
+                        return {
+                            passed: true,
+                            value: bookingFlow ? `Found: ${bookingFlow.name}` : 'N/A (booking disabled)',
+                            fix: null
+                        };
+                    } catch (err) {
+                        return { passed: true, value: 'Check skipped', fix: null };
+                    }
+                }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 4: ESCALATION_FLOW_EXISTS - Human handoff configured
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'ESCALATION_FLOW_EXISTS',
+                description: 'Escalation/handoff flow exists',
+                severity: 'warning',
+                weight: 20,
+                check: async (config, tradeKey, companyDoc, companyId) => {
+                    try {
+                        const DynamicFlow = require('../../models/DynamicFlow');
+                        const flows = await DynamicFlow.find({ companyId });
+                        
+                        // Look for escalation-related flows
+                        const escalationFlow = flows.find(f => 
+                            f.name?.toLowerCase().includes('escal') ||
+                            f.name?.toLowerCase().includes('handoff') ||
+                            f.name?.toLowerCase().includes('transfer') ||
+                            f.name?.toLowerCase().includes('human') ||
+                            f.name?.toLowerCase().includes('manager')
+                        );
+                        
+                        return {
+                            passed: !!escalationFlow,
+                            value: escalationFlow ? `Found: ${escalationFlow.name}` : 'NO_ESCALATION_PATH',
+                            fix: escalationFlow ? null : 'Create an escalation flow for "speak to manager" requests'
+                        };
+                    } catch (err) {
+                        return { passed: true, value: 'Check skipped', fix: null };
                     }
                 }
             }
