@@ -4093,6 +4093,18 @@ async function processTurn({
                 // Extract the actual name, not just the first word
             // ═══════════════════════════════════════════════════════════════════
                 else if ((session.booking.activeSlotType === 'name' || session.booking.activeSlot === 'name') && nameMeta.askedMissingPartOnce && !hasBothParts) {
+                    // 🍿 POPCORN TRAIL: V60 - Extracting MISSING NAME PART
+                    log('🍿 [POPCORN] MISSING_NAME_PART_EXTRACTION', {
+                        trigger: 'askedMissingPartOnce=true, hasBothParts=false',
+                        userText,
+                        existingFirst: nameMeta.first,
+                        existingLast: nameMeta.last,
+                        assumedSingleTokenAs: nameMeta.assumedSingleTokenAs,
+                        expectingPart: nameMeta.assumedSingleTokenAs === 'first' ? 'LAST_NAME' : 'FIRST_NAME',
+                        activeSlot: session.booking.activeSlot,
+                        activeSlotType: session.booking.activeSlotType
+                    });
+                    
                     // We asked for the missing part - extract name from various phrasings
                     let extractedNamePart = null;
                     
@@ -4168,6 +4180,16 @@ async function processTurn({
                     if (extractedNamePart && extractedNamePart.length >= 2) {
                         // Title case
                         const formattedName = extractedNamePart.charAt(0).toUpperCase() + extractedNamePart.slice(1).toLowerCase();
+                        
+                        // 🍿 POPCORN TRAIL: V60 - Storing the extracted name part
+                        log('🍿 [POPCORN] NAME_PART_EXTRACTED', {
+                            rawInput: userText,
+                            extractedNamePart,
+                            formattedName,
+                            willStoreAs: nameMeta.assumedSingleTokenAs === 'first' ? 'LAST_NAME' : 'FIRST_NAME',
+                            existingFirst: nameMeta.first,
+                            existingLast: nameMeta.last
+                        });
                         
                         if (nameMeta.assumedSingleTokenAs === 'first') {
                             // We had first name (e.g., "Mark"), now got last name
@@ -4285,7 +4307,8 @@ async function processTurn({
                     }
                 }
                 // Check if we're in the middle of name collection
-                else if ((session.booking.activeSlotType === 'name' || session.booking.activeSlot === 'name') && hasPartialName) {
+                // V60 FIX: EXCLUDE cases where we're waiting for the MISSING PART (handled by earlier block)
+                else if ((session.booking.activeSlotType === 'name' || session.booking.activeSlot === 'name') && hasPartialName && !nameMeta.askedMissingPartOnce) {
                     const extractedName = extractedThisTurn.name || currentSlots.partialName;
                     const hasSpace = extractedName && extractedName.includes(' ');
                     
@@ -4371,17 +4394,21 @@ async function processTurn({
                                                     spellingAsksThisCall < maxSpellingAsks &&
                                                     nameMeta.assumedSingleTokenAs === 'first';
                         
-                        // V44 DEBUG: Log spelling variant check decision
-                        log('📝 V44 SPELLING VARIANT CHECK', {
+                        // 🍿 POPCORN TRAIL: V60 - Spelling variant decision
+                        log('🍿 [POPCORN] SPELLING_VARIANT_CHECK', {
+                            name: extractedName,
                             shouldCheckSpelling,
-                            spellingEnabled,
-                            askedSpellingVariant: nameMeta.askedSpellingVariant,
-                            spellingAsksThisCall,
-                            maxSpellingAsks,
-                            assumedSingleTokenAs: nameMeta.assumedSingleTokenAs,
+                            WHY_NOT: !shouldCheckSpelling ? {
+                                spellingEnabled_is: spellingEnabled,
+                                alreadyAsked: nameMeta.askedSpellingVariant,
+                                maxAsksReached: spellingAsksThisCall >= maxSpellingAsks,
+                                notFirstName: nameMeta.assumedSingleTokenAs !== 'first',
+                                FIX: !spellingEnabled ? 'Enable "Confirm spelling variants" in Booking Slot editor' :
+                                     nameMeta.askedSpellingVariant ? 'Already asked this call' :
+                                     nameMeta.assumedSingleTokenAs !== 'first' ? 'Only checks first names' : 'Unknown'
+                            } : null,
                             hasPrecomputedMap: !!(spellingConfig.precomputedVariantMap),
-                            precomputedMapKeys: spellingConfig.precomputedVariantMap ? Object.keys(spellingConfig.precomputedVariantMap).slice(0, 10) : [],
-                            source: spellingConfig.source
+                            precomputedMapKeys: spellingConfig.precomputedVariantMap ? Object.keys(spellingConfig.precomputedVariantMap).slice(0, 10) : []
                         });
                         
                         if (shouldCheckSpelling) {
