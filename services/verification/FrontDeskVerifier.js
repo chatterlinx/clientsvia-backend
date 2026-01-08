@@ -210,6 +210,204 @@ const VERIFICATION_RULES = {
     },
 
     // ═══════════════════════════════════════════════════════════════════
+    // DISCOVERY & CONSENT TAB - V57 "Gatekeeper" of the call
+    // This tab decides if the agent has permission to book
+    // If broken, agent loops indefinitely before reaching booking slots
+    // ═══════════════════════════════════════════════════════════════════
+    discoveryConsent: {
+        name: 'Discovery & Consent',
+        icon: '🧠',
+        checks: [
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 1: CONSENT_WIRING - Is consent system properly configured?
+            // CRITICAL: If enabled but phrases null, call loops forever
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'CONSENT_WIRING',
+                description: 'Consent system is properly wired (not half-configured)',
+                severity: 'error',
+                weight: 30,
+                check: (config) => {
+                    const dc = config?.frontDeskBehavior?.discoveryConsent || {};
+                    const bookingRequiresConsent = dc.bookingRequiresExplicitConsent;
+                    const consentPhrases = dc.consentPhrases || [];
+                    
+                    // CRITICAL: If consent is required but no phrases defined = infinite loop
+                    if (bookingRequiresConsent === true && consentPhrases.length === 0) {
+                        return {
+                            passed: false,
+                            value: 'CONSENT_REQUIRED_BUT_NO_PHRASES',
+                            details: {
+                                bookingRequiresConsent: true,
+                                consentPhrasesCount: 0
+                            },
+                            fix: 'Either add consent phrases OR disable booking consent requirement'
+                        };
+                    }
+                    
+                    // Check if consent system is consistent
+                    const isConsistent = (bookingRequiresConsent && consentPhrases.length > 0) || 
+                                         (!bookingRequiresConsent);
+                    
+                    return {
+                        passed: isConsistent,
+                        value: isConsistent ? 
+                            (bookingRequiresConsent ? `Enabled (${consentPhrases.length} phrases)` : 'Disabled (no consent needed)') :
+                            'MISCONFIGURED',
+                        details: {
+                            bookingRequiresConsent,
+                            consentPhrasesCount: consentPhrases.length,
+                            samplePhrases: consentPhrases.slice(0, 3)
+                        },
+                        fix: isConsistent ? null : 'Configure consent phrases or disable consent requirement'
+                    };
+                }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 2: INTENT_MATCH_DEPTH - Are booking intents detectable?
+            // "I need an AC service" must trigger BOOKING mode 100% of time
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'INTENT_MATCH_DEPTH',
+                description: 'Booking intent triggers are configured',
+                severity: 'error',
+                weight: 25,
+                check: (config) => {
+                    const dc = config?.frontDeskBehavior?.discoveryConsent || {};
+                    const bookingIntentPhrases = dc.bookingIntentPhrases || [];
+                    
+                    // Also check for common booking scenarios in template
+                    const templateRefs = config?.templateReferences || [];
+                    const hasTemplates = templateRefs.length > 0;
+                    
+                    // Minimum intent phrases for reliable detection
+                    const hasEnoughPhrases = bookingIntentPhrases.length >= 5;
+                    
+                    // Check for critical phrases that MUST be detected
+                    const criticalPhrases = ['schedule', 'appointment', 'book', 'service', 'come out'];
+                    const lowercasePhrases = bookingIntentPhrases.map(p => p.toLowerCase());
+                    const missingCritical = criticalPhrases.filter(cp => 
+                        !lowercasePhrases.some(lp => lp.includes(cp))
+                    );
+                    
+                    const passed = hasEnoughPhrases || hasTemplates; // Templates can provide intent detection
+                    
+                    return {
+                        passed,
+                        value: passed ? 
+                            `${bookingIntentPhrases.length} phrases${hasTemplates ? ' + template scenarios' : ''}` :
+                            'INSUFFICIENT_INTENT_DETECTION',
+                        details: {
+                            customPhrasesCount: bookingIntentPhrases.length,
+                            hasTemplateScenarios: hasTemplates,
+                            missingCriticalPhrases: missingCritical.length > 0 ? missingCritical : null
+                        },
+                        fix: passed ? null : 'Add booking intent phrases (schedule, appointment, book, service, etc.)'
+                    };
+                }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 3: CONSENT_PERSISTENCE - Does consent survive session?
+            // Consent must be "locked" once given, not re-asked
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'CONSENT_PERSISTENCE',
+                description: 'Consent tracking is configured to persist',
+                severity: 'warning',
+                weight: 20,
+                check: (config) => {
+                    const dc = config?.frontDeskBehavior?.discoveryConsent || {};
+                    
+                    // Check if system is configured to remember consent
+                    const persistConsent = dc.persistConsent !== false; // Default true
+                    const lockAfterConsent = dc.lockModeAfterConsent !== false; // Default true
+                    
+                    const isPersistent = persistConsent && lockAfterConsent;
+                    
+                    return {
+                        passed: isPersistent,
+                        value: isPersistent ? 'Consent locks session' : 'Consent may be re-asked',
+                        details: {
+                            persistConsent,
+                            lockModeAfterConsent: lockAfterConsent
+                        },
+                        fix: isPersistent ? null : 'Enable consent persistence to prevent re-asking'
+                    };
+                }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 4: DISCOVERY_FACT_EXTRACTION - Are issues captured?
+            // "water leakage" must appear in callLedger/runningSummary
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'DISCOVERY_FACT_EXTRACTION',
+                description: 'Issue extraction is configured (facts → booking)',
+                severity: 'warning',
+                weight: 15,
+                check: (config) => {
+                    const dc = config?.frontDeskBehavior?.discoveryConsent || {};
+                    
+                    // Check if fact extraction is enabled
+                    const extractIssues = dc.extractIssuesDuringDiscovery !== false;
+                    const passToBooking = dc.passIssuesToBooking !== false;
+                    
+                    // Check if call ledger is enabled (where facts are stored)
+                    const ledgerEnabled = config?.frontDeskBehavior?.callLedger?.enabled !== false;
+                    
+                    const isWired = extractIssues && (passToBooking || ledgerEnabled);
+                    
+                    return {
+                        passed: isWired,
+                        value: isWired ? 'Issues extracted → booking' : 'Issues may be lost',
+                        details: {
+                            extractIssues,
+                            passToBooking,
+                            ledgerEnabled
+                        },
+                        fix: isWired ? null : 'Enable issue extraction during discovery'
+                    };
+                }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 5: KILL_SWITCH_SAFETY - Are kill switches in safe state?
+            // forceLLMDiscovery=true OR disableScenarioAutoResponses=true = broken
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'KILL_SWITCH_SAFETY',
+                description: 'Kill switches are OFF (scenarios can fire)',
+                severity: 'error',
+                weight: 10,
+                check: (config) => {
+                    const dc = config?.frontDeskBehavior?.discoveryConsent || {};
+                    
+                    // These should be FALSE for normal operation
+                    const forceLLM = dc.forceLLMDiscovery === true;
+                    const disableAuto = dc.disableScenarioAutoResponses === true;
+                    
+                    // Both OFF = safe
+                    const isSafe = !forceLLM && !disableAuto;
+                    
+                    let status = 'SAFE';
+                    if (forceLLM && disableAuto) status = 'BOTH_KILL_SWITCHES_ON';
+                    else if (forceLLM) status = 'FORCE_LLM_ON';
+                    else if (disableAuto) status = 'AUTO_RESPONSES_DISABLED';
+                    
+                    return {
+                        passed: isSafe,
+                        value: isSafe ? 'Scenarios enabled' : status,
+                        details: {
+                            forceLLMDiscovery: forceLLM,
+                            disableScenarioAutoResponses: disableAuto
+                        },
+                        fix: isSafe ? null : 
+                            `Turn OFF: ${forceLLM ? 'Force LLM Discovery' : ''}${forceLLM && disableAuto ? ' AND ' : ''}${disableAuto ? 'Disable Auto Responses' : ''}`
+                    };
+                }
+            }
+        ]
+    },
+
+    // ═══════════════════════════════════════════════════════════════════
     // BOOKING SLOTS TAB
     // ═══════════════════════════════════════════════════════════════════
     bookingSlots: {

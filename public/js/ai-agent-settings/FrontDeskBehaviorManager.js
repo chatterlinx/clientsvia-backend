@@ -8298,6 +8298,7 @@ Sean → Shawn, Shaun`;
                     // Map verification keys to tab IDs
                     const tabMap = {
                         'personality': 'personality',
+                        'discoveryConsent': 'discovery', // V57: Discovery & Consent tab
                         'bookingSlots': 'booking',
                         'responses': 'fallbacks',
                         'greeting': 'personality', // Greeting is in personality
