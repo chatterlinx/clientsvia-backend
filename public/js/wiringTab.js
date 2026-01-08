@@ -1356,16 +1356,16 @@
                   </div>
                   
                   <div class="w-scope-proof-grid">
-                    <div class="w-scope-proof-item">
-                      <div class="w-scope-proof-label">Company ID</div>
+                    <div class="w-scope-proof-item w-scope-clickable" data-nav-url="/company-profile.html?companyId=${esc(scopeProof.companyId)}" title="Open Company Profile">
+                      <div class="w-scope-proof-label">Company ID <i class="fas fa-external-link-alt" style="font-size: 9px; opacity: 0.5;"></i></div>
                       <div class="w-scope-proof-value">${esc(scopeProof.companyId || 'N/A')}</div>
                     </div>
-                    <div class="w-scope-proof-item">
-                      <div class="w-scope-proof-label">Trade Key</div>
+                    <div class="w-scope-proof-item w-scope-clickable" data-nav-tab="data-config" data-nav-subtab="onboarding" title="Change Trade Key in Onboarding">
+                      <div class="w-scope-proof-label">Trade Key <i class="fas fa-edit" style="font-size: 9px; opacity: 0.5;"></i></div>
                       <div class="w-scope-proof-value">${esc(scopeProof.tradeKey || 'universal')}</div>
                     </div>
-                    <div class="w-scope-proof-item w-scope-proof-item-wide">
-                      <div class="w-scope-proof-label">Templates Used (${(scopeProof.templatesUsed || scopeProof.templateIdsUsed || []).length})</div>
+                    <div class="w-scope-proof-item w-scope-proof-item-wide w-scope-clickable" data-nav-tab="data-config" data-nav-subtab="templates" title="Manage Templates">
+                      <div class="w-scope-proof-label">Templates Used (${(scopeProof.templatesUsed || scopeProof.templateIdsUsed || []).length}) <i class="fas fa-edit" style="font-size: 9px; opacity: 0.5;"></i></div>
                       <div class="w-scope-proof-value">
                         ${(scopeProof.templatesUsed || []).length > 0 
                           ? scopeProof.templatesUsed.map(t => `
@@ -1378,8 +1378,8 @@
                         }
                       </div>
                     </div>
-                    <div class="w-scope-proof-item">
-                      <div class="w-scope-proof-label">Scenarios Loaded</div>
+                    <div class="w-scope-proof-item w-scope-clickable" data-nav-tab="data-config" data-nav-subtab="scenarios" title="View Scenarios">
+                      <div class="w-scope-proof-label">Scenarios Loaded <i class="fas fa-eye" style="font-size: 9px; opacity: 0.5;"></i></div>
                       <div class="w-scope-proof-value">${(scopeProof.scenarioIdsUsed || []).length} IDs (refs only)</div>
                     </div>
                     <div class="w-scope-proof-item">
@@ -1441,6 +1441,44 @@
                 </div>
               </div>
             `;
+            
+            // V55: Bind click handlers for clickable scope proof items
+            setTimeout(() => {
+                $$('.w-scope-clickable[data-nav-tab]', el).forEach(item => {
+                    item.addEventListener('click', () => {
+                        const tab = item.dataset.navTab;
+                        const subtab = item.dataset.navSubtab;
+                        console.log('[WiringTab] 🔗 Scope item clicked:', { tab, subtab });
+                        
+                        // Navigate to the tab
+                        if (window.ControlPlaneNav?.go) {
+                            window.ControlPlaneNav.go({ tab, section: subtab || null });
+                        } else {
+                            // Fallback: click the tab button
+                            const tabBtn = document.querySelector(`[data-tab="${tab}"]`);
+                            if (tabBtn) tabBtn.click();
+                        }
+                        
+                        // If there's a subtab, switch to it after tab loads
+                        if (subtab) {
+                            setTimeout(() => {
+                                const subtabBtn = document.querySelector(`[data-subtab="${subtab}"]`);
+                                if (subtabBtn) subtabBtn.click();
+                            }, 200);
+                        }
+                    });
+                });
+                
+                // External URL links (like Company Profile)
+                $$('.w-scope-clickable[data-nav-url]', el).forEach(item => {
+                    item.addEventListener('click', () => {
+                        const url = item.dataset.navUrl;
+                        console.log('[WiringTab] 🔗 Opening URL:', url);
+                        window.open(url, '_blank');
+                    });
+                });
+            }, 100);
+            
             return;
         }
         
