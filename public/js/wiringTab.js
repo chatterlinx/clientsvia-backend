@@ -1364,13 +1364,23 @@
                       <div class="w-scope-proof-label">Trade Key</div>
                       <div class="w-scope-proof-value">${esc(scopeProof.tradeKey || 'universal')}</div>
                     </div>
-                    <div class="w-scope-proof-item">
-                      <div class="w-scope-proof-label">Templates Used</div>
-                      <div class="w-scope-proof-value">${(scopeProof.templateIdsUsed || []).length} IDs</div>
+                    <div class="w-scope-proof-item w-scope-proof-item-wide">
+                      <div class="w-scope-proof-label">Templates Used (${(scopeProof.templatesUsed || scopeProof.templateIdsUsed || []).length})</div>
+                      <div class="w-scope-proof-value">
+                        ${(scopeProof.templatesUsed || []).length > 0 
+                          ? scopeProof.templatesUsed.map(t => `
+                              <div class="w-template-detail">
+                                <span class="w-template-name">${esc(t.name)}</span>
+                                <code class="w-template-id">${esc(t.id?.substring(0, 8) || 'N/A')}...</code>
+                              </div>
+                            `).join('')
+                          : `<span class="text-red">❌ No templates linked</span>`
+                        }
+                      </div>
                     </div>
                     <div class="w-scope-proof-item">
-                      <div class="w-scope-proof-label">Scenarios Used</div>
-                      <div class="w-scope-proof-value">${(scopeProof.scenarioIdsUsed || []).length} IDs only</div>
+                      <div class="w-scope-proof-label">Scenarios Loaded</div>
+                      <div class="w-scope-proof-value">${(scopeProof.scenarioIdsUsed || []).length} IDs (refs only)</div>
                     </div>
                     <div class="w-scope-proof-item">
                       <div class="w-scope-proof-label">No Embedded Bodies</div>

@@ -672,12 +672,21 @@ function buildNoTenantBleedProof(companyDoc, companyId, derivedData = {}) {
         }
     };
     
-    // Extract template IDs used
+    // Extract template IDs and details used
     const templateRefs = companyDoc?.aiAgentSettings?.templateReferences || [];
-    proof.scopeProof.templateIdsUsed = templateRefs
-        .filter(ref => ref.enabled !== false)
+    const enabledTemplates = templateRefs.filter(ref => ref.enabled !== false);
+    
+    proof.scopeProof.templateIdsUsed = enabledTemplates
         .map(ref => ref.templateId)
         .filter(Boolean);
+    
+    // V55: Add template DETAILS for verification (name + ID)
+    proof.scopeProof.templatesUsed = enabledTemplates.map(ref => ({
+        id: ref.templateId?.toString() || 'unknown',
+        name: ref.templateName || 'Unnamed Template',
+        priority: ref.priority || 1,
+        enabled: ref.enabled !== false
+    }));
     
     // Extract scenario IDs from derivedData (IDs only, never bodies)
     if (derivedData?.scenarios && Array.isArray(derivedData.scenarios)) {
