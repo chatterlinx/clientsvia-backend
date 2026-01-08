@@ -1429,14 +1429,26 @@
 
                 <!-- ALL CHECKS -->
                 <div style="margin-top: 14px;">
-                  <div class="w-guard-section-title">All Checks (${checks.length})</div>
+                  <div class="w-guard-section-title">All Checks (${checks.length}) <span style="font-size: 10px; color: #9ca3af; font-weight: 400;">Hover for details</span></div>
                   <div class="w-checks-compact">
-                    ${checks.map(c => `
-                      <div class="w-check-compact ${c.passed ? 'pass' : 'fail'}">
+                    ${checks.map(c => {
+                      // V55: Human-readable descriptions for each check
+                      const checkDescriptions = {
+                        'COMPANY_ID_MATCH': 'Company document ID matches the requested ID - prevents loading wrong company data',
+                        'NO_EMBEDDED_SCENARIOS': 'Template references contain IDs only, not full scenario bodies - keeps data normalized',
+                        'NO_SCENARIO_TEXT': 'Company doc doesn\'t contain raw scenario text - all scenarios come from global templates',
+                        'TRADE_KEY_SET': 'Company has a trade key assigned (hvac, plumbing, etc.) - ensures correct template filtering',
+                        'PLACEHOLDERS_ALLOWLIST': 'Only allowed placeholders ({companyName}, {phone}, etc.) are used',
+                        'NO_HARDCODED_COMPANY_DATA': 'No company-specific data embedded in global templates',
+                        'COMPANY_STORES_REFS_ONLY': 'Company stores references (IDs) to templates, not copies of template data'
+                      };
+                      const desc = checkDescriptions[c.id] || c.description || 'Multi-tenant safety check';
+                      return `
+                      <div class="w-check-compact ${c.passed ? 'pass' : 'fail'}" title="${esc(desc)}">
                         <span class="w-check-icon">${c.passed ? '✅' : '❌'}</span>
                         <span class="w-check-id">${esc(c.id || 'CHECK')}</span>
                       </div>
-                    `).join('')}
+                    `;}).join('')}
                   </div>
                 </div>
               </div>
