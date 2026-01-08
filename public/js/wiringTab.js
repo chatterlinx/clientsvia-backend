@@ -143,6 +143,85 @@
     }
     
     /**
+     * V56: Show safety check details modal
+     */
+    function showCheckDetailsModal(info) {
+        // Remove existing modal
+        const existing = document.getElementById('check-details-modal');
+        if (existing) existing.remove();
+        
+        const passed = info.passed;
+        const statusColor = passed ? '#22c55e' : '#ef4444';
+        const statusIcon = passed ? '✅' : '❌';
+        const statusText = passed ? 'PASSED' : 'FAILED';
+        
+        const modal = document.createElement('div');
+        modal.id = 'check-details-modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+        modal.innerHTML = `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 24px; max-width: 550px; width: 90%;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 style="margin: 0; color: #fff; font-size: 16px; display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 24px;">${statusIcon}</span>
+                        ${esc(info.id)}
+                    </h3>
+                    <button id="close-check-modal" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 20px;">✕</button>
+                </div>
+                
+                <!-- Score Badge -->
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+                    <div style="font-size: 32px; font-weight: 800; color: ${statusColor};">${passed ? '100%' : '0%'}</div>
+                    <div style="padding: 6px 12px; background: ${passed ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)'}; color: ${statusColor}; border-radius: 6px; font-weight: 700; font-size: 12px;">
+                        ${statusText}
+                    </div>
+                </div>
+                
+                <!-- What It Checks -->
+                <div style="margin-bottom: 16px;">
+                    <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; margin-bottom: 6px; font-weight: 600;">What it checks</div>
+                    <div style="color: #e0e0e0; font-size: 14px; line-height: 1.5;">${esc(info.desc)}</div>
+                </div>
+                
+                <!-- Why It Matters -->
+                <div style="margin-bottom: 16px;">
+                    <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; margin-bottom: 6px; font-weight: 600;">Why it matters</div>
+                    <div style="color: #e0e0e0; font-size: 14px; line-height: 1.5;">${esc(info.why)}</div>
+                </div>
+                
+                <!-- Current Status / Details -->
+                <div style="margin-bottom: 16px; padding: 12px; background: rgba(0,0,0,0.3); border-radius: 8px; border-left: 3px solid ${statusColor};">
+                    <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; margin-bottom: 6px; font-weight: 600;">Details</div>
+                    <div style="color: #c9d1d9; font-size: 13px; font-family: monospace;">${esc(info.details || 'No additional details')}</div>
+                </div>
+                
+                ${!passed ? `
+                <!-- How to Fix -->
+                <div style="margin-bottom: 16px; padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.3);">
+                    <div style="font-size: 11px; color: #f87171; text-transform: uppercase; margin-bottom: 6px; font-weight: 600;">🔧 How to fix</div>
+                    <div style="color: #fca5a5; font-size: 13px; line-height: 1.5;">${esc(info.fix)}</div>
+                </div>
+                ` : `
+                <!-- All Good -->
+                <div style="padding: 12px; background: rgba(34, 197, 94, 0.1); border-radius: 8px; border: 1px solid rgba(34, 197, 94, 0.3); text-align: center;">
+                    <span style="color: #4ade80; font-size: 13px; font-weight: 600;">✓ This check is passing - no action needed</span>
+                </div>
+                `}
+                
+                <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+                    <button id="close-check-btn" style="padding: 8px 20px; background: #238636; border: none; border-radius: 6px; color: #fff; cursor: pointer; font-size: 13px; font-weight: 600;">Got it</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Close handlers
+        modal.querySelector('#close-check-modal').onclick = () => modal.remove();
+        modal.querySelector('#close-check-btn').onclick = () => modal.remove();
+        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    }
+    
+    /**
      * Show compliance check results in a modal
      */
     function showComplianceModal(result) {
@@ -1427,28 +1506,90 @@
                   </div>
                 ` : ''}
 
-                <!-- ALL CHECKS -->
+                <!-- ALL CHECKS WITH SCORE -->
                 <div style="margin-top: 14px;">
-                  <div class="w-guard-section-title">All Checks (${checks.length}) <span style="font-size: 10px; color: #9ca3af; font-weight: 400;">Hover for details</span></div>
+                  ${(() => {
+                    const passedCount = checks.filter(c => c.passed).length;
+                    const totalCount = checks.length;
+                    const percentage = totalCount > 0 ? Math.round((passedCount / totalCount) * 100) : 0;
+                    const scoreColor = percentage === 100 ? '#22c55e' : percentage >= 70 ? '#f59e0b' : '#ef4444';
+                    
+                    return `
+                    <div class="w-checks-score-header">
+                      <div class="w-guard-section-title">Safety Checks</div>
+                      <div class="w-checks-score" style="color: ${scoreColor};">
+                        <span class="w-checks-score-num">${percentage}%</span>
+                        <span class="w-checks-score-label">(${passedCount}/${totalCount} passed)</span>
+                      </div>
+                    </div>
+                    <div class="w-checks-progress-bar">
+                      <div class="w-checks-progress-fill" style="width: ${percentage}%; background: ${scoreColor};"></div>
+                    </div>
+                    `;
+                  })()}
                   <div class="w-checks-compact">
-                    ${checks.map(c => {
-                      // V55: Human-readable descriptions for each check
-                      const checkDescriptions = {
-                        'COMPANY_ID_MATCH': 'Company document ID matches the requested ID - prevents loading wrong company data',
-                        'NO_EMBEDDED_SCENARIOS': 'Template references contain IDs only, not full scenario bodies - keeps data normalized',
-                        'NO_SCENARIO_TEXT': 'Company doc doesn\'t contain raw scenario text - all scenarios come from global templates',
-                        'TRADE_KEY_SET': 'Company has a trade key assigned (hvac, plumbing, etc.) - ensures correct template filtering',
-                        'PLACEHOLDERS_ALLOWLIST': 'Only allowed placeholders ({companyName}, {phone}, etc.) are used',
-                        'NO_HARDCODED_COMPANY_DATA': 'No company-specific data embedded in global templates',
-                        'COMPANY_STORES_REFS_ONLY': 'Company stores references (IDs) to templates, not copies of template data'
+                    ${checks.map((c, idx) => {
+                      // V56: Human-readable descriptions and details for each check
+                      const checkInfo = {
+                        'COMPANY_ID_MATCH': {
+                          desc: 'Company document ID matches the requested ID',
+                          why: 'Prevents loading wrong company data (tenant bleed)',
+                          fix: 'This should always pass. If it fails, there\'s a serious bug.',
+                          details: `Expected: ${esc(_companyId || 'N/A')}, Got: ${esc(c.actual || c.expected || 'N/A')}`
+                        },
+                        'NO_EMBEDDED_SCENARIOS': {
+                          desc: 'Template references contain IDs only, not full scenario bodies',
+                          why: 'Keeps data normalized - scenarios live in global templates',
+                          fix: 'Remove any embedded scenarios from templateReferences array',
+                          details: `Template refs checked: ${c.templateRefCount || 'N/A'}`
+                        },
+                        'NO_SCENARIO_TEXT': {
+                          desc: 'Company doc doesn\'t contain raw scenario text',
+                          why: 'All scenarios should come from global templates, not company doc',
+                          fix: 'Remove triggers/quickReplies from company document',
+                          details: 'Scanning for "triggers":[ and "quickReplies":[ patterns'
+                        },
+                        'TRADE_KEY_SET': {
+                          desc: 'Company has a trade key assigned (hvac, plumbing, etc.)',
+                          why: 'Ensures correct template/scenario filtering by industry',
+                          fix: 'Go to Data & Config → Onboarding → Set Trade Key',
+                          details: `Current trade key: ${esc(c.tradeKey || 'NOT_SET')}`
+                        },
+                        'PLACEHOLDERS_ALLOWLIST': {
+                          desc: 'Only allowed placeholders are used',
+                          why: 'Prevents injection of unauthorized variables',
+                          fix: 'Remove invalid placeholder keys from company config',
+                          details: c.invalidKeys?.length > 0 ? `Invalid: ${c.invalidKeys.join(', ')}` : 'All placeholders valid'
+                        },
+                        'NO_HARDCODED_COMPANY_DATA': {
+                          desc: 'No company-specific data embedded in templates',
+                          why: 'Global templates should use {placeholders}, not hardcoded names',
+                          fix: 'Replace hardcoded company names with {companyName} placeholder',
+                          details: 'Checking for hardcoded company names in responses'
+                        },
+                        'COMPANY_STORES_REFS_ONLY': {
+                          desc: 'Company stores references (IDs) to templates, not copies',
+                          why: 'Prevents data duplication and drift',
+                          fix: 'Remove scenarios/categories/templates arrays from company doc',
+                          details: 'Company should only have templateReferences with IDs'
+                        }
                       };
-                      const desc = checkDescriptions[c.id] || c.description || 'Multi-tenant safety check';
+                      const info = checkInfo[c.id] || { desc: c.description || 'Safety check', why: 'Multi-tenant data isolation', fix: 'Review configuration', details: '' };
+                      const checkData = JSON.stringify({ id: c.id, passed: c.passed, ...info, raw: c }).replace(/"/g, '&quot;');
+                      
                       return `
-                      <div class="w-check-compact ${c.passed ? 'pass' : 'fail'}" title="${esc(desc)}">
+                      <div class="w-check-compact w-check-clickable ${c.passed ? 'pass' : 'fail'}" 
+                           data-check-idx="${idx}"
+                           data-check-info="${checkData}"
+                           title="Click for details">
                         <span class="w-check-icon">${c.passed ? '✅' : '❌'}</span>
                         <span class="w-check-id">${esc(c.id || 'CHECK')}</span>
+                        <span class="w-check-percent">${c.passed ? '100%' : '0%'}</span>
                       </div>
                     `;}).join('')}
+                  </div>
+                  <div style="font-size: 10px; color: #6b7280; margin-top: 8px; text-align: center;">
+                    Click any check to see details
                   </div>
                 </div>
               </div>
@@ -1487,6 +1628,18 @@
                         const url = item.dataset.navUrl;
                         console.log('[WiringTab] 🔗 Opening URL:', url);
                         window.open(url, '_blank');
+                    });
+                });
+                
+                // V56: Clickable safety checks - show details modal
+                $$('.w-check-clickable[data-check-info]', el).forEach(item => {
+                    item.addEventListener('click', () => {
+                        try {
+                            const info = JSON.parse(item.dataset.checkInfo.replace(/&quot;/g, '"'));
+                            showCheckDetailsModal(info);
+                        } catch (err) {
+                            console.error('[WiringTab] Failed to parse check info:', err);
+                        }
                     });
                 });
             }, 100);

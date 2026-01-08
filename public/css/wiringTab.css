@@ -2253,6 +2253,70 @@
     opacity: 1;
 }
 
+/* V56: Safety Checks Score Header */
+.w-checks-score-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.w-checks-score {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.w-checks-score-num {
+    font-size: 24px;
+    font-weight: 800;
+}
+
+.w-checks-score-label {
+    font-size: 12px;
+    color: #9ca3af;
+    font-weight: 500;
+}
+
+/* V56: Progress Bar */
+.w-checks-progress-bar {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.w-checks-progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+/* V56: Clickable Checks */
+.w-check-clickable {
+    cursor: pointer;
+}
+
+.w-check-percent {
+    font-size: 10px;
+    font-weight: 700;
+    margin-left: auto;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.w-check-compact.pass .w-check-percent {
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.15);
+}
+
+.w-check-compact.fail .w-check-percent {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.15);
+}
+
 /* ============================================================================
    V55: TEMPLATE DETAIL DISPLAY IN SCOPE PROOF
    ============================================================================ */
