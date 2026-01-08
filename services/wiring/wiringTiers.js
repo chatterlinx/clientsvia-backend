@@ -355,19 +355,14 @@ const TIER_MAX = {
             priority: 3,
             payoff: 'Faster FAQ responses, lower LLM costs',
             validator: (val) => val && (val.enabled === true || (Array.isArray(val.items) && val.items.length > 0)),
-            fixInstructions: 'Add FAQ content via Cheat Sheet Editor',
-            // NOTE: Cheat Sheets has its own editor page at frontline-intel-editor.html
-            // Nav points to templates section as fallback until cheat-sheets subtab is built
+            fixInstructions: 'Add FAQ content via Cheat Sheet Editor → frontline-intel-editor.html',
+            // NOTE: Cheat Sheets stored in separate CheatSheetVersion collection
+            // Cannot auto-apply via Company doc - must use dedicated editor
             nav: { tab: 'data-config', section: 'template-references', field: 'templateReferences' },
             dbPath: 'CheatSheetVersion collection (companyId filter)',
-            recommendedValue: {
-                enabled: true,
-                items: [
-                    { question: 'What are your hours?', answer: 'We are available 24/7 for emergencies. Regular business hours are Monday through Friday, 8 AM to 5 PM.' },
-                    { question: 'Do you offer free estimates?', answer: 'Yes, we offer free estimates for most services. The technician will provide a detailed quote before any work begins.' },
-                    { question: 'What areas do you service?', answer: 'We service the greater metro area. Let me get your address to confirm we can help you.' }
-                ]
-            }
+            // Cannot auto-apply - uses separate collection, requires Frontline Intel Editor
+            requiresUserInput: true,
+            canAutoApply: false
         },
         {
             fieldId: 'dataConfig.placeholders',
