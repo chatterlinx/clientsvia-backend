@@ -1089,15 +1089,31 @@ router.post('/:companyId/fix-spelling-variants', async (req, res) => {
         
         const changes = [];
         
-        // Fix 1: Set confirmSpelling on name slot
+        // Track what needs to change
         if (nameSlot && !hasConfirmSpelling) {
-            bookingSlots[nameSlotIndex].confirmSpelling = true;
             changes.push('Set confirmSpelling: true on name slot');
         }
-        
-        // Fix 2: Set global nameSpellingVariants config
         if (!hasGlobalEnabled) {
-            frontDesk.nameSpellingVariants = {
+            changes.push('Set nameSpellingVariants.enabled: true with variant groups');
+        }
+        
+        if (changes.length === 0) {
+            return res.json({
+                status: 'NO_CHANGES_NEEDED',
+                message: 'No changes were needed'
+            });
+        }
+        
+        // V61 FIX: Use targeted $set update to bypass full document validation
+        // This avoids triggering validation errors on unrelated fields (like cheatSheet.transferRules)
+        const updateOps = {};
+        
+        if (nameSlot && !hasConfirmSpelling && nameSlotIndex >= 0) {
+            updateOps[`aiAgentSettings.frontDeskBehavior.bookingSlots.${nameSlotIndex}.confirmSpelling`] = true;
+        }
+        
+        if (!hasGlobalEnabled) {
+            updateOps['aiAgentSettings.frontDeskBehavior.nameSpellingVariants'] = {
                 enabled: true,
                 source: 'auto_scan',
                 checkMode: '1_char_only',
@@ -1117,19 +1133,12 @@ router.post('/:companyId/fix-spelling-variants', async (req, res) => {
                     { base: 'Anne', variants: ['Ann'] }
                 ]
             };
-            changes.push('Set nameSpellingVariants.enabled: true with variant groups');
         }
         
-        if (changes.length === 0) {
-            return res.json({
-                status: 'NO_CHANGES_NEEDED',
-                message: 'No changes were needed'
-            });
-        }
-        
-        // Save
-        company.markModified('aiAgentSettings.frontDeskBehavior');
-        await company.save();
+        await Company.updateOne(
+            { _id: companyId },
+            { $set: updateOps }
+        );
         
         // Clear Redis cache
         try {
