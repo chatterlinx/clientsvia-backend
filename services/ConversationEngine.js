@@ -3586,13 +3586,17 @@ async function processTurn({
                     }
                 }
                 
-                // 🔍 DEBUG: Log nameMeta state at start of turn
+                // 🔍 DEBUG: Log nameMeta state at start of turn (V62: Added spelling variant fields)
                 log('📝 NAME META STATE AT TURN START', {
                     'nameMeta.first': session.booking.meta.name.first,
                     'nameMeta.last': session.booking.meta.name.last,
                     'nameMeta.lastConfirmed': session.booking.meta.name.lastConfirmed,
                     'nameMeta.askedMissingPartOnce': session.booking.meta.name.askedMissingPartOnce,
                     'nameMeta.assumedSingleTokenAs': session.booking.meta.name.assumedSingleTokenAs,
+                    // V62: Spelling variant state (CRITICAL for debugging loops)
+                    'nameMeta.askedSpellingVariant': session.booking.meta.name.askedSpellingVariant,
+                    'nameMeta.spellingVariantAnswer': session.booking.meta.name.spellingVariantAnswer,
+                    'nameMeta.pendingSpellingVariant': session.booking.meta.name.pendingSpellingVariant ? 'SET' : 'NOT SET',
                     'currentSlots.partialName': currentSlots.partialName,
                     'currentSlots.name': currentSlots.name
                 });
@@ -3838,6 +3842,9 @@ async function processTurn({
                                 nameMeta.spellingAsksCount = (nameMeta.spellingAsksCount || 0) + 1;
                                 nameMeta.pendingSpellingVariant = variantV45;
                                 
+                                // V62 FIX: Mark booking as modified so Mongoose persists spelling variant state
+                                session.markModified('booking');
+                                
                                 // V59 NUKE: UI-configured spelling variant script ONLY
                                 const scriptV45 = spellingConfigV45.script || 'Is that {optionA} with a {letterA} or {optionB} with a {letterB}?';
                                 finalReply = scriptV45
@@ -4004,8 +4011,10 @@ async function processTurn({
                 }
                 // Check if name slot is already complete
                 // V44: BUT don't skip if spelling variant check is still needed!
-                else if ((hasFullName || hasBothParts) && !needsSpellingVariantCheck) {
-                    // Name is complete AND no spelling variant check needed, move to next slot
+                // V62 FIX: ALSO don't skip if we're waiting for spelling variant ANSWER
+                else if ((hasFullName || hasBothParts) && !needsSpellingVariantCheck && 
+                         !(nameMeta?.askedSpellingVariant && nameMeta?.pendingSpellingVariant && !nameMeta?.spellingVariantAnswer)) {
+                    // Name is complete AND no spelling variant check needed AND not waiting for spelling answer, move to next slot
                     if (hasBothParts && !currentSlots.name) {
                         // Build full name safely (no undefined)
                         const firstName = nameMeta.first || '';
@@ -4049,6 +4058,9 @@ async function processTurn({
                         nameMeta.askedSpellingVariant = true;
                         nameMeta.spellingAsksCount = (nameMeta.spellingAsksCount || 0) + 1;
                         nameMeta.pendingSpellingVariant = variantV44;
+                        
+                        // V62 FIX: Mark booking as modified so Mongoose persists spelling variant state
+                        session.markModified('booking');
                         
                         // V59 NUKE: UI-configured spelling variant script ONLY
                         const scriptV44 = spellingConfigV44.script || 'Is that {optionA} with a {letterA} or {optionB} with a {letterB}?';
@@ -4427,6 +4439,9 @@ async function processTurn({
                                 nameMeta.askedSpellingVariant = true;
                                 nameMeta.spellingAsksCount = spellingAsksThisCall + 1;
                                 nameMeta.pendingSpellingVariant = variant;
+                                
+                                // V62 FIX: Mark booking as modified so Mongoose persists spelling variant state
+                                session.markModified('booking');
                                 
                                 // V59 NUKE: UI-configured spelling variant script ONLY
                                 const script = spellingConfig.script || 'Is that {optionA} with a {letterA} or {optionB} with a {letterB}?';
