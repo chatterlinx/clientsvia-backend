@@ -1832,6 +1832,9 @@ const companySchema = new mongoose.Schema({
                     // V54: UI-configurable name prompts (no hardcodes!)
                     lastNameQuestion: { type: String, default: "And what's your last name?", trim: true },
                     firstNameQuestion: { type: String, default: "And what's your first name?", trim: true },
+                    // V63: Spelling variant confirmation (Mark/Marc, Brian/Bryan)
+                    confirmSpelling: { type: Boolean, default: false }, // Check for spelling variants and confirm with caller
+                    spellingVariantPrompt: { type: String, default: "Just to confirm — {optionA} or {optionB}?", trim: true },
                     
                     // ═══════════════════════════════════════════════════════════════
                     // PHONE-SPECIFIC OPTIONS
