@@ -3526,6 +3526,11 @@ async function processTurn({
                 const bookingConfigSafe = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
                 const bookingSlotsSafe = bookingConfigSafe.slots || [];
                 
+                // V65 FIX: Track if we ask spelling variant THIS TURN
+                // This prevents the V51 handler from processing user input as an "answer" 
+                // in the same turn we ask the question
+                let askedSpellingVariantThisTurn = false;
+                
                 // Initialize booking meta state for tracking confirmations
                 // V38 FIX: Initialize ALL slot metas at the start of booking mode
                 session.booking.meta = session.booking.meta || {};
@@ -3845,6 +3850,10 @@ async function processTurn({
                                 nameMeta.spellingAsksCount = (nameMeta.spellingAsksCount || 0) + 1;
                                 nameMeta.pendingSpellingVariant = variantV45;
                                 
+                                // V65 FIX: Mark that we asked THIS TURN - prevents V51 handler from 
+                                // processing user's name as a "spelling variant answer" in the same turn
+                                askedSpellingVariantThisTurn = true;
+                                
                                 // V62 FIX: Mark booking as modified so Mongoose persists spelling variant state
                                 session.markModified('booking');
                                 
@@ -3858,7 +3867,7 @@ async function processTurn({
                                 nextSlotId = 'name';
                                 // DON'T set lastConfirmed yet - we're asking about spelling first
                                 
-                                log('📝 V45 SPELLING VARIANT: Asking about variant (discovery path)', {
+                                log('📝 V65 SPELLING VARIANT: Asking question THIS TURN (will skip V51 handler)', {
                                     name: nameToConfirm,
                                     optionA: variantV45.optionA,
                                     optionB: variantV45.optionB,
@@ -4062,6 +4071,10 @@ async function processTurn({
                         nameMeta.spellingAsksCount = (nameMeta.spellingAsksCount || 0) + 1;
                         nameMeta.pendingSpellingVariant = variantV44;
                         
+                        // V65 FIX: Mark that we asked THIS TURN - prevents V51 handler from 
+                        // processing user's name as a "spelling variant answer" in the same turn
+                        askedSpellingVariantThisTurn = true;
+                        
                         // V62 FIX: Mark booking as modified so Mongoose persists spelling variant state
                         session.markModified('booking');
                         
@@ -4074,7 +4087,7 @@ async function processTurn({
                             .replace('{letterB}', variantV44.letterB);
                         nextSlotId = 'name'; // Still on name
                         
-                        log('📝 V44 SPELLING VARIANT: Asking about variant', {
+                        log('📝 V65 SPELLING VARIANT: Asking question THIS TURN (V44 path)', {
                             name: nameToCheck,
                             optionA: variantV44.optionA,
                             optionB: variantV44.optionB,
@@ -4262,8 +4275,11 @@ async function processTurn({
                 // Must check BEFORE name collection branch to prevent loop
                 // When user says "Marc with a C", we should process the variant answer,
                 // NOT treat it as a new name being provided
+                // 
+                // V65 FIX: Skip this handler if we JUST ASKED the spelling variant question
+                // THIS TURN. Otherwise we process the user's name as an "answer" immediately!
                 // ═══════════════════════════════════════════════════════════════════
-                else if (nameMeta?.askedSpellingVariant && nameMeta?.pendingSpellingVariant && !nameMeta?.spellingVariantAnswer) {
+                else if (nameMeta?.askedSpellingVariant && nameMeta?.pendingSpellingVariant && !nameMeta?.spellingVariantAnswer && !askedSpellingVariantThisTurn) {
                     const variant = nameMeta.pendingSpellingVariant;
                     const userTextLower = userText.toLowerCase().trim();
                     
