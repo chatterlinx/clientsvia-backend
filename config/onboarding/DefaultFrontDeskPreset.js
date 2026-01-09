@@ -40,7 +40,8 @@ const DEFAULT_BOOKING_SLOTS = [
         firstNameQuestion: "And what's your first name?",
         lastNameQuestion: "And what's your last name?",
         // Spelling variant handling (Marc vs Mark)
-        askSpellingVariant: true,
+        // V61: CORRECT FIELD NAME - confirmSpelling is what ConversationEngine checks
+        confirmSpelling: true,
         spellingVariantPrompt: "Is that {name} with a {variant1} or {variant2}?",
         // Reprompts if user is unclear
         repromptVariants: [
@@ -220,6 +221,32 @@ const DEFAULT_UNIT_OF_WORK = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT NAME SPELLING VARIANTS
+// V61: Global config for spelling variant detection (Marc vs Mark)
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_NAME_SPELLING_VARIANTS = {
+    enabled: true,  // Master toggle - ENABLED by default for enterprise quality
+    source: 'auto_scan', // Auto-detect variants from commonFirstNames list
+    checkMode: '1_char_only', // Only ask if 1 character difference (Mark/Marc, Brian/Bryan)
+    maxAsksPerCall: 1, // Only ask once per call to avoid annoying caller
+    // Pre-built variant pairs (backup if auto_scan misses any)
+    variantGroups: [
+        { base: 'Mark', variants: ['Marc'] },
+        { base: 'Brian', variants: ['Bryan', 'Bryon'] },
+        { base: 'Eric', variants: ['Erik'] },
+        { base: 'Steven', variants: ['Stephen'] },
+        { base: 'Sara', variants: ['Sarah'] },
+        { base: 'John', variants: ['Jon'] },
+        { base: 'Kristina', variants: ['Christina'] },
+        { base: 'Catherine', variants: ['Katherine', 'Kathryn'] },
+        { base: 'Philip', variants: ['Phillip'] },
+        { base: 'Jeffrey', variants: ['Geoffrey'] },
+        { base: 'Allan', variants: ['Alan', 'Allen'] },
+        { base: 'Anne', variants: ['Ann'] }
+    ]
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // DEFAULT DISCOVERY & CONSENT
 // ═══════════════════════════════════════════════════════════════════════════
 const DEFAULT_DISCOVERY_CONSENT = {
@@ -346,6 +373,9 @@ function getPresetForTrade(tradeKey = 'universal') {
         // Discovery & consent
         discoveryConsent: DEFAULT_DISCOVERY_CONSENT,
         
+        // V61: Name spelling variants (global config)
+        nameSpellingVariants: DEFAULT_NAME_SPELLING_VARIANTS,
+        
         // Personality (trade-aware)
         personality: {
             conversationStyle: 'balanced',
@@ -368,6 +398,7 @@ module.exports = {
     DEFAULT_ESCALATION,
     DEFAULT_UNIT_OF_WORK,
     DEFAULT_DISCOVERY_CONSENT,
+    DEFAULT_NAME_SPELLING_VARIANTS,
     TRADE_PRESETS
 };
 

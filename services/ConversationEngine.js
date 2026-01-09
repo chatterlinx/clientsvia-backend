@@ -5053,7 +5053,30 @@ async function processTurn({
                         finalReply = addressSlotConfig?.partialAddressPrompt || getMissingConfigPrompt('partialAddressPrompt', 'address');
                         nextSlotId = 'address';
                         log('🏠 ADDRESS: Partial address not accepted, asking for full');
-                    } 
+                    }
+                    // ═══════════════════════════════════════════════════════════════════
+                    // V61: ENTERPRISE CITY DETECTION
+                    // Even if acceptPartialAddress is true, we should ask for city
+                    // if the address looks like just a street (no city/state/zip)
+                    // ═══════════════════════════════════════════════════════════════════
+                    else if (!hasZip && !hasState && !addressMeta.askedForCity && 
+                             addressSlotConfig?.addressConfirmLevel !== 'street_only') {
+                        // V61: Address looks like just street, ask for city
+                        // Store what we have and trigger city prompt
+                        addressMeta.street = extractedThisTurn.address;
+                        addressMeta.askedForCity = true;
+                        addressMeta.breakdownStep = 'city';
+                        // V59 NUKE: UI-configured city prompt ONLY
+                        finalReply = `Got it — ${extractedThisTurn.address}. ` + 
+                            (addressSlotConfig?.cityPrompt || getMissingConfigPrompt('cityPrompt', 'address'));
+                        nextSlotId = 'address';
+                        log('🏠 ADDRESS V61: Got street, asking for city', { 
+                            street: extractedThisTurn.address,
+                            hasZip,
+                            hasState,
+                            addressConfirmLevel: addressSlotConfig?.addressConfirmLevel
+                        });
+                    }
                     // V35 WORLD-CLASS: Ask for unit if detection says we should
                     else if (unitDetectionResult?.shouldAsk && !addressMeta.unitAsked) {
                         addressMeta.unitAsked = true;

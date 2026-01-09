@@ -1034,6 +1034,134 @@ router.post('/:companyId/fix-template-references', async (req, res) => {
 });
 
 // ============================================================================
+// POST /api/admin/wiring-status/:companyId/fix-spelling-variants
+// V61: Quick fix for spelling variant configuration
+// Enables: slot-level confirmSpelling + global nameSpellingVariants.enabled
+// ============================================================================
+router.post('/:companyId/fix-spelling-variants', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        logger.info('[WIRING API] Fix Spelling Variants requested', { companyId });
+        
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Ensure structure exists
+        if (!company.aiAgentSettings) {
+            company.aiAgentSettings = {};
+        }
+        if (!company.aiAgentSettings.frontDeskBehavior) {
+            company.aiAgentSettings.frontDeskBehavior = {};
+        }
+        
+        const frontDesk = company.aiAgentSettings.frontDeskBehavior;
+        const bookingSlots = frontDesk.bookingSlots || [];
+        const currentSpellingConfig = frontDesk.nameSpellingVariants || {};
+        
+        // Check current state
+        const nameSlotIndex = bookingSlots.findIndex(s => 
+            s.type === 'name' || s.id === 'name' || s.slotId === 'name'
+        );
+        const nameSlot = nameSlotIndex >= 0 ? bookingSlots[nameSlotIndex] : null;
+        
+        const hasConfirmSpelling = nameSlot?.confirmSpelling === true;
+        const hasGlobalEnabled = currentSpellingConfig.enabled === true;
+        
+        logger.info('[WIRING API] Current spelling config:', {
+            nameSlotFound: !!nameSlot,
+            nameSlotIndex,
+            hasConfirmSpelling,
+            hasGlobalEnabled
+        });
+        
+        // Already configured correctly?
+        if (hasConfirmSpelling && hasGlobalEnabled) {
+            return res.json({
+                status: 'ALREADY_CONFIGURED',
+                message: 'Spelling variants already correctly configured',
+                slotLevel: hasConfirmSpelling,
+                globalLevel: hasGlobalEnabled
+            });
+        }
+        
+        const changes = [];
+        
+        // Fix 1: Set confirmSpelling on name slot
+        if (nameSlot && !hasConfirmSpelling) {
+            bookingSlots[nameSlotIndex].confirmSpelling = true;
+            changes.push('Set confirmSpelling: true on name slot');
+        }
+        
+        // Fix 2: Set global nameSpellingVariants config
+        if (!hasGlobalEnabled) {
+            frontDesk.nameSpellingVariants = {
+                enabled: true,
+                source: 'auto_scan',
+                checkMode: '1_char_only',
+                maxAsksPerCall: 1,
+                variantGroups: [
+                    { base: 'Mark', variants: ['Marc'] },
+                    { base: 'Brian', variants: ['Bryan', 'Bryon'] },
+                    { base: 'Eric', variants: ['Erik'] },
+                    { base: 'Steven', variants: ['Stephen'] },
+                    { base: 'Sara', variants: ['Sarah'] },
+                    { base: 'John', variants: ['Jon'] },
+                    { base: 'Kristina', variants: ['Christina'] },
+                    { base: 'Catherine', variants: ['Katherine', 'Kathryn'] },
+                    { base: 'Philip', variants: ['Phillip'] },
+                    { base: 'Jeffrey', variants: ['Geoffrey'] },
+                    { base: 'Allan', variants: ['Alan', 'Allen'] },
+                    { base: 'Anne', variants: ['Ann'] }
+                ]
+            };
+            changes.push('Set nameSpellingVariants.enabled: true with variant groups');
+        }
+        
+        if (changes.length === 0) {
+            return res.json({
+                status: 'NO_CHANGES_NEEDED',
+                message: 'No changes were needed'
+            });
+        }
+        
+        // Save
+        company.markModified('aiAgentSettings.frontDeskBehavior');
+        await company.save();
+        
+        // Clear Redis cache
+        try {
+            const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+            if (isRedisConfigured()) {
+                const redis = await getSharedRedisClient();
+                await redis.del(`company:${companyId}`);
+                logger.info('[WIRING API] Redis cache cleared for company');
+            }
+        } catch (cacheErr) {
+            logger.warn('[WIRING API] Could not clear Redis cache:', cacheErr.message);
+        }
+        
+        logger.info('[WIRING API] ✅ Spelling variants fixed successfully', { changes });
+        
+        return res.json({
+            status: 'FIXED',
+            message: 'Spelling variant configuration fixed',
+            changes,
+            action: 'Test by saying a name like "Mark" - AI should ask "Is that Mark with a K or Marc with a C?"'
+        });
+        
+    } catch (error) {
+        logger.error('[WIRING API] Fix Spelling Variants error', { error: error.message, stack: error.stack });
+        return res.status(500).json({
+            error: 'Failed to fix spelling variants',
+            details: error.message
+        });
+    }
+});
+
+// ============================================================================
 // GET /api/admin/wiring-status/:companyId/compliance
 // Code compliance check - detects hardcoded values that should come from config
 // ============================================================================
