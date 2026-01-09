@@ -786,7 +786,21 @@ function stripFillerWords(userText, company, template) {
 // - Runtime only does O(1) map lookup
 // ═══════════════════════════════════════════════════════════════════════════
 function findSpellingVariant(name, config, commonFirstNames = []) {
-    if (!name || !config?.enabled) return null;
+    // V66 DEBUG: Log inputs to trace spelling variant issues
+    logger.info('[SPELLING VARIANT] 🔍 V66 findSpellingVariant called', {
+        name,
+        hasConfig: !!config,
+        configEnabled: config?.enabled,
+        configSource: config?.source,
+        configMode: config?.mode,
+        hasVariantGroups: !!config?.variantGroups,
+        variantGroupsKeys: config?.variantGroups ? Object.keys(config.variantGroups).slice(0, 5) : []
+    });
+    
+    if (!name || !config?.enabled) {
+        logger.info('[SPELLING VARIANT] ❌ V66 Early return', { reason: !name ? 'no_name' : 'config_not_enabled' });
+        return null;
+    }
     
     const nameLower = name.toLowerCase();
     const mode = config.mode || '1_char_only';
@@ -833,9 +847,24 @@ function findSpellingVariant(name, config, commonFirstNames = []) {
         }
     }
     
+    // V66 DEBUG: Log the processed variant groups
+    logger.info('[SPELLING VARIANT] 🔍 V66 Variant groups processed', {
+        nameLower,
+        source,
+        processedGroupsCount: Object.keys(variantGroups).length,
+        processedGroupsKeys: Object.keys(variantGroups).slice(0, 10),
+        lookingForKey: nameLower,
+        hasKeyInGroups: !!variantGroups[nameLower]
+    });
+    
     // Check if the name has variants - O(1) lookup
     const variants = variantGroups[nameLower];
-    if (!variants || variants.length === 0) return null;
+    if (!variants || variants.length === 0) {
+        logger.info('[SPELLING VARIANT] ❌ V66 No variants found', { nameLower, variants });
+        return null;
+    }
+    
+    logger.info('[SPELLING VARIANT] ✅ V66 Variants found for name', { nameLower, variants });
     
     // Find the first variant that matches the mode criteria
     for (const variant of variants) {
