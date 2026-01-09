@@ -3659,8 +3659,11 @@ async function processTurn({
                 // V53 FIX: If we already have BOTH first AND last name, skip spelling check entirely
                 // Spelling variants only matter for single-word names (Mark vs Marc)
                 // Once we have "Mark Gonzales", the first name spelling is locked in
+                // V64 FIX: Check BOTH global AND slot-level spelling settings!
                 const spellingConfig = company.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants || {};
-                const spellingEnabled = spellingConfig.enabled === true;
+                const globalSpellingEnabled = spellingConfig.enabled === true;
+                const slotLevelSpellingEnabled = nameSlotConfig?.confirmSpelling === true;  // V64: Check slot-level too!
+                const spellingEnabled = globalSpellingEnabled || slotLevelSpellingEnabled;  // V64: Either enables it
                 const hasFullNameFromMeta = nameMeta?.first && nameMeta?.last;
                 const needsSpellingVariantCheck = spellingEnabled && hasName && !hasFullNameFromMeta && !nameMeta?.askedSpellingVariant && !nameMeta?.spellingVariantAnswer;
                 
