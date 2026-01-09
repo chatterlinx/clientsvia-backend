@@ -2857,6 +2857,20 @@ Sean → Shawn, Shaun`;
         // V59 NUKE: Both first and last name questions MUST be from UI
         if (el.querySelector('.slot-firstNameQuestion')) slotData.firstNameQuestion = getVal('.slot-firstNameQuestion') || "And what's your first name?";
         if (el.querySelector('.slot-lastNameQuestion')) slotData.lastNameQuestion = getVal('.slot-lastNameQuestion') || "And what's your last name?";
+        
+        // V63 DEBUG: Log name slot collection
+        if (slotData.type === 'name' || slotData.id === 'name') {
+            console.log('[FRONT DESK] 📝 V63 DEBUG - Collecting name slot:', {
+                id: slotData.id,
+                type: slotData.type,
+                askMissingNamePart: slotData.askMissingNamePart,
+                confirmSpelling: slotData.confirmSpelling,
+                confirmSpellingCheckbox: el.querySelector('.slot-confirmSpelling'),
+                confirmSpellingChecked: el.querySelector('.slot-confirmSpelling')?.checked,
+                firstNameQuestion: slotData.firstNameQuestion,
+                lastNameQuestion: slotData.lastNameQuestion
+            });
+        }
 
         // PHONE options
         if (el.querySelector('.slot-offerCallerId')) slotData.offerCallerId = getCheckedDefault('.slot-offerCallerId', true);
