@@ -61,18 +61,55 @@ function normalizeSlot(slot, index) {
         // Confirmation options
         confirmBack: slot.confirmBack || false,
         confirmPrompt: slot.confirmPrompt || "Just to confirm, that's {value}, correct?",
-        // Name-specific
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V63: Name-specific fields (ALL must be copied from DB!)
+        // ═══════════════════════════════════════════════════════════════════════════
         askFullName: slot.askFullName !== false,
         useFirstNameOnly: slot.useFirstNameOnly !== false,
-        askMissingNamePart: slot.askMissingNamePart === true, // 🔴 Was missing! Must be explicitly true
-        // Phone-specific
+        askMissingNamePart: slot.askMissingNamePart === true, // Must be explicitly true
+        // V59: These were MISSING - causing hardcoded fallbacks!
+        lastNameQuestion: slot.lastNameQuestion || null,
+        firstNameQuestion: slot.firstNameQuestion || null,
+        // V61: Spelling variants
+        confirmSpelling: slot.confirmSpelling || false,
+        spellingVariantPrompt: slot.spellingVariantPrompt || null,
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V63: Phone-specific fields
+        // ═══════════════════════════════════════════════════════════════════════════
         offerCallerId: slot.offerCallerId || false,
         callerIdPrompt: slot.callerIdPrompt || null,
         acceptTextMe: slot.acceptTextMe !== false,
         breakDownIfUnclear: slot.breakDownIfUnclear || false, // Works for phone AND address
-        // Address-specific
+        // V59: Phone breakdown prompts
+        areaCodePrompt: slot.areaCodePrompt || null,
+        restOfNumberPrompt: slot.restOfNumberPrompt || null,
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V63: Address-specific fields
+        // ═══════════════════════════════════════════════════════════════════════════
         addressConfirmLevel: slot.addressConfirmLevel || 'street_city',
         acceptPartialAddress: slot.acceptPartialAddress || false,
+        // V59: Address breakdown prompts
+        partialAddressPrompt: slot.partialAddressPrompt || null,
+        streetBreakdownPrompt: slot.streetBreakdownPrompt || null,
+        cityPrompt: slot.cityPrompt || null,
+        zipPrompt: slot.zipPrompt || null,
+        // Unit number handling
+        unitNumberMode: slot.unitNumberMode || 'smart',
+        unitNumberPrompt: slot.unitNumberPrompt || null,
+        unitTriggerWords: slot.unitTriggerWords || [],
+        unitAlwaysAskZips: slot.unitAlwaysAskZips || [],
+        unitNeverAskZips: slot.unitNeverAskZips || [],
+        unitPromptVariants: slot.unitPromptVariants || [],
+        // Google Maps integration
+        useGoogleMapsValidation: slot.useGoogleMapsValidation || false,
+        googleMapsValidationMode: slot.googleMapsValidationMode || 'confirm_low_confidence',
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Other slot types
+        // ═══════════════════════════════════════════════════════════════════════════
         // Email-specific
         spellOutEmail: slot.spellOutEmail !== false,
         offerToSendText: slot.offerToSendText || false,
@@ -122,6 +159,19 @@ function normalizeBookingSlots(rawSlots = []) {
         outputCount: normalized.length,
         rejectedCount: rawSlots.length - normalized.length
     });
+    
+    // 🔍 V63 DIAGNOSTIC: Log name slot specifically to verify question fields are preserved
+    const nameSlot = normalized.find(s => s.type === 'name' || s.slotId === 'name');
+    if (nameSlot) {
+        logger.info('[BOOKING ENGINE] 📋 V63 NAME SLOT NORMALIZED', {
+            hasLastNameQuestion: !!nameSlot.lastNameQuestion,
+            lastNameQuestion: nameSlot.lastNameQuestion,
+            hasFirstNameQuestion: !!nameSlot.firstNameQuestion,
+            firstNameQuestion: nameSlot.firstNameQuestion,
+            confirmSpelling: nameSlot.confirmSpelling,
+            askMissingNamePart: nameSlot.askMissingNamePart
+        });
+    }
     
     return normalized;
 }

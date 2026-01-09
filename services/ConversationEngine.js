@@ -4306,8 +4306,8 @@ async function processTurn({
                     // Now proceed to ask for last name or move on
                     if (askFullName) {
                         nameMeta.askedMissingPartOnce = true;
-                        // V47: Use UI-configured last name question
-                        const lastNameQSpelling = nameSlotConfig?.lastNameQuestion || "What's your last name?";
+                        // V63: Use UI-configured last name question - NO HARDCODED FALLBACK
+                        const lastNameQSpelling = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
                         finalReply = `Got it, ${chosenName}. ${lastNameQSpelling.replace('{firstName}', chosenName)}`;
                         nextSlotId = 'name';
                     } else {
@@ -4515,8 +4515,8 @@ async function processTurn({
                         // Now proceed to ask for last name or move on
                         if (askFullName) {
                             nameMeta.askedMissingPartOnce = true;
-                            // V47: Use UI-configured last name question
-                            const lastNameQSpelling = nameSlotConfig?.lastNameQuestion || "What's your last name?";
+                            // V63: Use UI-configured last name question - NO HARDCODED FALLBACK
+                            const lastNameQSpelling = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
                             finalReply = `Got it, ${chosenName}. ${lastNameQSpelling.replace('{firstName}', chosenName)}`;
                             nextSlotId = 'name';
                         } else {
