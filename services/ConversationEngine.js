@@ -818,6 +818,17 @@ function findSpellingVariant(name, config, commonFirstNames = [], slotLevelEnabl
     if (source === 'curated_list') {
         // Use manually curated variant groups from config
         const rawGroups = config.variantGroups || {};
+        
+        // V68 DEBUG: Log raw groups to see what we're receiving
+        logger.info('[SPELLING VARIANT] 🔍 V68 RAW GROUPS DEBUG', {
+            hasVariantGroups: !!config.variantGroups,
+            rawGroupsType: typeof rawGroups,
+            isMap: rawGroups instanceof Map,
+            isArray: Array.isArray(rawGroups),
+            rawGroupsKeys: Object.keys(rawGroups),
+            rawGroupsSample: JSON.stringify(rawGroups).substring(0, 200)
+        });
+        
         // Handle both Map and plain object
         if (rawGroups instanceof Map) {
             rawGroups.forEach((variants, key) => {
