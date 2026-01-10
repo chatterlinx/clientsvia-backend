@@ -47,6 +47,7 @@ const LLMDiscoveryEngine = require('./LLMDiscoveryEngine');
 const AddressValidationService = require('./AddressValidationService');
 const DynamicFlowEngine = require('./DynamicFlowEngine');
 const logger = require('../utils/logger');
+const { parseSpellingVariantPrompt, parseSpellingVariantResponse } = require('../utils/nameSpellingVariant');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VERSION BANNER - Proves this code is deployed
@@ -4699,6 +4700,41 @@ async function processTurn({
                             }
                         }
                         // If chosenName is null (unclear), finalReply was already set to ask again
+                    } else if (
+                        // FALLBACK: If LLM (or legacy flow) asked a spelling prompt but we didn't persist pendingSpellingVariant,
+                        // try to infer the variant from the *last assistant message* and treat this user utterance as the answer.
+                        // This prevents misrouting into last-name collection when the user is actually clarifying spelling.
+                        (session.booking.activeSlotType === 'name' || session.booking.activeSlot === 'name') &&
+                        askFullName &&
+                        !hasFullName &&
+                        !nameMeta?.last &&
+                        !nameMeta?.spellingVariantAnswer
+                    ) {
+                        const lastAssistantMsg = [...(conversationHistory || [])].reverse().find(t => t.role === 'assistant')?.content || '';
+                        const inferredVariant = parseSpellingVariantPrompt(lastAssistantMsg);
+                        const inferredChoice = inferredVariant ? parseSpellingVariantResponse(userText, inferredVariant) : null;
+                        
+                        if (inferredVariant && inferredChoice) {
+                            // Persist spelling choice so downstream logic is consistent
+                            nameMeta.askedSpellingVariant = true;
+                            nameMeta.pendingSpellingVariant = inferredVariant;
+                            nameMeta.spellingVariantAnswer = inferredChoice;
+                            nameMeta.first = inferredChoice;
+                            currentSlots.partialName = inferredChoice;
+                            
+                            // Ask for last name as normal (UI-configured)
+                            nameMeta.askedMissingPartOnce = true;
+                            const lastNameQSpelling = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
+                            finalReply = `Got it, ${inferredChoice}. ${lastNameQSpelling.replace('{firstName}', inferredChoice)}`;
+                            nextSlotId = 'name';
+                            
+                            log('📝 V73: Inferred spelling-variant answer from last assistant prompt', {
+                                lastAssistantMsg: lastAssistantMsg.substring(0, 80),
+                                inferredVariant,
+                                userText: userText.substring(0, 80),
+                                chosenName: inferredChoice
+                            });
+                        }
                     } else if (nameMeta.lastConfirmed && !nameMeta.askedMissingPartOnce && askFullName) {
                         // V36 FIX: Check if confirmPrompt ALREADY asked for last name
                         // If so, the user's response IS the last name, not a confirmation
