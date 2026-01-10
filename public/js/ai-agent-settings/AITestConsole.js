@@ -1451,6 +1451,12 @@ ${separator}`;
         
         // Build decision trace (why the agent did what it did)
         const lastEntry = this.debugLog[this.debugLog.length - 1];
+        const inBookingMode = (currentMode || '').toUpperCase() === 'BOOKING' || (stageInfo?.currentStage || '').toLowerCase() === 'booking';
+        const promptFrom = inBookingMode ? (bookingConfig?.source || 'unknown') : '—';
+        const templateRefs = lastDebug?.templateReferences || lastDebugEntry?.templateReferences || [];
+        const templateRefsCount = Array.isArray(templateRefs) ? templateRefs.length : 0;
+        const templateWiringStatus = templateRefsCount > 0 ? `✅ (${templateRefsCount})` : '❌ (none)';
+
         const decisionTrace = lastEntry ? `
             <div style="background: #1c1c3a; border: 1px solid #8957e5; border-radius: 6px; padding: 8px;">
                 <div style="color: #a78bfa; font-size: 10px; font-weight: 600; margin-bottom: 6px;">🎯 DECISION TRACE</div>
@@ -1459,7 +1465,10 @@ ${separator}`;
                     <span style="color: #e6edf3;">${lastEntry.source || '—'}</span>
                     
                     <span style="color: #6e7681;">Prompt from:</span>
-                    <span style="color: #e6edf3;">${bookingConfig?.source || 'unknown'}</span>
+                    <span style="color: #e6edf3;">${promptFrom}</span>
+
+                    <span style="color: #6e7681;">Template:</span>
+                    <span style="color: ${templateRefsCount > 0 ? '#3fb950' : '#f85149'};">${templateWiringStatus}</span>
                     
                     <span style="color: #6e7681;">Action:</span>
                     <span style="color: #e6edf3;">${lastDebug?.stateMachine?.action || lastEntry.llmBrain?.engineAction?.normalizedSlot ? 'COLLECT_SLOT' : 'REPLY'}</span>
@@ -1638,7 +1647,7 @@ ${separator}`;
                         <!-- SLOT BOXES - The "call slot boxes" you wanted -->
                         <div>
                             <div style="color: #8b949e; font-size: 10px; margin-bottom: 6px; display: flex; justify-content: space-between;">
-                                <span>📦 BOOKING SLOTS</span>
+                                <span>📦 BOOKING SLOTS ${inBookingMode ? '' : '<span style="color:#6e7681;">(standby)</span>'}</span>
                                 <span>${Object.values(collectedSlots).filter(v => v).length}/${configuredSlots.length} filled</span>
                             </div>
                             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 6px;">
