@@ -4624,47 +4624,81 @@ async function processTurn({
                             optionB: variant.optionB
                         });
                         
-                        // Check for letter patterns first (more specific)
+                        // V72 FIX: INTELLIGENT detection - only accept CLEAR confirmations
+                        // NO GUESSING - if unclear, ask again!
+                        
+                        // Check for letter patterns first (most specific)
                         if (hasLetterAPattern && !hasLetterBPattern) {
                             chosenName = variant.optionA;
+                            log('📝 V72: Detected letterA pattern', { letter: letterALower, chosen: chosenName });
                         } else if (hasLetterBPattern && !hasLetterAPattern) {
                             chosenName = variant.optionB;
+                            log('📝 V72: Detected letterB pattern', { letter: letterBLower, chosen: chosenName });
                         }
-                        // Check for exact name matches (not substrings in other words)
+                        // Check for exact name matches (word boundaries)
                         else if (new RegExp(`\\b${variant.optionA.toLowerCase()}\\b`).test(userTextLower) &&
                                  !new RegExp(`\\b${variant.optionB.toLowerCase()}\\b`).test(userTextLower)) {
                             chosenName = variant.optionA;
+                            log('📝 V72: Detected exact name match optionA', { name: variant.optionA });
                         } else if (new RegExp(`\\b${variant.optionB.toLowerCase()}\\b`).test(userTextLower) &&
                                  !new RegExp(`\\b${variant.optionA.toLowerCase()}\\b`).test(userTextLower)) {
                             chosenName = variant.optionB;
+                            log('📝 V72: Detected exact name match optionB', { name: variant.optionB });
                         }
-                        // Default to optionA if unclear
-                        else {
+                        // V72: Check for "first one" / "second one" / "option 1" / "option 2"
+                        else if (/\b(first|option 1|number 1|1st|the first)\b/i.test(userTextLower)) {
                             chosenName = variant.optionA;
-                            log('📝 V71 SPELLING: Unclear answer, defaulting to optionA', { userText, optionA: variant.optionA });
+                            log('📝 V72: User said first/option 1', { chosen: chosenName });
+                        } else if (/\b(second|option 2|number 2|2nd|the second)\b/i.test(userTextLower)) {
+                            chosenName = variant.optionB;
+                            log('📝 V72: User said second/option 2', { chosen: chosenName });
                         }
-                        
-                        // Update the name with the correct spelling
-                        nameMeta.spellingVariantAnswer = chosenName;
-                        nameMeta.first = chosenName;
-                        currentSlots.partialName = chosenName;
-                        
-                        log('📝 V31 SPELLING VARIANT: User chose', { chosenName, userText });
-                        
-                        // Now proceed to ask for last name or move on
-                        if (askFullName) {
-                            nameMeta.askedMissingPartOnce = true;
-                            // V63: Use UI-configured last name question - NO HARDCODED FALLBACK
-                            const lastNameQSpelling = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
-                            finalReply = `Got it, ${chosenName}. ${lastNameQSpelling.replace('{firstName}', chosenName)}`;
+                        // V72: UNCLEAR - DO NOT GUESS! Ask again.
+                        else {
+                            chosenName = null; // Explicitly null - will ask again
+                            log('📝 V72: UNCLEAR response - asking again', { 
+                                userText, 
+                                optionA: variant.optionA, 
+                                optionB: variant.optionB,
+                                hasLetterAPattern,
+                                hasLetterBPattern
+                            });
+                            
+                            // Ask again more directly
+                            const script = spellingConfig.script || 'Is that {optionA} with a {letterA} or {optionB} with a {letterB}?';
+                            finalReply = `I didn't catch that. ${script
+                                .replace('{optionA}', variant.optionA)
+                                .replace('{optionB}', variant.optionB)
+                                .replace('{letterA}', variant.letterA)
+                                .replace('{letterB}', variant.letterB)}`;
                             nextSlotId = 'name';
-                        } else {
-                            // Accept as complete
-                            currentSlots.name = chosenName;
-                            session.booking.activeSlot = getSlotIdByType('phone'); session.booking.activeSlotType = 'phone';
-                            finalReply = `Got it, ${chosenName}. `;
-                            nextSlotId = null;
+                            // Don't update name or mark as answered - will ask again next turn
                         }
+                        
+                        // V72: Only update name if we got a CLEAR answer
+                        if (chosenName) {
+                            nameMeta.spellingVariantAnswer = chosenName;
+                            nameMeta.first = chosenName;
+                            currentSlots.partialName = chosenName;
+                        
+                            log('📝 V31 SPELLING VARIANT: User chose', { chosenName, userText });
+                            
+                            // Now proceed to ask for last name or move on
+                            if (askFullName) {
+                                nameMeta.askedMissingPartOnce = true;
+                                // V63: Use UI-configured last name question - NO HARDCODED FALLBACK
+                                const lastNameQSpelling = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
+                                finalReply = `Got it, ${chosenName}. ${lastNameQSpelling.replace('{firstName}', chosenName)}`;
+                                nextSlotId = 'name';
+                            } else {
+                                // Accept as complete
+                                currentSlots.name = chosenName;
+                                session.booking.activeSlot = getSlotIdByType('phone'); session.booking.activeSlotType = 'phone';
+                                finalReply = `Got it, ${chosenName}. `;
+                                nextSlotId = null;
+                            }
+                        }
+                        // If chosenName is null (unclear), finalReply was already set to ask again
                     } else if (nameMeta.lastConfirmed && !nameMeta.askedMissingPartOnce && askFullName) {
                         // V36 FIX: Check if confirmPrompt ALREADY asked for last name
                         // If so, the user's response IS the last name, not a confirmation
