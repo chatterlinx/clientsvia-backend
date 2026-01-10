@@ -817,16 +817,31 @@ function findSpellingVariant(name, config, commonFirstNames = [], slotLevelEnabl
     
     if (source === 'curated_list') {
         // Use manually curated variant groups from config
-        const rawGroups = config.variantGroups || {};
+        // V69 FIX: Mongoose stores variantGroups as a subdocument, NOT a plain object!
+        // We must convert to plain object first using toObject() or JSON parse/stringify
+        let rawGroups = config.variantGroups || {};
+        
+        // V69: Convert Mongoose subdocument to plain object
+        if (rawGroups && typeof rawGroups.toObject === 'function') {
+            rawGroups = rawGroups.toObject();
+        } else if (rawGroups && rawGroups.$__parent) {
+            // Mongoose Map/subdoc detection - convert via JSON
+            try {
+                rawGroups = JSON.parse(JSON.stringify(rawGroups));
+            } catch (e) {
+                logger.warn('[SPELLING VARIANT] Failed to convert Mongoose subdoc:', e.message);
+                rawGroups = {};
+            }
+        }
         
         // V68 DEBUG: Log raw groups to see what we're receiving
-        logger.info('[SPELLING VARIANT] 🔍 V68 RAW GROUPS DEBUG', {
+        logger.info('[SPELLING VARIANT] 🔍 V69 RAW GROUPS DEBUG', {
             hasVariantGroups: !!config.variantGroups,
             rawGroupsType: typeof rawGroups,
             isMap: rawGroups instanceof Map,
-            isArray: Array.isArray(rawGroups),
             rawGroupsKeys: Object.keys(rawGroups),
-            rawGroupsSample: JSON.stringify(rawGroups).substring(0, 200)
+            sampleKey: Object.keys(rawGroups)[0],
+            sampleValue: rawGroups[Object.keys(rawGroups)[0]]
         });
         
         // Handle both Map and plain object
