@@ -787,9 +787,11 @@ function stripFillerWords(userText, company, template) {
 // - Runtime only does O(1) map lookup
 // ═══════════════════════════════════════════════════════════════════════════
 function findSpellingVariant(name, config, commonFirstNames = [], slotLevelEnabled = false) {
-    // V67 FIX: Accept slot-level enabled flag as 4th parameter
-    // This allows the slot's confirmSpelling checkbox to enable variants even if global is disabled
-    const effectiveEnabled = config?.enabled === true || slotLevelEnabled === true;
+    // V75: Deterministic gating — require BOTH:
+    // - Global master toggle (Front Desk → Booking Prompts → Name Spelling Variants)
+    // - Slot-level checkbox (bookingSlots[].confirmSpelling)
+    // This prevents the agent (LLM or deterministic layer) from asking spelling questions "without basis".
+    const effectiveEnabled = config?.enabled === true && slotLevelEnabled === true;
     
     // V66 DEBUG: Log inputs to trace spelling variant issues
     logger.info('[SPELLING VARIANT] 🔍 V67 findSpellingVariant called', {
@@ -2775,6 +2777,42 @@ async function processTurn({
         // Find name slot by TYPE (not by slotId) - Type dropdown determines behavior
         const nameSlotConfig = bookingConfig.slots.find(s => s.type === 'name' || s.slotId === 'name' || s.id === 'name');
         const askMissingNamePart = nameSlotConfig?.askMissingNamePart === true;
+
+        // ═══════════════════════════════════════════════════════════════════
+        // V75: SPELLING VARIANT ANSWER CAPTURE (pre-LLM, deterministic)
+        // ═══════════════════════════════════════════════════════════════════
+        // If the prior assistant message asked a spelling-variant question like:
+        // "Mark with a K or Marc with a C?"
+        // and the user replies "with a C" (or "who is Marc with a C"),
+        // we MUST write the chosen spelling into the slot immediately so:
+        // - Booking can proceed deterministically
+        // - The inspector reflects the corrected spelling
+        //
+        // GATING: require BOTH UI toggles:
+        // - frontDeskBehavior.nameSpellingVariants.enabled
+        // - bookingSlots(name).confirmSpelling
+        const spellingConfigPre = company.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants || {};
+        const spellingEnabledPre = spellingConfigPre.enabled === true && nameSlotConfig?.confirmSpelling === true;
+        if (spellingEnabledPre && userText) {
+            const lastAssistantMsg = [...(conversationHistory || [])].reverse().find(t => t.role === 'assistant')?.content || '';
+            const inferredVariant = parseSpellingVariantPrompt(lastAssistantMsg);
+            const inferredChoice = inferredVariant ? parseSpellingVariantResponse(userText, inferredVariant) : null;
+            
+            if (inferredVariant && inferredChoice) {
+                // Persist as the current "best" name spelling (single-token name)
+                currentSlots.name = inferredChoice;
+                currentSlots.partialName = inferredChoice;
+                extractedThisTurn.name = inferredChoice;
+                extractedThisTurn.partialName = inferredChoice;
+                
+                log('📝 V75: Captured spelling-variant choice during slot extraction', {
+                    lastAssistantMsg: lastAssistantMsg.substring(0, 80),
+                    inferredVariant,
+                    userText: userText.substring(0, 80),
+                    chosenName: inferredChoice
+                });
+            }
+        }
         
         // Extract name
         // ═══════════════════════════════════════════════════════════════════════
@@ -3737,8 +3775,9 @@ async function processTurn({
                 // V64 FIX: Check BOTH global AND slot-level spelling settings!
                 const spellingConfig = company.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants || {};
                 const globalSpellingEnabled = spellingConfig.enabled === true;
-                const slotLevelSpellingEnabled = nameSlotConfig?.confirmSpelling === true;  // V64: Check slot-level too!
-                const spellingEnabled = globalSpellingEnabled || slotLevelSpellingEnabled;  // V64: Either enables it
+                const slotLevelSpellingEnabled = nameSlotConfig?.confirmSpelling === true;
+                // V75: Require BOTH toggles for deterministic behavior
+                const spellingEnabled = globalSpellingEnabled && slotLevelSpellingEnabled;
                 const hasFullNameFromMeta = nameMeta?.first && nameMeta?.last;
                 const needsSpellingVariantCheck = spellingEnabled && hasName && !hasFullNameFromMeta && !nameMeta?.askedSpellingVariant && !nameMeta?.spellingVariantAnswer;
                 
@@ -3878,16 +3917,16 @@ async function processTurn({
                     
                     if (nameToConfirm && !nameToConfirm.includes(' ')) {
                         // ═══════════════════════════════════════════════════════════════════
-                        // V46: CHECK SPELLING VARIANT - reads from SLOT config first
-                        // nameSlotConfig.confirmSpelling = TRUE enables the check
-                        // Falls back to global nameSpellingVariants.enabled if not set on slot
+                        // V46/V75: CHECK SPELLING VARIANT - deterministic gating
+                        // Only enabled when BOTH are true:
+                        // - frontDeskBehavior.nameSpellingVariants.enabled (master toggle)
+                        // - bookingSlots(name).confirmSpelling (slot-level checkbox)
                         // ═══════════════════════════════════════════════════════════════════
                         const spellingConfigV45 = company.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants || {};
                         
-                        // V46: Check slot-level setting FIRST, then fall back to global
                         const slotLevelSpellingEnabled = nameSlotConfig?.confirmSpelling === true;
                         const globalSpellingEnabled = spellingConfigV45.enabled === true;
-                        const spellingEnabledV45 = slotLevelSpellingEnabled || globalSpellingEnabled;
+                        const spellingEnabledV45 = slotLevelSpellingEnabled && globalSpellingEnabled;
                         
                         const shouldCheckSpellingV45 = spellingEnabledV45 && 
                                                        !nameMeta.askedSpellingVariant && 
@@ -4142,10 +4181,9 @@ async function processTurn({
                     });
                     
                     // V44: Actually RUN the spelling variant check here
-                    const spellingConfigV44 = company.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants || {};
-                    const commonFirstNamesV44 = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
-                    // V67 FIX: Pass slot-level enabled flag to override global disabled
-                    const variantV44 = findSpellingVariant(nameToCheck, spellingConfigV44, commonFirstNamesV44, slotLevelSpellingEnabled);
+                        const spellingConfigV44 = company.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants || {};
+                        const commonFirstNamesV44 = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+                        const variantV44 = findSpellingVariant(nameToCheck, spellingConfigV44, commonFirstNamesV44, slotLevelSpellingEnabled);
                     
                     log('📝 V44 SPELLING VARIANT CHECK RESULT', {
                         nameToCheck,
@@ -4509,7 +4547,8 @@ async function processTurn({
                         const nameSlotConfigV67 = bookingSlotsSafe.find(s => s.type === 'name');
                         const globalSpellingEnabled = spellingConfig.enabled === true;
                         const slotLevelSpellingEnabledV67 = nameSlotConfigV67?.confirmSpelling === true;
-                        const spellingEnabled = globalSpellingEnabled || slotLevelSpellingEnabledV67; // V67: Either enables it
+                        // V75: Require BOTH toggles
+                        const spellingEnabled = globalSpellingEnabled && slotLevelSpellingEnabledV67;
                         const maxSpellingAsks = spellingConfig.maxAsksPerCall || 1;
                         const spellingAsksThisCall = nameMeta.spellingAsksCount || 0;
                         
