@@ -53,6 +53,13 @@ class FrontDeskBehaviorManager {
             const result = await response.json();
             this.config = result.data;
 
+            // V77: Ensure Off-Rails Recovery config shape exists for UI editing
+            // (DB may omit nested objects until changed)
+            this.config.offRailsRecovery = this.config.offRailsRecovery || {};
+            this.config.offRailsRecovery.bridgeBack = this.config.offRailsRecovery.bridgeBack || {};
+            this.config.offRailsRecovery.bridgeBack.resumeBooking =
+                this.config.offRailsRecovery.bridgeBack.resumeBooking || this.getDefaultConfig().offRailsRecovery.bridgeBack.resumeBooking;
+
             // Preset Draft overlay (UI-only): if an in-memory preset is loaded, overlay it onto the loaded config.
             // This MUST NOT write to DB; it only affects the UI until user clicks Save.
             try {
@@ -563,6 +570,27 @@ class FrontDeskBehaviorManager {
                 mode: 'inherit_booking_minimum',
                 requiredFieldKeys: ['name', 'phone', 'address', 'problemSummary', 'preferredTime'],
                 extraSlotIds: []
+            },
+
+            // ════════════════════════════════════════════════════════════════════
+            // V77: Off-Rails Recovery (Resume Booking Protocol)
+            // ════════════════════════════════════════════════════════════════════
+            offRailsRecovery: {
+                enabled: true,
+                bridgeBack: {
+                    enabled: true,
+                    transitionPhrase: "Now, to help you best,",
+                    maxRecoveryAttempts: 3,
+                    resumeBooking: {
+                        enabled: true,
+                        includeValues: false,
+                        template: "Okay — back to booking. I have {collectedSummary}. {nextQuestion}",
+                        collectedItemTemplate: "{label}",
+                        collectedItemTemplateWithValue: "{label}: {value}",
+                        separator: ", ",
+                        finalSeparator: " and "
+                    }
+                }
             }
         };
     }
@@ -1637,6 +1665,80 @@ Sean → Shawn, Shaun"
                     </div>
                 </div>
             </div>
+
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <!-- V77: RESUME BOOKING PROTOCOL (Off-Rails Recovery → Bridge Back) -->
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            ${(() => {
+                const rb = this.config.offRailsRecovery?.bridgeBack?.resumeBooking || this.getDefaultConfig().offRailsRecovery.bridgeBack.resumeBooking;
+                const enabled = rb.enabled !== false;
+                return `
+                <div style="background: #161b22; border: 1px solid ${enabled ? '#3fb950' : '#30363d'}; border-radius: 8px; padding: 20px; margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                        <div>
+                            <h3 style="margin: 0; color: #3fb950;">🧭 Resume Booking Protocol</h3>
+                            <p style="color: #8b949e; font-size: 0.8rem; margin: 4px 0 0 0;">
+                                After answering an off-rails question during booking, read a short recap of what’s already collected and continue with the next slot question.
+                                <br><span style="color: #6e7681;">UI-controlled. No hidden backend text.</span>
+                            </p>
+                        </div>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="fdb-resume-booking-enabled" ${enabled ? 'checked' : ''} 
+                                style="accent-color: #3fb950; width: 18px; height: 18px;"
+                                onchange="window.frontDeskManager.toggleResumeBookingProtocol(this.checked)">
+                            <span style="color: ${enabled ? '#3fb950' : '#8b949e'}; font-weight: 600;">
+                                ${enabled ? 'ENABLED' : 'DISABLED'}
+                            </span>
+                        </label>
+                    </div>
+                    
+                    <div id="fdb-resume-booking-settings" style="display: ${enabled ? 'block' : 'none'};">
+                        <div style="display:flex; align-items:center; gap: 12px; margin-bottom: 12px;">
+                            <label style="display:flex; align-items:center; gap: 8px; cursor:pointer;">
+                                <input type="checkbox" id="fdb-resume-booking-includeValues" ${rb.includeValues === true ? 'checked' : ''} style="accent-color: #3fb950;">
+                                <span style="color:#c9d1d9;">Include collected values (reads back what you have)</span>
+                            </label>
+                            <span style="color:#6e7681; font-size: 0.75rem;">Tip: keep OFF if you don’t want to read back phone/address.</span>
+                        </div>
+                        
+                        <div style="margin-bottom: 12px;">
+                            <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">Resume block template</label>
+                            <textarea id="fdb-resume-booking-template" rows="2"
+                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${rb.template || ''}</textarea>
+                            <div style="color:#6e7681; font-size: 0.7rem; margin-top: 6px;">
+                                Placeholders: <code>{collectedSummary}</code>, <code>{missingSummary}</code>, <code>{nextSlotLabel}</code>, <code>{nextQuestion}</code>
+                            </div>
+                        </div>
+                        
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                            <div>
+                                <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">Collected item template (no values)</label>
+                                <input id="fdb-resume-booking-itemTemplate" value="${rb.collectedItemTemplate || ''}"
+                                    style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                            </div>
+                            <div>
+                                <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">Collected item template (with values)</label>
+                                <input id="fdb-resume-booking-itemTemplateWithValue" value="${rb.collectedItemTemplateWithValue || ''}"
+                                    style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                            </div>
+                        </div>
+
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div>
+                                <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">List separator</label>
+                                <input id="fdb-resume-booking-separator" value="${rb.separator || ', '}"
+                                    style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                            </div>
+                            <div>
+                                <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">Final separator</label>
+                                <input id="fdb-resume-booking-finalSeparator" value="${rb.finalSeparator || ' and '}"
+                                    style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `;
+            })()}
             
             <!-- Common First Names Section -->
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 16px;">
@@ -1913,6 +2015,22 @@ Sean → Shawn, Shaun`;
         
         this.isDirty = true;
         console.log('[FRONT DESK] ✏️ Spelling variants toggled:', enabled);
+    }
+
+    // V77: Toggle Resume Booking Protocol UI
+    toggleResumeBookingProtocol(enabled) {
+        if (!this.config.offRailsRecovery) this.config.offRailsRecovery = {};
+        if (!this.config.offRailsRecovery.bridgeBack) this.config.offRailsRecovery.bridgeBack = {};
+        if (!this.config.offRailsRecovery.bridgeBack.resumeBooking) {
+            this.config.offRailsRecovery.bridgeBack.resumeBooking = this.getDefaultConfig().offRailsRecovery.bridgeBack.resumeBooking;
+        }
+        
+        this.config.offRailsRecovery.bridgeBack.resumeBooking.enabled = enabled === true;
+        this.isDirty = true;
+        
+        // Toggle UI section visibility without full rerender
+        const settingsEl = document.getElementById('fdb-resume-booking-settings');
+        if (settingsEl) settingsEl.style.display = enabled ? 'block' : 'none';
     }
     
     parseVariantGroups(text) {
@@ -7945,6 +8063,27 @@ Sean → Shawn, Shaun`;
         if (document.getElementById('fdb-spelling-enabled')) {
             this.config.nameSpellingVariants = this.collectSpellingVariantsConfig();
             console.log('[FRONT DESK BEHAVIOR] ✏️ V30 Name spelling variants saved:', this.config.nameSpellingVariants);
+        }
+
+        // ════════════════════════════════════════════════════════════════════════════
+        // V77: Resume Booking Protocol (Off-Rails Recovery → Bridge Back)
+        // ════════════════════════════════════════════════════════════════════════════
+        if (document.getElementById('fdb-resume-booking-enabled')) {
+            if (!this.config.offRailsRecovery) this.config.offRailsRecovery = {};
+            if (!this.config.offRailsRecovery.bridgeBack) this.config.offRailsRecovery.bridgeBack = {};
+            if (!this.config.offRailsRecovery.bridgeBack.resumeBooking) {
+                this.config.offRailsRecovery.bridgeBack.resumeBooking = this.getDefaultConfig().offRailsRecovery.bridgeBack.resumeBooking;
+            }
+
+            this.config.offRailsRecovery.bridgeBack.resumeBooking = {
+                enabled: document.getElementById('fdb-resume-booking-enabled')?.checked === true,
+                includeValues: document.getElementById('fdb-resume-booking-includeValues')?.checked === true,
+                template: (document.getElementById('fdb-resume-booking-template')?.value || '').trim(),
+                collectedItemTemplate: (document.getElementById('fdb-resume-booking-itemTemplate')?.value || '').trim(),
+                collectedItemTemplateWithValue: (document.getElementById('fdb-resume-booking-itemTemplateWithValue')?.value || '').trim(),
+                separator: (document.getElementById('fdb-resume-booking-separator')?.value || '').toString(),
+                finalSeparator: (document.getElementById('fdb-resume-booking-finalSeparator')?.value || '').toString()
+            };
         }
     }
 

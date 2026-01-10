@@ -49,6 +49,7 @@ const DynamicFlowEngine = require('./DynamicFlowEngine');
 const logger = require('../utils/logger');
 const { parseSpellingVariantPrompt, parseSpellingVariantResponse } = require('../utils/nameSpellingVariant');
 const { extractName: extractNameDeterministic } = require('../utils/nameExtraction');
+const { buildResumeBookingBlock } = require('../utils/resumeBookingProtocol');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VERSION BANNER - Proves this code is deployed
@@ -236,10 +237,44 @@ function getMissingConfigPrompt(configType, fieldName, context = {}) {
         'final_script': "You're all set.",
         'askAddAnotherPrompt': "Is there anything else?",
         // Confirm prompts
-        'confirmPrompt': "Just to confirm, {value}. Is that right?"
+        'confirmPrompt': "Just to confirm, {value}. Is that right?",
+        // Resume booking protocol
+        'resumeBookingTemplate': "Okay — back to booking. I have {collectedSummary}. {nextQuestion}"
     };
     
     return safeDefaults[configType] || safeDefaults[fieldName] || `[CONFIG MISSING: ${configType}]`;
+}
+
+function buildBookingResumeBlock({
+    company,
+    bookingSlots,
+    collectedSlots,
+    nextSlot,
+    nextQuestion
+}) {
+    const resumeCfg = company?.aiAgentSettings?.frontDeskBehavior?.offRailsRecovery?.bridgeBack?.resumeBooking || {};
+    const templateFallback = getMissingConfigPrompt('resumeBookingTemplate', 'offRailsRecovery.bridgeBack.resumeBooking.template', {
+        companyId: company?._id,
+        note: 'Configure in Front Desk Behavior → Off-Rails Recovery → Resume Booking Protocol'
+    });
+
+    const effectiveResumeCfg = {
+        enabled: resumeCfg?.enabled !== false,
+        includeValues: resumeCfg?.includeValues === true,
+        template: typeof resumeCfg?.template === 'string' && resumeCfg.template.trim() ? resumeCfg.template : templateFallback,
+        collectedItemTemplate: resumeCfg?.collectedItemTemplate,
+        collectedItemTemplateWithValue: resumeCfg?.collectedItemTemplateWithValue,
+        separator: resumeCfg?.separator,
+        finalSeparator: resumeCfg?.finalSeparator
+    };
+
+    return buildResumeBookingBlock({
+        resumeConfig: effectiveResumeCfg,
+        bookingSlots,
+        collectedSlots,
+        nextSlot,
+        nextQuestion
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3365,10 +3400,17 @@ async function processTurn({
                             willResumeSlot: nextSlotQuestion.substring(0, 50)
                         });
                         
-                        // FAST PATH: Use cheat sheet answer directly + resume slot
+                        // FAST PATH: Use cheat sheet answer directly + resume slot (with UI-controlled resume protocol)
                         // This is faster than LLM and more predictable
                         const cheatSheetAnswer = bookingInterruptCheatSheet.answer;
-                        const finalReply = `${cheatSheetAnswer}\n\n${nextSlotQuestion}`;
+                        const resumeBlock = buildBookingResumeBlock({
+                            company,
+                            bookingSlots: bookingSlotsInt,
+                            collectedSlots: currentSlots,
+                            nextSlot: nextMissingSlotInt,
+                            nextQuestion: nextSlotQuestion
+                        }) || nextSlotQuestion;
+                        const finalReply = `${cheatSheetAnswer}\n\n${resumeBlock}`;
                         
                         aiResult = {
                             reply: finalReply,
@@ -3436,12 +3478,18 @@ async function processTurn({
                     behaviorConfig: company.aiAgentSettings?.frontDeskBehavior || {}
                 });
                 
-                // Bridge back to booking slot after LLM response
-                const bridgePhrase = company.aiAgentSettings?.frontDeskBehavior?.offRailsRecovery?.bridgeBack?.transitionPhrase || 'Now,';
+                // Bridge back to booking slot after LLM response (with UI-controlled resume protocol)
                 let finalReply = llmResult.reply || '';
+                const resumeBlock = buildBookingResumeBlock({
+                    company,
+                    bookingSlots: bookingSlotsInt,
+                    collectedSlots: currentSlots,
+                    nextSlot: nextMissingSlotInt,
+                    nextQuestion: nextSlotQuestion
+                }) || nextSlotQuestion;
                 
-                if (nextSlotQuestion) {
-                    finalReply = `${finalReply} ${bridgePhrase} ${nextSlotQuestion}`;
+                if (resumeBlock) {
+                    finalReply = `${finalReply}\n\n${resumeBlock}`;
                 }
                 
                 aiLatencyMs = Date.now() - aiStartTime;

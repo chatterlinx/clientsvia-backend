@@ -2882,7 +2882,39 @@ const companySchema = new mongoose.Schema({
                     // Transition phrase before asking the fixed question again
                     transitionPhrase: { type: String, default: "Now, to help you best,", trim: true },
                     // Max recovery attempts before escalation
-                    maxRecoveryAttempts: { type: Number, default: 3, min: 1, max: 5 }
+                    maxRecoveryAttempts: { type: Number, default: 3, min: 1, max: 5 },
+
+                    // ═══════════════════════════════════════════════════════════════
+                    // V77: RESUME BOOKING PROTOCOL (UI Controlled)
+                    // ═══════════════════════════════════════════════════════════════
+                    // After answering an off-rails question in BOOKING mode (cheat sheet or LLM),
+                    // read a brief recap of what is already collected and resume with the next slot.
+                    //
+                    // IMPORTANT:
+                    // - This is enterprise protocol text and must be visible/editable in UI
+                    // - Defaults are safe but should be customized per company
+                    resumeBooking: {
+                        enabled: { type: Boolean, default: true },
+                        includeValues: { type: Boolean, default: false }, // Avoid reading back PII by default
+                        // Template for the resume block (answer is already given above this).
+                        // Placeholders:
+                        // - {collectedSummary} (e.g., "Name, Phone")
+                        // - {nextQuestion} (exact UI slot question)
+                        // - {nextSlotLabel} (e.g., "Address")
+                        // - {missingSummary} (e.g., "Address, Time")
+                        template: {
+                            type: String,
+                            default: "Okay — back to booking. I have {collectedSummary}. {nextQuestion}",
+                            trim: true
+                        },
+                        // How to format each collected slot in {collectedSummary}
+                        // Placeholders: {label}, {value}
+                        collectedItemTemplate: { type: String, default: "{label}", trim: true },
+                        collectedItemTemplateWithValue: { type: String, default: "{label}: {value}", trim: true },
+                        // List separators
+                        separator: { type: String, default: ", ", trim: true },
+                        finalSeparator: { type: String, default: " and ", trim: true }
+                    }
                 }
             },
             

@@ -195,6 +195,29 @@ const DEFAULT_BOOKING_OUTCOME = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT OFF-RAILS RECOVERY (Enterprise)
+// ═══════════════════════════════════════════════════════════════════════════
+// NOTE: This is protocol-level text (not trade-specific) and is fully editable in UI.
+const DEFAULT_OFF_RAILS_RECOVERY = {
+    enabled: true,
+    bridgeBack: {
+        enabled: true,
+        transitionPhrase: "Now,",
+        maxRecoveryAttempts: 3,
+        // V77: Resume Booking Protocol (recap + resume slot)
+        resumeBooking: {
+            enabled: true,
+            includeValues: false,
+            template: "Okay — back to booking. I have {collectedSummary}. {nextQuestion}",
+            collectedItemTemplate: "{label}",
+            collectedItemTemplateWithValue: "{label}: {value}",
+            separator: ", ",
+            finalSeparator: " and "
+        }
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // DEFAULT ESCALATION CONFIG
 // ═══════════════════════════════════════════════════════════════════════════
 const DEFAULT_ESCALATION = {
@@ -375,6 +398,9 @@ function getPresetForTrade(tradeKey = 'universal') {
         
         // V61: Name spelling variants (global config)
         nameSpellingVariants: DEFAULT_NAME_SPELLING_VARIANTS,
+
+        // V77: Off-rails recovery protocol (resume booking after interrupts)
+        offRailsRecovery: DEFAULT_OFF_RAILS_RECOVERY,
         
         // Personality (trade-aware)
         personality: {
@@ -399,6 +425,7 @@ module.exports = {
     DEFAULT_UNIT_OF_WORK,
     DEFAULT_DISCOVERY_CONSENT,
     DEFAULT_NAME_SPELLING_VARIANTS,
+    DEFAULT_OFF_RAILS_RECOVERY,
     TRADE_PRESETS
 };
 
