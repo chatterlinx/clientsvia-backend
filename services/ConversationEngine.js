@@ -785,20 +785,26 @@ function stripFillerWords(userText, company, template) {
 // - Precomputed variants are stored in config.precomputedVariantMap (from Admin UI)
 // - Runtime only does O(1) map lookup
 // ═══════════════════════════════════════════════════════════════════════════
-function findSpellingVariant(name, config, commonFirstNames = []) {
+function findSpellingVariant(name, config, commonFirstNames = [], slotLevelEnabled = false) {
+    // V67 FIX: Accept slot-level enabled flag as 4th parameter
+    // This allows the slot's confirmSpelling checkbox to enable variants even if global is disabled
+    const effectiveEnabled = config?.enabled === true || slotLevelEnabled === true;
+    
     // V66 DEBUG: Log inputs to trace spelling variant issues
-    logger.info('[SPELLING VARIANT] 🔍 V66 findSpellingVariant called', {
+    logger.info('[SPELLING VARIANT] 🔍 V67 findSpellingVariant called', {
         name,
         hasConfig: !!config,
         configEnabled: config?.enabled,
+        slotLevelEnabled,
+        effectiveEnabled,
         configSource: config?.source,
         configMode: config?.mode,
         hasVariantGroups: !!config?.variantGroups,
         variantGroupsKeys: config?.variantGroups ? Object.keys(config.variantGroups).slice(0, 5) : []
     });
     
-    if (!name || !config?.enabled) {
-        logger.info('[SPELLING VARIANT] ❌ V66 Early return', { reason: !name ? 'no_name' : 'config_not_enabled' });
+    if (!name || !effectiveEnabled) {
+        logger.info('[SPELLING VARIANT] ❌ V67 Early return', { reason: !name ? 'no_name' : 'not_enabled', configEnabled: config?.enabled, slotLevelEnabled });
         return null;
     }
     
@@ -3865,7 +3871,8 @@ async function processTurn({
                         
                         if (shouldCheckSpellingV45) {
                             const commonFirstNamesV45 = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
-                            const variantV45 = findSpellingVariant(nameToConfirm, spellingConfigV45, commonFirstNamesV45);
+                            // V67 FIX: Pass slot-level enabled flag to override global disabled
+                            const variantV45 = findSpellingVariant(nameToConfirm, spellingConfigV45, commonFirstNamesV45, slotLevelSpellingEnabled);
                             
                             log('📝 V45: Spelling variant result', {
                                 name: nameToConfirm,
@@ -4084,7 +4091,8 @@ async function processTurn({
                     // V44: Actually RUN the spelling variant check here
                     const spellingConfigV44 = company.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants || {};
                     const commonFirstNamesV44 = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
-                    const variantV44 = findSpellingVariant(nameToCheck, spellingConfigV44, commonFirstNamesV44);
+                    // V67 FIX: Pass slot-level enabled flag to override global disabled
+                    const variantV44 = findSpellingVariant(nameToCheck, spellingConfigV44, commonFirstNamesV44, slotLevelSpellingEnabled);
                     
                     log('📝 V44 SPELLING VARIANT CHECK RESULT', {
                         nameToCheck,
@@ -4442,9 +4450,13 @@ async function processTurn({
                         // ═══════════════════════════════════════════════════════════════════
                         // V31: SPELLING VARIANT CHECK (Mark with K or Marc with C?)
                         // Only ask if: enabled, not asked yet, max asks not exceeded
+                        // V67 FIX: Also check slot-level confirmSpelling checkbox!
                         // ═══════════════════════════════════════════════════════════════════
                         const spellingConfig = company.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants || {};
-                        const spellingEnabled = spellingConfig.enabled === true;
+                        const nameSlotConfigV67 = bookingSlotsSafe.find(s => s.type === 'name');
+                        const globalSpellingEnabled = spellingConfig.enabled === true;
+                        const slotLevelSpellingEnabledV67 = nameSlotConfigV67?.confirmSpelling === true;
+                        const spellingEnabled = globalSpellingEnabled || slotLevelSpellingEnabledV67; // V67: Either enables it
                         const maxSpellingAsks = spellingConfig.maxAsksPerCall || 1;
                         const spellingAsksThisCall = nameMeta.spellingAsksCount || 0;
                         
@@ -4473,7 +4485,8 @@ async function processTurn({
                         
                         if (shouldCheckSpelling) {
                             const commonFirstNames = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
-                            const variant = findSpellingVariant(extractedName, spellingConfig, commonFirstNames);
+                            // V67 FIX: Pass slot-level enabled flag to override global disabled
+                            const variant = findSpellingVariant(extractedName, spellingConfig, commonFirstNames, slotLevelSpellingEnabledV67);
                             
                             // V44 DEBUG: Log variant result
                             log('📝 V44 SPELLING VARIANT RESULT', {
