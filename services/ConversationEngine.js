@@ -4581,11 +4581,17 @@ async function processTurn({
                                 log('📝 NAME: No spelling variant found, confirming partial name', { partial: extractedName });
                             }
                         } else {
-                            // Spelling variants disabled or already asked, proceed with normal confirm
-                            const confirmText = confirmBackTemplate.replace('{value}', extractedName);
-                            finalReply = confirmText;
-                            nextSlotId = 'name';
-                            log('📝 NAME: Confirming partial name', { partial: extractedName, spellingEnabled, askedSpellingVariant: nameMeta.askedSpellingVariant });
+                            // V70 FIX: Only overwrite if we didn't ALREADY set the spelling variant question this turn!
+                            // The discovery path may have already set it, we must NOT overwrite.
+                            if (!askedSpellingVariantThisTurn) {
+                                // Spelling variants disabled or already asked, proceed with normal confirm
+                                const confirmText = confirmBackTemplate.replace('{value}', extractedName);
+                                finalReply = confirmText;
+                                nextSlotId = 'name';
+                                log('📝 NAME: Confirming partial name', { partial: extractedName, spellingEnabled, askedSpellingVariant: nameMeta.askedSpellingVariant });
+                            } else {
+                                log('📝 V70: SKIPPING confirmBack - spelling variant question already set this turn');
+                            }
                         }
                     // ═══════════════════════════════════════════════════════════════════
                     // V31: Handle spelling variant response
