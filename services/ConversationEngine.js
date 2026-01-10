@@ -4604,24 +4604,44 @@ async function processTurn({
                         // Check what the user answered
                         let chosenName = null;
                         
-                        // Check for letter answers: "K", "C", "with a K", "the K"
-                        if (userTextLower.includes(variant.letterA.toLowerCase()) && 
-                            !userTextLower.includes(variant.letterB.toLowerCase())) {
+                        // V71 FIX: Smarter letter detection - look for isolated letter patterns
+                        // "with a C", "the C", "a C", just "C", "C please"
+                        // NOT just any occurrence (e.g., "marked" contains "k" but user means "C")
+                        const letterALower = variant.letterA.toLowerCase();
+                        const letterBLower = variant.letterB.toLowerCase();
+                        
+                        // Patterns that clearly indicate a letter choice
+                        const hasLetterAPattern = new RegExp(`(with a |with the |the |a |^)${letterALower}($|\\s|\\.|,|!|\\?)`, 'i').test(userTextLower);
+                        const hasLetterBPattern = new RegExp(`(with a |with the |the |a |^)${letterBLower}($|\\s|\\.|,|!|\\?)`, 'i').test(userTextLower);
+                        
+                        log('📝 V71 SPELLING RESPONSE DETECTION', {
+                            userText: userTextLower,
+                            letterA: letterALower,
+                            letterB: letterBLower,
+                            hasLetterAPattern,
+                            hasLetterBPattern,
+                            optionA: variant.optionA,
+                            optionB: variant.optionB
+                        });
+                        
+                        // Check for letter patterns first (more specific)
+                        if (hasLetterAPattern && !hasLetterBPattern) {
                             chosenName = variant.optionA;
-                        } else if (userTextLower.includes(variant.letterB.toLowerCase()) && 
-                                   !userTextLower.includes(variant.letterA.toLowerCase())) {
+                        } else if (hasLetterBPattern && !hasLetterAPattern) {
                             chosenName = variant.optionB;
                         }
-                        // Check for name answers: "Mark", "Marc"
-                        else if (userTextLower.includes(variant.optionA.toLowerCase())) {
+                        // Check for exact name matches (not substrings in other words)
+                        else if (new RegExp(`\\b${variant.optionA.toLowerCase()}\\b`).test(userTextLower) &&
+                                 !new RegExp(`\\b${variant.optionB.toLowerCase()}\\b`).test(userTextLower)) {
                             chosenName = variant.optionA;
-                        } else if (userTextLower.includes(variant.optionB.toLowerCase())) {
+                        } else if (new RegExp(`\\b${variant.optionB.toLowerCase()}\\b`).test(userTextLower) &&
+                                 !new RegExp(`\\b${variant.optionA.toLowerCase()}\\b`).test(userTextLower)) {
                             chosenName = variant.optionB;
                         }
                         // Default to optionA if unclear
                         else {
                             chosenName = variant.optionA;
-                            log('📝 V31 SPELLING: Unclear answer, defaulting to optionA', { userText, optionA: variant.optionA });
+                            log('📝 V71 SPELLING: Unclear answer, defaulting to optionA', { userText, optionA: variant.optionA });
                         }
                         
                         // Update the name with the correct spelling
