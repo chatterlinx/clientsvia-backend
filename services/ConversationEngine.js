@@ -3874,6 +3874,21 @@ async function processTurn({
                             // V67 FIX: Pass slot-level enabled flag to override global disabled
                             const variantV45 = findSpellingVariant(nameToConfirm, spellingConfigV45, commonFirstNamesV45, slotLevelSpellingEnabled);
                             
+                            // V68 DEBUG: Log extensive info to trace why variant might not be found
+                            log('📝 V68 SPELLING VARIANT DEBUG', {
+                                nameToConfirm,
+                                nameToConfirmLower: nameToConfirm.toLowerCase(),
+                                variantFound: !!(variantV45 && variantV45.hasVariant),
+                                variant: variantV45 ? { optionA: variantV45.optionA, optionB: variantV45.optionB } : null,
+                                configExists: !!spellingConfigV45,
+                                configEnabled: spellingConfigV45?.enabled,
+                                configSource: spellingConfigV45?.source,
+                                slotLevelEnabled: slotLevelSpellingEnabled,
+                                variantGroupsKeys: spellingConfigV45?.variantGroups ? Object.keys(spellingConfigV45.variantGroups) : [],
+                                variantGroupsType: spellingConfigV45?.variantGroups ? typeof spellingConfigV45.variantGroups : 'undefined',
+                                hasMarkVariant: spellingConfigV45?.variantGroups?.['Mark'] || spellingConfigV45?.variantGroups?.['mark'] || 'NOT_FOUND'
+                            });
+                            
                             log('📝 V45: Spelling variant result', {
                                 name: nameToConfirm,
                                 variantFound: !!(variantV45 && variantV45.hasVariant),
