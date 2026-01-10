@@ -1806,7 +1806,9 @@ async function processTurn({
             blackBox = null,
             // V51: Add templateReferences for wiring diagnostic
             templateReferences = null,
-            scenarioCount = null
+            scenarioCount = null,
+            // V68: Add spelling variant debug for troubleshooting
+            spellingVariantDebug = null
         } = truth;
 
         // Always return required shape, with nulls if missing.
@@ -1864,7 +1866,10 @@ async function processTurn({
             // V51: Template references for wiring diagnostic
             // This allows WiringDiagnosticService to see actual template state
             templateReferences: Array.isArray(templateReferences) ? templateReferences : [],
-            scenarioCount: typeof scenarioCount === 'number' ? scenarioCount : 0
+            scenarioCount: typeof scenarioCount === 'number' ? scenarioCount : 0,
+            
+            // V68: Spelling variant debug info for troubleshooting
+            spellingVariantDebug: spellingVariantDebug || null
         };
     }
 
@@ -1889,6 +1894,9 @@ async function processTurn({
         debugLog.push(entry);
         logger.info(`[CONVERSATION ENGINE] ${msg}`, data);
     };
+    
+    // V68: Spelling variant debug data - captured during booking mode and included in response
+    let spellingVariantDebugData = null;
     
     try {
         // ═══════════════════════════════════════════════════════════════════
@@ -3885,8 +3893,8 @@ async function processTurn({
                             // V67 FIX: Pass slot-level enabled flag to override global disabled
                             const variantV45 = findSpellingVariant(nameToConfirm, spellingConfigV45, commonFirstNamesV45, slotLevelSpellingEnabled);
                             
-                            // V68 DEBUG: Log extensive info to trace why variant might not be found
-                            log('📝 V68 SPELLING VARIANT DEBUG', {
+                            // V68 DEBUG: Capture for response snapshot
+                            spellingVariantDebugData = {
                                 nameToConfirm,
                                 nameToConfirmLower: nameToConfirm.toLowerCase(),
                                 variantFound: !!(variantV45 && variantV45.hasVariant),
@@ -3897,8 +3905,11 @@ async function processTurn({
                                 slotLevelEnabled: slotLevelSpellingEnabled,
                                 variantGroupsKeys: spellingConfigV45?.variantGroups ? Object.keys(spellingConfigV45.variantGroups) : [],
                                 variantGroupsType: spellingConfigV45?.variantGroups ? typeof spellingConfigV45.variantGroups : 'undefined',
-                                hasMarkVariant: spellingConfigV45?.variantGroups?.['Mark'] || spellingConfigV45?.variantGroups?.['mark'] || 'NOT_FOUND'
-                            });
+                                hasMarkVariant: spellingConfigV45?.variantGroups?.['Mark'] || spellingConfigV45?.variantGroups?.['mark'] || 'NOT_FOUND',
+                                variantGroupsSample: spellingConfigV45?.variantGroups ? JSON.stringify(spellingConfigV45.variantGroups).substring(0, 300) : null
+                            };
+                            
+                            log('📝 V68 SPELLING VARIANT DEBUG', spellingVariantDebugData);
                             
                             log('📝 V45: Spelling variant result', {
                                 name: nameToConfirm,
@@ -7250,7 +7261,9 @@ async function processTurn({
                 blackBox: { callId: session._id.toString(), source: sourceTruth },
                 // V51: Include templateReferences for wiring diagnostic
                 templateReferences: enabledTemplateRefs,
-                scenarioCount: scenarioToolsExpanded.length
+                scenarioCount: scenarioToolsExpanded.length,
+                // V68: Include spelling variant debug data
+                spellingVariantDebug: spellingVariantDebugData
             });
         }
         
