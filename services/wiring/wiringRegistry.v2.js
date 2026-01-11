@@ -78,7 +78,13 @@ const VALIDATORS = {
     ),
 
     // Booking continuity validators
-    resumeBookingHasTemplate: (val) => !!(val && typeof val.template === 'string' && val.template.trim().length > 0),
+    // If enabled, template must be non-empty. If disabled, it's valid without template.
+    resumeBookingHasTemplate: (val) => {
+        if (!val || typeof val !== 'object') return false;
+        const enabled = val.enabled !== false;
+        if (!enabled) return true;
+        return typeof val.template === 'string' && val.template.trim().length > 0;
+    },
     confirmationRequestsHasTriggers: (val) => {
         if (!val || typeof val !== 'object') return false;
         const enabled = val.enabled !== false;

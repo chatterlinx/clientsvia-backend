@@ -271,7 +271,15 @@ const TIER_MAX = {
             fixInstructions: 'Enable Resume Booking Protocol and set a template',
             nav: { tab: 'front-desk', section: 'personality', field: 'resumeBooking' },
             dbPath: 'aiAgentSettings.frontDeskBehavior.offRailsRecovery.bridgeBack.resumeBooking',
-            recommendedValue: { enabled: true }
+            recommendedValue: {
+                enabled: true,
+                includeValues: false,
+                template: "Okay — back to booking. I have {collectedSummary}. {nextQuestion}",
+                collectedItemTemplate: "{label}",
+                collectedItemTemplateWithValue: "{label}: {value}",
+                separator: ", ",
+                finalSeparator: " and "
+            }
         },
         {
             fieldId: 'frontDesk.confirmationRequests',
@@ -283,7 +291,20 @@ const TIER_MAX = {
             fixInstructions: 'Enable Confirmation Requests and keep at least 2 trigger phrases',
             nav: { tab: 'front-desk', section: 'personality', field: 'confirmationRequests' },
             dbPath: 'aiAgentSettings.frontDeskBehavior.confirmationRequests',
-            recommendedValue: { enabled: true }
+            recommendedValue: {
+                enabled: true,
+                triggers: [
+                    "did you get my",
+                    "did you catch my",
+                    "did i give you the right",
+                    "is that right",
+                    "is that correct",
+                    "can you repeat",
+                    "can you read that back",
+                    "can you confirm",
+                    "what did you have for my"
+                ]
+            }
         },
         {
             fieldId: 'frontDesk.fastPathBooking.triggerKeywords',
