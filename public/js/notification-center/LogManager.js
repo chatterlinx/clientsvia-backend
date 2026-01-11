@@ -433,9 +433,9 @@ class LogManager {
                         </button>
                     ` : ''}
                     ${log.companyId ? `
-                        <a href="/company-profile.html?id=${log.companyId}" target="_blank"
+                        <a href="/control-plane-v2.html?companyId=${log.companyId}" target="_blank"
                            class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 inline-block">
-                            🏢 View Company
+                            🏢 Control Plane
                         </a>
                     ` : ''}
                 </div>

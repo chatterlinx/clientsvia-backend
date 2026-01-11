@@ -1435,7 +1435,7 @@
                   </div>
                   
                   <div class="w-scope-proof-grid">
-                    <div class="w-scope-proof-item w-scope-clickable" data-nav-url="/company-profile.html?companyId=${esc(scopeProof.companyId)}" title="Open Company Profile">
+                    <div class="w-scope-proof-item w-scope-clickable" data-nav-url="/control-plane-v2.html?companyId=${esc(scopeProof.companyId)}" title="Open Control Plane (Truth UI)">
                       <div class="w-scope-proof-label">Company ID <i class="fas fa-external-link-alt" style="font-size: 9px; opacity: 0.5;"></i></div>
                       <div class="w-scope-proof-value">${esc(scopeProof.companyId || 'N/A')}</div>
                     </div>

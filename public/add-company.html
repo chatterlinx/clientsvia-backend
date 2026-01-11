@@ -428,7 +428,8 @@
                 document.getElementById('success-modal').classList.remove('hidden');
 
                 setTimeout(() => {
-                    window.location.href = `/company-profile.html?id=${result._id}`;
+                    // Legacy UI nuked (Jan 2026) — route new companies into the Truth UI.
+                    window.location.href = `/control-plane-v2.html?companyId=${result._id}`;
                 }, 2000);
 
             } catch (error) {

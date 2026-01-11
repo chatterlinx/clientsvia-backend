@@ -1058,7 +1058,7 @@
     <div class="header-left">
       <button class="btn-back" onclick="goBackToProfile()">
       <i class="fas fa-arrow-left"></i>
-      <span>Back to Profile</span>
+      <span>Back to Directory</span>
     </button>
       <h1 class="page-title">🎛️ Control Plane</h1>
     </div>
@@ -2517,11 +2517,8 @@
     // NAVIGATION FUNCTIONS
     // ═══════════════════════════════════════════════════════════════════════════
     function goBackToProfile() {
-      if (currentCompanyId) {
-        window.location.href = `/company-profile.html?id=${currentCompanyId}#ai-agent-settings`;
-      } else {
-        window.location.href = '/admin-directory.html';
-      }
+      // Legacy UI nuked (Jan 2026). Prevent returning to company-profile.html.
+      window.location.href = '/directory.html';
     }
 
     function openCallCenter() {

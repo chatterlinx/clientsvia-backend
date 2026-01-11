@@ -16,6 +16,34 @@
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script>
+        // ============================================================================
+        // 🚫 LEGACY UI NUKED (Jan 2026)
+        // ============================================================================
+        // Defense-in-depth: even if this file is served directly (CDN cache, static host,
+        // or a dev environment bypass), immediately redirect admins to the Truth UI.
+        //
+        // Truth UI: /control-plane-v2.html?companyId=...
+        // ============================================================================
+        (function() {
+            try {
+                const params = new URLSearchParams(window.location.search || '');
+                const rawId = params.get('companyId') || params.get('id') || params.get('company');
+                const companyId = String(rawId || '').trim();
+                const isMongoId = /^[a-f0-9]{24}$/i.test(companyId);
+
+                if (isMongoId) {
+                    window.location.replace(`/control-plane-v2.html?companyId=${encodeURIComponent(companyId)}`);
+                } else {
+                    window.location.replace('/directory.html');
+                }
+            } catch (e) {
+                // If something goes wrong, fail closed by going to directory.
+                window.location.replace('/directory.html');
+            }
+        })();
+    </script>
 </head>
 <body class="bg-gray-100">
     <div id="app" class="flex flex-col min-h-screen">

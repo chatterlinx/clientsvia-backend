@@ -730,8 +730,8 @@
         });
 
         function updateNavLinks() {
-            // Back to Profile - goes to company profile page
-            document.getElementById('navBack').href = `company-profile.html?companyId=${companyId}`;
+            // Legacy UI nuked (Jan 2026) — Back goes to Control Plane V2 (truth UI).
+            document.getElementById('navBack').href = `control-plane-v2.html?companyId=${companyId}`;
             
             // Control Plane V2 - main control plane
             document.getElementById('navControlPlane').href = `control-plane-v2.html?companyId=${companyId}`;

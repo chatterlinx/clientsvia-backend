@@ -383,6 +383,30 @@ console.log('🔍 SESSION CHECKPOINT 3: Session middleware applied successfully'
 const compression = require('compression');
 app.use(compression());
 
+// ============================================================================
+// 🚫 LEGACY UI NUKED (Jan 2026)
+// ============================================================================
+// We intentionally prevent access to the legacy company-profile UI to eliminate
+// "two sources of truth" and stop admins from editing the wrong config tree.
+//
+// Truth UI: /control-plane-v2.html?companyId=...
+// Legacy UI: /company-profile.html (DISABLED)
+//
+// NOTE: This MUST be registered BEFORE express.static(public) or the static
+// file will be served and the redirect will never execute.
+// ============================================================================
+app.get('/company-profile.html', (req, res) => {
+    const rawId = req.query.companyId || req.query.id || req.query.company || '';
+    const companyId = String(rawId || '').trim();
+    const isMongoId = /^[a-f0-9]{24}$/i.test(companyId);
+    
+    const target = isMongoId
+        ? `/control-plane-v2.html?companyId=${encodeURIComponent(companyId)}`
+        : `/control-plane-v2.html`;
+    
+    return res.redirect(302, target);
+});
+
 // Optimized static file serving with aggressive caching for audio files
 app.use('/audio', express.static(path.join(__dirname, 'public/audio'), {
   maxAge: '1d', // Cache audio files for 1 day
