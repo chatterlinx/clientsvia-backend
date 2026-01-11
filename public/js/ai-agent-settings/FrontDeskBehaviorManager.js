@@ -12,7 +12,7 @@
 class FrontDeskBehaviorManager {
     // Visible on-page build stamp so admins can confirm what UI code is running.
     // Keep this human-readable (no giant hashes).
-    static UI_BUILD = 'FD-BEHAVIOR_UI_V79.3';
+    static UI_BUILD = 'FD-BEHAVIOR_UI_V79.4';
     constructor(companyId) {
         this.companyId = companyId;
         this.config = null;
@@ -6088,6 +6088,11 @@ Sean → Shawn, Shaun`;
 
     renderLoopsTab() {
         const lp = this.config.loopPrevention || {};
+        const defaults = {
+            nudgeNamePrompt: "Sure — go ahead.",
+            nudgePhonePrompt: "Sure — go ahead with the area code first.",
+            nudgeAddressPrompt: "No problem — go ahead with the street address, and include unit number if you have one."
+        };
         return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
                 <h3 style="margin: 0 0 16px 0; color: #58a6ff;">🔄 Loop Prevention</h3>
@@ -6122,6 +6127,33 @@ Sean → Shawn, Shaun`;
                     <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Rephrase Introduction</label>
                     <input type="text" id="fdb-rephrase-intro" value="${lp.rephraseIntro || 'Let me try this differently - '}" 
                         style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                </div>
+                
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #30363d;">
+                    <h4 style="margin: 0 0 8px 0; color: #c9d1d9;">🧲 Nudge Prompts (when caller is hesitant or gives partial input)</h4>
+                    <p style="color: #8b949e; margin-bottom: 12px; font-size: 0.8rem;">
+                        These are the “gentle push” lines the agent uses instead of breaking down or looping.
+                    </p>
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 12px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Name Nudge</label>
+                            <input type="text" id="fdb-nudge-name" value="${lp.nudgeNamePrompt || defaults.nudgeNamePrompt}"
+                                placeholder="${defaults.nudgeNamePrompt}"
+                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Phone Nudge</label>
+                            <input type="text" id="fdb-nudge-phone" value="${lp.nudgePhonePrompt || defaults.nudgePhonePrompt}"
+                                placeholder="${defaults.nudgePhonePrompt}"
+                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Address Nudge</label>
+                            <input type="text" id="fdb-nudge-address" value="${lp.nudgeAddressPrompt || defaults.nudgeAddressPrompt}"
+                                placeholder="${defaults.nudgeAddressPrompt}"
+                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -6313,6 +6345,7 @@ Sean → Shawn, Shaun`;
         const companyName = this.companyName || 'our company';
         const defaults = {
             greeting: `Thanks for calling ${companyName}! How can I help you today?`,
+            noResponse: "Hello — are you still there?",
             didNotUnderstandTier1: "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?",
             didNotUnderstandTier2: "I'm still having trouble hearing you clearly. Could you repeat that a bit slower for me?",
             didNotUnderstandTier3: "It sounds like this connection isn't great. Do you want me to have someone from the office call or text you back to help you?"
@@ -6350,6 +6383,20 @@ Sean → Shawn, Shaun`;
                 </div>
                 
                 <div style="display: flex; flex-direction: column; gap: 20px;">
+                    
+                    <!-- Silence / No Response -->
+                    <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;">
+                        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                            <span style="background:#334155; color:#e2e8f0; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700;">SILENCE</span>
+                            <span style="color:#c9d1d9; font-weight:600;">Caller is silent / no input</span>
+                        </div>
+                        <input type="text" id="fdb-fb-noresponse" value="${fb.noResponse || defaults.noResponse}"
+                            placeholder="${defaults.noResponse}"
+                            style="width: 100%; padding: 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
+                        <p style="color:#8b949e; font-size:11px; margin:8px 0 0 0;">
+                            Used when the caller doesn’t respond. Keep it short and polite (no blame).
+                        </p>
+                    </div>
                     
                     <!-- Tier 1: First Miss -->
                     <div style="background: #0d2818; border: 1px solid #238636; border-radius: 8px; padding: 16px;">
@@ -8092,7 +8139,10 @@ Sean → Shawn, Shaun`;
                 enabled: getChecked('fdb-loop-enabled'),
                 maxSameQuestion: parseInt(document.getElementById('fdb-max-same-q')?.value) || 2,
                 onLoop: get('fdb-on-loop'),
-                rephraseIntro: get('fdb-rephrase-intro')
+                rephraseIntro: get('fdb-rephrase-intro'),
+                nudgeNamePrompt: get('fdb-nudge-name'),
+                nudgePhonePrompt: get('fdb-nudge-phone'),
+                nudgeAddressPrompt: get('fdb-nudge-address')
             };
         }
         
@@ -8108,6 +8158,10 @@ Sean → Shawn, Shaun`;
         // Tiered Fallback Protocol (honesty-first recovery)
         if (document.getElementById('fdb-fb-tier1')) {
             this.config.fallbackResponses = this.config.fallbackResponses || {};
+            // Silence / no-response fallback
+            if (document.getElementById('fdb-fb-noresponse')) {
+                this.config.fallbackResponses.noResponse = get('fdb-fb-noresponse') || 'Hello — are you still there?';
+            }
             // New tiered fallbacks
             this.config.fallbackResponses.didNotUnderstandTier1 = get('fdb-fb-tier1') || "I'm sorry, the connection was a little rough and I didn't catch that. Can you please say that one more time?";
             this.config.fallbackResponses.didNotUnderstandTier2 = get('fdb-fb-tier2') || "I'm still having trouble hearing you clearly. Could you repeat that a bit slower for me?";

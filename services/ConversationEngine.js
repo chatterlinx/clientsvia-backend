@@ -3155,6 +3155,33 @@ async function processTurn({
             // ═══════════════════════════════════════════════════════════════════
             log('CHECKPOINT 9b: 📋 BOOKING MODE (deterministic - no state machine)');
 
+            // ───────────────────────────────────────────────────────────────
+            // SILENCE / NO RESPONSE (UI-CONTROLLED)
+            // ───────────────────────────────────────────────────────────────
+            // If caller is silent (empty input), do NOT misroute into slot breakdown.
+            // Use a dedicated no-response fallback if configured, otherwise a safe default.
+            const isSilent = !(userText || '').trim();
+            if (isSilent) {
+                const noResponseCfg =
+                    company?.aiAgentSettings?.frontDeskBehavior?.fallbackResponses?.noResponse ||
+                    "DEFAULT - OVERRIDE IN UI: Hello — are you still there?";
+                
+                aiResult = {
+                    reply: noResponseCfg,
+                    conversationMode: 'booking',
+                    intent: 'no_response',
+                    nextGoal: 'WAIT_FOR_CALLER',
+                    filledSlots: currentSlots,
+                    signals: { wantsBooking: true, consentGiven: true },
+                    latencyMs: Date.now() - aiStartTime,
+                    tokensUsed: 0,
+                    fromStateMachine: true,
+                    mode: 'BOOKING',
+                    debug: { source: 'BOOKING_SILENCE_FALLBACK' }
+                };
+                break BOOKING_MODE;
+            }
+
             // ═══════════════════════════════════════════════════════════════════
             // 📦 UNIT OF WORK (UoW) - Multi-location / multi-job (UI-controlled)
             // ═══════════════════════════════════════════════════════════════════

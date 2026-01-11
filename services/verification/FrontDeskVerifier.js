@@ -1097,6 +1097,24 @@ const VERIFICATION_RULES = {
                 weight: 20,
                 check: async (config, tradeKey, companyDoc, companyId) => {
                     try {
+                        // Truth: Escalation is primarily UI-driven (frontDeskBehavior.escalation).
+                        // A Dynamic Flow is optional; do not warn if escalation is configured and enabled.
+                        const esc = config?.frontDeskBehavior?.escalation || {};
+                        const hasEscCfg =
+                            esc.enabled !== false &&
+                            Array.isArray(esc.triggerPhrases) &&
+                            esc.triggerPhrases.filter(Boolean).length > 0 &&
+                            typeof esc.offerMessage === 'string' &&
+                            esc.offerMessage.trim().length > 0;
+                        
+                        if (hasEscCfg) {
+                            return {
+                                passed: true,
+                                value: `UI escalation configured (${esc.triggerPhrases.length} triggers)`,
+                                fix: null
+                            };
+                        }
+
                         const DynamicFlow = require('../../models/DynamicFlow');
                         const flows = await DynamicFlow.find({ companyId });
                         
@@ -1112,7 +1130,7 @@ const VERIFICATION_RULES = {
                         return {
                             passed: !!escalationFlow,
                             value: escalationFlow ? `Found: ${escalationFlow.name}` : 'NO_ESCALATION_PATH',
-                            fix: escalationFlow ? null : 'Create an escalation flow for "speak to manager" requests'
+                            fix: escalationFlow ? null : 'Configure Escalation triggers/messages (Front Desk → Escalation) or create a Dynamic Flow for "speak to manager" requests'
                         };
                     } catch (err) {
                         return { passed: true, value: 'Check skipped', fix: null };
@@ -1207,11 +1225,12 @@ const VERIFICATION_RULES = {
                 severity: 'warning',
                 weight: 25,
                 check: (config) => {
-                    const maxRetries = config?.frontDeskBehavior?.loopPrevention?.maxRetries;
-                    const hasValue = maxRetries !== undefined && maxRetries > 0;
+                    // Truth: UI uses maxSameQuestion (not maxRetries).
+                    const maxSame = config?.frontDeskBehavior?.loopPrevention?.maxSameQuestion;
+                    const hasValue = typeof maxSame === 'number' && maxSame > 0;
                     return {
                         passed: hasValue,
-                        value: hasValue ? `${maxRetries} retries` : 'Using default',
+                        value: hasValue ? `${maxSame} max repeats` : 'Using default',
                         fix: null
                     };
                 }
