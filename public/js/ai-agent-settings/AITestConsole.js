@@ -14,7 +14,16 @@
 
 class AITestConsole {
     constructor(companyId) {
-        this.companyId = companyId;
+        // Robust companyId derivation:
+        // - Control Plane passes companyId into constructor
+        // - Standalone / deep links may rely on query param (?companyId=...)
+        // Never allow downstream calls to hit /api/.../undefined/...
+        const qp = new URLSearchParams(window.location.search || '');
+        this.companyId = companyId || qp.get('companyId') || qp.get('id') || null;
+
+        if (!this.companyId) {
+            console.warn('[AI TEST CONSOLE] ⚠️ No companyId provided. Wiring diagnostics will be disabled until a company is selected.');
+        }
         this.conversationHistory = [];
         // Generate truly unique session ID with random component
         this.testSessionId = `fresh-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -1055,6 +1064,15 @@ ${separator}`;
         `;
         
         try {
+            if (!this.companyId) {
+                content.innerHTML = `
+                    <div style="background:#2d1c1c; border:1px solid #f85149; border-radius:8px; padding:12px; color:#fca5a5; font-size:12px;">
+                        ❌ Cannot run wiring diagnostics: <strong>companyId is missing</strong>.<br>
+                        Open Test Agent from Control Plane (it injects the companyId), or append <code style="background:#0d1117; padding:2px 6px; border-radius:6px;">?companyId=...</code> to the URL.
+                    </div>
+                `;
+                return;
+            }
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
             
             // Get last debug snapshot from test session (evidence-first)
