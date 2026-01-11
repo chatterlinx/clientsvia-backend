@@ -929,6 +929,32 @@ class FrontDeskBehaviorManager {
     renderPersonalityTab() {
         const p = this.config.personality || {};
         const warmthPct = Number.isFinite(p.warmth) ? Math.round(p.warmth * 100) : 60;
+        
+        // Tiny helper for consistent "what does this setting do?" UX.
+        // Uses native tooltip for reliability (no hidden JS dependencies).
+        const infoIcon = (text) => `
+            <span title="${String(text || '').replace(/"/g, '&quot;')}"
+                  style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; margin-left:8px;
+                         border:1px solid #30363d; border-radius:999px; color:#9ca3af; font-size:12px; cursor:help; user-select:none;
+                         background:#0d1117;">
+                i
+            </span>
+        `;
+        
+        const warmthHelp = [
+            'Warmth controls how empathetic vs direct the AI sounds.',
+            'Recommended (World‑Class Default): 60%.',
+            'Lower (20–45%): more concise/transactional; can feel robotic if too low.',
+            'Higher (75–90%): more reassuring/luxury tone; can feel slow if too high.',
+            'Tip: keep warmth ~60% and adjust pace first if you want faster booking.'
+        ].join(' ');
+        
+        const paceHelp = [
+            'Speaking Pace controls how quickly the AI moves through the call.',
+            'Recommended (World‑Class Default): Normal.',
+            'Fast: fewer extra words; better for high call volume + strong scripts.',
+            'Slow: more confirmations; better for elderly callers or high-stress scenarios.'
+        ].join(' ');
         return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
                 <h3 style="margin: 0 0 16px 0; color: #58a6ff;">🎭 Personality Settings</h3>
@@ -1032,20 +1058,27 @@ class FrontDeskBehaviorManager {
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
                             Warmth: <span id="fdb-warmth-val" style="color: #58a6ff;">${warmthPct}%</span>
+                            ${infoIcon(warmthHelp)}
                         </label>
                         <input type="range" id="fdb-warmth" min="0" max="100" value="${warmthPct}" style="width: 100%; accent-color: #f59e0b;">
                         <p style="color: #8b949e; font-size: 0.75rem; margin-top: 4px;">
-                            Higher warmth = more empathetic and friendly phrasing. Lower warmth = more direct, businesslike.
+                            <strong style="color:#fbbf24;">Recommended:</strong> 60% (world‑class default). Higher warmth = more empathetic. Lower warmth = more direct.
                         </p>
                     </div>
 
                     <div>
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Speaking Pace</label>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            Speaking Pace
+                            ${infoIcon(paceHelp)}
+                        </label>
                         <select id="fdb-speaking-pace" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                             <option value="slow" ${(p.speakingPace || 'normal') === 'slow' ? 'selected' : ''}>🐢 Slow - more pauses, more confirmation</option>
                             <option value="normal" ${(p.speakingPace || 'normal') === 'normal' ? 'selected' : ''}>🚶 Normal - balanced</option>
                             <option value="fast" ${(p.speakingPace || 'normal') === 'fast' ? 'selected' : ''}>🏃 Fast - moves through booking quickly</option>
                         </select>
+                        <p style="color: #8b949e; font-size: 0.75rem; margin-top: 4px;">
+                            <strong style="color:#fbbf24;">Recommended:</strong> Normal (world‑class default).
+                        </p>
                     </div>
                     
                     <div>
