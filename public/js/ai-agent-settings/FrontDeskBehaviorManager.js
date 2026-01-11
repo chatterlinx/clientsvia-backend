@@ -8573,23 +8573,72 @@ Sean → Shawn, Shaun`;
             
             if (allIssues.length > 0 || allWarnings.length > 0) {
                 issuesEl.style.display = 'block';
+                const detailsId = `fdb-verify-issues-details-${Date.now()}`;
+                const safeJson = JSON.stringify({ issues: allIssues, warnings: allWarnings }, null, 2)
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+                
+                const renderItem = (item, color, borderColor) => `
+                    <div style="font-size: 11px; color: ${color}; margin-bottom: 6px; padding-left: 8px; border-left: 2px solid ${borderColor};">
+                        <strong>${item.tab || 'General'}</strong>: ${item.description || item.message || '(no description)'}
+                        ${item.fix ? `<div style="color: #9ca3af; margin-top: 2px;">Fix: ${item.fix}</div>` : ''}
+                    </div>
+                `;
+                
                 issuesEl.innerHTML = `
-                    <div style="padding: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px;">
-                        <div style="font-size: 12px; font-weight: 600; color: #f87171; margin-bottom: 8px;">
-                            ${allIssues.length > 0 ? `❌ ${allIssues.length} Error${allIssues.length > 1 ? 's' : ''}` : ''}
-                            ${allWarnings.length > 0 ? `⚠️ ${allWarnings.length} Warning${allWarnings.length > 1 ? 's' : ''}` : ''}
+                    <div style="padding: 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 8px;">
+                        <div style="display:flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <div style="font-size: 12px; font-weight: 700; color: #e6edf3;">
+                                ${allIssues.length > 0 ? `<span style="color:#f87171;">❌ ${allIssues.length} Error${allIssues.length > 1 ? 's' : ''}</span>` : ''}
+                                ${allWarnings.length > 0 ? `<span style="color:#fbbf24; margin-left: 10px;">⚠️ ${allWarnings.length} Warning${allWarnings.length > 1 ? 's' : ''}</span>` : ''}
+                            </div>
+                            <div style="display:flex; gap: 8px;">
+                                <button id="fdb-verify-toggle-details" style="padding: 6px 10px; background:#21262d; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; font-size:11px; cursor:pointer;">
+                                    Show details
+                                </button>
+                                <button id="fdb-verify-copy-issues" style="padding: 6px 10px; background:#0d2818; border:1px solid #238636; border-radius:6px; color:#3fb950; font-size:11px; cursor:pointer;">
+                                    Copy
+                                </button>
+                            </div>
                         </div>
+                        
                         <div style="max-height: 120px; overflow-y: auto;">
-                            ${allIssues.slice(0, 5).map(i => `
-                                <div style="font-size: 11px; color: #fca5a5; margin-bottom: 4px; padding-left: 8px; border-left: 2px solid #ef4444;">
-                                    <strong>${i.tab}</strong>: ${i.description}
-                                    ${i.fix ? `<div style="color: #9ca3af; margin-top: 2px;">Fix: ${i.fix}</div>` : ''}
-                                </div>
-                            `).join('')}
-                            ${allIssues.length > 5 ? `<div style="font-size: 10px; color: #9ca3af;">...and ${allIssues.length - 5} more</div>` : ''}
+                            ${allIssues.slice(0, 3).map(i => renderItem(i, '#fca5a5', '#ef4444')).join('')}
+                            ${allWarnings.slice(0, 4).map(w => renderItem(w, '#fde68a', '#f59e0b')).join('')}
+                            ${(allIssues.length > 3 || allWarnings.length > 4)
+                                ? `<div style="font-size: 10px; color: #9ca3af;">Preview shows top items — click “Show details” for full list.</div>`
+                                : ''}
+                        </div>
+                        
+                        <div id="${detailsId}" style="display:none; margin-top: 10px;">
+                            <div style="padding: 10px; background:#0d1117; border:1px solid #30363d; border-radius:8px; max-height: 220px; overflow:auto;">
+                                <pre style="margin:0; color:#c9d1d9; font-size:11px; white-space:pre-wrap;">${safeJson}</pre>
+                            </div>
                         </div>
                     </div>
                 `;
+                
+                // Wire up buttons
+                const toggleBtn = document.getElementById('fdb-verify-toggle-details');
+                const copyBtn = document.getElementById('fdb-verify-copy-issues');
+                const detailsEl = document.getElementById(detailsId);
+                if (toggleBtn && detailsEl) {
+                    toggleBtn.onclick = () => {
+                        const isHidden = detailsEl.style.display === 'none';
+                        detailsEl.style.display = isHidden ? 'block' : 'none';
+                        toggleBtn.textContent = isHidden ? 'Hide details' : 'Show details';
+                    };
+                }
+                if (copyBtn) {
+                    copyBtn.onclick = async () => {
+                        try {
+                            await navigator.clipboard.writeText(JSON.stringify({ issues: allIssues, warnings: allWarnings }, null, 2));
+                            this.showNotification('Copied verification issues/warnings', 'success');
+                        } catch (e) {
+                            this.showNotification('Copy failed (browser permission)', 'warning');
+                        }
+                    };
+                }
             } else {
                 issuesEl.style.display = 'none';
             }
