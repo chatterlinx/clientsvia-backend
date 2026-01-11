@@ -50,6 +50,7 @@ const logger = require('../utils/logger');
 const { parseSpellingVariantPrompt, parseSpellingVariantResponse } = require('../utils/nameSpellingVariant');
 const { extractName: extractNameDeterministic } = require('../utils/nameExtraction');
 const { buildResumeBookingBlock } = require('../utils/resumeBookingProtocol');
+const { detectConfirmationRequest } = require('../utils/confirmationRequest');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VERSION BANNER - Proves this code is deployed
@@ -3530,6 +3531,51 @@ async function processTurn({
                 
                 const bookingConfigSafe = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
                 const bookingSlotsSafe = bookingConfigSafe.slots || [];
+
+                // ═══════════════════════════════════════════════════════════════════
+                // V78: CONFIRMATION REQUESTS (caller asks: "did you get my ___ right?")
+                // ═══════════════════════════════════════════════════════════════════
+                // This must be handled BEFORE slot collection/breakdown, otherwise the engine
+                // can incorrectly trigger phone breakdown or reprompts when the caller is
+                // simply asking us to repeat what we already captured.
+                const confirmationCfg = company.aiAgentSettings?.frontDeskBehavior?.confirmationRequests || {};
+                const confirmationEnabled = confirmationCfg.enabled !== false;
+                if (confirmationEnabled && typeof userText === 'string' && userText.trim()) {
+                    const slotTypeRequested = detectConfirmationRequest(userText, { triggers: confirmationCfg.triggers || [] });
+                    if (slotTypeRequested) {
+                        const slotIdByType = session.booking?.slotTypeMap?.[slotTypeRequested] || slotTypeRequested;
+                        const slotConfig = bookingSlotsSafe.find(s => (s.type || s.slotId || s.id) === slotTypeRequested) ||
+                                           bookingSlotsSafe.find(s => (s.slotId || s.id) === slotIdByType);
+
+                        // Resolve current value (prefer canonical slot id, then type, then name/partialName)
+                        let value = null;
+                        if (slotTypeRequested === 'name') {
+                            value = currentSlots.name || currentSlots.partialName || null;
+                        } else {
+                            value = (slotIdByType && currentSlots[slotIdByType]) || (slotTypeRequested && currentSlots[slotTypeRequested]) || null;
+                        }
+
+                        if (value) {
+                            const confirmPrompt = slotConfig?.confirmPrompt || getMissingConfigPrompt('confirmPrompt', slotTypeRequested);
+                            const confirmText = String(confirmPrompt).replace('{value}', String(value));
+                            aiResult = {
+                                reply: confirmText,
+                                conversationMode: 'booking',
+                                intent: 'booking_confirmation_request',
+                                nextGoal: 'CONFIRMATION_REQUEST',
+                                filledSlots: currentSlots,
+                                signals: { wantsBooking: true, consentGiven: true },
+                                latencyMs: Date.now() - aiStartTime,
+                                tokensUsed: 0,
+                                fromStateMachine: true,
+                                mode: 'BOOKING',
+                                debug: { source: 'BOOKING_CONFIRMATION_REQUEST', slotTypeRequested, slotIdByType }
+                            };
+                            break BOOKING_MODE;
+                        }
+                        // If we don't have the value, fall through to normal booking logic.
+                    }
+                }
                 
                 // V65 FIX: Track if we ask spelling variant THIS TURN
                 // This prevents the V51 handler from processing user input as an "answer" 

@@ -60,6 +60,9 @@ class FrontDeskBehaviorManager {
             this.config.offRailsRecovery.bridgeBack.resumeBooking =
                 this.config.offRailsRecovery.bridgeBack.resumeBooking || this.getDefaultConfig().offRailsRecovery.bridgeBack.resumeBooking;
 
+            // V78: Ensure confirmationRequests shape exists
+            this.config.confirmationRequests = this.config.confirmationRequests || this.getDefaultConfig().confirmationRequests;
+
             // Preset Draft overlay (UI-only): if an in-memory preset is loaded, overlay it onto the loaded config.
             // This MUST NOT write to DB; it only affects the UI until user clicks Save.
             try {
@@ -591,6 +594,25 @@ class FrontDeskBehaviorManager {
                         finalSeparator: " and "
                     }
                 }
+            }
+            ,
+
+            // ════════════════════════════════════════════════════════════════════
+            // V78: Confirmation Requests (repeat what we captured)
+            // ════════════════════════════════════════════════════════════════════
+            confirmationRequests: {
+                enabled: true,
+                triggers: [
+                    "did you get my",
+                    "did you catch my",
+                    "did i give you the right",
+                    "is that right",
+                    "is that correct",
+                    "can you repeat",
+                    "can you read that back",
+                    "can you confirm",
+                    "what did you have for my"
+                ]
             }
         };
     }
@@ -1735,6 +1757,36 @@ Sean → Shawn, Shaun"
                                     style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                             </div>
                         </div>
+                    </div>
+                </div>
+                `;
+            })()}
+
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <!-- V78: CONFIRMATION REQUESTS (repeat what we captured) -->
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            ${(() => {
+                const cr = this.config.confirmationRequests || this.getDefaultConfig().confirmationRequests;
+                const enabled = cr.enabled !== false;
+                const triggersText = Array.isArray(cr.triggers) ? cr.triggers.join('\n') : '';
+                return `
+                <div style="background: #161b22; border: 1px solid ${enabled ? '#58a6ff' : '#30363d'}; border-radius: 8px; padding: 20px; margin-top: 16px;">
+                    <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                        <div>
+                            <h3 style="margin: 0; color: #58a6ff;">✅ Confirmation Requests</h3>
+                            <p style="color: #8b949e; font-size: 0.8rem; margin: 4px 0 0 0;">
+                                When callers ask “did you get my name/phone/address right?”, the agent will repeat what’s captured using each slot’s <code>confirmPrompt</code>.
+                            </p>
+                        </div>
+                        <label style="display:flex; align-items:center; gap: 8px; cursor:pointer;">
+                            <input type="checkbox" id="fdb-confirm-req-enabled" ${enabled ? 'checked' : ''} style="accent-color:#58a6ff;">
+                            <span style="color:${enabled ? '#58a6ff' : '#8b949e'}; font-weight:600;">${enabled ? 'ENABLED' : 'DISABLED'}</span>
+                        </label>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">Trigger phrases (one per line, lowercase recommended)</label>
+                        <textarea id="fdb-confirm-req-triggers" rows="6"
+                            style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 12px; resize: vertical;">${triggersText}</textarea>
                     </div>
                 </div>
                 `;
@@ -8084,6 +8136,19 @@ Sean → Shawn, Shaun`;
                 separator: (document.getElementById('fdb-resume-booking-separator')?.value || '').toString(),
                 finalSeparator: (document.getElementById('fdb-resume-booking-finalSeparator')?.value || '').toString()
             };
+        }
+
+        // ════════════════════════════════════════════════════════════════════════════
+        // V78: Confirmation Requests
+        // ════════════════════════════════════════════════════════════════════════════
+        if (document.getElementById('fdb-confirm-req-enabled')) {
+            const enabled = document.getElementById('fdb-confirm-req-enabled')?.checked === true;
+            const triggersRaw = document.getElementById('fdb-confirm-req-triggers')?.value || '';
+            const triggers = triggersRaw
+                .split('\n')
+                .map(s => s.trim())
+                .filter(Boolean);
+            this.config.confirmationRequests = { enabled, triggers };
         }
     }
 

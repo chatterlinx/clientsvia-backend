@@ -2917,6 +2917,31 @@ const companySchema = new mongoose.Schema({
                     }
                 }
             },
+
+            // ═══════════════════════════════════════════════════════════════════════
+            // V78: CONFIRMATION REQUESTS (UI Controlled)
+            // ═══════════════════════════════════════════════════════════════════════
+            // When caller asks “did you get my phone/address/name right?” during booking,
+            // reply deterministically by repeating what we have using the slot’s confirmPrompt.
+            // This is not off-rails: it’s a booking protocol feature.
+            confirmationRequests: {
+                enabled: { type: Boolean, default: true },
+                // Trigger phrases (lowercased match) - UI editable
+                triggers: {
+                    type: [String],
+                    default: [
+                        "did you get my",
+                        "did you catch my",
+                        "did i give you the right",
+                        "is that right",
+                        "is that correct",
+                        "can you repeat",
+                        "can you read that back",
+                        "can you confirm",
+                        "what did you have for my"
+                    ]
+                }
+            },
             
             // ═══════════════════════════════════════════════════════════════════════
             // 🆕 CONTEXT RECOGNITION - Detect important caller context (UI Controlled)
