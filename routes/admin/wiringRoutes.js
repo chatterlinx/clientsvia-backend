@@ -766,6 +766,47 @@ router.post('/:companyId/apply', async (req, res) => {
         );
         
         console.log('[WIRING APPLY] ✅ CHECKPOINT 9: Update result:', updateResult);
+
+        // =========================================================
+        // AFTER-WRITE VERIFICATION (NO MORE SILENT "APPLIED")
+        // =========================================================
+        // Mongoose strict mode can drop unknown paths during update ops, which yields modifiedCount=0.
+        // Also, if the value was already identical, modifiedCount can be 0 even though it's "applied".
+        const deepEqual = (a, b) => {
+            try { return JSON.stringify(a) === JSON.stringify(b); } catch (e) { return false; }
+        };
+        const getPath = (obj, path) => {
+            if (!obj || !path) return undefined;
+            const parts = String(path).split('.');
+            let cur = obj;
+            for (const p of parts) {
+                if (cur == null) return undefined;
+                cur = cur[p];
+            }
+            return cur;
+        };
+        const afterDoc = await Company.findById(companyId).lean();
+        const afterValue = getPath(afterDoc, dbPath);
+        const alreadyApplied = deepEqual(beforeValue, valueToApply) || deepEqual(afterValue, valueToApply);
+
+        if (!alreadyApplied && updateResult.modifiedCount === 0) {
+            console.error('[WIRING APPLY] ❌ CHECKPOINT 9b: No changes applied (likely strict schema dropped path)', {
+                companyId,
+                fieldId,
+                dbPath
+            });
+            return res.status(409).json({
+                success: false,
+                error: 'NO_CHANGES_APPLIED',
+                message: 'Apply did not persist any changes. This usually means the dbPath is not schema-backed (strict mode dropped it), or the write was blocked.',
+                companyId,
+                fieldId,
+                dbPath,
+                modifiedCount: updateResult.modifiedCount,
+                matchedCount: updateResult.matchedCount,
+                hint: 'Click Inspect to view dbPath and current value. If dbPath is wrong, Wiring registry must be updated.'
+            });
+        }
         
         // =========================================================
         // WRITE AUDIT LOG
@@ -835,6 +876,10 @@ router.post('/:companyId/apply', async (req, res) => {
             modifiedCount: updateResult.modifiedCount,
             durationMs,
             timestamp: new Date().toISOString(),
+            verification: {
+                alreadyApplied,
+                afterValue
+            },
             audit: {
                 logged: true,
                 beforeValue: beforeValue !== undefined ? '(captured)' : null,
