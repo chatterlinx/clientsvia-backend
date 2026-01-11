@@ -503,7 +503,10 @@ class AITestConsole {
                 // ═══════════════════════════════════════════════════════════════
                 
                 // Map new API response format to expected format
+                // debug: full debug payload (slots, bookingConfig, etc.)
+                // debugSnapshot: compact truth bundle used for wiring evidence (templateRefs, scenarioCount, killSwitches)
                 const debug = data.debug || {};
+                const debugSnapshot = data.debugSnapshot || debug.debugSnapshot || null;
                 // Slots can come from multiple places - prioritize slotDiagnostics for accuracy
                 const collectedSlots = debug.slotDiagnostics?.slotsAfterMerge || 
                                        data.slotsCollected || 
@@ -551,7 +554,8 @@ class AITestConsole {
                     dynamicFlow: debug.dynamicFlow,  // 🧠 V41: Dynamic Flow Engine trace
                     timestamp: new Date().toISOString(),
                     // 🎯 LIVE SESSION INSPECTOR: Store FULL debug for inspector access
-                    debug: debug  // Full debug object for Live Session Inspector
+                    debug: debug,  // Full debug object for Live Session Inspector
+                    debugSnapshot  // Truth bundle for wiring diagnostics
                 });
                 
                 console.log('[AI Test] Response received:', {
@@ -1054,8 +1058,9 @@ ${separator}`;
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
             
             // Get last debug snapshot from test session (evidence-first)
+            // Prefer the compact truth bundle that includes templateReferences/scenarioCount/killSwitches.
             const lastDebugEntry = this.debugLog.length > 0 ? this.debugLog[this.debugLog.length - 1] : null;
-            const debugSnapshot = lastDebugEntry?.debug || null;
+            const debugSnapshot = lastDebugEntry?.debugSnapshot || lastDebugEntry?.debug?.debugSnapshot || null;
             
             let diagnostics;
             
@@ -1453,7 +1458,8 @@ ${separator}`;
         const lastEntry = this.debugLog[this.debugLog.length - 1];
         const inBookingMode = (currentMode || '').toUpperCase() === 'BOOKING' || (stageInfo?.currentStage || '').toLowerCase() === 'booking';
         const promptFrom = inBookingMode ? (bookingConfig?.source || 'unknown') : '—';
-        const templateRefs = lastDebug?.templateReferences || lastDebugEntry?.templateReferences || [];
+        const snap = lastEntry?.debugSnapshot || lastDebug?.debugSnapshot || null;
+        const templateRefs = snap?.templateReferences || lastDebug?.templateReferences || lastDebugEntry?.templateReferences || [];
         const templateRefsCount = Array.isArray(templateRefs) ? templateRefs.length : 0;
         const templateWiringStatus = templateRefsCount > 0 ? `✅ (${templateRefsCount})` : '❌ (none)';
 

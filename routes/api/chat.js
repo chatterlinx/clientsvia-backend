@@ -150,6 +150,16 @@ router.post('/message', async (req, res) => {
             response.debug = result.debug;
         }
         
+        // V80: Forward deterministic debugSnapshot (truth bundle) for Wiring/Test Console.
+        // This is separate from `debug` (full debug payload) and is used as evidence for wiring diagnostics.
+        if (includeDebug && result.debugSnapshot) {
+            response.debugSnapshot = result.debugSnapshot;
+            // Convenience: also attach to debug so clients that only read `debug` still have access.
+            if (response.debug && typeof response.debug === 'object') {
+                response.debug.debugSnapshot = result.debugSnapshot;
+            }
+        }
+        
         // Include error details if failed
         if (!result.success) {
             response.error = result.error;
