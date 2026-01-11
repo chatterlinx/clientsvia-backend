@@ -15,6 +15,11 @@ describe('utils/nameExtraction.extractName', () => {
     const text = "my name is Larry pretty long but it's Gonzalez";
     expect(extractName(text, { expectingName: true })).toBe('Larry Gonzalez');
   });
+  
+  test('prefers the LAST "my name is ..." clause in rambling input', () => {
+    const text = "well my name is kind of complicated you know i have a 3 family members with different names and my name is Gonzalez";
+    expect(extractName(text, { expectingName: true })).toBe('Gonzalez');
+  });
 
   test('returns null in discovery when no name intent and not expecting', () => {
     expect(extractName('go ahead', { expectingName: false })).toBe(null);

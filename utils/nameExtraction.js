@@ -64,23 +64,38 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
   if (!expectingName && !hasNameIntent) return null;
 
   // Extract the post-intro clause (best-effort)
-  const patterns = [
-    /\bmy name is\s+(.+)$/i,
-    /\bname is\s+(.+)$/i,
-    /\bthis is\s+(.+)$/i,
-    /\bi am\s+(.+)$/i,
-    /\bi'?m\s+(.+)$/i,
-    /\bit'?s\s+(.+)$/i,
-    /\bcall me\s+(.+)$/i
+  //
+  // V80 FIX: If the user has multiple "name is ..." clauses (human ramble),
+  // prefer the *last* one. Example:
+  // "my name is kind of complicated ... my name is Gonzalez" → "Gonzalez"
+  //
+  // We do this via lastIndexOf() on the normalized string (regex $-anchoring
+  // is too brittle for rambling).
+  const lower = raw.toLowerCase();
+  const intros = [
+    'my name is',
+    'name is',
+    'this is',
+    "i'm",
+    'i am',
+    'call me',
+    "it's",
+    'it is'
   ];
 
   let candidate = null;
-  for (const re of patterns) {
-    const m = raw.match(re);
-    if (m && m[1]) {
-      candidate = m[1];
-      break;
+  let bestIdx = -1;
+  let bestIntro = null;
+  for (const intro of intros) {
+    const idx = lower.lastIndexOf(intro);
+    if (idx > bestIdx) {
+      bestIdx = idx;
+      bestIntro = intro;
     }
+  }
+
+  if (bestIdx >= 0 && bestIntro) {
+    candidate = raw.slice(bestIdx + bestIntro.length).trim();
   }
   if (!candidate && expectingName) candidate = raw;
   if (!candidate) return null;
@@ -95,9 +110,14 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
       null;
 
     if (lastNameFromTail) {
-      const firstToken = firstMeaningfulToken(candidate, STOP_WORDS);
+      // Use FIRST intro clause to extract first name (human ramble often puts last name at the end).
+      const firstIntroIdx = lower.indexOf('my name is');
+      const firstIntroClause = firstIntroIdx >= 0 ? raw.slice(firstIntroIdx + 'my name is'.length).trim() : candidate;
+      const firstToken = firstMeaningfulToken(firstIntroClause, STOP_WORDS);
       const lastToken = cleanToken(lastNameFromTail);
       if (firstToken && lastToken && !STOP_WORDS.has(lastToken.toLowerCase())) {
+        // Avoid "Gonzalez Gonzalez" if the first token cannot be found and equals the last token.
+        if (firstToken.toLowerCase() === lastToken.toLowerCase()) return titleCase(lastToken);
         return `${titleCase(firstToken)} ${titleCase(lastToken)}`.trim();
       }
     }
