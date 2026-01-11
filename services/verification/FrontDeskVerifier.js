@@ -695,15 +695,15 @@ const VERIFICATION_RULES = {
             // ─────────────────────────────────────────────────────────────
             {
                 id: 'QUESTIONS_NOT_HARDCODED',
-                description: 'Slot questions are UI-configured (not hardcoded fallbacks)',
-                severity: 'error',
+                description: 'Slot questions are customized (not just defaults)',
+                severity: 'warning',
                 weight: 20,
                 check: (config) => {
                     const slots = config?.frontDeskBehavior?.bookingSlots || [];
                     const enabledSlots = slots.filter(s => s.enabled !== false);
                     
-                    // Known hardcoded fallbacks from ConversationEngine.js
-                    // If the slot question MATCHES these, it's likely using defaults
+                    // Known "default-ish" questions. If the slot question matches these,
+                    // it likely wasn't customized (even if it *is* saved in UI/DB).
                     const HARDCODED_FALLBACKS = [
                         "what is your name?",
                         "may i have your name please?",
@@ -744,8 +744,8 @@ const VERIFICATION_RULES = {
                     return {
                         passed: allCustomized,
                         value: allCustomized ? 
-                            `✅ All ${enabledSlots.length} slots have CUSTOM questions` : 
-                            `⚠️ ${slotsUsingHardcodedQuestion.length} slots MAY use hardcoded fallbacks`,
+                            `✅ All ${enabledSlots.length} slots are customized` : 
+                            `⚠️ ${slotsUsingHardcodedQuestion.length} slots still use default wording`,
                         details: {
                             questionDetails,
                             potentialHardcodedSlots: slotsUsingHardcodedQuestion.map(s => ({
@@ -753,8 +753,8 @@ const VERIFICATION_RULES = {
                                 question: s.question
                             }))
                         },
-                        fix: allCustomized ? null : 
-                            `Review & customize questions for: ${slotsUsingHardcodedQuestion.map(s => s.type || s.slotId).join(', ')}`
+                        fix: allCustomized ? null :
+                            `Customize slot questions (optional but recommended) for: ${slotsUsingHardcodedQuestion.map(s => s.type || s.slotId).join(', ')}`
                     };
                 }
             }
@@ -832,15 +832,14 @@ const VERIFICATION_RULES = {
                 severity: 'error',
                 weight: 35,
                 check: (config) => {
-                    // Check multiple possible greeting locations
-                    const rules = config?.frontDeskBehavior?.conversationStages?.greeting?.rules ||
-                                  config?.frontDeskBehavior?.greetingRules ||
-                                  [];
+                    // Runtime truth: ConversationEngine uses frontDeskBehavior.greetingResponses (LLM-0)
+                    // Also accept connectionMessages.voice.text for voice channel.
+                    const greetingResponses = config?.frontDeskBehavior?.greetingResponses || [];
                     
                     // Also check connectionMessages (often used for greeting)
                     const connectionMsg = config?.connectionMessages?.voice?.text;
                     
-                    const hasGreetingRules = Array.isArray(rules) && rules.length > 0;
+                    const hasGreetingRules = Array.isArray(greetingResponses) && greetingResponses.length > 0;
                     const hasConnectionGreeting = connectionMsg && connectionMsg.trim().length > 10;
                     
                     // At least one source of greeting must exist
@@ -849,8 +848,8 @@ const VERIFICATION_RULES = {
                     // Check if greeting has substance (not just "Hi")
                     let greetingQuality = 'none';
                     if (hasGreetingRules) {
-                        const firstRule = rules[0];
-                        const responseLength = (firstRule?.response || firstRule?.text || '').length;
+                        const first = greetingResponses[0];
+                        const responseLength = String(first || '').length;
                         greetingQuality = responseLength > 50 ? 'rich' : responseLength > 10 ? 'basic' : 'minimal';
                     } else if (hasConnectionGreeting) {
                         greetingQuality = connectionMsg.length > 50 ? 'rich' : 'basic';
@@ -858,10 +857,10 @@ const VERIFICATION_RULES = {
                     
                     return {
                         passed: hasAnyGreeting,
-                        value: hasAnyGreeting ? `${greetingQuality} (${rules.length} rules)` : 'NO_GREETING',
+                        value: hasAnyGreeting ? `${greetingQuality} (${greetingResponses.length} responses)` : 'NO_GREETING',
                         details: {
                             hasGreetingRules,
-                            ruleCount: rules.length,
+                            ruleCount: greetingResponses.length,
                             hasConnectionGreeting,
                             quality: greetingQuality
                         },
@@ -878,26 +877,13 @@ const VERIFICATION_RULES = {
                 severity: 'error',
                 weight: 25,
                 check: (config) => {
-                    const rules = config?.frontDeskBehavior?.conversationStages?.greeting?.rules ||
-                                  config?.frontDeskBehavior?.greetingRules ||
-                                  [];
-                    
-                    // Find a rule that applies by default (no condition or isDefault)
-                    const defaultRule = rules.find(r => 
-                        r.isDefault === true || 
-                        r.condition === 'always' || 
-                        !r.condition ||
-                        r.condition === ''
-                    );
-                    
-                    // Also acceptable if there's only one rule (it's implicitly default)
-                    const hasImplicitDefault = rules.length === 1;
-                    
-                    const hasDefault = !!defaultRule || hasImplicitDefault;
+                    // greetingResponses are unconditional; if at least 1 exists, it's implicitly default.
+                    const greetingResponses = config?.frontDeskBehavior?.greetingResponses || [];
+                    const hasDefault = Array.isArray(greetingResponses) && greetingResponses.length > 0;
                     
                     return {
                         passed: hasDefault,
-                        value: hasDefault ? (defaultRule ? 'Explicit default' : 'Implicit (single rule)') : 'NO_DEFAULT',
+                        value: hasDefault ? 'Implicit default (greetingResponses[0])' : 'NO_DEFAULT',
                         fix: hasDefault ? null : 'Add a default greeting rule that always applies'
                     };
                 }
