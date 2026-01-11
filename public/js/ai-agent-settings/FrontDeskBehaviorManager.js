@@ -7502,26 +7502,32 @@ Sean → Shawn, Shaun`;
         // Auto-run verification on load
         setTimeout(() => this.runDeepVerification(), 500);
 
-        // Slider updates
-        const maxWordsSlider = container.querySelector('#fdb-max-words');
-        if (maxWordsSlider) {
-            maxWordsSlider.addEventListener('input', (e) => {
-                const val = container.querySelector('#fdb-max-words-val');
-                if (val) val.textContent = e.target.value;
-            });
-        }
+        // --------------------------------------------------------------------
+        // Delegated listeners (work across tab re-renders)
+        // switchTab() re-renders innerHTML for fdb-tab-content, so direct
+        // element listeners would silently break after navigating.
+        // --------------------------------------------------------------------
+        if (!this._delegatesBound) {
+            this._delegatesBound = true;
 
-        const warmthSlider = container.querySelector('#fdb-warmth');
-        if (warmthSlider) {
-            warmthSlider.addEventListener('input', (e) => {
-                const val = container.querySelector('#fdb-warmth-val');
-                if (val) val.textContent = `${e.target.value}%`;
+            // Slider text updates (personality tab)
+            container.addEventListener('input', (e) => {
+                const t = e?.target;
+                if (!t || !t.id) return;
+                if (t.id === 'fdb-max-words') {
+                    const val = container.querySelector('#fdb-max-words-val');
+                    if (val) val.textContent = t.value;
+                }
+                if (t.id === 'fdb-warmth') {
+                    const val = container.querySelector('#fdb-warmth-val');
+                    if (val) val.textContent = `${t.value}%`;
+                }
             });
-        }
 
-        // V79 UX: Clickable info popovers (no hover dependency)
-        container.querySelectorAll('.fdb-info-btn[data-info-key]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            // V79 UX: Clickable info popovers (no hover dependency)
+            container.addEventListener('click', (e) => {
+                const btn = e?.target?.closest?.('.fdb-info-btn[data-info-key]');
+                if (!btn) return;
                 e.preventDefault();
                 const key = btn.dataset.infoKey;
                 const panel = container.querySelector(`.fdb-info-panel[data-info-key="${key}"]`);
@@ -7529,7 +7535,7 @@ Sean → Shawn, Shaun`;
                 const isHidden = panel.style.display === 'none' || !panel.style.display;
                 panel.style.display = isHidden ? 'block' : 'none';
             });
-        });
+        }
 
         // Add trigger buttons
         ['frustration', 'escalation', 'forbidden'].forEach(type => {
