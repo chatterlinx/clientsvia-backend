@@ -262,6 +262,30 @@ const TIER_MAX = {
             recommendedValue: true
         },
         {
+            fieldId: 'frontDesk.offRailsRecovery.bridgeBack.resumeBooking',
+            purpose: 'After off-rails Q&A in booking, the agent recaps collected slots and continues with the next missing slot',
+            failureMode: 'Caller gets answered but booking context drifts; agent re-asks or loses momentum',
+            impact: 'conversion',
+            priority: 2,
+            payoff: 'Reduces booking abandonment after interruptions',
+            fixInstructions: 'Enable Resume Booking Protocol and set a template',
+            nav: { tab: 'front-desk', section: 'personality', field: 'resumeBooking' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.offRailsRecovery.bridgeBack.resumeBooking',
+            recommendedValue: { enabled: true }
+        },
+        {
+            fieldId: 'frontDesk.confirmationRequests',
+            purpose: 'When caller asks “did you get my phone/name/address right?”, repeat captured value using slot confirmPrompt',
+            failureMode: 'Engine misroutes into breakdown/re-ask instead of confirming captured value',
+            impact: 'reliability',
+            priority: 2,
+            payoff: 'Prevents phone/address/name confirmation misses',
+            fixInstructions: 'Enable Confirmation Requests and keep at least 2 trigger phrases',
+            nav: { tab: 'front-desk', section: 'personality', field: 'confirmationRequests' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.confirmationRequests',
+            recommendedValue: { enabled: true }
+        },
+        {
             fieldId: 'frontDesk.fastPathBooking.triggerKeywords',
             purpose: 'Keywords that trigger instant booking offer',
             failureMode: '"Send someone out" doesn\'t trigger fast-path',

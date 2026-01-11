@@ -230,6 +230,55 @@ const RUNTIME_READERS_MAP = {
     },
 
     // =========================================================================
+    // FRONT DESK - BOOKING CONTINUITY (NO HIDDEN FEATURES)
+    // =========================================================================
+    'frontDesk.offRailsRecovery.bridgeBack.resumeBooking': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'processTurn',
+                line: 3380,
+                description: 'Appends Resume Booking Protocol after off-rails answers during BOOKING (cheat sheet + LLM interruption)',
+                checkpoint: 'BOOKING_INTERRUPTION_*',
+                required: false
+            },
+            {
+                file: 'utils/resumeBookingProtocol.js',
+                function: 'buildResumeBookingBlock',
+                line: 1,
+                description: 'Builds the resume block using UI-configured templates and collected slots',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.offRailsRecovery.bridgeBack.resumeBooking',
+        scope: 'company',
+        defaultValue: { enabled: true }
+    },
+
+    'frontDesk.confirmationRequests': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'processTurn',
+                line: 2800,
+                description: 'Intercepts “did you get my phone/name/address right?” and replies using slot confirmPrompt + captured value',
+                checkpoint: 'BOOKING MODE SAFETY NET',
+                required: false
+            },
+            {
+                file: 'utils/confirmationRequest.js',
+                function: 'detectConfirmationRequest',
+                line: 1,
+                description: 'Deterministically detects confirmation requests and which slot type is being confirmed',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.confirmationRequests',
+        scope: 'company',
+        defaultValue: { enabled: true }
+    },
+
+    // =========================================================================
     // FRONT DESK - FAST PATH BOOKING
     // =========================================================================
     'frontDesk.fastPathBooking.enabled': {

@@ -75,7 +75,18 @@ const VALIDATORS = {
     scenarioHasReplies: (s) => s && (
         (Array.isArray(s.quickReplies) && s.quickReplies.length > 0) ||
         (Array.isArray(s.fullReplies) && s.fullReplies.length > 0)
-    )
+    ),
+
+    // Booking continuity validators
+    resumeBookingHasTemplate: (val) => !!(val && typeof val.template === 'string' && val.template.trim().length > 0),
+    confirmationRequestsHasTriggers: (val) => {
+        if (!val || typeof val !== 'object') return false;
+        const enabled = val.enabled !== false;
+        const triggers = Array.isArray(val.triggers) ? val.triggers : (Array.isArray(val?.triggers?.default) ? val.triggers.default : null);
+        // If disabled, it's valid without triggers. If enabled, require at least 2 triggers.
+        if (!enabled) return true;
+        return Array.isArray(triggers) ? triggers.filter(Boolean).length >= 2 : false;
+    }
 };
 
 /**
@@ -318,6 +329,47 @@ const wiringRegistryV2 = {
                                 RULE: If ConversationEngine needs a prompt string, it MUST read from bookingSlots[].field
                                       NEVER hardcode text in code. Use || fallback ONLY as schema default reference.
                             `
+                        }
+                    ]
+                },
+
+                // BOOKING CONTINUITY (NO HIDDEN FEATURES)
+                {
+                    id: 'frontDesk.bookingContinuity',
+                    label: 'Booking Continuity',
+                    description: 'How booking survives interruptions and confirmation questions',
+                    ui: {
+                        sectionId: 'bookingContinuity',
+                        path: 'Front Desk → Personality → Booking Continuity'
+                    },
+                    fields: [
+                        {
+                            id: 'frontDesk.offRailsRecovery.bridgeBack.resumeBooking',
+                            label: 'Resume Booking Protocol',
+                            ui: { inputId: 'resumeBooking', path: 'Front Desk → Personality → Resume Booking Protocol' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.offRailsRecovery.bridgeBack.resumeBooking' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.offRailsRecovery.bridgeBack.resumeBooking'],
+                            scope: 'company',
+                            required: false,
+                            validators: [
+                                { fn: VALIDATORS.isNonEmptyObject, message: 'resumeBooking must be an object' },
+                                { fn: VALIDATORS.resumeBookingHasTemplate, message: 'resumeBooking.template is required when enabled' }
+                            ],
+                            defaultValue: { enabled: true }
+                        },
+                        {
+                            id: 'frontDesk.confirmationRequests',
+                            label: 'Confirmation Requests',
+                            ui: { inputId: 'confirmationRequests', path: 'Front Desk → Personality → Confirmation Requests' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.confirmationRequests' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.confirmationRequests'],
+                            scope: 'company',
+                            required: false,
+                            validators: [
+                                { fn: VALIDATORS.isNonEmptyObject, message: 'confirmationRequests must be an object' },
+                                { fn: VALIDATORS.confirmationRequestsHasTriggers, message: 'confirmationRequests.triggers must have at least 2 entries when enabled' }
+                            ],
+                            defaultValue: { enabled: true }
                         }
                     ]
                 },
