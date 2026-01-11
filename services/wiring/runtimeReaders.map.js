@@ -395,40 +395,53 @@ const RUNTIME_READERS_MAP = {
     },
 
     // =========================================================================
-    // FRONT DESK - EMOTIONS
+    // FRONT DESK - EMOTIONS (UI: emotionResponses)
     // =========================================================================
     'frontDesk.emotions': {
         readers: [
             {
-                file: 'services/ConversationEngine.js',
-                function: 'detectEmotion',
-                line: 1100,
-                description: 'Emotion detection configuration',
-                checkpoint: 'CHECKPOINT 9d',
+                file: 'services/HybridReceptionistLLM.js',
+                function: 'getEmotionModifiers',
+                line: 1280,
+                description: 'Uses emotionResponses toggles to steer tone + friction (no hardcoded scripts)',
+                required: false
+            },
+            {
+                file: 'config/frontDeskPrompt.js',
+                function: 'buildFrontDeskPrompt',
+                line: 1,
+                description: 'Injects emotion behavior rules into the LLM prompt',
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.emotions',
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.emotionResponses',
         scope: 'company',
         defaultValue: {}
     },
 
     // =========================================================================
-    // FRONT DESK - FRUSTRATION
+    // FRONT DESK - FRUSTRATION (UI: frustrationTriggers)
     // =========================================================================
     'frontDesk.frustration': {
         readers: [
             {
-                file: 'services/FrustrationEngine.js',
-                function: 'detectFrustration',
-                line: 30,
-                description: 'Frustration detection and de-escalation',
+                file: 'services/HybridReceptionistLLM.js',
+                function: 'detectFrustrationFromTriggers',
+                line: 1300,
+                description: 'Matches caller text against frustrationTriggers to reduce friction / de-escalate',
+                required: false
+            },
+            {
+                file: 'config/frontDeskPrompt.js',
+                function: 'buildFrontDeskPrompt',
+                line: 1,
+                description: 'Includes frustration trigger guidance in the LLM prompt',
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.frustration',
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.frustrationTriggers',
         scope: 'company',
-        defaultValue: {}
+        defaultValue: []
     },
 
     // =========================================================================

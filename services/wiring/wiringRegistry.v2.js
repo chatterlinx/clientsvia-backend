@@ -507,11 +507,13 @@ const wiringRegistryV2 = {
                             id: 'frontDesk.emotions',
                             label: 'Emotion Config',
                             ui: { inputId: 'emotions', path: 'Front Desk → Emotions → Config' },
-                            db: { path: 'aiAgentSettings.frontDeskBehavior.emotions' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.emotionResponses' },
                             runtime: RUNTIME_READERS_MAP['frontDesk.emotions'],
                             scope: 'company',
                             required: false,
-                            validators: [],
+                            validators: [
+                                { fn: VALIDATORS.isNonEmptyObject, message: 'emotionResponses must be an object' }
+                            ],
                             defaultValue: {}
                         }
                     ]
@@ -528,12 +530,15 @@ const wiringRegistryV2 = {
                             id: 'frontDesk.frustration',
                             label: 'Frustration Config',
                             ui: { inputId: 'frustration', path: 'Front Desk → Frustration → Config' },
-                            db: { path: 'aiAgentSettings.frontDeskBehavior.frustration' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.frustrationTriggers' },
                             runtime: RUNTIME_READERS_MAP['frontDesk.frustration'],
                             scope: 'company',
                             required: false,
-                            validators: [],
-                            defaultValue: {}
+                            validators: [
+                                { fn: VALIDATORS.isNonEmptyArray, message: 'frustrationTriggers must be a non-empty array' },
+                                { fn: VALIDATORS.hasMinItems(2), message: 'frustrationTriggers should include at least 2 phrases' }
+                            ],
+                            defaultValue: []
                         }
                     ]
                 },

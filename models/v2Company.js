@@ -2198,6 +2198,16 @@ const companySchema = new mongoose.Schema({
                     enabled: { type: Boolean, default: true },
                     allowSmallTalk: { type: Boolean, default: true },
                     smallTalkLimit: { type: Number, default: 1 }
+                },
+                // UI already exposes these - schema must store them (no hidden UI-only toggles)
+                joking: {
+                    enabled: { type: Boolean, default: true },
+                    respondInKind: { type: Boolean, default: true }
+                },
+                panicked: {
+                    enabled: { type: Boolean, default: true },
+                    bypassAllQuestions: { type: Boolean, default: false },
+                    confirmFirst: { type: Boolean, default: true }
                 }
             },
             

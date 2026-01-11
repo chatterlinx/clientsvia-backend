@@ -367,12 +367,14 @@ const TIER_MAX = {
             validator: (val) => val && Object.keys(val).length > 0,
             fixInstructions: 'Configure emotion detection',
             nav: { tab: 'front-desk', section: 'emotions', field: 'emotions' },
-            dbPath: 'aiAgentSettings.frontDeskBehavior.emotions',
+            dbPath: 'aiAgentSettings.frontDeskBehavior.emotionResponses',
             recommendedValue: {
-                enabled: true,
-                detectAnger: true,
-                detectFrustration: true,
-                deescalationResponse: "I completely understand your frustration. Let me make sure we take care of this for you right away."
+                stressed: { enabled: true, acknowledgments: [], followUp: "Let me help you get this taken care of." },
+                frustrated: { enabled: true, acknowledgments: [], followUp: "I'll get someone scheduled right away.", reduceFriction: true },
+                angry: { enabled: true, acknowledgments: [], followUp: "Let me make this right.", offerEscalation: true, maxTriesBeforeEscalate: 2 },
+                friendly: { enabled: true, allowSmallTalk: true, smallTalkLimit: 1 },
+                joking: { enabled: true, respondInKind: true },
+                panicked: { enabled: true, bypassAllQuestions: false, confirmFirst: true }
             }
         },
         {
@@ -385,12 +387,18 @@ const TIER_MAX = {
             validator: (val) => val && Object.keys(val).length > 0,
             fixInstructions: 'Configure frustration handling',
             nav: { tab: 'front-desk', section: 'frustration', field: 'frustration' },
-            dbPath: 'aiAgentSettings.frontDeskBehavior.frustration',
-            recommendedValue: {
-                enabled: true,
-                triggerWords: ['frustrated', 'angry', 'upset', 'furious', 'ridiculous', 'unacceptable', 'terrible', 'awful', 'sick of this'],
-                response: "I'm so sorry you're dealing with this. Your comfort is our priority - let me get this resolved for you right now."
-            }
+            dbPath: 'aiAgentSettings.frontDeskBehavior.frustrationTriggers',
+            recommendedValue: [
+                "this is ridiculous",
+                "i already told you",
+                "you're not listening",
+                "this is the third time",
+                "i'm frustrated",
+                "unacceptable",
+                "stop asking",
+                "just send someone",
+                "i need a manager"
+            ]
         },
         {
             fieldId: 'dataConfig.cheatSheets',
