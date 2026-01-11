@@ -40,7 +40,10 @@ const UI_DEFAULTS = {
         tone: 'warm',
         verbosity: 'concise',
         maxResponseWords: 30,
-        useCallerName: true
+        useCallerName: true,
+        // V79: Style depth controls (must be visible in UI)
+        warmth: 0.6,
+        speakingPace: 'normal'
     },
     bookingPrompts: {
         askName: "May I have your name?",

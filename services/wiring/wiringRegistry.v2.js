@@ -156,6 +156,29 @@ const wiringRegistryV2 = {
                             validators: [],
                             defaultValue: 'balanced',
                             allowedValues: ['confident', 'balanced', 'polite']
+                        },
+                        {
+                            id: 'frontDesk.personality.warmth',
+                            label: 'Warmth',
+                            ui: { inputId: 'warmth', path: 'Front Desk → Personality → Warmth' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.personality.warmth' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.personality.warmth'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 0.6
+                        },
+                        {
+                            id: 'frontDesk.personality.speakingPace',
+                            label: 'Speaking Pace',
+                            ui: { inputId: 'speakingPace', path: 'Front Desk → Personality → Speaking Pace' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.personality.speakingPace' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.personality.speakingPace'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 'normal',
+                            allowedValues: ['slow', 'normal', 'fast']
                         }
                     ]
                 },

@@ -25,6 +25,9 @@ const DEFAULT_FRONT_DESK_CONFIG = {
         verbosity: 'concise',  // concise | balanced | detailed
         maxResponseWords: 30,
         useCallerName: true,
+        // V79: Style depth controls (UI controlled)
+        warmth: 0.6, // 0.0 → 1.0
+        speakingPace: 'normal', // slow | normal | fast
         companyIntro: 'Thank you for calling {companyName}, this is your AI assistant.'
     },
 
@@ -269,7 +272,15 @@ const DEFAULT_FRONT_DESK_CONFIG = {
  * @returns {string}
  */
 function buildPromptFromUIConfig(uiConfig, callContext = {}) {
-    const config = { ...DEFAULT_FRONT_DESK_CONFIG, ...uiConfig };
+    // NOTE: shallow spreads lose nested defaults. Ensure personality retains defaults.
+    const config = {
+        ...DEFAULT_FRONT_DESK_CONFIG,
+        ...uiConfig,
+        personality: {
+            ...(DEFAULT_FRONT_DESK_CONFIG.personality || {}),
+            ...((uiConfig && uiConfig.personality) ? uiConfig.personality : {})
+        }
+    };
     const {
         companyName = 'our company',
         industry = 'HVAC',
@@ -301,6 +312,8 @@ function buildPromptFromUIConfig(uiConfig, callContext = {}) {
 
     return `You are the front desk for ${companyName} (${industry}).
 Tone: ${config.personality.tone}
+Warmth: ${typeof config.personality.warmth === 'number' ? config.personality.warmth : 'default'}
+Speaking pace: ${config.personality.speakingPace || 'default'}
 Max response length: ${config.personality.maxResponseWords} words
 ${config.personality.useCallerName ? 'Use caller\'s name once you know it.' : ''}
 

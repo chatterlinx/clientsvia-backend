@@ -406,7 +406,10 @@ function getPresetForTrade(tradeKey = 'universal') {
         personality: {
             conversationStyle: 'balanced',
             agentName: null, // Set during onboarding
-            tone: 'professional_friendly'
+            tone: 'professional_friendly',
+            // V79: Style depth controls (UI controlled)
+            warmth: 0.6,
+            speakingPace: 'normal'
         }
     };
 }

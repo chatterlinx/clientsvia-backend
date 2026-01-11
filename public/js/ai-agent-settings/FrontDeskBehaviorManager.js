@@ -349,7 +349,10 @@ class FrontDeskBehaviorManager {
                 verbosity: 'concise',
                 maxResponseWords: 30,
                 useCallerName: true,
-                agentName: ''  // No default - must be configured per company
+                agentName: '',  // No default - must be configured per company
+                // V79: Style depth controls (UI controlled)
+                warmth: 0.6,
+                speakingPace: 'normal'
             },
             bookingPrompts: {
                 askName: "May I have your name?",
@@ -925,6 +928,7 @@ class FrontDeskBehaviorManager {
 
     renderPersonalityTab() {
         const p = this.config.personality || {};
+        const warmthPct = Number.isFinite(p.warmth) ? Math.round(p.warmth * 100) : 60;
         return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
                 <h3 style="margin: 0 0 16px 0; color: #58a6ff;">🎭 Personality Settings</h3>
@@ -1023,6 +1027,25 @@ class FrontDeskBehaviorManager {
                             Max Response Words: <span id="fdb-max-words-val" style="color: #58a6ff;">${p.maxResponseWords || 30}</span>
                         </label>
                         <input type="range" id="fdb-max-words" min="10" max="100" value="${p.maxResponseWords || 30}" style="width: 100%; accent-color: #58a6ff;">
+                    </div>
+
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            Warmth: <span id="fdb-warmth-val" style="color: #58a6ff;">${warmthPct}%</span>
+                        </label>
+                        <input type="range" id="fdb-warmth" min="0" max="100" value="${warmthPct}" style="width: 100%; accent-color: #f59e0b;">
+                        <p style="color: #8b949e; font-size: 0.75rem; margin-top: 4px;">
+                            Higher warmth = more empathetic and friendly phrasing. Lower warmth = more direct, businesslike.
+                        </p>
+                    </div>
+
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Speaking Pace</label>
+                        <select id="fdb-speaking-pace" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                            <option value="slow" ${(p.speakingPace || 'normal') === 'slow' ? 'selected' : ''}>🐢 Slow - more pauses, more confirmation</option>
+                            <option value="normal" ${(p.speakingPace || 'normal') === 'normal' ? 'selected' : ''}>🚶 Normal - balanced</option>
+                            <option value="fast" ${(p.speakingPace || 'normal') === 'fast' ? 'selected' : ''}>🏃 Fast - moves through booking quickly</option>
+                        </select>
                     </div>
                     
                     <div>
@@ -7444,6 +7467,14 @@ Sean → Shawn, Shaun`;
             });
         }
 
+        const warmthSlider = container.querySelector('#fdb-warmth');
+        if (warmthSlider) {
+            warmthSlider.addEventListener('input', (e) => {
+                const val = container.querySelector('#fdb-warmth-val');
+                if (val) val.textContent = `${e.target.value}%`;
+            });
+        }
+
         // Add trigger buttons
         ['frustration', 'escalation', 'forbidden'].forEach(type => {
             const addBtn = container.querySelector(`#fdb-add-${type}`);
@@ -7723,12 +7754,16 @@ Sean → Shawn, Shaun`;
         const getChecked = (id) => document.getElementById(id)?.checked;
 
         if (document.getElementById('fdb-tone')) {
+            const warmthRaw = parseInt(get('fdb-warmth'));
+            const warmth = Number.isFinite(warmthRaw) ? Math.max(0, Math.min(1, warmthRaw / 100)) : 0.6;
             this.config.personality = {
                 agentName: get('fdb-agent-name') || '',  // AI receptionist name
                 tone: get('fdb-tone'),
                 verbosity: get('fdb-verbosity'),
                 maxResponseWords: parseInt(get('fdb-max-words')) || 30,
-                useCallerName: getChecked('fdb-use-name')
+                useCallerName: getChecked('fdb-use-name'),
+                warmth,
+                speakingPace: get('fdb-speaking-pace') || 'normal'
             };
         }
         

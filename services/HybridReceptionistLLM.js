@@ -79,7 +79,10 @@ function loadFrontDeskConfig(company) {
             verbosity: config.personality?.verbosity || null,
             maxResponseWords: config.personality?.maxResponseWords || null,
             useCallerName: config.personality?.useCallerName,
-            agentName: config.personality?.agentName || null
+            agentName: config.personality?.agentName || null,
+            // V79: Style depth controls (UI controlled)
+            warmth: (typeof config.personality?.warmth === 'number') ? config.personality.warmth : null,
+            speakingPace: config.personality?.speakingPace || null
         },
         
         // 🎯 Conversation Style - confident/balanced/polite
@@ -1056,6 +1059,26 @@ RULES:
             balanced: 'Be friendly and professional.',
             polite: 'Be courteous and respectful.'
         }[style] || 'Be friendly and professional.';
+
+        // V79: Style depth controls (warmth + speaking pace)
+        const warmth = (typeof behaviorConfig?.personality?.warmth === 'number')
+            ? Math.max(0, Math.min(1, behaviorConfig.personality.warmth))
+            : null;
+        const speakingPace = behaviorConfig?.personality?.speakingPace || null;
+        
+        const warmthHint = (warmth == null)
+            ? ''
+            : (warmth >= 0.75)
+                ? 'Use noticeably warm, reassuring language.'
+                : (warmth >= 0.45)
+                    ? 'Use a friendly, professional tone.'
+                    : 'Be more direct and businesslike (still polite).';
+        
+        const paceHint = speakingPace === 'fast'
+            ? 'Move through booking quickly; minimize extra words.'
+            : speakingPace === 'slow'
+                ? 'Move a bit slower; add brief confirmations when appropriate.'
+                : '';
         
         // Customer context (brief)
         const callerInfo = customerContext?.isReturning 
@@ -1083,7 +1106,7 @@ RULES:
         // Determine first missing slot for order guidance
         const firstMissingSlot = needed[0] || 'none';
         
-        const prompt = `You are ${companyName}'s receptionist (${trade}). ${styleHint}
+        const prompt = `You are ${companyName}'s receptionist (${trade}). ${styleHint}${warmthHint ? ` ${warmthHint}` : ''}${paceHint ? ` ${paceHint}` : ''}
 
 CALLER: ${callerInfo}
 HAVE: ${collected.join(', ') || 'nothing yet'}

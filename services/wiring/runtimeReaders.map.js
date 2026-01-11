@@ -64,6 +64,36 @@ const RUNTIME_READERS_MAP = {
         defaultValue: 'balanced'
     },
 
+    'frontDesk.personality.warmth': {
+        readers: [
+            {
+                file: 'services/HybridReceptionistLLM.js',
+                function: 'buildSystemPrompt',
+                line: 1050,
+                description: 'Controls how warm/empathetic the assistant sounds (0.0 → 1.0)',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.personality.warmth',
+        scope: 'company',
+        defaultValue: 0.6
+    },
+
+    'frontDesk.personality.speakingPace': {
+        readers: [
+            {
+                file: 'services/HybridReceptionistLLM.js',
+                function: 'buildSystemPrompt',
+                line: 1050,
+                description: 'Controls how quickly the assistant moves through questions (slow/normal/fast)',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.personality.speakingPace',
+        scope: 'company',
+        defaultValue: 'normal'
+    },
+
     // =========================================================================
     // FRONT DESK - GREETING RESPONSES
     // =========================================================================

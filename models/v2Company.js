@@ -1667,7 +1667,14 @@ const companySchema = new mongoose.Schema({
                 tone: { type: String, enum: ['warm', 'professional', 'casual', 'formal'], default: 'warm' },
                 verbosity: { type: String, enum: ['concise', 'balanced', 'detailed'], default: 'concise' },
                 maxResponseWords: { type: Number, default: 30, min: 10, max: 100 },
-                useCallerName: { type: Boolean, default: true }
+                useCallerName: { type: Boolean, default: true },
+                // V79: STYLE DEPTH CONTROLS (UI Controlled)
+                // These are simple behavior knobs that influence how the LLM speaks.
+                // They must be visible/editable in UI (no hidden magic).
+                // warmth: 0.0 (cold/strict) → 1.0 (very warm)
+                warmth: { type: Number, default: 0.6, min: 0, max: 1 },
+                // speakingPace: how quickly the assistant moves through questions
+                speakingPace: { type: String, enum: ['slow', 'normal', 'fast'], default: 'normal', trim: true }
             },
             
             // ═══════════════════════════════════════════════════════════════
