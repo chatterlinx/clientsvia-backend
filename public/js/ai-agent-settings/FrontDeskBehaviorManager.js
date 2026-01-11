@@ -10,6 +10,9 @@
  */
 
 class FrontDeskBehaviorManager {
+    // Visible on-page build stamp so admins can confirm what UI code is running.
+    // Keep this human-readable (no giant hashes).
+    static UI_BUILD = 'FD-BEHAVIOR_UI_V79.2';
     constructor(companyId) {
         this.companyId = companyId;
         this.config = null;
@@ -840,6 +843,10 @@ class FrontDeskBehaviorManager {
                             💬 Front Desk Behavior
                             <span style="font-size: 0.75rem; padding: 3px 8px; background: ${this.config.enabled ? '#238636' : '#6e7681'}; border-radius: 12px; color: white;">
                                 ${this.config.enabled ? 'ACTIVE' : 'DISABLED'}
+                            </span>
+                            <span title="UI Build stamp for Front Desk Behavior page (proves which code is running)"
+                                  style="font-size: 0.7rem; padding: 3px 8px; background: #21262d; border: 1px solid #30363d; border-radius: 12px; color: #c9d1d9;">
+                                UI Build: ${FrontDeskBehaviorManager.UI_BUILD}
                             </span>
                         </h2>
                         <p style="margin: 8px 0 0 0; color: #8b949e; font-size: 0.875rem;">
