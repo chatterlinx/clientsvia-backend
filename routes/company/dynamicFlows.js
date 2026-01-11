@@ -84,6 +84,17 @@ function validateDynamicFlow(flowData) {
             errors.push(`Action[${idx}]: Missing "type" field`);
         }
     });
+
+    // HARD RULE (runtime truth): enabled V1 flows must not be "half wired"
+    // Snapshot/runtime wiring expects these four action types to exist when a flow is enabled.
+    if (enabled) {
+        const types = actions.map(a => String(a.type || '').toLowerCase());
+        const required = ['set_flag', 'append_ledger', 'ack_once', 'transition_mode'];
+        const missing = required.filter(t => !types.includes(t));
+        if (missing.length > 0) {
+            errors.push(`INVALID: Enabled flow is missing required actions: ${missing.join(', ')}`);
+        }
+    }
     
     return {
         valid: errors.length === 0,
@@ -92,6 +103,185 @@ function validateDynamicFlow(flowData) {
         triggerCount: triggers.length,
         actionCount: actions.length
     };
+}
+
+/**
+ * Normalize legacy DFLOW_V1 payloads into the current DynamicFlow schema.
+ * Returns: { flow: normalizedFlow, notes: string[] }
+ *
+ * This prevents "enabled but dead" flows and removes the need for per-client troubleshooting.
+ */
+function normalizeDynamicFlowInput(flowData) {
+    const notes = [];
+    const out = { ...(flowData || {}) };
+
+    // Normalize enabled boolean
+    out.enabled = out.enabled !== false;
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Triggers: support legacy `trigger` object and legacy types
+    // ─────────────────────────────────────────────────────────────────────
+    if (!Array.isArray(out.triggers) || out.triggers.length === 0) {
+        if (out.trigger && typeof out.trigger === 'object') {
+            const t = out.trigger;
+            // Legacy PHRASE_MATCH → phrase trigger
+            const legacyType = String(t.type || '').toUpperCase();
+            if (legacyType === 'PHRASE_MATCH') {
+                out.triggers = [{
+                    type: 'phrase',
+                    config: {
+                        phrases: Array.isArray(t.phrases) ? t.phrases : [],
+                        fuzzy: t.fuzzy !== false,
+                        minConfidence: typeof t.minConfidence === 'number' ? t.minConfidence : 0.7
+                    },
+                    priority: 10,
+                    description: 'Migrated from legacy trigger'
+                }];
+                notes.push('Normalized legacy trigger → triggers[0] (phrase)');
+            } else if (legacyType) {
+                out.triggers = [{
+                    type: legacyType.toLowerCase(),
+                    config: t.config || {},
+                    priority: 10,
+                    description: 'Migrated from legacy trigger'
+                }];
+                notes.push(`Normalized legacy trigger type "${legacyType}"`);
+            }
+        }
+    }
+
+    // Special-case: after_hours_routing should use the built-in after_hours trigger (no phrases needed)
+    if ((out.flowKey || '').toLowerCase() === 'after_hours_routing') {
+        const hasAfterHours = Array.isArray(out.triggers) && out.triggers.some(tr => tr?.type === 'after_hours');
+        const hasPhrase = Array.isArray(out.triggers) && out.triggers.some(tr => tr?.type === 'phrase');
+        if (!hasAfterHours && hasPhrase) {
+            const phrase = out.triggers.find(tr => tr?.type === 'phrase');
+            const phrases = phrase?.config?.phrases || [];
+            if (!Array.isArray(phrases) || phrases.length === 0) {
+                out.triggers = [{ type: 'after_hours', config: {}, priority: 10, description: 'After-hours (built-in)' }];
+                notes.push('Converted after_hours_routing trigger to built-in after_hours (no phrases required)');
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Actions: normalize casing + payload→config for DFLOW_V1
+    // ─────────────────────────────────────────────────────────────────────
+    if (Array.isArray(out.actions)) {
+        out.actions = out.actions.map((a) => {
+            if (!a || typeof a !== 'object') return a;
+            const typeRaw = a.type || a.action || '';
+            const type = String(typeRaw).toLowerCase();
+            const timing = a.timing || 'on_activate';
+            const config = a.config || a.payload || {};
+
+            // Legacy payload field name normalization
+            if (type === 'set_flag' || type === 'set-flag' || type === 'setflag') {
+                const flagName = config.flagName || config.path || config.name;
+                const flagValue = config.flagValue ?? config.value ?? true;
+                return {
+                    timing,
+                    type: 'set_flag',
+                    config: {
+                        flagName,
+                        flagValue,
+                        alsoWriteToCallLedgerFacts: config.alsoWriteToCallLedgerFacts !== false
+                    }
+                };
+            }
+            if (type === 'ack_once' || type === 'ack-once' || type === 'ackonce') {
+                return { timing, type: 'ack_once', config: { text: config.text || config.response || '' } };
+            }
+            if (type === 'append_ledger' || type === 'append-ledger') {
+                return {
+                    timing,
+                    type: 'append_ledger',
+                    config: {
+                        type: config.type,
+                        key: config.key,
+                        note: config.note
+                    }
+                };
+            }
+            if (type === 'transition_mode' || type === 'transition-mode') {
+                return {
+                    timing,
+                    type: 'transition_mode',
+                    config: {
+                        targetMode: config.targetMode,
+                        setBookingLocked: config.setBookingLocked !== false
+                    }
+                };
+            }
+            // Default passthrough with normalized type/config
+            return { ...a, timing, type, config };
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Auto-repair: If enabled, ensure required action types exist.
+    // IMPORTANT: This is not hidden. We return explicit notes to the caller.
+    // ─────────────────────────────────────────────────────────────────────
+    if (out.enabled !== false) {
+        const actions = Array.isArray(out.actions) ? out.actions : [];
+        const types = actions.map(a => String(a?.type || '').toLowerCase());
+
+        // Ensure set_flag exists (cannot invent a flagName safely)
+        if (!types.includes('set_flag')) {
+            notes.push('Auto-repair blocked: missing set_flag (requires user-supplied flagName)');
+        }
+
+        // Ensure ack_once exists (cannot invent words safely)
+        if (!types.includes('ack_once')) {
+            notes.push('Auto-repair blocked: missing ack_once (requires user-supplied text)');
+        }
+
+        // append_ledger: we can inject safe audit defaults if missing
+        if (!types.includes('append_ledger')) {
+            const key = (out.flowKey || 'FLOW').toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+            actions.push({
+                timing: 'on_activate',
+                type: 'append_ledger',
+                config: {
+                    type: 'EVENT',
+                    key: `${key}_ACTIVATED`,
+                    note: `Auto-injected audit entry for flow ${out.flowKey || ''}`.trim()
+                }
+            });
+            notes.push('Auto-injected missing action: append_ledger');
+        }
+
+        // transition_mode: safe default is to NOT change mode unless flowKey is known.
+        if (!types.includes('transition_mode')) {
+            let targetMode = null;
+            let setBookingLocked = true;
+            const fk = String(out.flowKey || '').toLowerCase();
+            if (fk === 'after_hours_routing') {
+                targetMode = 'BOOKING';
+                setBookingLocked = false;
+            } else if (fk === 'technician_request') {
+                targetMode = 'BOOKING';
+                setBookingLocked = true;
+            }
+
+            if (targetMode) {
+                actions.push({
+                    timing: 'on_activate',
+                    type: 'transition_mode',
+                    config: { targetMode, setBookingLocked }
+                });
+                notes.push(`Auto-injected missing action: transition_mode (${targetMode})`);
+            } else {
+                notes.push('Auto-repair blocked: missing transition_mode (unknown safe targetMode for this flowKey)');
+            }
+        }
+
+        out.actions = actions;
+    }
+
+    // Remove legacy top-level keys to avoid confusion (but do not delete if caller wants them)
+    // Keep them if present; DB schema will ignore unknown keys anyway.
+    return { flow: out, notes };
 }
 
 // ============================================================================
@@ -240,7 +430,9 @@ router.get('/:flowId', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const { companyId } = req.params;
-        const flowData = req.body;
+        const rawFlowData = req.body;
+        const normalized = normalizeDynamicFlowInput(rawFlowData);
+        const flowData = normalized.flow;
         
         logger.info('[DYNAMIC FLOWS API] Create request', {
             companyId,
@@ -272,7 +464,8 @@ router.post('/', async (req, res) => {
                 error: 'Flow validation failed',
                 validationErrors: validation.errors,
                 triggerCount: validation.triggerCount,
-                actionCount: validation.actionCount
+                actionCount: validation.actionCount,
+                normalizationNotes: normalized.notes || []
             });
         }
         
@@ -306,7 +499,7 @@ router.post('/', async (req, res) => {
             flowKey: flow.flowKey
         });
         
-        res.status(201).json({ success: true, flow });
+        res.status(201).json({ success: true, flow, normalizationNotes: normalized.notes || [] });
         
     } catch (error) {
         logger.error('[DYNAMIC FLOWS API] Create failed', {
@@ -325,7 +518,9 @@ router.post('/', async (req, res) => {
 router.put('/:flowId', async (req, res) => {
     try {
         const { companyId, flowId } = req.params;
-        const updates = req.body;
+        const rawUpdates = req.body;
+        const normalized = normalizeDynamicFlowInput(rawUpdates);
+        const updates = normalized.flow;
         
         logger.info('[DYNAMIC FLOWS API] Update request', {
             companyId,
@@ -371,7 +566,8 @@ router.put('/:flowId', async (req, res) => {
                 error: 'Flow validation failed',
                 validationErrors: validation.errors,
                 triggerCount: validation.triggerCount,
-                actionCount: validation.actionCount
+                actionCount: validation.actionCount,
+                normalizationNotes: normalized.notes || []
             });
         }
         
@@ -391,7 +587,7 @@ router.put('/:flowId', async (req, res) => {
             version: flow.metadata?.version
         });
         
-        res.json({ success: true, flow });
+        res.json({ success: true, flow, normalizationNotes: normalized.notes || [] });
         
     } catch (error) {
         logger.error('[DYNAMIC FLOWS API] Update failed', {
