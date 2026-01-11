@@ -12,7 +12,7 @@
 class FrontDeskBehaviorManager {
     // Visible on-page build stamp so admins can confirm what UI code is running.
     // Keep this human-readable (no giant hashes).
-    static UI_BUILD = 'FD-BEHAVIOR_UI_V79.2';
+    static UI_BUILD = 'FD-BEHAVIOR_UI_V79.3';
     constructor(companyId) {
         this.companyId = companyId;
         this.config = null;
@@ -936,6 +936,13 @@ class FrontDeskBehaviorManager {
     renderPersonalityTab() {
         const p = this.config.personality || {};
         const warmthPct = Number.isFinite(p.warmth) ? Math.round(p.warmth * 100) : 60;
+        const maxWords = Number.isFinite(p.maxResponseWords) ? p.maxResponseWords : 30;
+        
+        const RECOMMENDED = {
+            maxResponseWords: 30,
+            warmthPct: 60,
+            speakingPace: 'normal'
+        };
         
         // Tiny helper for consistent "what does this setting do?" UX.
         // Clickable so it works in all browsers + mobile (no hover dependency).
@@ -964,6 +971,14 @@ class FrontDeskBehaviorManager {
             'Recommended (World‑Class Default): Normal.',
             'Fast: fewer extra words; better for high call volume + strong scripts.',
             'Slow: more confirmations; better for elderly callers or high-stress scenarios.'
+        ].join(' ');
+        
+        const maxWordsHelp = [
+            'Max Response Words is a hard ceiling that prevents the AI from rambling.',
+            'Recommended (World‑Class Default): 30 words.',
+            'Lower (20–25): very efficient/transactional; can feel abrupt.',
+            'Higher (45–60): more explanatory; can feel slow and reduce booking conversion.',
+            'Tip: keep this near 30 and use “Warmth” + “Speaking Pace” for most tuning.'
         ].join(' ');
         return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
@@ -1060,15 +1075,37 @@ class FrontDeskBehaviorManager {
                     
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                            Max Response Words: <span id="fdb-max-words-val" style="color: #58a6ff;">${p.maxResponseWords || 30}</span>
+                            Max Response Words: <span id="fdb-max-words-val" style="color: #58a6ff;">${maxWords}</span>
+                            ${infoIcon('maxResponseWords')}
+                            <button type="button"
+                                    class="fdb-reset-recommended"
+                                    data-reset-key="maxResponseWords"
+                                    style="margin-left:10px; padding:2px 8px; font-size:11px; border-radius:999px; cursor:pointer;
+                                           border:1px solid #30363d; background:#0d1117; color:#8b949e;">
+                                Reset
+                            </button>
                         </label>
-                        <input type="range" id="fdb-max-words" min="10" max="100" value="${p.maxResponseWords || 30}" style="width: 100%; accent-color: #58a6ff;">
+                        <input type="range" id="fdb-max-words" min="10" max="100" value="${maxWords}" style="width: 100%; accent-color: #58a6ff;">
+                        <p style="color: #8b949e; font-size: 0.75rem; margin-top: 4px;">
+                            <strong style="color:#fbbf24;">Recommended:</strong> ${RECOMMENDED.maxResponseWords} words (world‑class default). Lower = faster/shorter. Higher = more explanation.
+                        </p>
+                        <div class="fdb-info-panel" data-info-key="maxResponseWords" style="display:none; margin-top:10px; padding:10px; background:#0d1117; border:1px solid #30363d; border-radius:8px; color:#c9d1d9; font-size:12px; line-height:1.4;">
+                            <div style="font-weight:700; color:#fbbf24; margin-bottom:6px;">Max Response Words (anti‑ramble safety)</div>
+                            <div>${maxWordsHelp}</div>
+                        </div>
                     </div>
 
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
                             Warmth: <span id="fdb-warmth-val" style="color: #58a6ff;">${warmthPct}%</span>
                             ${infoIcon('warmth')}
+                            <button type="button"
+                                    class="fdb-reset-recommended"
+                                    data-reset-key="warmth"
+                                    style="margin-left:10px; padding:2px 8px; font-size:11px; border-radius:999px; cursor:pointer;
+                                           border:1px solid #30363d; background:#0d1117; color:#8b949e;">
+                                Reset
+                            </button>
                         </label>
                         <input type="range" id="fdb-warmth" min="0" max="100" value="${warmthPct}" style="width: 100%; accent-color: #f59e0b;">
                         <p style="color: #8b949e; font-size: 0.75rem; margin-top: 4px;">
@@ -1084,6 +1121,13 @@ class FrontDeskBehaviorManager {
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
                             Speaking Pace
                             ${infoIcon('speakingPace')}
+                            <button type="button"
+                                    class="fdb-reset-recommended"
+                                    data-reset-key="speakingPace"
+                                    style="margin-left:10px; padding:2px 8px; font-size:11px; border-radius:999px; cursor:pointer;
+                                           border:1px solid #30363d; background:#0d1117; color:#8b949e;">
+                                Reset
+                            </button>
                         </label>
                         <select id="fdb-speaking-pace" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                             <option value="slow" ${(p.speakingPace || 'normal') === 'slow' ? 'selected' : ''}>🐢 Slow - more pauses, more confirmation</option>
@@ -7541,6 +7585,37 @@ Sean → Shawn, Shaun`;
                 if (!panel) return;
                 const isHidden = panel.style.display === 'none' || !panel.style.display;
                 panel.style.display = isHidden ? 'block' : 'none';
+            });
+            
+            // V79.3 UX: Reset-to-recommended buttons for key personality controls
+            container.addEventListener('click', (e) => {
+                const btn = e?.target?.closest?.('.fdb-reset-recommended[data-reset-key]');
+                if (!btn) return;
+                e.preventDefault();
+                const key = btn.dataset.resetKey;
+                
+                if (key === 'maxResponseWords') {
+                    const slider = container.querySelector('#fdb-max-words');
+                    const val = container.querySelector('#fdb-max-words-val');
+                    if (slider) slider.value = '30';
+                    if (val) val.textContent = '30';
+                    this.isDirty = true;
+                    return;
+                }
+                if (key === 'warmth') {
+                    const slider = container.querySelector('#fdb-warmth');
+                    const val = container.querySelector('#fdb-warmth-val');
+                    if (slider) slider.value = '60';
+                    if (val) val.textContent = '60%';
+                    this.isDirty = true;
+                    return;
+                }
+                if (key === 'speakingPace') {
+                    const sel = container.querySelector('#fdb-speaking-pace');
+                    if (sel) sel.value = 'normal';
+                    this.isDirty = true;
+                    return;
+                }
             });
         }
 
