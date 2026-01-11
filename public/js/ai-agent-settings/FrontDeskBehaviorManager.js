@@ -931,14 +931,17 @@ class FrontDeskBehaviorManager {
         const warmthPct = Number.isFinite(p.warmth) ? Math.round(p.warmth * 100) : 60;
         
         // Tiny helper for consistent "what does this setting do?" UX.
-        // Uses native tooltip for reliability (no hidden JS dependencies).
-        const infoIcon = (text) => `
-            <span title="${String(text || '').replace(/"/g, '&quot;')}"
-                  style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; margin-left:8px;
-                         border:1px solid #30363d; border-radius:999px; color:#9ca3af; font-size:12px; cursor:help; user-select:none;
-                         background:#0d1117;">
+        // Clickable so it works in all browsers + mobile (no hover dependency).
+        const infoIcon = (key) => `
+            <button type="button"
+                    class="fdb-info-btn"
+                    data-info-key="${String(key)}"
+                    aria-label="Help"
+                    style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; margin-left:8px;
+                           border:1px solid #30363d; border-radius:999px; color:#9ca3af; font-size:12px; cursor:pointer; user-select:none;
+                           background:#0d1117; padding:0; line-height:18px;">
                 i
-            </span>
+            </button>
         `;
         
         const warmthHelp = [
@@ -1058,18 +1061,22 @@ class FrontDeskBehaviorManager {
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
                             Warmth: <span id="fdb-warmth-val" style="color: #58a6ff;">${warmthPct}%</span>
-                            ${infoIcon(warmthHelp)}
+                            ${infoIcon('warmth')}
                         </label>
                         <input type="range" id="fdb-warmth" min="0" max="100" value="${warmthPct}" style="width: 100%; accent-color: #f59e0b;">
                         <p style="color: #8b949e; font-size: 0.75rem; margin-top: 4px;">
                             <strong style="color:#fbbf24;">Recommended:</strong> 60% (world‑class default). Higher warmth = more empathetic. Lower warmth = more direct.
                         </p>
+                        <div class="fdb-info-panel" data-info-key="warmth" style="display:none; margin-top:10px; padding:10px; background:#0d1117; border:1px solid #30363d; border-radius:8px; color:#c9d1d9; font-size:12px; line-height:1.4;">
+                            <div style="font-weight:700; color:#fbbf24; margin-bottom:6px;">Warmth (how it sounds)</div>
+                            <div>${warmthHelp}</div>
+                        </div>
                     </div>
 
                     <div>
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
                             Speaking Pace
-                            ${infoIcon(paceHelp)}
+                            ${infoIcon('speakingPace')}
                         </label>
                         <select id="fdb-speaking-pace" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                             <option value="slow" ${(p.speakingPace || 'normal') === 'slow' ? 'selected' : ''}>🐢 Slow - more pauses, more confirmation</option>
@@ -1079,6 +1086,10 @@ class FrontDeskBehaviorManager {
                         <p style="color: #8b949e; font-size: 0.75rem; margin-top: 4px;">
                             <strong style="color:#fbbf24;">Recommended:</strong> Normal (world‑class default).
                         </p>
+                        <div class="fdb-info-panel" data-info-key="speakingPace" style="display:none; margin-top:10px; padding:10px; background:#0d1117; border:1px solid #30363d; border-radius:8px; color:#c9d1d9; font-size:12px; line-height:1.4;">
+                            <div style="font-weight:700; color:#fbbf24; margin-bottom:6px;">Speaking Pace (how it moves)</div>
+                            <div>${paceHelp}</div>
+                        </div>
                     </div>
                     
                     <div>
@@ -7507,6 +7518,18 @@ Sean → Shawn, Shaun`;
                 if (val) val.textContent = `${e.target.value}%`;
             });
         }
+
+        // V79 UX: Clickable info popovers (no hover dependency)
+        container.querySelectorAll('.fdb-info-btn[data-info-key]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const key = btn.dataset.infoKey;
+                const panel = container.querySelector(`.fdb-info-panel[data-info-key="${key}"]`);
+                if (!panel) return;
+                const isHidden = panel.style.display === 'none' || !panel.style.display;
+                panel.style.display = isHidden ? 'block' : 'none';
+            });
+        });
 
         // Add trigger buttons
         ['frustration', 'escalation', 'forbidden'].forEach(type => {
