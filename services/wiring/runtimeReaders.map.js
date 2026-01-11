@@ -63,6 +63,32 @@ const RUNTIME_READERS_MAP = {
         scope: 'company',
         defaultValue: 'balanced'
     },
+    
+    'frontDesk.styleAcknowledgments': {
+        readers: [
+            {
+                file: 'services/HybridReceptionistLLM.js',
+                function: 'generateResponse',
+                line: 770,
+                description: 'Uses UI-configured styleAcknowledgments when LLM did not provide an acknowledgment (LLMQNA slot turns)',
+                required: false
+            },
+            {
+                file: 'services/ResponseRenderer.js',
+                function: 'getStyleAcknowledgment',
+                line: 304,
+                description: 'Uses UI-configured styleAcknowledgments for 0-token deterministic acknowledgments (state machine)',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.styleAcknowledgments',
+        scope: 'company',
+        defaultValue: {
+            confident: "Let's get this taken care of.",
+            balanced: 'I can help with that!',
+            polite: "I'd be happy to help."
+        }
+    },
 
     'frontDesk.personality.warmth': {
         readers: [

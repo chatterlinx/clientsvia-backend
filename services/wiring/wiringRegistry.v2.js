@@ -158,6 +158,21 @@ const wiringRegistryV2 = {
                             allowedValues: ['confident', 'balanced', 'polite']
                         },
                         {
+                            id: 'frontDesk.styleAcknowledgments',
+                            label: 'Style Acknowledgments',
+                            ui: { inputId: 'styleAcknowledgments', path: 'Front Desk → Personality → Style Acknowledgments' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.styleAcknowledgments' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.styleAcknowledgments'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: {
+                                confident: "Let's get this taken care of.",
+                                balanced: 'I can help with that!',
+                                polite: "I'd be happy to help."
+                            }
+                        },
+                        {
                             id: 'frontDesk.personality.warmth',
                             label: 'Warmth',
                             ui: { inputId: 'warmth', path: 'Front Desk → Personality → Warmth' },
