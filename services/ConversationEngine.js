@@ -4379,7 +4379,21 @@ async function processTurn({
                             if (needsLast) {
                                 const lastNameQuestion = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
                                 const firstNameForTemplate = nameMeta.first || '';
-                                reaskText = String(lastNameQuestion).replace('{firstName}', firstNameForTemplate);
+                                const lastNameQuestionRendered = String(lastNameQuestion).replace('{firstName}', firstNameForTemplate);
+
+                                // V85: If configured, use the "duplicate last-name recovery" prompt instead of repeating the same question.
+                                // IMPORTANT: This copy must be UI-controlled (no hidden behavior).
+                                const { renderBracedTemplate } = require('../utils/promptTemplate');
+                                const dupTemplate = nameSlotConfig?.duplicateNamePartPrompt || '';
+                                if (dupTemplate && dupTemplate.trim()) {
+                                    reaskText = renderBracedTemplate(String(dupTemplate), {
+                                        firstName: firstNameForTemplate,
+                                        candidate: formattedName,
+                                        lastNameQuestion: lastNameQuestionRendered
+                                    }).trim();
+                                } else {
+                                    reaskText = lastNameQuestionRendered;
+                                }
                             } else {
                                 // Missing first name: fall back to name slot main question
                                 const nameQuestion = nameSlotConfig?.question || getMissingConfigPrompt('slot_question', 'name');
@@ -4389,6 +4403,38 @@ async function processTurn({
                             // Keep booking focused on name collection
                             session.booking.activeSlot = 'name';
                             session.booking.activeSlotType = 'name';
+
+                            // V85: If caller repeats the duplicate twice, offer escalation (UI-controlled)
+                            nameMeta.duplicateNamePartCount = (nameMeta.duplicateNamePartCount || 0) + 1;
+                            if (nameMeta.duplicateNamePartCount >= 2) {
+                                const escalationCfg = company.aiAgentSettings?.frontDeskBehavior?.escalation || {};
+                                const escalationOffer =
+                                    escalationCfg.offerMessage ||
+                                    escalationCfg.transferMessage ||
+                                    "DEFAULT - OVERRIDE IN UI: No problem — I can connect you to our team or take a message. Which would you prefer?";
+                                aiResult = {
+                                    reply: escalationOffer,
+                                    conversationMode: 'booking',
+                                    intent: 'booking_name_duplicate_escalation',
+                                    nextGoal: 'ESCALATION_OFFER',
+                                    filledSlots: currentSlots,
+                                    signals: { wantsBooking: true, consentGiven: true },
+                                    latencyMs: Date.now() - aiStartTime,
+                                    tokensUsed: 0,
+                                    fromStateMachine: true,
+                                    mode: 'BOOKING',
+                                    debug: {
+                                        source: 'BOOKING_NAME_DUPLICATE_ESCALATION',
+                                        needsLast,
+                                        rejectedCandidate: formattedName,
+                                        duplicateNamePartCount: nameMeta.duplicateNamePartCount
+                                    }
+                                };
+                                log('🧾 V85: Duplicate last-name loop - offering escalation', {
+                                    duplicateNamePartCount: nameMeta.duplicateNamePartCount
+                                });
+                                break BOOKING_MODE;
+                            }
 
                             aiResult = {
                                 reply: reaskText,
@@ -4407,7 +4453,8 @@ async function processTurn({
                                     rejectedCandidate: formattedName,
                                     isDuplicateOfFirst,
                                     isVariantDuplicateOfFirst,
-                                    isDuplicateOfLast
+                                    isDuplicateOfLast,
+                                    duplicateNamePartCount: nameMeta.duplicateNamePartCount || 0
                                 }
                             };
 

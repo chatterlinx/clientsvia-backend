@@ -39,6 +39,10 @@ const DEFAULT_BOOKING_SLOTS = [
         askMissingNamePart: true,
         firstNameQuestion: "And what's your first name?",
         lastNameQuestion: "And what's your last name?",
+        // V85: Duplicate/unclear last-name recovery prompt (UI-controlled)
+        // Fired when caller repeats first name as last name (common nervous mistake).
+        // Placeholders: {firstName}, {candidate}, {lastNameQuestion}
+        duplicateNamePartPrompt: "I just want to make sure I get this right — I have your first name as {firstName}, and I heard {candidate} for your last name. {lastNameQuestion}",
         // Spelling variant handling (Marc vs Mark)
         // V61: CORRECT FIELD NAME - confirmSpelling is what ConversationEngine checks
         confirmSpelling: true,

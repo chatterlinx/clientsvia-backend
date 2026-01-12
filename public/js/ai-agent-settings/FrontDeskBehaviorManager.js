@@ -3145,6 +3145,7 @@ Sean → Shawn, Shaun`;
         // V59 NUKE: Both first and last name questions MUST be from UI
         if (el.querySelector('.slot-firstNameQuestion')) slotData.firstNameQuestion = getVal('.slot-firstNameQuestion') || "And what's your first name?";
         if (el.querySelector('.slot-lastNameQuestion')) slotData.lastNameQuestion = getVal('.slot-lastNameQuestion') || "And what's your last name?";
+        if (el.querySelector('.slot-duplicateNamePartPrompt')) slotData.duplicateNamePartPrompt = getVal('.slot-duplicateNamePartPrompt') || "";
         
         // V63 DEBUG: Log name slot collection
         if (slotData.type === 'name' || slotData.id === 'name') {
@@ -3156,7 +3157,8 @@ Sean → Shawn, Shaun`;
                 confirmSpellingCheckbox: el.querySelector('.slot-confirmSpelling'),
                 confirmSpellingChecked: el.querySelector('.slot-confirmSpelling')?.checked,
                 firstNameQuestion: slotData.firstNameQuestion,
-                lastNameQuestion: slotData.lastNameQuestion
+                        lastNameQuestion: slotData.lastNameQuestion,
+                        duplicateNamePartPrompt: slotData.duplicateNamePartPrompt ? '(set)' : '(empty)'
             });
         }
 
@@ -3313,6 +3315,19 @@ Sean → Shawn, Shaun`;
                                 placeholder="And what's your last name?"
                                 style="width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
                             <span style="font-size: 10px; color: #8b949e;">Use {firstName} to include caller name, e.g. "Got it, {firstName}. And what's your last name?"</span>
+                        </div>
+
+                        <!-- V85: Duplicate/unclear last name recovery -->
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <label style="font-size: 11px; color: #f0883e; font-weight: 700;">
+                                🧯 Duplicate / Confusing Last Name Prompt (when caller repeats first name)
+                            </label>
+                            <textarea class="slot-duplicateNamePartPrompt" data-index="${index}" rows="2"
+                                placeholder="I just want to make sure I get this right — I have your first name as {firstName}, and I heard {candidate} for your last name. {lastNameQuestion}"
+                                style="width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; resize: vertical;">${this.escapeHtml(slot.duplicateNamePartPrompt || '')}</textarea>
+                            <span style="font-size: 10px; color: #8b949e;">
+                                Placeholders: {firstName}, {candidate}, {lastNameQuestion}. Leave empty to just re-ask the Last Name Question.
+                            </span>
                         </div>
                     </div>
                     

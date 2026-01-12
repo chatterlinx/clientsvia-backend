@@ -1839,6 +1839,14 @@ const companySchema = new mongoose.Schema({
                     // V54: UI-configurable name prompts (no hardcodes!)
                     lastNameQuestion: { type: String, default: "And what's your last name?", trim: true },
                     firstNameQuestion: { type: String, default: "And what's your first name?", trim: true },
+                    // V85: Duplicate/unclear last-name recovery (UI-controlled)
+                    // Used when caller repeats first name when we asked for last name.
+                    // Placeholders: {firstName}, {candidate}, {lastNameQuestion}
+                    duplicateNamePartPrompt: {
+                        type: String,
+                        default: "DEFAULT - OVERRIDE IN UI: I just want to make sure I get this right — I have your first name as {firstName}, and I heard {candidate} for your last name. {lastNameQuestion}",
+                        trim: true
+                    },
                     // V63: Spelling variant confirmation (Mark/Marc, Brian/Bryan)
                     confirmSpelling: { type: Boolean, default: false }, // Check for spelling variants and confirm with caller
                     spellingVariantPrompt: { type: String, default: "Just to confirm — {optionA} or {optionB}?", trim: true },
