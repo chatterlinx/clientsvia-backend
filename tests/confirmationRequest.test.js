@@ -15,6 +15,11 @@ describe('utils/confirmationRequest.detectConfirmationRequest', () => {
     expect(detectConfirmationRequest('is that address correct', { triggers })).toBe('address');
   });
 
+  test('detects direct "what is my last name" without requiring explicit confirm triggers', () => {
+    expect(detectConfirmationRequest('what is my last name', { triggers })).toBe('name');
+    expect(detectConfirmationRequest("what's my phone number", { triggers })).toBe('phone');
+  });
+
   test('returns null when no trigger and no fallback pattern', () => {
     expect(detectConfirmationRequest('hello there', { triggers })).toBe(null);
   });

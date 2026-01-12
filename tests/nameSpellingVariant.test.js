@@ -24,6 +24,16 @@ describe('nameSpellingVariant utils', () => {
     expect(chosen).toBe('Marc');
   });
 
+  test('detects compact user choice "Mark with AC" as the C-variant (Marc)', () => {
+    const variant = {
+      optionA: 'Mark',
+      optionB: 'Marc',
+      letterA: 'K',
+      letterB: 'C'
+    };
+    expect(parseSpellingVariantResponse('Mark with AC', variant)).toBe('Marc');
+  });
+
   test('returns null when response is unclear (no guessing)', () => {
     const variant = {
       optionA: 'Mark',

@@ -67,12 +67,29 @@ function parseSpellingVariantResponse(userText, variant) {
   const letterALower = variant.letterA.toLowerCase();
   const letterBLower = variant.letterB.toLowerCase();
 
+  // Compact form (letters only) catches common no-space inputs like "withac"
+  // Example: "Mark with AC" -> "markwithac" (treat as "with a c")
+  const compact = text.replace(/[^a-z]/g, '');
+
   // "with a c", "with the c", "the c", "a c", or just "c" with boundaries
   const hasLetterAPattern = new RegExp(`(?:\\bwith\\s+(?:a|the)\\s+|\\bthe\\s+|\\ba\\s+|^)${escapeRegExp(letterALower)}(?:$|\\s|\\.|,|!|\\?)`, 'i').test(text);
   const hasLetterBPattern = new RegExp(`(?:\\bwith\\s+(?:a|the)\\s+|\\bthe\\s+|\\ba\\s+|^)${escapeRegExp(letterBLower)}(?:$|\\s|\\.|,|!|\\?)`, 'i').test(text);
 
-  if (hasLetterAPattern && !hasLetterBPattern) return variant.optionA;
-  if (hasLetterBPattern && !hasLetterAPattern) return variant.optionB;
+  // Compact variants: "withac" / "withthec" / "withc"
+  const hasLetterACompact =
+    compact.includes(`witha${letterALower}`) ||
+    compact.includes(`withthe${letterALower}`) ||
+    compact.includes(`with${letterALower}`);
+  const hasLetterBCompact =
+    compact.includes(`witha${letterBLower}`) ||
+    compact.includes(`withthe${letterBLower}`) ||
+    compact.includes(`with${letterBLower}`);
+
+  const hasAByLetter = hasLetterAPattern || hasLetterACompact;
+  const hasBByLetter = hasLetterBPattern || hasLetterBCompact;
+
+  if (hasAByLetter && !hasBByLetter) return variant.optionA;
+  if (hasBByLetter && !hasAByLetter) return variant.optionB;
 
   const a = variant.optionA.toLowerCase();
   const b = variant.optionB.toLowerCase();

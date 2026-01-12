@@ -22,7 +22,10 @@ function detectConfirmationRequest(text, { triggers = [] } = {}) {
   // "is that address correct" or "is that phone number right" are caught.
   const fallbackPattern =
     /\b(did you (get|catch)|can you (repeat|confirm|read))\b/i.test(text) ||
-    (/\bis that\b/i.test(text) && /\b(right|correct)\b/i.test(text));
+    (/\bis that\b/i.test(text) && /\b(right|correct)\b/i.test(text)) ||
+    // Common direct asks without "confirm": "what's my phone", "what is my last name"
+    /\b(what's|what is)\s+my\b/i.test(text) ||
+    /\b(do you have|can you tell me)\s+my\b/i.test(text);
   // If triggers are configured, we treat ANY match as a confirmation request,
   // even if it doesn't match the smaller fallbackPattern set.
   if (!hasTrigger && !fallbackPattern) return null;

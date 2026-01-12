@@ -2538,7 +2538,16 @@ async function processTurn({
         // Copy other slots as-is (address, time, etc.)
         if (rawSlots.address) currentSlots.address = rawSlots.address;
         if (rawSlots.time) currentSlots.time = rawSlots.time;
-        if (rawSlots.partialName) currentSlots.partialName = rawSlots.partialName;
+        if (rawSlots.partialName) {
+            const pn = String(rawSlots.partialName || '').trim();
+            const pnLower = pn.toLowerCase();
+            const invalidPartial = new Set(['last', 'name', 'surname']);
+            if (pn.length < 2 || invalidPartial.has(pnLower)) {
+                log('🚨 INVALID PARTIAL NAME DETECTED - clearing:', rawSlots.partialName);
+            } else {
+                currentSlots.partialName = rawSlots.partialName;
+            }
+        }
         
         // Copy any other custom slots
         for (const key of Object.keys(rawSlots)) {
@@ -3340,6 +3349,18 @@ async function processTurn({
             
             if (looksLikeQuestion && !extractedThisTurn.name && !extractedThisTurn.phone && 
                 !extractedThisTurn.address && !extractedThisTurn.time) {
+                // V78: Confirmation requests should NOT route to booking interruption LLM.
+                // Example: "what is my last name" / "did you get my phone right"
+                const confirmationCfgPre = company.aiAgentSettings?.frontDeskBehavior?.confirmationRequests || {};
+                const confirmationEnabledPre = confirmationCfgPre.enabled !== false;
+                const confirmationSlotPre = confirmationEnabledPre
+                    ? detectConfirmationRequest(userText, { triggers: confirmationCfgPre.triggers || [] })
+                    : null;
+                if (confirmationSlotPre) {
+                    log('🧾 CONFIRMATION REQUEST DETECTED (pre-interrupt) - bypassing booking interruption', {
+                        confirmationSlotPre
+                    });
+                } else {
                 // Caller went off-rails during booking (asked a question, etc.)
                 // LLM handles it, then returns to booking slot
                 log('CHECKPOINT 9c: 🔄 Booking interruption - checking cheat sheets first');
@@ -3494,6 +3515,7 @@ async function processTurn({
                     }
                 };
                 }  // End of if (!bookingCheatSheetUsed)
+                } // End of confirmationSlotPre bypass
             } else {
                 // ═══════════════════════════════════════════════════════════════════
                 // BOOKING MODE SAFETY NET - Deterministic slot collection
@@ -3529,6 +3551,27 @@ async function processTurn({
                             value = currentSlots.name || currentSlots.partialName || null;
                         } else {
                             value = (slotIdByType && currentSlots[slotIdByType]) || (slotTypeRequested && currentSlots[slotTypeRequested]) || null;
+                        }
+
+                        // Special-case: caller asks "what is my last name" but we don't have a reliable last name yet.
+                        if (slotTypeRequested === 'name' && /\b(last name|surname)\b/i.test(userText || '')) {
+                            const nameStr = String(currentSlots.name || '').trim();
+                            const parts = nameStr ? nameStr.split(/\s+/).filter(Boolean) : [];
+                            const hasLast = parts.length >= 2;
+                            const first = parts[0] || '';
+                            const last = parts.slice(1).join(' ');
+                            const invalidLast = !hasLast || (first && last && first.toLowerCase() === last.toLowerCase());
+
+                            if (invalidLast) {
+                                const lastNameQuestion = slotConfig?.lastNameQuestion || nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
+                                finalReply = String(lastNameQuestion).replace('{firstName}', first);
+                                nextSlotId = 'name';
+                                // Keep booking focused on name collection until last name is captured
+                                session.booking.activeSlot = 'name';
+                                session.booking.activeSlotType = 'name';
+                                log('🧾 CONFIRMATION(last name): last name not available - re-asking', { first });
+                                break BOOKING_MODE;
+                            }
                         }
 
                         if (value) {
@@ -3615,6 +3658,37 @@ async function processTurn({
                             first: session.booking.meta.name.first, 
                             last: session.booking.meta.name.last 
                         });
+                    }
+                }
+
+                // ═══════════════════════════════════════════════════════════════════
+                // V84: Guardrail - Prevent "first name repeated as last name"
+                // Example: name="Mark Mark" -> treat as first name only; keep last name missing.
+                // This protects against nervous/confused callers repeating first name when asked for last name.
+                // ═══════════════════════════════════════════════════════════════════
+                if (currentSlots.name && typeof currentSlots.name === 'string') {
+                    const parts = currentSlots.name.trim().split(/\s+/).filter(Boolean);
+                    if (parts.length >= 2) {
+                        const first = parts[0];
+                        const last = parts.slice(1).join(' ');
+                        if (first && last && first.toLowerCase() === last.toLowerCase()) {
+                            log('🚨 V84: Detected duplicated name parts (invalid last name) - cleaning', {
+                                current: currentSlots.name
+                            });
+                            currentSlots.name = first;
+                            // Keep meta consistent
+                            session.booking.meta.name.first = first;
+                            session.booking.meta.name.last = null;
+                            session.booking.meta.name.askedMissingPartOnce = true; // we are effectively in "need last name" mode
+                            session.booking.meta.name.assumedSingleTokenAs = 'first';
+                            // Force booking to remain on NAME until last name is provided
+                            session.booking.activeSlot = 'name';
+                            session.booking.activeSlotType = 'name';
+                            // Persist cleanup so the UI and future turns see truth
+                            session.collectedSlots = { ...(session.collectedSlots || {}), name: first };
+                            delete session.collectedSlots.partialName;
+                            session.markModified('collectedSlots');
+                        }
                     }
                 }
                 
@@ -4255,6 +4329,50 @@ async function processTurn({
                     if (extractedNamePart && extractedNamePart.length >= 2) {
                         // Title case
                         const formattedName = extractedNamePart.charAt(0).toUpperCase() + extractedNamePart.slice(1).toLowerCase();
+
+                        // V84: If we're expecting LAST name and caller repeats the FIRST name, do not accept it.
+                        // This is a common human error when nervous/confused.
+                        const isDuplicateOfFirst =
+                            nameMeta.assumedSingleTokenAs === 'first' &&
+                            nameMeta.first &&
+                            formattedName.toLowerCase() === String(nameMeta.first).toLowerCase();
+                        if (isDuplicateOfFirst) {
+                            log('🚫 V84: Rejected last-name candidate because it matches first name', {
+                                first: nameMeta.first,
+                                candidate: formattedName
+                            });
+                        }
+                        // Similarly, if we're expecting FIRST name and caller repeats LAST name, do not accept it.
+                        const isDuplicateOfLast =
+                            nameMeta.assumedSingleTokenAs === 'last' &&
+                            nameMeta.last &&
+                            formattedName.toLowerCase() === String(nameMeta.last).toLowerCase();
+                        if (isDuplicateOfLast) {
+                            log('🚫 V84: Rejected first-name candidate because it matches last name', {
+                                last: nameMeta.last,
+                                candidate: formattedName
+                            });
+                        }
+
+                        if (isDuplicateOfFirst || isDuplicateOfLast) {
+                            // Re-ask the missing part using UI-configured prompts (no hardcoded copy).
+                            const needsLast = nameMeta.assumedSingleTokenAs === 'first';
+                            if (needsLast) {
+                                const lastNameQuestion = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
+                                const firstNameForTemplate = nameMeta.first || '';
+                                finalReply = String(lastNameQuestion).replace('{firstName}', firstNameForTemplate);
+                            } else {
+                                // Missing first name: fall back to name slot main question
+                                const nameQuestion = nameSlotConfig?.question || getMissingConfigPrompt('slot_question', 'name');
+                                finalReply = String(nameQuestion);
+                            }
+                            nextSlotId = 'name';
+                            log('🧾 V84: Re-asking missing name part after duplicate', {
+                                needsLast,
+                                finalReply: finalReply?.substring?.(0, 120) || finalReply
+                            });
+                            break BOOKING_MODE;
+                        }
                         
                         // 🍿 POPCORN TRAIL: V60 - Storing the extracted name part
                         log('🍿 [POPCORN] NAME_PART_EXTRACTED', {
@@ -4330,7 +4448,7 @@ async function processTurn({
                     const variant = nameMeta.pendingSpellingVariant;
                     const userTextLower = userText.toLowerCase().trim();
                     
-                    // Check what the user answered
+                    // Check what the user answered (deterministic - no guessing)
                     let chosenName = null;
                     
                     log('📝 V51: Processing spelling variant response', {
@@ -4341,25 +4459,21 @@ async function processTurn({
                         letterB: variant.letterB
                     });
                     
-                    // Check for letter answers: "K", "C", "with a K", "the K"
-                    const hasLetterA = userTextLower.includes(variant.letterA.toLowerCase());
-                    const hasLetterB = userTextLower.includes(variant.letterB.toLowerCase());
-                    
-                    if (hasLetterB && !hasLetterA) {
-                        chosenName = variant.optionB;
-                    } else if (hasLetterA && !hasLetterB) {
-                        chosenName = variant.optionA;
-                    }
-                    // Check for name answers: "Mark", "Marc"
-                    else if (userTextLower.includes(variant.optionB.toLowerCase())) {
-                        chosenName = variant.optionB;
-                    } else if (userTextLower.includes(variant.optionA.toLowerCase())) {
-                        chosenName = variant.optionA;
-                    }
-                    // Default to optionA if unclear
-                    else {
-                        chosenName = variant.optionA;
-                        log('📝 V51 SPELLING: Unclear answer, defaulting to optionA', { userText, optionA: variant.optionA });
+                    chosenName = parseSpellingVariantResponse(userText, variant);
+                    if (!chosenName) {
+                        // Stay conservative: re-ask the same spelling question rather than defaulting.
+                        const script =
+                            spellingConfigV44?.script ||
+                            spellingConfigV45?.script ||
+                            'Is that {optionA} with a {letterA} or {optionB} with a {letterB}?';
+                        finalReply = String(script)
+                            .replace('{optionA}', variant.optionA)
+                            .replace('{optionB}', variant.optionB)
+                            .replace('{letterA}', variant.letterA)
+                            .replace('{letterB}', variant.letterB);
+                        nextSlotId = 'name';
+                        log('📝 V51 SPELLING: Unclear answer (no guessing) - re-asking', { userText });
+                        break BOOKING_MODE;
                     }
                     
                     // Update the name with the correct spelling
