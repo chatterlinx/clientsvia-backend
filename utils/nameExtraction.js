@@ -40,7 +40,10 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
     // Problem-related words (generic)
     'problem', 'problems', 'issue', 'issues', 'trouble', 'wrong', 'weird', 'strange',
     // Question words
-    'any', 'some', 'with'
+    'any', 'some', 'with',
+    // Meta-words that appear in rambling but are NOT name parts
+    // (prevents false extraction like "Last Name" from "my last name is")
+    'name', 'last', 'surname'
   ];
 
   const STOP_WORDS = new Set([
@@ -118,6 +121,21 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
       raw.match(/\b(last name|surname)\b[\s\S]*?\b([A-Za-z][A-Za-z'\-]{1,})\s*$/i)?.[2] ||
       null;
     const cleanedTail = cleanToken(tailToken);
+    // If the caller mentioned "last name" but the tail is clearly a descriptor, don't extract junk.
+    // Example: "my last name is a little complicated" → null (they haven't given the surname yet)
+    const NON_NAME_TAILS = new Set([
+      'complicated',
+      'difficult',
+      'confusing',
+      'weird',
+      'strange',
+      'messy',
+      'tricky'
+    ]);
+    if (cleanedTail && NON_NAME_TAILS.has(cleanedTail.toLowerCase())) {
+      return null;
+    }
+
     if (cleanedTail && !STOP_WORDS.has(cleanedTail.toLowerCase())) {
       return titleCase(cleanedTail);
     }

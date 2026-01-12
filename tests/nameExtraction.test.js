@@ -20,6 +20,11 @@ describe('utils/nameExtraction.extractName', () => {
     const text = "show me my last name is a little complicated I hope you don't mess it up Gonzalez";
     expect(extractName(text, { expectingName: true })).toBe('Gonzalez');
   });
+
+  test('does not treat the words "Last Name" as a name when caller provides no surname yet', () => {
+    expect(extractName('my last name is', { expectingName: true })).toBe(null);
+    expect(extractName('my last name is a little complicated', { expectingName: true })).toBe(null);
+  });
   
   test('prefers the LAST "my name is ..." clause in rambling input', () => {
     const text = "well my name is kind of complicated you know i have a 3 family members with different names and my name is Gonzalez";
