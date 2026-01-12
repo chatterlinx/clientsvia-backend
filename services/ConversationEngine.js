@@ -50,6 +50,7 @@ const logger = require('../utils/logger');
 const { parseSpellingVariantPrompt, parseSpellingVariantResponse } = require('../utils/nameSpellingVariant');
 const { extractName: extractNameDeterministic } = require('../utils/nameExtraction');
 const { buildResumeBookingBlock } = require('../utils/resumeBookingProtocol');
+const { detectBookingClarification } = require('../utils/bookingClarification');
 const { detectConfirmationRequest } = require('../utils/confirmationRequest');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -240,7 +241,9 @@ function getMissingConfigPrompt(configType, fieldName, context = {}) {
         // Confirm prompts
         'confirmPrompt': "Just to confirm, {value}. Is that right?",
         // Resume booking protocol
-        'resumeBookingTemplate': "Okay — back to booking. I have {collectedSummary}. {nextQuestion}"
+        'resumeBookingTemplate': "Okay — back to booking. I have {collectedSummary}. {nextQuestion}",
+        // Booking clarification (meta questions during booking)
+        'bookingClarificationTemplate': "DEFAULT - OVERRIDE IN UI: No problem — {nextQuestion}"
     };
     
     return safeDefaults[configType] || safeDefaults[fieldName] || `[CONFIG MISSING: ${configType}]`;
@@ -3337,6 +3340,19 @@ async function processTurn({
             const looksLikeQuestion =
                 (hasQuestionMark || startsWithQuestionWord || hasInterruptKeywords || (hasQuestionIntentAnywhere && hasProblemMarker)) &&
                 !looksLikeSlotAnswer;
+
+            // V92: Meta clarification questions during booking (UI controlled)
+            // Example: "is that what you want" → clarify + repeat next required slot question
+            const clarificationCfg = company.aiAgentSettings?.frontDeskBehavior?.offRailsRecovery?.bridgeBack?.clarification || {};
+            const clarificationEnabled = clarificationCfg.enabled !== false;
+            const clarificationTriggers = Array.isArray(clarificationCfg.triggers) ? clarificationCfg.triggers : [];
+            const looksLikeClarification =
+                clarificationEnabled &&
+                detectBookingClarification(userTextTrimmed, clarificationTriggers) &&
+                !extractedThisTurn.name &&
+                !extractedThisTurn.phone &&
+                !extractedThisTurn.address &&
+                !extractedThisTurn.time;
             
             log('📝 INTERRUPT CHECK', {
                 userText: userTextTrimmed.substring(0, 50),
@@ -3344,8 +3360,47 @@ async function processTurn({
                 startsWithQuestionWord,
                 hasInterruptKeywords,
                 looksLikeSlotAnswer,
-                looksLikeQuestion
+                looksLikeQuestion,
+                looksLikeClarification
             });
+
+            if (looksLikeClarification) {
+                // Re-ask the next missing slot question deterministically (UI prompt as law)
+                const bookingConfigClar = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
+                const bookingSlotsClar = bookingConfigClar.slots || [];
+                const nextMissingSlotClar = bookingSlotsClar.find(slot => {
+                    const slotId = slot.slotId || slot.id || slot.type;
+                    const isCollected = currentSlots[slotId] || currentSlots[slot.type];
+                    return slot.required && !isCollected;
+                });
+                const nextSlotQuestionClar = nextMissingSlotClar?.question || getMissingConfigPrompt('slot_question', nextMissingSlotClar?.id || 'unknown');
+                const nextSlotLabelClar = nextMissingSlotClar?.label || nextMissingSlotClar?.slotId || nextMissingSlotClar?.id || 'next step';
+
+                const templateRaw = (typeof clarificationCfg.template === 'string' && clarificationCfg.template.trim())
+                    ? clarificationCfg.template
+                    : getMissingConfigPrompt('bookingClarificationTemplate', 'offRailsRecovery.bridgeBack.clarification.template', { companyId: company?._id });
+
+                const { renderBracedTemplate } = require('../utils/promptTemplate');
+                const reply = renderBracedTemplate(templateRaw, {
+                    nextQuestion: nextSlotQuestionClar,
+                    nextSlotLabel: nextSlotLabelClar
+                });
+
+                aiResult = {
+                    reply,
+                    conversationMode: 'booking',
+                    intent: 'BOOKING_CLARIFICATION',
+                    nextGoal: 'BOOKING_SLOT_QUESTION',
+                    filledSlots: currentSlots,
+                    signals: { wantsBooking: true, consentGiven: true },
+                    latencyMs: Date.now() - aiStartTime,
+                    tokensUsed: 0,
+                    fromStateMachine: true,
+                    mode: 'BOOKING',
+                    debug: { source: 'BOOKING_CLARIFICATION', nextSlotLabel: nextSlotLabelClar }
+                };
+                break BOOKING_MODE;
+            }
             
             if (looksLikeQuestion && !extractedThisTurn.name && !extractedThisTurn.phone && 
                 !extractedThisTurn.address && !extractedThisTurn.time) {

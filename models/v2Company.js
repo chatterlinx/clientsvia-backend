@@ -2939,6 +2939,39 @@ const companySchema = new mongoose.Schema({
                         // List separators
                         separator: { type: String, default: ", ", trim: true },
                         finalSeparator: { type: String, default: " and ", trim: true }
+                    },
+
+                    // ═══════════════════════════════════════════════════════════════
+                    // V92: BOOKING CLARIFICATION (UI Controlled)
+                    // ═══════════════════════════════════════════════════════════════
+                    // When caller asks meta-questions during slot collection like:
+                    // - "is that what you want?"
+                    // - "what do you mean?"
+                    //
+                    // This is NOT a trade question and should NOT route to scenarios.
+                    // We should clarify and then re-ask the next required slot question.
+                    clarification: {
+                        enabled: { type: Boolean, default: true },
+                        triggers: {
+                            type: [String],
+                            default: [
+                                "is that what you want",
+                                "is that what you need",
+                                "what do you want",
+                                "what do you need",
+                                "what do you mean",
+                                "can you explain",
+                                "sorry what do you mean"
+                            ]
+                        },
+                        // Placeholders:
+                        // - {nextQuestion} (exact UI slot question)
+                        // - {nextSlotLabel} (e.g., "Customer Name")
+                        template: {
+                            type: String,
+                            default: "No problem — {nextQuestion}",
+                            trim: true
+                        }
                     }
                 }
             },

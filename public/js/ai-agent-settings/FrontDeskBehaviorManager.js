@@ -598,6 +598,20 @@ class FrontDeskBehaviorManager {
                         collectedItemTemplateWithValue: "{label}: {value}",
                         separator: ", ",
                         finalSeparator: " and "
+                    },
+                    // V92: Booking Clarification (meta questions during booking)
+                    clarification: {
+                        enabled: true,
+                        triggers: [
+                            "is that what you want",
+                            "is that what you need",
+                            "what do you want",
+                            "what do you need",
+                            "what do you mean",
+                            "can you explain",
+                            "sorry what do you mean"
+                        ],
+                        template: "No problem — {nextQuestion}"
                     }
                 }
             }
@@ -1881,6 +1895,57 @@ Sean → Shawn, Shaun"
             })()}
 
             <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <!-- V92: BOOKING CLARIFICATION (Meta questions during slot collection) -->
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            ${(() => {
+                const bc = this.config.offRailsRecovery?.bridgeBack?.clarification || this.getDefaultConfig().offRailsRecovery.bridgeBack.clarification;
+                const enabled = bc.enabled !== false;
+                const triggersText = Array.isArray(bc.triggers) ? bc.triggers.join('\n') : '';
+                return `
+                <div style="background: #161b22; border: 1px solid ${enabled ? '#58a6ff' : '#30363d'}; border-radius: 8px; padding: 20px; margin-top: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                        <div>
+                            <h3 style="margin: 0; color: #58a6ff;">🧠 Booking Clarification (Meta Questions)</h3>
+                            <p style="color: #8b949e; font-size: 0.8rem; margin: 4px 0 0 0;">
+                                Handles confusion like “is that what you want?” or “what do you mean?” during booking.
+                                The agent replies using your template and then repeats the <strong>exact</strong> next slot question.
+                                <br><span style="color: #6e7681;">UI-controlled. No hidden backend text.</span>
+                            </p>
+                        </div>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="fdb-booking-clarification-enabled" ${enabled ? 'checked' : ''} 
+                                style="accent-color: #58a6ff; width: 18px; height: 18px;"
+                                onchange="window.frontDeskManager.toggleBookingClarificationProtocol(this.checked)">
+                            <span style="color: ${enabled ? '#58a6ff' : '#8b949e'}; font-weight: 600;">
+                                ${enabled ? 'ENABLED' : 'DISABLED'}
+                            </span>
+                        </label>
+                    </div>
+
+                    <div id="fdb-booking-clarification-settings" style="display: ${enabled ? 'block' : 'none'};">
+                        <div style="margin-bottom: 12px;">
+                            <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">Trigger phrases (one per line)</label>
+                            <textarea id="fdb-booking-clarification-triggers" rows="4"
+                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${this.escapeHtml(triggersText)}</textarea>
+                            <div style="color:#6e7681; font-size: 0.7rem; margin-top: 6px;">
+                                Match is case-insensitive substring. Keep phrases specific to avoid false triggers.
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 12px;">
+                            <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">Reply template</label>
+                            <textarea id="fdb-booking-clarification-template" rows="2"
+                                style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${this.escapeHtml(bc.template || '')}</textarea>
+                            <div style="color:#6e7681; font-size: 0.7rem; margin-top: 6px;">
+                                Placeholders: <code>{nextQuestion}</code>, <code>{nextSlotLabel}</code>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `;
+            })()}
+
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
             <!-- V78: CONFIRMATION REQUESTS (repeat what we captured) -->
             <!-- ═══════════════════════════════════════════════════════════════════════ -->
             ${(() => {
@@ -2200,6 +2265,21 @@ Sean → Shawn, Shaun`;
         
         // Toggle UI section visibility without full rerender
         const settingsEl = document.getElementById('fdb-resume-booking-settings');
+        if (settingsEl) settingsEl.style.display = enabled ? 'block' : 'none';
+    }
+
+    // V92: Toggle Booking Clarification Protocol UI
+    toggleBookingClarificationProtocol(enabled) {
+        if (!this.config.offRailsRecovery) this.config.offRailsRecovery = {};
+        if (!this.config.offRailsRecovery.bridgeBack) this.config.offRailsRecovery.bridgeBack = {};
+        if (!this.config.offRailsRecovery.bridgeBack.clarification) {
+            this.config.offRailsRecovery.bridgeBack.clarification = this.getDefaultConfig().offRailsRecovery.bridgeBack.clarification;
+        }
+
+        this.config.offRailsRecovery.bridgeBack.clarification.enabled = enabled === true;
+        this.isDirty = true;
+
+        const settingsEl = document.getElementById('fdb-booking-clarification-settings');
         if (settingsEl) settingsEl.style.display = enabled ? 'block' : 'none';
     }
     
@@ -8394,6 +8474,29 @@ Sean → Shawn, Shaun`;
                 collectedItemTemplateWithValue: (document.getElementById('fdb-resume-booking-itemTemplateWithValue')?.value || '').trim(),
                 separator: (document.getElementById('fdb-resume-booking-separator')?.value || '').toString(),
                 finalSeparator: (document.getElementById('fdb-resume-booking-finalSeparator')?.value || '').toString()
+            };
+        }
+
+        // ════════════════════════════════════════════════════════════════════════════
+        // V92: Booking Clarification (Meta Questions During Booking)
+        // ════════════════════════════════════════════════════════════════════════════
+        if (document.getElementById('fdb-booking-clarification-enabled')) {
+            if (!this.config.offRailsRecovery) this.config.offRailsRecovery = {};
+            if (!this.config.offRailsRecovery.bridgeBack) this.config.offRailsRecovery.bridgeBack = {};
+            if (!this.config.offRailsRecovery.bridgeBack.clarification) {
+                this.config.offRailsRecovery.bridgeBack.clarification = this.getDefaultConfig().offRailsRecovery.bridgeBack.clarification;
+            }
+
+            const triggersRaw = (document.getElementById('fdb-booking-clarification-triggers')?.value || '').toString();
+            const triggers = triggersRaw
+                .split('\n')
+                .map(s => s.trim().toLowerCase())
+                .filter(Boolean);
+
+            this.config.offRailsRecovery.bridgeBack.clarification = {
+                enabled: document.getElementById('fdb-booking-clarification-enabled')?.checked === true,
+                triggers,
+                template: (document.getElementById('fdb-booking-clarification-template')?.value || '').trim()
             };
         }
 

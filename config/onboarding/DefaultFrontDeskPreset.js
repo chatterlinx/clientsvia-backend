@@ -217,6 +217,26 @@ const DEFAULT_OFF_RAILS_RECOVERY = {
             collectedItemTemplateWithValue: "{label}: {value}",
             separator: ", ",
             finalSeparator: " and "
+        },
+        // V92: Booking Clarification (meta questions during slot collection)
+        // Example user input: "is that what you want" / "what do you mean"
+        // This is NOT a trade Q&A and should NOT go to scenarios.
+        // It should clarify what field we need, then immediately re-ask the exact slot question.
+        clarification: {
+            enabled: true,
+            // Phrases that indicate caller is asking for clarification about what we want them to say
+            // (Keep these fairly specific to avoid accidentally firing on normal speech.)
+            triggers: [
+                "is that what you want",
+                "is that what you need",
+                "what do you want",
+                "what do you need",
+                "what do you mean",
+                "can you explain",
+                "sorry what do you mean"
+            ],
+            // Placeholders: {nextQuestion}, {nextSlotLabel}
+            template: "No problem — {nextQuestion}"
         }
     }
 };
