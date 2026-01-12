@@ -2349,8 +2349,8 @@ Sean → Shawn, Shaun`;
                 {
                     ...base[0],
                     id: this.generateMidCallRuleId(),
-                    trigger: 'i don\\'t know the zip',
-                    responseTemplate: 'That\\'s okay — give me the street address and city. {slotQuestion}'
+                    trigger: 'i don\'t know the zip',
+                    responseTemplate: 'That\'s okay — give me the street address and city. {slotQuestion}'
                 }
             ];
         }
