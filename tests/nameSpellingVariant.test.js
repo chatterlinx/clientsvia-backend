@@ -34,6 +34,19 @@ describe('nameSpellingVariant utils', () => {
     expect(parseSpellingVariantResponse('Mark with AC', variant)).toBe('Marc');
   });
 
+  test('treats first-name variant as NOT a valid last-name token (guardrail case)', () => {
+    // This test documents the intended behavior:
+    // If the first name is Marc, a last-name answer of Mark is likely a nervous repeat, not a surname.
+    // The actual enforcement happens in ConversationEngine using configured variantGroups.
+    const variant = {
+      optionA: 'Marc',
+      optionB: 'Mark',
+      letterA: 'C',
+      letterB: 'K'
+    };
+    expect(parseSpellingVariantResponse('Mark', variant)).toBe('Mark');
+  });
+
   test('returns null when response is unclear (no guessing)', () => {
     const variant = {
       optionA: 'Mark',

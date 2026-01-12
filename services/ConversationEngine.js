@@ -4336,6 +4336,24 @@ async function processTurn({
                             nameMeta.assumedSingleTokenAs === 'first' &&
                             nameMeta.first &&
                             formattedName.toLowerCase() === String(nameMeta.first).toLowerCase();
+                        // Also treat configured spelling variants (Mark/Marc) as "same name" for this guardrail.
+                        // This prevents accepting "Mark" as the last name when the first name is "Marc" (or vice versa).
+                        let isVariantDuplicateOfFirst = false;
+                        if (nameMeta.assumedSingleTokenAs === 'first' && nameMeta.first) {
+                            const spellingCfg = company.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants || {};
+                            // For last-name guardrails we don't require slot-level confirmSpelling;
+                            // this is a safety net to prevent obviously-wrong "surname = first name" data.
+                            const firstNameVariant = findSpellingVariant(String(nameMeta.first), spellingCfg, [], true);
+                            if (firstNameVariant) {
+                                const firstLower = String(nameMeta.first).toLowerCase();
+                                const candLower = formattedName.toLowerCase();
+                                const optALower = firstNameVariant.optionA.toLowerCase();
+                                const optBLower = firstNameVariant.optionB.toLowerCase();
+                                isVariantDuplicateOfFirst =
+                                    (firstLower === optALower && candLower === optBLower) ||
+                                    (firstLower === optBLower && candLower === optALower);
+                            }
+                        }
                         if (isDuplicateOfFirst) {
                             log('🚫 V84: Rejected last-name candidate because it matches first name', {
                                 first: nameMeta.first,
@@ -4354,22 +4372,49 @@ async function processTurn({
                             });
                         }
 
-                        if (isDuplicateOfFirst || isDuplicateOfLast) {
+                        if (isDuplicateOfFirst || isVariantDuplicateOfFirst || isDuplicateOfLast) {
                             // Re-ask the missing part using UI-configured prompts (no hardcoded copy).
                             const needsLast = nameMeta.assumedSingleTokenAs === 'first';
+                            let reaskText = '';
                             if (needsLast) {
                                 const lastNameQuestion = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
                                 const firstNameForTemplate = nameMeta.first || '';
-                                finalReply = String(lastNameQuestion).replace('{firstName}', firstNameForTemplate);
+                                reaskText = String(lastNameQuestion).replace('{firstName}', firstNameForTemplate);
                             } else {
                                 // Missing first name: fall back to name slot main question
                                 const nameQuestion = nameSlotConfig?.question || getMissingConfigPrompt('slot_question', 'name');
-                                finalReply = String(nameQuestion);
+                                reaskText = String(nameQuestion);
                             }
-                            nextSlotId = 'name';
+
+                            // Keep booking focused on name collection
+                            session.booking.activeSlot = 'name';
+                            session.booking.activeSlotType = 'name';
+
+                            aiResult = {
+                                reply: reaskText,
+                                conversationMode: 'booking',
+                                intent: 'booking_name_part_reask',
+                                nextGoal: 'COLLECT_NAME',
+                                filledSlots: currentSlots,
+                                signals: { wantsBooking: true, consentGiven: true },
+                                latencyMs: Date.now() - aiStartTime,
+                                tokensUsed: 0,
+                                fromStateMachine: true,
+                                mode: 'BOOKING',
+                                debug: {
+                                    source: 'BOOKING_NAME_PART_REASK',
+                                    needsLast,
+                                    rejectedCandidate: formattedName,
+                                    isDuplicateOfFirst,
+                                    isVariantDuplicateOfFirst,
+                                    isDuplicateOfLast
+                                }
+                            };
+
                             log('🧾 V84: Re-asking missing name part after duplicate', {
                                 needsLast,
-                                finalReply: finalReply?.substring?.(0, 120) || finalReply
+                                rejectedCandidate: formattedName,
+                                reaskText: reaskText?.substring?.(0, 120) || reaskText
                             });
                             break BOOKING_MODE;
                         }
@@ -4466,12 +4511,26 @@ async function processTurn({
                             spellingConfigV44?.script ||
                             spellingConfigV45?.script ||
                             'Is that {optionA} with a {letterA} or {optionB} with a {letterB}?';
-                        finalReply = String(script)
+                        const reaskText = String(script)
                             .replace('{optionA}', variant.optionA)
                             .replace('{optionB}', variant.optionB)
                             .replace('{letterA}', variant.letterA)
                             .replace('{letterB}', variant.letterB);
-                        nextSlotId = 'name';
+                        session.booking.activeSlot = 'name';
+                        session.booking.activeSlotType = 'name';
+                        aiResult = {
+                            reply: reaskText,
+                            conversationMode: 'booking',
+                            intent: 'booking_spelling_variant_reask',
+                            nextGoal: 'COLLECT_NAME',
+                            filledSlots: currentSlots,
+                            signals: { wantsBooking: true, consentGiven: true },
+                            latencyMs: Date.now() - aiStartTime,
+                            tokensUsed: 0,
+                            fromStateMachine: true,
+                            mode: 'BOOKING',
+                            debug: { source: 'BOOKING_SPELLING_VARIANT_REASK', userText }
+                        };
                         log('📝 V51 SPELLING: Unclear answer (no guessing) - re-asking', { userText });
                         break BOOKING_MODE;
                     }
