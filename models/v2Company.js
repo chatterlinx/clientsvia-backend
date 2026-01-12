@@ -1829,6 +1829,33 @@ const companySchema = new mongoose.Schema({
                     // ═══════════════════════════════════════════════════════════════
                     skipIfKnown: { type: Boolean, default: false }, // Skip for returning customers
                     helperNote: { type: String, default: null }, // Internal AI guidance note
+
+                    // ═══════════════════════════════════════════════════════════════
+                    // V93: MID-CALL HELPERS (SLOT-LEVEL, UI CONTROLLED)
+                    // ═══════════════════════════════════════════════════════════════
+                    // Handles common "human moments" *while collecting this slot*.
+                    // Example: during PHONE slot:
+                    // - "why do you need my number?"
+                    // - "i gave too many digits"
+                    //
+                    // IMPORTANT:
+                    // - This must NEVER change slot order.
+                    // - When it fires, it should clarify and then re-ask the exact slot question.
+                    midCallRules: {
+                        type: [{
+                            id: { type: String, required: true, trim: true }, // stable id for cooldown/max tracking
+                            enabled: { type: Boolean, default: true },
+                            matchType: { type: String, enum: ['exact', 'contains'], default: 'contains' },
+                            trigger: { type: String, required: true, trim: true }, // what caller says
+                            action: { type: String, enum: ['reply_reask', 'escalate'], default: 'reply_reask' },
+                            // Placeholders: {slotQuestion}, {slotLabel}
+                            // Optional (slot-type dependent): {exampleFormat}
+                            responseTemplate: { type: String, required: true, trim: true },
+                            cooldownTurns: { type: Number, default: 2, min: 0, max: 10 },
+                            maxPerCall: { type: Number, default: 2, min: 1, max: 10 }
+                        }],
+                        default: []
+                    },
                     
                     // ═══════════════════════════════════════════════════════════════
                     // NAME-SPECIFIC OPTIONS

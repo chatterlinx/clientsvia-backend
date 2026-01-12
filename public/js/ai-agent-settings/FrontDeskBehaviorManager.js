@@ -2282,6 +2282,297 @@ Sean → Shawn, Shaun`;
         const settingsEl = document.getElementById('fdb-booking-clarification-settings');
         if (settingsEl) settingsEl.style.display = enabled ? 'block' : 'none';
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V93: SLOT-LEVEL MID-CALL HELPERS (Booking Slot Editor)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // These are DOM-based helpers used inside the full-screen slot editor modal.
+    // We do NOT mutate this.config here; we simply update the editor DOM and
+    // collect the values at save time (collectBookingSlotFromEditor).
+
+    generateMidCallRuleId() {
+        return `mcr_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+    }
+
+    getRecommendedMidCallRulesForSlot(slotIdOrType) {
+        const key = (slotIdOrType || '').toString().toLowerCase();
+        const base = [
+            {
+                id: this.generateMidCallRuleId(),
+                enabled: true,
+                matchType: 'contains',
+                action: 'reply_reask',
+                cooldownTurns: 2,
+                maxPerCall: 2
+            }
+        ];
+
+        if (key === 'name') {
+            return [
+                {
+                    ...base[0],
+                    trigger: 'is that what you want',
+                    responseTemplate: 'No problem — {slotQuestion}'
+                },
+                {
+                    ...base[0],
+                    id: this.generateMidCallRuleId(),
+                    trigger: 'what do you mean',
+                    responseTemplate: 'No problem — {slotQuestion}'
+                }
+            ];
+        }
+
+        if (key === 'phone') {
+            return [
+                {
+                    ...base[0],
+                    trigger: 'why do you need',
+                    responseTemplate: 'We use it to send appointment updates and reach you if we need to confirm. {slotQuestion}'
+                },
+                {
+                    ...base[0],
+                    id: this.generateMidCallRuleId(),
+                    trigger: 'too many',
+                    responseTemplate: 'No worries — just the 10 digits works best (example: {exampleFormat}). {slotQuestion}'
+                }
+            ];
+        }
+
+        if (key === 'address') {
+            return [
+                {
+                    ...base[0],
+                    trigger: 'do you need city',
+                    responseTemplate: 'Yes please — street address and city helps us get the technician to the right place. {slotQuestion}'
+                },
+                {
+                    ...base[0],
+                    id: this.generateMidCallRuleId(),
+                    trigger: 'i don\\'t know the zip',
+                    responseTemplate: 'That\\'s okay — give me the street address and city. {slotQuestion}'
+                }
+            ];
+        }
+
+        if (key === 'time' || key === 'datetime' || key === 'date') {
+            return [
+                {
+                    ...base[0],
+                    trigger: 'what do you have',
+                    responseTemplate: 'If you have a preferred day or time window, tell me what works best. {slotQuestion}'
+                }
+            ];
+        }
+
+        return [];
+    }
+
+    renderMidCallRulesEditor(slot) {
+        const rules = Array.isArray(slot.midCallRules) ? slot.midCallRules : [];
+        const slotKey = (slot.id || slot.type || '').toString().toLowerCase();
+        const showExampleFormat = slotKey === 'phone';
+        const exampleFormat = '(555) 123-4567';
+
+        const rows = rules.length > 0
+            ? rules.map((r, idx) => this.renderMidCallRuleRow(r, idx, { showExampleFormat, exampleFormat })).join('')
+            : `<div style="padding: 10px 12px; color:#8b949e; font-size: 12px; border: 1px dashed #30363d; border-radius: 8px; background:#0d1117;">
+                    No mid-call helpers yet. Click <strong>Add Rule</strong> or <strong>Apply Recommended</strong>.
+               </div>`;
+
+        return `
+            <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid #30363d;">
+                <div style="display:flex; align-items:center; justify-content: space-between; gap: 10px; margin-bottom: 8px;">
+                    <div>
+                        <div style="font-weight: 900; color:#58a6ff;">🧩 Mid‑Call Helpers (slot‑level)</div>
+                        <div style="color:#8b949e; font-size: 12px; margin-top: 2px;">
+                            Deterministic quick replies for common “human moments” while collecting this slot. Fires only when we <strong>did not extract</strong> the slot this turn.
+                        </div>
+                    </div>
+                    <div style="display:flex; gap: 8px; flex-wrap: wrap;">
+                        <button type="button" onclick="window.frontDeskManager.applyRecommendedMidCallRules()"
+                            style="padding: 8px 10px; background:#21262d; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9; cursor:pointer; font-weight:800;">
+                            Apply Recommended
+                        </button>
+                        <button type="button" onclick="window.frontDeskManager.addMidCallRuleRow()"
+                            style="padding: 8px 10px; background:#238636; border:none; border-radius: 8px; color:white; cursor:pointer; font-weight:900;">
+                            + Add Rule
+                        </button>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1.2fr 140px 160px 1.6fr 110px 110px 44px; gap: 8px; align-items:center; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 10px; font-size: 11px; color:#8b949e; font-weight:800;">
+                    <div>CALLER SAYS (trigger)</div>
+                    <div>MATCH</div>
+                    <div>ACTION</div>
+                    <div>AI RESPONDS (template)</div>
+                    <div>COOLDOWN</div>
+                    <div>MAX/CALL</div>
+                    <div></div>
+                </div>
+
+                <div class="slot-midcall-rules" style="margin-top: 8px; display:flex; flex-direction: column; gap: 8px;">
+                    ${rows}
+                </div>
+
+                <div style="color:#6e7681; font-size: 11px; margin-top: 8px;">
+                    Placeholders: <code>{slotQuestion}</code>, <code>{slotLabel}</code>${showExampleFormat ? `, <code>{exampleFormat}</code>` : ''}.
+                </div>
+            </div>
+        `;
+    }
+
+    renderMidCallRuleRow(rule, idx, { showExampleFormat, exampleFormat }) {
+        const r = rule && typeof rule === 'object' ? rule : {};
+        const id = (r.id || this.generateMidCallRuleId()).toString();
+        const enabled = r.enabled !== false;
+        const matchType = (r.matchType || 'contains').toString();
+        const action = (r.action || 'reply_reask').toString();
+        const trigger = (r.trigger || '').toString();
+        const responseTemplate = (r.responseTemplate || '').toString();
+        const cooldownTurns = typeof r.cooldownTurns === 'number' ? r.cooldownTurns : 2;
+        const maxPerCall = typeof r.maxPerCall === 'number' ? r.maxPerCall : 2;
+
+        const placeholderHint = showExampleFormat
+            ? `You can include {exampleFormat} (e.g., ${exampleFormat}).`
+            : `Keep it short and end by re-asking {slotQuestion}.`;
+
+        return `
+            <div class="midcall-rule-row" data-midcall-idx="${idx}"
+                 style="display:grid; grid-template-columns: 1.2fr 140px 160px 1.6fr 110px 110px 44px; gap: 8px; align-items: start; padding: 10px; background:#0d1117; border:1px solid #30363d; border-radius: 10px;">
+                <input type="hidden" class="midcall-rule-id" value="${this.escapeHtml(id)}">
+                <div style="display:flex; flex-direction: column; gap: 6px;">
+                    <label style="display:flex; align-items:center; gap: 8px; font-size: 12px; color:#c9d1d9;">
+                        <input type="checkbox" class="midcall-rule-enabled" ${enabled ? 'checked' : ''} style="accent-color:#58a6ff;">
+                        <span style="font-weight:800;">Enabled</span>
+                    </label>
+                    <input class="midcall-rule-trigger" value="${this.escapeHtml(trigger)}"
+                        placeholder="e.g., is that what you want"
+                        style="width:100%; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9;">
+                </div>
+
+                <select class="midcall-rule-matchType"
+                    style="width:100%; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9;">
+                    <option value="exact" ${matchType === 'exact' ? 'selected' : ''}>EXACT</option>
+                    <option value="contains" ${matchType !== 'exact' ? 'selected' : ''}>CONTAINS</option>
+                </select>
+
+                <select class="midcall-rule-action"
+                    style="width:100%; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9;">
+                    <option value="reply_reask" ${action === 'reply_reask' ? 'selected' : ''}>Reply + re‑ask slot</option>
+                    <option value="escalate" ${action === 'escalate' ? 'selected' : ''}>Escalate / handoff</option>
+                </select>
+
+                <div style="display:flex; flex-direction: column; gap: 6px;">
+                    <textarea class="midcall-rule-template" rows="2"
+                        placeholder="${this.escapeHtml(placeholderHint)}"
+                        style="width:100%; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9; resize: vertical;">${this.escapeHtml(responseTemplate)}</textarea>
+                </div>
+
+                <input class="midcall-rule-cooldown" type="number" min="0" max="10" value="${cooldownTurns}"
+                    style="width:100%; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9;">
+
+                <input class="midcall-rule-max" type="number" min="1" max="10" value="${maxPerCall}"
+                    style="width:100%; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9;">
+
+                <button type="button" onclick="window.frontDeskManager.removeMidCallRuleRow(${idx})"
+                    style="width: 40px; height: 40px; background: transparent; border: 1px solid #f8514940; border-radius: 10px; color: #f85149; cursor: pointer; font-size: 18px; font-weight: 900;"
+                    title="Remove this rule">×</button>
+            </div>
+        `;
+    }
+
+    getSlotEditorMidCallContainer() {
+        return document.querySelector('#fdb-slot-editor-panel .slot-midcall-rules');
+    }
+
+    addMidCallRuleRow() {
+        const container = this.getSlotEditorMidCallContainer();
+        const panel = document.getElementById('fdb-slot-editor-panel');
+        if (!container || !panel) return;
+        const slotType = panel.querySelector('#fdb-slot-editor-type')?.value || 'text';
+        const slotId = panel.querySelector('.slot-id')?.value || slotType;
+        const slotKey = (slotId || slotType).toString().toLowerCase();
+        const showExampleFormat = slotKey === 'phone';
+        const exampleFormat = '(555) 123-4567';
+
+        const existingRows = container.querySelectorAll('.midcall-rule-row').length;
+        const rule = {
+            id: this.generateMidCallRuleId(),
+            enabled: true,
+            matchType: 'contains',
+            trigger: '',
+            action: 'reply_reask',
+            responseTemplate: `No problem — {slotQuestion}`,
+            cooldownTurns: 2,
+            maxPerCall: 2
+        };
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = this.renderMidCallRuleRow(rule, existingRows, { showExampleFormat, exampleFormat });
+        const rowEl = wrapper.firstElementChild;
+        if (rowEl) container.appendChild(rowEl);
+        this.isDirty = true;
+    }
+
+    removeMidCallRuleRow(idx) {
+        const container = this.getSlotEditorMidCallContainer();
+        if (!container) return;
+        const rows = [...container.querySelectorAll('.midcall-rule-row')];
+        const row = rows[idx];
+        if (row) row.remove();
+        // Re-index by rebuilding (so remove buttons keep working)
+        this.reindexMidCallRuleRows();
+        this.isDirty = true;
+    }
+
+    reindexMidCallRuleRows() {
+        const container = this.getSlotEditorMidCallContainer();
+        const panel = document.getElementById('fdb-slot-editor-panel');
+        if (!container || !panel) return;
+        const slotType = panel.querySelector('#fdb-slot-editor-type')?.value || 'text';
+        const slotId = panel.querySelector('.slot-id')?.value || slotType;
+        const slotKey = (slotId || slotType).toString().toLowerCase();
+        const showExampleFormat = slotKey === 'phone';
+        const exampleFormat = '(555) 123-4567';
+
+        const existing = [...container.querySelectorAll('.midcall-rule-row')].map((row) => {
+            const get = (sel) => row.querySelector(sel);
+            return {
+                id: get('.midcall-rule-id')?.value || this.generateMidCallRuleId(),
+                enabled: get('.midcall-rule-enabled')?.checked === true,
+                trigger: get('.midcall-rule-trigger')?.value || '',
+                matchType: get('.midcall-rule-matchType')?.value || 'contains',
+                action: get('.midcall-rule-action')?.value || 'reply_reask',
+                responseTemplate: get('.midcall-rule-template')?.value || '',
+                cooldownTurns: parseInt(get('.midcall-rule-cooldown')?.value || '2', 10),
+                maxPerCall: parseInt(get('.midcall-rule-max')?.value || '2', 10)
+            };
+        });
+
+        container.innerHTML = existing.length > 0
+            ? existing.map((r, i) => this.renderMidCallRuleRow(r, i, { showExampleFormat, exampleFormat })).join('')
+            : `<div style="padding: 10px 12px; color:#8b949e; font-size: 12px; border: 1px dashed #30363d; border-radius: 8px; background:#0d1117;">
+                    No mid-call helpers yet. Click <strong>Add Rule</strong> or <strong>Apply Recommended</strong>.
+               </div>`;
+    }
+
+    applyRecommendedMidCallRules() {
+        const panel = document.getElementById('fdb-slot-editor-panel');
+        const container = this.getSlotEditorMidCallContainer();
+        if (!panel || !container) return;
+        const slotType = panel.querySelector('#fdb-slot-editor-type')?.value || 'text';
+        const slotId = panel.querySelector('.slot-id')?.value || slotType;
+        const slotKey = (slotId || slotType).toString().toLowerCase();
+        const rules = this.getRecommendedMidCallRulesForSlot(slotKey);
+        const showExampleFormat = slotKey === 'phone';
+        const exampleFormat = '(555) 123-4567';
+        container.innerHTML = rules.length > 0
+            ? rules.map((r, i) => this.renderMidCallRuleRow(r, i, { showExampleFormat, exampleFormat })).join('')
+            : `<div style="padding: 10px 12px; color:#8b949e; font-size: 12px; border: 1px dashed #30363d; border-radius: 8px; background:#0d1117;">
+                    No recommended rules for this slot type.
+               </div>`;
+        this.isDirty = true;
+    }
     
     parseVariantGroups(text) {
         const groups = {};
@@ -3237,6 +3528,33 @@ Sean → Shawn, Shaun`;
                 throw new Error('Last Name Question is required when "Ask once for missing part" is enabled.');
             }
         }
+
+        // V93: Slot-level Mid-Call Helpers (collected from slot editor DOM)
+        const midCallRows = [...el.querySelectorAll('.midcall-rule-row')];
+        if (midCallRows.length > 0) {
+            slotData.midCallRules = midCallRows.map((row) => {
+                const id = row.querySelector('.midcall-rule-id')?.value?.trim() || window.frontDeskManager?.generateMidCallRuleId?.() || `mcr_${Date.now()}`;
+                const enabled = row.querySelector('.midcall-rule-enabled')?.checked === true;
+                const trigger = row.querySelector('.midcall-rule-trigger')?.value?.trim() || '';
+                const matchType = row.querySelector('.midcall-rule-matchType')?.value || 'contains';
+                const action = row.querySelector('.midcall-rule-action')?.value || 'reply_reask';
+                const responseTemplate = row.querySelector('.midcall-rule-template')?.value?.trim() || '';
+                const cooldownTurns = parseInt(row.querySelector('.midcall-rule-cooldown')?.value || '2', 10);
+                const maxPerCall = parseInt(row.querySelector('.midcall-rule-max')?.value || '2', 10);
+                return {
+                    id,
+                    enabled,
+                    matchType,
+                    trigger,
+                    action,
+                    responseTemplate,
+                    cooldownTurns: Number.isFinite(cooldownTurns) ? cooldownTurns : 2,
+                    maxPerCall: Number.isFinite(maxPerCall) ? maxPerCall : 2
+                };
+            }).filter(r => r.trigger && r.responseTemplate);
+        } else {
+            slotData.midCallRules = [];
+        }
         
         // V63 DEBUG: Log name slot collection
         if (slotData.type === 'name' || slotData.id === 'name') {
@@ -3434,6 +3752,8 @@ Sean → Shawn, Shaun`;
                             Uses Name Spelling Variants config above
                         </span>
                     </div>
+
+                    ${this.renderMidCallRulesEditor(slot)}
                 </div>
             `;
         }
@@ -3463,6 +3783,8 @@ Sean → Shawn, Shaun`;
                         placeholder="I see you're calling from {callerId} - is that good for texts?"
                         style="width: 100%; padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px; ${slot.offerCallerId !== false ? '' : 'opacity: 0.5;'}"
                         ${slot.offerCallerId !== false ? '' : 'disabled'}>
+
+                    ${this.renderMidCallRulesEditor(slot)}
                 </div>
             `;
         }
@@ -3577,6 +3899,8 @@ Sean → Shawn, Shaun`;
                             </div>
                         </div>
                     </div>
+
+                    ${this.renderMidCallRulesEditor(slot)}
                 </div>
             `;
         }
@@ -3618,6 +3942,8 @@ Sean → Shawn, Shaun`;
                         <input type="text" class="slot-asapPhrase" data-index="${index}" value="${slot.asapPhrase || 'first available'}" 
                             style="flex: 1; padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
                     </div>
+
+                    ${this.renderMidCallRulesEditor(slot)}
                 </div>
             `;
         }

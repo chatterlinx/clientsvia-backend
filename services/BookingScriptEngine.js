@@ -67,6 +67,24 @@ function normalizeSlot(slot, index) {
     const slotId = getSlotId(mergedSlot);
     
     const asTrimmedString = (val) => (typeof val === 'string' ? val.trim() : null);
+    const normalizeMidCallRules = (rules) => {
+        if (!Array.isArray(rules)) return [];
+        return rules
+            .map((r) => {
+                if (!r || typeof r !== 'object') return null;
+                return {
+                    id: asTrimmedString(r.id),
+                    enabled: r.enabled !== false,
+                    matchType: (asTrimmedString(r.matchType) || 'contains'),
+                    trigger: asTrimmedString(r.trigger),
+                    action: (asTrimmedString(r.action) || 'reply_reask'),
+                    responseTemplate: asTrimmedString(r.responseTemplate),
+                    cooldownTurns: typeof r.cooldownTurns === 'number' ? r.cooldownTurns : 2,
+                    maxPerCall: typeof r.maxPerCall === 'number' ? r.maxPerCall : 2
+                };
+            })
+            .filter(r => r && r.id && r.trigger && r.responseTemplate);
+    };
     
     // 🔍 DIAGNOSTIC: Log why slots are being rejected
     if (!slotId || !mergedSlot.question) {
@@ -165,7 +183,10 @@ function normalizeSlot(slot, index) {
         unit: mergedSlot.unit || null,
         // Advanced
         skipIfKnown: mergedSlot.skipIfKnown || false,
-        helperNote: asTrimmedString(mergedSlot.helperNote)
+        helperNote: asTrimmedString(mergedSlot.helperNote),
+
+        // V93: Slot-level mid-call helpers (UI-controlled)
+        midCallRules: normalizeMidCallRules(mergedSlot.midCallRules)
     };
 }
 

@@ -52,6 +52,7 @@ const { extractName: extractNameDeterministic } = require('../utils/nameExtracti
 const { buildResumeBookingBlock } = require('../utils/resumeBookingProtocol');
 const { detectBookingClarification } = require('../utils/bookingClarification');
 const { detectConfirmationRequest } = require('../utils/confirmationRequest');
+const { findFirstMatchingRule, recordRuleFired } = require('../utils/slotMidCallRules');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VERSION BANNER - Proves this code is deployed
@@ -3310,6 +3311,33 @@ async function processTurn({
             // ═══════════════════════════════════════════════════════════════════
             const userTextTrimmed = userText.trim();
             const userTextLower = userTextTrimmed.toLowerCase();
+
+            // ═══════════════════════════════════════════════════════════════════
+            // V93: SLOT-LEVEL MID-CALL HELPERS (UI-controlled)
+            // ═══════════════════════════════════════════════════════════════════
+            // Evaluate ONLY when:
+            // - We did not extract a slot value this turn
+            // - We are about to ask/re-ask the next required slot
+            //
+            // If a rule fires, we reply deterministically using the rule template
+            // and then (ideally) re-ask the exact slot question.
+            const turnNumberNow = (session.metrics?.totalTurns || 0) + 1;
+            const bookingConfigMid = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
+            const bookingSlotsMid = bookingConfigMid.slots || [];
+            const nextMissingSlotMid = bookingSlotsMid.find(slot => {
+                const slotId = slot.slotId || slot.id || slot.type;
+                const isCollected = currentSlots[slotId] || currentSlots[slot.type];
+                return slot.required && !isCollected;
+            });
+            const nextSlotIdMid = nextMissingSlotMid?.slotId || nextMissingSlotMid?.id || nextMissingSlotMid?.type || null;
+            const nextSlotQuestionMid = nextMissingSlotMid?.question || (nextSlotIdMid ? getMissingConfigPrompt('slot_question', nextSlotIdMid) : null);
+            const nextSlotLabelMid = nextMissingSlotMid?.label || nextSlotIdMid || 'next step';
+            const slotMidCallRules = Array.isArray(nextMissingSlotMid?.midCallRules) ? nextMissingSlotMid.midCallRules : [];
+            const didExtractAnySlotThisTurn =
+                !!extractedThisTurn.name ||
+                !!extractedThisTurn.phone ||
+                !!extractedThisTurn.address ||
+                !!extractedThisTurn.time;
             
             // Rule 1: Contains question mark = definitely a question
             const hasQuestionMark = userTextTrimmed.includes('?');
@@ -3336,6 +3364,85 @@ async function processTurn({
             const looksLikeSlotAnswer = /^(my name|name is|i'm|it's|call me|yes|yeah|no|nope)/i.test(userTextTrimmed) ||
                                         /^\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/.test(userTextTrimmed) || // phone
                                         /^\d+\s+\w+/.test(userTextTrimmed); // address
+
+            if (!didExtractAnySlotThisTurn && !looksLikeSlotAnswer && nextSlotIdMid && slotMidCallRules.length > 0) {
+                session.booking.meta = session.booking.meta || {};
+                session.booking.meta[nextSlotIdMid] = session.booking.meta[nextSlotIdMid] || {};
+                session.booking.meta[nextSlotIdMid].midCall = session.booking.meta[nextSlotIdMid].midCall || {};
+                const slotMidState = session.booking.meta[nextSlotIdMid].midCall;
+
+                const matchedRule = findFirstMatchingRule({
+                    userText: userTextTrimmed,
+                    rules: slotMidCallRules,
+                    stateForSlot: slotMidState,
+                    turnNumber: turnNumberNow
+                });
+
+                if (matchedRule) {
+                    const { renderBracedTemplate } = require('../utils/promptTemplate');
+                    const exampleFormat = nextSlotIdMid === 'phone' ? '(555) 123-4567' : '';
+                    let reply = renderBracedTemplate(matchedRule.responseTemplate, {
+                        slotQuestion: nextSlotQuestionMid || '',
+                        slotLabel: nextSlotLabelMid,
+                        exampleFormat
+                    }).trim();
+
+                    // Guardrail: If template forgot to include {slotQuestion}, append the exact slot question.
+                    if (nextSlotQuestionMid && !reply.includes(nextSlotQuestionMid)) {
+                        logger.error('[V93 MID-CALL] 🚨 Rule template missing {slotQuestion} - appending exact question', {
+                            companyId: company?._id?.toString(),
+                            slotId: nextSlotIdMid,
+                            ruleId: matchedRule.id,
+                            trigger: matchedRule.trigger
+                        });
+                        reply = `${reply} ${nextSlotQuestionMid}`.replace(/\s{2,}/g, ' ').trim();
+                    }
+
+                    // Record fire for cooldown/max-per-call
+                    session.booking.meta[nextSlotIdMid].midCall = recordRuleFired({
+                        rule: matchedRule,
+                        stateForSlot: slotMidState,
+                        turnNumber: turnNumberNow
+                    });
+                    session.markModified('booking');
+
+                    // Optional: Escalate / handoff action
+                    if (matchedRule.action === 'escalate') {
+                        const escalationCfg = company.aiAgentSettings?.frontDeskBehavior?.escalation || {};
+                        const transferMsg =
+                            escalationCfg.transferMessage ||
+                            company.connectionMessages?.voice?.transferMessage ||
+                            "DEFAULT - OVERRIDE IN UI: One moment while I transfer you to our team.";
+                        reply = transferMsg;
+                    }
+
+                    aiResult = {
+                        reply,
+                        conversationMode: 'booking',
+                        intent: 'SLOT_MIDCALL_HELPER',
+                        nextGoal: matchedRule.action === 'escalate' ? 'TRANSFER' : 'BOOKING_SLOT_QUESTION',
+                        filledSlots: currentSlots,
+                        signals: { wantsBooking: true, consentGiven: true },
+                        latencyMs: Date.now() - aiStartTime,
+                        tokensUsed: 0,
+                        fromStateMachine: true,
+                        mode: 'BOOKING',
+                        debug: {
+                            source: 'SLOT_MIDCALL_HELPER',
+                            slotId: nextSlotIdMid,
+                            ruleId: matchedRule.id,
+                            action: matchedRule.action
+                        }
+                    };
+
+                    if (matchedRule.action === 'escalate') {
+                        aiResult.debug.requiresTransfer = true;
+                        aiResult.debug.transferReason = 'slot_midcall_escalate';
+                    }
+
+                    break BOOKING_MODE;
+                }
+            }
             
             const looksLikeQuestion =
                 (hasQuestionMark || startsWithQuestionWord || hasInterruptKeywords || (hasQuestionIntentAnywhere && hasProblemMarker)) &&
@@ -7335,6 +7442,12 @@ async function processTurn({
             conversationMode: aiResult.conversationMode || 'free',
             latencyMs
         };
+
+        // V93: Allow deterministic mid-call rules (and other protocols) to request transfer in a visible way
+        if (aiResult?.debug?.requiresTransfer === true) {
+            response.requiresTransfer = true;
+            response.transferReason = aiResult.debug.transferReason || 'protocol_requested_transfer';
+        }
         
         // Add debug info if requested
         if (includeDebug) {
