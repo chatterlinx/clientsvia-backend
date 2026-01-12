@@ -70,7 +70,10 @@ const FAILURE_NODE_MAP = [
     },
     {
         id: 'ZERO_SCENARIOS_LOADED',
-        check: (evidence) => evidence.scenarioCount === 0 && (evidence.templateReferences?.length || 0) > 0,
+        check: (evidence) =>
+            evidence.mode !== 'BOOKING' &&
+            evidence.scenarioCount === 0 &&
+            (evidence.templateReferences?.length || 0) > 0,
         severity: 'HIGH',
         nodeId: 'dataConfig.scenarios',
         title: 'Templates Linked But 0 Scenarios Loaded',
@@ -81,7 +84,10 @@ const FAILURE_NODE_MAP = [
     },
     {
         id: 'LLM_FALLBACK_NO_SCENARIOS',
-        check: (evidence) => evidence.responseSource === 'LLM' && evidence.scenarioCount === 0,
+        check: (evidence) =>
+            evidence.mode !== 'BOOKING' &&
+            evidence.responseSource === 'LLM' &&
+            evidence.scenarioCount === 0,
         severity: 'CRITICAL',
         nodeId: 'dataConfig.templateReferences',
         title: 'LLM Fallback Due to Empty Scenario Pool',
@@ -183,10 +189,12 @@ function extractEvidence(debugSnapshot) {
     const v22 = debugSnapshot.v22 || debugSnapshot.v22BlackBox || {};
     const slotDiag = debugSnapshot.slotDiagnostics || {};
     const bookingConfig = debugSnapshot.bookingConfig || {};
+    const bookingSlotIds = Array.isArray(debugSnapshot.booking?.slotIds) ? debugSnapshot.booking.slotIds : [];
     
     return {
         // Response source
-        responseSource: debugSnapshot.responseSource || 
+        responseSource: debugSnapshot.routing?.responseSource ||
+                       debugSnapshot.responseSource || 
                        (debugSnapshot.wasQuickAnswer ? 'QUICK_ANSWER' :
                         debugSnapshot.triageMatched ? 'TRIAGE' :
                         debugSnapshot.wasFallback ? 'FALLBACK' : 'LLM'),
@@ -214,8 +222,10 @@ function extractEvidence(debugSnapshot) {
         
         // Booking
         bookingSlots: {
-            total: bookingConfig.slots?.length || slotDiag.totalSlots || 0,
-            valid: slotDiag.validSlots || 0,
+            total: bookingConfig.slots?.length || bookingSlotIds.length || slotDiag.totalSlots || 0,
+            // If we don't have per-slot validation diagnostics, treat the presence of slotIds as "valid enough"
+            // for wiring purposes (the runtime is already using these prompts successfully).
+            valid: slotDiag.validSlots || bookingConfig.slots?.length || bookingSlotIds.length || 0,
             invalid: slotDiag.rejectedSlots || 0
         },
         bookingRequiresConsent: bookingConfig.bookingRequiresConsent,

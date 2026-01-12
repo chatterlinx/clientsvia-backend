@@ -1363,77 +1363,12 @@ const SlotExtractors = {
      * V37 FIX: More forgiving - handle typos, extra digits, 7-digit local numbers
      */
     extractPhone(text) {
-        if (!text || typeof text !== 'string') return null;
-        
-        // Remove common words that might confuse extraction
-        let cleaned = text.replace(/\b(phone|number|is|my|the|at|reach|me|call)\b/gi, ' ');
-        
-        // Extract all digits
-        const digits = cleaned.replace(/\D/g, '');
-        
-        // V37: Log what we're working with
-        logger.debug('[PHONE EXTRACT] V37:', { raw: text, digits, length: digits.length });
-        
-        // 10 digits - perfect US phone number
-        if (digits.length === 10) {
-            return digits.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
+        const { extractPhoneFromText } = require('../utils/phone');
+        const extracted = extractPhoneFromText(text);
+        if (extracted) {
+            logger.info('[PHONE EXTRACT] ✅ Extracted phone', { raw: text?.substring?.(0, 80) || text, extracted });
         }
-        
-        // 11 digits starting with 1 - US with country code
-        if (digits.length === 11 && digits.startsWith('1')) {
-            return digits.substring(1).replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
-        }
-        
-        // V37 FIX: 11 digits NOT starting with 1 - likely typo, take last 10
-        // Example: "23933333747" → probably meant "2393337747" 
-        if (digits.length === 11 && !digits.startsWith('1')) {
-            logger.info('[PHONE EXTRACT] V37: 11 digits without country code - taking last 10 (possible typo)');
-            const last10 = digits.substring(1);
-            return last10.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
-        }
-        
-        // V37 FIX: 12+ digits - smart reconstruction
-        // People usually get area code (first 3) and last 4 digits correct
-        // Extra digits are typically typos in the middle (repeated keys)
-        // Example: "23933333 7747" → "239333337747" (12 digits)
-        //   - Area code: 239 (first 3)
-        //   - Last 4: 7747 (last 4)  
-        //   - Middle: 333337 (6 digits, need 3) → take last 3 = "337"
-        //   - Result: 239-337-7747
-        // Wait, that's still wrong. Let's just take first 3 + middle 3 + last 4
-        // For 12 digits: positions 0-2 (area) + positions 3-5 (exchange) + positions 8-11 (last 4)
-        if (digits.length === 12) {
-            logger.info('[PHONE EXTRACT] V37: 12 digits - reconstructing', { digits });
-            const areaCode = digits.substring(0, 3);      // First 3
-            const exchange = digits.substring(3, 6);       // Next 3 (positions 3-5)
-            const lastFour = digits.substring(8, 12);      // Last 4 (positions 8-11)
-            const reconstructed = areaCode + exchange + lastFour;
-            logger.info('[PHONE EXTRACT] V37: 12 digit result', { 
-                areaCode, exchange, lastFour, reconstructed 
-            });
-            return reconstructed.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
-        }
-        
-        // 13+ digits - too many, don't auto-correct (will trigger breakdown)
-        if (digits.length >= 13) {
-            logger.info('[PHONE EXTRACT] V37: 13+ digits - too many, not extracting');
-            return null;
-        }
-        
-        // V37 FIX: 7 digits - local number (missing area code)
-        // Don't format, just return as-is so confirmBack can ask for area code
-        if (digits.length === 7) {
-            logger.info('[PHONE EXTRACT] V37: 7 digits - local number, may need area code');
-            return digits.replace(/(\d{3})(\d{4})/, '$1-$2');
-        }
-        
-        // 8-9 digits - partial, don't extract (will trigger breakdown)
-        if (digits.length >= 8 && digits.length <= 9) {
-            logger.info('[PHONE EXTRACT] V37: 8-9 digits - partial, not extracting');
-            return null;
-        }
-        
-        return null;
+        return extracted;
     },
     
     /**
@@ -3365,20 +3300,34 @@ async function processTurn({
             const userTextLower = userTextTrimmed.toLowerCase();
             
             // Rule 1: Contains question mark = definitely a question
-            const hasQuestionMark = userTextTrimmed.endsWith('?');
+            const hasQuestionMark = userTextTrimmed.includes('?');
             
             // Rule 2: Starts with question words (but NOT "is" alone - too broad)
             const startsWithQuestionWord = /^(what|when|where|why|how|can you|could you|do you|does|are you|will you)\b/i.test(userTextTrimmed);
             
             // Rule 3: Contains booking-interrupt keywords (pricing, availability, etc.)
             const hasInterruptKeywords = /\b(soonest|earliest|available|price|cost|how much|warranty|hours|open|close)\b/i.test(userTextLower);
+
+            // Rule 3b: Problem-question intent without a leading question word (common in real calls)
+            // Example: "I need to understand why my thermostat is not working"
+            // Use UI-configured describingProblem triggers when available (no hidden hardcoded industry logic).
+            const detectionTriggers = company.aiAgentSettings?.frontDeskBehavior?.detectionTriggers || {};
+            const describingProblem = Array.isArray(detectionTriggers.describingProblem) ? detectionTriggers.describingProblem : [];
+            const hasProblemMarker =
+                describingProblem.length > 0
+                    ? describingProblem.some(p => userTextLower.includes((p || '').toString().toLowerCase()))
+                    : /\b(thermostat|not working|not cooling|blank screen|won't start|no power|leak|broken)\b/i.test(userTextLower);
+
+            const hasQuestionIntentAnywhere = /\b(why|how|what)\b/i.test(userTextLower) || /\b(do you know|can you tell me|help me understand)\b/i.test(userTextLower);
             
             // Rule 4: EXCLUDE if it looks like a slot answer
             const looksLikeSlotAnswer = /^(my name|name is|i'm|it's|call me|yes|yeah|no|nope)/i.test(userTextTrimmed) ||
                                         /^\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/.test(userTextTrimmed) || // phone
                                         /^\d+\s+\w+/.test(userTextTrimmed); // address
             
-            const looksLikeQuestion = (hasQuestionMark || startsWithQuestionWord || hasInterruptKeywords) && !looksLikeSlotAnswer;
+            const looksLikeQuestion =
+                (hasQuestionMark || startsWithQuestionWord || hasInterruptKeywords || (hasQuestionIntentAnywhere && hasProblemMarker)) &&
+                !looksLikeSlotAnswer;
             
             log('📝 INTERRUPT CHECK', {
                 userText: userTextTrimmed.substring(0, 50),
@@ -5792,8 +5741,8 @@ async function processTurn({
                         // V59 NUKE: UI-configured rephrase intro ONLY
                         const rephraseIntro = (lp.rephraseIntro || getMissingConfigPrompt('rephrase_intro', 'loopPrevention')).toString();
                         const escalationCfg = company.aiAgentSettings?.frontDeskBehavior?.escalation || {};
-                        const escalationScript =
-                            lp.onLoop ||
+                        const onLoopAction = (lp.onLoop || 'rephrase').toString().trim().toLowerCase();
+                        const escalationOfferScript =
                             escalationCfg.offerMessage ||
                             escalationCfg.transferMessage ||
                             "DEFAULT - OVERRIDE IN UI: No problem — I can connect you to our team or take a message. Which would you prefer?";
@@ -5805,12 +5754,38 @@ async function processTurn({
                                 askedCount, 
                                 maxAttemptsPerSlot 
                             });
-                            
-                            // Offer escalation/transfer
-                            finalReply = escalationScript;
-                            session.booking.meta[nextSlotId].escalated = true;
-                            
-                            // Don't increment askedCount anymore
+
+                            session.booking.meta[nextSlotId].loopedCount = (session.booking.meta[nextSlotId].loopedCount || 0) + 1;
+
+                            // If we've already looped once, always offer escalation as a hard safety net.
+                            // (Prevents infinite rephrase loops and makes behavior predictable.)
+                            const shouldForceEscalation = session.booking.meta[nextSlotId].loopedCount >= 2;
+
+                            if (onLoopAction === 'escalate' || shouldForceEscalation) {
+                                // Offer escalation/transfer (UI-controlled)
+                                finalReply = escalationOfferScript;
+                                session.booking.meta[nextSlotId].escalated = true;
+                                // Don't increment askedCount anymore
+                            } else {
+                                // Default behavior: REPHRASE and ask again (UI-controlled rephraseIntro + prompt variants)
+                                let exactQuestion;
+                                if (DEFAULT_PROMPT_VARIANTS.reprompt[nextSlotId]) {
+                                    exactQuestion = getVariant(DEFAULT_PROMPT_VARIANTS.reprompt[nextSlotId], Math.max(0, askedCount - 1));
+                                    log('📋 V33: On-loop REPHRASE using REPROMPT variant', { slotId: nextSlotId, askedCount });
+                                } else {
+                                    exactQuestion = getSlotPromptVariant(nextMissingSlotSafe, nextSlotId, askedCount);
+                                    log('📋 V33: On-loop REPHRASE using slot variant', { slotId: nextSlotId, askedCount });
+                                }
+
+                                // Always prepend the rephrase intro when in loop mode
+                                if (lpEnabled && rephraseIntro) {
+                                    exactQuestion = `${rephraseIntro}${exactQuestion}`.replace(/\s{2,}/g, ' ').trim();
+                                }
+
+                                // Count the ask, so we can force escalation if caller stays stuck
+                                session.booking.meta[nextSlotId].askedCount = askedCount + 1;
+                                finalReply += exactQuestion;
+                            }
                         } else {
                             // Use reprompt variant if asked multiple times
                             let exactQuestion;

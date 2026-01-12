@@ -48,6 +48,13 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
     ...(customStopWords || []).map(w => String(w).toLowerCase().trim()).filter(Boolean)
   ]);
 
+  // Contextual stop-word: prevent "a little ..." from being interpreted as a surname in last-name collection.
+  // IMPORTANT: We do NOT globally ban "Little" (it is a valid surname). We only suppress it in the common
+  // phrase "a little <adjective>" which shows up in human rambling during booking.
+  if (expectingName && /\ba\s+little\b/i.test(raw)) {
+    STOP_WORDS.add('little');
+  }
+
   // Strict patterns that indicate actual name introduction
   const strictNamePatterns = [
     /\bmy name is\b/i,
@@ -99,6 +106,22 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
   }
   if (!candidate && expectingName) candidate = raw;
   if (!candidate) return null;
+
+  // Special-case: caller explicitly references last name / surname in a sentence,
+  // and ends with the actual last name token.
+  // Example:
+  // "my last name is a little complicated ... Gonzalez" → "Gonzalez"
+  // This is common during last-name collection where the caller rambles.
+  if (expectingName && /\b(last name|surname)\b/i.test(raw)) {
+    const tailToken =
+      raw.match(/\b(?:last name is|surname is)\b[\s\S]*?\b([A-Za-z][A-Za-z'\-]{1,})\s*$/i)?.[1] ||
+      raw.match(/\b(last name|surname)\b[\s\S]*?\b([A-Za-z][A-Za-z'\-]{1,})\s*$/i)?.[2] ||
+      null;
+    const cleanedTail = cleanToken(tailToken);
+    if (cleanedTail && !STOP_WORDS.has(cleanedTail.toLowerCase())) {
+      return titleCase(cleanedTail);
+    }
+  }
 
   // Special-case: human ramble where last name is provided after a “but it’s …”
   // Example: "my name is Larry pretty long but it's Gonzalez"

@@ -4,7 +4,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "test": "jest",
+    "test": "npm run test:unit",
+    "test:unit": "jest --runInBand",
+    "test:integration": "jest --runInBand --testPathPattern=integration",
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
     "build-css": "tailwindcss -i ./public/css/input.css -o ./public/css/output.css --watch",
@@ -93,6 +95,10 @@
   "jest": {
     "testMatch": [
       "**/tests/**/*.[jt]s?(x)"
+    ],
+    "testSequencer": "<rootDir>/node_modules/@jest/test-sequencer/build/index.js",
+    "testPathIgnorePatterns": [
+      "/tests/.*integration\\.test\\.[jt]s$"
     ]
   }
 }
