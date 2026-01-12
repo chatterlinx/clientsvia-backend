@@ -23,6 +23,35 @@ const BookingContractCompiler = require('./BookingContractCompiler');
 const { DEFAULT_BOOKING_SLOTS } = require('../config/onboarding/DefaultFrontDeskPreset');
 
 /**
+ * Build a map of default slots by slotId for backfilling missing optional fields.
+ * This keeps behavior UI-visible (defaults live in the onboarding preset) and avoids
+ * "hidden" runtime fallbacks sprinkled across the codebase.
+ */
+function buildDefaultSlotMap() {
+    const map = {};
+    for (const s of (DEFAULT_BOOKING_SLOTS || [])) {
+        const id = getSlotId(s);
+        if (!id) continue;
+        map[id] = s;
+    }
+    return map;
+}
+
+const DEFAULT_SLOT_MAP = buildDefaultSlotMap();
+
+/**
+ * Merge default slot fields into a raw slot object (slot overrides defaults).
+ * NOTE: We only fill missing fields (undefined) via the spread order.
+ * If a company explicitly set a field to empty string, we keep it.
+ */
+function mergeSlotDefaults(rawSlot) {
+    const slotId = getSlotId(rawSlot);
+    const def = slotId ? DEFAULT_SLOT_MAP[slotId] : null;
+    if (!def) return rawSlot;
+    return { ...def, ...rawSlot };
+}
+
+/**
  * Normalize slot ID - handles 'slotId', 'id', and 'key' field names
  * Priority: slotId > id > key (key is the new UI schema)
  */
@@ -34,18 +63,19 @@ function getSlotId(slot) {
  * Normalize a single booking slot to standard format
  */
 function normalizeSlot(slot, index) {
-    const slotId = getSlotId(slot);
+    const mergedSlot = mergeSlotDefaults(slot);
+    const slotId = getSlotId(mergedSlot);
     
     // 🔍 DIAGNOSTIC: Log why slots are being rejected
-    if (!slotId || !slot.question) {
+    if (!slotId || !mergedSlot.question) {
         logger.warn('[BOOKING ENGINE] ⚠️ SLOT REJECTED - missing required field', {
             index,
             hasSlotId: !!slotId,
             slotIdValue: slotId,
-            hasQuestion: !!slot.question,
-            questionValue: slot.question?.substring?.(0, 50),
-            rawSlotKeys: slot ? Object.keys(slot) : [],
-            rawSlot: JSON.stringify(slot).substring(0, 200)
+            hasQuestion: !!mergedSlot.question,
+            questionValue: mergedSlot.question?.substring?.(0, 50),
+            rawSlotKeys: mergedSlot ? Object.keys(mergedSlot) : [],
+            rawSlot: JSON.stringify(mergedSlot).substring(0, 200)
         });
         return null; // Invalid slot
     }
@@ -53,83 +83,85 @@ function normalizeSlot(slot, index) {
     return {
         slotId: slotId,
         id: slotId, // Also include 'id' for backward compatibility with HybridReceptionistLLM
-        label: slot.label || slotId,
-        question: (slot.question || '').trim(),
-        type: slot.type || 'text',
-        required: slot.required !== false,
-        order: typeof slot.order === 'number' ? slot.order : index,
+        label: mergedSlot.label || slotId,
+        question: (mergedSlot.question || '').trim(),
+        type: mergedSlot.type || 'text',
+        required: mergedSlot.required !== false,
+        order: typeof mergedSlot.order === 'number' ? mergedSlot.order : index,
         // Confirmation options
-        confirmBack: slot.confirmBack || false,
-        confirmPrompt: slot.confirmPrompt || "Just to confirm, that's {value}, correct?",
+        confirmBack: mergedSlot.confirmBack || false,
+        confirmPrompt: mergedSlot.confirmPrompt || "Just to confirm, that's {value}, correct?",
         
         // ═══════════════════════════════════════════════════════════════════════════
         // V63: Name-specific fields (ALL must be copied from DB!)
         // ═══════════════════════════════════════════════════════════════════════════
-        askFullName: slot.askFullName !== false,
-        useFirstNameOnly: slot.useFirstNameOnly !== false,
-        askMissingNamePart: slot.askMissingNamePart === true, // Must be explicitly true
+        askFullName: mergedSlot.askFullName !== false,
+        useFirstNameOnly: mergedSlot.useFirstNameOnly !== false,
+        askMissingNamePart: mergedSlot.askMissingNamePart === true, // Must be explicitly true
         // V59: These were MISSING - causing hardcoded fallbacks!
-        lastNameQuestion: slot.lastNameQuestion || null,
-        firstNameQuestion: slot.firstNameQuestion || null,
+        lastNameQuestion: mergedSlot.lastNameQuestion || null,
+        firstNameQuestion: mergedSlot.firstNameQuestion || null,
+        // V85: Duplicate/unclear last name recovery prompt
+        duplicateNamePartPrompt: mergedSlot.duplicateNamePartPrompt || null,
         // V61: Spelling variants
-        confirmSpelling: slot.confirmSpelling || false,
-        spellingVariantPrompt: slot.spellingVariantPrompt || null,
+        confirmSpelling: mergedSlot.confirmSpelling || false,
+        spellingVariantPrompt: mergedSlot.spellingVariantPrompt || null,
         
         // ═══════════════════════════════════════════════════════════════════════════
         // V63: Phone-specific fields
         // ═══════════════════════════════════════════════════════════════════════════
-        offerCallerId: slot.offerCallerId || false,
-        callerIdPrompt: slot.callerIdPrompt || null,
-        acceptTextMe: slot.acceptTextMe !== false,
-        breakDownIfUnclear: slot.breakDownIfUnclear || false, // Works for phone AND address
+        offerCallerId: mergedSlot.offerCallerId || false,
+        callerIdPrompt: mergedSlot.callerIdPrompt || null,
+        acceptTextMe: mergedSlot.acceptTextMe !== false,
+        breakDownIfUnclear: mergedSlot.breakDownIfUnclear || false, // Works for phone AND address
         // V59: Phone breakdown prompts
-        areaCodePrompt: slot.areaCodePrompt || null,
-        restOfNumberPrompt: slot.restOfNumberPrompt || null,
+        areaCodePrompt: mergedSlot.areaCodePrompt || null,
+        restOfNumberPrompt: mergedSlot.restOfNumberPrompt || null,
         
         // ═══════════════════════════════════════════════════════════════════════════
         // V63: Address-specific fields
         // ═══════════════════════════════════════════════════════════════════════════
-        addressConfirmLevel: slot.addressConfirmLevel || 'street_city',
-        acceptPartialAddress: slot.acceptPartialAddress || false,
+        addressConfirmLevel: mergedSlot.addressConfirmLevel || 'street_city',
+        acceptPartialAddress: mergedSlot.acceptPartialAddress || false,
         // V59: Address breakdown prompts
-        partialAddressPrompt: slot.partialAddressPrompt || null,
-        streetBreakdownPrompt: slot.streetBreakdownPrompt || null,
-        cityPrompt: slot.cityPrompt || null,
-        zipPrompt: slot.zipPrompt || null,
+        partialAddressPrompt: mergedSlot.partialAddressPrompt || null,
+        streetBreakdownPrompt: mergedSlot.streetBreakdownPrompt || null,
+        cityPrompt: mergedSlot.cityPrompt || null,
+        zipPrompt: mergedSlot.zipPrompt || null,
         // Unit number handling
-        unitNumberMode: slot.unitNumberMode || 'smart',
-        unitNumberPrompt: slot.unitNumberPrompt || null,
-        unitTriggerWords: slot.unitTriggerWords || [],
-        unitAlwaysAskZips: slot.unitAlwaysAskZips || [],
-        unitNeverAskZips: slot.unitNeverAskZips || [],
-        unitPromptVariants: slot.unitPromptVariants || [],
+        unitNumberMode: mergedSlot.unitNumberMode || 'smart',
+        unitNumberPrompt: mergedSlot.unitNumberPrompt || null,
+        unitTriggerWords: mergedSlot.unitTriggerWords || [],
+        unitAlwaysAskZips: mergedSlot.unitAlwaysAskZips || [],
+        unitNeverAskZips: mergedSlot.unitNeverAskZips || [],
+        unitPromptVariants: mergedSlot.unitPromptVariants || [],
         // Google Maps integration
-        useGoogleMapsValidation: slot.useGoogleMapsValidation || false,
-        googleMapsValidationMode: slot.googleMapsValidationMode || 'confirm_low_confidence',
+        useGoogleMapsValidation: mergedSlot.useGoogleMapsValidation || false,
+        googleMapsValidationMode: mergedSlot.googleMapsValidationMode || 'confirm_low_confidence',
         
         // ═══════════════════════════════════════════════════════════════════════════
         // Other slot types
         // ═══════════════════════════════════════════════════════════════════════════
         // Email-specific
-        spellOutEmail: slot.spellOutEmail !== false,
-        offerToSendText: slot.offerToSendText || false,
+        spellOutEmail: mergedSlot.spellOutEmail !== false,
+        offerToSendText: mergedSlot.offerToSendText || false,
         // DateTime-specific
-        offerAsap: slot.offerAsap !== false,
-        offerMorningAfternoon: slot.offerMorningAfternoon || false,
-        asapPhrase: slot.asapPhrase || 'first available',
+        offerAsap: mergedSlot.offerAsap !== false,
+        offerMorningAfternoon: mergedSlot.offerMorningAfternoon || false,
+        asapPhrase: mergedSlot.asapPhrase || 'first available',
         // Select-specific
-        selectOptions: slot.selectOptions || [],
-        allowOther: slot.allowOther || false,
+        selectOptions: mergedSlot.selectOptions || [],
+        allowOther: mergedSlot.allowOther || false,
         // YesNo-specific
-        yesAction: slot.yesAction || null,
-        noAction: slot.noAction || null,
+        yesAction: mergedSlot.yesAction || null,
+        noAction: mergedSlot.noAction || null,
         // Number-specific
-        minValue: slot.minValue || null,
-        maxValue: slot.maxValue || null,
-        unit: slot.unit || null,
+        minValue: mergedSlot.minValue || null,
+        maxValue: mergedSlot.maxValue || null,
+        unit: mergedSlot.unit || null,
         // Advanced
-        skipIfKnown: slot.skipIfKnown || false,
-        helperNote: slot.helperNote || null
+        skipIfKnown: mergedSlot.skipIfKnown || false,
+        helperNote: mergedSlot.helperNote || null
     };
 }
 
