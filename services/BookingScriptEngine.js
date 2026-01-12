@@ -66,6 +66,8 @@ function normalizeSlot(slot, index) {
     const mergedSlot = mergeSlotDefaults(slot);
     const slotId = getSlotId(mergedSlot);
     
+    const asTrimmedString = (val) => (typeof val === 'string' ? val.trim() : null);
+    
     // 🔍 DIAGNOSTIC: Log why slots are being rejected
     if (!slotId || !mergedSlot.question) {
         logger.warn('[BOOKING ENGINE] ⚠️ SLOT REJECTED - missing required field', {
@@ -99,24 +101,26 @@ function normalizeSlot(slot, index) {
         useFirstNameOnly: mergedSlot.useFirstNameOnly !== false,
         askMissingNamePart: mergedSlot.askMissingNamePart === true, // Must be explicitly true
         // V59: These were MISSING - causing hardcoded fallbacks!
-        lastNameQuestion: mergedSlot.lastNameQuestion || null,
-        firstNameQuestion: mergedSlot.firstNameQuestion || null,
+        // IMPORTANT: Preserve admin-authored text exactly (including debug suffixes like "... 3?")
+        // We only trim whitespace; we do NOT inject defaults here.
+        lastNameQuestion: asTrimmedString(mergedSlot.lastNameQuestion),
+        firstNameQuestion: asTrimmedString(mergedSlot.firstNameQuestion),
         // V85: Duplicate/unclear last name recovery prompt
-        duplicateNamePartPrompt: mergedSlot.duplicateNamePartPrompt || null,
+        duplicateNamePartPrompt: asTrimmedString(mergedSlot.duplicateNamePartPrompt),
         // V61: Spelling variants
         confirmSpelling: mergedSlot.confirmSpelling || false,
-        spellingVariantPrompt: mergedSlot.spellingVariantPrompt || null,
+        spellingVariantPrompt: asTrimmedString(mergedSlot.spellingVariantPrompt),
         
         // ═══════════════════════════════════════════════════════════════════════════
         // V63: Phone-specific fields
         // ═══════════════════════════════════════════════════════════════════════════
         offerCallerId: mergedSlot.offerCallerId || false,
-        callerIdPrompt: mergedSlot.callerIdPrompt || null,
+        callerIdPrompt: asTrimmedString(mergedSlot.callerIdPrompt),
         acceptTextMe: mergedSlot.acceptTextMe !== false,
         breakDownIfUnclear: mergedSlot.breakDownIfUnclear || false, // Works for phone AND address
         // V59: Phone breakdown prompts
-        areaCodePrompt: mergedSlot.areaCodePrompt || null,
-        restOfNumberPrompt: mergedSlot.restOfNumberPrompt || null,
+        areaCodePrompt: asTrimmedString(mergedSlot.areaCodePrompt),
+        restOfNumberPrompt: asTrimmedString(mergedSlot.restOfNumberPrompt),
         
         // ═══════════════════════════════════════════════════════════════════════════
         // V63: Address-specific fields
@@ -124,13 +128,13 @@ function normalizeSlot(slot, index) {
         addressConfirmLevel: mergedSlot.addressConfirmLevel || 'street_city',
         acceptPartialAddress: mergedSlot.acceptPartialAddress || false,
         // V59: Address breakdown prompts
-        partialAddressPrompt: mergedSlot.partialAddressPrompt || null,
-        streetBreakdownPrompt: mergedSlot.streetBreakdownPrompt || null,
-        cityPrompt: mergedSlot.cityPrompt || null,
-        zipPrompt: mergedSlot.zipPrompt || null,
+        partialAddressPrompt: asTrimmedString(mergedSlot.partialAddressPrompt),
+        streetBreakdownPrompt: asTrimmedString(mergedSlot.streetBreakdownPrompt),
+        cityPrompt: asTrimmedString(mergedSlot.cityPrompt),
+        zipPrompt: asTrimmedString(mergedSlot.zipPrompt),
         // Unit number handling
         unitNumberMode: mergedSlot.unitNumberMode || 'smart',
-        unitNumberPrompt: mergedSlot.unitNumberPrompt || null,
+        unitNumberPrompt: asTrimmedString(mergedSlot.unitNumberPrompt),
         unitTriggerWords: mergedSlot.unitTriggerWords || [],
         unitAlwaysAskZips: mergedSlot.unitAlwaysAskZips || [],
         unitNeverAskZips: mergedSlot.unitNeverAskZips || [],
@@ -161,7 +165,7 @@ function normalizeSlot(slot, index) {
         unit: mergedSlot.unit || null,
         // Advanced
         skipIfKnown: mergedSlot.skipIfKnown || false,
-        helperNote: mergedSlot.helperNote || null
+        helperNote: asTrimmedString(mergedSlot.helperNote)
     };
 }
 

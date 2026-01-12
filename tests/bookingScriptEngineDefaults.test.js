@@ -26,6 +26,8 @@ describe('BookingScriptEngine.getBookingSlotsFromCompany default backfill', () =
     expect(isConfigured).toBe(true);
     const nameSlot = slots.find(s => s.slotId === 'name' || s.type === 'name');
     expect(nameSlot).toBeTruthy();
+    // Preserve admin-authored lastNameQuestion verbatim (debug suffix included)
+    expect(nameSlot.lastNameQuestion).toBe("And what's your last name 3?");
     // Should be backfilled from DEFAULT_BOOKING_SLOTS
     expect(typeof nameSlot.duplicateNamePartPrompt === 'string' || nameSlot.duplicateNamePartPrompt === null).toBe(true);
     expect(nameSlot.duplicateNamePartPrompt).toBeTruthy();

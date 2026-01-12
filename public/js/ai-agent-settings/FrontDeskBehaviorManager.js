@@ -3142,10 +3142,21 @@ Sean → Shawn, Shaun`;
         if (el.querySelector('.slot-useFirstNameOnly')) slotData.useFirstNameOnly = getCheckedDefault('.slot-useFirstNameOnly', true);
         if (el.querySelector('.slot-askMissingNamePart')) slotData.askMissingNamePart = getChecked('.slot-askMissingNamePart');
         if (el.querySelector('.slot-confirmSpelling')) slotData.confirmSpelling = getChecked('.slot-confirmSpelling');
-        // V59 NUKE: Both first and last name questions MUST be from UI
-        if (el.querySelector('.slot-firstNameQuestion')) slotData.firstNameQuestion = getVal('.slot-firstNameQuestion') || "And what's your first name?";
-        if (el.querySelector('.slot-lastNameQuestion')) slotData.lastNameQuestion = getVal('.slot-lastNameQuestion') || "And what's your last name?";
+        // V59 NUKE: Both first and last name questions MUST be from UI.
+        // IMPORTANT: Never inject defaults on save — that can overwrite admin-configured prompts (e.g., debug suffixes like "... 3?").
+        if (el.querySelector('.slot-firstNameQuestion')) slotData.firstNameQuestion = getVal('.slot-firstNameQuestion');
+        if (el.querySelector('.slot-lastNameQuestion')) slotData.lastNameQuestion = getVal('.slot-lastNameQuestion');
         if (el.querySelector('.slot-duplicateNamePartPrompt')) slotData.duplicateNamePartPrompt = getVal('.slot-duplicateNamePartPrompt') || "";
+
+        // Enforce required name-part prompts when the behavior depends on them
+        if ((slotData.type === 'name' || slotData.id === 'name') && slotData.askMissingNamePart === true) {
+            if (!slotData.firstNameQuestion || !slotData.firstNameQuestion.trim()) {
+                throw new Error('First Name Question is required when "Ask once for missing part" is enabled.');
+            }
+            if (!slotData.lastNameQuestion || !slotData.lastNameQuestion.trim()) {
+                throw new Error('Last Name Question is required when "Ask once for missing part" is enabled.');
+            }
+        }
         
         // V63 DEBUG: Log name slot collection
         if (slotData.type === 'name' || slotData.id === 'name') {
@@ -3157,8 +3168,8 @@ Sean → Shawn, Shaun`;
                 confirmSpellingCheckbox: el.querySelector('.slot-confirmSpelling'),
                 confirmSpellingChecked: el.querySelector('.slot-confirmSpelling')?.checked,
                 firstNameQuestion: slotData.firstNameQuestion,
-                        lastNameQuestion: slotData.lastNameQuestion,
-                        duplicateNamePartPrompt: slotData.duplicateNamePartPrompt ? '(set)' : '(empty)'
+                lastNameQuestion: slotData.lastNameQuestion,
+                duplicateNamePartPrompt: slotData.duplicateNamePartPrompt ? '(set)' : '(empty)'
             });
         }
 
@@ -3299,7 +3310,7 @@ Sean → Shawn, Shaun`;
                                 📝 First Name Question (when caller gives last name first):
                             </label>
                             <input type="text" class="slot-firstNameQuestion" data-index="${index}" 
-                                value="${this.escapeHtml(slot.firstNameQuestion || "And what's your first name?")}" 
+                                value="${this.escapeHtml(slot.firstNameQuestion || '')}" 
                                 placeholder="And what's your first name?"
                                 style="width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
                             <span style="font-size: 10px; color: #8b949e;">Asked when caller says "My name is Smith" (last name only)</span>
@@ -3311,7 +3322,7 @@ Sean → Shawn, Shaun`;
                                 📝 Last Name Question (when asking for missing last name):
                             </label>
                             <input type="text" class="slot-lastNameQuestion" data-index="${index}" 
-                                value="${this.escapeHtml(slot.lastNameQuestion || "And what's your last name?")}" 
+                                value="${this.escapeHtml(slot.lastNameQuestion || '')}" 
                                 placeholder="And what's your last name?"
                                 style="width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
                             <span style="font-size: 10px; color: #8b949e;">Use {firstName} to include caller name, e.g. "Got it, {firstName}. And what's your last name?"</span>
