@@ -248,7 +248,6 @@ async function run() {
 
 ## 📞 Questions?
 
-- Read: `docs/COMPANY-CREATION-POLICY.md`
 - Read: `docs/PRODUCTION-DATABASE-INFO.md`
 - Read: `docs/SPAM-FILTER-ARCHITECTURE.md`
 

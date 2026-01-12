@@ -1,123 +1,33 @@
-# ClientsVia AI Platform
+# Docs (Curated)
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/clientsvia/platform)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
-[![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
-[![Security](https://img.shields.io/badge/security-enterprise%20grade-red.svg)](#security)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#testing)
+This folder is intentionally **small and current**. Legacy docs were archived to avoid “two sources of truth”.
 
-> **Enterprise-grade, multi-tenant AI agent platform for voice-first service companies**
+## Primary docs used by the UI/tools
 
-ClientsVia is a **Salesforce-caliber AI platform** that provides dynamic, per-company fine-tuning of agent logic, intelligent answer prioritization, template intelligence, and configurable agent personalities. Built specifically for voice-first service industries with enterprise security and single-developer deployment in mind.
+- `SCENARIO-OPS.md`
+- `SCENARIO-BULK-LOADER-README.md`
+- `SCENARIO-CSV-QUICK-REFERENCE.md`
+- `SCENARIO-CSV-FIELD-REFERENCE.md`
 
-## ✨ Key Features
+## Production runbooks (kept)
 
-### 🤖 **Advanced AI Intelligence**
-- **Dynamic Company-Specific AI Tuning**: Each client gets customized AI behavior
-- **Template Intelligence Engine**: Optimized response templates with continuous learning
-- **Agent Personality Configuration**: Customizable tone, style, and empathy levels
-- **Real-time Learning & Adaptation**: AI improves from every interaction
+- `DEPLOYMENT_SAFETY_CHECKLIST.md`
+- `PRODUCTION-ENVIRONMENT-SETUP.md`
+- `PRODUCTION-INFRASTRUCTURE-CONFIRMED.md`
+- `PRODUCTION-DATABASE-INFO.md`
 
-### 🔒 **Enterprise Security**
-- **Single-Session Lockout**: Aggressive session management for maximum security
-- **Hardware ID Binding**: Device-level security preventing session hijacking
-- **GeoIP Validation**: Location-based access control with impossible travel detection
-- **Emergency Bypass System**: Administrative access for critical situations
-- **Comprehensive Audit Trails**: Complete activity logging and monitoring
+## Architecture snapshots (kept)
 
-### 🏢 **Multi-Tenant Architecture**
-- **Complete Data Isolation**: Secure separation between client companies
-- **Per-Company Customization**: Tailored AI logic, workflows, and branding
-- **Scalable Infrastructure**: Supports thousands of concurrent companies
-- **Industry-Specific Optimization**: Pre-configured for plumbing, HVAC, electrical, and more
+- `RUNTIME_ARCHITECTURE.md`
+- `PLATFORM_ARCHITECTURE.md`
+- `MULTI-TENANT-ARCHITECTURE.md`
+- `CONTROL_PLANE_RUNTIME_MAP.md`
+- `WIRING_MAP_SCENARIO_BRAIN.md`
+- `CANONICAL_CONTRACT_V1.md`
 
-### 🎯 **Voice-First Design**
-- **Conversational AI Optimization**: Natural language processing for phone interactions
-- **Sub-second Response Times**: Real-time performance for live conversations
-- **Context Awareness**: Maintains conversation state across interactions
-- **Multi-Modal Support**: Text, voice, and structured data processing
+## Archived legacy docs
 
-## 🚀 Quick Start
-
-### Prerequisites
-- **Node.js** 18.0.0 or higher
-- **MongoDB** 6.0 or higher
-- **Redis** 7.0 or higher
-- **Git** for version control
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/clientsvia/platform.git
-cd clientsvia-backend
-
-# Install dependencies
-npm install
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your configuration
-
-# Start the application
-npm start
-```
-
-### First Login
-1. Navigate to `http://localhost:3000/login.html`
-2. Use default credentials: `admin` / `password`
-3. Access the AI Agent Logic dashboard at `http://localhost:3000/ai-agent-logic.html`
-
-## 🏗️ Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Client Applications                           │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
-│  │   Web Dashboard │  │   Mobile Apps   │  │   API Clients   │ │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
-└─────────────────────┬───────────────────────────────────────────┘
-                      │ HTTPS/WSS
-┌─────────────────────┴───────────────────────────────────────────┐
-│                  Security Gateway                               │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
-│  │  Load Balancer  │  │  Rate Limiting  │  │  DDoS Protection│ │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
-└─────────────────────┬───────────────────────────────────────────┘
-                      │
-┌─────────────────────┴───────────────────────────────────────────┐
-│                AI Intelligence Layer                            │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
-│  │ClientsVia Intel │  │Template Intel   │  │Agent Personality│ │
-│  │    Engine       │  │    Engine       │  │    Engine       │ │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
-└─────────────────────┬───────────────────────────────────────────┘
-                      │
-┌─────────────────────┴───────────────────────────────────────────┐
-│                   Data Layer                                    │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
-│  │    MongoDB      │  │     Redis       │  │    Pinecone     │ │
-│  │ (Primary DB)    │  │ (Cache/Session) │  │ (Vector Search) │ │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## 💡 Core Technologies
-
-| Technology | Purpose | Version |
-|------------|---------|---------|
-| **Node.js** | Runtime Environment | 18+ |
-| **Express.js** | Web Framework | 4.18+ |
-| **MongoDB** | Primary Database | 6.0+ |
-| **Redis** | Cache & Sessions | 7.0+ |
-| **JWT** | Authentication | Latest |
-| **OpenAI** | AI Language Models | GPT-4 |
-| **Pinecone** | Vector Database | Latest |
-| **Winston** | Logging | Latest |
-
-## 📁 Project Structure
-
-```
+Everything else was moved to `archived/docs-legacy/docs/`.
 clientsvia-backend/
 ├── 📁 docs/                    # Comprehensive documentation
 │   ├── PLATFORM_OVERVIEW.md    # Executive overview

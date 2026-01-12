@@ -407,6 +407,14 @@ app.get('/company-profile.html', (req, res) => {
     return res.redirect(302, target);
 });
 
+// ============================================================================
+// 📚 DOCS (CURATED) - Served for in-UI help links
+// ============================================================================
+// The Control Plane includes a few "Open Docs" links (e.g. Scenario Ops).
+// We intentionally serve ONLY the curated /docs folder (not archived legacy docs).
+// ============================================================================
+app.use('/docs', express.static(path.join(__dirname, 'docs')));
+
 // Optimized static file serving with aggressive caching for audio files
 app.use('/audio', express.static(path.join(__dirname, 'public/audio'), {
   maxAge: '1d', // Cache audio files for 1 day
