@@ -502,7 +502,45 @@ const VERIFICATION_RULES = {
                 }
             },
             // ─────────────────────────────────────────────────────────────
-            // PROBE 3: SPELLING_VARIANT_WIRING - "Marc with C" handling
+            // PROBE 3: REQUIRED_SLOT_SHAPE - Do core slots have ids, types, questions?
+            // Missing slotId/type/question can stall the state machine or produce null questions.
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'REQUIRED_SLOT_SHAPE',
+                description: 'Core booking slots (name/phone/address/time) have id, type, and question',
+                severity: 'error',
+                weight: 25,
+                check: (config) => {
+                    const slots = (config?.frontDeskBehavior?.bookingSlots || []).filter(s => s.enabled !== false);
+                    const requiredTypes = ['name', 'phone', 'address', 'time'];
+                    const findings = [];
+                    for (const rt of requiredTypes) {
+                        const slot = slots.find(s =>
+                            (s.slotId || s.id) === rt || s.type === rt
+                        );
+                        if (!slot) {
+                            findings.push({ slotType: rt, reason: 'missing_slot' });
+                            continue;
+                        }
+                        const missing = [];
+                        if (!slot.slotId && !slot.id) missing.push('id/slotId');
+                        if (!slot.type) missing.push('type');
+                        if (!slot.question) missing.push('question');
+                        if (missing.length > 0) {
+                            findings.push({ slotType: rt, missing });
+                        }
+                    }
+                    const passed = findings.length === 0;
+                    return {
+                        passed,
+                        value: passed ? 'All core slots have id/type/question' : 'Core slots incomplete',
+                        details: { findings },
+                        fix: passed ? null : 'Ensure name/phone/address/time slots each have slotId (or id), type, and question text'
+                    };
+                }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 4: SPELLING_VARIANT_WIRING - "Marc with C" handling
             // ─────────────────────────────────────────────────────────────
             {
                 id: 'SPELLING_VARIANT_WIRING',
