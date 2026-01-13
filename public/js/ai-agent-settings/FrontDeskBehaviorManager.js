@@ -715,6 +715,18 @@ class FrontDeskBehaviorManager {
             }
             
             this.showNotification('✅ Front Desk Behavior saved!', 'success');
+
+            // Refresh Config Health in the background (non-blocking).
+            // This gives admins immediate feedback without rebuilding verifier logic.
+            setTimeout(() => {
+                try {
+                    const bar = document.getElementById('fdb-verification-bar');
+                    if (bar) this.runDeepVerification();
+                } catch (e) {
+                    // Never let verifier refresh impact save UX
+                }
+            }, 400);
+
             return true;
         } catch (error) {
             console.error('[FRONT DESK BEHAVIOR] ❌ SAVE ERROR:', error);
@@ -2312,13 +2324,13 @@ Sean → Shawn, Shaun`;
                 {
                     ...base[0],
                     trigger: 'is that what you want',
-                    responseTemplate: 'No problem — {slotQuestion}'
+                    responseTemplate: 'Sure — {slotQuestion}'
                 },
                 {
                     ...base[0],
                     id: this.generateMidCallRuleId(),
                     trigger: 'what do you mean',
-                    responseTemplate: 'No problem — {slotQuestion}'
+                    responseTemplate: 'Happy to clarify — {slotQuestion}'
                 }
             ];
         }
@@ -2328,13 +2340,13 @@ Sean → Shawn, Shaun`;
                 {
                     ...base[0],
                     trigger: 'why do you need',
-                    responseTemplate: 'We use it to send appointment updates and reach you if we need to confirm. {slotQuestion}'
+                    responseTemplate: 'We use it for appointment updates and confirmations. {slotQuestion}'
                 },
                 {
                     ...base[0],
                     id: this.generateMidCallRuleId(),
                     trigger: 'too many',
-                    responseTemplate: 'No worries — just the 10 digits works best (example: {exampleFormat}). {slotQuestion}'
+                    responseTemplate: 'Got it — just the 10 digits works best (example: {exampleFormat}). {slotQuestion}'
                 }
             ];
         }
@@ -2344,13 +2356,13 @@ Sean → Shawn, Shaun`;
                 {
                     ...base[0],
                     trigger: 'do you need city',
-                    responseTemplate: 'Yes please — street address and city helps us get the technician to the right place. {slotQuestion}'
+                    responseTemplate: 'Yes — street address and city help us send the technician to the right place. {slotQuestion}'
                 },
                 {
                     ...base[0],
                     id: this.generateMidCallRuleId(),
                     trigger: 'i don\'t know the zip',
-                    responseTemplate: 'That\'s okay — give me the street address and city. {slotQuestion}'
+                    responseTemplate: 'That\'s okay — street address and city is enough to start. {slotQuestion}'
                 }
             ];
         }
@@ -2360,7 +2372,7 @@ Sean → Shawn, Shaun`;
                 {
                     ...base[0],
                     trigger: 'what do you have',
-                    responseTemplate: 'If you have a preferred day or time window, tell me what works best. {slotQuestion}'
+                    responseTemplate: 'We can work around your schedule — {slotQuestion}'
                 }
             ];
         }
@@ -2626,21 +2638,65 @@ Sean → Shawn, Shaun`;
                </div>`;
     }
 
-    applyRecommendedMidCallRules() {
+    async applyRecommendedMidCallRules() {
         const panel = document.getElementById('fdb-slot-editor-panel');
         const container = this.getSlotEditorMidCallContainer();
         if (!panel || !container) return;
         const slotType = panel.querySelector('#fdb-slot-editor-type')?.value || 'text';
         const slotId = panel.querySelector('.slot-id')?.value || slotType;
         const slotKey = (slotId || slotType).toString().toLowerCase();
-        const rules = this.getRecommendedMidCallRulesForSlot(slotKey);
         const showExampleFormat = slotKey === 'phone';
         const exampleFormat = '(555) 123-4567';
-        container.innerHTML = rules.length > 0
-            ? rules.map((r, i) => this.renderMidCallRuleRow(r, i, { showExampleFormat, exampleFormat })).join('')
-            : `<div style="padding: 10px 12px; color:#8b949e; font-size: 12px; border: 1px dashed #30363d; border-radius: 8px; background:#0d1117;">
-                    No recommended rules for this slot type.
-               </div>`;
+
+        // Backend-owned presets (canonical). UI falls back only if fetch fails.
+        let rules = [];
+        let presetMeta = null;
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+            if (!token) throw new Error('Not logged in');
+
+            // Send both slotId and slotType so backend can resolve granular presets.
+            // Precedence: slotId wins over slotType.
+            const qSlotId = (slotId || '').toString().trim();
+            const qSlotType = (slotType || '').toString().trim();
+            const qs = new URLSearchParams();
+            if (qSlotId) qs.set('slotId', qSlotId);
+            if (qSlotType) qs.set('slotType', qSlotType);
+
+            const response = await fetch(`/api/admin/front-desk/${this.companyId}/presets/midcall?${qs.toString()}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await response.json();
+            if (!response.ok || data?.success !== true) {
+                throw new Error(data?.error || 'Preset fetch failed');
+            }
+            presetMeta = data;
+            rules = Array.isArray(data.rules) ? data.rules : [];
+        } catch (e) {
+            console.warn('[FRONT DESK] ⚠️ Mid-call presets fetch failed, using local fallback:', e?.message || e);
+            // EXPLICIT fallback (should be rare). Keep this visible so we don't hide failures.
+            presetMeta = { fallback: true };
+            rules = this.getRecommendedMidCallRulesForSlot(slotKey);
+        }
+
+        const banner = presetMeta?.fallback
+            ? `<div style="margin-bottom: 8px; padding: 10px 12px; background: rgba(240, 136, 62, 0.10); border: 1px solid rgba(240, 136, 62, 0.35); border-radius: 10px; color: #fbbf24; font-size: 12px;">
+                    <strong>Preset warning:</strong> could not load server presets — using local fallback (UI Build ${FrontDeskBehaviorManager.UI_BUILD}). This should be rare; refresh/login and try again.
+               </div>`
+            : (presetMeta?.presetVersion
+                ? `<div style="margin-bottom: 8px; padding: 10px 12px; background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.25); border-radius: 10px; color: #86efac; font-size: 12px;">
+                        Recommended rules loaded from server presets: <strong>${this.escapeHtml(presetMeta.presetVersion)}</strong>
+                   </div>`
+                : '');
+
+        container.innerHTML = `
+            ${banner}
+            ${rules.length > 0
+                ? rules.map((r, i) => this.renderMidCallRuleRow(r, i, { showExampleFormat, exampleFormat })).join('')
+                : `<div style="padding: 10px 12px; color:#8b949e; font-size: 12px; border: 1px dashed #30363d; border-radius: 8px; background:#0d1117;">
+                        No recommended rules for this slot type.
+                   </div>`}
+        `;
         this.isDirty = true;
     }
     
@@ -3602,7 +3658,16 @@ Sean → Shawn, Shaun`;
         // V93: Slot-level Mid-Call Helpers (collected from slot editor DOM)
         const midCallRows = [...el.querySelectorAll('.midcall-rule-row')];
         if (midCallRows.length > 0) {
-            slotData.midCallRules = midCallRows.map((row) => {
+            // Clear prior validation UI
+            midCallRows.forEach((row) => {
+                row.style.outline = '';
+                row.style.borderRadius = '';
+                row.removeAttribute('data-midcall-error');
+            });
+
+            const partialErrors = [];
+
+            slotData.midCallRules = midCallRows.map((row, idx) => {
                 const id = row.querySelector('.midcall-rule-id')?.value?.trim() || window.frontDeskManager?.generateMidCallRuleId?.() || `mcr_${Date.now()}`;
                 const enabled = row.querySelector('.midcall-rule-enabled')?.checked === true;
                 const trigger = row.querySelector('.midcall-rule-trigger')?.value?.trim() || '';
@@ -3611,6 +3676,22 @@ Sean → Shawn, Shaun`;
                 const responseTemplate = row.querySelector('.midcall-rule-template')?.value?.trim() || '';
                 const cooldownTurns = parseInt(row.querySelector('.midcall-rule-cooldown')?.value || '2', 10);
                 const maxPerCall = parseInt(row.querySelector('.midcall-rule-max')?.value || '2', 10);
+
+                // Integrity gate: never silently drop partially filled rows.
+                // If either side is provided, require both.
+                const hasTrigger = !!trigger;
+                const hasTemplate = !!responseTemplate;
+                if ((hasTrigger && !hasTemplate) || (!hasTrigger && hasTemplate)) {
+                    const missing = [];
+                    if (!hasTrigger) missing.push('Caller says (trigger)');
+                    if (!hasTemplate) missing.push('AI responds (template)');
+                    partialErrors.push({ idx, missing });
+                    // UI highlight (row-level) for immediate admin feedback
+                    row.style.outline = '2px solid rgba(248, 81, 73, 0.75)';
+                    row.style.borderRadius = '10px';
+                    row.setAttribute('data-midcall-error', `Missing: ${missing.join(', ')}`);
+                }
+
                 return {
                     id,
                     enabled,
@@ -3622,6 +3703,13 @@ Sean → Shawn, Shaun`;
                     maxPerCall: Number.isFinite(maxPerCall) ? maxPerCall : 2
                 };
             }).filter(r => r.trigger && r.responseTemplate);
+
+            if (partialErrors.length > 0) {
+                const lines = partialErrors.map(e => `Rule #${e.idx + 1}: missing ${e.missing.join(' + ')}`);
+                const msg = `Mid-call helper rules are incomplete:\n${lines.join('\n')}\n\nFix highlighted rows (or delete them) before saving.`;
+                this.showNotification(`❌ ${lines[0]}${lines.length > 1 ? ` (+${lines.length - 1} more)` : ''}`, 'error');
+                throw new Error(msg);
+            }
         } else {
             slotData.midCallRules = [];
         }
@@ -9266,8 +9354,8 @@ Sean → Shawn, Shaun`;
             scoreEl.style.color = scoreColor;
             
             // Update status
-            const statusText = score === 100 ? '✅ Production Ready' : 
-                               score >= 70 ? '⚠️ Mostly Ready' : '❌ Needs Configuration';
+            const statusText = score === 100 ? '🟢 GREEN — Production Ready' :
+                               score >= 70 ? '🟡 YELLOW — Mostly Ready' : '🔴 RED — Needs Configuration';
             statusEl.textContent = statusText;
             statusEl.style.color = scoreColor;
             
