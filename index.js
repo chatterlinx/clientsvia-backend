@@ -537,6 +537,7 @@ function registerRoutes(routes) {
     app.use('/api/company/:companyId/blueprint', routes.blueprintRoutes); // 🎨 Blueprint Generator (Enterprise Scenario Configuration)
     app.use('/api/company/:companyId/execution-map', routes.executionMapRoutes); // 🗺️ Execution Map (Call Flow Visualization)
     app.use('/api/company/:companyId', routes.companyOpsRouter); // V2: CompanyOps Console + Cheat Sheet Config (Contacts, Locations, Appointments, Call Traces, Usage, Customer DB, Notifications, Settings, Booking Rules, Role Contacts, Links, Calculator)
+    app.use('/api/company/:companyId/trade-key', require('./routes/company/tradeKey')); // 🏷️ Trade Key (Onboarding) - explicit read/write
     app.use('/api/company', routes.v2TwilioControlRoutes); // V2: Twilio Control Center (AI Agent Settings - Dashboard tab)
     app.use('/api/company', routes.v2ConnectionMessagesRoutes); // V2: Connection Messages (AI Agent Settings - Messages & Greetings tab)
     app.use('/api/company', routes.v2TTSRoutes); // V2: Text-to-Speech for voice testing and preview (AI Voice Settings tab)

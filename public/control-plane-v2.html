@@ -3295,12 +3295,14 @@
       
       // Load current value from company
       try {
-        const resp = await fetch(`/api/company/${companyId}`, {
+        if (!currentCompanyId) throw new Error('Missing companyId in URL');
+        if (!authToken) throw new Error('Not logged in (missing token)');
+        const resp = await fetch(`/api/company/${currentCompanyId}/trade-key`, {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
         if (resp.ok) {
-          const company = await resp.json();
-          currentTradeKey = company.aiAgentSettings?.tradeKey || company.trade || 'universal';
+          const data = await resp.json();
+          currentTradeKey = (data.tradeKey || 'universal').toString().toLowerCase();
           select.value = currentTradeKey;
           if (currentEl) currentEl.textContent = currentTradeKey.toUpperCase();
           if (statusEl) statusEl.textContent = '✅ Loaded from DB';
@@ -3339,16 +3341,16 @@
       if (statusEl) statusEl.textContent = '⏳ Saving...';
       
       try {
-        const resp = await fetch(`/api/company/${companyId}`, {
+        if (!currentCompanyId) throw new Error('Missing companyId in URL');
+        if (!authToken) throw new Error('Not logged in (missing token)');
+        const resp = await fetch(`/api/company/${currentCompanyId}/trade-key`, {
           method: 'PATCH',
           headers: { 
             'Authorization': `Bearer ${authToken}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            aiAgentSettings: {
-              tradeKey: newTradeKey
-            }
+            tradeKey: newTradeKey
           })
         });
         
@@ -3365,7 +3367,7 @@
         
         // Clear Redis cache so runtime picks up new value
         try {
-          await fetch(`/api/admin/wiring-status/${companyId}/clear-cache`, {
+          await fetch(`/api/admin/wiring-status/${currentCompanyId}/clear-cache`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${authToken}` }
           });
