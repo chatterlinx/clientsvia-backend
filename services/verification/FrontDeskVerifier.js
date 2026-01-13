@@ -231,35 +231,42 @@ const VERIFICATION_RULES = {
                     const dc = config?.frontDeskBehavior?.discoveryConsent || {};
                     const bookingRequiresConsent = dc.bookingRequiresExplicitConsent;
                     const consentPhrases = dc.consentPhrases || [];
+                    const consentYesWords = dc.consentYesWords || [];
+                    const wantsBooking = config?.frontDeskBehavior?.detectionTriggers?.wantsBooking || [];
                     
                     // CRITICAL: If consent is required but no phrases defined = infinite loop
-                    if (bookingRequiresConsent === true && consentPhrases.length === 0) {
+                    if (bookingRequiresConsent === true && (consentPhrases.length === 0 || consentYesWords.length === 0)) {
                         return {
                             passed: false,
-                            value: 'CONSENT_REQUIRED_BUT_NO_PHRASES',
+                            value: 'CONSENT_REQUIRED_BUT_EMPTY',
                             details: {
                                 bookingRequiresConsent: true,
-                                consentPhrasesCount: 0
+                                consentPhrasesCount: consentPhrases.length,
+                                consentYesWordsCount: consentYesWords.length
                             },
-                            fix: 'Either add consent phrases OR disable booking consent requirement'
+                            fix: 'Add consent phrases AND yes-words, or disable booking consent requirement'
                         };
                     }
                     
                     // Check if consent system is consistent
-                    const isConsistent = (bookingRequiresConsent && consentPhrases.length > 0) || 
+                    const isConsistent = (bookingRequiresConsent && consentPhrases.length > 0 && consentYesWords.length > 0) || 
                                          (!bookingRequiresConsent);
                     
                     return {
                         passed: isConsistent,
                         value: isConsistent ? 
-                            (bookingRequiresConsent ? `Enabled (${consentPhrases.length} phrases)` : 'Disabled (no consent needed)') :
+                            (bookingRequiresConsent ? `Enabled (${consentPhrases.length} phrases, ${consentYesWords.length} yes-words)` : 'Disabled (no consent needed)') :
                             'MISCONFIGURED',
                         details: {
                             bookingRequiresConsent,
                             consentPhrasesCount: consentPhrases.length,
-                            samplePhrases: consentPhrases.slice(0, 3)
+                            consentYesWordsCount: consentYesWords.length,
+                            consentPhrasesSample: consentPhrases.slice(0, 3),
+                            consentYesWordsSample: consentYesWords.slice(0, 3),
+                            wantsBookingCount: wantsBooking.length,
+                            wantsBookingSample: wantsBooking.slice(0, 3)
                         },
-                        fix: isConsistent ? null : 'Configure consent phrases or disable consent requirement'
+                        fix: isConsistent ? null : 'Configure consent phrases AND yes-words (or disable consent requirement)'
                     };
                 }
             },
