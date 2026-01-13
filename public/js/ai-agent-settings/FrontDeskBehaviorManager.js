@@ -2648,12 +2648,9 @@ Sean → Shawn, Shaun`;
         const showExampleFormat = slotKey === 'phone';
         const exampleFormat = '(555) 123-4567';
 
-        // Backend-owned presets (canonical). UI falls back only if fetch fails.
-        let rules = [];
-        let presetMeta = null;
         try {
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
-            if (!token) throw new Error('Not logged in');
+            if (!token) throw new Error('Not logged in (missing token)');
 
             // Send both slotId and slotType so backend can resolve granular presets.
             // Precedence: slotId wins over slotType.
@@ -2668,35 +2665,36 @@ Sean → Shawn, Shaun`;
             });
             const data = await response.json();
             if (!response.ok || data?.success !== true) {
-                throw new Error(data?.error || 'Preset fetch failed');
+                throw new Error(data?.error || `Preset fetch failed (HTTP ${response.status})`);
             }
-            presetMeta = data;
-            rules = Array.isArray(data.rules) ? data.rules : [];
-        } catch (e) {
-            console.warn('[FRONT DESK] ⚠️ Mid-call presets fetch failed, using local fallback:', e?.message || e);
-            // EXPLICIT fallback (should be rare). Keep this visible so we don't hide failures.
-            presetMeta = { fallback: true };
-            rules = this.getRecommendedMidCallRulesForSlot(slotKey);
-        }
-
-        const banner = presetMeta?.fallback
-            ? `<div style="margin-bottom: 8px; padding: 10px 12px; background: rgba(240, 136, 62, 0.10); border: 1px solid rgba(240, 136, 62, 0.35); border-radius: 10px; color: #fbbf24; font-size: 12px;">
-                    <strong>Preset warning:</strong> could not load server presets — using local fallback (UI Build ${FrontDeskBehaviorManager.UI_BUILD}). This should be rare; refresh/login and try again.
-               </div>`
-            : (presetMeta?.presetVersion
+            const rules = Array.isArray(data.rules) ? data.rules : [];
+            const banner = data?.presetVersion
                 ? `<div style="margin-bottom: 8px; padding: 10px 12px; background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.25); border-radius: 10px; color: #86efac; font-size: 12px;">
-                        Recommended rules loaded from server presets: <strong>${this.escapeHtml(presetMeta.presetVersion)}</strong>
+                        Recommended rules loaded from server presets: <strong>${this.escapeHtml(data.presetVersion)}</strong>
                    </div>`
-                : '');
+                : '';
 
-        container.innerHTML = `
-            ${banner}
-            ${rules.length > 0
-                ? rules.map((r, i) => this.renderMidCallRuleRow(r, i, { showExampleFormat, exampleFormat })).join('')
-                : `<div style="padding: 10px 12px; color:#8b949e; font-size: 12px; border: 1px dashed #30363d; border-radius: 8px; background:#0d1117;">
-                        No recommended rules for this slot type.
-                   </div>`}
-        `;
+            container.innerHTML = `
+                ${banner}
+                ${rules.length > 0
+                    ? rules.map((r, i) => this.renderMidCallRuleRow(r, i, { showExampleFormat, exampleFormat })).join('')
+                    : `<div style="padding: 10px 12px; color:#8b949e; font-size: 12px; border: 1px dashed #30363d; border-radius: 8px; background:#0d1117;">
+                            No recommended rules for this slot type.
+                       </div>`}
+            `;
+        } catch (e) {
+            // Production policy: no local fallback presets. If server presets can't be loaded,
+            // we show a visible error state and keep the existing rules unchanged.
+            console.warn('[FRONT DESK] ❌ Mid-call presets fetch failed (no fallback):', e?.message || e);
+            container.innerHTML = `
+                <div style="padding: 12px; color:#fca5a5; font-size: 12px; border: 1px solid rgba(248, 81, 73, 0.35); border-radius: 10px; background: rgba(248, 81, 73, 0.06);">
+                    <div style="font-weight: 900; margin-bottom: 6px;">Could not load recommended presets</div>
+                    <div style="color:#c9d1d9;">This action is server-backed (no local fallback). Please refresh and try again.</div>
+                </div>
+            `;
+            this.showNotification(`❌ Presets unavailable: ${(e?.message || 'fetch failed')}`, 'error');
+            return;
+        }
         this.isDirty = true;
     }
     
