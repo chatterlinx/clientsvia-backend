@@ -2794,10 +2794,17 @@ async function processTurn({
         // Only ask for last name if UI explicitly requires it
         // CHECK BOTH: Direct property (UI saves here) AND nested nameOptions (legacy)
         // V36 FIX: Check both boolean and string values
-        const askFullNameEnabled = nameSlotCheck?.askFullName === true || nameSlotCheck?.askFullName === 'true' ||
-                                   nameSlotCheck?.requireFullName === true || nameSlotCheck?.requireFullName === 'true' ||
-                                   nameSlotCheck?.nameOptions?.askFullName === true || nameSlotCheck?.nameOptions?.askFullName === 'true' ||
-                                   nameSlotCheck?.nameOptions?.requireFullName === true || nameSlotCheck?.nameOptions?.requireFullName === 'true';
+        let askFullNameEnabled = nameSlotCheck?.askFullName === true || nameSlotCheck?.askFullName === 'true' ||
+                                 nameSlotCheck?.requireFullName === true || nameSlotCheck?.requireFullName === 'true' ||
+                                 nameSlotCheck?.nameOptions?.askFullName === true || nameSlotCheck?.nameOptions?.askFullName === 'true' ||
+                                 nameSlotCheck?.nameOptions?.requireFullName === true || nameSlotCheck?.nameOptions?.requireFullName === 'true';
+
+        // Guardrail: if we don't have a last-name question, asking for full name causes loops.
+        const hasLastNameQuestion = !!(nameSlotCheck?.lastNameQuestion);
+        if (askFullNameEnabled && !hasLastNameQuestion) {
+            log('🛑 askFullName disabled: missing lastNameQuestion in name slot config');
+            askFullNameEnabled = false;
+        }
         
         if (currentSlots.partialName && !currentSlots.name) {
             if (inBookingModeForName && !askFullNameEnabled) {
