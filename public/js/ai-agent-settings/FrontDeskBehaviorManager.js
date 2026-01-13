@@ -7052,6 +7052,16 @@ Sean → Shawn, Shaun`;
     renderDiscoveryConsentTab() {
         const dc = this.config.discoveryConsent || {};
         const dt = this.config.detectionTriggers || {};
+        const recommendedConsentPhrases = [
+            'schedule a visit',
+            'book an appointment',
+            'send a technician',
+            'come out to my house',
+            'set up service',
+            'schedule me',
+            'can you schedule this',
+            'schedule service today'
+        ];
         
         // Get current values with defaults
         const bookingRequiresConsent = dc.bookingRequiresExplicitConsent !== false;
@@ -7126,6 +7136,11 @@ Sean → Shawn, Shaun`;
                         <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
                             📝 Consent Phrases (one per line)
                         </label>
+                        <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap: wrap;">
+                            <button class="btn btn-secondary" style="padding: 8px 10px; font-size: 12px;" onclick="window.frontDeskBehaviorManager.applyRecommendedConsentPhrases()">
+                                <i class="fas fa-magic"></i> Apply Recommended
+                            </button>
+                        </div>
                         <textarea id="fdb-dc-wantsBooking" rows="6" 
                             placeholder="schedule an appointment\nbook a service\nsend someone out\nwhen can you come\nset up a time"
                             style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 0.85rem; resize: vertical;">${wantsBookingPhrases}</textarea>
@@ -7232,6 +7247,28 @@ Sean → Shawn, Shaun`;
                 ${this.renderFastPathSection()}
             </div>
         `;
+    }
+
+    applyRecommendedConsentPhrases() {
+        const recommended = [
+            'schedule a visit',
+            'book an appointment',
+            'send a technician',
+            'come out to my house',
+            'set up service',
+            'schedule me',
+            'can you schedule this',
+            'schedule service today'
+        ];
+        const textarea = document.getElementById('fdb-dc-wantsBooking');
+        const yesWordsInput = document.getElementById('fdb-dc-yesWords');
+        if (textarea) textarea.value = recommended.join('\\n');
+        // Only seed yes-words if empty to avoid clobbering admin content
+        if (yesWordsInput && !yesWordsInput.value.trim()) {
+            yesWordsInput.value = 'yes, yeah, yep, please, sure, okay, ok';
+        }
+        this.showNotification('✅ Applied recommended consent phrases (not saved yet)', 'success');
+        this.isDirty = true;
     }
     
     // ════════════════════════════════════════════════════════════════════════════
@@ -8535,8 +8572,13 @@ Sean → Shawn, Shaun`;
         if (document.getElementById('fdb-tone')) {
             const warmthRaw = parseInt(get('fdb-warmth'));
             const warmth = Number.isFinite(warmthRaw) ? Math.max(0, Math.min(1, warmthRaw / 100)) : 0.6;
+            const agentNameInput = (get('fdb-agent-name') || '').trim();
+            const effectiveAgentName = agentNameInput || 'Front Desk';
+            if (!agentNameInput) {
+                this.showNotification('ℹ️ Agent name was empty. Set to \"Front Desk\" to avoid blank identity.', 'info');
+            }
             this.config.personality = {
-                agentName: get('fdb-agent-name') || '',  // AI receptionist name
+                agentName: effectiveAgentName,  // AI receptionist name
                 tone: get('fdb-tone'),
                 verbosity: get('fdb-verbosity'),
                 maxResponseWords: parseInt(get('fdb-max-words')) || 30,
@@ -8810,6 +8852,19 @@ Sean → Shawn, Shaun`;
             // Also update detectionTriggers.wantsBooking from the textarea
             const wantsBookingRaw = get('fdb-dc-wantsBooking') || '';
             const wantsBookingPhrases = wantsBookingRaw.split('\n').map(p => p.trim().toLowerCase()).filter(p => p);
+            if (this.config.discoveryConsent.bookingRequiresExplicitConsent && wantsBookingPhrases.length === 0) {
+                wantsBookingPhrases.push(
+                    'schedule a visit',
+                    'book an appointment',
+                    'send a technician',
+                    'come out to my house',
+                    'set up service',
+                    'schedule me',
+                    'can you schedule this',
+                    'schedule service today'
+                );
+                this.showNotification('⚠️ Consent is required but no phrases were provided. Added recommended consent phrases before saving.', 'warning');
+            }
             
             if (!this.config.detectionTriggers) this.config.detectionTriggers = {};
             this.config.detectionTriggers.wantsBooking = wantsBookingPhrases;
