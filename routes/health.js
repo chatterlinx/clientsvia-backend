@@ -409,6 +409,14 @@ router.get('/version', (req, res) => {
             conversationEngine: engineVersion,
             hybridReceptionistLLM: llmVersion
         },
+        git: {
+            // Render exposes these env vars in most deployments. We include them
+            // for "hard proof" of which commit is live without relying on UI logs.
+            commit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || null,
+            branch: process.env.RENDER_GIT_BRANCH || process.env.GIT_BRANCH || null,
+            serviceId: process.env.RENDER_SERVICE_ID || null,
+            serviceName: process.env.RENDER_SERVICE_NAME || null
+        },
         deployed: new Date().toISOString(),
         node: process.version,
         env: process.env.NODE_ENV || 'development'
