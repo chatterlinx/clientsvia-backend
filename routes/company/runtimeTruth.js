@@ -247,9 +247,15 @@ router.get('/', async (req, res) => {
                             followUpMode: scenario.followUpMode || 'NONE'
                         },
                         
-                        // Wiring validation state
+                        // Wiring validation state (db flag + effective computed)
                         wiringValidated: scenario.wiringValidated || false,
                         wiringValidatedAt: scenario.wiringValidatedAt || null,
+                        wiringValidatedEffective: (() => {
+                            const validation = validateScenarioQuality(scenario);
+                            const wiringPass = validation?.checks?.wiring?.pass !== false;
+                            const noIssues = !(scenario.wiringIssues && scenario.wiringIssues.length > 0);
+                            return wiringPass && noIssues;
+                        })(),
                         wiringIssues: scenario.wiringIssues || [],
                         
                         // Quality (local calculation)
@@ -843,7 +849,7 @@ router.get('/', async (req, res) => {
                 withBookingIntent: scenarios.filter(s => s.wiring.bookingIntent).length,
                 withRequiredSlots: scenarios.filter(s => s.wiring.requiredSlots && s.wiring.requiredSlots.length > 0).length,
                 withStopRouting: scenarios.filter(s => s.wiring.stopRouting).length,
-                validated: scenarios.filter(s => s.wiringValidated).length,
+                validated: scenarios.filter(s => s.wiringValidated || s.wiringValidatedEffective).length,
                 
                 // Enterprise enforcement stats
                 enterpriseReady: scenarios.filter(s => s.enforcement?.enterpriseReady).length,
