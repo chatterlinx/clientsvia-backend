@@ -2647,101 +2647,112 @@ async function processTurn({
             }
         }
         
-        // Extract name
-        // ═══════════════════════════════════════════════════════════════════════
-        // NAME CORRECTION LOGIC: Allow explicit "my name is X" to override
-        // even if a name was already extracted (could have been wrong)
+        // Extract name (boxed handler first, legacy fallback second)
         // ═══════════════════════════════════════════════════════════════════════
         if (userText) {
-            const userTextLower = userText.toLowerCase();
-            const isExplicitNameStatement = /my name is|name is|i'm called|call me/i.test(userText);
-            
-            if (currentSlots.name && !isExplicitNameStatement) {
-                // Name already collected and user is NOT explicitly stating their name
-            log('📝 Name already collected:', currentSlots.name);
-            } else {
-            log('🔍 Attempting name extraction from:', userText.substring(0, 50));
-                if (currentSlots.name && isExplicitNameStatement) {
-                    log('🔄 User explicitly stating name - will override previous:', currentSlots.name);
-                }
-                
-            // V32: Pass expectingName flag - true if we're in BOOKING mode and asking for name
-            // V36: Pass custom stop words from company config (UI-controlled)
-            // Check activeSlotType (the TYPE, not the custom ID) to see if we're asking for name
-            const expectingName = session.mode === 'BOOKING' && (session.booking?.activeSlotType === 'name' || session.booking?.activeSlot === 'name');
-            const customStopWords = company?.aiAgentSettings?.nameStopWords?.custom || [];
-            const stopWordsEnabled = company?.aiAgentSettings?.nameStopWords?.enabled !== false;
-            let extractedName = SlotExtractors.extractName(userText, { 
-                expectingName, 
-                customStopWords: stopWordsEnabled ? customStopWords : []
-            });
-            log('🔍 V36 Extraction result:', extractedName || '(none)', { expectingName, customStopWordsCount: customStopWords.length });
-            
-            // ═══════════════════════════════════════════════════════════════════
-            // V29 FIX: Context-aware name extraction
-            // When we're in BOOKING mode and actively asking for name, be more aggressive
-            // "yes it's Mark" / "Mark" / "yes, Mark" should all work
-            // ═══════════════════════════════════════════════════════════════════
-            if (!extractedName && session.mode === 'BOOKING' && (session.booking?.activeSlotType === 'name' || session.booking?.activeSlot === 'name')) {
-                log('🔍 V29: Context-aware name extraction (activeSlot=name)');
-                
-                // Try to extract a capitalized word from short responses
-                const words = userText.trim().split(/\s+/);
-                const cleanWords = words.filter(w => {
-                    const lower = w.toLowerCase();
-                    // Filter out common non-name words
-                    const skipWords = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'no', 'nope', 
-                                       'it', 'is', 'its', "it's", 'my', 'name', 'the', 'a', 'an',
-                                       'please', 'hi', 'hello', 'hey'];
-                    return !skipWords.includes(lower) && /^[a-zA-Z]+$/.test(w) && w.length >= 2;
-                });
-                
-                if (cleanWords.length === 1 || cleanWords.length === 2) {
-                    // Title case the name(s)
-                    extractedName = cleanWords
-                        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-                        .join(' ');
-                    log('🔍 V29: Context-extracted name:', extractedName);
+            let nameHandled = false;
+
+            // Pilot: BookingNameHandler boxed state machine
+            if (session.mode === 'BOOKING' && (session.booking?.activeSlotType === 'name' || session.booking?.activeSlot === 'name')) {
+                const BookingNameHandler = require('./booking/BookingNameHandler');
+                const nameMachineOptions = {
+                    askMissingNamePart,
+                    confirmSpelling: nameSlotConfig?.confirmSpelling === true
+                };
+                const machine = session.booking?.nameMachine || BookingNameHandler.createContext(nameMachineOptions);
+                const updatedMachine = BookingNameHandler.step(machine, { type: 'input', text: userText });
+                session.booking = session.booking || {};
+                session.booking.nameMachine = updatedMachine;
+
+                if (updatedMachine.slots.name) {
+                    currentSlots.name = updatedMachine.slots.name;
+                    delete currentSlots.partialName;
+                    extractedThisTurn.name = updatedMachine.slots.name;
+                    nameHandled = true;
+                    log('🧭 BookingNameHandler accepted name', { state: updatedMachine.state, name: updatedMachine.slots.name });
+                } else if (updatedMachine.slots.partialName) {
+                    currentSlots.partialName = updatedMachine.slots.partialName;
+                    extractedThisTurn.partialName = updatedMachine.slots.partialName;
+                    nameHandled = true;
+                    log('🧭 BookingNameHandler captured partial name', { state: updatedMachine.state, partial: updatedMachine.slots.partialName });
                 }
             }
+
+            // Legacy extraction fallback if boxed handler did not produce a result
+            if (!nameHandled) {
+                const userTextLower = userText.toLowerCase();
+                const isExplicitNameStatement = /my name is|name is|i'm called|call me/i.test(userText);
                 
-            if (extractedName) {
-                const isPartialName = !extractedName.includes(' ');
-                const alreadyAskedForMissingPart = session.askedForMissingNamePart === true;
-                
-                if (askMissingNamePart && isPartialName && !alreadyAskedForMissingPart) {
-                    // Store partial, let AI ask for full name
-                    currentSlots.partialName = extractedName;
-                    extractedThisTurn.partialName = extractedName;
-                    log('Partial name detected (will ask for full)', { partialName: extractedName });
+                if (currentSlots.name && !isExplicitNameStatement) {
+                    // Name already collected and user is NOT explicitly stating their name
+                    log('📝 Name already collected:', currentSlots.name);
                 } else {
-                    // Accept name as-is
-                    if (currentSlots.partialName && isPartialName) {
-                        // V37 FIX: Don't merge if extracted name is same as partial (prevents "Mark Mark")
-                        const partialLower = currentSlots.partialName.toLowerCase();
-                        const extractedLower = extractedName.toLowerCase();
-                        if (partialLower === extractedLower) {
-                            // Same name repeated - just keep the partial, don't duplicate
-                            currentSlots.name = currentSlots.partialName;
-                            log('📝 V37: Same name repeated, not duplicating', { name: currentSlots.name });
-                        } else {
-                            // Different names - merge as first + last
-                            currentSlots.name = `${currentSlots.partialName} ${extractedName}`;
-                            log('📝 V37: Merging partial + new as full name', { name: currentSlots.name });
-                        }
-                        delete currentSlots.partialName;
-                    } else {
-                        currentSlots.name = extractedName;
+                    log('🔍 Attempting name extraction from:', userText.substring(0, 50));
+                    if (currentSlots.name && isExplicitNameStatement) {
+                        log('🔄 User explicitly stating name - will override previous:', currentSlots.name);
                     }
-                    extractedThisTurn.name = currentSlots.name;
-                    log('Name extracted', { name: currentSlots.name });
-                }
-            } else if (currentSlots.partialName) {
-                // Accept partial as complete (only ask once)
-                currentSlots.name = currentSlots.partialName;
-                delete currentSlots.partialName;
-                extractedThisTurn.name = currentSlots.name;
-                log('Accepting partial name as complete', { name: currentSlots.name });
+                    
+                    const expectingName = session.mode === 'BOOKING' && (session.booking?.activeSlotType === 'name' || session.booking?.activeSlot === 'name');
+                    const customStopWords = company?.aiAgentSettings?.nameStopWords?.custom || [];
+                    const stopWordsEnabled = company?.aiAgentSettings?.nameStopWords?.enabled !== false;
+                    let extractedName = SlotExtractors.extractName(userText, { 
+                        expectingName, 
+                        customStopWords: stopWordsEnabled ? customStopWords : []
+                    });
+                    log('🔍 V36 Extraction result:', extractedName || '(none)', { expectingName, customStopWordsCount: customStopWords.length });
+                    
+                    if (!extractedName && session.mode === 'BOOKING' && (session.booking?.activeSlotType === 'name' || session.booking?.activeSlot === 'name')) {
+                        log('🔍 V29: Context-aware name extraction (activeSlot=name)');
+                        
+                        const words = userText.trim().split(/\s+/);
+                        const cleanWords = words.filter(w => {
+                            const lower = w.toLowerCase();
+                            const skipWords = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'no', 'nope', 
+                                               'it', 'is', 'its', "it's", 'my', 'name', 'the', 'a', 'an',
+                                               'please', 'hi', 'hello', 'hey'];
+                            return !skipWords.includes(lower) && /^[a-zA-Z]+$/.test(w) && w.length >= 2;
+                        });
+                        
+                        if (cleanWords.length === 1 || cleanWords.length === 2) {
+                            extractedName = cleanWords
+                                .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+                                .join(' ');
+                            log('🔍 V29: Context-extracted name:', extractedName);
+                        }
+                    }
+                        
+                    if (extractedName) {
+                        const isPartialName = !extractedName.includes(' ');
+                        const alreadyAskedForMissingPart = session.askedForMissingNamePart === true;
+                        
+                        if (askMissingNamePart && isPartialName && !alreadyAskedForMissingPart) {
+                            currentSlots.partialName = extractedName;
+                            extractedThisTurn.partialName = extractedName;
+                            log('Partial name detected (will ask for full)', { partialName: extractedName });
+                        } else {
+                            if (currentSlots.partialName && isPartialName) {
+                                const partialLower = currentSlots.partialName.toLowerCase();
+                                const extractedLower = extractedName.toLowerCase();
+                                if (partialLower === extractedLower) {
+                                    currentSlots.name = currentSlots.partialName;
+                                    log('📝 V37: Same name repeated, not duplicating', { name: currentSlots.name });
+                                } else {
+                                    currentSlots.name = `${currentSlots.partialName} ${extractedName}`;
+                                    log('📝 V37: Merging partial + new as full name', { name: currentSlots.name });
+                                }
+                                delete currentSlots.partialName;
+                            } else {
+                                currentSlots.name = extractedName;
+                            }
+                            extractedThisTurn.name = currentSlots.name;
+                            log('Name extracted', { name: currentSlots.name });
+                        }
+                    } else if (currentSlots.partialName) {
+                        currentSlots.name = currentSlots.partialName;
+                        delete currentSlots.partialName;
+                        extractedThisTurn.name = currentSlots.name;
+                        log('Accepting partial name as complete', { name: currentSlots.name });
+                    }
                 }
             }
         }
