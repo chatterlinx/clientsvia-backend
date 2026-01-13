@@ -2406,8 +2406,18 @@ Sean → Shawn, Shaun`;
                     <div>MATCH</div>
                     <div>ACTION</div>
                     <div>AI RESPONDS (template)</div>
-                    <div>COOLDOWN</div>
-                    <div>MAX/CALL</div>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        COOLDOWN
+                        <button type="button" onclick="window.frontDeskManager.toggleSlotMidCallInfo('cooldown')"
+                            style="width:18px; height:18px; border-radius: 999px; border:1px solid #30363d; background:#0d1117; color:#8b949e; cursor:pointer; font-weight:900; line-height: 1;"
+                            title="What is cooldown?">i</button>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        MAX/CALL
+                        <button type="button" onclick="window.frontDeskManager.toggleSlotMidCallInfo('max')"
+                            style="width:18px; height:18px; border-radius: 999px; border:1px solid #30363d; background:#0d1117; color:#8b949e; cursor:pointer; font-weight:900; line-height: 1;"
+                            title="What is max per call?">i</button>
+                    </div>
                     <div></div>
                 </div>
 
@@ -2415,11 +2425,52 @@ Sean → Shawn, Shaun`;
                     ${rows}
                 </div>
 
+                <div class="midcall-info-panels" style="margin-top: 10px;">
+                    <div class="midcall-info-panel" data-midcall-info="cooldown"
+                        style="display:none; padding: 10px 12px; background:#0d1117; border:1px solid #30363d; border-radius: 10px; color:#c9d1d9; font-size: 12px; line-height: 1.45;">
+                        <div style="font-weight: 900; color:#58a6ff; margin-bottom: 6px;">Cooldown (Recommended: 2)</div>
+                        <div><strong>What it means:</strong> how many turns must pass before the <em>same mid‑call rule</em> can fire again.</div>
+                        <div style="margin-top: 6px;">
+                            <strong>Why 2 is ideal:</strong> prevents “helper loops” if the caller repeats the same confused phrase back‑to‑back.
+                        </div>
+                        <div style="margin-top: 6px;">
+                            <strong>Adjusting:</strong>
+                            <br>- Set to <strong>0–1</strong> if callers often repeat themselves and you want the helper to be more persistent.
+                            <br>- Set to <strong>3+</strong> if you want it to fire once and then get out of the way.
+                        </div>
+                    </div>
+                    <div class="midcall-info-panel" data-midcall-info="max"
+                        style="display:none; padding: 10px 12px; background:#0d1117; border:1px solid #30363d; border-radius: 10px; color:#c9d1d9; font-size: 12px; line-height: 1.45;">
+                        <div style="font-weight: 900; color:#58a6ff; margin-bottom: 6px;">Max/Call (Recommended: 2)</div>
+                        <div><strong>What it means:</strong> the maximum number of times this rule can fire during the <em>same session/call</em>.</div>
+                        <div style="margin-top: 6px;">
+                            <strong>Why 2 is ideal:</strong> gives the caller a second chance, but stops repetitive behavior if they keep derailing.
+                        </div>
+                        <div style="margin-top: 6px;">
+                            <strong>Adjusting:</strong>
+                            <br>- Set to <strong>1</strong> if you want a strict “one reminder only” policy.
+                            <br>- Set to <strong>3–5</strong> if you want the helper to keep guiding longer.
+                        </div>
+                    </div>
+                </div>
+
                 <div style="color:#6e7681; font-size: 11px; margin-top: 8px;">
                     Placeholders: <code>{slotQuestion}</code>, <code>{slotLabel}</code>${showExampleFormat ? `, <code>{exampleFormat}</code>` : ''}.
                 </div>
             </div>
         `;
+    }
+
+    toggleSlotMidCallInfo(which) {
+        const panelRoot = document.querySelector('#fdb-slot-editor-panel .midcall-info-panels');
+        if (!panelRoot) return;
+        const key = (which || '').toString();
+        const panel = panelRoot.querySelector(`.midcall-info-panel[data-midcall-info="${key}"]`);
+        if (!panel) return;
+        const isOpen = panel.style.display !== 'none';
+        // Close all then toggle selected
+        panelRoot.querySelectorAll('.midcall-info-panel').forEach(p => { p.style.display = 'none'; });
+        panel.style.display = isOpen ? 'none' : 'block';
     }
 
     renderMidCallRuleRow(rule, idx, { showExampleFormat, exampleFormat }) {
@@ -2446,34 +2497,53 @@ Sean → Shawn, Shaun`;
                         <input type="checkbox" class="midcall-rule-enabled" ${enabled ? 'checked' : ''} style="accent-color:#58a6ff;">
                         <span style="font-weight:800;">Enabled</span>
                     </label>
+                    <div style="font-size: 10px; color:#8b949e; font-weight: 800;">Trigger (caller says)</div>
                     <input class="midcall-rule-trigger" value="${this.escapeHtml(trigger)}"
                         placeholder="e.g., is that what you want"
                         style="width:100%; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9;">
                 </div>
 
-                <select class="midcall-rule-matchType"
-                    style="width:100%; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9;">
-                    <option value="exact" ${matchType === 'exact' ? 'selected' : ''}>EXACT</option>
-                    <option value="contains" ${matchType !== 'exact' ? 'selected' : ''}>CONTAINS</option>
-                </select>
-
-                <select class="midcall-rule-action"
-                    style="width:100%; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9;">
-                    <option value="reply_reask" ${action === 'reply_reask' ? 'selected' : ''}>Reply + re‑ask slot</option>
-                    <option value="escalate" ${action === 'escalate' ? 'selected' : ''}>Escalate / handoff</option>
-                </select>
+                <div style="display:flex; flex-direction: column; gap: 6px;">
+                    <div style="font-size: 10px; color:#8b949e; font-weight: 800;">Match</div>
+                    <select class="midcall-rule-matchType"
+                        style="width:100%; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9;">
+                        <option value="exact" ${matchType === 'exact' ? 'selected' : ''}>EXACT</option>
+                        <option value="contains" ${matchType !== 'exact' ? 'selected' : ''}>CONTAINS</option>
+                    </select>
+                    <div style="font-size: 10px; color:#6e7681;">Exact = only identical text</div>
+                </div>
 
                 <div style="display:flex; flex-direction: column; gap: 6px;">
+                    <div style="font-size: 10px; color:#8b949e; font-weight: 800;">Action</div>
+                    <select class="midcall-rule-action"
+                        style="width:100%; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9;">
+                        <option value="reply_reask" ${action === 'reply_reask' ? 'selected' : ''}>Reply + re‑ask slot</option>
+                        <option value="escalate" ${action === 'escalate' ? 'selected' : ''}>Escalate / handoff</option>
+                    </select>
+                    <div style="font-size: 10px; color:#6e7681;">Does not change slot order</div>
+                </div>
+
+                <div style="display:flex; flex-direction: column; gap: 6px;">
+                    <div style="font-size: 10px; color:#8b949e; font-weight: 800;">Reply template</div>
                     <textarea class="midcall-rule-template" rows="2"
                         placeholder="${this.escapeHtml(placeholderHint)}"
                         style="width:100%; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9; resize: vertical;">${this.escapeHtml(responseTemplate)}</textarea>
+                    <div style="font-size: 10px; color:#6e7681;">Tip: include <code>{slotQuestion}</code> so the caller stays on track</div>
                 </div>
 
-                <input class="midcall-rule-cooldown" type="number" min="0" max="10" value="${cooldownTurns}"
-                    style="width:100%; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9;">
+                <div style="display:flex; flex-direction: column; gap: 6px;">
+                    <div style="font-size: 10px; color:#8b949e; font-weight: 800;">Cooldown (turns)</div>
+                    <input class="midcall-rule-cooldown" type="number" min="0" max="10" value="${cooldownTurns}"
+                        style="width:100%; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9;">
+                    <div style="font-size: 10px; color:#6e7681;">Recommended: 2</div>
+                </div>
 
-                <input class="midcall-rule-max" type="number" min="1" max="10" value="${maxPerCall}"
-                    style="width:100%; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9;">
+                <div style="display:flex; flex-direction: column; gap: 6px;">
+                    <div style="font-size: 10px; color:#8b949e; font-weight: 800;">Max per call</div>
+                    <input class="midcall-rule-max" type="number" min="1" max="10" value="${maxPerCall}"
+                        style="width:100%; padding: 8px 10px; background:#161b22; border:1px solid #30363d; border-radius: 8px; color:#c9d1d9;">
+                    <div style="font-size: 10px; color:#6e7681;">Scope: this session/call • Recommended: 2</div>
+                </div>
 
                 <button type="button" onclick="window.frontDeskManager.removeMidCallRuleRow(${idx})"
                     style="width: 40px; height: 40px; background: transparent; border: 1px solid #f8514940; border-radius: 10px; color: #f85149; cursor: pointer; font-size: 18px; font-weight: 900;"
