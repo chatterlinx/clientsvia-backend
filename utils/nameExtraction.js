@@ -16,6 +16,10 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
   const raw = text.trim();
   if (!raw) return null;
 
+  if (isTradeContextSentence(raw)) {
+    return null;
+  }
+
   // STOP WORDS: tokens that should never be treated as name parts
   // This list is intentionally generic and not trade-specific.
   const PLATFORM_STOP_WORDS = [
@@ -65,13 +69,16 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
     /\bthis is\s+[A-Z]/,
     /\bi am\s+[A-Z]/,
     /\bi'?m\s+[A-Z][a-z]+(?:\s|$|,)/,
-    /\bit'?s\s+[A-Z]/,
     /\bcall me\b/i
   ];
-  const hasNameIntent = strictNamePatterns.some(p => p.test(raw));
+  const hasExplicitNameIntent = strictNamePatterns.some(p => p.test(raw));
 
   // Gate: Only extract if expecting name OR explicit name intent
-  if (!expectingName && !hasNameIntent) return null;
+  if (!expectingName && !hasExplicitNameIntent) return null;
+
+  if (!hasExplicitNameIntent && /^it'?s\s+\w+/i.test(raw)) {
+    return null;
+  }
 
   // Extract the post-intro clause (best-effort)
   //
@@ -88,9 +95,7 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
     'this is',
     "i'm",
     'i am',
-    'call me',
-    "it's",
-    'it is'
+    'call me'
   ];
 
   let candidate = null;
@@ -144,10 +149,9 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
   // Special-case: human ramble where last name is provided after a “but it’s …”
   // Example: "my name is Larry pretty long but it's Gonzalez"
   // We prefer the first meaningful token as first name + explicit tail token as last name.
-  if (expectingName && hasNameIntent) {
+  if (expectingName && hasExplicitNameIntent) {
     const lastNameFromTail =
       raw.match(/\b(?:last name is|surname is)\s+([A-Za-z][A-Za-z'\-]{1,})\b/i)?.[1] ||
-      raw.match(/\bbut\b[\s\S]*?\b(?:it'?s|it is|its)\s+([A-Za-z][A-Za-z'\-]{1,})\b/i)?.[1] ||
       null;
 
     if (lastNameFromTail) {
@@ -214,5 +218,17 @@ function titleCase(s) {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
-module.exports = { extractName };
+function isTradeContextSentence(text) {
+  if (!text || typeof text !== 'string') return false;
+  const lower = text.toLowerCase();
+  const tradeWords = [
+    'unit', 'cooling', 'heat', 'heating', 'leak', 'leaking', 'ac', 'a/c',
+    'system', 'compressor', 'thermostat', 'furnace', 'heater', 'evaporator',
+    'condenser', 'coil', 'blower', 'filter', 'air handler', 'hvac'
+  ];
+  const tradeRegex = new RegExp(`\\b(${tradeWords.map(w => w.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')).join('|')})\\b`, 'i');
+  return tradeRegex.test(lower);
+}
+
+module.exports = { extractName, isTradeContextSentence };
 

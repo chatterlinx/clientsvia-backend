@@ -11,9 +11,9 @@ describe('utils/nameExtraction.extractName', () => {
     expect(extractName("my name is John Smith", { expectingName: true })).toBe('John Smith');
   });
 
-  test('captures last name from human ramble tail: "but it\'s Gonzalez"', () => {
+  test('does not infer last name from "but it\'s ..." phrasing', () => {
     const text = "my name is Larry pretty long but it's Gonzalez";
-    expect(extractName(text, { expectingName: true })).toBe('Larry Gonzalez');
+    expect(extractName(text, { expectingName: true })).toBe('Larry');
   });
 
   test('captures explicit last name at the end of a rambling last-name sentence (avoids "Little")', () => {
@@ -34,6 +34,21 @@ describe('utils/nameExtraction.extractName', () => {
   test('returns null in discovery when no name intent and not expecting', () => {
     expect(extractName('go ahead', { expectingName: false })).toBe(null);
     expect(extractName('yes', { expectingName: false })).toBe(null);
+  });
+
+  test('blocks trade/problem sentences from name extraction', () => {
+    expect(extractName("it's not cooling", { expectingName: true })).toBe(null);
+    expect(extractName("it's not quite cooling", { expectingName: true })).toBe(null);
+    expect(extractName("it's leaking from the unit", { expectingName: true })).toBe(null);
+  });
+
+  test('keeps explicit last-name capture intact', () => {
+    expect(extractName('My last name is Stevens', { expectingName: true })).toBe('Stevens');
+  });
+
+  test('captures full name when caller provides it', () => {
+    expect(extractName('John Stevens', { expectingName: true })).toBe('John Stevens');
+    expect(extractName('This is John Stevens speaking', { expectingName: true })).toBe('John Stevens');
   });
 });
 

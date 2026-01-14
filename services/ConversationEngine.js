@@ -48,7 +48,7 @@ const AddressValidationService = require('./AddressValidationService');
 const DynamicFlowEngine = require('./DynamicFlowEngine');
 const logger = require('../utils/logger');
 const { parseSpellingVariantPrompt, parseSpellingVariantResponse } = require('../utils/nameSpellingVariant');
-const { extractName: extractNameDeterministic } = require('../utils/nameExtraction');
+const { extractName: extractNameDeterministic, isTradeContextSentence } = require('../utils/nameExtraction');
 const { buildResumeBookingBlock } = require('../utils/resumeBookingProtocol');
 const { detectBookingClarification } = require('../utils/bookingClarification');
 const { detectConfirmationRequest } = require('../utils/confirmationRequest');
@@ -248,6 +248,29 @@ function getMissingConfigPrompt(configType, fieldName, context = {}) {
     };
     
     return safeDefaults[configType] || safeDefaults[fieldName] || `[CONFIG MISSING: ${configType}]`;
+}
+
+function extractExplicitNamePartsFromText(text) {
+    if (!text || typeof text !== 'string') return null;
+    const raw = text.trim();
+    if (!raw) return null;
+
+    const lastNameMatch = raw.match(/(?:my\s+)?last\s+name\s+(?:is\s+)?([A-Za-z][A-Za-z'\-]{1,})\b/i);
+    if (lastNameMatch?.[1]) {
+        return { last: lastNameMatch[1], matchedPattern: 'last_name' };
+    }
+
+    const firstNameMatch = raw.match(/(?:my\s+)?first\s+name\s+(?:is\s+)?([A-Za-z][A-Za-z'\-]{1,})\b/i);
+    if (firstNameMatch?.[1]) {
+        return { first: firstNameMatch[1], matchedPattern: 'first_name' };
+    }
+
+    const fullNameMatch = raw.match(/\bthis\s+is\s+([A-Za-z][A-Za-z'\-]{1,})\s+([A-Za-z][A-Za-z'\-]{1,})\b/i);
+    if (fullNameMatch?.[1] && fullNameMatch?.[2]) {
+        return { first: fullNameMatch[1], last: fullNameMatch[2], matchedPattern: 'this_is_full' };
+    }
+
+    return null;
 }
 
 function buildBookingResumeBlock({
@@ -1643,6 +1666,7 @@ async function processTurn({
             slotIds = null,
             currentSlots = null,
             extractedThisTurn = null,
+            nameTrace = null,
             flow = null,
             scenarios = null,
             blackBox = null,
@@ -1685,7 +1709,8 @@ async function processTurn({
                 slotIds: Array.isArray(slotIds) ? slotIds : [],
 
                 currentSlots: currentSlots || session?.collectedSlots || {},
-                extractedThisTurn: extractedThisTurn || {}
+                extractedThisTurn: extractedThisTurn || {},
+                nameTrace: nameTrace || session?.booking?.meta?.name?.nameTrace || null
             },
 
             flow: {
@@ -2950,6 +2975,15 @@ async function processTurn({
                 }
                 session.booking.currentSlotQuestion = exactQuestion;
                 session.booking.meta[slotId].askedCount = askedCount + 1;
+
+                if (firstMissingSlot.type === 'name' || slotId === 'name') {
+                    session.booking.meta.name = session.booking.meta.name || {};
+                    const nameTrace = session.booking.meta.name.nameTrace || {};
+                    nameTrace.lastPromptTurn = (session.metrics?.totalTurns || 0) + 1;
+                    nameTrace.lastPromptType = 'name_prompt';
+                    nameTrace.lastPromptText = exactQuestion;
+                    session.booking.meta.name.nameTrace = nameTrace;
+                }
                 
                 // Build acknowledgment + exact question
                 const ack = "Perfect! Let me get your information.";
@@ -3731,6 +3765,7 @@ async function processTurn({
                                 // Keep booking focused on name collection until last name is captured
                                 session.booking.activeSlot = 'name';
                                 session.booking.activeSlotType = 'name';
+                                recordNamePrompt('missing_last', finalReply);
                                 log('🧾 CONFIRMATION(last name): last name not available - re-asking', { first });
                                 break BOOKING_MODE;
                             }
@@ -3773,6 +3808,12 @@ async function processTurn({
                     lastConfirmed: false,      // Did user confirm the partial name?
                     askedMissingPartOnce: false,
                     assumedSingleTokenAs: null,  // "first" | "last"
+                    missingPartMissCount: 0,
+                    nameTrace: {
+                        outcome: null,
+                        lastPromptTurn: null,
+                        lastPromptType: null
+                    },
                     // V31: Spelling variant tracking
                     askedSpellingVariant: false,
                     spellingVariantAnswer: null  // "optionA" | "optionB" | null
@@ -3910,6 +3951,8 @@ async function processTurn({
                 // 3. askFullName is OFF or we have full name (first + last)
                 // ═══════════════════════════════════════════════════════════════════
                 const nameMeta = session.booking.meta.name;
+                nameMeta.missingPartMissCount = Number.isFinite(nameMeta.missingPartMissCount) ? nameMeta.missingPartMissCount : 0;
+                nameMeta.nameTrace = nameMeta.nameTrace || { outcome: null, lastPromptTurn: null, lastPromptType: null };
                 const confirmBackEnabled = nameSlotConfig?.confirmBack === true || nameSlotConfig?.confirmBack === 'true';
                 // V36 FIX: Check both boolean and string values (UI might save as string)
                 const askFullNameEnabled = nameSlotConfig?.askFullName === true || nameSlotConfig?.askFullName === 'true' ||
@@ -4048,6 +4091,32 @@ async function processTurn({
                 }
                 
                 const hasBothParts = nameMeta.first && nameMeta.last;
+
+                const getCurrentTurnNumber = () => (session.metrics?.totalTurns || 0) + 1;
+                const recordNamePrompt = (promptType, promptText = null) => {
+                    const trace = nameMeta.nameTrace || {};
+                    trace.lastPromptTurn = getCurrentTurnNumber();
+                    trace.lastPromptType = promptType;
+                    trace.lastPromptText = promptText ? String(promptText) : null;
+                    nameMeta.nameTrace = trace;
+                };
+                const setNameTraceOutcome = (outcome, details = {}) => {
+                    const trace = nameMeta.nameTrace || {};
+                    trace.outcome = outcome;
+                    trace.outcomeAtTurn = getCurrentTurnNumber();
+                    trace.outcomeDetails = details && Object.keys(details).length ? details : null;
+                    nameMeta.nameTrace = trace;
+                };
+                const lastPromptTurn = nameMeta.nameTrace?.lastPromptTurn;
+                const lastPromptType = nameMeta.nameTrace?.lastPromptType;
+                const promptTurnExpected = session.metrics?.totalTurns || 0;
+                const promptedForNameRecently =
+                    Number.isFinite(lastPromptTurn) &&
+                    lastPromptTurn === promptTurnExpected &&
+                    ['missing_last', 'missing_first', 'name_prompt'].includes(lastPromptType);
+                const inNameSubflow =
+                    (session.booking.activeSlotType === 'name' || session.booking.activeSlot === 'name') ||
+                    nameMeta.askedMissingPartOnce;
                 
                 log('📝 NAME SLOT STATE', {
                     activeSlot: session.booking.activeSlot,
@@ -4205,6 +4274,7 @@ async function processTurn({
                         nextSlotId = 'name';
                         nameMeta.askedMissingPartOnce = true;
                         nameMeta.lastConfirmed = true; // Mark that we've asked
+                        recordNamePrompt('missing_last', finalReply);
                         
                         log('📝 V47: Discovery name - asking for last name (UI configured)', {
                             nameToUse,
@@ -4262,6 +4332,7 @@ async function processTurn({
                             : lastNameQ;
                     }
                     nextSlotId = 'name'; // Still on name
+                    recordNamePrompt(nameMeta.assumedSingleTokenAs === 'last' ? 'missing_first' : 'missing_last', finalReply);
                     
                     log('📝 V47: User confirmed partial, asking for missing part (UI configured)', {
                         assumedAs: nameMeta.assumedSingleTokenAs,
@@ -4303,6 +4374,7 @@ async function processTurn({
                     // V59 NUKE: UI-configured question ONLY
                     finalReply = "I apologize for the confusion. " + (nameSlotConfig?.question || getMissingConfigPrompt('slot_question', 'name'));
                     nextSlotId = 'name';
+                    recordNamePrompt('name_prompt', finalReply);
                 }
                 // Check if name slot is already complete
                 // V44: BUT don't skip if spelling variant check is still needed!
@@ -4403,8 +4475,8 @@ async function processTurn({
                 // When we've asked for last name and user says "Walter" or "the last name is Walter"
                 // Extract the actual name, not just the first word
             // ═══════════════════════════════════════════════════════════════════
-                else if ((session.booking.activeSlotType === 'name' || session.booking.activeSlot === 'name') && nameMeta.askedMissingPartOnce && !hasBothParts) {
-                    // 🍿 POPCORN TRAIL: V60 - Extracting MISSING NAME PART
+                else if (inNameSubflow && nameMeta.askedMissingPartOnce && !hasBothParts && promptedForNameRecently) {
+                    // 🍿 POPCORN TRAIL: V60 - Extracting MISSING NAME PART (STRICT)
                     log('🍿 [POPCORN] MISSING_NAME_PART_EXTRACTION', {
                         trigger: 'askedMissingPartOnce=true, hasBothParts=false',
                         userText,
@@ -4413,12 +4485,15 @@ async function processTurn({
                         assumedSingleTokenAs: nameMeta.assumedSingleTokenAs,
                         expectingPart: nameMeta.assumedSingleTokenAs === 'first' ? 'LAST_NAME' : 'FIRST_NAME',
                         activeSlot: session.booking.activeSlot,
-                        activeSlotType: session.booking.activeSlotType
+                        activeSlotType: session.booking.activeSlotType,
+                        promptedForNameRecently
                     });
-                    
-                    // We asked for the missing part - extract name from various phrasings
+
                     let extractedNamePart = null;
-                    
+                    let matchedPattern = null;
+                    const needsLastName = nameMeta.assumedSingleTokenAs === 'first';
+                    const tradeSentence = isTradeContextSentence(userText);
+
                     // ═══════════════════════════════════════════════════════════════════
                     // V50 FIX: Stop words that are NEVER valid names
                     // Prevents "my last name is" from extracting "is" as the name
@@ -4430,7 +4505,7 @@ async function processTurn({
                         'hi', 'hello', 'hey', 'please', 'thanks', 'thank', 'you',
                         'it', 'that', 'this', 'what', 'and', 'or', 'but', 'to', 'for'
                     ]);
-                    
+
                     // Helper: validate extracted name isn't a stop word or too short
                     const isValidNameExtraction = (name) => {
                         if (!name || name.length < 2) return false;
@@ -4439,56 +4514,31 @@ async function processTurn({
                         if (/^(is|are|was|were|be|am|has|have|had|do|does|did|will|would|could|should|can|may|might)$/i.test(name)) return false;
                         return true;
                     };
-                    
-                    // Pattern 1: "the last name is Walter" / "my last name is Walter" / "last name is Walter"
-                    const lastNameIsMatch = userText.match(/(?:the\s+)?(?:my\s+)?last\s+name\s+(?:is\s+)?([A-Za-z]+)/i);
-                    if (lastNameIsMatch && lastNameIsMatch[1] && isValidNameExtraction(lastNameIsMatch[1])) {
-                        extractedNamePart = lastNameIsMatch[1];
-                        log('📝 V33: Extracted from "last name is X" pattern', { extracted: extractedNamePart });
-                    }
-                    
-                    // Pattern 2: "the first name is Mark" / "my first name is Mark"
-                    if (!extractedNamePart) {
-                        const firstNameIsMatch = userText.match(/(?:the\s+)?(?:my\s+)?first\s+name\s+(?:is\s+)?([A-Za-z]+)/i);
-                        if (firstNameIsMatch && firstNameIsMatch[1] && isValidNameExtraction(firstNameIsMatch[1])) {
-                            extractedNamePart = firstNameIsMatch[1];
-                            log('📝 V33: Extracted from "first name is X" pattern', { extracted: extractedNamePart });
-                        }
-                    }
-                    
-                    // Pattern 3: "it's Walter" / "it is Walter"
-                    if (!extractedNamePart) {
-                        const itsMatch = userText.match(/(?:it'?s|it\s+is)\s+([A-Za-z]+)/i);
-                        if (itsMatch && itsMatch[1] && isValidNameExtraction(itsMatch[1])) {
-                            extractedNamePart = itsMatch[1];
-                            log('📝 V33: Extracted from "it\'s X" pattern', { extracted: extractedNamePart });
-                        }
-                    }
-                    
-                    // Pattern 4: Just a single name word (filter out filler words, take LAST meaningful word)
-                    if (!extractedNamePart) {
-                        const words = userText.trim().split(/\s+/);
-                        const nameWords = words.filter(w => {
-                            const clean = w.replace(/[^a-zA-Z]/g, '').toLowerCase();
-                            return clean.length >= 2 && !NAME_STOP_WORDS.has(clean);
+
+                    if (tradeSentence) {
+                        setNameTraceOutcome('skipped_trade_sentence', { reason: 'trade_context_guard' });
+                        log('🧹 V88: Skipping missing-name extraction due to trade sentence', {
+                            userText: userText?.substring?.(0, 120) || userText
                         });
-                        
-                        if (nameWords.length > 0) {
-                            // Take the last meaningful word (most likely the actual name)
-                            const candidate = nameWords[nameWords.length - 1].replace(/[^a-zA-Z]/g, '');
-                            if (isValidNameExtraction(candidate)) {
-                                extractedNamePart = candidate;
-                                log('📝 V33: Extracted last meaningful word', { extracted: extractedNamePart, allWords: nameWords });
+                    } else {
+                        const explicitParts = extractExplicitNamePartsFromText(userText);
+                        matchedPattern = explicitParts?.matchedPattern || null;
+                        if (explicitParts) {
+                            if (needsLastName && explicitParts.last) {
+                                extractedNamePart = explicitParts.last;
+                            } else if (!needsLastName && explicitParts.first) {
+                                extractedNamePart = explicitParts.first;
+                            } else if (explicitParts.first && explicitParts.last) {
+                                extractedNamePart = needsLastName ? explicitParts.last : explicitParts.first;
                             }
                         }
                     }
-                    
-                    // V50: Log if extraction was blocked
-                    if (!extractedNamePart) {
-                        log('📝 V50: No valid name extracted (stop word or incomplete input)', { userText });
+
+                    if (extractedNamePart && !isValidNameExtraction(extractedNamePart)) {
+                        extractedNamePart = null;
                     }
-                    
-                    if (extractedNamePart && extractedNamePart.length >= 2) {
+
+                    if (extractedNamePart) {
                         // Title case
                         const formattedName = extractedNamePart.charAt(0).toUpperCase() + extractedNamePart.slice(1).toLowerCase();
 
@@ -4565,6 +4615,7 @@ async function processTurn({
                             // Keep booking focused on name collection
                             session.booking.activeSlot = 'name';
                             session.booking.activeSlotType = 'name';
+                            recordNamePrompt(needsLast ? 'missing_last' : 'missing_first', reaskText);
 
                             // V85: If caller repeats the duplicate twice, offer escalation (UI-controlled)
                             nameMeta.duplicateNamePartCount = (nameMeta.duplicateNamePartCount || 0) + 1;
@@ -4675,6 +4726,9 @@ async function processTurn({
                         finalReply = `Perfect, ${displayName}. `;
                         nextSlotId = null; // Will find next slot below
                         
+                        nameMeta.missingPartMissCount = 0;
+                        const nowHasBothParts = Boolean(nameMeta.first && nameMeta.last);
+                        setNameTraceOutcome(nowHasBothParts ? 'handler_complete' : 'handler_partial', { matchedPattern, needsLastName });
                         log('📝 V33: NAME COMPLETE after missing part', { 
                             name: currentSlots.name,
                             displayName,
@@ -4682,11 +4736,66 @@ async function processTurn({
                             last: nameMeta.last
                         });
                     } else {
-                        // Couldn't extract - ask again with reprompt
-                        const askingFor = nameMeta.assumedSingleTokenAs === 'first' ? 'last' : 'first';
-                        finalReply = `Sorry, I didn't catch that. What's your ${askingFor} name?`;
-                        nextSlotId = 'name';
-                        log('📝 V33: Could not extract name part, re-asking', { userText, askingFor });
+                        // Couldn't extract - re-ask with rephrased prompt (no legacy heuristics)
+                        nameMeta.missingPartMissCount = (nameMeta.missingPartMissCount || 0) + 1;
+                        const missCount = nameMeta.missingPartMissCount;
+
+                        const lastNameQuestion = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
+                        const firstNameQuestion = nameSlotConfig?.firstNameQuestion || getMissingConfigPrompt('firstNameQuestion', 'name');
+                        const baseQuestion = needsLastName
+                            ? String(lastNameQuestion).replace('{firstName}', nameMeta.first || '')
+                            : String(firstNameQuestion);
+                        const rephrasePrefixes = [
+                            'Just to make sure, ',
+                            'Before we continue, '
+                        ];
+                        const rephrasedQuestion = `${rephrasePrefixes[(missCount - 1) % rephrasePrefixes.length]}${baseQuestion}`.trim();
+
+                        if (missCount === 1 || missCount === 2) {
+                            finalReply = rephrasedQuestion;
+                            nextSlotId = 'name';
+                            session.booking.activeSlot = 'name';
+                            session.booking.activeSlotType = 'name';
+                            recordNamePrompt(needsLastName ? 'missing_last' : 'missing_first', finalReply);
+                            if (!tradeSentence) {
+                                setNameTraceOutcome(missCount === 1 ? 'reask_1' : 'reask_2', { needsLastName, matchedPattern });
+                            }
+                            log('📝 V88: Could not extract name part, re-asking', {
+                                userText,
+                                needsLastName,
+                                missCount
+                            });
+                        } else {
+                            const acceptFirstOnly =
+                                nameSlotConfig?.useFirstNameOnly === true || !askFullName;
+                            if (acceptFirstOnly && nameMeta.first) {
+                                currentSlots.name = nameMeta.first;
+                                extractedThisTurn.name = currentSlots.name;
+                                delete currentSlots.partialName;
+                                delete extractedThisTurn.partialName;
+                                session.booking.activeSlot = getSlotIdByType('phone');
+                                session.booking.activeSlotType = 'phone';
+                                if (!tradeSentence) {
+                                    setNameTraceOutcome('accept_first_only', { needsLastName, missCount });
+                                }
+                                log('📝 V88: Accepting first name only after misses', {
+                                    name: currentSlots.name,
+                                    missCount
+                                });
+                            } else {
+                                const lowConfReply =
+                                    company?.aiAgentSettings?.frontDeskBehavior?.fallbackResponses?.lowConfidence ||
+                                    "I want to make sure I understand correctly. Could you rephrase that?";
+                                finalReply = lowConfReply;
+                                nextSlotId = 'name';
+                                session.booking.activeSlot = 'name';
+                                session.booking.activeSlotType = 'name';
+                                if (!tradeSentence) {
+                                    setNameTraceOutcome('bail_low_confidence', { needsLastName, missCount });
+                                }
+                                log('📝 V88: Bailing to low confidence after misses', { missCount });
+                            }
+                        }
                     }
                 }
                 // ═══════════════════════════════════════════════════════════════════
@@ -4758,6 +4867,7 @@ async function processTurn({
                         const lastNameQSpelling = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
                         finalReply = `Got it, ${chosenName}. ${lastNameQSpelling.replace('{firstName}', chosenName)}`;
                         nextSlotId = 'name';
+                        recordNamePrompt('missing_last', finalReply);
                     } else {
                         // Accept as complete
                         currentSlots.name = chosenName;
@@ -5031,6 +5141,7 @@ async function processTurn({
                                 const lastNameQSpelling = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
                                 finalReply = `Got it, ${chosenName}. ${lastNameQSpelling.replace('{firstName}', chosenName)}`;
                                 nextSlotId = 'name';
+                                recordNamePrompt('missing_last', finalReply);
                             } else {
                                 // Accept as complete
                                 currentSlots.name = chosenName;
@@ -5067,6 +5178,7 @@ async function processTurn({
                             const lastNameQSpelling = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
                             finalReply = `Got it, ${inferredChoice}. ${lastNameQSpelling.replace('{firstName}', inferredChoice)}`;
                             nextSlotId = 'name';
+                            recordNamePrompt('missing_last', finalReply);
                             
                             log('📝 V73: Inferred spelling-variant answer from last assistant prompt', {
                                 lastAssistantMsg: lastAssistantMsg.substring(0, 80),
@@ -5119,6 +5231,7 @@ async function processTurn({
                                     : lastNameQMissing;
                             }
                             nextSlotId = 'name'; // Still on name
+                            recordNamePrompt(nameMeta.assumedSingleTokenAs === 'last' ? 'missing_first' : 'missing_last', finalReply);
                             
                             log('📝 V47: Asking for missing part (UI configured)', {
                                 askingFor: nameMeta.assumedSingleTokenAs === 'last' ? 'first' : 'last',
@@ -7626,7 +7739,8 @@ async function processTurn({
                     slotsBeforeThisTurn: session.collectedSlots || {},
                     extractedThisTurn: extractedThisTurn,
                     slotsAfterMerge: allSlots,
-                    whatLLMSaw: currentSlots
+                    whatLLMSaw: currentSlots,
+                    nameTrace: session.booking?.meta?.name?.nameTrace || null
                 },
                 bookingConfig: {
                     source: bookingConfig.source,
@@ -7731,6 +7845,7 @@ async function processTurn({
                 slotIds: slotIdsTruth,
                 currentSlots: session.collectedSlots || {},
                 extractedThisTurn: extractedThisTurn || {},
+                nameTrace: session.booking?.meta?.name?.nameTrace || null,
                 flow: {
                     triggersFired: (dynamicFlowResult?.triggersFired || []).length,
                     flowsActivated: (dynamicFlowResult?.flowsActivated || []).length,
