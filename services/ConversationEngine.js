@@ -2580,6 +2580,7 @@ async function processTurn({
         }
         
         const extractedThisTurn = {};
+        let nameOutcome = null; // track whether handler or legacy completed name
         
         // Get booking config for askMissingNamePart setting
         const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
@@ -2676,15 +2677,18 @@ async function processTurn({
                     extractedThisTurn.name = updatedMachine.slots.name;
                     nameHandled = true;
                     nameResult = 'complete';
+                    nameOutcome = 'handler_complete';
                     log('🧭 BookingNameHandler result', { state: updatedMachine.state, result: nameResult, name: updatedMachine.slots.name });
                 } else if (updatedMachine.slots.partialName) {
                     currentSlots.partialName = updatedMachine.slots.partialName;
                     extractedThisTurn.partialName = updatedMachine.slots.partialName;
                     nameHandled = true;
                     nameResult = 'partial';
+                    nameOutcome = 'handler_partial';
                     log('🧭 BookingNameHandler result', { state: updatedMachine.state, result: nameResult, partial: updatedMachine.slots.partialName });
                 } else if (updatedMachine.state === BookingNameHandler.STATES.AWAITING_SPELLING) {
                     nameResult = 'spellingRequested';
+                    nameOutcome = 'handler_spelling_request';
                     log('🧭 BookingNameHandler result', { state: updatedMachine.state, result: nameResult });
                 }
             }
@@ -2744,6 +2748,7 @@ async function processTurn({
                             currentSlots.partialName = extractedName;
                             extractedThisTurn.partialName = extractedName;
                             log('Partial name detected (will ask for full)', { partialName: extractedName });
+                            if (!nameOutcome) nameOutcome = 'legacy_partial';
                         } else {
                             if (currentSlots.partialName && isPartialName) {
                                 const partialLower = currentSlots.partialName.toLowerCase();
@@ -2761,12 +2766,14 @@ async function processTurn({
                             }
                             extractedThisTurn.name = currentSlots.name;
                             log('Name extracted', { name: currentSlots.name });
+                            if (!nameOutcome) nameOutcome = 'legacy_complete';
                         }
                     } else if (currentSlots.partialName) {
                         currentSlots.name = currentSlots.partialName;
                         delete currentSlots.partialName;
                         extractedThisTurn.name = currentSlots.name;
                         log('Accepting partial name as complete', { name: currentSlots.name });
+                        if (!nameOutcome) nameOutcome = 'legacy_accept_partial';
                     }
                 }
             }
@@ -2786,11 +2793,13 @@ async function processTurn({
                         extractedThisTurn.name = currentSlots.name;
                         session.booking.reaskPromptOverride = null;
                         log('🛑 Name attempts exceeded, using lowConfidence fallback');
+                        if (!nameOutcome) nameOutcome = 'bail_low_confidence';
                     }
                 }
             } else if (extractedThisTurn.name) {
                 session.nameAttempts = 0;
                 session.booking.reaskPromptOverride = null;
+                if (!nameOutcome) nameOutcome = 'handler_or_legacy_complete';
             }
         }
         
@@ -7681,7 +7690,14 @@ async function processTurn({
                     slotsBeforeThisTurn: session.collectedSlots || {},
                     extractedThisTurn: extractedThisTurn,
                     slotsAfterMerge: allSlots,
-                    whatLLMSaw: currentSlots
+                    whatLLMSaw: currentSlots,
+                    nameTrace: {
+                        attempts: session.nameAttempts || 0,
+                        outcome: nameOutcome,
+                        handlerState: session.booking?.nameMachine?.state,
+                        lastPrompt: session.booking?.nameMachine?.lastPrompt,
+                        prompts: session.booking?.nameMachine?.prompts
+                    }
                 },
                 bookingConfig: {
                     source: bookingConfig.source,
@@ -7784,6 +7800,11 @@ async function processTurn({
                 bookingSnapTriggered: responseSourceTruth === 'BOOKING_SNAP',
                 activeSlotId: session.booking?.currentSlotId ?? session.booking?.activeSlot ?? null,
                 slotIds: slotIdsTruth,
+                nameTrace: {
+                    attempts: session.nameAttempts || 0,
+                    outcome: nameOutcome,
+                    handlerState: session.booking?.nameMachine?.state
+                },
                 currentSlots: session.collectedSlots || {},
                 extractedThisTurn: extractedThisTurn || {},
                 flow: {
