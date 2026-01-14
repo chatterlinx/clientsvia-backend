@@ -17,7 +17,8 @@ const NAME_STOP_WORDS = new Set([
     'the', 'my', 'its', "it's", 'a', 'an', 'name', 'last', 'first',
     'yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'no', 'nope',
     'hi', 'hello', 'hey', 'please', 'thanks', 'thank', 'you',
-    'it', 'that', 'this', 'what', 'and', 'or', 'but', 'to', 'for'
+    'it', 'that', 'this', 'what', 'and', 'or', 'but', 'to', 'for',
+    'got', 'two', 'kids', 'there', 'uh', 'um', 'yup', 'yep'
 ]);
 
 function isValidName(token = '') {
@@ -55,6 +56,14 @@ function extractFullNameParts(text) {
     if (candidates.length === 0) return { first: null, last: null };
     if (candidates.length === 1) return { first: candidates[0], last: null };
     return { first: candidates[0], last: candidates.slice(1).join(' ') };
+}
+
+function extractLastNamePhrase(text) {
+    const m = text.match(/last\s+name\s+(?:is\s+)?([A-Za-z'-]+)/i);
+    if (m && isValidName(m[1])) {
+        return titleCase(m[1]);
+    }
+    return null;
 }
 
 function createContext(options = {}) {
@@ -111,6 +120,13 @@ function step(ctx, event) {
             break;
         }
         case STATES.AWAITING_LAST: {
+            const phraseLast = extractLastNamePhrase(text);
+            if (phraseLast) {
+                ctx.slots.last = phraseLast;
+                ctx.slots.name = `${ctx.slots.first || ''} ${phraseLast}`.trim();
+                ctx.state = ctx.options.confirmSpelling ? STATES.AWAITING_SPELLING : STATES.COMPLETE;
+                break;
+            }
             const last = extractSingleName(text);
             if (last) {
                 ctx.slots.last = last;
