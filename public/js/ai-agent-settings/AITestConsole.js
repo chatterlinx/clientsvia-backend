@@ -223,7 +223,7 @@ class AITestConsole {
 
     async startProductionASR() {
         try {
-            this.isProdAsrActive = true;
+            this.isProdAsrActive = false; // set true only after mic+ws ready
             this.asrStatus = 'connecting';
             this.updateMicButton();
 
@@ -238,15 +238,17 @@ class AITestConsole {
 
             this.dgSocket.onopen = async () => {
                 this.asrStatus = 'streaming';
-                this.updateMicButton();
                 // Start microphone capture after WS is ready
                 try {
                     await this.startMicCapture();
+                    this.isProdAsrActive = true;
                 } catch (err) {
                     console.error('[AI Test] Mic capture failed', err);
                     this.addChatBubble('⚠️ Microphone capture failed. Check permissions and try again.', 'ai', null, true);
                     this.stopProductionASR();
+                    return;
                 }
+                this.updateMicButton();
             };
 
             this.dgSocket.onmessage = (event) => {
