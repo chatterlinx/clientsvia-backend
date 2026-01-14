@@ -5357,6 +5357,7 @@ async function processTurn({
                             phoneMeta.confirmed = true;
                             phoneMeta.pendingConfirm = false;
                             phoneMeta.attempts = 0;
+                            session.markModified('booking.meta.phone');
                             session.booking.activeSlot = 'address';
                             const addressSlotConfigForPrompt = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'address');
                             finalReply = "Perfect. " + (addressSlotConfigForPrompt?.question || "What's the service address?");
@@ -5368,6 +5369,7 @@ async function processTurn({
                             phoneMeta.confirmed = false;
                             phoneMeta.pendingConfirm = true;
                             phoneMeta.attempts = Math.min((phoneMeta.attempts || 0) + 1, 99);
+                            session.markModified('booking.meta.phone');
                             const phoneConfirmPrompt = phoneSlotConfig?.confirmPrompt || "Just to confirm, that's {value}, correct?";
                             const confirmTextRaw = phoneConfirmPrompt.replace('{value}', updated.action.phone);
                             const rephraseIntro = company.aiAgentSettings?.frontDeskBehavior?.loopPrevention?.rephraseIntro || '';
@@ -5380,6 +5382,7 @@ async function processTurn({
                             phoneMeta.confirmed = false;
                             phoneMeta.pendingConfirm = false;
                             phoneMeta.attempts = Math.min((phoneMeta.attempts || 0) + 1, 99);
+                            session.markModified('booking.meta.phone');
                             const rephraseIntro = company.aiAgentSettings?.frontDeskBehavior?.loopPrevention?.rephraseIntro || '';
                             const baseQ = (phoneSlotConfig?.question || getMissingConfigPrompt('phone_question', 'phone'));
                             finalReply = (updated.action.promptKey === 'ask_full_1' && rephraseIntro)
@@ -5390,6 +5393,7 @@ async function processTurn({
                         } else if (updated.action?.kind === 'bail') {
                             phoneMeta.confirmed = false;
                             phoneMeta.pendingConfirm = false;
+                            session.markModified('booking.meta.phone');
                             const lowConf = company.aiAgentSettings?.frontDeskBehavior?.fallbackResponses?.lowConfidence;
                             finalReply = (typeof lowConf === 'string' && lowConf.trim())
                                 ? lowConf.trim()
@@ -5405,6 +5409,7 @@ async function processTurn({
                     } else if (userSaysYes) {
                         phoneMeta.confirmed = true;
                         phoneMeta.pendingConfirm = false;
+                        session.markModified('booking.meta.phone');
                         session.booking.activeSlot = 'address';
                         // V35 FIX: Set finalReply to ask for address (prevents fall-through to breakdown)
                         const addressSlotConfigForPrompt = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'address');
@@ -5417,6 +5422,8 @@ async function processTurn({
                         if (extractedThisTurn.phone) {
                             currentSlots.phone = extractedThisTurn.phone;
                             phoneMeta.pendingConfirm = true; // Confirm the new number
+                            phoneMeta.confirmed = false;
+                            session.markModified('booking.meta.phone');
                             const confirmText = (phoneSlotConfig?.confirmPrompt || "Just to confirm, that's {value}, correct?")
                                 .replace('{value}', extractedThisTurn.phone);
                             finalReply = confirmText;
@@ -5425,6 +5432,8 @@ async function processTurn({
                         } else {
                             currentSlots.phone = null;
                             phoneMeta.pendingConfirm = false;
+                            phoneMeta.confirmed = false;
+                            session.markModified('booking.meta.phone');
                             // V59 NUKE: UI-configured question ONLY
                             finalReply = "I apologize. " + (phoneSlotConfig?.question || getMissingConfigPrompt('phone_question', 'phone'));
                             nextSlotId = 'phone';
@@ -5433,6 +5442,8 @@ async function processTurn({
                     } else if (extractedThisTurn.phone) {
                         currentSlots.phone = extractedThisTurn.phone;
                         phoneMeta.pendingConfirm = false;
+                        phoneMeta.confirmed = false;
+                        session.markModified('booking.meta.phone');
                         log('📞 PHONE: User provided new number instead of confirming');
                     }
                 }
@@ -6361,8 +6372,25 @@ async function processTurn({
                                     finalReply
                                 });
                             } else {
-                                // Pending confirm - don't add question, just use the confirm text already set
-                                log('📋 BOOKING SAFETY NET: Slot pending confirmation', { 
+                                // Pending confirm.
+                                // If we *didn't* already set the confirm prompt in `finalReply` earlier this turn,
+                                // generate it from UI config now to avoid "stalling" on a blank reply.
+                                const pendingValue = currentSlots?.[nextSlotId] || currentSlots?.[nextMissingSlotSafe?.type];
+                                const confirmTemplate = nextMissingSlotSafe?.confirmPrompt || "Just to confirm, that's {value}, correct?";
+                                const confirmText = pendingValue ? confirmTemplate.replace('{value}', pendingValue) : confirmTemplate;
+
+                                if (!finalReply || !String(finalReply).trim()) {
+                                    finalReply = confirmText;
+                                } else {
+                                    // If the current reply is just an acknowledgement ("Perfect, Mark.") and we still
+                                    // need a confirmation prompt, append it.
+                                    const looksLikeOnlyAck = String(finalReply).trim().length < 40 && !/\?/.test(String(finalReply));
+                                    if (looksLikeOnlyAck) {
+                                        finalReply = `${String(finalReply).trim()} ${confirmText}`.replace(/\s{2,}/g, ' ').trim();
+                                    }
+                                }
+
+                                log('📋 BOOKING SAFETY NET: Slot pending confirmation', {
                                     slotId: nextSlotId,
                                     finalReply
                                 });
