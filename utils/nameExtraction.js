@@ -5,7 +5,7 @@
  * - Be conservative in DISCOVERY (avoid false positives)
  * - Be more permissive in BOOKING when we're expecting a name
  * - Handle human "noise" phrases while still extracting a clean name
- * - Support patterns like: "my name is Larry ... but it's Gonzalez"
+ * - Be conservative with ambiguous “it’s …” phrases (trade sentences)
  *
  * NOTE: This is parsing logic, not AI behavior text.
  */
@@ -65,10 +65,18 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
     /\bthis is\s+[A-Z]/,
     /\bi am\s+[A-Z]/,
     /\bi'?m\s+[A-Z][a-z]+(?:\s|$|,)/,
-    /\bit'?s\s+[A-Z]/,
     /\bcall me\b/i
   ];
   const hasNameIntent = strictNamePatterns.some(p => p.test(raw));
+
+  // Trade/problem guard:
+  // If we are "expectingName" but the utterance is clearly about HVAC/trade context
+  // and does NOT contain explicit name-intent phrases, do not extract.
+  // This prevents garbage like lastName="Not" from "it's not cooling".
+  const tradeWords = /\b(unit|ac|a\/c|air\s*con|air\s*condition(?:er|ing)?|cooling|not\s+cool(?:ing)?|heat|heating|furnace|thermostat|compressor|condenser|leak|leaking|drip|dripping|broken|not\s+working|stopped\s+working)\b/i;
+  if (expectingName && !hasNameIntent && tradeWords.test(raw)) {
+    return null;
+  }
 
   // Gate: Only extract if expecting name OR explicit name intent
   if (!expectingName && !hasNameIntent) return null;
@@ -88,9 +96,7 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
     'this is',
     "i'm",
     'i am',
-    'call me',
-    "it's",
-    'it is'
+    'call me'
   ];
 
   let candidate = null;
@@ -141,28 +147,8 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
     }
   }
 
-  // Special-case: human ramble where last name is provided after a “but it’s …”
-  // Example: "my name is Larry pretty long but it's Gonzalez"
-  // We prefer the first meaningful token as first name + explicit tail token as last name.
-  if (expectingName && hasNameIntent) {
-    const lastNameFromTail =
-      raw.match(/\b(?:last name is|surname is)\s+([A-Za-z][A-Za-z'\-]{1,})\b/i)?.[1] ||
-      raw.match(/\bbut\b[\s\S]*?\b(?:it'?s|it is|its)\s+([A-Za-z][A-Za-z'\-]{1,})\b/i)?.[1] ||
-      null;
-
-    if (lastNameFromTail) {
-      // Use FIRST intro clause to extract first name (human ramble often puts last name at the end).
-      const firstIntroIdx = lower.indexOf('my name is');
-      const firstIntroClause = firstIntroIdx >= 0 ? raw.slice(firstIntroIdx + 'my name is'.length).trim() : candidate;
-      const firstToken = firstMeaningfulToken(firstIntroClause, STOP_WORDS);
-      const lastToken = cleanToken(lastNameFromTail);
-      if (firstToken && lastToken && !STOP_WORDS.has(lastToken.toLowerCase())) {
-        // Avoid "Gonzalez Gonzalez" if the first token cannot be found and equals the last token.
-        if (firstToken.toLowerCase() === lastToken.toLowerCase()) return titleCase(lastToken);
-        return `${titleCase(firstToken)} ${titleCase(lastToken)}`.trim();
-      }
-    }
-  }
+  // NOTE: We intentionally do NOT use generic “it’s X” heuristics for names.
+  // Those phrases are too ambiguous and frequently map to trade/problem statements.
 
   // Cut at clause boundaries to avoid "Mark do you..." → "Mark"
   //

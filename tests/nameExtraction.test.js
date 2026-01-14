@@ -11,9 +11,10 @@ describe('utils/nameExtraction.extractName', () => {
     expect(extractName("my name is John Smith", { expectingName: true })).toBe('John Smith');
   });
 
-  test('captures last name from human ramble tail: "but it\'s Gonzalez"', () => {
-    const text = "my name is Larry pretty long but it's Gonzalez";
-    expect(extractName(text, { expectingName: true })).toBe('Larry Gonzalez');
+  test('does NOT treat trade/problem utterances as names when only expectingName (guardrail)', () => {
+    expect(extractName("it's not cooling", { expectingName: true })).toBe(null);
+    expect(extractName("it's not quite cooling", { expectingName: true })).toBe(null);
+    expect(extractName("it's leaking from the unit", { expectingName: true })).toBe(null);
   });
 
   test('captures explicit last name at the end of a rambling last-name sentence (avoids "Little")', () => {
@@ -34,6 +35,10 @@ describe('utils/nameExtraction.extractName', () => {
   test('returns null in discovery when no name intent and not expecting', () => {
     expect(extractName('go ahead', { expectingName: false })).toBe(null);
     expect(extractName('yes', { expectingName: false })).toBe(null);
+  });
+
+  test('extracts full name from "This is John Stevens speaking"', () => {
+    expect(extractName('This is John Stevens speaking', { expectingName: true })).toBe('John Stevens');
   });
 });
 

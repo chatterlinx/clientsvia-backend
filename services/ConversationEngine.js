@@ -2712,6 +2712,18 @@ async function processTurn({
             }
 
             // Legacy extraction fallback if boxed handler did not produce a result
+            // HARD RULE: In BOOKING name sub-flow, never run legacy/mud name extraction.
+            const inBookingNameSubflow =
+                session.mode === 'BOOKING' && (session.booking?.activeSlotType === 'name' || session.booking?.activeSlot === 'name');
+            if (!nameHandled && inBookingNameSubflow) {
+                log('🧭 BookingNameHandler missing result - skipping legacy name extraction', {
+                    reason: 'no_handler_name',
+                    handlerState: session.booking?.nameMachine?.state
+                });
+                nameHandled = true;
+                if (!nameOutcome) {nameOutcome = 'reask_1';}
+            }
+
             if (!nameHandled) {
                 log('🧭 BookingNameHandler fallback to legacy', {
                     reason: 'no_handler_name',
@@ -4498,81 +4510,37 @@ async function processTurn({
                         activeSlotType: session.booking.activeSlotType
                     });
                     
-                    // We asked for the missing part - extract name from various phrasings
+                    // We asked for the missing part - extract ONLY from explicit name phrases (no "it's X" heuristics)
+                    const { extractMissingNamePart } = require('./booking/MissingNamePartExtractor');
                     let extractedNamePart = null;
-                    
-                    // ═══════════════════════════════════════════════════════════════════
-                    // V50 FIX: Stop words that are NEVER valid names
-                    // Prevents "my last name is" from extracting "is" as the name
-                    // ═══════════════════════════════════════════════════════════════════
-                    const NAME_STOP_WORDS = new Set([
-                        'is', 'are', 'was', 'were', 'be', 'been', 'am', 'has', 'have', 'had',
-                        'the', 'my', 'its', "it's", 'a', 'an', 'name', 'last', 'first',
-                        'yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'no', 'nope',
-                        'hi', 'hello', 'hey', 'please', 'thanks', 'thank', 'you',
-                        'it', 'that', 'this', 'what', 'and', 'or', 'but', 'to', 'for'
-                    ]);
-                    
-                    // Helper: validate extracted name isn't a stop word or too short
-                    const isValidNameExtraction = (name) => {
-                        if (!name || name.length < 2) return false;
-                        if (NAME_STOP_WORDS.has(name.toLowerCase())) return false;
-                        // Also reject if it matches common verbs/articles
-                        if (/^(is|are|was|were|be|am|has|have|had|do|does|did|will|would|could|should|can|may|might)$/i.test(name)) return false;
-                        return true;
-                    };
-                    
-                    // Pattern 1: "the last name is Walter" / "my last name is Walter" / "last name is Walter"
-                    const lastNameIsMatch = userText.match(/(?:the\s+)?(?:my\s+)?last\s+name\s+(?:is\s+)?([A-Za-z]+)/i);
-                    if (lastNameIsMatch && lastNameIsMatch[1] && isValidNameExtraction(lastNameIsMatch[1])) {
-                        extractedNamePart = lastNameIsMatch[1];
-                        log('📝 V33: Extracted from "last name is X" pattern', { extracted: extractedNamePart });
-                    }
-                    
-                    // Pattern 2: "the first name is Mark" / "my first name is Mark"
+                    let missingNameExtractOutcome = null;
+
+                    const expectingPart = nameMeta.assumedSingleTokenAs === 'first' ? 'LAST_NAME' : 'FIRST_NAME';
+
+                    // Strict gating: only attempt missing-name extraction if we JUST asked a name-related question.
+                    const currentTurn = session.metrics?.totalTurns || 0;
+                    const lastPromptTurn = Number.isFinite(nameMeta.lastPromptTurn) ? nameMeta.lastPromptTurn : null;
+                    const recentlyAskedByMeta = lastPromptTurn != null && (currentTurn - lastPromptTurn) <= 2;
+                    const lastAssistantMsg = [...(conversationHistory || [])].reverse().find(t => t.role === 'assistant')?.content || '';
+                    const recentlyAskedByText = /last name|first name|spell/i.test(lastAssistantMsg);
+                    const recentNamePrompt = Boolean(recentlyAskedByMeta || recentlyAskedByText);
+
+                    const extractedObj = extractMissingNamePart({
+                        userText,
+                        expectingPart,
+                        recentNamePrompt,
+                        allowBareToken: true
+                    });
+                    extractedNamePart = extractedObj.extracted;
+                    missingNameExtractOutcome = extractedObj.outcome;
+
                     if (!extractedNamePart) {
-                        const firstNameIsMatch = userText.match(/(?:the\s+)?(?:my\s+)?first\s+name\s+(?:is\s+)?([A-Za-z]+)/i);
-                        if (firstNameIsMatch && firstNameIsMatch[1] && isValidNameExtraction(firstNameIsMatch[1])) {
-                            extractedNamePart = firstNameIsMatch[1];
-                            log('📝 V33: Extracted from "first name is X" pattern', { extracted: extractedNamePart });
-                        }
-                    }
-                    
-                    // Pattern 3: "it's Walter" / "it is Walter"
-                    if (!extractedNamePart) {
-                        const itsMatch = userText.match(/(?:it'?s|it\s+is)\s+([A-Za-z]+)/i);
-                        if (itsMatch && itsMatch[1] && isValidNameExtraction(itsMatch[1])) {
-                            extractedNamePart = itsMatch[1];
-                            log('📝 V33: Extracted from "it\'s X" pattern', { extracted: extractedNamePart });
-                        }
-                    }
-                    
-                    // Pattern 4: Just a single name word (filter out filler words, take LAST meaningful word)
-                    if (!extractedNamePart) {
-                        const words = userText.trim().split(/\s+/);
-                        const nameWords = words.filter(w => {
-                            const clean = w.replace(/[^a-zA-Z]/g, '').toLowerCase();
-                            return clean.length >= 2 && !NAME_STOP_WORDS.has(clean);
-                        });
-                        
-                        if (nameWords.length > 0) {
-                            // Take the last meaningful word (most likely the actual name)
-                            const candidate = nameWords[nameWords.length - 1].replace(/[^a-zA-Z]/g, '');
-                            if (isValidNameExtraction(candidate)) {
-                                extractedNamePart = candidate;
-                                log('📝 V33: Extracted last meaningful word', { extracted: extractedNamePart, allWords: nameWords });
-                            }
-                        }
-                    }
-                    
-                    // V50: Log if extraction was blocked
-                    if (!extractedNamePart) {
-                        log('📝 V50: No valid name extracted (stop word or incomplete input)', { userText });
+                        log('📝 Missing-name extraction skipped/blocked', { outcome: missingNameExtractOutcome, recentNamePrompt });
                     }
                     
                     if (extractedNamePart && extractedNamePart.length >= 2) {
-                        // Title case
-                        const formattedName = extractedNamePart.charAt(0).toUpperCase() + extractedNamePart.slice(1).toLowerCase();
+                        // Extractor returns Title Case
+                        const formattedName = extractedNamePart;
 
                         // V84: If we're expecting LAST name and caller repeats the FIRST name, do not accept it.
                         // This is a common human error when nervous/confused.
@@ -4764,11 +4732,63 @@ async function processTurn({
                             last: nameMeta.last
                         });
                     } else {
-                        // Couldn't extract - ask again with reprompt
-                        const askingFor = nameMeta.assumedSingleTokenAs === 'first' ? 'last' : 'first';
-                        finalReply = `Sorry, I didn't catch that. What's your ${askingFor} name?`;
-                        nextSlotId = 'name';
-                        log('📝 V33: Could not extract name part, re-asking', { userText, askingFor });
+                        // Couldn't extract - STRICT behavior (no mud heuristics):
+                        // re-ask twice (rephrased), then accept first-only or bail based on askFullName setting.
+                        nameMeta.missingPartMisses = (nameMeta.missingPartMisses || 0) + 1;
+
+                        if (missingNameExtractOutcome === 'skipped_trade_sentence') {
+                            nameOutcome = 'skipped_trade_sentence';
+                        }
+
+                        const rephraseIntro = company.aiAgentSettings?.frontDeskBehavior?.loopPrevention?.rephraseIntro || '';
+                        const firstName = nameMeta.first || currentSlots.partialName || '';
+                        const askingForPart = nameMeta.assumedSingleTokenAs === 'first' ? 'LAST_NAME' : 'FIRST_NAME';
+                        const lastNameQ = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
+                        const firstNameQ = nameSlotConfig?.firstNameQuestion || getMissingConfigPrompt('firstNameQuestion', 'name');
+                        const baseQ = (askingForPart === 'LAST_NAME')
+                            ? (firstName ? lastNameQ.replace('{firstName}', firstName) : lastNameQ)
+                            : (firstName ? firstNameQ.replace('{firstName}', firstName) : firstNameQ);
+
+                        if (nameMeta.missingPartMisses === 1) {
+                            if (!nameOutcome) {nameOutcome = 'reask_1';}
+                            finalReply = rephraseIntro ? `${rephraseIntro} ${baseQ}`.trim() : baseQ;
+                            nextSlotId = 'name';
+                        } else if (nameMeta.missingPartMisses === 2) {
+                            if (!nameOutcome) {nameOutcome = 'reask_2';}
+                            const personalized = firstName ? `${firstName}, ${baseQ}` : baseQ;
+                            finalReply = rephraseIntro ? `${rephraseIntro} ${personalized}`.trim() : personalized;
+                            nextSlotId = 'name';
+                        } else {
+                            const askFullNameEnabled =
+                                nameSlotConfig?.askFullName === true || nameSlotConfig?.askFullName === 'true' ||
+                                nameSlotConfig?.requireFullName === true || nameSlotConfig?.requireFullName === 'true' ||
+                                nameSlotConfig?.nameOptions?.askFullName === true || nameSlotConfig?.nameOptions?.askFullName === 'true';
+
+                            if (!askFullNameEnabled && firstName) {
+                                nameOutcome = 'accept_first_only';
+                                currentSlots.name = firstName;
+                                extractedThisTurn.name = firstName;
+                                delete currentSlots.partialName;
+                                delete extractedThisTurn.partialName;
+                                session.booking.activeSlot = getSlotIdByType('phone');
+                                session.booking.activeSlotType = 'phone';
+                                finalReply = `Perfect, ${firstName}. `;
+                                nextSlotId = null;
+                            } else {
+                                nameOutcome = 'bail_low_confidence';
+                                const lowConf = company.aiAgentSettings?.frontDeskBehavior?.fallbackResponses?.lowConfidence;
+                                finalReply = (typeof lowConf === 'string' && lowConf.trim())
+                                    ? lowConf.trim()
+                                    : "I'm sorry — I didn't catch that. Could you repeat it?";
+                                nextSlotId = 'name';
+                            }
+                        }
+
+                        log('📝 Missing name part not extracted (guarded)', {
+                            outcome: missingNameExtractOutcome,
+                            misses: nameMeta.missingPartMisses,
+                            nameOutcome
+                        });
                     }
                 }
                 // ═══════════════════════════════════════════════════════════════════
@@ -5167,6 +5187,8 @@ async function processTurn({
                             // So extractedName IS the last name!
                             nameMeta.last = extractedName;
                             nameMeta.askedMissingPartOnce = true;
+                            nameMeta.lastPromptTurn = session.metrics?.totalTurns || 0;
+                            nameMeta.missingPartMisses = 0;
                             
                             // Build full name
                             const firstName = nameMeta.first || currentSlots.partialName || '';
@@ -5185,6 +5207,8 @@ async function processTurn({
                             // confirmPrompt didn't ask for last name, so ask now
                             // V47: Use UI-configured questions - NOT hardcoded
                             nameMeta.askedMissingPartOnce = true;
+                            nameMeta.lastPromptTurn = session.metrics?.totalTurns || 0;
+                            nameMeta.missingPartMisses = 0;
                             
                             const firstName = nameMeta.first || currentSlots.partialName || '';
                             // V59 NUKE: UI-configured questions ONLY
