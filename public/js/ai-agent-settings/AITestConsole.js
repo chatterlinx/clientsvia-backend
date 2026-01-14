@@ -40,6 +40,12 @@ class AITestConsole {
         this.voiceInfo = null; // ElevenLabs voice info
         this.audioContext = null;
         this.currentAudio = null;
+        this.asrMode = 'deepgram'; // production ASR default
+        this.isProdAsrActive = false;
+        this.dgSocket = null;
+        this.micStream = null;
+        this.micProcessor = null;
+        this.asrStatus = 'idle';
         
         // Initialize speech recognition
         this.initSpeechRecognition();
@@ -104,7 +110,7 @@ class AITestConsole {
             
             // If final result, send the message
             if (event.results[0].isFinal) {
-                this.sendMessage(transcript);
+                this.sendMessage(transcript, { asrProvider: 'browser', source: 'test_console' });
             }
         };
         
@@ -128,6 +134,16 @@ class AITestConsole {
      * Toggle microphone listening
      */
     toggleMic() {
+        if (this.asrMode === 'deepgram') {
+            if (this.isProdAsrActive) {
+                this.stopProductionASR();
+            } else {
+                this.startProductionASR();
+            }
+            return;
+        }
+
+        // Dev path: browser ASR
         if (!this.recognition) {
             this.addChatBubble('⚠️ Speech recognition not supported in this browser. Try Chrome.', 'ai', null, true);
             return;
@@ -151,7 +167,8 @@ class AITestConsole {
         const btn = document.getElementById('mic-button');
         if (!btn) return;
         
-        if (this.isListening) {
+        const active = this.asrMode === 'deepgram' ? this.isProdAsrActive : this.isListening;
+        if (active) {
             btn.style.background = '#f85149';
             btn.style.animation = 'pulse 1s infinite';
             btn.innerHTML = '🎙️ Listening...';
@@ -160,6 +177,148 @@ class AITestConsole {
             btn.style.animation = 'none';
             btn.innerHTML = '🎤 Speak';
         }
+    }
+
+    setAsrMode(mode) {
+        const nextMode = mode === 'browser' ? 'browser' : 'deepgram';
+        if (this.asrMode === nextMode) return;
+        // Stop any active streams before switching
+        if (this.isProdAsrActive) {
+            this.stopProductionASR();
+        }
+        if (this.isListening && this.recognition) {
+            this.recognition.stop();
+            this.isListening = false;
+        }
+        this.asrMode = nextMode;
+        this.updateAsrModeUI();
+        this.updateMicButton();
+    }
+
+    updateAsrModeUI() {
+        const prodBtn = document.getElementById('asr-mode-prod');
+        const devBtn = document.getElementById('asr-mode-dev');
+        const badge = document.getElementById('asr-mode-badge');
+
+        if (prodBtn && devBtn) {
+            if (this.asrMode === 'deepgram') {
+                prodBtn.style.background = '#238636';
+                prodBtn.style.color = '#fff';
+                devBtn.style.background = '#30363d';
+                devBtn.style.color = '#c9d1d9';
+            } else {
+                prodBtn.style.background = '#30363d';
+                prodBtn.style.color = '#c9d1d9';
+                devBtn.style.background = '#238636';
+                devBtn.style.color = '#fff';
+            }
+        }
+
+        if (badge) {
+            badge.textContent = this.asrMode === 'deepgram'
+                ? 'ASR: Deepgram (production config)'
+                : 'ASR: Browser (dev-only)';
+        }
+    }
+
+    async startProductionASR() {
+        try {
+            this.isProdAsrActive = true;
+            this.asrStatus = 'connecting';
+            this.updateMicButton();
+
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const wsScheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            const url = new URL(`${wsScheme}://${window.location.host}/api/test-console/asr`);
+            if (this.companyId) url.searchParams.set('companyId', this.companyId);
+            if (token) url.searchParams.set('token', token);
+
+            this.dgSocket = new WebSocket(url.toString());
+            this.dgSocket.binaryType = 'arraybuffer';
+
+            this.dgSocket.onopen = async () => {
+                this.asrStatus = 'streaming';
+                this.updateMicButton();
+                // Start microphone capture after WS is ready
+                try {
+                    await this.startMicCapture();
+                } catch (err) {
+                    console.error('[AI Test] Mic capture failed', err);
+                    this.addChatBubble('⚠️ Microphone capture failed. Check permissions and try again.', 'ai', null, true);
+                    this.stopProductionASR();
+                }
+            };
+
+            this.dgSocket.onmessage = (event) => {
+                try {
+                    const payload = JSON.parse(event.data);
+                    if (payload.type === 'final' && payload.text) {
+                        this.sendMessage(payload.text, { asrProvider: 'deepgram', source: 'test_console' });
+                    }
+                } catch (err) {
+                    console.error('[AI Test] Failed to parse ASR message', err);
+                }
+            };
+
+            this.dgSocket.onerror = (err) => {
+                console.error('[AI Test] Deepgram WS error', err);
+                this.addChatBubble('⚠️ Production ASR error. Falling back to dev mode.', 'ai', null, true);
+                this.stopProductionASR();
+            };
+
+            this.dgSocket.onclose = () => {
+                this.stopProductionASR();
+            };
+        } catch (error) {
+            console.error('[AI Test] Failed to start production ASR', error);
+            this.addChatBubble('⚠️ Unable to start production ASR.', 'ai', null, true);
+            this.stopProductionASR();
+        }
+    }
+
+    async startMicCapture() {
+        if (this.micProcessor) return;
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000 } });
+        this.micStream = stream;
+        this.audioContext = new AudioContext({ sampleRate: 16000 });
+        const source = this.audioContext.createMediaStreamSource(stream);
+        const processor = this.audioContext.createScriptProcessor(4096, 1, 1);
+        processor.onaudioprocess = (event) => {
+            if (!this.dgSocket || this.dgSocket.readyState !== WebSocket.OPEN) return;
+            const input = event.inputBuffer.getChannelData(0);
+            // Convert Float32 to 16-bit PCM
+            const pcm = new Int16Array(input.length);
+            for (let i = 0; i < input.length; i++) {
+                const s = Math.max(-1, Math.min(1, input[i]));
+                pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+            }
+            this.dgSocket.send(pcm.buffer);
+        };
+        source.connect(processor);
+        processor.connect(this.audioContext.destination);
+        this.micProcessor = processor;
+    }
+
+    stopProductionASR() {
+        this.asrStatus = 'idle';
+        this.isProdAsrActive = false;
+        if (this.dgSocket && this.dgSocket.readyState === WebSocket.OPEN) {
+            this.dgSocket.close();
+        }
+        this.dgSocket = null;
+        if (this.micProcessor) {
+            try { this.micProcessor.disconnect(); } catch (e) {}
+        }
+        if (this.audioContext) {
+            try { this.audioContext.close(); } catch (e) {}
+        }
+        if (this.micStream) {
+            this.micStream.getTracks().forEach(t => t.stop());
+        }
+        this.audioContext = null;
+        this.micProcessor = null;
+        this.micStream = null;
+        this.updateMicButton();
     }
     
     /**
@@ -285,6 +444,7 @@ class AITestConsole {
         
         this.attachEventListeners();
         this.loadFailureReport();
+        this.updateAsrModeUI();
     }
 
     /**
@@ -340,8 +500,19 @@ class AITestConsole {
                             </div>
                             
                             <!-- Voice Controls -->
-                            <div style="padding: 8px 16px; border-top: 1px solid #30363d; display: flex; gap: 10px; align-items: center; background: #161b22;">
+                            <div style="padding: 8px 16px; border-top: 1px solid #30363d; display: flex; gap: 10px; align-items: center; background: #161b22; flex-wrap: wrap;">
                                 <span style="color: #8b949e; font-size: 12px;">🎙️ Voice Mode:</span>
+                                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                    <button id="asr-mode-prod" onclick="window.aiTestConsole.setAsrMode('deepgram')" 
+                                        style="padding: 6px 10px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                                        Production ASR (Deepgram)
+                                    </button>
+                                    <button id="asr-mode-dev" onclick="window.aiTestConsole.setAsrMode('browser')" 
+                                        style="padding: 6px 10px; background: #30363d; color: #c9d1d9; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                                        Dev (Browser ASR)
+                                    </button>
+                                </div>
+                                <div id="asr-mode-badge" style="color: #8b949e; font-size: 12px;">ASR: Deepgram (production config)</div>
                                 <button id="mic-button" onclick="window.aiTestConsole.toggleMic()" 
                                     style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s;">
                                     🎤 Speak
@@ -455,7 +626,7 @@ class AITestConsole {
      * - Customer profiles are created/updated
      * - AI doesn't know it's a "test"
      */
-    async sendMessage(customMessage = null) {
+    async sendMessage(customMessage = null, meta = {}) {
         const input = document.getElementById('test-user-input');
         const message = customMessage || input.value.trim();
         if (!message) return;
@@ -488,6 +659,7 @@ class AITestConsole {
                     sessionId: this.testSessionId,
                     includeDebug: true,  // Get debug info for the console
                     forceNewSession: this.forceNewSession || false,  // Force new session after reset
+                    metadata: (typeof meta === 'object' && meta !== null) ? meta : {},
                     visitorInfo: {
                         userAgent: navigator.userAgent,
                         pageUrl: window.location.href

@@ -7794,6 +7794,8 @@ async function processTurn({
                 effectiveConfigVersion: scenarioRetrieval?.effectiveConfigVersion || null,
                 lastAgentIntent: session.lastAgentIntent || null,
                 responseSource: responseSourceTruth,
+                inputSource: metadata?.source || channel || null,
+                asrProvider: metadata?.asrProvider || null,
                 bookingRequiresConsent: killSwitches?.bookingRequiresConsent ?? null,
                 consentGiven: session.booking?.consentGiven ?? null,
                 consentPhrase: session.booking?.consentPhrase ?? null,

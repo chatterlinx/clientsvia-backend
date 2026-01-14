@@ -188,9 +188,9 @@ class DeepgramService {
             endpointing: options.endpointing || '300',
             vad_events: 'true',
             // Phone call specific
-            encoding: 'mulaw',
-            sample_rate: '8000',
-            channels: '1'
+            encoding: options.encoding || 'mulaw',
+            sample_rate: options.sample_rate || '8000',
+            channels: options.channels || '1'
         });
         
         // Add keywords/hints if provided
