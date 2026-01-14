@@ -2625,6 +2625,7 @@ async function processTurn({
         // GATING: require BOTH UI toggles:
         // - frontDeskBehavior.nameSpellingVariants.enabled
         // - bookingSlots(name).confirmSpelling
+        let spellingChoiceCapturedThisTurn = false;
         const spellingConfigPre = company.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants || {};
         const spellingEnabledPre = spellingConfigPre.enabled === true && nameSlotConfig?.confirmSpelling === true;
         if (spellingEnabledPre && userText) {
@@ -2638,6 +2639,18 @@ async function processTurn({
                 currentSlots.partialName = inferredChoice;
                 extractedThisTurn.name = inferredChoice;
                 extractedThisTurn.partialName = inferredChoice;
+                spellingChoiceCapturedThisTurn = true;
+
+                // Mark spelling variant as resolved in booking meta so the safety net won't re-ask.
+                session.booking = session.booking || {};
+                session.booking.meta = session.booking.meta || {};
+                session.booking.meta.name = session.booking.meta.name || {};
+                session.booking.meta.name.askedSpellingVariant = true;
+                session.booking.meta.name.spellingVariantAnswer = inferredChoice;
+                session.booking.meta.name.confirmed = true;
+                session.booking.meta.name.lastConfirmed = true;
+                session.booking.meta.name.first = inferredChoice;
+                session.booking.meta.name.last = null;
                 
                 log('📝 V75: Captured spelling-variant choice during slot extraction', {
                     lastAssistantMsg: lastAssistantMsg.substring(0, 80),
@@ -2654,7 +2667,11 @@ async function processTurn({
             let nameHandled = false;
 
             // Pilot: BookingNameHandler boxed state machine
-            if (session.mode === 'BOOKING' && (session.booking?.activeSlotType === 'name' || session.booking?.activeSlot === 'name')) {
+            if (spellingChoiceCapturedThisTurn) {
+                // We already deterministically resolved the spelling variant this turn.
+                // Do NOT allow handler/legacy extraction to override the chosen spelling.
+                nameHandled = true;
+            } else if (session.mode === 'BOOKING' && (session.booking?.activeSlotType === 'name' || session.booking?.activeSlot === 'name')) {
                 const BookingNameHandler = require('./booking/BookingNameHandler');
                 const nameMachineOptions = {
                     askMissingNamePart,

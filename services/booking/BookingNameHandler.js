@@ -17,7 +17,7 @@ const NAME_STOP_WORDS = new Set([
     'the', 'my', 'its', "it's", 'a', 'an', 'name', 'last', 'first',
     'yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'no', 'nope',
     'hi', 'hello', 'hey', 'please', 'thanks', 'thank', 'you',
-    'it', 'that', 'this', 'what', 'and', 'or', 'but', 'to', 'for',
+    'it', 'that', 'this', 'what', 'and', 'or', 'but', 'to', 'for', 'with',
     'got', 'two', 'kids', 'there', 'uh', 'um', 'yup', 'yep'
 ]);
 
@@ -68,22 +68,9 @@ function extractLastNamePhrase(text) {
 
 function extractSpellingVariant(text) {
     // Accept "Mark with a k" / "Marc with a c"
-    const m = text.match(/([A-Za-z]+)\s+with\s+a\s+([a-z])/i);
+    const m = text.match(/([A-Za-z]+)\s+with\s+(?:a\s+)?([a-z])/i);
     if (m && isValidName(m[1])) {
-        const base = titleCase(m[1]);
-        const letter = m[2].toLowerCase();
-        // Replace last character with provided letter if single-letter tweak
-        if (base.length > 1) {
-            return base.slice(0, -1) + letter.toUpperCase();
-        }
-        return base;
-    }
-    return null;
-}
-
-function extractLastNamePhrase(text) {
-    const m = text.match(/last\s+name\s+(?:is\s+)?([A-Za-z'-]+)/i);
-    if (m && isValidName(m[1])) {
+        // The "with k/c" is a disambiguation cue; the base token is the chosen name.
         return titleCase(m[1]);
     }
     return null;
@@ -157,13 +144,6 @@ function step(ctx, event) {
                 ctx.state = ctx.options.confirmSpelling ? STATES.AWAITING_SPELLING : STATES.COMPLETE;
                 break;
             }
-            const spellingVariant = extractSpellingVariant(text);
-            if (spellingVariant && ctx.slots.first && !ctx.slots.last) {
-                ctx.slots.last = spellingVariant;
-                ctx.slots.name = `${ctx.slots.first} ${spellingVariant}`.trim();
-                ctx.state = ctx.options.confirmSpelling ? STATES.AWAITING_SPELLING : STATES.COMPLETE;
-                break;
-            }
             const last = extractSingleName(text);
             if (last) {
                 ctx.slots.last = last;
@@ -182,22 +162,22 @@ function step(ctx, event) {
         }
         case STATES.AWAITING_SPELLING: {
             const hint = text.toLowerCase();
-            if (/with a [a-z]/.test(hint) && ctx.slots.name) {
-                ctx.state = STATES.COMPLETE;
-                break;
+            if (/with\s+(?:a\s+)?[a-z]/.test(hint)) {
+                const spellingVariant = extractSpellingVariant(text);
+                if (spellingVariant) {
+                    ctx.slots.first = spellingVariant;
+                    ctx.slots.last = null;
+                    ctx.slots.partialName = spellingVariant;
+                    ctx.slots.name = spellingVariant;
+                    ctx.state = STATES.COMPLETE;
+                    break;
+                }
             }
             const { first, last } = extractFullNameParts(text);
             if (first && last) {
                 ctx.slots.first = first;
                 ctx.slots.last = last;
                 ctx.slots.name = `${first} ${last}`.trim();
-                ctx.state = STATES.COMPLETE;
-                break;
-            }
-            const spellingVariant = extractSpellingVariant(text);
-            if (spellingVariant && ctx.slots.first && !ctx.slots.last) {
-                ctx.slots.last = spellingVariant;
-                ctx.slots.name = `${ctx.slots.first} ${spellingVariant}`.trim();
                 ctx.state = STATES.COMPLETE;
                 break;
             }
