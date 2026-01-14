@@ -131,9 +131,13 @@ const VERIFICATION_RULES = {
                 severity: 'warning',
                 weight: 15,
                 check: (config) => {
-                    const fallbacks = config?.frontDeskBehavior?.fallbackResponses;
-                    const hasGeneric = fallbacks?.generic && fallbacks.generic.trim().length > 0;
-                    const hasLowConf = fallbacks?.lowConfidence && fallbacks.lowConfidence.trim().length > 0;
+                    const fallbacks = config?.frontDeskBehavior?.fallbackResponses || {};
+                    const genericRaw = fallbacks.generic;
+                    const lowConfRaw = fallbacks.lowConfidence;
+                    const generic = typeof genericRaw === 'string' ? genericRaw : (genericRaw == null ? '' : String(genericRaw));
+                    const lowConf = typeof lowConfRaw === 'string' ? lowConfRaw : (lowConfRaw == null ? '' : String(lowConfRaw));
+                    const hasGeneric = generic.trim().length > 0;
+                    const hasLowConf = lowConf.trim().length > 0;
                     
                     // For "recovery mode" - should have specific error handling responses
                     const hasRecoveryMode = hasGeneric && hasLowConf;
