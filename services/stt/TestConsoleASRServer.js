@@ -118,9 +118,14 @@ function attachTestConsoleASRServer(server) {
             const alt = dgData?.channel?.alternatives?.[0];
             const transcript = alt?.transcript || '';
             if (!transcript) return;
-            const isFinal = dgData?.is_final === true || dgData?.speech_final === true;
+            // IMPORTANT:
+            // - Deepgram can emit `is_final=true` many times within one utterance.
+            // - `speech_final=true` indicates endpointing/VAD decided the utterance is complete.
+            // For Test Console UX parity (and to avoid cutting users off mid-sentence),
+            // only treat `speech_final` as a true "final" that should be sent to the engine.
+            const isSpeechFinal = dgData?.speech_final === true;
             const payload = {
-                type: isFinal ? 'final' : 'partial',
+                type: isSpeechFinal ? 'final' : 'partial',
                 text: transcript,
                 confidence: alt?.confidence ?? null,
                 asrProvider: 'deepgram',
