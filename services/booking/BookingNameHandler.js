@@ -66,6 +66,29 @@ function extractLastNamePhrase(text) {
     return null;
 }
 
+function extractSpellingVariant(text) {
+    // Accept "Mark with a k" / "Marc with a c"
+    const m = text.match(/([A-Za-z]+)\s+with\s+a\s+([a-z])/i);
+    if (m && isValidName(m[1])) {
+        const base = titleCase(m[1]);
+        const letter = m[2].toLowerCase();
+        // Replace last character with provided letter if single-letter tweak
+        if (base.length > 1) {
+            return base.slice(0, -1) + letter.toUpperCase();
+        }
+        return base;
+    }
+    return null;
+}
+
+function extractLastNamePhrase(text) {
+    const m = text.match(/last\s+name\s+(?:is\s+)?([A-Za-z'-]+)/i);
+    if (m && isValidName(m[1])) {
+        return titleCase(m[1]);
+    }
+    return null;
+}
+
 function createContext(options = {}) {
     return {
         state: STATES.INIT,
@@ -76,6 +99,7 @@ function createContext(options = {}) {
             partialName: null
         },
         prompts: [],
+        lastPrompt: null,
         options: {
             askMissingNamePart: options.askMissingNamePart === true,
             confirmSpelling: options.confirmSpelling === true
@@ -113,7 +137,13 @@ function step(ctx, event) {
                     ? STATES.AWAITING_LAST
                     : (ctx.options.confirmSpelling ? STATES.AWAITING_SPELLING : STATES.COMPLETE);
                 if (ctx.state === STATES.AWAITING_LAST) {
-                    ctx.prompts.push('What is your last name?');
+                    if (ctx.lastPrompt !== 'ask_last_name') {
+                        ctx.prompts.push('What is your last name?');
+                        ctx.lastPrompt = 'ask_last_name';
+                    } else {
+                        ctx.prompts.push('Could you share your last name?');
+                        ctx.lastPrompt = 'ask_last_name_rephrase';
+                    }
                 }
                 break;
             }
@@ -127,11 +157,26 @@ function step(ctx, event) {
                 ctx.state = ctx.options.confirmSpelling ? STATES.AWAITING_SPELLING : STATES.COMPLETE;
                 break;
             }
+            const spellingVariant = extractSpellingVariant(text);
+            if (spellingVariant && ctx.slots.first && !ctx.slots.last) {
+                ctx.slots.last = spellingVariant;
+                ctx.slots.name = `${ctx.slots.first} ${spellingVariant}`.trim();
+                ctx.state = ctx.options.confirmSpelling ? STATES.AWAITING_SPELLING : STATES.COMPLETE;
+                break;
+            }
             const last = extractSingleName(text);
             if (last) {
                 ctx.slots.last = last;
                 ctx.slots.name = `${ctx.slots.first || ''} ${last}`.trim();
                 ctx.state = ctx.options.confirmSpelling ? STATES.AWAITING_SPELLING : STATES.COMPLETE;
+                break;
+            }
+            // Re-ask with rephrase if we already asked last name
+            if (ctx.lastPrompt === 'ask_last_name') {
+                ctx.prompts.push('I want to be sure I heard that right—what is your last name?');
+                ctx.lastPrompt = 'ask_last_name_rephrase';
+            } else if (ctx.lastPrompt === 'ask_last_name_rephrase') {
+                // cap re-asks here; let ConversationEngine handle bail-out
             }
             break;
         }
@@ -146,6 +191,13 @@ function step(ctx, event) {
                 ctx.slots.first = first;
                 ctx.slots.last = last;
                 ctx.slots.name = `${first} ${last}`.trim();
+                ctx.state = STATES.COMPLETE;
+                break;
+            }
+            const spellingVariant = extractSpellingVariant(text);
+            if (spellingVariant && ctx.slots.first && !ctx.slots.last) {
+                ctx.slots.last = spellingVariant;
+                ctx.slots.name = `${ctx.slots.first} ${spellingVariant}`.trim();
                 ctx.state = STATES.COMPLETE;
                 break;
             }

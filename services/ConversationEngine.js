@@ -2770,6 +2770,28 @@ async function processTurn({
                     }
                 }
             }
+
+            // Re-ask/bailout logic: never repeat the same prompt twice; max two attempts then low-confidence fallback
+            if (!extractedThisTurn.name && session.mode === 'BOOKING' && (session.booking?.activeSlotType === 'name' || session.booking?.activeSlot === 'name')) {
+                session.nameAttempts = (session.nameAttempts || 0) + 1;
+                if (session.nameAttempts === 2 && currentSlots.partialName) {
+                    // Rephrase on second attempt
+                    const rephraseIntro = company.aiAgentSettings?.frontDeskBehavior?.loopPrevention?.rephraseIntro || 'Let me try this differently -';
+                    session.booking.reaskPromptOverride = `${rephraseIntro} I heard ${currentSlots.partialName}. Did I get that right? If not, please spell it.`;
+                } else if (session.nameAttempts >= 3) {
+                    // Bail out to low confidence fallback
+                    const lowConf = company.aiAgentSettings?.frontDeskBehavior?.fallbackResponses?.lowConfidence;
+                    if (lowConf) {
+                        currentSlots.name = currentSlots.name || currentSlots.partialName || null;
+                        extractedThisTurn.name = currentSlots.name;
+                        session.booking.reaskPromptOverride = null;
+                        log('🛑 Name attempts exceeded, using lowConfidence fallback');
+                    }
+                }
+            } else if (extractedThisTurn.name) {
+                session.nameAttempts = 0;
+                session.booking.reaskPromptOverride = null;
+            }
         }
         
         // Extract phone
