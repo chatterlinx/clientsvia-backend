@@ -820,7 +820,7 @@ const VERIFICATION_RULES = {
                 weight: 40,
                 check: (config) => {
                     const raw = config?.frontDeskBehavior?.fallbackResponses?.generic;
-                    const fallback = typeof raw === 'string' ? raw : '';
+                    const fallback = typeof raw === 'string' ? raw : (raw == null ? '' : String(raw));
                     const hasFallback = fallback.trim().length > 0;
                     return {
                         passed: hasFallback,
@@ -836,7 +836,7 @@ const VERIFICATION_RULES = {
                 weight: 30,
                 check: (config) => {
                     const raw = config?.frontDeskBehavior?.fallbackResponses?.noResponse;
-                    const fallback = typeof raw === 'string' ? raw : '';
+                    const fallback = typeof raw === 'string' ? raw : (raw == null ? '' : String(raw));
                     const hasFallback = fallback.trim().length > 0;
                     return {
                         passed: hasFallback,
@@ -852,7 +852,7 @@ const VERIFICATION_RULES = {
                 weight: 30,
                 check: (config) => {
                     const raw = config?.frontDeskBehavior?.fallbackResponses?.lowConfidence;
-                    const fallback = typeof raw === 'string' ? raw : '';
+                    const fallback = typeof raw === 'string' ? raw : (raw == null ? '' : String(raw));
                     const hasFallback = fallback.trim().length > 0;
                     return {
                         passed: hasFallback,
