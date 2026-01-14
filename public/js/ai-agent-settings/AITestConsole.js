@@ -46,6 +46,10 @@ class AITestConsole {
         this.micStream = null;
         this.micProcessor = null;
         this.asrStatus = 'idle';
+        this.pendingFinalTranscripts = [];
+        this.processingFinalTranscripts = false;
+        this.lastFinalTranscript = null;
+        this.lastFinalAt = 0;
         
         // Initialize speech recognition
         this.initSpeechRecognition();
@@ -110,7 +114,7 @@ class AITestConsole {
             
             // If final result, send the message
             if (event.results[0].isFinal) {
-                this.sendMessage(transcript, { asrProvider: 'browser', source: 'test_console' });
+                this.enqueueFinalTranscript(transcript, { asrProvider: 'browser', source: 'test_console' });
             }
         };
         
@@ -259,7 +263,7 @@ class AITestConsole {
                         if (input) input.value = payload.text;
                     }
                     if (payload.type === 'final' && payload.text) {
-                        this.sendMessage(payload.text, { asrProvider: 'deepgram', source: 'test_console' });
+                        this.enqueueFinalTranscript(payload.text, { asrProvider: 'deepgram', source: 'test_console' });
                     }
                 } catch (err) {
                     console.error('[AI Test] Failed to parse ASR message', err);
@@ -340,6 +344,37 @@ class AITestConsole {
         this.micProcessor = null;
         this.micStream = null;
         this.updateMicButton();
+    }
+
+    enqueueFinalTranscript(text, meta = {}) {
+        const clean = String(text || '').trim();
+        if (!clean) return;
+
+        // De-dupe common Deepgram final repeats (same text emitted twice rapidly)
+        const now = Date.now();
+        if (this.lastFinalTranscript && clean === this.lastFinalTranscript && (now - this.lastFinalAt) < 1500) {
+            return;
+        }
+        this.lastFinalTranscript = clean;
+        this.lastFinalAt = now;
+
+        this.pendingFinalTranscripts.push({ text: clean, meta });
+        if (!this.processingFinalTranscripts) {
+            this.processFinalTranscriptQueue();
+        }
+    }
+
+    async processFinalTranscriptQueue() {
+        this.processingFinalTranscripts = true;
+        try {
+            while (this.pendingFinalTranscripts.length > 0) {
+                const item = this.pendingFinalTranscripts.shift();
+                // Serialize calls to /api/chat/message to avoid session version collisions
+                await this.sendMessage(item.text, item.meta);
+            }
+        } finally {
+            this.processingFinalTranscripts = false;
+        }
     }
     
     /**
