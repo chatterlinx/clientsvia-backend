@@ -280,9 +280,24 @@ class AITestConsole {
 
     async startMicCapture() {
         if (this.micProcessor) return;
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000 } });
+        if (!navigator.mediaDevices?.getUserMedia) {
+            throw new Error('getUserMedia not available');
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                channelCount: 1,
+                sampleRate: 16000,
+                noiseSuppression: true,
+                echoCancellation: true
+            }
+        });
         this.micStream = stream;
         this.audioContext = new AudioContext({ sampleRate: 16000 });
+        try {
+            await this.audioContext.resume();
+        } catch (e) {
+            console.warn('[AI Test] AudioContext resume warning', e);
+        }
         const source = this.audioContext.createMediaStreamSource(stream);
         const processor = this.audioContext.createScriptProcessor(4096, 1, 1);
         processor.onaudioprocess = (event) => {
