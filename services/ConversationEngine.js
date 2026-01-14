@@ -2581,6 +2581,7 @@ async function processTurn({
         
         const extractedThisTurn = {};
         let nameOutcome = null; // track whether handler or legacy completed name
+        let phoneOutcome = null; // track phone handler outcomes (confirm/correct/bail)
         
         // Get booking config for askMissingNamePart setting
         const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
@@ -5285,7 +5286,8 @@ async function processTurn({
                     pendingConfirm: false, 
                     confirmed: false,
                     offeredCallerId: false,
-                    breakdownStep: null // null, 'area_code', 'rest'
+                    breakdownStep: null, // null, 'area_code', 'rest'
+                    attempts: 0
                 };
                 session.booking.meta.address = session.booking.meta.address || { 
                     pendingConfirm: false, 
@@ -5327,7 +5329,80 @@ async function processTurn({
                 }
                 
                 if (phoneMeta.pendingConfirm && !phoneMeta.confirmed) {
-                    if (userSaysYes) {
+                    // ────────────────────────────────────────────────────────────────
+                    // BOXED PHONE HANDLER (deterministic confirm/correction)
+                    // ────────────────────────────────────────────────────────────────
+                    // Handles:
+                    // - "No, it's actually 2202" (suffix correction)
+                    // - New full number given during confirm
+                    // - Attempt caps with low-confidence bailout
+                    // NOTE: Text-me flow is handled separately below.
+                    if (!finalReply && !userSaysTextMe) {
+                        const BookingPhoneHandler = require('./booking/BookingPhoneHandler');
+                        session.booking.phoneMachine = session.booking.phoneMachine || BookingPhoneHandler.createContext({ maxAttempts: 2 });
+                        const prevState = session.booking.phoneMachine.state;
+                        const updated = BookingPhoneHandler.step(session.booking.phoneMachine, {
+                            text: userText,
+                            extractedPhone: extractedThisTurn.phone || null,
+                            currentPhone: currentSlots.phone || null,
+                            pendingConfirm: phoneMeta.pendingConfirm === true,
+                            userSaysYes,
+                            userSaysNo: userSaysNoGeneric
+                        });
+                        session.booking.phoneMachine = updated;
+                        phoneOutcome = updated.lastOutcome || phoneOutcome;
+                        log('🧭 BookingPhoneHandler step', { prevState, nextState: updated.state, outcome: updated.lastOutcome });
+
+                        if (updated.action?.kind === 'advance') {
+                            phoneMeta.confirmed = true;
+                            phoneMeta.pendingConfirm = false;
+                            phoneMeta.attempts = 0;
+                            session.booking.activeSlot = 'address';
+                            const addressSlotConfigForPrompt = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'address');
+                            finalReply = "Perfect. " + (addressSlotConfigForPrompt?.question || "What's the service address?");
+                            nextSlotId = 'address';
+                            log('📞 PHONE: Handler confirmed, moving to address');
+                        } else if (updated.action?.kind === 'confirm' && updated.action.phone) {
+                            currentSlots.phone = updated.action.phone;
+                            extractedThisTurn.phone = updated.action.phone;
+                            phoneMeta.confirmed = false;
+                            phoneMeta.pendingConfirm = true;
+                            phoneMeta.attempts = Math.min((phoneMeta.attempts || 0) + 1, 99);
+                            const phoneConfirmPrompt = phoneSlotConfig?.confirmPrompt || "Just to confirm, that's {value}, correct?";
+                            const confirmTextRaw = phoneConfirmPrompt.replace('{value}', updated.action.phone);
+                            const rephraseIntro = company.aiAgentSettings?.frontDeskBehavior?.loopPrevention?.rephraseIntro || '';
+                            finalReply = (updated.action.promptKey === 'confirm_1' && rephraseIntro)
+                                ? `${rephraseIntro} ${confirmTextRaw}`.trim()
+                                : confirmTextRaw;
+                            nextSlotId = 'phone';
+                            log('📞 PHONE: Handler requesting confirm', { phone: updated.action.phone });
+                        } else if (updated.action?.kind === 'ask_full') {
+                            phoneMeta.confirmed = false;
+                            phoneMeta.pendingConfirm = false;
+                            phoneMeta.attempts = Math.min((phoneMeta.attempts || 0) + 1, 99);
+                            const rephraseIntro = company.aiAgentSettings?.frontDeskBehavior?.loopPrevention?.rephraseIntro || '';
+                            const baseQ = (phoneSlotConfig?.question || getMissingConfigPrompt('phone_question', 'phone'));
+                            finalReply = (updated.action.promptKey === 'ask_full_1' && rephraseIntro)
+                                ? `${rephraseIntro} ${baseQ}`.trim()
+                                : `I apologize. ${baseQ}`.trim();
+                            nextSlotId = 'phone';
+                            log('📞 PHONE: Handler asking for full number');
+                        } else if (updated.action?.kind === 'bail') {
+                            phoneMeta.confirmed = false;
+                            phoneMeta.pendingConfirm = false;
+                            const lowConf = company.aiAgentSettings?.frontDeskBehavior?.fallbackResponses?.lowConfidence;
+                            finalReply = (typeof lowConf === 'string' && lowConf.trim())
+                                ? lowConf.trim()
+                                : "I'm sorry — I didn't catch that. Could you repeat it?";
+                            nextSlotId = 'phone';
+                            log('📞 PHONE: Handler bailed to low-confidence');
+                        }
+                    }
+
+                    // If handler produced a reply, skip legacy pendingConfirm handling.
+                    if (finalReply) {
+                        // no-op
+                    } else if (userSaysYes) {
                         phoneMeta.confirmed = true;
                         phoneMeta.pendingConfirm = false;
                         session.booking.activeSlot = 'address';
@@ -7714,6 +7789,13 @@ async function processTurn({
                         handlerState: session.booking?.nameMachine?.state,
                         lastPrompt: session.booking?.nameMachine?.lastPrompt,
                         prompts: session.booking?.nameMachine?.prompts
+                    },
+                    phoneTrace: {
+                        attempts: session.booking?.meta?.phone?.attempts || 0,
+                        outcome: phoneOutcome,
+                        handlerState: session.booking?.phoneMachine?.state,
+                        lastPromptKey: session.booking?.phoneMachine?.lastPromptKey,
+                        lastOutcome: session.booking?.phoneMachine?.lastOutcome
                     }
                 },
                 bookingConfig: {
@@ -7823,6 +7905,11 @@ async function processTurn({
                     attempts: session.nameAttempts || 0,
                     outcome: nameOutcome,
                     handlerState: session.booking?.nameMachine?.state
+                },
+                phoneTrace: {
+                    attempts: session.booking?.meta?.phone?.attempts || 0,
+                    outcome: phoneOutcome,
+                    handlerState: session.booking?.phoneMachine?.state
                 },
                 currentSlots: session.collectedSlots || {},
                 extractedThisTurn: extractedThisTurn || {},
