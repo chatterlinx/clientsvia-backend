@@ -254,6 +254,10 @@ class AITestConsole {
             this.dgSocket.onmessage = (event) => {
                 try {
                     const payload = JSON.parse(event.data);
+                    if (payload.type === 'partial' && payload.text) {
+                        const input = document.getElementById('test-user-input');
+                        if (input) input.value = payload.text;
+                    }
                     if (payload.type === 'final' && payload.text) {
                         this.sendMessage(payload.text, { asrProvider: 'deepgram', source: 'test_console' });
                     }

@@ -70,6 +70,7 @@ function attachTestConsoleASRServer(server) {
         });
 
         let dgLive;
+        let audioChunks = 0;
         try {
             // Reuse the SAME config as Twilio, only overriding encoding/sample_rate for browser PCM.
             const liveConfig = DeepgramService.getLiveConnectionConfig({
@@ -77,6 +78,9 @@ function attachTestConsoleASRServer(server) {
                 sample_rate: '16000',
                 channels: '1'
             });
+            if (!liveConfig?.url) {
+                throw new Error('Deepgram live config missing url');
+            }
 
             dgLive = dgClient.listen.live({
                 model: 'nova-2',
@@ -105,7 +109,12 @@ function attachTestConsoleASRServer(server) {
             logger.info('[TEST-CONSOLE-ASR] Connection closed', { reason });
         };
 
-        dgLive.addListener(LiveTranscriptionEvents.TranscriptReceived, (dgData) => {
+        dgLive.addListener(LiveTranscriptionEvents.Open, () => {
+            logger.info('[TEST-CONSOLE-ASR] Deepgram stream open', { companyId });
+        });
+
+        // Deepgram SDK v3 emits transcripts on LiveTranscriptionEvents.Transcript ('Results')
+        dgLive.addListener(LiveTranscriptionEvents.Transcript, (dgData) => {
             const alt = dgData?.channel?.alternatives?.[0];
             const transcript = alt?.transcript || '';
             if (!transcript) return;
@@ -138,7 +147,11 @@ function attachTestConsoleASRServer(server) {
         ws.on('message', (data) => {
             try {
                 if (Buffer.isBuffer(data) || data instanceof ArrayBuffer) {
+                    audioChunks += 1;
                     dgLive.send(data);
+                    if (audioChunks === 1 || audioChunks % 50 === 0) {
+                        logger.debug('[TEST-CONSOLE-ASR] Forwarding audio to Deepgram', { companyId, audioChunks });
+                    }
                 }
             } catch (err) {
                 logger.error('[TEST-CONSOLE-ASR] Failed to forward audio chunk', { error: err.message });
