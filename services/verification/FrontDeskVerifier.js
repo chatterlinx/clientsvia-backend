@@ -819,8 +819,9 @@ const VERIFICATION_RULES = {
                 severity: 'error',
                 weight: 40,
                 check: (config) => {
-                    const fallback = config?.frontDeskBehavior?.fallbackResponses?.generic;
-                    const hasFallback = fallback && fallback.trim().length > 0;
+                    const raw = config?.frontDeskBehavior?.fallbackResponses?.generic;
+                    const fallback = typeof raw === 'string' ? raw : '';
+                    const hasFallback = fallback.trim().length > 0;
                     return {
                         passed: hasFallback,
                         value: hasFallback ? 'Set' : 'NOT_SET',
@@ -834,8 +835,9 @@ const VERIFICATION_RULES = {
                 severity: 'warning',
                 weight: 30,
                 check: (config) => {
-                    const fallback = config?.frontDeskBehavior?.fallbackResponses?.noResponse;
-                    const hasFallback = fallback && fallback.trim().length > 0;
+                    const raw = config?.frontDeskBehavior?.fallbackResponses?.noResponse;
+                    const fallback = typeof raw === 'string' ? raw : '';
+                    const hasFallback = fallback.trim().length > 0;
                     return {
                         passed: hasFallback,
                         value: hasFallback ? 'Set' : 'Using default',
@@ -849,8 +851,9 @@ const VERIFICATION_RULES = {
                 severity: 'warning',
                 weight: 30,
                 check: (config) => {
-                    const fallback = config?.frontDeskBehavior?.fallbackResponses?.lowConfidence;
-                    const hasFallback = fallback && fallback.trim().length > 0;
+                    const raw = config?.frontDeskBehavior?.fallbackResponses?.lowConfidence;
+                    const fallback = typeof raw === 'string' ? raw : '';
+                    const hasFallback = fallback.trim().length > 0;
                     return {
                         passed: hasFallback,
                         value: hasFallback ? 'Set' : 'Using default',
