@@ -2660,26 +2660,41 @@ async function processTurn({
                     confirmSpelling: nameSlotConfig?.confirmSpelling === true
                 };
                 const machine = session.booking?.nameMachine || BookingNameHandler.createContext(nameMachineOptions);
+                const prevState = machine.state;
                 const updatedMachine = BookingNameHandler.step(machine, { type: 'input', text: userText });
                 session.booking = session.booking || {};
                 session.booking.nameMachine = updatedMachine;
+                log('🧭 BookingNameHandler step', {
+                    prevState,
+                    nextState: updatedMachine.state
+                });
 
+                let nameResult = 'pending';
                 if (updatedMachine.slots.name) {
                     currentSlots.name = updatedMachine.slots.name;
                     delete currentSlots.partialName;
                     extractedThisTurn.name = updatedMachine.slots.name;
                     nameHandled = true;
-                    log('🧭 BookingNameHandler accepted name', { state: updatedMachine.state, name: updatedMachine.slots.name });
+                    nameResult = 'complete';
+                    log('🧭 BookingNameHandler result', { state: updatedMachine.state, result: nameResult, name: updatedMachine.slots.name });
                 } else if (updatedMachine.slots.partialName) {
                     currentSlots.partialName = updatedMachine.slots.partialName;
                     extractedThisTurn.partialName = updatedMachine.slots.partialName;
                     nameHandled = true;
-                    log('🧭 BookingNameHandler captured partial name', { state: updatedMachine.state, partial: updatedMachine.slots.partialName });
+                    nameResult = 'partial';
+                    log('🧭 BookingNameHandler result', { state: updatedMachine.state, result: nameResult, partial: updatedMachine.slots.partialName });
+                } else if (updatedMachine.state === BookingNameHandler.STATES.AWAITING_SPELLING) {
+                    nameResult = 'spellingRequested';
+                    log('🧭 BookingNameHandler result', { state: updatedMachine.state, result: nameResult });
                 }
             }
 
             // Legacy extraction fallback if boxed handler did not produce a result
             if (!nameHandled) {
+                log('🧭 BookingNameHandler fallback to legacy', {
+                    reason: 'no_handler_name',
+                    handlerState: session.booking?.nameMachine?.state
+                });
                 const userTextLower = userText.toLowerCase();
                 const isExplicitNameStatement = /my name is|name is|i'm called|call me/i.test(userText);
                 
