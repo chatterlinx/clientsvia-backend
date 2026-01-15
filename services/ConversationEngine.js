@@ -160,6 +160,128 @@ const DEFAULT_PROMPT_VARIANTS = {
     // 🚫 NUKED: slots{} and reprompt{} - ALL booking prompts come from UI now
 };
 
+/**
+ * Test-only helper to validate name slot behavior deterministically.
+ * Mirrors booking name extraction + askFullName handling in isolation.
+ */
+function __testHandleNameSlotTurn({
+    userText,
+    company = {},
+    nameSlotConfig = {},
+    nameMeta: nameMetaInput = {}
+}) {
+    const nameMeta = {
+        first: null,
+        last: null,
+        lastConfirmed: false,
+        askedMissingPartOnce: false,
+        assumedSingleTokenAs: null,
+        confirmed: false,
+        ...nameMetaInput
+    };
+
+    const currentSlots = {};
+    const extractedThisTurn = {};
+    const setExtractedSlotIfChanged = (slotKey, value) => {
+        if (value === undefined || value === null) return;
+        const previous = currentSlots[slotKey];
+        if (String(previous || '') !== String(value || '')) {
+            extractedThisTurn[slotKey] = value;
+        }
+    };
+
+    const askFullNameEnabled = nameSlotConfig?.askFullName === true || nameSlotConfig?.askFullName === 'true' ||
+        nameSlotConfig?.requireFullName === true || nameSlotConfig?.requireFullName === 'true' ||
+        nameSlotConfig?.nameOptions?.askFullName === true || nameSlotConfig?.nameOptions?.askFullName === 'true';
+    const askMissingNamePart = nameSlotConfig?.askMissingNamePart === true;
+
+    const customStopWords = company?.aiAgentSettings?.nameStopWords?.custom || [];
+    const stopWordsEnabled = company?.aiAgentSettings?.nameStopWords?.enabled !== false;
+
+    let extractedName = SlotExtractors.extractName(userText || '', {
+        expectingName: true,
+        customStopWords: stopWordsEnabled ? customStopWords : []
+    });
+
+    if (!extractedName && userText) {
+        const words = userText.trim().split(/\s+/);
+        const cleanWords = words.filter(w => {
+            const lower = w.toLowerCase();
+            const skipWords = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'no', 'nope',
+                'it', 'is', 'its', "it's", 'my', 'name', 'the', 'a', 'an',
+                'please', 'hi', 'hello', 'hey'];
+            return !skipWords.includes(lower) && /^[a-zA-Z]+$/.test(w) && w.length >= 2;
+        });
+
+        if (cleanWords.length === 1 || cleanWords.length === 2) {
+            extractedName = cleanWords
+                .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+                .join(' ');
+        }
+    }
+
+    if (extractedName) {
+        const isPartialName = !extractedName.includes(' ');
+        const alreadyAskedForMissingPart = nameMeta.askedMissingPartOnce === true;
+
+        if (askFullNameEnabled && isPartialName) {
+            currentSlots.partialName = extractedName;
+            setExtractedSlotIfChanged('partialName', extractedName);
+        } else if (askMissingNamePart && isPartialName && !alreadyAskedForMissingPart) {
+            currentSlots.partialName = extractedName;
+            setExtractedSlotIfChanged('partialName', extractedName);
+        } else {
+            currentSlots.name = extractedName;
+            setExtractedSlotIfChanged('name', extractedName);
+        }
+    }
+
+    // Initialize nameMeta from captured data
+    if (currentSlots.name && currentSlots.name.includes(' ')) {
+        const parts = currentSlots.name.split(/\s+/);
+        nameMeta.first = parts[0];
+        nameMeta.last = parts.slice(1).join(' ');
+    } else if (currentSlots.partialName && !nameMeta.first && !nameMeta.last) {
+        const partialName = currentSlots.partialName;
+        const commonFirstNames = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+        const commonFirstNamesSet = new Set(commonFirstNames.map(n => n.toLowerCase()));
+        const listIsEmpty = commonFirstNames.length === 0;
+        const isCommonFirstName = listIsEmpty || commonFirstNamesSet.has(partialName.toLowerCase());
+        if (isCommonFirstName) {
+            nameMeta.first = partialName;
+            nameMeta.assumedSingleTokenAs = 'first';
+        } else {
+            nameMeta.last = partialName;
+            nameMeta.assumedSingleTokenAs = 'last';
+        }
+    } else if (currentSlots.name && !currentSlots.name.includes(' ')) {
+        nameMeta.first = currentSlots.name;
+        nameMeta.last = null;
+    }
+
+    const confirmBackTemplate = nameSlotConfig?.confirmPrompt || getMissingConfigPrompt('confirmPrompt', 'name');
+    const lastNameQuestion = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
+    let reply = '';
+    const nextSlotAfterConfirm = 'phone';
+
+    if (askFullNameEnabled && currentSlots.partialName && !currentSlots.name) {
+        nameMeta.askedMissingPartOnce = true;
+        reply = String(lastNameQuestion).replace('{firstName}', nameMeta.first || currentSlots.partialName || '').trim();
+    } else if (currentSlots.name) {
+        reply = String(confirmBackTemplate).replace('{value}', currentSlots.name).trim();
+    }
+
+    return {
+        reply,
+        state: {
+            slots: currentSlots,
+            extractedThisTurn,
+            nameMeta,
+            nextSlotAfterConfirm
+        }
+    };
+}
+
 const SERVICE_TRADE_KEYS = ['hvac', 'plumbing', 'electrical', 'appliance'];
 
 function normalizeTradeKey(value) {
@@ -8842,7 +8964,10 @@ module.exports = {
     ENGINE_VERSION,
     
     // Export slot extractors for testing
-    SlotExtractors
+    SlotExtractors,
+
+    // Test-only helper: deterministic name slot handling
+    __testHandleNameSlotTurn
 };
 
 
