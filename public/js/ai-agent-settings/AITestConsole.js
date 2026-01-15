@@ -1729,6 +1729,7 @@ ${separator}`;
         const templateWiringStatus = templateRefsCount > 0 ? `✅ (${templateRefsCount})` : '❌ (none)';
         const packTrace = snap?.promptPacks || lastDebug?.v22BlackBox?.promptPacks || null;
         const guardTrace = snap?.promptGuards || lastDebug?.v22BlackBox?.promptGuards || null;
+        const confirmBackTrace = Array.isArray(snap?.booking?.confirmBackTrace) ? snap.booking.confirmBackTrace : [];
         const packTrade = packTrace?.tradeKey || 'unknown';
         const selectedPack = packTrace?.selectedByTrade?.[packTrade] || '—';
         const overridesCount = Number.isFinite(packTrace?.overridesCount) ? packTrace.overridesCount : '—';
@@ -1754,6 +1755,23 @@ ${separator}`;
                 </div>
             </div>
         ` : '';
+
+        const confirmBackTraceHtml = confirmBackTrace.length > 0 ? `
+            <div style="background: #141b2d; border: 1px solid #2b3954; border-radius: 6px; padding: 8px;">
+                <div style="color: #9fb3ff; font-size: 10px; font-weight: 600; margin-bottom: 6px;">🧾 CONFIRM BACK TRACE</div>
+                <div style="display: grid; grid-template-columns: 90px 1fr; gap: 4px; font-size: 10px;">
+                    ${confirmBackTrace.map(entry => `
+                        <span style="color: #6e7681;">${entry.slot || '—'}</span>
+                        <span style="color: #e6edf3;">${entry.userReplyType || '—'} → ${entry.outcome || '—'}</span>
+                    `).join('')}
+                </div>
+            </div>
+        ` : `
+            <div style="background: #101519; border: 1px dashed #2d333b; border-radius: 6px; padding: 8px;">
+                <div style="color: #6e7681; font-size: 10px; font-weight: 600; margin-bottom: 4px;">🧾 CONFIRM BACK TRACE</div>
+                <div style="color: #6e7681; font-size: 11px;">No confirm-back events</div>
+            </div>
+        `;
 
         const packTraceHtml = this.packTestMode ? `
             <div style="background: #0f1a24; border: 1px solid #58a6ff; border-radius: 6px; padding: 8px;">
@@ -1957,6 +1975,9 @@ ${separator}`;
                         
                         <!-- Decision Trace -->
                         ${decisionTrace}
+
+                        <!-- Confirm Back Trace -->
+                        ${confirmBackTraceHtml}
 
                         <!-- Pack Trace (Pack Test Mode) -->
                         ${packTraceHtml}

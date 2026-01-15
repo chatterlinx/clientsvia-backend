@@ -405,7 +405,8 @@ function __testHandleConfirmSlotTurn({
     nextQuestion = '',
     reaskPrefix = '',
     abortReply = null,
-    decisionTrace = null
+    decisionTrace = null,
+    decisionTraceContext = null
 }) {
     const slotMeta = {
         pendingConfirm: true,
@@ -443,7 +444,8 @@ function __testHandleConfirmSlotTurn({
             recordConfirmBackTrace(decisionTrace, {
                 slot: slotType,
                 userReplyType: 'SILENCE',
-                outcome: 'SILENCE_REPROMPT'
+                outcome: 'SILENCE_REPROMPT',
+                context: decisionTraceContext
             });
             return {
                 reply,
@@ -453,7 +455,8 @@ function __testHandleConfirmSlotTurn({
         recordConfirmBackTrace(decisionTrace, {
             slot: slotType,
             userReplyType: 'SILENCE',
-            outcome: 'SILENCE_ABORT'
+            outcome: 'SILENCE_ABORT',
+            context: decisionTraceContext
         });
         return {
             reply: abortScript,
@@ -465,7 +468,8 @@ function __testHandleConfirmSlotTurn({
         recordConfirmBackTrace(decisionTrace, {
             slot: slotType,
             userReplyType: 'ABORT',
-            outcome: 'ABORTED'
+            outcome: 'ABORTED',
+            context: decisionTraceContext
         });
         return {
             reply: abortScript,
@@ -483,6 +487,7 @@ function __testHandleConfirmSlotTurn({
         userSaysNoGeneric,
         reaskPrefix,
         decisionTrace,
+        decisionTraceContext,
         onConfirmYes: () => ({
             reply: nextQuestion,
             nextSlotId: nextSlotType
@@ -731,13 +736,17 @@ function detectBookingAbortIntent(userText, company = {}) {
     return phrases.some(phrase => phrase && text.includes(String(phrase).toLowerCase()));
 }
 
-function recordConfirmBackTrace(decisionTrace, { slot, userReplyType, outcome }) {
+function recordConfirmBackTrace(decisionTrace, { slot, userReplyType, outcome, context = null }) {
     if (!decisionTrace) return;
+    const traceContext = context || {};
     decisionTrace.push({
         phase: 'bookingConfirmBack',
         slot,
         userReplyType,
         outcome,
+        companyId: traceContext.companyId || null,
+        tradeKey: traceContext.tradeKey || null,
+        callSessionId: traceContext.callSessionId || null,
         ts: new Date().toISOString()
     });
 }
@@ -752,7 +761,8 @@ function handleConfirmBackForSlot({
     userSaysNoGeneric,
     onConfirmYes,
     reaskPrefix = '',
-    decisionTrace = null
+    decisionTrace = null,
+    decisionTraceContext = null
 }) {
     if (!slotMeta?.pendingConfirm || slotMeta.confirmed) {
         return { handled: false };
@@ -768,7 +778,8 @@ function handleConfirmBackForSlot({
         recordConfirmBackTrace(decisionTrace, {
             slot: slotType,
             userReplyType: 'YES',
-            outcome: 'CONFIRMED'
+            outcome: 'CONFIRMED',
+            context: decisionTraceContext
         });
         return {
             handled: true,
@@ -784,7 +795,8 @@ function handleConfirmBackForSlot({
             recordConfirmBackTrace(decisionTrace, {
                 slot: slotType,
                 userReplyType: 'NO',
-                outcome: 'CORRECTION'
+                outcome: 'CORRECTION',
+                context: decisionTraceContext
             });
             return {
                 handled: true,
@@ -797,7 +809,8 @@ function handleConfirmBackForSlot({
         recordConfirmBackTrace(decisionTrace, {
             slot: slotType,
             userReplyType: 'NO',
-            outcome: 'CORRECTION'
+            outcome: 'CORRECTION',
+            context: decisionTraceContext
         });
         return {
             handled: true,
@@ -812,7 +825,8 @@ function handleConfirmBackForSlot({
         recordConfirmBackTrace(decisionTrace, {
             slot: slotType,
             userReplyType: 'UNKNOWN',
-            outcome: 'CORRECTION'
+            outcome: 'CORRECTION',
+            context: decisionTraceContext
         });
         return {
             handled: true,
@@ -2207,6 +2221,7 @@ async function processTurn({
     const startTime = Date.now();
         const debugLog = [];
         const confirmBackTrace = [];
+        let confirmBackTraceContext = null;
 
     // Backward-compatible alias: many callers pass debug:true.
     // Treat either flag as “include debug payload in response”.
@@ -2853,6 +2868,12 @@ async function processTurn({
             existingSlots: JSON.stringify(session.collectedSlots || {}),
             isSessionReused: sessionWasReused
         });
+
+        confirmBackTraceContext = {
+            companyId: companyId?.toString?.() || company?._id?.toString?.() || null,
+            tradeKey: normalizeTradeKey(company?.trade || company?.tradeType || ''),
+            callSessionId: session?._id?.toString?.() || null
+        };
         
         // ═══════════════════════════════════════════════════════════════════
         // 🆕 PHASE 1: INITIALIZE STATE + LOCKS (Deterministic Control Layer)
@@ -3804,7 +3825,8 @@ async function processTurn({
                         recordConfirmBackTrace(confirmBackTrace, {
                             slot: confirmPending.slot,
                             userReplyType: 'SILENCE',
-                            outcome: 'SILENCE_REPROMPT'
+                            outcome: 'SILENCE_REPROMPT',
+                            context: confirmBackTraceContext
                         });
                         aiResult = {
                             reply: confirmText,
@@ -3828,7 +3850,8 @@ async function processTurn({
                     recordConfirmBackTrace(confirmBackTrace, {
                         slot: confirmPending.slot,
                         userReplyType: 'SILENCE',
-                        outcome: 'SILENCE_ABORT'
+                        outcome: 'SILENCE_ABORT',
+                        context: confirmBackTraceContext
                     });
                     aiResult = {
                         reply: abortScript,
@@ -3873,7 +3896,8 @@ async function processTurn({
                 recordConfirmBackTrace(confirmBackTrace, {
                     slot: confirmPending.slot,
                     userReplyType: 'ABORT',
-                    outcome: 'ABORTED'
+                    outcome: 'ABORTED',
+                    context: confirmBackTraceContext
                 });
                 aiResult = {
                     reply: abortScript,
@@ -6243,6 +6267,7 @@ async function processTurn({
                         userSaysNoGeneric,
                         reaskPrefix: 'I apologize. ',
                         decisionTrace: confirmBackTrace,
+                        decisionTraceContext: confirmBackTraceContext,
                         onConfirmYes: () => {
                             session.booking.activeSlot = 'address';
                             session.booking.activeSlotType = 'address';
@@ -6680,6 +6705,7 @@ async function processTurn({
                         userSaysNoGeneric,
                         reaskPrefix: 'I apologize. ',
                         decisionTrace: confirmBackTrace,
+                        decisionTraceContext: confirmBackTraceContext,
                         onConfirmYes: () => {
                             if (moveToTimeAfterAddress()) {
                                 log('🏠 ADDRESS: User confirmed, moving to access/time');
@@ -7054,6 +7080,7 @@ async function processTurn({
                         userSaysNoGeneric,
                         reaskPrefix: 'No problem. ',
                         decisionTrace: confirmBackTrace,
+                        decisionTraceContext: confirmBackTraceContext,
                         onConfirmYes: () => {
                             log('⏰ TIME: User confirmed');
                             return { reply: '', nextSlotId: null };
@@ -7150,6 +7177,7 @@ async function processTurn({
                         userSaysNoGeneric,
                         reaskPrefix: 'No problem. ',
                         decisionTrace: confirmBackTrace,
+                        decisionTraceContext: confirmBackTraceContext,
                         onConfirmYes: () => ({ reply: '', nextSlotId: null })
                     });
                     if (confirmResult.handled) {
@@ -7171,6 +7199,7 @@ async function processTurn({
                         userSaysNoGeneric,
                         reaskPrefix: 'No problem. ',
                         decisionTrace: confirmBackTrace,
+                        decisionTraceContext: confirmBackTraceContext,
                         onConfirmYes: () => ({ reply: '', nextSlotId: null })
                     });
                     if (confirmResult.handled) {

@@ -245,4 +245,34 @@ describe('ConfirmBack contract for phone/address/time', () => {
 
     expect(state.bookingAborted).toBe(true);
   });
+
+  test('confirmBack behavior does not depend on tenant wording', () => {
+    const traceA = [];
+    const traceB = [];
+    const resultA = ConversationEngine.__testHandleConfirmSlotTurn({
+      slotType: 'serviceType',
+      userText: 'yes',
+      company: buildCompany(),
+      slotConfig: buildSlotConfig({ question: 'A tenant says: choose repair.' }),
+      slotMeta: { pendingConfirm: true, confirmed: false },
+      currentSlots: { serviceType: 'repair' },
+      decisionTrace: traceA
+    });
+    const resultB = ConversationEngine.__testHandleConfirmSlotTurn({
+      slotType: 'serviceType',
+      userText: 'yes',
+      company: buildCompany(),
+      slotConfig: buildSlotConfig({ question: 'B tenant says: choose cleaning.' }),
+      slotMeta: { pendingConfirm: true, confirmed: false },
+      currentSlots: { serviceType: 'cleaning' },
+      decisionTrace: traceB
+    });
+
+    expect(resultA.state.slotMeta.confirmed).toBe(true);
+    expect(resultB.state.slotMeta.confirmed).toBe(true);
+    expect(traceA[0].outcome).toBe('CONFIRMED');
+    expect(traceB[0].outcome).toBe('CONFIRMED');
+    expect(traceA[0].userReplyType).toBe('YES');
+    expect(traceB[0].userReplyType).toBe('YES');
+  });
 });
