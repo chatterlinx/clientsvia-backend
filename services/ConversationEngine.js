@@ -390,6 +390,111 @@ function __testHandleNameSlotTurn({
     };
 }
 
+/**
+ * Test-only helper to validate confirmBack behavior for non-name slots.
+ */
+function __testHandleConfirmSlotTurn({
+    slotType,
+    userText,
+    company = {},
+    slotConfig = {},
+    slotMeta: slotMetaInput = {},
+    currentSlots: currentSlotsInput = {},
+    extractedValue = null,
+    nextSlotType = null,
+    nextQuestion = '',
+    reaskPrefix = '',
+    abortReply = null
+}) {
+    const slotMeta = {
+        pendingConfirm: true,
+        confirmed: false,
+        confirmSilenceCount: 0,
+        ...slotMetaInput
+    };
+    const currentSlots = { ...currentSlotsInput };
+    const extractedThisTurn = {};
+    const setExtractedSlotIfChanged = (slotKey, value) => {
+        if (value === undefined || value === null) return;
+        const previous = currentSlots[slotKey];
+        if (String(previous || '') !== String(value || '')) {
+            extractedThisTurn[slotKey] = value;
+        }
+    };
+
+    const abortScript = abortReply || getMissingConfigPrompt('booking_abort', 'bookingOutcome.scripts.message_taken');
+    const trimmed = String(userText || '').trim();
+    const lower = trimmed.toLowerCase();
+    const userSaysYes = /^(yes|yeah|yep|correct|that's right|right|yup|uh huh|mhm|affirmative|sure|ok|okay|absolutely|definitely|certainly|perfect|exactly|that's it|you got it|sounds good|that works)/i.test(trimmed);
+    const userSaysNoGeneric = /^(no|nope|nah|that's wrong|wrong|incorrect|not right|that's not right)/i.test(trimmed);
+
+    if (!trimmed) {
+        slotMeta.confirmSilenceCount = Number.isFinite(slotMeta.confirmSilenceCount)
+            ? slotMeta.confirmSilenceCount
+            : 0;
+        slotMeta.confirmSilenceCount += 1;
+        if (slotMeta.confirmSilenceCount <= 1) {
+            const confirmPrompt = slotConfig?.confirmPrompt || getMissingConfigPrompt('confirmPrompt', slotType);
+            const value = currentSlots[slotType] || extractedValue || '';
+            const reply = value
+                ? String(confirmPrompt).replace('{value}', String(value))
+                : String(slotConfig?.question || getMissingConfigPrompt('slot_question', slotType));
+            return {
+                reply,
+                state: { slots: currentSlots, slotMeta, extractedThisTurn, activeSlot: slotType }
+            };
+        }
+        return {
+            reply: abortScript,
+            state: { slots: currentSlots, slotMeta, extractedThisTurn, activeSlot: null, bookingAborted: true }
+        };
+    }
+
+    if (detectBookingAbortIntent(lower, company)) {
+        return {
+            reply: abortScript,
+            state: { slots: currentSlots, slotMeta, extractedThisTurn, activeSlot: null, bookingAborted: true }
+        };
+    }
+
+    const confirmResult = handleConfirmBackForSlot({
+        slotType,
+        slotConfig,
+        slotMeta,
+        currentSlots,
+        extractedValue,
+        userSaysYes,
+        userSaysNoGeneric,
+        reaskPrefix,
+        onConfirmYes: () => ({
+            reply: nextQuestion,
+            nextSlotId: nextSlotType
+        })
+    });
+
+    if (confirmResult.handled) {
+        if (extractedValue) {
+            currentSlots[slotType] = extractedValue;
+            setExtractedSlotIfChanged(slotType, extractedValue);
+        }
+        return {
+            reply: confirmResult.reply,
+            state: {
+                slots: currentSlots,
+                slotMeta,
+                extractedThisTurn,
+                activeSlot: confirmResult.nextSlotId || null,
+                nextSlotId: confirmResult.nextSlotId || null
+            }
+        };
+    }
+
+    return {
+        reply: '',
+        state: { slots: currentSlots, slotMeta, extractedThisTurn, activeSlot: slotType }
+    };
+}
+
 const SERVICE_TRADE_KEYS = ['hvac', 'plumbing', 'electrical', 'appliance'];
 
 function normalizeTradeKey(value) {
@@ -606,6 +711,67 @@ function detectBookingAbortIntent(userText, company = {}) {
         ];
 
     return phrases.some(phrase => phrase && text.includes(String(phrase).toLowerCase()));
+}
+
+function handleConfirmBackForSlot({
+    slotType,
+    slotConfig,
+    slotMeta,
+    currentSlots,
+    extractedValue,
+    userSaysYes,
+    userSaysNoGeneric,
+    onConfirmYes,
+    reaskPrefix = ''
+}) {
+    if (!slotMeta?.pendingConfirm || slotMeta.confirmed) {
+        return { handled: false };
+    }
+
+    const confirmPrompt = slotConfig?.confirmPrompt || getMissingConfigPrompt('confirmPrompt', slotType);
+    const questionPrompt = slotConfig?.question || getMissingConfigPrompt('slot_question', slotType);
+
+    if (userSaysYes) {
+        slotMeta.confirmed = true;
+        slotMeta.pendingConfirm = false;
+        const confirmYesResult = onConfirmYes ? onConfirmYes() : null;
+        return {
+            handled: true,
+            reply: confirmYesResult?.reply || '',
+            nextSlotId: confirmYesResult?.nextSlotId || null
+        };
+    }
+
+    if (userSaysNoGeneric) {
+        if (extractedValue) {
+            currentSlots[slotType] = extractedValue;
+            slotMeta.pendingConfirm = true;
+            return {
+                handled: true,
+                reply: String(confirmPrompt).replace('{value}', extractedValue),
+                nextSlotId: slotType
+            };
+        }
+        currentSlots[slotType] = null;
+        slotMeta.pendingConfirm = false;
+        return {
+            handled: true,
+            reply: `${reaskPrefix}${questionPrompt}`.trim(),
+            nextSlotId: slotType
+        };
+    }
+
+    if (extractedValue) {
+        currentSlots[slotType] = extractedValue;
+        slotMeta.pendingConfirm = true;
+        return {
+            handled: true,
+            reply: String(confirmPrompt).replace('{value}', extractedValue),
+            nextSlotId: slotType
+        };
+    }
+
+    return { handled: false };
 }
 
 function extractExplicitNamePartsFromText(text) {
@@ -5983,38 +6149,31 @@ async function processTurn({
                 }
                 
                 if (phoneMeta.pendingConfirm && !phoneMeta.confirmed) {
-                    if (userSaysYes) {
-                        phoneMeta.confirmed = true;
-                        phoneMeta.pendingConfirm = false;
-                        session.booking.activeSlot = 'address';
-                        // V35 FIX: Set finalReply to ask for address (prevents fall-through to breakdown)
-                        const addressSlotConfigForPrompt = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'address');
-                        finalReply = "Perfect. " + (addressSlotConfigForPrompt?.question || "What's the service address?");
-                        nextSlotId = 'address';
-                        log('📞 PHONE: User confirmed, moving to address');
-                    } else if (userSaysNoGeneric) {
-                        // V37 FIX: Check if user provided a new number along with "no"
-                        // "no that's 2393337747" should extract the new number, not just re-ask
-                        if (extractedThisTurn.phone) {
-                            currentSlots.phone = extractedThisTurn.phone;
-                            phoneMeta.pendingConfirm = true; // Confirm the new number
-                            const confirmText = (phoneSlotConfig?.confirmPrompt || "Just to confirm, that's {value}, correct?")
-                                .replace('{value}', extractedThisTurn.phone);
-                            finalReply = confirmText;
-                            nextSlotId = 'phone';
-                            log('📞 PHONE: User said no but provided new number, confirming', { phone: extractedThisTurn.phone });
-                        } else {
-                            currentSlots.phone = null;
-                            phoneMeta.pendingConfirm = false;
-                            // V59 NUKE: UI-configured question ONLY
-                            finalReply = "I apologize. " + (phoneSlotConfig?.question || getMissingConfigPrompt('phone_question', 'phone'));
-                            nextSlotId = 'phone';
-                            log('📞 PHONE: User denied confirmation, re-asking');
+                    const confirmResult = handleConfirmBackForSlot({
+                        slotType: 'phone',
+                        slotConfig: phoneSlotConfig,
+                        slotMeta: phoneMeta,
+                        currentSlots,
+                        extractedValue: extractedThisTurn.phone,
+                        userSaysYes,
+                        userSaysNoGeneric,
+                        reaskPrefix: 'I apologize. ',
+                        onConfirmYes: () => {
+                            session.booking.activeSlot = 'address';
+                            session.booking.activeSlotType = 'address';
+                            const addressSlotConfigForPrompt = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'address');
+                            return {
+                                reply: `Perfect. ${(addressSlotConfigForPrompt?.question || getMissingConfigPrompt('slot_question', 'address'))}`.trim(),
+                                nextSlotId: 'address'
+                            };
                         }
-                    } else if (extractedThisTurn.phone) {
-                        currentSlots.phone = extractedThisTurn.phone;
-                        phoneMeta.pendingConfirm = false;
-                        log('📞 PHONE: User provided new number instead of confirming');
+                    });
+
+                    if (confirmResult.handled) {
+                        finalReply = confirmResult.reply;
+                        nextSlotId = confirmResult.nextSlotId;
+                        log('📞 PHONE: ConfirmBack handled', { nextSlotId });
+                        break BOOKING_MODE;
                     }
                 }
                 // Handle breakDownIfUnclear step-by-step collection
@@ -6426,36 +6585,29 @@ async function processTurn({
                 }
                 
                 if (addressMeta.pendingConfirm && !addressMeta.confirmed) {
-                    if (userSaysYes) {
-                        addressMeta.confirmed = true;
-                        addressMeta.pendingConfirm = false;
-                        if (moveToTimeAfterAddress()) {
-                            log('🏠 ADDRESS: User confirmed, moving to access/time');
-                            break BOOKING_MODE;
+                    const confirmResult = handleConfirmBackForSlot({
+                        slotType: 'address',
+                        slotConfig: addressSlotConfig,
+                        slotMeta: addressMeta,
+                        currentSlots,
+                        extractedValue: extractedThisTurn.address,
+                        userSaysYes,
+                        userSaysNoGeneric,
+                        reaskPrefix: 'I apologize. ',
+                        onConfirmYes: () => {
+                            if (moveToTimeAfterAddress()) {
+                                log('🏠 ADDRESS: User confirmed, moving to access/time');
+                                return { reply: finalReply || '', nextSlotId };
+                            }
+                            log('🏠 ADDRESS: User confirmed, moving to time');
+                            return { reply: finalReply || '', nextSlotId };
                         }
-                        log('🏠 ADDRESS: User confirmed, moving to time');
-                    } else if (userSaysNoGeneric) {
-                        // V37 FIX: Check if user provided a new address along with "no"
-                        // "no that's 123 Main St" should extract the new address, not just re-ask
-                        if (extractedThisTurn.address) {
-                            currentSlots.address = extractedThisTurn.address;
-                            addressMeta.pendingConfirm = true; // Confirm the new address
-                            const confirmText = (addressSlotConfig?.confirmPrompt || "Just to confirm, that's {value}, correct?")
-                                .replace('{value}', extractedThisTurn.address);
-                            finalReply = confirmText;
-                            nextSlotId = 'address';
-                            log('🏠 ADDRESS: User said no but provided new address, confirming', { address: extractedThisTurn.address });
-                        } else {
-                            currentSlots.address = null;
-                            addressMeta.pendingConfirm = false;
-                            finalReply = "I apologize. " + (addressSlotConfig?.question || "What's the service address?");
-                            nextSlotId = 'address';
-                            log('🏠 ADDRESS: User denied confirmation, re-asking');
-                        }
-                    } else if (extractedThisTurn.address) {
-                        currentSlots.address = extractedThisTurn.address;
-                        addressMeta.pendingConfirm = false;
-                        log('🏠 ADDRESS: User provided new address instead of confirming');
+                    });
+
+                    if (confirmResult.handled) {
+                        if (confirmResult.reply) finalReply = confirmResult.reply;
+                        if (confirmResult.nextSlotId) nextSlotId = confirmResult.nextSlotId;
+                        break BOOKING_MODE;
                     }
                 }
                 // V35: Handle unit number response (after Google Maps asked for unit)
@@ -6806,21 +6958,24 @@ async function processTurn({
                 const timeMeta = session.booking.meta.time;
                 
                 if (timeMeta.pendingConfirm && !timeMeta.confirmed) {
-                    if (userSaysYes) {
-                        timeMeta.confirmed = true;
-                        timeMeta.pendingConfirm = false;
-                        log('⏰ TIME: User confirmed');
-                    } else if (userSaysNoGeneric) {
-                        currentSlots.time = null;
-                        timeMeta.pendingConfirm = false;
-                        // V59 NUKE: UI-configured time question ONLY
-                        finalReply = "No problem. " + (timeSlotConfig?.question || getMissingConfigPrompt('slot_question', 'time'));
-                        nextSlotId = 'time';
-                        log('⏰ TIME: User denied confirmation, re-asking');
-                    } else if (extractedThisTurn.time) {
-                        currentSlots.time = extractedThisTurn.time;
-                        timeMeta.pendingConfirm = false;
-                        log('⏰ TIME: User provided new time instead of confirming');
+                    const confirmResult = handleConfirmBackForSlot({
+                        slotType: 'time',
+                        slotConfig: timeSlotConfig,
+                        slotMeta: timeMeta,
+                        currentSlots,
+                        extractedValue: extractedThisTurn.time,
+                        userSaysYes,
+                        userSaysNoGeneric,
+                        reaskPrefix: 'No problem. ',
+                        onConfirmYes: () => {
+                            log('⏰ TIME: User confirmed');
+                            return { reply: '', nextSlotId: null };
+                        }
+                    });
+
+                    if (confirmResult.handled) {
+                        if (confirmResult.reply) finalReply = confirmResult.reply;
+                        if (confirmResult.nextSlotId) nextSlotId = confirmResult.nextSlotId;
                     }
                 }
                 // Handle ASAP / today / tomorrow / morning / afternoon responses
@@ -9205,7 +9360,8 @@ module.exports = {
     SlotExtractors,
 
     // Test-only helper: deterministic name slot handling
-    __testHandleNameSlotTurn
+    __testHandleNameSlotTurn,
+    __testHandleConfirmSlotTurn
 };
 
 
