@@ -63,6 +63,8 @@ const { buildResumeBookingBlock } = require('../utils/resumeBookingProtocol');
 const { detectBookingClarification } = require('../utils/bookingClarification');
 const { detectConfirmationRequest } = require('../utils/confirmationRequest');
 const { findFirstMatchingRule, recordRuleFired } = require('../utils/slotMidCallRules');
+const { classifyServiceUrgency } = require('../utils/serviceUrgency');
+const { resolveBookingPrompt } = require('./PromptResolver');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VERSION BANNER - Proves this code is deployed
@@ -157,6 +159,89 @@ const DEFAULT_PROMPT_VARIANTS = {
     ]
     // 🚫 NUKED: slots{} and reprompt{} - ALL booking prompts come from UI now
 };
+
+const SERVICE_TRADE_KEYS = ['hvac', 'plumbing', 'electrical', 'appliance'];
+
+function normalizeTradeKey(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function isServiceTrade(tradeKey) {
+    const normalized = normalizeTradeKey(tradeKey);
+    return SERVICE_TRADE_KEYS.includes(normalized);
+}
+
+function stripServiceEmpathyPreamble(reply, tradeKey, isServiceCall) {
+    if (!reply || !isServiceCall || !isServiceTrade(tradeKey)) return reply;
+    const patterns = [
+        /^sorry to hear that[.,!\s-]*/i,
+        /^i'?m sorry to hear that[.,!\s-]*/i,
+        /^i'?m sorry you'?re dealing with that[.,!\s-]*/i,
+        /^that must be frustrating[.,!\s-]*/i
+    ];
+
+    let cleaned = reply.trim();
+    for (const pattern of patterns) {
+        cleaned = cleaned.replace(pattern, '').trim();
+    }
+
+    return cleaned;
+}
+
+function isExistingUnitServiceRequest(text = '') {
+    const normalized = String(text || '').toLowerCase();
+    const newSystemKeywords = [
+        'new system', 'replace', 'replacement', 'install', 'installation', 'quote',
+        'estimate', 'new ac', 'new a/c', 'new unit'
+    ];
+    const serviceKeywords = [
+        'service', 'repair', 'fix', 'maintenance', 'tune', 'check', 'inspect',
+        'ac service', 'a/c service', 'hvac service', 'need service', 'need someone',
+        'look at', 'come out'
+    ];
+
+    if (newSystemKeywords.some(k => normalized.includes(k))) {
+        return false;
+    }
+
+    return serviceKeywords.some(k => normalized.includes(k));
+}
+
+function resolveTenantPromptOrFallback({ company, promptKey, contextLabel, session, tradeKey }) {
+    const prompt = resolveBookingPrompt(company, promptKey, { tradeKey });
+    if (prompt) return prompt;
+
+    const frontDesk = company.aiAgentSettings?.frontDeskBehavior || {};
+    const fallbackKey = frontDesk.promptGuards?.missingPromptFallbackKey || 'booking.universal.guardrails.missing_prompt_fallback';
+
+    if (session) {
+        session.memory = session.memory || {};
+        session.memory.promptGuards = session.memory.promptGuards || {};
+        session.memory.promptGuards.missingPrompts = session.memory.promptGuards.missingPrompts || [];
+        session.memory.promptGuards.missingPrompts.push({
+            key: promptKey || null,
+            context: contextLabel || null,
+            turn: (session.metrics?.totalTurns || 0) + 1
+        });
+        session.memory.promptGuards.lastMissingPromptKey = promptKey || null;
+        session.memory.promptGuards.lastMissingPromptContext = contextLabel || null;
+    }
+
+    logger.error('[PROMPT GUARD] Missing tenant prompt', {
+        promptKey,
+        fallbackKey,
+        context: contextLabel || null,
+        companyId: company?._id || null
+    });
+
+    const fallbackPrompt = resolveBookingPrompt(company, fallbackKey, { tradeKey: 'universal' });
+    if (fallbackPrompt) return fallbackPrompt;
+
+    return getMissingConfigPrompt('missing_tenant_prompt', promptKey, {
+        fallbackKey,
+        context: contextLabel || null
+    });
+}
 
 // Helper: Get random variant from pool
 function getVariant(pool, index = null) {
@@ -1684,7 +1769,9 @@ async function processTurn({
             templateReferences = null,
             scenarioCount = null,
             // V68: Add spelling variant debug for troubleshooting
-            spellingVariantDebug = null
+            spellingVariantDebug = null,
+            promptGuards = null,
+            promptPacks = null
         } = truth;
 
         // Always return required shape, with nulls if missing.
@@ -1748,7 +1835,9 @@ async function processTurn({
             scenarioCount: typeof scenarioCount === 'number' ? scenarioCount : 0,
             
             // V68: Spelling variant debug info for troubleshooting
-            spellingVariantDebug: spellingVariantDebug || null
+            spellingVariantDebug: spellingVariantDebug || null,
+            promptGuards: promptGuards || null,
+            promptPacks: promptPacks || null
         };
     }
 
@@ -7180,7 +7269,41 @@ async function processTurn({
             // Instead: 1 empathy line + offer scheduling immediately.
             // This prevents the robotic "tell me more" loop.
             // ═══════════════════════════════════════════════════════════════════
-            const discoveryConfig = company.aiAgentSettings?.frontDeskBehavior?.discovery || {};
+            const frontDeskBehavior = company.aiAgentSettings?.frontDeskBehavior || {};
+            const discoveryConfig = frontDeskBehavior.discovery || {};
+            const serviceFlowConfig = frontDeskBehavior.serviceFlow || {};
+            const tradeKey = normalizeTradeKey(company.trade || company.tradeType || '');
+            const serviceFlowTrades = Array.isArray(serviceFlowConfig.trades)
+                ? serviceFlowConfig.trades.map(normalizeTradeKey).filter(Boolean)
+                : [];
+            const serviceFlowEnabled = serviceFlowConfig.mode !== 'off' &&
+                serviceFlowTrades.length > 0 &&
+                serviceFlowTrades.includes(tradeKey);
+            const serviceFlowPromptKeys = (() => {
+                if (!serviceFlowEnabled) return null;
+                const byTrade = serviceFlowConfig.promptKeysByTrade || {};
+                const tradeConfig = typeof byTrade.get === 'function' ? byTrade.get(tradeKey) : byTrade[tradeKey];
+                return tradeConfig || null;
+            })();
+            const resolveServiceFlowPrompt = (promptField, contextLabel) => {
+                if (!serviceFlowPromptKeys || !serviceFlowPromptKeys[promptField]) {
+                    return resolveTenantPromptOrFallback({
+                        company,
+                        promptKey: serviceFlowPromptKeys?.[promptField],
+                        contextLabel,
+                        session,
+                        tradeKey
+                    });
+                }
+                return resolveTenantPromptOrFallback({
+                    company,
+                    promptKey: serviceFlowPromptKeys[promptField],
+                    contextLabel,
+                    session,
+                    tradeKey
+                });
+            };
+            const isServiceCall = isExistingUnitServiceRequest(userText) && isServiceTrade(tradeKey);
             const maxDiscoveryTurns = discoveryConfig.maxDiscoveryTurns ?? 1;  // Default: 1 turn
             
             // Track discovery turns
@@ -7214,6 +7337,56 @@ async function processTurn({
                 shouldAutoOffer,
                 callerDescribedIssue
             });
+
+            if (!aiResult && isServiceCall && serviceFlowEnabled && serviceFlowPromptKeys) {
+                if (session.lastAgentIntent === 'ASK_SERVICE_TRIAGE') {
+                    const postTriagePrompt = resolveServiceFlowPrompt('postTriageConsent', 'serviceFlow.postTriageConsent');
+                    if (postTriagePrompt) {
+                        session.lastAgentIntent = 'ASK_SERVICE_CONSENT';
+                        session.memory = session.memory || {};
+                        session.memory.lastServiceUrgency = session.memory.lastServiceUrgency || 'urgent';
+
+                        aiLatencyMs = Date.now() - aiStartTime;
+                        aiResult = {
+                            reply: postTriagePrompt,
+                            conversationMode: 'discovery',
+                            intent: 'service_post_triage_consent',
+                            nextGoal: 'AWAIT_CONSENT',
+                            filledSlots: currentSlots,
+                            signals: { wantsBooking: false },
+                            latencyMs: aiLatencyMs,
+                            tokensUsed: 0,
+                            fromStateMachine: true,
+                            mode: 'DISCOVERY',
+                            debug: {
+                                source: 'SERVICE_FLOW_POST_TRIAGE',
+                                trade: tradeKey
+                            }
+                        };
+                    }
+                } else if (session.lastAgentIntent === 'ASK_SERVICE_CONSENT' && !consentCheck.hasConsent) {
+                    const clarifyPrompt = resolveServiceFlowPrompt('consentClarify', 'serviceFlow.consentClarify');
+                    if (clarifyPrompt) {
+                        aiLatencyMs = Date.now() - aiStartTime;
+                        aiResult = {
+                            reply: clarifyPrompt,
+                            conversationMode: 'discovery',
+                            intent: 'service_consent_clarify',
+                            nextGoal: 'AWAIT_CONSENT',
+                            filledSlots: currentSlots,
+                            signals: { wantsBooking: false },
+                            latencyMs: aiLatencyMs,
+                            tokensUsed: 0,
+                            fromStateMachine: true,
+                            mode: 'DISCOVERY',
+                            debug: {
+                                source: 'SERVICE_FLOW_CONSENT_CLARIFY',
+                                trade: tradeKey
+                            }
+                        };
+                    }
+                }
+            }
             
             // ═══════════════════════════════════════════════════════════════════
             // V31: AUTO-OFFER SCHEDULING (if issue understood)
@@ -7227,23 +7400,42 @@ async function processTurn({
                 : 2;
 
             if (shouldAutoOffer && !session.discovery.offeredScheduling && currentTurnNumber >= minTurnsBeforeBooking) {
-                // Get empathy variant
-                const empathyVariants = discoveryConfig.empathyVariants || DEFAULT_PROMPT_VARIANTS.empathy;
-                const empathyLine = getVariant(empathyVariants);
-                
-                // Get offer variant
-                const offerVariants = discoveryConfig.offerVariants || DEFAULT_PROMPT_VARIANTS.offerScheduling;
-                const offerLine = getVariant(offerVariants);
-                
-                // Build natural response: Empathy + Offer
-                const autoOfferResponse = `${empathyLine} ${offerLine}`;
+                let autoOfferResponse = null;
+                let autoOfferIntent = 'auto_offer_scheduling';
+
+                if (isServiceCall && serviceFlowEnabled && serviceFlowPromptKeys) {
+                    const urgency = classifyServiceUrgency(userText);
+                    session.memory = session.memory || {};
+                    session.memory.lastServiceUrgency = urgency;
+
+                    if (urgency === 'urgent' && serviceFlowConfig.mode === 'hybrid') {
+                        autoOfferResponse = resolveServiceFlowPrompt('urgentTriageQuestion', 'serviceFlow.urgentTriageQuestion');
+                        session.lastAgentIntent = 'ASK_SERVICE_TRIAGE';
+                        autoOfferIntent = 'service_triage';
+                    } else {
+                        autoOfferResponse = resolveServiceFlowPrompt('nonUrgentConsent', 'serviceFlow.nonUrgentConsent');
+                        session.lastAgentIntent = 'ASK_SERVICE_CONSENT';
+                        autoOfferIntent = 'service_consent';
+                    }
+                } else {
+                    // Get empathy variant
+                    const empathyVariants = discoveryConfig.empathyVariants || DEFAULT_PROMPT_VARIANTS.empathy;
+                    const empathyLine = getVariant(empathyVariants);
+                    
+                    // Get offer variant
+                    const offerVariants = discoveryConfig.offerVariants || DEFAULT_PROMPT_VARIANTS.offerScheduling;
+                    const offerLine = getVariant(offerVariants);
+                    
+                    // Build natural response: Empathy + Offer
+                    autoOfferResponse = `${empathyLine} ${offerLine}`;
+                    autoOfferResponse = stripServiceEmpathyPreamble(autoOfferResponse, tradeKey, isServiceCall && !serviceFlowConfig.empathyEnabled);
+                    session.lastAgentIntent = 'OFFER_SCHEDULE';
+                }
                 
                 session.discovery.offeredScheduling = true;
-                session.lastAgentIntent = 'OFFER_SCHEDULE';
                 
                 log('🎯 V31 AUTO-OFFER: Offering scheduling after issue understood', {
-                    empathyLine,
-                    offerLine,
+                    responsePreview: autoOfferResponse?.substring(0, 60),
                     discoveryTurnCount,
                     issue: session.discovery.issue?.substring(0, 50)
                 });
@@ -7253,7 +7445,7 @@ async function processTurn({
                 aiResult = {
                     reply: autoOfferResponse,
                     conversationMode: 'discovery',
-                    intent: 'auto_offer_scheduling',
+                    intent: autoOfferIntent,
                     nextGoal: 'AWAIT_CONSENT',
                     filledSlots: currentSlots,
                     signals: { 
@@ -7342,9 +7534,28 @@ async function processTurn({
             // If fast-path triggered, respond with offer script instead of LLM
             const autoRescueOnFrustration = modeSwitchingCfg.autoRescueOnFrustration !== false;
             if (fastPathTriggered || (autoRescueOnFrustration && fastPathEnabled && exceededMaxQuestions && emotion.emotion === 'frustrated')) {
-                const offerScript = fastPathConfig.offerScript || 
+                let offerScript = fastPathConfig.offerScript || 
                     "Got it — I completely understand. We can get someone out to you. Would you like me to schedule a technician now?";
                 const oneQuestionScript = fastPathConfig.oneQuestionScript || "";
+                let fastPathIntent = 'fast_path_offer';
+
+                if (isServiceCall && serviceFlowEnabled && serviceFlowPromptKeys) {
+                    const urgency = classifyServiceUrgency(userText);
+                    session.memory = session.memory || {};
+                    session.memory.lastServiceUrgency = urgency;
+
+                    if (urgency === 'urgent' && serviceFlowConfig.mode === 'hybrid' && !session.discovery?.fastPathOneQuestionAsked) {
+                        offerScript = resolveServiceFlowPrompt('urgentTriageQuestion', 'serviceFlow.urgentTriageQuestion');
+                        session.lastAgentIntent = 'ASK_SERVICE_TRIAGE';
+                        fastPathIntent = 'service_triage';
+                    } else {
+                        offerScript = resolveServiceFlowPrompt('nonUrgentConsent', 'serviceFlow.nonUrgentConsent');
+                        session.lastAgentIntent = 'ASK_SERVICE_CONSENT';
+                        fastPathIntent = 'service_consent';
+                    }
+                } else {
+                    offerScript = stripServiceEmpathyPreamble(offerScript, tradeKey, isServiceCall && !serviceFlowConfig.empathyEnabled);
+                }
                 
                 // Determine response: one-question first, or straight to offer
                 let fastPathResponse;
@@ -7368,7 +7579,7 @@ async function processTurn({
                 aiResult = {
                     reply: fastPathResponse,
                     conversationMode: 'discovery',
-                    intent: 'fast_path_offer',
+                    intent: fastPathIntent,
                     nextGoal: 'AWAIT_CONSENT',
                     filledSlots: currentSlots,
                     signals: { 
@@ -7600,6 +7811,16 @@ async function processTurn({
                     }
                 }
             };
+
+            if (isServiceCall && serviceFlowConfig.empathyEnabled !== true) {
+                const stripped = stripServiceEmpathyPreamble(aiResult.reply, tradeKey, true);
+                if (stripped) {
+                    aiResult.reply = stripped;
+                } else if (serviceFlowPromptKeys) {
+                    aiResult.reply = resolveServiceFlowPrompt('nonUrgentConsent', 'serviceFlow.nonUrgentConsent');
+                    session.lastAgentIntent = 'ASK_SERVICE_CONSENT';
+                }
+            }
             
             log('CHECKPOINT 9d: ✅ LLM response complete (DISCOVERY/SUPPORT)', {
                 tokensUsed: llmResult.tokensUsed,
@@ -8182,6 +8403,26 @@ async function processTurn({
                         ? 'open_access'
                         : 'unknown';
 
+            const promptGuardState = session.memory?.promptGuards || {};
+            const promptPacksConfig = company.aiAgentSettings?.frontDeskBehavior?.promptPacks || {};
+            const promptPacksSelected = promptPacksConfig.selectedByTrade || {};
+            const promptPacksHistory = Array.isArray(promptPacksConfig.history) ? promptPacksConfig.history : [];
+            const lastUpgrade = promptPacksHistory[promptPacksHistory.length - 1] || null;
+            const promptPacksSnapshot = {
+                activeTradeKeys: Object.keys(promptPacksSelected || {}),
+                selectedByTrade: promptPacksSelected,
+                migratedKeysCount: promptPacksConfig.migration?.migratedKeysCount || 0,
+                migrationStatus: promptPacksConfig.migration?.status || 'not_started',
+                legacyKeysRemaining: promptPacksConfig.migration?.legacyKeysRemaining ?? null,
+                lastUpgrade: lastUpgrade
+                    ? {
+                        tradeKey: lastUpgrade.tradeKey || null,
+                        from: lastUpgrade.fromPack || null,
+                        to: lastUpgrade.toPack || null,
+                        changedAt: lastUpgrade.changedAt || null
+                    }
+                    : null
+            };
             response.debug = {
                 engineVersion: ENGINE_VERSION,
                 channel,
@@ -8268,7 +8509,15 @@ async function processTurn({
                     responseSource: aiResult?.debug?.source || (aiResult?.fromStateMachine ? 'STATE_MACHINE' : 'LLM'),
                     propertyType: accessSnapshot.property.type || null,
                     unit: accessSnapshot.property.unit || null,
-                    accessSummary
+                    accessSummary,
+                    promptGuards: {
+                        missingPromptFallbackKey: company.aiAgentSettings?.frontDeskBehavior?.promptGuards?.missingPromptFallbackKey || null,
+                        missingPromptKeys: Array.isArray(promptGuardState.missingPrompts)
+                            ? promptGuardState.missingPrompts.map(p => p?.key).filter(Boolean)
+                            : [],
+                        lastMissingPromptKey: promptGuardState.lastMissingPromptKey || null
+                    },
+                    promptPacks: promptPacksSnapshot
                 },
                 // ════════════════════════════════════════════════════════════════
                 // 🧠 V41: DYNAMIC FLOW TRACE - What the flow engine decided
@@ -8317,6 +8566,15 @@ async function processTurn({
             const templateRefs = company?.aiAgentSettings?.templateReferences || [];
             const enabledTemplateRefs = templateRefs.filter(ref => ref.enabled !== false);
             
+            const promptGuardsSnapshot = {
+                missingPromptFallbackKey: company.aiAgentSettings?.frontDeskBehavior?.promptGuards?.missingPromptFallbackKey || null,
+                missingPromptKeys: Array.isArray(promptGuardState.missingPrompts)
+                    ? promptGuardState.missingPrompts.map(p => p?.key).filter(Boolean)
+                    : [],
+                lastMissingPromptKey: promptGuardState.lastMissingPromptKey || null,
+                lastMissingPromptContext: promptGuardState.lastMissingPromptContext || null
+            };
+
             response.debugSnapshot = safeBuildDebugSnapshotV1({
                 session,
                 sessionId: session._id.toString(),
@@ -8360,7 +8618,9 @@ async function processTurn({
                 templateReferences: enabledTemplateRefs,
                 scenarioCount: scenarioToolsExpanded.length,
                 // V68: Include spelling variant debug data
-                spellingVariantDebug: spellingVariantDebugData
+                spellingVariantDebug: spellingVariantDebugData,
+                promptGuards: promptGuardsSnapshot,
+                promptPacks: promptPacksSnapshot
             });
         }
         

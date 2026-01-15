@@ -55,6 +55,7 @@ class FrontDeskBehaviorManager {
             
             const result = await response.json();
             this.config = result.data;
+            this.promptPackRegistry = result.meta?.promptPackRegistry || { packs: {}, byTrade: {} };
 
             // V77: Ensure Off-Rails Recovery config shape exists for UI editing
             // (DB may omit nested objects until changed)
@@ -65,6 +66,10 @@ class FrontDeskBehaviorManager {
 
             // V78: Ensure confirmationRequests shape exists
             this.config.confirmationRequests = this.config.confirmationRequests || this.getDefaultConfig().confirmationRequests;
+
+            // Prompt guards + packs shape
+            this.config.promptGuards = this.config.promptGuards || this.getDefaultConfig().promptGuards;
+            this.config.promptPacks = this.config.promptPacks || this.getDefaultConfig().promptPacks;
 
             // Preset Draft overlay (UI-only): if an in-memory preset is loaded, overlay it onto the loaded config.
             // This MUST NOT write to DB; it only affects the UI until user clicks Save.
@@ -364,6 +369,22 @@ class FrontDeskBehaviorManager {
                 askTime: "When works best for you - morning or afternoon?",
                 confirmTemplate: "So I have {name} at {address}, {time}. Does that sound right?",
                 completeTemplate: "You're all set, {name}! A technician will be out {time}. You'll receive a confirmation text shortly."
+            },
+            bookingPromptsMap: {},
+            serviceFlow: {
+                mode: 'hybrid',
+                empathyEnabled: false,
+                trades: [],
+                promptKeysByTrade: {}
+            },
+            promptGuards: {
+                missingPromptFallbackKey: 'booking.universal.guardrails.missing_prompt_fallback'
+            },
+            promptPacks: {
+                enabled: true,
+                selectedByTrade: {
+                    universal: 'universal_v1'
+                }
             },
             emotionResponses: {
                 stressed: { enabled: true, acknowledgments: ["I understand, that sounds stressful."], followUp: "Let me help you get this taken care of." },
@@ -733,6 +754,127 @@ class FrontDeskBehaviorManager {
             console.error('[FRONT DESK BEHAVIOR] ❌ Save failed after', (performance.now() - saveStartTime).toFixed(1), 'ms');
             this.showNotification('❌ Save failed: ' + error.message, 'error');
             throw error;
+        }
+    }
+
+    async previewPromptPackMigration() {
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+        if (!token) {
+            this.showNotification('❌ Missing auth token', 'error');
+            return;
+        }
+        const previewEl = document.getElementById('fdb-pack-migration-preview');
+        if (previewEl) previewEl.style.display = 'block';
+
+        try {
+            const resp = await fetch(`/api/admin/prompt-packs/migration/preview?companyId=${this.companyId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await resp.json();
+            if (!resp.ok || data?.success !== true) {
+                throw new Error(data?.error || 'Migration preview failed');
+            }
+            if (previewEl) previewEl.textContent = JSON.stringify(data.data, null, 2);
+            this.showNotification('✅ Migration preview loaded', 'success');
+        } catch (error) {
+            if (previewEl) previewEl.textContent = `Preview failed: ${error.message}`;
+            this.showNotification(`❌ ${error.message}`, 'error');
+        }
+    }
+
+    async applyPromptPackMigration() {
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+        if (!token) {
+            this.showNotification('❌ Missing auth token', 'error');
+            return;
+        }
+        const previewEl = document.getElementById('fdb-pack-migration-preview');
+        if (previewEl) previewEl.style.display = 'block';
+
+        try {
+            const resp = await fetch('/api/admin/prompt-packs/migration/apply', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ companyId: this.companyId, appliedBy: 'admin-ui', notes: 'UI migration apply' })
+            });
+            const data = await resp.json();
+            if (!resp.ok || data?.success !== true) {
+                throw new Error(data?.error || 'Migration apply failed');
+            }
+            if (previewEl) previewEl.textContent = JSON.stringify(data.data, null, 2);
+            this.showNotification('✅ Migration applied', 'success');
+        } catch (error) {
+            if (previewEl) previewEl.textContent = `Apply failed: ${error.message}`;
+            this.showNotification(`❌ ${error.message}`, 'error');
+        }
+    }
+
+    async previewPromptPackUpgrade(tradeKey, toPack) {
+        if (!tradeKey || !toPack) {
+            this.showNotification('❌ Missing trade or pack', 'error');
+            return;
+        }
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+        if (!token) {
+            this.showNotification('❌ Missing auth token', 'error');
+            return;
+        }
+
+        const previewEl = document.getElementById(`fdb-pack-preview-${tradeKey}`);
+        if (previewEl) previewEl.style.display = 'block';
+
+        try {
+            const qs = new URLSearchParams({ companyId: this.companyId, tradeKey, toPack });
+            const resp = await fetch(`/api/admin/prompt-packs/upgrade/preview?${qs.toString()}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await resp.json();
+            if (!resp.ok || data?.success !== true) {
+                throw new Error(data?.error || 'Upgrade preview failed');
+            }
+            if (previewEl) previewEl.textContent = JSON.stringify(data.data, null, 2);
+            this.showNotification('✅ Upgrade preview loaded', 'success');
+        } catch (error) {
+            if (previewEl) previewEl.textContent = `Preview failed: ${error.message}`;
+            this.showNotification(`❌ ${error.message}`, 'error');
+        }
+    }
+
+    async applyPromptPackUpgrade(tradeKey, toPack) {
+        if (!tradeKey || !toPack) {
+            this.showNotification('❌ Missing trade or pack', 'error');
+            return;
+        }
+        const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+        if (!token) {
+            this.showNotification('❌ Missing auth token', 'error');
+            return;
+        }
+
+        const previewEl = document.getElementById(`fdb-pack-preview-${tradeKey}`);
+        if (previewEl) previewEl.style.display = 'block';
+
+        try {
+            const resp = await fetch('/api/admin/prompt-packs/upgrade/apply', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    companyId: this.companyId,
+                    tradeKey,
+                    toPack,
+                    changedBy: 'admin-ui',
+                    notes: 'UI pack upgrade'
+                })
+            });
+            const data = await resp.json();
+            if (!resp.ok || data?.success !== true) {
+                throw new Error(data?.error || 'Upgrade apply failed');
+            }
+            if (previewEl) previewEl.textContent = JSON.stringify(data.data, null, 2);
+            this.showNotification('✅ Pack upgraded', 'success');
+        } catch (error) {
+            if (previewEl) previewEl.textContent = `Upgrade failed: ${error.message}`;
+            this.showNotification(`❌ ${error.message}`, 'error');
         }
     }
 
@@ -1358,6 +1500,79 @@ class FrontDeskBehaviorManager {
         const uowNextIntro = this.escapeHtml(uow.confirmation?.nextUnitIntro || '');
         const uowFinalMulti = this.escapeHtml(uow.confirmation?.finalScriptMulti || '');
 
+        const serviceFlow = this.config.serviceFlow || {};
+        const serviceFlowMode = serviceFlow.mode || 'hybrid';
+        const serviceFlowTrades = Array.isArray(serviceFlow.trades) ? serviceFlow.trades : [];
+        const serviceFlowTradesValue = this.escapeHtml(serviceFlowTrades.join(', '));
+        const serviceFlowPromptsMap = this.config.bookingPromptsMap || {};
+        const serviceFlowPromptKeysByTrade = serviceFlow.promptKeysByTrade || {};
+        const promptGuards = this.config.promptGuards || {};
+        const promptPacks = this.config.promptPacks || {};
+        const promptPackRegistry = this.promptPackRegistry || { packs: {}, byTrade: {} };
+        const selectedPacksByTrade = promptPacks.selectedByTrade || {};
+        const missingPromptFallbackKey = promptGuards.missingPromptFallbackKey || 'booking.universal.guardrails.missing_prompt_fallback';
+        const resolvePackPrompt = (promptKey) => {
+            const match = /^booking\.([a-z0-9_]+)\./i.exec(String(promptKey || '').trim());
+            const tradeKey = match ? match[1].toLowerCase() : 'universal';
+            const packId = selectedPacksByTrade[tradeKey] || selectedPacksByTrade.universal || null;
+            if (!packId) return '';
+            const pack = promptPackRegistry.packs?.[packId] || null;
+            return pack?.prompts?.[promptKey] || '';
+        };
+        const missingPromptFallbackText = this.escapeHtml(
+            serviceFlowPromptsMap[missingPromptFallbackKey] || resolvePackPrompt(missingPromptFallbackKey) || ''
+        );
+        const renderServiceFlowTrade = (tradeKeyRaw) => {
+            const tradeKey = String(tradeKeyRaw || '').trim().toLowerCase();
+            if (!tradeKey) return '';
+            const safeId = tradeKey.replace(/[^a-z0-9]+/gi, '_');
+            const existingKeys = serviceFlowPromptKeysByTrade[tradeKey] || {};
+            const keyNonUrgent = existingKeys.nonUrgentConsent || `booking.${tradeKey}.service.non_urgent_consent`;
+            const keyUrgent = existingKeys.urgentTriageQuestion || `booking.${tradeKey}.service.urgent_triage_question`;
+            const keyPostTriage = existingKeys.postTriageConsent || `booking.${tradeKey}.service.post_triage_consent`;
+            const keyClarify = existingKeys.consentClarify || `booking.${tradeKey}.service.consent_clarify`;
+            const nonUrgentText = this.escapeHtml(serviceFlowPromptsMap[keyNonUrgent] || resolvePackPrompt(keyNonUrgent) || '');
+            const urgentText = this.escapeHtml(serviceFlowPromptsMap[keyUrgent] || resolvePackPrompt(keyUrgent) || '');
+            const postTriageText = this.escapeHtml(serviceFlowPromptsMap[keyPostTriage] || resolvePackPrompt(keyPostTriage) || '');
+            const clarifyText = this.escapeHtml(serviceFlowPromptsMap[keyClarify] || resolvePackPrompt(keyClarify) || '');
+
+            return `
+                <div style="border: 1px solid #30363d; border-radius: 8px; padding: 14px; margin-top: 12px; background: #0d1117;">
+                    <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <strong style="color: #58a6ff;">${tradeKey.toUpperCase()}</strong>
+                        <span style="color:#8b949e; font-size: 0.75rem;">Prompt keys live in bookingPromptsMap</span>
+                    </div>
+                    <div style="display:grid; gap: 12px;">
+                        <div>
+                            <label style="display:block; margin-bottom: 6px; color:#c9d1d9; font-weight: 500;">Non-Urgent Consent</label>
+                            <input type="text" value="${this.escapeHtml(keyNonUrgent)}" disabled
+                                style="width: 100%; padding: 8px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #6e7681; margin-bottom: 6px;">
+                            <textarea id="fdb-sf-${safeId}-nonUrgent" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${nonUrgentText}</textarea>
+                        </div>
+                        <div>
+                            <label style="display:block; margin-bottom: 6px; color:#c9d1d9; font-weight: 500;">Urgent Triage Question</label>
+                            <input type="text" value="${this.escapeHtml(keyUrgent)}" disabled
+                                style="width: 100%; padding: 8px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #6e7681; margin-bottom: 6px;">
+                            <textarea id="fdb-sf-${safeId}-urgent" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${urgentText}</textarea>
+                        </div>
+                        <div>
+                            <label style="display:block; margin-bottom: 6px; color:#c9d1d9; font-weight: 500;">Post-Triage Consent</label>
+                            <input type="text" value="${this.escapeHtml(keyPostTriage)}" disabled
+                                style="width: 100%; padding: 8px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #6e7681; margin-bottom: 6px;">
+                            <textarea id="fdb-sf-${safeId}-postTriage" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${postTriageText}</textarea>
+                        </div>
+                        <div>
+                            <label style="display:block; margin-bottom: 6px; color:#c9d1d9; font-weight: 500;">Consent Clarify (optional)</label>
+                            <input type="text" value="${this.escapeHtml(keyClarify)}" disabled
+                                style="width: 100%; padding: 8px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #6e7681; margin-bottom: 6px;">
+                            <textarea id="fdb-sf-${safeId}-clarify" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${clarifyText}</textarea>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+        const serviceFlowTradeBlocks = serviceFlowTrades.map(renderServiceFlowTrade).join('');
+
         // After-hours message contract (deterministic)
         const ah = this.config.afterHoursMessageContract || {};
         const ahMode = ah.mode || 'inherit_booking_minimum';
@@ -1685,7 +1900,117 @@ class FrontDeskBehaviorManager {
                         </label>
                         <input type="text" id="fdb-asapPhrase" value="${templates.asapPhrase || "Or I can send someone as soon as possible."}" style="flex: 1; padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                     </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Missing Prompt Fallback (Guardrail)</label>
+                        <input type="text" id="fdb-missingPromptFallbackKey" value="${this.escapeHtml(missingPromptFallbackKey)}"
+                            style="width: 100%; padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; margin-bottom: 6px;">
+                        <textarea id="fdb-missingPromptFallback" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${missingPromptFallbackText || "Would you like to schedule a service visit?"}</textarea>
+                        <p style="color:#8b949e; font-size:0.75rem; margin:6px 0 0 0;">Used only if a configured prompt key has no tenant text.</p>
+                    </div>
                 </div>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <!-- SERVICE CALL FLOW (Existing Units) -->
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 16px;">
+                <h3 style="margin: 0 0 10px 0; color: #58a6ff;">🧰 Service Calls (Existing Units)</h3>
+                <p style="color: #8b949e; margin-bottom: 16px; font-size: 0.8rem;">
+                    Configure consent and triage prompts per trade. Text is stored in <code style="background:#0d1117; padding:2px 6px; border-radius:4px;">bookingPromptsMap</code>.
+                </p>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display:block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Mode</label>
+                        <select id="fdb-serviceflow-mode" style="width: 100%; padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                            <option value="off" ${serviceFlowMode === 'off' ? 'selected' : ''}>Off</option>
+                            <option value="direct_to_booking" ${serviceFlowMode === 'direct_to_booking' ? 'selected' : ''}>Direct to Booking</option>
+                            <option value="hybrid" ${serviceFlowMode === 'hybrid' ? 'selected' : ''}>Hybrid (triage if urgent)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display:block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Trades (comma-separated)</label>
+                        <input id="fdb-serviceflow-trades" value="${serviceFlowTradesValue}" placeholder="hvac, plumbing"
+                            style="width: 100%; padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                    </div>
+                </div>
+
+                <label style="display:flex; align-items: center; gap: 8px; margin-bottom: 12px; color: #c9d1d9;">
+                    <input type="checkbox" id="fdb-serviceflow-empathy" ${serviceFlow.empathyEnabled ? 'checked' : ''} style="accent-color: #58a6ff;">
+                    Enable empathy/opening acknowledgments for service trades
+                </label>
+
+                ${serviceFlowTradeBlocks || '<p style="color: #8b949e; font-size: 0.8rem; margin: 0;">Add trades above and save to configure prompts.</p>'}
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <!-- PROMPT PACKS (Hybrid defaults + overrides) -->
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 16px;">
+                <h3 style="margin: 0 0 10px 0; color: #58a6ff;">📦 Prompt Packs (Hybrid)</h3>
+                <p style="color: #8b949e; margin-bottom: 16px; font-size: 0.8rem;">
+                    Select a prompt pack per trade. Packs provide defaults; per-company overrides live in <code style="background:#0d1117; padding:2px 6px; border-radius:4px;">bookingPromptsMap</code>.
+                </p>
+
+                <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px; color:#c9d1d9;">
+                    <input type="checkbox" id="fdb-promptpacks-enabled" ${promptPacks.enabled !== false ? 'checked' : ''} style="accent-color:#58a6ff;">
+                    Enable prompt packs
+                </label>
+
+                <div style="display:grid; gap: 10px;">
+                    ${Object.keys(promptPackRegistry.byTrade || {}).sort().map(trade => {
+                        const packOptions = promptPackRegistry.byTrade[trade] || [];
+                        const selected = selectedPacksByTrade[trade] || '';
+                        const latest = promptPackRegistry.latestByTrade?.[trade] || null;
+                        const optionsHtml = packOptions.map(packId => {
+                            const pack = promptPackRegistry.packs?.[packId];
+                            const label = pack ? `${pack.label} (${pack.id})` : packId;
+                            return `<option value="${this.escapeHtml(packId)}" ${packId === selected ? 'selected' : ''}>${this.escapeHtml(label)}</option>`;
+                        }).join('');
+                        const needsUpgrade = latest && selected && latest !== selected;
+                        return `
+                            <div style="border: 1px solid #30363d; border-radius: 8px; padding: 12px; background: #0d1117;">
+                                <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <strong style="color:#c9d1d9;">${this.escapeHtml(trade)}</strong>
+                                    ${needsUpgrade ? `<span style="color:#f0883e; font-size:0.8rem;">Upgrade available: ${this.escapeHtml(latest)}</span>` : '<span style="color:#8b949e; font-size:0.8rem;">Up to date</span>'}
+                                </div>
+                                <div style="display:grid; grid-template-columns: 180px 1fr; gap: 12px; align-items: center;">
+                                    <label style="color:#8b949e;">Selected pack</label>
+                                    <select data-pack-trade="${this.escapeHtml(trade)}" style="width:100%; padding:8px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#c9d1d9;">
+                                        <option value="">(none)</option>
+                                        ${optionsHtml}
+                                    </select>
+                                </div>
+                                <div style="display:flex; gap:8px; margin-top:10px;">
+                                    <button class="btn btn-secondary" onclick="window.frontDeskBehaviorManager.previewPromptPackUpgrade('${this.escapeHtml(trade)}', '${this.escapeHtml(latest || '')}')"
+                                        style="padding:6px 10px; font-size:12px;" ${!latest ? 'disabled' : ''}>
+                                        Preview Changes
+                                    </button>
+                                    <button class="btn btn-primary" onclick="window.frontDeskBehaviorManager.applyPromptPackUpgrade('${this.escapeHtml(trade)}', '${this.escapeHtml(latest || '')}')"
+                                        style="padding:6px 10px; font-size:12px;" ${!needsUpgrade ? 'disabled' : ''}>
+                                        Upgrade Pack
+                                    </button>
+                                </div>
+                                <pre id="fdb-pack-preview-${this.escapeHtml(trade)}" style="margin-top:10px; display:none; padding:10px; background:#0b0f14; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; font-size:12px; white-space:pre-wrap;"></pre>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <!-- PROMPT PACK MIGRATION -->
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 16px;">
+                <h3 style="margin: 0 0 10px 0; color: #58a6ff;">🧭 Prompt Pack Migration</h3>
+                <p style="color: #8b949e; margin-bottom: 16px; font-size: 0.8rem;">
+                    Preview or apply legacy key migration. No changes are made until Apply is used.
+                </p>
+                <div style="display:flex; gap:8px; margin-bottom:10px;">
+                    <button class="btn btn-secondary" onclick="window.frontDeskBehaviorManager.previewPromptPackMigration()" style="padding:6px 10px; font-size:12px;">Preview Migration</button>
+                    <button class="btn btn-primary" onclick="window.frontDeskBehaviorManager.applyPromptPackMigration()" style="padding:6px 10px; font-size:12px;">Apply Migration</button>
+                </div>
+                <pre id="fdb-pack-migration-preview" style="display:none; padding:10px; background:#0b0f14; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; font-size:12px; white-space:pre-wrap;"></pre>
             </div>
             
             <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -8665,6 +8990,81 @@ Sean → Shawn, Shaun`;
                 askTime: slots.find(s => s.id === 'time')?.question || '',
                 confirmTemplate: get('fdb-confirmTemplate'),
                 completeTemplate: get('fdb-completeTemplate')
+            };
+        }
+
+        // Prompt guardrails (missing prompt fallback)
+        if (document.getElementById('fdb-missingPromptFallback')) {
+            const missingPromptFallbackKey = get('fdb-missingPromptFallbackKey') || 'booking.universal.guardrails.missing_prompt_fallback';
+            const bookingPromptsMap = { ...(this.config.bookingPromptsMap || {}) };
+            const fallbackTextRaw = get('fdb-missingPromptFallback');
+            if (fallbackTextRaw || fallbackTextRaw === '') {
+                bookingPromptsMap[missingPromptFallbackKey] = fallbackTextRaw || bookingPromptsMap[missingPromptFallbackKey] || '';
+            }
+            this.config.bookingPromptsMap = bookingPromptsMap;
+            this.config.promptGuards = {
+                ...(this.config.promptGuards || {}),
+                missingPromptFallbackKey
+            };
+        }
+
+        // Service flow (existing unit) prompts
+        if (document.getElementById('fdb-serviceflow-mode')) {
+            const rawTrades = get('fdb-serviceflow-trades') || '';
+            const trades = rawTrades
+                .split(',')
+                .map(t => String(t || '').trim().toLowerCase())
+                .filter(Boolean);
+
+            const promptKeysByTrade = {};
+            const bookingPromptsMap = { ...(this.config.bookingPromptsMap || {}) };
+
+            const buildKey = (trade, suffix) => `booking.${trade}.service.${suffix}`;
+            const toSafeId = (trade) => trade.replace(/[^a-z0-9]+/gi, '_');
+
+            for (const trade of trades) {
+                const safeId = toSafeId(trade);
+                const nonUrgentKey = buildKey(trade, 'non_urgent_consent');
+                const urgentKey = buildKey(trade, 'urgent_triage_question');
+                const postTriageKey = buildKey(trade, 'post_triage_consent');
+                const clarifyKey = buildKey(trade, 'consent_clarify');
+
+                promptKeysByTrade[trade] = {
+                    nonUrgentConsent: nonUrgentKey,
+                    urgentTriageQuestion: urgentKey,
+                    postTriageConsent: postTriageKey,
+                    consentClarify: clarifyKey
+                };
+
+                bookingPromptsMap[nonUrgentKey] = get(`fdb-sf-${safeId}-nonUrgent`) || '';
+                bookingPromptsMap[urgentKey] = get(`fdb-sf-${safeId}-urgent`) || '';
+                bookingPromptsMap[postTriageKey] = get(`fdb-sf-${safeId}-postTriage`) || '';
+                bookingPromptsMap[clarifyKey] = get(`fdb-sf-${safeId}-clarify`) || '';
+            }
+
+            this.config.serviceFlow = {
+                mode: get('fdb-serviceflow-mode') || 'hybrid',
+                empathyEnabled: getChecked('fdb-serviceflow-empathy') === true,
+                trades,
+                promptKeysByTrade
+            };
+            this.config.bookingPromptsMap = bookingPromptsMap;
+        }
+
+        // Prompt pack selection
+        if (document.getElementById('fdb-promptpacks-enabled')) {
+            const selectedByTrade = {};
+            const packSelects = document.querySelectorAll('[data-pack-trade]');
+            packSelects.forEach(select => {
+                const trade = (select.getAttribute('data-pack-trade') || '').toLowerCase();
+                const value = select.value || '';
+                if (trade && value) {
+                    selectedByTrade[trade] = value;
+                }
+            });
+            this.config.promptPacks = {
+                enabled: getChecked('fdb-promptpacks-enabled') !== false,
+                selectedByTrade
             };
         }
 

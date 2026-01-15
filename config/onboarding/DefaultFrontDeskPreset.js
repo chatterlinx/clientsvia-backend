@@ -15,6 +15,7 @@
  */
 
 const logger = require('../../utils/logger');
+const { getPromptPackRegistry } = require('../promptPacks');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // UNIVERSAL BOOKING SLOTS PRESET
@@ -316,6 +317,48 @@ const DEFAULT_ACCESS_FLOW = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT SERVICE FLOW (Service-call consent + triage)
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_SERVICE_FLOW = {
+    mode: 'hybrid',
+    empathyEnabled: false,
+    trades: [],
+    promptKeysByTrade: {}
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT BOOKING PROMPTS MAP (UI-managed prompt library)
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_BOOKING_PROMPTS_MAP = {};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT PROMPT GUARDS (runtime safety)
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_PROMPT_GUARDS = {
+    missingPromptFallbackKey: 'booking.universal.guardrails.missing_prompt_fallback'
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT PROMPT PACK SELECTION (explicit; no magic defaults)
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_PROMPT_PACKS = {
+    enabled: true,
+    selectedByTrade: {
+        universal: 'universal_v1'
+    },
+    migration: {
+        status: 'not_started',
+        appliedAt: null,
+        appliedBy: null,
+        notes: null,
+        migratedKeysCount: 0,
+        conflictsCount: 0,
+        legacyKeysRemaining: 0
+    },
+    history: []
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // DEFAULT DISCOVERY & CONSENT
 // ═══════════════════════════════════════════════════════════════════════════
 const DEFAULT_DISCOVERY_CONSENT = {
@@ -410,6 +453,12 @@ const TRADE_PRESETS = {
 function getPresetForTrade(tradeKey = 'universal') {
     const normalizedKey = (tradeKey || 'universal').toLowerCase().trim();
     const tradePreset = TRADE_PRESETS[normalizedKey] || TRADE_PRESETS.universal;
+    const promptPackRegistry = getPromptPackRegistry();
+    const promptPackSelections = { ...DEFAULT_PROMPT_PACKS.selectedByTrade };
+    const tradePackOptions = promptPackRegistry.byTrade?.[normalizedKey] || [];
+    if (tradePackOptions.length > 0) {
+        promptPackSelections[normalizedKey] = tradePackOptions[0];
+    }
     
     logger.info('[ONBOARDING PRESET] Loading preset for trade:', {
         requestedTrade: tradeKey,
@@ -448,6 +497,21 @@ function getPresetForTrade(tradeKey = 'universal') {
         // Access flow (property type + gated access)
         accessFlow: DEFAULT_ACCESS_FLOW,
 
+        // Service flow (existing unit service)
+        serviceFlow: DEFAULT_SERVICE_FLOW,
+
+        // Prompt library (per-company)
+        bookingPromptsMap: DEFAULT_BOOKING_PROMPTS_MAP,
+
+        // Prompt guardrails
+        promptGuards: DEFAULT_PROMPT_GUARDS,
+
+        // Prompt packs (explicit defaults)
+        promptPacks: {
+            ...DEFAULT_PROMPT_PACKS,
+            selectedByTrade: promptPackSelections
+        },
+
         // V77: Off-rails recovery protocol (resume booking after interrupts)
         offRailsRecovery: DEFAULT_OFF_RAILS_RECOVERY,
         
@@ -478,6 +542,10 @@ module.exports = {
     DEFAULT_DISCOVERY_CONSENT,
     DEFAULT_NAME_SPELLING_VARIANTS,
     DEFAULT_ACCESS_FLOW,
+    DEFAULT_SERVICE_FLOW,
+    DEFAULT_BOOKING_PROMPTS_MAP,
+    DEFAULT_PROMPT_GUARDS,
+    DEFAULT_PROMPT_PACKS,
     DEFAULT_OFF_RAILS_RECOVERY,
     TRADE_PRESETS
 };

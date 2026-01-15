@@ -59,6 +59,8 @@ const wiringRegistryV1 = {
         "frontDesk.discoveryConsent",
         "frontDesk.vocabulary",
         "frontDesk.bookingPrompts",
+        "frontDesk.promptPacks",
+        "frontDesk.promptGuards",
         "frontDesk.dynamicFlows",
         "frontDesk.emotions",
         "frontDesk.frustration",
@@ -177,6 +179,38 @@ const wiringRegistryV1 = {
         description: "Slots defined but bookingContractV2.enabled = false",
         checkField: "bookingContractV2.enabled"
       }
+    },
+
+    // SECTION: Prompt Packs (Hybrid defaults)
+    {
+      id: "frontDesk.promptPacks",
+      type: "SECTION",
+      label: "Prompt Packs",
+      parentId: "tab.frontDesk",
+      description: "Trade-scoped prompt packs (explicit selection only)",
+      expectedDbPaths: [
+        "company.aiAgentSettings.frontDeskBehavior.promptPacks",
+        "company.aiAgentSettings.frontDeskBehavior.promptPacks.selectedByTrade"
+      ],
+      expectedConsumers: ["PromptResolver", "ConversationEngine"],
+      expectedTraceKeys: [],
+      requiredFields: []
+    },
+
+    // SECTION: Prompt Guards
+    {
+      id: "frontDesk.promptGuards",
+      type: "SECTION",
+      label: "Prompt Guards",
+      parentId: "tab.frontDesk",
+      description: "Missing prompt guardrails and fallback key",
+      expectedDbPaths: [
+        "company.aiAgentSettings.frontDeskBehavior.promptGuards",
+        "company.aiAgentSettings.frontDeskBehavior.promptGuards.missingPromptFallbackKey"
+      ],
+      expectedConsumers: ["ConversationEngine"],
+      expectedTraceKeys: [],
+      requiredFields: []
     },
 
     // SECTION: Dynamic Flows (within Front Desk tab)

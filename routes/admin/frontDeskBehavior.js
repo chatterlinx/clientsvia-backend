@@ -22,6 +22,7 @@ const v2Company = require('../../models/v2Company');
 const { authenticateJWT } = require('../../middleware/auth');
 const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
 const { DEFAULT_FRONT_DESK_CONFIG } = require('../../config/frontDeskPrompt');
+const { getPromptPackRegistry } = require('../../config/promptPacks');
 const ConfigAuditService = require('../../services/ConfigAuditService');
 const { computeEffectiveConfigVersion } = require('../../utils/effectiveConfigVersion');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
@@ -54,6 +55,22 @@ const UI_DEFAULTS = {
         completeTemplate: "You're all set, {name}! A technician will be out {time}. You'll receive a confirmation text shortly.",
         offerAsap: true,
         asapPhrase: "Or I can send someone as soon as possible."
+    },
+    bookingPromptsMap: {},
+    serviceFlow: {
+        mode: 'hybrid',
+        empathyEnabled: false,
+        trades: [],
+        promptKeysByTrade: {}
+    },
+    promptGuards: {
+        missingPromptFallbackKey: 'booking.universal.guardrails.missing_prompt_fallback'
+    },
+    promptPacks: {
+        enabled: true,
+        selectedByTrade: {
+            universal: 'universal_v1'
+        }
     },
     emotionResponses: {
         stressed: {
@@ -266,6 +283,9 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
         
         res.json({
             success: true,
+            meta: {
+                promptPackRegistry: getPromptPackRegistry()
+            },
             data: {
                 enabled: config.enabled,
                 // 🎯 Conversation Style - confident/balanced/polite
@@ -288,6 +308,10 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 bookingTemplates: config.bookingTemplates || null,
                 // Legacy booking prompts (for backward compatibility)
                 bookingPrompts: config.bookingPrompts,
+                bookingPromptsMap: config.bookingPromptsMap,
+                serviceFlow: config.serviceFlow,
+                promptGuards: config.promptGuards,
+                promptPacks: config.promptPacks,
                 emotionResponses: config.emotionResponses,
                 frustrationTriggers: config.frustrationTriggers,
                 escalation: config.escalation,
@@ -383,6 +407,22 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             Object.entries(updates.bookingPrompts).forEach(([key, value]) => {
                 updateObj[`aiAgentSettings.frontDeskBehavior.bookingPrompts.${key}`] = value;
             });
+        }
+
+        if (updates.bookingPromptsMap) {
+            updateObj['aiAgentSettings.frontDeskBehavior.bookingPromptsMap'] = updates.bookingPromptsMap;
+        }
+
+        if (updates.serviceFlow) {
+            updateObj['aiAgentSettings.frontDeskBehavior.serviceFlow'] = updates.serviceFlow;
+        }
+
+        if (updates.promptGuards) {
+            updateObj['aiAgentSettings.frontDeskBehavior.promptGuards'] = updates.promptGuards;
+        }
+
+        if (updates.promptPacks) {
+            updateObj['aiAgentSettings.frontDeskBehavior.promptPacks'] = updates.promptPacks;
         }
         
         if (updates.emotionResponses) {

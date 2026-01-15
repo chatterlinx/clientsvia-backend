@@ -16,6 +16,7 @@
  */
 
 const { wiringRegistryV1, WIRING_SCHEMA_VERSION } = require('./wiringRegistry.v1');
+const { getLegacyPromptKeyMap } = require('../../config/promptPacks/migrationMap.v1');
 const logger = require('../../utils/logger');
 
 // ============================================================================
@@ -598,6 +599,18 @@ async function buildWiringReport({
     
     // Booking slot normalization check (detailed rejection analysis)
     specialChecks.bookingSlotNormalization = checkBookingSlotNormalization(companyDoc);
+
+    const legacyPromptMap = getLegacyPromptKeyMap();
+    const bookingPromptsMap = companyDoc?.aiAgentSettings?.frontDeskBehavior?.bookingPromptsMap || {};
+    const bookingMapKeys = typeof bookingPromptsMap.get === 'function'
+        ? Array.from(bookingPromptsMap.keys())
+        : Object.keys(bookingPromptsMap || {});
+    const legacyKeysRemaining = bookingMapKeys.filter(key => legacyPromptMap[key]).length;
+    specialChecks.promptPacks = {
+        status: legacyKeysRemaining === 0 ? 'PURE_SCHEMA' : 'LEGACY_KEYS_REMAIN',
+        health: legacyKeysRemaining === 0 ? 'GREEN' : 'YELLOW',
+        legacyKeysRemaining
+    };
     
     // Kill switches check (CRITICAL - the reason scenarioCount=0)
     specialChecks.killSwitches = checkKillSwitches(companyDoc);
@@ -701,6 +714,17 @@ async function buildWiringReport({
                 `Rejection reasons: ${Object.entries(specialChecks.bookingSlotNormalization.rejectionReasons).map(([k, v]) => `${k}(${v})`).join(', ')}`
             ],
             fix: 'Add "question" field to all booking slots in Front Desk → Booking Prompts'
+        });
+    }
+
+    if (specialChecks.promptPacks.legacyKeysRemaining > 0) {
+        issues.push({
+            severity: 'MEDIUM',
+            nodeId: 'frontDesk.promptPacks',
+            label: 'Legacy Prompt Keys Remaining',
+            status: 'LEGACY_KEYS_REMAIN',
+            reasons: [`${specialChecks.promptPacks.legacyKeysRemaining} legacy prompt keys still present`],
+            fix: 'Run Prompt Pack Migration (preview/apply) to convert legacy keys'
         });
     }
     

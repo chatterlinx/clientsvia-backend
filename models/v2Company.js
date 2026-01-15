@@ -2224,6 +2224,64 @@ const companySchema = new mongoose.Schema({
                 asapPhrase: { type: String, default: "Or I can send someone as soon as possible.", trim: true }
             },
             
+            // ═══════════════════════════════════════════════════════════════
+            // SERVICE FLOW - Service-call consent/triage flow (UI-controlled)
+            // ═══════════════════════════════════════════════════════════════
+            serviceFlow: {
+                mode: { type: String, enum: ['off', 'direct_to_booking', 'hybrid'], default: 'hybrid' },
+                empathyEnabled: { type: Boolean, default: false },
+                trades: [{ type: String, trim: true }],
+                promptKeysByTrade: {
+                    type: Map,
+                    of: new mongoose.Schema({
+                        nonUrgentConsent: { type: String, trim: true },
+                        urgentTriageQuestion: { type: String, trim: true },
+                        postTriageConsent: { type: String, trim: true },
+                        consentClarify: { type: String, trim: true }
+                    }),
+                    default: undefined
+                }
+            },
+
+            // Prompt map for per-trade booking/service templates (UI-controlled)
+            bookingPromptsMap: {
+                type: Map,
+                of: String,
+                default: {}
+            },
+
+            promptGuards: {
+                missingPromptFallbackKey: { type: String, trim: true, default: 'booking.universal.guardrails.missing_prompt_fallback' }
+            },
+
+            promptPacks: {
+                enabled: { type: Boolean, default: true },
+                selectedByTrade: {
+                    type: Map,
+                    of: String,
+                    default: {}
+                },
+                migration: {
+                    status: { type: String, enum: ['not_started', 'previewed', 'applied', 'skipped'], default: 'not_started' },
+                    appliedAt: { type: Date, default: null },
+                    appliedBy: { type: String, trim: true, default: null },
+                    notes: { type: String, trim: true, default: null },
+                    migratedKeysCount: { type: Number, default: 0 },
+                    conflictsCount: { type: Number, default: 0 },
+                    legacyKeysRemaining: { type: Number, default: 0 }
+                },
+                history: [{
+                    tradeKey: { type: String, trim: true },
+                    fromPack: { type: String, trim: true },
+                    toPack: { type: String, trim: true },
+                    changedAt: { type: Date, default: Date.now },
+                    changedBy: { type: String, trim: true },
+                    notes: { type: String, trim: true },
+                    changedKeysCount: { type: Number, default: 0 },
+                    overrideCount: { type: Number, default: 0 }
+                }]
+            },
+
             // LEGACY: Keep old bookingPrompts for backward compatibility
             bookingPrompts: {
                 askName: { type: String, default: "May I have your name?", trim: true },
