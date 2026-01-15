@@ -8408,12 +8408,30 @@ async function processTurn({
             const promptPacksSelected = promptPacksConfig.selectedByTrade || {};
             const promptPacksHistory = Array.isArray(promptPacksConfig.history) ? promptPacksConfig.history : [];
             const lastUpgrade = promptPacksHistory[promptPacksHistory.length - 1] || null;
+            const packTradeKey = normalizeTradeKey(company.trade || company.tradeType || 'universal');
+            const bookingPromptsMap = company.aiAgentSettings?.frontDeskBehavior?.bookingPromptsMap || {};
+            const bookingPromptEntries = typeof bookingPromptsMap.get === 'function'
+                ? Array.from(bookingPromptsMap.entries())
+                : Object.entries(bookingPromptsMap || {});
+            const tradePrefix = `booking.${packTradeKey}.`;
+            const overridesCount = bookingPromptEntries.filter(([key, value]) => {
+                if (!key || typeof key !== 'string') return false;
+                if (!key.startsWith(tradePrefix)) return false;
+                return typeof value === 'string' && value.trim().length > 0;
+            }).length;
+            const missingCount = Array.isArray(promptGuardState.missingPrompts)
+                ? promptGuardState.missingPrompts.length
+                : 0;
             const promptPacksSnapshot = {
                 activeTradeKeys: Object.keys(promptPacksSelected || {}),
                 selectedByTrade: promptPacksSelected,
                 migratedKeysCount: promptPacksConfig.migration?.migratedKeysCount || 0,
                 migrationStatus: promptPacksConfig.migration?.status || 'not_started',
                 legacyKeysRemaining: promptPacksConfig.migration?.legacyKeysRemaining ?? null,
+                tradeKey: packTradeKey || null,
+                overridesCount,
+                missingCount,
+                fallbackCount: missingCount,
                 lastUpgrade: lastUpgrade
                     ? {
                         tradeKey: lastUpgrade.tradeKey || null,

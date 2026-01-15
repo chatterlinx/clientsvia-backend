@@ -1999,6 +1999,20 @@ class FrontDeskBehaviorManager {
             </div>
 
             <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <!-- PACK UPGRADE PLAYBOOK (Required Checks) -->
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-top: 16px;">
+                <h3 style="margin: 0 0 8px 0; color: #f0883e;">✅ Pack Upgrade Playbook (Required Checks)</h3>
+                <div style="display:grid; gap: 6px; font-size: 12px; color:#8b949e;">
+                    <div>• clean diff (preview shows zero changes after apply)</div>
+                    <div>• history entry recorded (from → to → who → when)</div>
+                    <div>• legacy keys remaining = 0</div>
+                    <div>• promptGuards fallback key set</div>
+                    <div>• live/console test passed with new phrasing</div>
+                </div>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
             <!-- PROMPT PACK MIGRATION -->
             <!-- ═══════════════════════════════════════════════════════════════════════ -->
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 16px;">

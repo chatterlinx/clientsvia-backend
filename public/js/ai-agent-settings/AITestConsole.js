@@ -50,6 +50,8 @@ class AITestConsole {
         this.processingFinalTranscripts = false;
         this.lastFinalTranscript = null;
         this.lastFinalAt = 0;
+
+        this.packTestMode = localStorage.getItem('packTestMode') === 'true';
         
         // Initialize speech recognition
         this.initSpeechRecognition();
@@ -501,6 +503,7 @@ class AITestConsole {
         this.attachEventListeners();
         this.loadFailureReport();
         this.updateAsrModeUI();
+        this.initPackTestToggle();
     }
 
     /**
@@ -518,6 +521,10 @@ class AITestConsole {
                             <p style="margin: 4px 0 0 0; color: #8b949e; font-size: 12px;">Test conversations without making real calls</p>
                         </div>
                         <div style="display: flex; align-items: center; gap: 12px;">
+                            <label style="display:flex; align-items:center; gap:6px; background:#21262d; padding:6px 10px; border-radius:6px; font-size:11px; color:#8b949e;">
+                                <input type="checkbox" id="pack-test-toggle" ${this.packTestMode ? 'checked' : ''} style="accent-color:#58a6ff;">
+                                Pack Test Mode
+                            </label>
                             <div id="voice-status" style="background: #21262d; padding: 6px 12px; border-radius: 6px; font-size: 11px;">
                                 ${this.voiceInfo?.hasVoice 
                                     ? `<span style="color: #3fb950;">🔊 ${this.voiceInfo.voiceName || 'ElevenLabs'}</span>`
@@ -671,6 +678,18 @@ class AITestConsole {
      */
     attachEventListeners() {
         window.aiTestConsole = this;
+    }
+
+    initPackTestToggle() {
+        const toggle = document.getElementById('pack-test-toggle');
+        if (!toggle) return;
+        toggle.checked = this.packTestMode === true;
+        toggle.addEventListener('change', (event) => {
+            const enabled = event.target.checked === true;
+            this.packTestMode = enabled;
+            localStorage.setItem('packTestMode', enabled ? 'true' : 'false');
+            this.updateAnalysis(this.lastMetadata || null);
+        });
     }
 
     /**
@@ -1708,6 +1727,14 @@ ${separator}`;
         const templateRefs = snap?.templateReferences || lastDebug?.templateReferences || lastDebugEntry?.templateReferences || [];
         const templateRefsCount = Array.isArray(templateRefs) ? templateRefs.length : 0;
         const templateWiringStatus = templateRefsCount > 0 ? `✅ (${templateRefsCount})` : '❌ (none)';
+        const packTrace = snap?.promptPacks || lastDebug?.v22BlackBox?.promptPacks || null;
+        const guardTrace = snap?.promptGuards || lastDebug?.v22BlackBox?.promptGuards || null;
+        const packTrade = packTrace?.tradeKey || 'unknown';
+        const selectedPack = packTrace?.selectedByTrade?.[packTrade] || '—';
+        const overridesCount = Number.isFinite(packTrace?.overridesCount) ? packTrace.overridesCount : '—';
+        const fallbackCount = Number.isFinite(packTrace?.fallbackCount) ? packTrace.fallbackCount : '—';
+        const missingCount = Number.isFinite(packTrace?.missingCount) ? packTrace.missingCount : '—';
+        const guardStatus = (missingCount === 0 || missingCount === '0') ? 'clean' : 'check';
 
         const decisionTrace = lastEntry ? `
             <div style="background: #1c1c3a; border: 1px solid #8957e5; border-radius: 6px; padding: 8px;">
@@ -1725,6 +1752,27 @@ ${separator}`;
                     <span style="color: #6e7681;">Action:</span>
                     <span style="color: #e6edf3;">${lastDebug?.stateMachine?.action || lastEntry.llmBrain?.engineAction?.normalizedSlot ? 'COLLECT_SLOT' : 'REPLY'}</span>
                 </div>
+            </div>
+        ` : '';
+
+        const packTraceHtml = this.packTestMode ? `
+            <div style="background: #0f1a24; border: 1px solid #58a6ff; border-radius: 6px; padding: 8px;">
+                <div style="color: #58a6ff; font-size: 10px; font-weight: 600; margin-bottom: 6px;">🧭 PACK TRACE</div>
+                <div style="display: grid; grid-template-columns: 90px 1fr; gap: 4px; font-size: 11px;">
+                    <span style="color: #6e7681;">Trade:</span>
+                    <span style="color: #e6edf3;">${packTrade}</span>
+                    <span style="color: #6e7681;">Pack:</span>
+                    <span style="color: #e6edf3;">${selectedPack}</span>
+                    <span style="color: #6e7681;">Overrides:</span>
+                    <span style="color: #e6edf3;">${overridesCount}</span>
+                    <span style="color: #6e7681;">Fallback:</span>
+                    <span style="color: #e6edf3;">${fallbackCount}</span>
+                    <span style="color: #6e7681;">Missing:</span>
+                    <span style="color: #e6edf3;">${missingCount}</span>
+                    <span style="color: #6e7681;">Guards:</span>
+                    <span style="color: ${guardStatus === 'clean' ? '#3fb950' : '#f0883e'};">${guardStatus}</span>
+                </div>
+                ${guardTrace?.missingPromptFallbackKey ? `<div style="color:#8b949e;font-size:9px;margin-top:6px;">fallbackKey: ${guardTrace.missingPromptFallbackKey}</div>` : ''}
             </div>
         ` : '';
         
@@ -1909,6 +1957,9 @@ ${separator}`;
                         
                         <!-- Decision Trace -->
                         ${decisionTrace}
+
+                        <!-- Pack Trace (Pack Test Mode) -->
+                        ${packTraceHtml}
                         
                     </div>
                 </div>
