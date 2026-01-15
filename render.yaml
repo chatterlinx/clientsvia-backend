@@ -3,7 +3,7 @@ services:
     name: clientsvia-backend
     env: node
     plan: starter
-    buildCommand: npm install
+    buildCommand: npm ci && npm run test:ci
     startCommand: npm start
     envVars:
       - key: NODE_ENV

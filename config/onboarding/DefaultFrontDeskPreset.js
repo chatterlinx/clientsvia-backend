@@ -243,6 +243,23 @@ const DEFAULT_OFF_RAILS_RECOVERY = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT BOOKING INTERRUPTION BEHAVIOR (UI Controlled)
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_BOOKING_INTERRUPTION = {
+    enabled: true,
+    oneSlotPerTurn: true,
+    forceReturnToQuestionAsLastLine: true,
+    allowEmpathyLanguage: false,
+    maxSentences: 2,
+    shortClarificationPatterns: [
+        'mark?',
+        'yes?',
+        'hello?',
+        'what?'
+    ]
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // DEFAULT ESCALATION CONFIG
 // ═══════════════════════════════════════════════════════════════════════════
 const DEFAULT_ESCALATION = {
@@ -514,6 +531,9 @@ function getPresetForTrade(tradeKey = 'universal') {
 
         // V77: Off-rails recovery protocol (resume booking after interrupts)
         offRailsRecovery: DEFAULT_OFF_RAILS_RECOVERY,
+
+        // Booking interruption behavior (slot-safe)
+        bookingInterruption: DEFAULT_BOOKING_INTERRUPTION,
         
         // Personality (trade-aware)
         personality: {
@@ -547,6 +567,7 @@ module.exports = {
     DEFAULT_PROMPT_GUARDS,
     DEFAULT_PROMPT_PACKS,
     DEFAULT_OFF_RAILS_RECOVERY,
+    DEFAULT_BOOKING_INTERRUPTION,
     TRADE_PRESETS
 };
 

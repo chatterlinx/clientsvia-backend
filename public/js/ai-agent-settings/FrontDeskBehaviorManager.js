@@ -67,6 +67,9 @@ class FrontDeskBehaviorManager {
             // V78: Ensure confirmationRequests shape exists
             this.config.confirmationRequests = this.config.confirmationRequests || this.getDefaultConfig().confirmationRequests;
 
+            // Booking interruption behavior (UI-visible)
+            this.config.bookingInterruption = this.config.bookingInterruption || this.getDefaultConfig().bookingInterruption;
+
             // Prompt guards + packs shape
             this.config.promptGuards = this.config.promptGuards || this.getDefaultConfig().promptGuards;
             this.config.promptPacks = this.config.promptPacks || this.getDefaultConfig().promptPacks;
@@ -385,6 +388,14 @@ class FrontDeskBehaviorManager {
                 selectedByTrade: {
                     universal: 'universal_v1'
                 }
+            },
+            bookingInterruption: {
+                enabled: true,
+                oneSlotPerTurn: true,
+                forceReturnToQuestionAsLastLine: true,
+                allowEmpathyLanguage: false,
+                maxSentences: 2,
+                shortClarificationPatterns: ['mark?', 'yes?', 'hello?', 'what?']
             },
             emotionResponses: {
                 stressed: { enabled: true, acknowledgments: ["I understand, that sounds stressful."], followUp: "Let me help you get this taken care of." },
@@ -1522,6 +1533,26 @@ class FrontDeskBehaviorManager {
         const missingPromptFallbackText = this.escapeHtml(
             serviceFlowPromptsMap[missingPromptFallbackKey] || resolvePackPrompt(missingPromptFallbackKey) || ''
         );
+        const bookingInterruption = this.config.bookingInterruption || this.getDefaultConfig().bookingInterruption;
+        const interruptionKeys = {
+            systemHeader: 'booking.universal.interruption.system_header',
+            ackWithName: 'booking.universal.interruption.ack_with_name',
+            ackShort: 'booking.universal.interruption.ack_short',
+            genericAck: 'booking.universal.interruption.generic_ack',
+            prohibitPhrases: 'booking.universal.interruption.prohibit_phrases'
+        };
+        const interruptionTexts = {
+            systemHeader: this.escapeHtml(serviceFlowPromptsMap[interruptionKeys.systemHeader] || resolvePackPrompt(interruptionKeys.systemHeader) || ''),
+            ackWithName: this.escapeHtml(serviceFlowPromptsMap[interruptionKeys.ackWithName] || resolvePackPrompt(interruptionKeys.ackWithName) || ''),
+            ackShort: this.escapeHtml(serviceFlowPromptsMap[interruptionKeys.ackShort] || resolvePackPrompt(interruptionKeys.ackShort) || ''),
+            genericAck: this.escapeHtml(serviceFlowPromptsMap[interruptionKeys.genericAck] || resolvePackPrompt(interruptionKeys.genericAck) || ''),
+            prohibitPhrases: this.escapeHtml(serviceFlowPromptsMap[interruptionKeys.prohibitPhrases] || resolvePackPrompt(interruptionKeys.prohibitPhrases) || '')
+        };
+        const shortClarificationsText = this.escapeHtml(
+            Array.isArray(bookingInterruption.shortClarificationPatterns)
+                ? bookingInterruption.shortClarificationPatterns.join('\n')
+                : ''
+        );
         const renderServiceFlowTrade = (tradeKeyRaw) => {
             const tradeKey = String(tradeKeyRaw || '').trim().toLowerCase();
             if (!tradeKey) return '';
@@ -1891,6 +1922,77 @@ class FrontDeskBehaviorManager {
                             style="width: 100%; padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; margin-bottom: 6px;">
                         <textarea id="fdb-missingPromptFallback" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${missingPromptFallbackText || "Would you like to schedule a service visit?"}</textarea>
                         <p style="color:#8b949e; font-size:0.75rem; margin:6px 0 0 0;">Used only if a configured prompt key has no tenant text.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <!-- Booking Interruption Behavior -->
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin-top:16px;">
+                <h3 style="margin: 0 0 10px 0; color: #58a6ff;">🧭 Booking Interruption Behavior</h3>
+                <p style="color: #8b949e; margin-bottom: 16px; font-size: 0.8rem;">
+                    Slot-safe interruption handling. Text is stored in <code style="background:#0d1117; padding:2px 6px; border-radius:4px;">bookingPromptsMap</code>.
+                </p>
+
+                <div style="display:grid; gap:12px; margin-bottom:16px;">
+                    <label style="display:flex; align-items:center; gap:10px; color:#c9d1d9;">
+                        <input type="checkbox" id="fdb-interrupt-enabled" ${bookingInterruption.enabled !== false ? 'checked' : ''} style="accent-color:#58a6ff;">
+                        Enable booking interruption handling
+                    </label>
+                    <label style="display:flex; align-items:center; gap:10px; color:#c9d1d9;">
+                        <input type="checkbox" id="fdb-interrupt-oneSlot" ${bookingInterruption.oneSlotPerTurn !== false ? 'checked' : ''} style="accent-color:#58a6ff;">
+                        One slot per turn (never mix questions)
+                    </label>
+                    <label style="display:flex; align-items:center; gap:10px; color:#c9d1d9;">
+                        <input type="checkbox" id="fdb-interrupt-forceReturn" ${bookingInterruption.forceReturnToQuestionAsLastLine !== false ? 'checked' : ''} style="accent-color:#58a6ff;">
+                        Force returnToQuestion as last line
+                    </label>
+                    <label style="display:flex; align-items:center; gap:10px; color:#c9d1d9;">
+                        <input type="checkbox" id="fdb-interrupt-allowEmpathy" ${bookingInterruption.allowEmpathyLanguage === true ? 'checked' : ''} style="accent-color:#58a6ff;">
+                        Allow empathy language
+                    </label>
+                    <div>
+                        <label style="display:block; margin-bottom:6px; color:#c9d1d9; font-weight:500;">Max acknowledgment sentences</label>
+                        <input id="fdb-interrupt-maxSentences" type="number" min="1" max="5" value="${Number(bookingInterruption.maxSentences || 2)}"
+                            style="width: 120px; padding: 8px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#c9d1d9;">
+                    </div>
+                    <div>
+                        <label style="display:block; margin-bottom:6px; color:#c9d1d9; font-weight:500;">Short Clarification Patterns (one per line)</label>
+                        <textarea id="fdb-interrupt-shortClarifications" rows="3" style="width: 100%; padding: 10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; resize: vertical;">${shortClarificationsText}</textarea>
+                    </div>
+                </div>
+
+                <div style="display:grid; gap:12px; background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:16px;">
+                    <div>
+                        <label style="display:block; margin-bottom:6px; color:#c9d1d9; font-weight:500;">System Prompt (Interruption)</label>
+                        <input type="text" value="${this.escapeHtml(interruptionKeys.systemHeader)}" disabled
+                            style="width: 100%; padding: 8px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #6e7681; margin-bottom: 6px;">
+                        <textarea id="fdb-interrupt-systemHeader" rows="6" style="width: 100%; padding: 10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; resize: vertical;">${interruptionTexts.systemHeader}</textarea>
+                    </div>
+                    <div>
+                        <label style="display:block; margin-bottom:6px; color:#c9d1d9; font-weight:500;">Acknowledgment (with name)</label>
+                        <input type="text" value="${this.escapeHtml(interruptionKeys.ackWithName)}" disabled
+                            style="width: 100%; padding: 8px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #6e7681; margin-bottom: 6px;">
+                        <textarea id="fdb-interrupt-ackWithName" rows="2" style="width: 100%; padding: 10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; resize: vertical;">${interruptionTexts.ackWithName}</textarea>
+                    </div>
+                    <div>
+                        <label style="display:block; margin-bottom:6px; color:#c9d1d9; font-weight:500;">Acknowledgment (short)</label>
+                        <input type="text" value="${this.escapeHtml(interruptionKeys.ackShort)}" disabled
+                            style="width: 100%; padding: 8px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #6e7681; margin-bottom: 6px;">
+                        <textarea id="fdb-interrupt-ackShort" rows="2" style="width: 100%; padding: 10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; resize: vertical;">${interruptionTexts.ackShort}</textarea>
+                    </div>
+                    <div>
+                        <label style="display:block; margin-bottom:6px; color:#c9d1d9; font-weight:500;">Acknowledgment (generic)</label>
+                        <input type="text" value="${this.escapeHtml(interruptionKeys.genericAck)}" disabled
+                            style="width: 100%; padding: 8px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #6e7681; margin-bottom: 6px;">
+                        <textarea id="fdb-interrupt-genericAck" rows="2" style="width: 100%; padding: 10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; resize: vertical;">${interruptionTexts.genericAck}</textarea>
+                    </div>
+                    <div>
+                        <label style="display:block; margin-bottom:6px; color:#c9d1d9; font-weight:500;">Prohibited Phrases (one per line)</label>
+                        <input type="text" value="${this.escapeHtml(interruptionKeys.prohibitPhrases)}" disabled
+                            style="width: 100%; padding: 8px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #6e7681; margin-bottom: 6px;">
+                        <textarea id="fdb-interrupt-prohibitPhrases" rows="3" style="width: 100%; padding: 10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; resize: vertical;">${interruptionTexts.prohibitPhrases}</textarea>
                     </div>
                 </div>
             </div>
@@ -8878,6 +8980,40 @@ Sean → Shawn, Shaun`;
                 ...(this.config.promptGuards || {}),
                 missingPromptFallbackKey
             };
+        }
+
+        // Booking interruption behavior + prompts
+        if (document.getElementById('fdb-interrupt-enabled')) {
+            const bookingPromptsMap = { ...(this.config.bookingPromptsMap || {}) };
+            const interruptKeys = {
+                systemHeader: 'booking.universal.interruption.system_header',
+                ackWithName: 'booking.universal.interruption.ack_with_name',
+                ackShort: 'booking.universal.interruption.ack_short',
+                genericAck: 'booking.universal.interruption.generic_ack',
+                prohibitPhrases: 'booking.universal.interruption.prohibit_phrases'
+            };
+
+            bookingPromptsMap[interruptKeys.systemHeader] = get('fdb-interrupt-systemHeader') || '';
+            bookingPromptsMap[interruptKeys.ackWithName] = get('fdb-interrupt-ackWithName') || '';
+            bookingPromptsMap[interruptKeys.ackShort] = get('fdb-interrupt-ackShort') || '';
+            bookingPromptsMap[interruptKeys.genericAck] = get('fdb-interrupt-genericAck') || '';
+            bookingPromptsMap[interruptKeys.prohibitPhrases] = get('fdb-interrupt-prohibitPhrases') || '';
+
+            const shortClarifications = (get('fdb-interrupt-shortClarifications') || '')
+                .split('\n')
+                .map(v => v.trim())
+                .filter(Boolean);
+
+            this.config.bookingInterruption = {
+                enabled: getChecked('fdb-interrupt-enabled') === true,
+                oneSlotPerTurn: getChecked('fdb-interrupt-oneSlot') !== false,
+                forceReturnToQuestionAsLastLine: getChecked('fdb-interrupt-forceReturn') !== false,
+                allowEmpathyLanguage: getChecked('fdb-interrupt-allowEmpathy') === true,
+                maxSentences: Number(get('fdb-interrupt-maxSentences') || 2),
+                shortClarificationPatterns: shortClarifications
+            };
+
+            this.config.bookingPromptsMap = bookingPromptsMap;
         }
 
         // Service flow (existing unit) prompts

@@ -72,6 +72,14 @@ const UI_DEFAULTS = {
             universal: 'universal_v1'
         }
     },
+    bookingInterruption: {
+        enabled: true,
+        oneSlotPerTurn: true,
+        forceReturnToQuestionAsLastLine: true,
+        allowEmpathyLanguage: false,
+        maxSentences: 2,
+        shortClarificationPatterns: ['mark?', 'yes?', 'hello?', 'what?']
+    },
     emotionResponses: {
         stressed: {
             enabled: true,

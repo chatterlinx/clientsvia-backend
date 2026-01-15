@@ -30,6 +30,7 @@ const { callLLM0 } = require('./llmRegistry');
 const TriageContextProvider = require('./TriageContextProvider');
 const STTProfile = require('../models/STTProfile');
 const BookingScriptEngine = require('./BookingScriptEngine');
+const { resolveBookingPrompt } = require('./PromptResolver');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 🎯 VERSION BANNER - This log PROVES the new code is deployed
@@ -111,6 +112,9 @@ function loadFrontDeskConfig(company) {
             confirmTemplate: config.bookingPrompts?.confirmTemplate || null,
             completeTemplate: config.bookingPrompts?.completeTemplate || null
         },
+
+        // Booking interruption behavior (UI controlled)
+        bookingInterruption: config.bookingInterruption || {},
         
         // Emotion responses - from database ONLY
         emotionResponses: config.emotionResponses || {},
@@ -145,6 +149,9 @@ function loadFrontDeskConfig(company) {
             describingProblem: config.detectionTriggers?.describingProblem || [],
             wantsBooking: config.detectionTriggers?.wantsBooking || []
         },
+
+        // Booking interruption behavior (UI controlled)
+        bookingInterruption: config.bookingInterruption || {},
         
         // Fallback responses - from database ONLY
         // 🚨 TIERED FALLBACK - Honesty-first (never fake understanding)
@@ -181,6 +188,72 @@ function loadFrontDeskConfig(company) {
         // Raw config for anything else
         raw: config
     };
+}
+
+function normalizeShortText(value) {
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .replace(/[“”‘’]/g, "'")
+        .replace(/\s+\?/g, '?');
+}
+
+function splitSentences(value) {
+    if (!value) return [];
+    const matches = String(value).match(/[^.!?]+[.!?]?/g);
+    return matches ? matches.map(s => s.trim()).filter(Boolean) : [];
+}
+
+function limitSentences(value, maxSentences) {
+    if (!value) return '';
+    const max = Number.isFinite(maxSentences) ? Math.max(1, maxSentences) : 2;
+    const sentences = splitSentences(value);
+    return sentences.slice(0, max).join(' ').trim();
+}
+
+function removeQuestionSentences(value, keepQuestion) {
+    if (!value) return '';
+    const keepNormalized = normalizeShortText(keepQuestion);
+    return splitSentences(value)
+        .filter(sentence => {
+            if (!sentence.includes('?')) return true;
+            const normalized = normalizeShortText(sentence);
+            return keepNormalized && normalized === keepNormalized;
+        })
+        .join(' ')
+        .trim();
+}
+
+function parsePromptList(value) {
+    if (!value) return [];
+    return String(value)
+        .split(/\r?\n|,/)
+        .map(v => v.trim())
+        .filter(Boolean);
+}
+
+function stripExactSentence(value, sentence) {
+    if (!value || !sentence) return value || '';
+    const target = normalizeShortText(sentence);
+    return splitSentences(value)
+        .filter(s => normalizeShortText(s) !== target)
+        .join(' ')
+        .trim();
+}
+
+function applyProhibitedPhrases(reply, phrases) {
+    if (!reply || !Array.isArray(phrases) || phrases.length === 0) {
+        return reply;
+    }
+    let output = reply;
+    for (const phrase of phrases) {
+        if (!phrase) continue;
+        const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(escaped, 'gi');
+        output = output.replace(regex, '').replace(/\s{2,}/g, ' ').trim();
+    }
+    return output;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -529,37 +602,114 @@ class HybridReceptionistLLM {
                     keyFactsCount: enterpriseContext.keyFacts?.length || 0,
                     nextSlotQuestion: enterpriseContext.nextSlotQuestion
                 });
-                
-                const companyName = company.name || company.companyName || 'our company';
-                const trade = company.trade || 'service';
-                const keyFactsList = (enterpriseContext.keyFacts || []).join('\n- ');
-                const collectedSlotsList = Object.entries(enterpriseContext.collectedSlots || {})
-                    .filter(([k, v]) => v)
-                    .map(([k, v]) => `${k}: ${v}`)
-                    .join(', ');
-                
-                systemPrompt = `You are ${companyName}'s receptionist (${trade}).
+                const uiConfig = loadFrontDeskConfig(company);
+                const interruptionCfgRaw = uiConfig.bookingInterruption || {};
+                const interruptionCfg = {
+                    enabled: interruptionCfgRaw.enabled !== false,
+                    oneSlotPerTurn: interruptionCfgRaw.oneSlotPerTurn !== false,
+                    forceReturnToQuestionAsLastLine: interruptionCfgRaw.forceReturnToQuestionAsLastLine !== false,
+                    allowEmpathyLanguage: interruptionCfgRaw.allowEmpathyLanguage === true,
+                    maxSentences: Number.isFinite(interruptionCfgRaw.maxSentences) ? interruptionCfgRaw.maxSentences : 2,
+                    shortClarificationPatterns: Array.isArray(interruptionCfgRaw.shortClarificationPatterns)
+                        ? interruptionCfgRaw.shortClarificationPatterns
+                        : []
+                };
 
-CONTEXT (what we've discussed so far):
-${enterpriseContext.discoverySummary || 'Scheduling service'}
-${keyFactsList ? `\nKey facts:\n- ${keyFactsList}` : ''}
-${collectedSlotsList ? `\nAlready collected: ${collectedSlotsList}` : ''}
+                const promptKeys = {
+                    systemHeader: 'booking.universal.interruption.system_header',
+                    ackWithName: 'booking.universal.interruption.ack_with_name',
+                    ackShort: 'booking.universal.interruption.ack_short',
+                    genericAck: 'booking.universal.interruption.generic_ack',
+                    prohibitPhrases: 'booking.universal.interruption.prohibit_phrases'
+                };
+                const promptTexts = {
+                    systemHeader: resolveBookingPrompt(company, promptKeys.systemHeader, { tradeKey: 'universal' }) || '',
+                    ackWithName: resolveBookingPrompt(company, promptKeys.ackWithName, { tradeKey: 'universal' }) || '',
+                    ackShort: resolveBookingPrompt(company, promptKeys.ackShort, { tradeKey: 'universal' }) || '',
+                    genericAck: resolveBookingPrompt(company, promptKeys.genericAck, { tradeKey: 'universal' }) || '',
+                    prohibitPhrases: resolveBookingPrompt(company, promptKeys.prohibitPhrases, { tradeKey: 'universal' }) || ''
+                };
 
-The caller asked a question or made a comment DURING booking.
-Your job: Answer briefly (1-2 sentences max), then bridge back to the booking question.
+                const prohibitPhrases = parsePromptList(promptTexts.prohibitPhrases);
+                const returnToQuestion = (enterpriseContext.nextSlotQuestion || '').trim();
+                const activeSlotId = enterpriseContext.activeSlotId || enterpriseContext.activeSlot || null;
+                const collectedSlots = enterpriseContext.collectedSlots || {};
+                const nameMeta = enterpriseContext.nameMeta || {};
+                const nameValue = (collectedSlots.name || collectedSlots.partialName || nameMeta.first || '').trim();
 
-NEXT BOOKING QUESTION: "${enterpriseContext.nextSlotQuestion}"
+                const normalizePatterns = interruptionCfg.shortClarificationPatterns
+                    .map(normalizeShortText)
+                    .filter(Boolean);
+                const normalizedInput = normalizeShortText(userInput);
+                const isShortClarification = Boolean(normalizedInput) && (
+                    normalizePatterns.includes(normalizedInput) ||
+                    (nameValue && normalizedInput === normalizeShortText(nameValue)) ||
+                    (nameValue && normalizedInput === `${normalizeShortText(nameValue)}?`)
+                );
 
-OUTPUT JSON (STRICT):
-{"say":"brief answer to their question","bridgeBack":"${enterpriseContext.nextSlotQuestion}"}
+                const buildAck = () => {
+                    if (nameValue && promptTexts.ackWithName) {
+                        return promptTexts.ackWithName.replace('{name}', nameValue);
+                    }
+                    return promptTexts.ackShort || promptTexts.genericAck || '';
+                };
 
-RULES:
-1. Keep "say" SHORT - 1-2 sentences max
-2. "bridgeBack" must be EXACTLY: "${enterpriseContext.nextSlotQuestion}"
-3. Be helpful but don't get derailed
-4. If they ask about pricing/hours, give brief answer then bridge back
-5. If they're frustrated, acknowledge briefly then bridge back`;
+                const buildFinalReply = (ackText) => {
+                    let ack = ackText || '';
+                    if (interruptionCfg.oneSlotPerTurn && returnToQuestion) {
+                        ack = removeQuestionSentences(ack, returnToQuestion);
+                    }
+                    if (returnToQuestion) {
+                        ack = stripExactSentence(ack, returnToQuestion);
+                    }
+                    ack = limitSentences(ack, interruptionCfg.maxSentences);
+                    if (!interruptionCfg.allowEmpathyLanguage) {
+                        ack = applyProhibitedPhrases(ack, prohibitPhrases);
+                    }
+                    let reply = ack.trim();
+                    if (interruptionCfg.forceReturnToQuestionAsLastLine && returnToQuestion) {
+                        reply = reply ? `${reply}\n\n${returnToQuestion}` : returnToQuestion;
+                    }
+                    return reply.trim();
+                };
 
+                if (interruptionCfg.enabled && isShortClarification && returnToQuestion) {
+                    const quickReply = buildFinalReply(buildAck());
+                    const guarded = this.applyForbiddenPhrasesToReply(
+                        this.applyVocabularyGuardrailsToReply(quickReply, company).reply,
+                        company
+                    ).reply;
+
+                    return {
+                        reply: guarded,
+                        conversationMode: 'booking',
+                        intent: 'booking_interruption',
+                        nextGoal: 'RESUME_BOOKING',
+                        filledSlots: {},
+                        signals: { bookingInterruption: true, bridgedBack: true, shortClarification: true },
+                        latencyMs: Date.now() - startTime,
+                        tokensUsed: 0,
+                        source: 'booking_interruption',
+                        debug: {
+                            ackUsed: (quickReply || '').substring(0, 80),
+                            bridgeBack: returnToQuestion,
+                            activeSlotId
+                        }
+                    };
+                }
+
+                const contextPayload = {
+                    callerMessage: userInput,
+                    bookingMode: callContext.mode || 'BOOKING',
+                    activeSlot: activeSlotId,
+                    slotsCollected: collectedSlots,
+                    returnToQuestion,
+                    allowEmpathyLanguage: interruptionCfg.allowEmpathyLanguage,
+                    maxSentences: interruptionCfg.maxSentences,
+                    shortClarificationPatterns: interruptionCfg.shortClarificationPatterns
+                };
+
+                systemPrompt = `${promptTexts.systemHeader || ''}\n\nCONTEXT_JSON:\n${JSON.stringify(contextPayload, null, 2)}`.trim();
             } else if (isV22Discovery && enterpriseContext.customSystemPrompt) {
                 // ════════════════════════════════════════════════════════════════
                 // V22 DISCOVERY MODE: Use the custom prompt WITH scenario knowledge
@@ -688,37 +838,85 @@ RULES:
             }
             
             // ════════════════════════════════════════════════════════════════
-            // V22 BOOKING INTERRUPTION: Handle {say, bridgeBack} format
+            // BOOKING INTERRUPTION: Enforce slot-safe reply + returnToQuestion
             // ════════════════════════════════════════════════════════════════
-            if (isBookingInterruption && (parsed.say || parsed.bridgeBack)) {
-                const say = (parsed.say || '').trim();
-                const bridgeBack = (parsed.bridgeBack || enterpriseContext.nextSlotQuestion || '').trim();
-                
-                const assembled = bridgeBack ? `${say} ${bridgeBack}` : say;
+            if (isBookingInterruption) {
+                const uiConfig = loadFrontDeskConfig(company);
+                const interruptionCfgRaw = uiConfig.bookingInterruption || {};
+                const interruptionCfg = {
+                    enabled: interruptionCfgRaw.enabled !== false,
+                    oneSlotPerTurn: interruptionCfgRaw.oneSlotPerTurn !== false,
+                    forceReturnToQuestionAsLastLine: interruptionCfgRaw.forceReturnToQuestionAsLastLine !== false,
+                    allowEmpathyLanguage: interruptionCfgRaw.allowEmpathyLanguage === true,
+                    maxSentences: Number.isFinite(interruptionCfgRaw.maxSentences) ? interruptionCfgRaw.maxSentences : 2
+                };
+
+                const promptKeys = {
+                    ackWithName: 'booking.universal.interruption.ack_with_name',
+                    ackShort: 'booking.universal.interruption.ack_short',
+                    genericAck: 'booking.universal.interruption.generic_ack',
+                    prohibitPhrases: 'booking.universal.interruption.prohibit_phrases'
+                };
+                const promptTexts = {
+                    ackWithName: resolveBookingPrompt(company, promptKeys.ackWithName, { tradeKey: 'universal' }) || '',
+                    ackShort: resolveBookingPrompt(company, promptKeys.ackShort, { tradeKey: 'universal' }) || '',
+                    genericAck: resolveBookingPrompt(company, promptKeys.genericAck, { tradeKey: 'universal' }) || '',
+                    prohibitPhrases: resolveBookingPrompt(company, promptKeys.prohibitPhrases, { tradeKey: 'universal' }) || ''
+                };
+                const prohibitPhrases = parsePromptList(promptTexts.prohibitPhrases);
+
+                const returnToQuestion = (enterpriseContext.nextSlotQuestion || '').trim();
+                const collectedSlots = enterpriseContext.collectedSlots || {};
+                const nameMeta = enterpriseContext.nameMeta || {};
+                const nameValue = (collectedSlots.name || collectedSlots.partialName || nameMeta.first || '').trim();
+
+                const ackRaw = (parsed.ack || parsed.say || content || '').trim();
+                let ack = ackRaw || (nameValue && promptTexts.ackWithName ? promptTexts.ackWithName.replace('{name}', nameValue) : '') ||
+                    promptTexts.ackShort || promptTexts.genericAck || '';
+
+                if (interruptionCfg.oneSlotPerTurn && returnToQuestion) {
+                    ack = removeQuestionSentences(ack, returnToQuestion);
+                }
+                if (returnToQuestion) {
+                    ack = stripExactSentence(ack, returnToQuestion);
+                }
+                ack = limitSentences(ack, interruptionCfg.maxSentences);
+                if (!interruptionCfg.allowEmpathyLanguage) {
+                    ack = applyProhibitedPhrases(ack, prohibitPhrases);
+                }
+
+                let assembled = ack.trim();
+                if (interruptionCfg.forceReturnToQuestionAsLastLine && returnToQuestion) {
+                    assembled = assembled ? `${assembled}\n\n${returnToQuestion}` : returnToQuestion;
+                }
+
                 let finalReply = this.applyVocabularyGuardrailsToReply(assembled, company).reply;
                 finalReply = this.applyForbiddenPhrasesToReply(finalReply, company).reply;
-                
+                if (!interruptionCfg.allowEmpathyLanguage) {
+                    finalReply = applyProhibitedPhrases(finalReply, prohibitPhrases);
+                }
+
                 logger.info('[HYBRID LLM] 🔄 BOOKING INTERRUPTION response assembled', {
                     callId,
-                    say: say.substring(0, 50),
-                    bridgeBack: bridgeBack.substring(0, 50),
+                    ackPreview: ack.substring(0, 50),
+                    bridgeBack: returnToQuestion.substring(0, 50),
                     finalReply: finalReply.substring(0, 80)
                 });
-                
+
                 return {
                     reply: finalReply,
                     conversationMode: 'booking',
                     intent: 'booking_interruption',
                     nextGoal: 'RESUME_BOOKING',
                     filledSlots: {},
-                    signals: { bookingInterruption: true, bridgedBack: true },
+                    signals: { bookingInterruption: true, bridgedBack: Boolean(returnToQuestion) },
                     latencyMs,
                     tokensUsed: response.usage?.total_tokens || 0,
                     source: 'booking_interruption',
                     debug: {
-                        say,
-                        bridgeBack,
-                        originalQuestion: enterpriseContext.nextSlotQuestion
+                        ack,
+                        bridgeBack: returnToQuestion,
+                        originalQuestion: returnToQuestion
                     }
                 };
             }

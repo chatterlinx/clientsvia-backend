@@ -3768,6 +3768,9 @@ async function processTurn({
                             keyFacts: session.keyFacts || [],
                             collectedSlots: currentSlots,
                             nextSlotQuestion: nextSlotQuestion,
+                            activeSlotId: nextMissingSlotInt?.slotId || nextMissingSlotInt?.id || session.booking?.activeSlot || null,
+                            activeSlotLabel: nextMissingSlotInt?.label || nextMissingSlotInt?.name || null,
+                            nameMeta: session.booking?.meta?.name || {},
                             // Tell LLM to bridge back after answering
                             bridgeBackRequired: true
                         },
@@ -3791,7 +3794,8 @@ async function processTurn({
                     nextQuestion: nextSlotQuestion
                 }) || nextSlotQuestion;
                 
-                if (resumeBlock) {
+                const shouldAppendResumeBlock = !(llmResult?.signals?.bookingInterruption) || llmResult?.signals?.bridgedBack !== true;
+                if (resumeBlock && shouldAppendResumeBlock) {
                     finalReply = `${finalReply}\n\n${resumeBlock}`;
                 }
                 

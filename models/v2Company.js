@@ -2282,6 +2282,18 @@ const companySchema = new mongoose.Schema({
                 }]
             },
 
+            // ═══════════════════════════════════════════════════════════════
+            // BOOKING INTERRUPTION - Slot-safe interruption handling
+            // ═══════════════════════════════════════════════════════════════
+            bookingInterruption: {
+                enabled: { type: Boolean, default: true },
+                oneSlotPerTurn: { type: Boolean, default: true },
+                forceReturnToQuestionAsLastLine: { type: Boolean, default: true },
+                allowEmpathyLanguage: { type: Boolean, default: false },
+                maxSentences: { type: Number, default: 2, min: 1, max: 5 },
+                shortClarificationPatterns: { type: [String], default: ['mark?', 'yes?', 'hello?', 'what?'] }
+            },
+
             // LEGACY: Keep old bookingPrompts for backward compatibility
             bookingPrompts: {
                 askName: { type: String, default: "May I have your name?", trim: true },
