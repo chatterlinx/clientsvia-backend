@@ -2,6 +2,7 @@ const logger = require('../../utils/logger');
 const jwt = require('jsonwebtoken');
 const { createClient, LiveTranscriptionEvents } = require('@deepgram/sdk');
 const DeepgramService = require('./DeepgramService');
+const Company = require('../../models/v2Company');
 
 // NOTE: ws is a transitive dep of @deepgram/sdk; available at runtime.
 const { WebSocketServer } = require('ws');
@@ -23,6 +24,30 @@ function buildDeepgramLiveClient() {
     }
 
     return createClient(apiKey);
+}
+
+function clampNumber(value, min, max) {
+    if (!Number.isFinite(value)) return min;
+    return Math.min(max, Math.max(min, value));
+}
+
+async function getEndpointingMs(companyId) {
+    if (!companyId) return 300;
+    try {
+        const company = await Company.findById(companyId)
+            .select('callExperienceSettings aiAgentSettings.callExperience')
+            .lean();
+        const callExperience = company?.callExperienceSettings || company?.aiAgentSettings?.callExperience || {};
+        const endSilenceSeconds = Number(callExperience?.endSilenceTimeout);
+        if (!Number.isFinite(endSilenceSeconds)) return 300;
+        return clampNumber(Math.round(endSilenceSeconds * 1000), 200, 5000);
+    } catch (err) {
+        logger.warn('[TEST-CONSOLE-ASR] Failed to load callExperience for endpointing', {
+            companyId,
+            error: err.message
+        });
+        return 300;
+    }
 }
 
 /**
@@ -71,12 +96,14 @@ function attachTestConsoleASRServer(server) {
 
         let dgLive;
         let audioChunks = 0;
+        const endpointingMs = await getEndpointingMs(companyId);
         try {
             // Reuse the SAME config as Twilio, only overriding encoding/sample_rate for browser PCM.
             const liveConfig = DeepgramService.getLiveConnectionConfig({
                 encoding: 'linear16',
                 sample_rate: '16000',
-                channels: '1'
+                channels: '1',
+                endpointing: String(endpointingMs)
             });
             if (!liveConfig?.url) {
                 throw new Error('Deepgram live config missing url');
@@ -88,7 +115,7 @@ function attachTestConsoleASRServer(server) {
                 smart_format: true,
                 punctuate: true,
                 interim_results: true,
-                endpointing: 300,
+                endpointing: endpointingMs,
                 vad_events: true,
                 encoding: 'linear16',
                 sample_rate: 16000,
