@@ -168,7 +168,10 @@ function __testHandleNameSlotTurn({
     userText,
     company = {},
     nameSlotConfig = {},
-    nameMeta: nameMetaInput = {}
+    nameMeta: nameMetaInput = {},
+    currentSlots: currentSlotsInput = {},
+    activeSlot: activeSlotInput = 'name',
+    phoneQuestion = null
 }) {
     const nameMeta = {
         first: null,
@@ -180,7 +183,7 @@ function __testHandleNameSlotTurn({
         ...nameMetaInput
     };
 
-    const currentSlots = {};
+    const currentSlots = { ...currentSlotsInput };
     const extractedThisTurn = {};
     const setExtractedSlotIfChanged = (slotKey, value) => {
         if (value === undefined || value === null) return;
@@ -190,6 +193,7 @@ function __testHandleNameSlotTurn({
         }
     };
 
+    const confirmBackEnabled = nameSlotConfig?.confirmBack === true || nameSlotConfig?.confirmBack === 'true';
     const askFullNameEnabled = nameSlotConfig?.askFullName === true || nameSlotConfig?.askFullName === 'true' ||
         nameSlotConfig?.requireFullName === true || nameSlotConfig?.requireFullName === 'true' ||
         nameSlotConfig?.nameOptions?.askFullName === true || nameSlotConfig?.nameOptions?.askFullName === 'true';
@@ -197,6 +201,64 @@ function __testHandleNameSlotTurn({
 
     const customStopWords = company?.aiAgentSettings?.nameStopWords?.custom || [];
     const stopWordsEnabled = company?.aiAgentSettings?.nameStopWords?.enabled !== false;
+
+    const normalizedInput = String(userText || '').trim();
+    const lowerInput = normalizedInput.toLowerCase();
+    const isYes = /^(yes|yeah|yep|correct|that's right|right)\b/i.test(lowerInput);
+    const isNo = /^(no|nope|nah)\b/i.test(lowerInput);
+    const confirmBackTemplate = nameSlotConfig?.confirmPrompt || getMissingConfigPrompt('confirmPrompt', 'name');
+    const lastNameQuestion = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
+    const phonePrompt = phoneQuestion || getMissingConfigPrompt('slot_question', 'phone');
+    let activeSlot = activeSlotInput;
+
+    if (activeSlot === 'name' && currentSlots.name && confirmBackEnabled && !nameMeta.confirmed) {
+        if (isYes) {
+            nameMeta.confirmed = true;
+            activeSlot = 'phone';
+            return {
+                reply: String(phonePrompt).trim(),
+                state: {
+                    slots: currentSlots,
+                    extractedThisTurn,
+                    nameMeta,
+                    activeSlot,
+                    nextSlotAfterConfirm: 'phone'
+                }
+            };
+        }
+
+        if (isNo) {
+            const correctionText = normalizedInput.replace(/^(no|nope|nah)[,\s]+/i, '').trim();
+            const correctedName = SlotExtractors.extractName(correctionText, {
+                expectingName: true,
+                customStopWords: stopWordsEnabled ? customStopWords : []
+            }) || '';
+            if (correctedName) {
+                currentSlots.name = correctedName;
+                setExtractedSlotIfChanged('name', correctedName);
+                nameMeta.confirmed = false;
+                if (correctedName.includes(' ')) {
+                    const parts = correctedName.split(/\s+/);
+                    nameMeta.first = parts[0];
+                    nameMeta.last = parts.slice(1).join(' ');
+                } else {
+                    nameMeta.first = correctedName;
+                    nameMeta.last = null;
+                }
+                const reply = String(confirmBackTemplate).replace('{value}', correctedName).trim();
+                return {
+                    reply,
+                    state: {
+                        slots: currentSlots,
+                        extractedThisTurn,
+                        nameMeta,
+                        activeSlot: 'name',
+                        nextSlotAfterConfirm: 'phone'
+                    }
+                };
+            }
+        }
+    }
 
     let extractedName = SlotExtractors.extractName(userText || '', {
         expectingName: true,
@@ -259,16 +321,16 @@ function __testHandleNameSlotTurn({
         nameMeta.last = null;
     }
 
-    const confirmBackTemplate = nameSlotConfig?.confirmPrompt || getMissingConfigPrompt('confirmPrompt', 'name');
-    const lastNameQuestion = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
     let reply = '';
     const nextSlotAfterConfirm = 'phone';
 
     if (askFullNameEnabled && currentSlots.partialName && !currentSlots.name) {
         nameMeta.askedMissingPartOnce = true;
         reply = String(lastNameQuestion).replace('{firstName}', nameMeta.first || currentSlots.partialName || '').trim();
+        activeSlot = 'name';
     } else if (currentSlots.name) {
         reply = String(confirmBackTemplate).replace('{value}', currentSlots.name).trim();
+        activeSlot = confirmBackEnabled ? 'name' : 'phone';
     }
 
     return {
@@ -277,6 +339,7 @@ function __testHandleNameSlotTurn({
             slots: currentSlots,
             extractedThisTurn,
             nameMeta,
+            activeSlot,
             nextSlotAfterConfirm
         }
     };
