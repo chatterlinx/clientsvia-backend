@@ -31,12 +31,12 @@ const UPGRADE_TO_PACK = 'hvac_v2';
             process.exit(1);
         }
 
-        const previousPack = company.aiAgentSettings?.frontDeskBehavior?.promptPacks?.selectedByTrade?.[TRADE_KEY] || null;
-        console.log(`ℹ️ Previous selected pack for trade "${TRADE_KEY}":`, previousPack);
+        const selectedByTrade = company.aiAgentSettings?.frontDeskBehavior?.promptPacks?.selectedByTrade;
+        const previousPack = selectedByTrade?.get?.(TRADE_KEY) || selectedByTrade?.[TRADE_KEY] || null;
+        console.log(`ℹ️ Current selected pack for trade "${TRADE_KEY}":`, previousPack);
 
-        if (previousPack === TARGET_PACK) {
-            console.log(`✅ Already set to ${TARGET_PACK}, no change needed.`);
-        } else {
+        const allowSet = String(process.env.ALLOW_SET_HVAC_V1 || '').toLowerCase() === 'true';
+        if (!previousPack && allowSet) {
             console.log(`ℹ️ Setting selectedByTrade.${TRADE_KEY} = "${TARGET_PACK}"...`);
             await Company.updateOne(
                 { _id: COMPANY_ID },
@@ -44,6 +44,10 @@ const UPGRADE_TO_PACK = 'hvac_v2';
                 { runValidators: false }
             );
             console.log('✅ Company updated.');
+        } else if (!previousPack) {
+            console.log('ℹ️ No pack selected; set ALLOW_SET_HVAC_V1=true to assign hvac_v1.');
+        } else {
+            console.log(`✅ Pack already set to ${previousPack}; no changes applied.`);
         }
 
         console.log('\nℹ️ Running HVAC pack upgrade preview (hvac_v1 → hvac_v2)...');
