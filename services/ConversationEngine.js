@@ -171,7 +171,8 @@ function __testHandleNameSlotTurn({
     nameMeta: nameMetaInput = {},
     currentSlots: currentSlotsInput = {},
     activeSlot: activeSlotInput = 'name',
-    phoneQuestion = null
+    phoneQuestion = null,
+    abortReply = null
 }) {
     const nameMeta = {
         first: null,
@@ -209,9 +210,53 @@ function __testHandleNameSlotTurn({
     const confirmBackTemplate = nameSlotConfig?.confirmPrompt || getMissingConfigPrompt('confirmPrompt', 'name');
     const lastNameQuestion = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
     const phonePrompt = phoneQuestion || getMissingConfigPrompt('slot_question', 'phone');
+    const abortScript = abortReply || getMissingConfigPrompt('booking_abort', 'bookingOutcome.scripts.message_taken');
     let activeSlot = activeSlotInput;
 
     if (activeSlot === 'name' && currentSlots.name && confirmBackEnabled && !nameMeta.confirmed) {
+        if (!normalizedInput) {
+            nameMeta.confirmSilenceCount = Number.isFinite(nameMeta.confirmSilenceCount) ? nameMeta.confirmSilenceCount : 0;
+            nameMeta.confirmSilenceCount += 1;
+            if (nameMeta.confirmSilenceCount <= 1) {
+                const reply = String(confirmBackTemplate).replace('{value}', currentSlots.name).trim();
+                return {
+                    reply,
+                    state: {
+                        slots: currentSlots,
+                        extractedThisTurn,
+                        nameMeta,
+                        activeSlot: 'name',
+                        nextSlotAfterConfirm: 'phone'
+                    }
+                };
+            }
+            return {
+                reply: abortScript,
+                state: {
+                    slots: currentSlots,
+                    extractedThisTurn,
+                    nameMeta,
+                    activeSlot: null,
+                    nextSlotAfterConfirm: null,
+                    bookingAborted: true
+                }
+            };
+        }
+
+        if (detectBookingAbortIntent(userText, company)) {
+            return {
+                reply: abortScript,
+                state: {
+                    slots: currentSlots,
+                    extractedThisTurn,
+                    nameMeta,
+                    activeSlot: null,
+                    nextSlotAfterConfirm: null,
+                    bookingAborted: true
+                }
+            };
+        }
+
         if (isYes) {
             nameMeta.confirmed = true;
             activeSlot = 'phone';
@@ -528,6 +573,39 @@ function getMissingConfigPrompt(configType, fieldName, context = {}) {
     };
     
     return safeDefaults[configType] || safeDefaults[fieldName] || `[CONFIG MISSING: ${configType}]`;
+}
+
+function detectBookingAbortIntent(userText, company = {}) {
+    const text = String(userText || '').toLowerCase().trim();
+    if (!text) return false;
+
+    const uiPhrases = company.aiAgentSettings?.frontDeskBehavior?.bookingAbortPhrases || [];
+    const phrases = Array.isArray(uiPhrases) && uiPhrases.length > 0
+        ? uiPhrases
+        : [
+            'never mind',
+            'nevermind',
+            'forget it',
+            'cancel',
+            'cancel it',
+            'cancel the appointment',
+            'dont want to schedule',
+            "don't want to schedule",
+            'do not want to schedule',
+            'dont want to book',
+            "don't want to book",
+            'do not want to book',
+            'i dont want',
+            "i don't want",
+            'no thanks',
+            'ill call back',
+            "i'll call back",
+            'call back',
+            'stop this',
+            'stop now'
+        ];
+
+    return phrases.some(phrase => phrase && text.includes(String(phrase).toLowerCase()));
 }
 
 function extractExplicitNamePartsFromText(text) {
@@ -3443,17 +3521,94 @@ async function processTurn({
             // ═══════════════════════════════════════════════════════════════════
             log('CHECKPOINT 9b: 📋 BOOKING MODE (deterministic - no state machine)');
 
+            const bookingSlotsSafe = bookingConfig.slots || [];
+            const getSlotByType = (type) => bookingSlotsSafe.find(s => s.type === type || s.slotId === type || s.id === type);
+            const nameSlotConfig = getSlotByType('name') || {};
+            const phoneSlotConfig = getSlotByType('phone') || {};
+            const addressSlotConfig = getSlotByType('address') || {};
+            const timeSlotConfig = getSlotByType('time') || {};
+            const bookingOutcome = company.aiAgentSettings?.frontDeskBehavior?.bookingOutcome || {};
+            const bookingOutcomeScripts = bookingOutcome.scripts || {};
+            const abortScript = bookingOutcomeScripts.message_taken ||
+                getMissingConfigPrompt('booking_abort', 'bookingOutcome.scripts.message_taken');
+
+            const nameMeta = session.booking?.meta?.name || {};
+            const phoneMeta = session.booking?.meta?.phone || {};
+            const addressMeta = session.booking?.meta?.address || {};
+            const timeMeta = session.booking?.meta?.time || {};
+
+            const nameConfirmPending = !!(nameMeta.lastConfirmed && !nameMeta.confirmed);
+            const phoneConfirmPending = phoneMeta.pendingConfirm === true;
+            const addressConfirmPending = addressMeta.pendingConfirm === true;
+            const timeConfirmPending = timeMeta.pendingConfirm === true;
+
+            const getConfirmPendingSlot = () => {
+                if (nameConfirmPending) return { slot: 'name', meta: nameMeta, config: nameSlotConfig, value: currentSlots.name || currentSlots.partialName };
+                if (phoneConfirmPending) return { slot: 'phone', meta: phoneMeta, config: phoneSlotConfig, value: currentSlots.phone };
+                if (addressConfirmPending) return { slot: 'address', meta: addressMeta, config: addressSlotConfig, value: currentSlots.address };
+                if (timeConfirmPending) return { slot: 'time', meta: timeMeta, config: timeSlotConfig, value: currentSlots.time };
+                return null;
+            };
+
+            const confirmPending = getConfirmPendingSlot();
+
             // ───────────────────────────────────────────────────────────────
             // SILENCE / NO RESPONSE (UI-CONTROLLED)
             // ───────────────────────────────────────────────────────────────
-            // If caller is silent (empty input), do NOT misroute into slot breakdown.
-            // Use a dedicated no-response fallback if configured, otherwise a safe default.
             const isSilent = !(userText || '').trim();
             if (isSilent) {
+                if (confirmPending) {
+                    confirmPending.meta.confirmSilenceCount = Number.isFinite(confirmPending.meta.confirmSilenceCount)
+                        ? confirmPending.meta.confirmSilenceCount
+                        : 0;
+                    confirmPending.meta.confirmSilenceCount += 1;
+
+                    if (confirmPending.meta.confirmSilenceCount <= 1) {
+                        const confirmPrompt = confirmPending.config?.confirmPrompt || getMissingConfigPrompt('confirmPrompt', confirmPending.slot);
+                        const value = confirmPending.value || '';
+                        const confirmText = value
+                            ? String(confirmPrompt).replace('{value}', String(value))
+                            : String(confirmPending.config?.question || getMissingConfigPrompt('slot_question', confirmPending.slot));
+
+                        aiResult = {
+                            reply: confirmText,
+                            conversationMode: 'booking',
+                            intent: 'confirm_silence_reprompt',
+                            nextGoal: 'WAIT_FOR_CALLER',
+                            filledSlots: currentSlots,
+                            signals: { wantsBooking: true, consentGiven: true },
+                            latencyMs: Date.now() - aiStartTime,
+                            tokensUsed: 0,
+                            fromStateMachine: true,
+                            mode: 'BOOKING',
+                            debug: { source: 'BOOKING_CONFIRM_SILENCE_REPROMPT', slot: confirmPending.slot }
+                        };
+                        break BOOKING_MODE;
+                    }
+
+                    session.booking.abortedAt = new Date();
+                    session.mode = 'COMPLETE';
+                    session.phase = 'complete';
+                    aiResult = {
+                        reply: abortScript,
+                        conversationMode: 'complete',
+                        intent: 'booking_abort_silence',
+                        nextGoal: 'END_CALL',
+                        filledSlots: currentSlots,
+                        signals: { bookingAborted: true },
+                        latencyMs: Date.now() - aiStartTime,
+                        tokensUsed: 0,
+                        fromStateMachine: true,
+                        mode: 'COMPLETE',
+                        debug: { source: 'BOOKING_CONFIRM_SILENCE_ABORT', slot: confirmPending.slot }
+                    };
+                    break BOOKING_MODE;
+                }
+
                 const noResponseCfg =
                     company?.aiAgentSettings?.frontDeskBehavior?.fallbackResponses?.noResponse ||
                     "DEFAULT - OVERRIDE IN UI: Hello — are you still there?";
-                
+
                 aiResult = {
                     reply: noResponseCfg,
                     conversationMode: 'booking',
@@ -3466,6 +3621,26 @@ async function processTurn({
                     fromStateMachine: true,
                     mode: 'BOOKING',
                     debug: { source: 'BOOKING_SILENCE_FALLBACK' }
+                };
+                break BOOKING_MODE;
+            }
+
+            if (confirmPending && detectBookingAbortIntent(userText, company)) {
+                session.booking.abortedAt = new Date();
+                session.mode = 'COMPLETE';
+                session.phase = 'complete';
+                aiResult = {
+                    reply: abortScript,
+                    conversationMode: 'complete',
+                    intent: 'booking_abort_confirm',
+                    nextGoal: 'END_CALL',
+                    filledSlots: currentSlots,
+                    signals: { bookingAborted: true },
+                    latencyMs: Date.now() - aiStartTime,
+                    tokensUsed: 0,
+                    fromStateMachine: true,
+                    mode: 'COMPLETE',
+                    debug: { source: 'BOOKING_CONFIRM_ABORT', slot: confirmPending.slot }
                 };
                 break BOOKING_MODE;
             }

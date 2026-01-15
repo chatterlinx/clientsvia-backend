@@ -122,4 +122,57 @@ describe('Booking name handling', () => {
     expect(reply.toLowerCase()).toContain('mark johnson');
     expect(reply.toLowerCase()).toContain('confirm');
   });
+
+  test('confirmBack: abort intent ends booking', () => {
+    const company = buildCompany();
+    const nameSlotConfig = buildNameSlotConfig({ askFullName: false });
+
+    const { reply, state } = ConversationEngine.__testHandleNameSlotTurn({
+      userText: "no actually I don't want to schedule",
+      company,
+      nameSlotConfig,
+      currentSlots: { name: 'Mark' },
+      nameMeta: { first: 'Mark', last: null, confirmed: false },
+      activeSlot: 'name',
+      abortReply: "Got it! I've taken down your information. Someone will be in touch soon. Is there anything else?"
+    });
+
+    expect(state.bookingAborted).toBe(true);
+    expect(state.activeSlot).toBeNull();
+    expect(reply.toLowerCase()).toContain('taken down your information');
+  });
+
+  test('confirmBack: silence reprompts once then aborts', () => {
+    const company = buildCompany();
+    const nameSlotConfig = buildNameSlotConfig({ askFullName: false });
+    const abortReply = "Got it! I've taken down your information. Someone will be in touch soon. Is there anything else?";
+
+    const first = ConversationEngine.__testHandleNameSlotTurn({
+      userText: '',
+      company,
+      nameSlotConfig,
+      currentSlots: { name: 'Mark' },
+      nameMeta: { first: 'Mark', last: null, confirmed: false, confirmSilenceCount: 0 },
+      activeSlot: 'name',
+      abortReply
+    });
+
+    expect(first.state.activeSlot).toBe('name');
+    expect(first.state.nameMeta.confirmSilenceCount).toBe(1);
+    expect(first.reply.toLowerCase()).toContain('confirm');
+
+    const second = ConversationEngine.__testHandleNameSlotTurn({
+      userText: '',
+      company,
+      nameSlotConfig,
+      currentSlots: { name: 'Mark' },
+      nameMeta: { first: 'Mark', last: null, confirmed: false, confirmSilenceCount: 1 },
+      activeSlot: 'name',
+      abortReply
+    });
+
+    expect(second.state.bookingAborted).toBe(true);
+    expect(second.state.activeSlot).toBeNull();
+    expect(second.reply.toLowerCase()).toContain('taken down your information');
+  });
 });
