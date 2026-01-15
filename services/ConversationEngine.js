@@ -404,7 +404,8 @@ function __testHandleConfirmSlotTurn({
     nextSlotType = null,
     nextQuestion = '',
     reaskPrefix = '',
-    abortReply = null
+    abortReply = null,
+    decisionTrace = null
 }) {
     const slotMeta = {
         pendingConfirm: true,
@@ -439,21 +440,36 @@ function __testHandleConfirmSlotTurn({
             const reply = value
                 ? String(confirmPrompt).replace('{value}', String(value))
                 : String(slotConfig?.question || getMissingConfigPrompt('slot_question', slotType));
+            recordConfirmBackTrace(decisionTrace, {
+                slot: slotType,
+                userReplyType: 'SILENCE',
+                outcome: 'SILENCE_REPROMPT'
+            });
             return {
                 reply,
-                state: { slots: currentSlots, slotMeta, extractedThisTurn, activeSlot: slotType }
+                state: { slots: currentSlots, slotMeta, extractedThisTurn, confirmBackTrace: decisionTrace, activeSlot: slotType }
             };
         }
+        recordConfirmBackTrace(decisionTrace, {
+            slot: slotType,
+            userReplyType: 'SILENCE',
+            outcome: 'SILENCE_ABORT'
+        });
         return {
             reply: abortScript,
-            state: { slots: currentSlots, slotMeta, extractedThisTurn, activeSlot: null, bookingAborted: true }
+            state: { slots: currentSlots, slotMeta, extractedThisTurn, confirmBackTrace: decisionTrace, activeSlot: null, bookingAborted: true }
         };
     }
 
     if (detectBookingAbortIntent(lower, company)) {
+        recordConfirmBackTrace(decisionTrace, {
+            slot: slotType,
+            userReplyType: 'ABORT',
+            outcome: 'ABORTED'
+        });
         return {
             reply: abortScript,
-            state: { slots: currentSlots, slotMeta, extractedThisTurn, activeSlot: null, bookingAborted: true }
+            state: { slots: currentSlots, slotMeta, extractedThisTurn, confirmBackTrace: decisionTrace, activeSlot: null, bookingAborted: true }
         };
     }
 
@@ -466,6 +482,7 @@ function __testHandleConfirmSlotTurn({
         userSaysYes,
         userSaysNoGeneric,
         reaskPrefix,
+        decisionTrace,
         onConfirmYes: () => ({
             reply: nextQuestion,
             nextSlotId: nextSlotType
@@ -483,6 +500,7 @@ function __testHandleConfirmSlotTurn({
                 slots: currentSlots,
                 slotMeta,
                 extractedThisTurn,
+                confirmBackTrace: decisionTrace,
                 activeSlot: confirmResult.nextSlotId || null,
                 nextSlotId: confirmResult.nextSlotId || null
             }
@@ -491,7 +509,7 @@ function __testHandleConfirmSlotTurn({
 
     return {
         reply: '',
-        state: { slots: currentSlots, slotMeta, extractedThisTurn, activeSlot: slotType }
+        state: { slots: currentSlots, slotMeta, extractedThisTurn, confirmBackTrace: decisionTrace, activeSlot: slotType }
     };
 }
 
@@ -713,6 +731,17 @@ function detectBookingAbortIntent(userText, company = {}) {
     return phrases.some(phrase => phrase && text.includes(String(phrase).toLowerCase()));
 }
 
+function recordConfirmBackTrace(decisionTrace, { slot, userReplyType, outcome }) {
+    if (!decisionTrace) return;
+    decisionTrace.push({
+        phase: 'bookingConfirmBack',
+        slot,
+        userReplyType,
+        outcome,
+        ts: new Date().toISOString()
+    });
+}
+
 function handleConfirmBackForSlot({
     slotType,
     slotConfig,
@@ -722,7 +751,8 @@ function handleConfirmBackForSlot({
     userSaysYes,
     userSaysNoGeneric,
     onConfirmYes,
-    reaskPrefix = ''
+    reaskPrefix = '',
+    decisionTrace = null
 }) {
     if (!slotMeta?.pendingConfirm || slotMeta.confirmed) {
         return { handled: false };
@@ -735,6 +765,11 @@ function handleConfirmBackForSlot({
         slotMeta.confirmed = true;
         slotMeta.pendingConfirm = false;
         const confirmYesResult = onConfirmYes ? onConfirmYes() : null;
+        recordConfirmBackTrace(decisionTrace, {
+            slot: slotType,
+            userReplyType: 'YES',
+            outcome: 'CONFIRMED'
+        });
         return {
             handled: true,
             reply: confirmYesResult?.reply || '',
@@ -746,6 +781,11 @@ function handleConfirmBackForSlot({
         if (extractedValue) {
             currentSlots[slotType] = extractedValue;
             slotMeta.pendingConfirm = true;
+            recordConfirmBackTrace(decisionTrace, {
+                slot: slotType,
+                userReplyType: 'NO',
+                outcome: 'CORRECTION'
+            });
             return {
                 handled: true,
                 reply: String(confirmPrompt).replace('{value}', extractedValue),
@@ -754,6 +794,11 @@ function handleConfirmBackForSlot({
         }
         currentSlots[slotType] = null;
         slotMeta.pendingConfirm = false;
+        recordConfirmBackTrace(decisionTrace, {
+            slot: slotType,
+            userReplyType: 'NO',
+            outcome: 'CORRECTION'
+        });
         return {
             handled: true,
             reply: `${reaskPrefix}${questionPrompt}`.trim(),
@@ -764,6 +809,11 @@ function handleConfirmBackForSlot({
     if (extractedValue) {
         currentSlots[slotType] = extractedValue;
         slotMeta.pendingConfirm = true;
+        recordConfirmBackTrace(decisionTrace, {
+            slot: slotType,
+            userReplyType: 'UNKNOWN',
+            outcome: 'CORRECTION'
+        });
         return {
             handled: true,
             reply: String(confirmPrompt).replace('{value}', extractedValue),
@@ -2155,7 +2205,8 @@ async function processTurn({
     forceNewSession = false  // For Test Console - always create fresh session
 }) {
     const startTime = Date.now();
-    const debugLog = [];
+        const debugLog = [];
+        const confirmBackTrace = [];
 
     // Backward-compatible alias: many callers pass debug:true.
     // Treat either flag as “include debug payload in response”.
@@ -2191,6 +2242,7 @@ async function processTurn({
             currentSlots = null,
             extractedThisTurn = null,
             nameTrace = null,
+            confirmBackTrace = null,
             flow = null,
             scenarios = null,
             blackBox = null,
@@ -2237,6 +2289,7 @@ async function processTurn({
                 currentSlots: currentSlots || session?.collectedSlots || {},
                 extractedThisTurn: extractedThisTurn || {},
                 nameTrace: nameTrace || session?.booking?.meta?.name?.nameTrace || null,
+                confirmBackTrace: confirmBackTrace || [],
                 property: buildAccessSnapshot(session?.booking?.meta?.address || {}).property,
                 access: buildAccessSnapshot(session?.booking?.meta?.address || {}).access
             },
@@ -3688,11 +3741,14 @@ async function processTurn({
             log('CHECKPOINT 9b: 📋 BOOKING MODE (deterministic - no state machine)');
 
             const bookingSlotsSafe = bookingConfig.slots || [];
+            const CONFIRMABLE_SLOTS = ['name', 'phone', 'address', 'time', 'email', 'serviceType'];
             const getSlotByType = (type) => bookingSlotsSafe.find(s => s.type === type || s.slotId === type || s.id === type);
             const nameSlotConfig = getSlotByType('name') || {};
             const phoneSlotConfig = getSlotByType('phone') || {};
             const addressSlotConfig = getSlotByType('address') || {};
             const timeSlotConfig = getSlotByType('time') || {};
+            const emailSlotConfig = getSlotByType('email') || {};
+            const serviceTypeSlotConfig = getSlotByType('serviceType') || {};
             const bookingOutcome = company.aiAgentSettings?.frontDeskBehavior?.bookingOutcome || {};
             const bookingOutcomeScripts = bookingOutcome.scripts || {};
             const abortScript = bookingOutcomeScripts.message_taken ||
@@ -3702,21 +3758,30 @@ async function processTurn({
             const phoneMeta = session.booking?.meta?.phone || {};
             const addressMeta = session.booking?.meta?.address || {};
             const timeMeta = session.booking?.meta?.time || {};
+            const emailMeta = session.booking?.meta?.email || {};
+            const serviceTypeMeta = session.booking?.meta?.serviceType || {};
 
             const nameConfirmPending = !!(nameMeta.lastConfirmed && !nameMeta.confirmed);
             const phoneConfirmPending = phoneMeta.pendingConfirm === true;
             const addressConfirmPending = addressMeta.pendingConfirm === true;
             const timeConfirmPending = timeMeta.pendingConfirm === true;
+            const emailConfirmPending = emailMeta.pendingConfirm === true;
+            const serviceTypeConfirmPending = serviceTypeMeta.pendingConfirm === true;
 
             const getConfirmPendingSlot = () => {
                 if (nameConfirmPending) return { slot: 'name', meta: nameMeta, config: nameSlotConfig, value: currentSlots.name || currentSlots.partialName };
                 if (phoneConfirmPending) return { slot: 'phone', meta: phoneMeta, config: phoneSlotConfig, value: currentSlots.phone };
                 if (addressConfirmPending) return { slot: 'address', meta: addressMeta, config: addressSlotConfig, value: currentSlots.address };
                 if (timeConfirmPending) return { slot: 'time', meta: timeMeta, config: timeSlotConfig, value: currentSlots.time };
+                if (emailConfirmPending) return { slot: 'email', meta: emailMeta, config: emailSlotConfig, value: currentSlots.email };
+                if (serviceTypeConfirmPending) return { slot: 'serviceType', meta: serviceTypeMeta, config: serviceTypeSlotConfig, value: currentSlots.serviceType };
                 return null;
             };
 
             const confirmPending = getConfirmPendingSlot();
+            if (confirmPending && !CONFIRMABLE_SLOTS.includes(confirmPending.slot)) {
+                confirmPending.meta.pendingConfirm = false;
+            }
 
             // ───────────────────────────────────────────────────────────────
             // SILENCE / NO RESPONSE (UI-CONTROLLED)
@@ -3736,6 +3801,11 @@ async function processTurn({
                             ? String(confirmPrompt).replace('{value}', String(value))
                             : String(confirmPending.config?.question || getMissingConfigPrompt('slot_question', confirmPending.slot));
 
+                        recordConfirmBackTrace(confirmBackTrace, {
+                            slot: confirmPending.slot,
+                            userReplyType: 'SILENCE',
+                            outcome: 'SILENCE_REPROMPT'
+                        });
                         aiResult = {
                             reply: confirmText,
                             conversationMode: 'booking',
@@ -3755,6 +3825,11 @@ async function processTurn({
                     session.booking.abortedAt = new Date();
                     session.mode = 'COMPLETE';
                     session.phase = 'complete';
+                    recordConfirmBackTrace(confirmBackTrace, {
+                        slot: confirmPending.slot,
+                        userReplyType: 'SILENCE',
+                        outcome: 'SILENCE_ABORT'
+                    });
                     aiResult = {
                         reply: abortScript,
                         conversationMode: 'complete',
@@ -3795,6 +3870,11 @@ async function processTurn({
                 session.booking.abortedAt = new Date();
                 session.mode = 'COMPLETE';
                 session.phase = 'complete';
+                recordConfirmBackTrace(confirmBackTrace, {
+                    slot: confirmPending.slot,
+                    userReplyType: 'ABORT',
+                    outcome: 'ABORTED'
+                });
                 aiResult = {
                     reply: abortScript,
                     conversationMode: 'complete',
@@ -4504,6 +4584,10 @@ async function processTurn({
                     pendingConfirm: false, 
                     confirmed: false,
                     spelledOut: false
+                };
+                session.booking.meta.serviceType = session.booking.meta.serviceType || {
+                    pendingConfirm: false,
+                    confirmed: false
                 };
                 
                 // ═══════════════════════════════════════════════════════════════════
@@ -6158,6 +6242,7 @@ async function processTurn({
                         userSaysYes,
                         userSaysNoGeneric,
                         reaskPrefix: 'I apologize. ',
+                        decisionTrace: confirmBackTrace,
                         onConfirmYes: () => {
                             session.booking.activeSlot = 'address';
                             session.booking.activeSlotType = 'address';
@@ -6594,6 +6679,7 @@ async function processTurn({
                         userSaysYes,
                         userSaysNoGeneric,
                         reaskPrefix: 'I apologize. ',
+                        decisionTrace: confirmBackTrace,
                         onConfirmYes: () => {
                             if (moveToTimeAfterAddress()) {
                                 log('🏠 ADDRESS: User confirmed, moving to access/time');
@@ -6967,6 +7053,7 @@ async function processTurn({
                         userSaysYes,
                         userSaysNoGeneric,
                         reaskPrefix: 'No problem. ',
+                        decisionTrace: confirmBackTrace,
                         onConfirmYes: () => {
                             log('⏰ TIME: User confirmed');
                             return { reply: '', nextSlotId: null };
@@ -7052,6 +7139,45 @@ async function processTurn({
                 // ═══════════════════════════════════════════════════════════════════
                 const emailSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'email');
                 const emailMeta = session.booking.meta.email;
+                if (emailMeta.pendingConfirm && !emailMeta.confirmed) {
+                    const confirmResult = handleConfirmBackForSlot({
+                        slotType: 'email',
+                        slotConfig: emailSlotConfig || {},
+                        slotMeta: emailMeta,
+                        currentSlots,
+                        extractedValue: extractedThisTurn.email,
+                        userSaysYes,
+                        userSaysNoGeneric,
+                        reaskPrefix: 'No problem. ',
+                        decisionTrace: confirmBackTrace,
+                        onConfirmYes: () => ({ reply: '', nextSlotId: null })
+                    });
+                    if (confirmResult.handled) {
+                        if (confirmResult.reply) finalReply = confirmResult.reply;
+                        if (confirmResult.nextSlotId) nextSlotId = confirmResult.nextSlotId;
+                    }
+                }
+
+                const serviceTypeSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'serviceType');
+                const serviceTypeMeta = session.booking.meta.serviceType;
+                if (serviceTypeMeta.pendingConfirm && !serviceTypeMeta.confirmed) {
+                    const confirmResult = handleConfirmBackForSlot({
+                        slotType: 'serviceType',
+                        slotConfig: serviceTypeSlotConfig || {},
+                        slotMeta: serviceTypeMeta,
+                        currentSlots,
+                        extractedValue: extractedThisTurn.serviceType || currentSlots.serviceType,
+                        userSaysYes,
+                        userSaysNoGeneric,
+                        reaskPrefix: 'No problem. ',
+                        decisionTrace: confirmBackTrace,
+                        onConfirmYes: () => ({ reply: '', nextSlotId: null })
+                    });
+                    if (confirmResult.handled) {
+                        if (confirmResult.reply) finalReply = confirmResult.reply;
+                        if (confirmResult.nextSlotId) nextSlotId = confirmResult.nextSlotId;
+                    }
+                }
                 
                 if (emailMeta && extractedThisTurn.email && !emailMeta.confirmed) {
                     const spellOutEmail = emailSlotConfig?.spellOutEmail !== false;
@@ -9150,6 +9276,7 @@ async function processTurn({
                 currentSlots: session.collectedSlots || {},
                 extractedThisTurn: extractedThisTurn || {},
                 nameTrace: session.booking?.meta?.name?.nameTrace || null,
+                confirmBackTrace,
                 property: buildAccessSnapshot(session.booking?.meta?.address || {}).property,
                 access: buildAccessSnapshot(session.booking?.meta?.address || {}).access,
                 flow: {

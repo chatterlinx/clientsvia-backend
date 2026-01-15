@@ -190,4 +190,59 @@ describe('ConfirmBack contract for phone/address/time', () => {
     expect(second.state.activeSlot).toBeNull();
     expect(second.reply.toLowerCase()).toContain('stop');
   });
+
+  test('email confirm yes records trace', () => {
+    const trace = [];
+    const { reply, state } = ConversationEngine.__testHandleConfirmSlotTurn({
+      slotType: 'email',
+      userText: 'yes',
+      company: buildCompany(),
+      slotConfig: buildSlotConfig({ question: "What's the best email?" }),
+      slotMeta: { pendingConfirm: true, confirmed: false },
+      currentSlots: { email: 'mark@example.com' },
+      nextSlotType: null,
+      nextQuestion: '',
+      decisionTrace: trace
+    });
+
+    expect(state.slotMeta.confirmed).toBe(true);
+    expect(state.confirmBackTrace[0].slot).toBe('email');
+    expect(state.confirmBackTrace[0].outcome).toBe('CONFIRMED');
+    expect(reply).toBe('');
+  });
+
+  test('email confirm no records correction trace', () => {
+    const trace = [];
+    const { state } = ConversationEngine.__testHandleConfirmSlotTurn({
+      slotType: 'email',
+      userText: 'no, it is mark2@example.com',
+      company: buildCompany(),
+      slotConfig: buildSlotConfig({ question: "What's the best email?" }),
+      slotMeta: { pendingConfirm: true, confirmed: false },
+      currentSlots: { email: 'mark@example.com' },
+      extractedValue: 'mark2@example.com',
+      decisionTrace: trace
+    });
+
+    expect(state.slots.email).toBe('mark2@example.com');
+    expect(state.confirmBackTrace[0].slot).toBe('email');
+    expect(state.confirmBackTrace[0].outcome).toBe('CORRECTION');
+  });
+
+  test('serviceType silence abort records trace', () => {
+    const trace = [];
+    const abortReply = 'Got it, we can stop here.';
+    const { state } = ConversationEngine.__testHandleConfirmSlotTurn({
+      slotType: 'serviceType',
+      userText: '',
+      company: buildCompany(),
+      slotConfig: buildSlotConfig({ question: 'What type of visit?' }),
+      slotMeta: { pendingConfirm: true, confirmed: false, confirmSilenceCount: 1 },
+      currentSlots: { serviceType: 'repair' },
+      abortReply,
+      decisionTrace: trace
+    });
+
+    expect(state.bookingAborted).toBe(true);
+  });
 });
