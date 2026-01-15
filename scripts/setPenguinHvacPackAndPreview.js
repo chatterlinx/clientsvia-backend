@@ -31,27 +31,18 @@ const UPGRADE_TO_PACK = 'hvac_v2';
             process.exit(1);
         }
 
-        company.aiAgentSettings = company.aiAgentSettings || {};
-        company.aiAgentSettings.frontDeskBehavior = company.aiAgentSettings.frontDeskBehavior || {};
-        company.aiAgentSettings.frontDeskBehavior.promptPacks =
-            company.aiAgentSettings.frontDeskBehavior.promptPacks || {};
-        company.aiAgentSettings.frontDeskBehavior.promptPacks.selectedByTrade =
-            company.aiAgentSettings.frontDeskBehavior.promptPacks.selectedByTrade || {};
-
-        const selectedByTrade = company.aiAgentSettings.frontDeskBehavior.promptPacks.selectedByTrade;
-
-        const previousPack = selectedByTrade[TRADE_KEY] || null;
-
+        const previousPack = company.aiAgentSettings?.frontDeskBehavior?.promptPacks?.selectedByTrade?.[TRADE_KEY] || null;
         console.log(`ℹ️ Previous selected pack for trade "${TRADE_KEY}":`, previousPack);
 
         if (previousPack === TARGET_PACK) {
             console.log(`✅ Already set to ${TARGET_PACK}, no change needed.`);
         } else {
-            selectedByTrade[TRADE_KEY] = TARGET_PACK;
-            company.markModified('aiAgentSettings.frontDeskBehavior.promptPacks.selectedByTrade');
-
             console.log(`ℹ️ Setting selectedByTrade.${TRADE_KEY} = "${TARGET_PACK}"...`);
-            await company.save();
+            await Company.updateOne(
+                { _id: COMPANY_ID },
+                { $set: { [`aiAgentSettings.frontDeskBehavior.promptPacks.selectedByTrade.${TRADE_KEY}`]: TARGET_PACK } },
+                { runValidators: false }
+            );
             console.log('✅ Company updated.');
         }
 
