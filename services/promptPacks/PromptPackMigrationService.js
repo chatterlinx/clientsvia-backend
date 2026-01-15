@@ -6,6 +6,23 @@ function normalizeTradeKey(value) {
     return String(value || '').trim().toLowerCase();
 }
 
+function getSelectedPackId(selectedByTrade, tradeKey) {
+    if (!selectedByTrade) return null;
+    if (typeof selectedByTrade.get === 'function') {
+        return selectedByTrade.get(tradeKey) || null;
+    }
+    return selectedByTrade[tradeKey] || null;
+}
+
+function setSelectedPackId(selectedByTrade, tradeKey, packId) {
+    if (!selectedByTrade) return;
+    if (typeof selectedByTrade.set === 'function') {
+        selectedByTrade.set(tradeKey, packId);
+        return;
+    }
+    selectedByTrade[tradeKey] = packId;
+}
+
 function isNewSchemaKey(key) {
     return /^booking\.[a-z0-9_]+\./i.test(String(key || '').trim());
 }
@@ -210,7 +227,7 @@ function buildUpgradePreview(companyDoc, tradeKey, toPackId) {
     const frontDesk = companyDoc?.aiAgentSettings?.frontDeskBehavior || {};
     const selectedByTrade = frontDesk.promptPacks?.selectedByTrade || {};
     const normalizedTrade = normalizeTradeKey(tradeKey);
-    const fromPackId = selectedByTrade[normalizedTrade] || null;
+    const fromPackId = getSelectedPackId(selectedByTrade, normalizedTrade);
 
     const fromPack = getPromptPackById(fromPackId);
     const toPack = getPromptPackById(toPackId);
@@ -246,7 +263,7 @@ function buildUpgradePreview(companyDoc, tradeKey, toPackId) {
 function applyPackUpgrade(companyDoc, tradeKey, toPackId, { changedBy = 'admin-pack-upgrade', notes = null } = {}) {
     const frontDesk = companyDoc.aiAgentSettings.frontDeskBehavior;
     const normalizedTrade = normalizeTradeKey(tradeKey);
-    const fromPackId = frontDesk.promptPacks?.selectedByTrade?.[normalizedTrade] || null;
+    const fromPackId = getSelectedPackId(frontDesk.promptPacks?.selectedByTrade, normalizedTrade);
     const toPack = getPromptPackById(toPackId);
 
     const preview = buildUpgradePreview(companyDoc, normalizedTrade, toPackId);
@@ -255,7 +272,7 @@ function applyPackUpgrade(companyDoc, tradeKey, toPackId, { changedBy = 'admin-p
 
     frontDesk.promptPacks = frontDesk.promptPacks || {};
     frontDesk.promptPacks.selectedByTrade = frontDesk.promptPacks.selectedByTrade || {};
-    frontDesk.promptPacks.selectedByTrade[normalizedTrade] = toPackId;
+    setSelectedPackId(frontDesk.promptPacks.selectedByTrade, normalizedTrade, toPackId);
     frontDesk.promptPacks.history = Array.isArray(frontDesk.promptPacks.history) ? frontDesk.promptPacks.history : [];
     frontDesk.promptPacks.history.push({
         tradeKey: normalizedTrade,
