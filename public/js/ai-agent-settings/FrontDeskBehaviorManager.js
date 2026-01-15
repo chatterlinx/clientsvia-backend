@@ -1590,21 +1590,6 @@ class FrontDeskBehaviorManager {
 
         return `
             <!-- ═══════════════════════════════════════════════════════════════════════ -->
-            <!-- GOLDEN SLOTS LOADER - Quick setup with best practices -->
-            <!-- ═══════════════════════════════════════════════════════════════════════ -->
-            <div style="background: linear-gradient(135deg, #1a1f35 0%, #0d1117 100%); border: 1px solid #f0883e; border-radius: 8px; padding: 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
-                <div>
-                    <h4 style="margin: 0; color: #f0883e; font-size: 14px;">⭐ Quick Setup</h4>
-                    <p style="color: #8b949e; font-size: 12px; margin: 4px 0 0 0;">Load golden booking slots with name intelligence, spelling variants, and proper confirmation flows.</p>
-                </div>
-                <button onclick="window.frontDeskManager.loadGoldenBookingSlots()" 
-                    id="load-golden-slots-btn"
-                    style="padding: 10px 20px; background: linear-gradient(135deg, #f0883e 0%, #d97706 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; white-space: nowrap;">
-                    🎯 Load Golden Slots
-                </button>
-            </div>
-
-            <!-- ═══════════════════════════════════════════════════════════════════════ -->
             <!-- BOOKING CONTRACT V2 (BETA) - Slot Library + Slot Groups -->
             <!-- ═══════════════════════════════════════════════════════════════════════ -->
             <div style="background: #0d1117; border: 1px solid ${v2Enabled ? '#3fb950' : '#30363d'}; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
@@ -4663,82 +4648,7 @@ Sean → Shawn, Shaun`;
         ];
     }
     
-    /**
-     * Load Golden Booking Slots from backend
-     * This seeds the company with properly configured booking slots including:
-     * - Name slot with spelling variants, confirm-back, and last name prompt
-     * - Phone slot with caller ID offer
-     * - Address slot with confirmation
-     * - Time slot with ASAP option
-     */
-    async loadGoldenBookingSlots() {
-        const btn = document.getElementById('load-golden-slots-btn');
-        const originalText = btn.innerHTML;
-        
-        try {
-            btn.innerHTML = '⏳ Loading...';
-            btn.disabled = true;
-            
-            // Get token from correct storage key (same as other API calls)
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
-            if (!token) {
-                throw new Error('No auth token found. Please refresh and sign in again.');
-            }
-            
-            const response = await fetch(`/api/company/${this.companyId}/seed-golden/booking-slots`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-            
-            let data;
-            try {
-                data = await response.json();
-            } catch (e) {
-                const text = await response.text().catch(() => '');
-                throw new Error(`Golden slots API returned non-JSON (HTTP ${response.status}). ${text ? `Body: ${text.substring(0, 200)}` : ''}`);
-            }
-            
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || data.message || `Failed to load golden slots (HTTP ${response.status})`);
-            }
-            
-            console.log('[FRONT DESK] ✅ Golden booking slots loaded:', data);
-            
-            // Reload config from backend and re-render properly
-            await this.load();
-            const panel = document.querySelector('.front-desk-behavior-panel');
-            if (panel) {
-                this.switchTab('booking', panel);
-            }
-            
-            btn.innerHTML = '✅ Loaded!';
-            btn.style.background = '#238636';
-            
-            // Show success message
-            alert(`✅ Golden booking slots loaded!\n\n${data.config.slotsCount} slots configured:\n${data.config.slots.map(s => `• ${s.label} (${s.id})`).join('\n')}\n\nName spelling variants: ${data.config.nameSpellingVariants.variantCount} pairs\n\nClick SAVE to persist changes.`);
-            
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-                btn.style.background = '';
-                btn.disabled = false;
-            }, 2000);
-            
-        } catch (error) {
-            console.error('[FRONT DESK] ❌ Failed to load golden slots:', error);
-            btn.innerHTML = '❌ Error';
-            btn.style.background = '#f85149';
-            alert(`Failed to load golden slots: ${error.message}`);
-            
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-                btn.style.background = '';
-                btn.disabled = false;
-            }, 2000);
-        }
-    }
+    // NOTE: Golden slot loader removed to prevent outdated slot templates
 
     // ═══════════════════════════════════════════════════════════════════════
     // BOOKING CONTRACT V2 (BETA) - Safe migration + preview compile
