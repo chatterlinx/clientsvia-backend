@@ -49,6 +49,8 @@ const DynamicFlowEngine = require('./DynamicFlowEngine');
 const logger = require('../utils/logger');
 const { parseSpellingVariantPrompt, parseSpellingVariantResponse } = require('../utils/nameSpellingVariant');
 const { extractName: extractNameDeterministic, isTradeContextSentence } = require('../utils/nameExtraction');
+const { isSuspiciousDuplicateName } = require('../utils/nameGuards');
+const { normalizeCityStatePhrase, parseCityStatePhrase, combineAddressParts } = require('../utils/addressNormalization');
 const { buildResumeBookingBlock } = require('../utils/resumeBookingProtocol');
 const { detectBookingClarification } = require('../utils/bookingClarification');
 const { detectConfirmationRequest } = require('../utils/confirmationRequest');
@@ -2605,6 +2607,14 @@ async function processTurn({
         }
         
         const extractedThisTurn = {};
+        const initialSlotsSnapshot = { ...currentSlots };
+        const setExtractedSlotIfChanged = (slotKey, value) => {
+            if (value === undefined || value === null) return;
+            const previous = initialSlotsSnapshot[slotKey];
+            if (String(previous || '') !== String(value || '')) {
+                extractedThisTurn[slotKey] = value;
+            }
+        };
         
         // Get booking config for askMissingNamePart setting
         const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
@@ -2660,8 +2670,8 @@ async function processTurn({
                 // Persist as the current "best" name spelling (single-token name)
                 currentSlots.name = inferredChoice;
                 currentSlots.partialName = inferredChoice;
-                extractedThisTurn.name = inferredChoice;
-                extractedThisTurn.partialName = inferredChoice;
+                setExtractedSlotIfChanged('name', inferredChoice);
+                setExtractedSlotIfChanged('partialName', inferredChoice);
                 
                 log('📝 V75: Captured spelling-variant choice during slot extraction', {
                     lastAssistantMsg: lastAssistantMsg.substring(0, 80),
@@ -2737,7 +2747,7 @@ async function processTurn({
                 if (askMissingNamePart && isPartialName && !alreadyAskedForMissingPart) {
                     // Store partial, let AI ask for full name
                     currentSlots.partialName = extractedName;
-                    extractedThisTurn.partialName = extractedName;
+                    setExtractedSlotIfChanged('partialName', extractedName);
                     log('Partial name detected (will ask for full)', { partialName: extractedName });
                 } else {
                     // Accept name as-is
@@ -2758,14 +2768,14 @@ async function processTurn({
                     } else {
                         currentSlots.name = extractedName;
                     }
-                    extractedThisTurn.name = currentSlots.name;
+                    setExtractedSlotIfChanged('name', currentSlots.name);
                     log('Name extracted', { name: currentSlots.name });
                 }
             } else if (currentSlots.partialName) {
                 // Accept partial as complete (only ask once)
                 currentSlots.name = currentSlots.partialName;
                 delete currentSlots.partialName;
-                extractedThisTurn.name = currentSlots.name;
+                setExtractedSlotIfChanged('name', currentSlots.name);
                 log('Accepting partial name as complete', { name: currentSlots.name });
                 }
             }
@@ -3809,6 +3819,8 @@ async function processTurn({
                     askedMissingPartOnce: false,
                     assumedSingleTokenAs: null,  // "first" | "last"
                     missingPartMissCount: 0,
+                    duplicateConfirmPending: false,
+                    duplicateConfirmName: null,
                     nameTrace: {
                         outcome: null,
                         lastPromptTurn: null,
@@ -3875,22 +3887,36 @@ async function processTurn({
                         const first = parts[0];
                         const last = parts.slice(1).join(' ');
                         if (first && last && first.toLowerCase() === last.toLowerCase()) {
-                            log('🚨 V84: Detected duplicated name parts (invalid last name) - cleaning', {
-                                current: currentSlots.name
-                            });
-                            currentSlots.name = first;
-                            // Keep meta consistent
-                            session.booking.meta.name.first = first;
-                            session.booking.meta.name.last = null;
-                            session.booking.meta.name.askedMissingPartOnce = true; // we are effectively in "need last name" mode
-                            session.booking.meta.name.assumedSingleTokenAs = 'first';
-                            // Force booking to remain on NAME until last name is provided
-                            session.booking.activeSlot = 'name';
-                            session.booking.activeSlotType = 'name';
-                            // Persist cleanup so the UI and future turns see truth
-                            session.collectedSlots = { ...(session.collectedSlots || {}), name: first };
-                            delete session.collectedSlots.partialName;
-                            session.markModified('collectedSlots');
+                            const commonFirstNames = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+                            const suspiciousDuplicate = isSuspiciousDuplicateName(first, last, commonFirstNames);
+
+                            if (suspiciousDuplicate) {
+                                session.booking.meta.name.first = first;
+                                session.booking.meta.name.last = last;
+                                session.booking.meta.name.assumedSingleTokenAs = 'first';
+                                session.booking.meta.name.duplicateConfirmPending = true;
+                                session.booking.meta.name.duplicateConfirmName = `${first} ${last}`.trim();
+                                log('🧾 V89: Suspicious duplicate name detected - pending confirm', {
+                                    name: currentSlots.name
+                                });
+                            } else {
+                                log('🚨 V84: Detected duplicated name parts (invalid last name) - cleaning', {
+                                    current: currentSlots.name
+                                });
+                                currentSlots.name = first;
+                                // Keep meta consistent
+                                session.booking.meta.name.first = first;
+                                session.booking.meta.name.last = null;
+                                session.booking.meta.name.askedMissingPartOnce = true; // we are effectively in "need last name" mode
+                                session.booking.meta.name.assumedSingleTokenAs = 'first';
+                                // Force booking to remain on NAME until last name is provided
+                                session.booking.activeSlot = 'name';
+                                session.booking.activeSlotType = 'name';
+                                // Persist cleanup so the UI and future turns see truth
+                                session.collectedSlots = { ...(session.collectedSlots || {}), name: first };
+                                delete session.collectedSlots.partialName;
+                                session.markModified('collectedSlots');
+                            }
                         }
                     }
                 }
@@ -3953,6 +3979,8 @@ async function processTurn({
                 const nameMeta = session.booking.meta.name;
                 nameMeta.missingPartMissCount = Number.isFinite(nameMeta.missingPartMissCount) ? nameMeta.missingPartMissCount : 0;
                 nameMeta.nameTrace = nameMeta.nameTrace || { outcome: null, lastPromptTurn: null, lastPromptType: null };
+                nameMeta.duplicateConfirmPending = Boolean(nameMeta.duplicateConfirmPending);
+                nameMeta.duplicateConfirmName = nameMeta.duplicateConfirmName || null;
                 const confirmBackEnabled = nameSlotConfig?.confirmBack === true || nameSlotConfig?.confirmBack === 'true';
                 // V36 FIX: Check both boolean and string values (UI might save as string)
                 const askFullNameEnabled = nameSlotConfig?.askFullName === true || nameSlotConfig?.askFullName === 'true' ||
@@ -4106,6 +4134,11 @@ async function processTurn({
                     trace.outcomeAtTurn = getCurrentTurnNumber();
                     trace.outcomeDetails = details && Object.keys(details).length ? details : null;
                     nameMeta.nameTrace = trace;
+                };
+                const buildDuplicateConfirmPrompt = (firstName, lastName) => {
+                    const safeFirst = firstName || '';
+                    const safeLast = lastName || '';
+                    return `Just to double-check, is your last name also ${safeLast}? So that's ${safeFirst} ${safeLast}?`.trim();
                 };
                 const lastPromptTurn = nameMeta.nameTrace?.lastPromptTurn;
                 const lastPromptType = nameMeta.nameTrace?.lastPromptType;
@@ -4306,6 +4339,53 @@ async function processTurn({
                     askedMissingPartOnce: nameMeta.askedMissingPartOnce
                 });
                 
+                if (nameMeta.duplicateConfirmPending && (session.booking.activeSlotType === 'name' || session.booking.activeSlot === 'name')) {
+                    const duplicateName = nameMeta.duplicateConfirmName || currentSlots.name || '';
+                    const firstName = nameMeta.first || duplicateName.split(' ')[0] || '';
+                    const lastName = nameMeta.last || duplicateName.split(' ').slice(1).join(' ') || '';
+                    const confirmPrompt = buildDuplicateConfirmPrompt(firstName, lastName);
+
+                    if (userSaysYesForName) {
+                        nameMeta.duplicateConfirmPending = false;
+                        nameMeta.duplicateConfirmName = null;
+                        nameMeta.lastConfirmed = true;
+                        nameMeta.confirmed = true;
+                        currentSlots.name = `${firstName} ${lastName}`.trim();
+                        extractedThisTurn.name = currentSlots.name;
+                        session.booking.activeSlot = getSlotIdByType('phone');
+                        session.booking.activeSlotType = 'phone';
+                        finalReply = `Perfect, ${firstName || currentSlots.name}. `;
+                        nextSlotId = null;
+                        setNameTraceOutcome('handler_confirmed_duplicate', { name: currentSlots.name });
+                        log('🧾 V89: Duplicate name confirmed by caller', { name: currentSlots.name });
+                    } else if (userSaysNo) {
+                        nameMeta.duplicateConfirmPending = false;
+                        nameMeta.duplicateConfirmName = null;
+                        nameMeta.last = null;
+                        nameMeta.assumedSingleTokenAs = 'first';
+                        nameMeta.askedMissingPartOnce = true;
+                        const lastNameQ = nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
+                        finalReply = lastNameQ.replace('{firstName}', firstName || '');
+                        nextSlotId = 'name';
+                        session.booking.activeSlot = 'name';
+                        session.booking.activeSlotType = 'name';
+                        recordNamePrompt('missing_last', finalReply);
+                        setNameTraceOutcome('reask_1', { reason: 'duplicate_declined' });
+                        log('🧾 V89: Duplicate name rejected, re-asking last name', { firstName });
+                    } else if (!hasNameStatement) {
+                        finalReply = confirmPrompt;
+                        nextSlotId = 'name';
+                        session.booking.activeSlot = 'name';
+                        session.booking.activeSlotType = 'name';
+                        recordNamePrompt('duplicate_confirm', finalReply);
+                        setNameTraceOutcome('handler_partial', { reason: 'duplicate_confirm_repeat' });
+                        log('🧾 V89: Duplicate name awaiting confirmation', { name: duplicateName });
+                    }
+                    if (finalReply) {
+                        break BOOKING_MODE;
+                    }
+                }
+
                 // Handle "YES" to name confirmBack - need to check if we should ask for last name
                 if (userSaysYesForName && nameMeta.lastConfirmed && !nameMeta.askedMissingPartOnce && askFullName && (session.booking.activeSlotType === 'name' || session.booking.activeSlot === 'name')) {
                     // User confirmed partial name, now ask for missing part
@@ -4382,6 +4462,25 @@ async function processTurn({
                 else if ((hasFullName || hasBothParts) && !needsSpellingVariantCheck && 
                          !(nameMeta?.askedSpellingVariant && nameMeta?.pendingSpellingVariant && !nameMeta?.spellingVariantAnswer)) {
                     // Name is complete AND no spelling variant check needed AND not waiting for spelling answer, move to next slot
+                    const commonFirstNames = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+                    const fullNameParts = String(currentSlots.name || '').trim().split(/\s+/).filter(Boolean);
+                    const fullFirst = nameMeta.first || fullNameParts[0] || '';
+                    const fullLast = nameMeta.last || fullNameParts.slice(1).join(' ') || '';
+                    const suspiciousDuplicate = isSuspiciousDuplicateName(fullFirst, fullLast, commonFirstNames);
+
+                    if (suspiciousDuplicate && !nameMeta.duplicateConfirmPending) {
+                        nameMeta.duplicateConfirmPending = true;
+                        nameMeta.duplicateConfirmName = `${fullFirst} ${fullLast}`.trim();
+                        finalReply = buildDuplicateConfirmPrompt(fullFirst, fullLast);
+                        nextSlotId = 'name';
+                        session.booking.activeSlot = 'name';
+                        session.booking.activeSlotType = 'name';
+                        recordNamePrompt('duplicate_confirm', finalReply);
+                        setNameTraceOutcome('handler_partial', { reason: 'duplicate_confirm_needed' });
+                        log('🧾 V89: Suspicious duplicate name requires confirmation', { name: nameMeta.duplicateConfirmName });
+                        break BOOKING_MODE;
+                    }
+
                     if (hasBothParts && !currentSlots.name) {
                         // Build full name safely (no undefined)
                         const firstName = nameMeta.first || '';
@@ -4719,6 +4818,19 @@ async function processTurn({
                         // V53 FIX: Clear partialName since we now have full name
                         delete currentSlots.partialName;
                         delete extractedThisTurn.partialName;
+                        const commonFirstNames = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+                        if (isSuspiciousDuplicateName(firstName, lastName, commonFirstNames)) {
+                            nameMeta.duplicateConfirmPending = true;
+                            nameMeta.duplicateConfirmName = currentSlots.name;
+                            finalReply = buildDuplicateConfirmPrompt(firstName, lastName);
+                            nextSlotId = 'name';
+                            session.booking.activeSlot = 'name';
+                            session.booking.activeSlotType = 'name';
+                            recordNamePrompt('duplicate_confirm', finalReply);
+                            setNameTraceOutcome('handler_partial', { reason: 'duplicate_confirm_needed' });
+                            log('🧾 V89: Duplicate name requires confirmation after missing part', { name: currentSlots.name });
+                            break BOOKING_MODE;
+                        }
                         session.booking.activeSlot = getSlotIdByType('phone'); session.booking.activeSlotType = 'phone';
                         
                         // 🎯 DISPLAY NAME: Always use first name for personalization
@@ -4888,6 +5000,19 @@ async function processTurn({
                         nameMeta.first = parts[0];
                         nameMeta.last = parts.slice(1).join(' ');
                         currentSlots.name = extractedName;
+                        const commonFirstNames = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+                        if (isSuspiciousDuplicateName(nameMeta.first, nameMeta.last, commonFirstNames)) {
+                            nameMeta.duplicateConfirmPending = true;
+                            nameMeta.duplicateConfirmName = currentSlots.name;
+                            finalReply = buildDuplicateConfirmPrompt(nameMeta.first, nameMeta.last);
+                            nextSlotId = 'name';
+                            session.booking.activeSlot = 'name';
+                            session.booking.activeSlotType = 'name';
+                            recordNamePrompt('duplicate_confirm', finalReply);
+                            setNameTraceOutcome('handler_partial', { reason: 'duplicate_confirm_needed' });
+                            log('🧾 V89: Duplicate name requires confirmation from full input', { name: currentSlots.name });
+                            break BOOKING_MODE;
+                        }
                         session.booking.activeSlot = getSlotIdByType('phone'); session.booking.activeSlotType = 'phone';
                         
                         // Confirm and move to phone
@@ -5567,7 +5692,10 @@ async function processTurn({
                     log('🏠 ADDRESS: Got street, asking for city');
                 }
                 else if (addressMeta.breakdownStep === 'city' && userText.length > 1) {
-                    addressMeta.city = userText.trim();
+                    const normalizedCityState = normalizeCityStatePhrase(userText);
+                    const parsedCityState = parseCityStatePhrase(normalizedCityState);
+                    addressMeta.city = parsedCityState.city || normalizedCityState;
+                    addressMeta.state = parsedCityState.state || addressMeta.state;
                     // Check addressConfirmLevel to see if we need zip
                     if (addressSlotConfig?.addressConfirmLevel === 'full') {
                         addressMeta.breakdownStep = 'zip';
@@ -5580,7 +5708,8 @@ async function processTurn({
                         // Combine and finish - V34 FIX: Handle missing street gracefully
                         const street = addressMeta.street || currentSlots.address || '';
                         const city = addressMeta.city || '';
-                        currentSlots.address = street && city ? `${street}, ${city}` : (street || city);
+                        const state = addressMeta.state || '';
+                        currentSlots.address = combineAddressParts(street, city, state) || (street || city);
                         addressMeta.breakdownStep = null;
                         addressMeta.confirmed = true;
                         session.booking.activeSlot = 'time';
@@ -5593,9 +5722,11 @@ async function processTurn({
                     // V34 FIX: Handle missing parts gracefully
                     const street = addressMeta.street || currentSlots.address || '';
                     const city = addressMeta.city || '';
+                    const state = addressMeta.state || '';
                     const zip = addressMeta.zip || '';
-                    const parts = [street, city, zip].filter(Boolean);
-                    currentSlots.address = parts.join(', ').replace(/, (\d{5})/, ' $1'); // Format: "123 Main, City 12345"
+                    const baseAddress = combineAddressParts(street, city, state);
+                    const parts = [baseAddress, zip].filter(Boolean);
+                    currentSlots.address = parts.join(', ').replace(/, (\d{5})/, ' $1'); // Format: "123 Main, City, State 12345"
                     addressMeta.breakdownStep = null;
                     addressMeta.confirmed = true;
                     session.booking.activeSlot = 'time';
