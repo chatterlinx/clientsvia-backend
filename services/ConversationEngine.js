@@ -2847,8 +2847,15 @@ async function processTurn({
             if (extractedName) {
                 const isPartialName = !extractedName.includes(' ');
                 const alreadyAskedForMissingPart = session.askedForMissingNamePart === true;
-                
-                if (askMissingNamePart && isPartialName && !alreadyAskedForMissingPart) {
+
+                // Full-name mode: always capture single-token as PARTIAL (never discard)
+                if (askFullNameEnabled && isPartialName) {
+                    currentSlots.partialName = extractedName;
+                    setExtractedSlotIfChanged('partialName', extractedName);
+                    log('📝 PARTIAL NAME: askFullName enabled, captured first name only', {
+                        partialName: extractedName
+                    });
+                } else if (askMissingNamePart && isPartialName && !alreadyAskedForMissingPart) {
                     // Store partial, let AI ask for full name
                     currentSlots.partialName = extractedName;
                     setExtractedSlotIfChanged('partialName', extractedName);
