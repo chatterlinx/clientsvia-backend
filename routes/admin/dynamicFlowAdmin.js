@@ -1,12 +1,11 @@
 /**
  * ============================================================================
- * DYNAMIC FLOW ADMIN ROUTES - Seed Templates & Admin Operations
+ * DYNAMIC FLOW ADMIN ROUTES - Template Admin Operations
  * ============================================================================
  * 
  * Admin-only routes for managing global templates and system operations.
  * 
  * ROUTES:
- * - POST /api/admin/dynamic-flows/seed-templates    Seed global templates
  * - GET  /api/admin/dynamic-flows/templates         List all global templates
  * - DELETE /api/admin/dynamic-flows/templates/:id   Delete a template (admin only)
  * 
@@ -27,7 +26,7 @@ router.use(authenticateJWT);
 router.use(requireRole('admin', 'owner'));
 
 // ============================================================================
-// TEMPLATE DEFINITIONS (Same as seed script)
+// TEMPLATE DEFINITIONS (legacy, retained for reference)
 // ============================================================================
 
 const TEMPLATES = [
@@ -457,11 +456,15 @@ const TEMPLATES = [
 ];
 
 // ============================================================================
-// SEED TEMPLATES ENDPOINT
+// RETIRED SEED ENDPOINT
 // ============================================================================
 // POST /api/admin/dynamic-flows/seed-templates
 
 router.post('/seed-templates', async (req, res) => {
+    return res.status(410).json({
+        success: false,
+        error: 'Seed endpoint retired. Create templates via the admin UI.'
+    });
     try {
         logger.info('[DYNAMIC FLOW ADMIN] 🌱 Seeding templates...');
         

@@ -74,7 +74,7 @@ This document maps how configuration flows from **UI → Database → Runtime �
 │  │        { id, type, question, required }    ⚠️ BROKEN: question missing!     ││
 │  │      ]                                                                      ││
 │  │    }                                                                        ││
-│  │    templateReferences: [                   ← Load Golden Setup / Manual     ││
+│  │    templateReferences: [                   ← Template references (manual)  ││
 │  │      { templateId, enabled, priority }     ⚠️ CACHING ISSUE!                ││
 │  │    ]                                                                        ││
 │  │  }                                                                          ││
@@ -330,19 +330,12 @@ C. Reduce TTL from 300s to 60s
 **Check**: Does schema expect `question` or `prompt`?
 **File**: `models/v2Company.js` - bookingSlots schema
 
-### 4. Dynamic Flows Not Copied (LOW PRIORITY)
-**Action**: Use "Copy Templates to Company" button in Load Golden HVAC Setup
-
----
-
 ## API Endpoints Reference
 
 | Endpoint | Purpose | UI Location |
 |----------|---------|-------------|
 | `GET /api/company/:id` | Load company config | All tabs |
 | `PATCH /api/admin/front-desk-behavior/:id` | Save Front Desk config | Personality, Discovery tabs |
-| `POST /api/company/:id/seed-golden` | Seed golden HVAC config | Load Golden HVAC Setup |
-| `POST /api/company/:id/seed-golden/copy-templates` | Copy DynamicFlows to company | Load Golden HVAC Setup (checkbox) |
 | `GET /api/company/:id/runtime-truth` | Get runtime config | Data & Config → Runtime Truth |
 | `GET /api/trade-knowledge/templates/:id/quality-report` | Scenario quality | Golden Autofill |
 

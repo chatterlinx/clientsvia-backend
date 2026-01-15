@@ -11,7 +11,7 @@
  * - POST   /api/admin/global-industry-types           - Create new industry
  * - PUT    /api/admin/global-industry-types/:id       - Update industry
  * - DELETE /api/admin/global-industry-types/:id       - Delete industry
- * - POST   /api/admin/global-industry-types/seed      - Seed default industries
+ * - POST   /api/admin/global-industry-types/seed      - Retired seed endpoint
  * 
  * ============================================================================
  */
@@ -207,8 +207,12 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
-// POST seed default industries
+// Retired seed endpoint
 router.post('/seed', async (req, res) => {
+    return res.status(410).json({
+        success: false,
+        message: 'Seed endpoint retired. Use the admin UI to create industry types.'
+    });
     try {
         const existingCount = await GlobalIndustryType.countDocuments();
         

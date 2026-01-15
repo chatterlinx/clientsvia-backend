@@ -780,14 +780,18 @@ router.get('/:templateId/metrics', authenticateJWT, requireRole('admin'), async 
 });
 
 // ============================================================================
-// SEED COMMON CORRECTIONS (Address/Number Recognition)
+// Retired seed endpoint (Address/Number Recognition)
 // ============================================================================
 
 /**
  * POST /api/admin/stt-profile/:templateId/seed-address-corrections
- * Seed common address and number corrections for better STT accuracy
+ * Retired seed endpoint
  */
 router.post('/:templateId/seed-address-corrections', authenticateJWT, requireRole('admin'), async (req, res) => {
+    return res.status(410).json({
+        success: false,
+        error: 'Seed endpoint retired. Manage corrections via the admin UI.'
+    });
     try {
         const { templateId } = req.params;
         
@@ -1201,14 +1205,18 @@ router.get('/providers/status', authenticateJWT, requireRole('admin'), async (re
 });
 
 // ============================================================================
-// SEED HVAC VOCABULARY KEYWORDS
+// Retired seed endpoint (HVAC vocabulary)
 // ============================================================================
 
 /**
  * POST /api/admin/stt-profile/:templateId/seed-hvac-keywords
- * Seed common HVAC vocabulary for better STT recognition
+ * Retired seed endpoint
  */
 router.post('/:templateId/seed-hvac-keywords', authenticateJWT, requireRole('admin'), async (req, res) => {
+    return res.status(410).json({
+        success: false,
+        error: 'Seed endpoint retired. Manage keywords via the admin UI.'
+    });
     try {
         const { templateId } = req.params;
         
@@ -1417,14 +1425,18 @@ router.post('/:templateId/clean-bad-fillers', authenticateJWT, requireRole('admi
 });
 
 // ============================================================================
-// SEED ALL DEFAULTS - Comprehensive one-click setup
+// Retired seed endpoint (comprehensive setup)
 // ============================================================================
 
 /**
  * POST /api/admin/stt-profile/:templateId/seed-all
- * One-click seed: keywords + corrections + clean bad fillers
+ * Retired seed endpoint
  */
 router.post('/:templateId/seed-all', authenticateJWT, requireRole('admin'), async (req, res) => {
+    return res.status(410).json({
+        success: false,
+        error: 'Seed endpoint retired. Manage STT settings via the admin UI.'
+    });
     try {
         const { templateId } = req.params;
         logger.info('[STT PROFILE API] Seed-all CHECKPOINT 1: Starting', { templateId });

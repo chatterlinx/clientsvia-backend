@@ -127,7 +127,6 @@ These scripts DELETE data (extreme caution):
 | `migrate-` | Schema migration | `migrate-settings.js` |
 | `nuke-` | Destructive deletion | `nuke-legacy-companies.js` |
 | `create-` | Create entities | `create-royal-plumbing.js` ❌ DELETED |
-| `seed-` | Populate test data | `seed-v2-trade-categories.js` |
 | `test-` | Testing scripts | `test-company-lifecycle.js` |
 
 ---

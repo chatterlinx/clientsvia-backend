@@ -209,9 +209,13 @@ router.delete('/:id', async (req, res) => {
 });
 
 /**
- * SEED INITIAL 15 BEHAVIORS
+ * Retired seed endpoint (legacy).
  */
 router.post('/seed', async (req, res) => {
+    return res.status(410).json({
+        success: false,
+        message: 'Seed endpoint retired. Use the admin UI to create behaviors.'
+    });
     try {
         // Check if behaviors already exist
         const existingCount = await GlobalAIBehaviorTemplate.countDocuments();

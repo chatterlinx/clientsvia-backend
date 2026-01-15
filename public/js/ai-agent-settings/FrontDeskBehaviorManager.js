@@ -4937,16 +4937,6 @@ Sean → Shawn, Shaun`;
                                 Templates for <span id="fdb-selected-category-name" style="color: #58a6ff;">selected trade category</span>
                             </p>
                         </div>
-                        <button id="fdb-seed-templates-btn" style="
-                            padding: 8px 16px;
-                            background: #6e40c9;
-                            color: white;
-                            border: none;
-                            border-radius: 6px;
-                            cursor: pointer;
-                            font-size: 12px;
-                            font-weight: 600;
-                        ">🌱 Seed Templates</button>
                     </div>
                     <div id="fdb-templates-list" style="display: flex; flex-direction: column; gap: 8px;">
                         <div style="text-align: center; padding: 20px; color: #8b949e;">
@@ -5366,8 +5356,8 @@ Sean → Shawn, Shaun`;
     // 
     // The workflow is:
     //   1. V1 samples appear ONLY when "All Categories" is selected (no filter)
-    //   2. Admin clicks "Seed Templates" to persist them to DB with correct tradeCategoryId
-    //   3. After seeding, DB templates are the truth, JS samples are ignored
+    //   2. Admin copies templates into the company
+    //   3. After copy, DB templates are the truth, JS samples are ignored
     //   4. Copy-to-Company uses the DROPDOWN-SELECTED tradeCategoryId (not name lookup)
     //
     // NO NAME-BASED LOOKUPS. The dropdown ObjectId is the ONLY source of truth.
@@ -5393,8 +5383,8 @@ Sean → Shawn, Shaun`;
         // They only show when dropdown = "All Categories" (no filter applied)
         // When copied, they inherit the SELECTED dropdown tradeCategoryId
         // ═══════════════════════════════════════════════════════════════════════════
-        const tradeCategoryId = null;  // V1 samples are category-agnostic until seeded
-        const tradeCategoryName = null; // No name - these are pre-seed templates
+        const tradeCategoryId = null;  // V1 samples are category-agnostic until copied
+        const tradeCategoryName = null; // No name - assigned at copy time
         
         return [
             // ─────────────────────────────────────────────────────────────────────
@@ -5410,7 +5400,7 @@ Sean → Shawn, Shaun`;
                 name: '🚨 Emergency Service Detection',
                 description: 'Detects TRUE emergencies (gas leak, fire, flooding, CO). Includes safety directive. Blocks all other flows.',
                 flowKey: 'emergency_service',
-                tradeCategoryId: tradeCategoryId,   // null until seeded to DB
+                tradeCategoryId: tradeCategoryId,   // null until copied to DB
                 tradeCategoryName: tradeCategoryName, // null - assigned at copy time from dropdown
                 enabled: true,
                 priority: 200,
@@ -5534,7 +5524,7 @@ Sean → Shawn, Shaun`;
                 name: '🔄 Returning Customer Claim',
                 description: 'Detects existing/returning customers. Sets flag for CRM lookup and personalizes the conversation.',
                 flowKey: 'returning_customer_claim',
-                tradeCategoryId: tradeCategoryId,   // null until seeded to DB
+                tradeCategoryId: tradeCategoryId,   // null until copied to DB
                 tradeCategoryName: tradeCategoryName, // null - assigned at copy time from dropdown
                 enabled: true,
                 priority: 60,
@@ -5623,7 +5613,7 @@ Sean → Shawn, Shaun`;
                 name: '✨ New Customer Detection',
                 description: 'Detects first-time callers. Welcomes them warmly and sets flag for special handling.',
                 flowKey: 'new_customer',
-                tradeCategoryId: tradeCategoryId,   // null until seeded to DB
+                tradeCategoryId: tradeCategoryId,   // null until copied to DB
                 tradeCategoryName: tradeCategoryName, // null - assigned at copy time from dropdown
                 enabled: true,
                 priority: 55,
@@ -5706,7 +5696,7 @@ Sean → Shawn, Shaun`;
                 name: '📅 Standard Booking Intent',
                 description: 'Detects when caller wants to schedule service. Transitions to BOOKING mode.',
                 flowKey: 'booking_intent',
-                tradeCategoryId: tradeCategoryId,   // null until seeded to DB
+                tradeCategoryId: tradeCategoryId,   // null until copied to DB
                 tradeCategoryName: tradeCategoryName, // null - assigned at copy time from dropdown
                 enabled: true,
                 priority: 50,
@@ -5796,7 +5786,7 @@ Sean → Shawn, Shaun`;
                 name: '💰 Quote/Pricing Request',
                 description: 'Detects pricing inquiries. Sets flag and acknowledges - does NOT transition to booking.',
                 flowKey: 'quote_request',
-                tradeCategoryId: tradeCategoryId,   // null until seeded to DB
+                tradeCategoryId: tradeCategoryId,   // null until copied to DB
                 tradeCategoryName: tradeCategoryName, // null - assigned at copy time from dropdown
                 enabled: true,
                 priority: 45,
@@ -5882,7 +5872,7 @@ Sean → Shawn, Shaun`;
                 name: '❌ Cancellation Request',
                 description: 'Detects when caller wants to cancel an existing appointment. High priority handling.',
                 flowKey: 'cancellation_request',
-                tradeCategoryId: tradeCategoryId,   // null until seeded to DB
+                tradeCategoryId: tradeCategoryId,   // null until copied to DB
                 tradeCategoryName: tradeCategoryName, // null - assigned at copy time from dropdown
                 enabled: true,
                 priority: 100,
@@ -5961,7 +5951,7 @@ Sean → Shawn, Shaun`;
                 name: '📆 Reschedule Request',
                 description: 'Detects when caller wants to reschedule an existing appointment.',
                 flowKey: 'reschedule_request',
-                tradeCategoryId: tradeCategoryId,   // null until seeded to DB
+                tradeCategoryId: tradeCategoryId,   // null until copied to DB
                 tradeCategoryName: tradeCategoryName, // null - assigned at copy time from dropdown
                 enabled: true,
                 priority: 90,
@@ -6077,48 +6067,6 @@ Sean → Shawn, Shaun`;
             });
         }
         
-        // Seed templates button (Admin only)
-        const seedBtn = container.querySelector('#fdb-seed-templates-btn');
-        if (seedBtn) {
-            seedBtn.addEventListener('click', async () => {
-                seedBtn.disabled = true;
-                seedBtn.textContent = '⏳ Seeding...';
-                
-                try {
-                    const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-                    const response = await fetch('/api/admin/dynamic-flows/seed-templates', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        }
-                    });
-                    
-                    if (!response.ok) {
-                        const err = await response.json();
-                        throw new Error(err.error || 'Failed to seed templates');
-                    }
-                    
-                    const data = await response.json();
-                    console.log('[DYNAMIC FLOWS] Seed result:', data);
-                    
-                    this.showNotification(
-                        `✅ Templates seeded! Created: ${data.results.created.length}, Updated: ${data.results.updated.length}`,
-                        'success'
-                    );
-                    
-                    // Reload the dynamic flows tab to show new templates
-                    await this.refreshFlowsList(container);
-                    
-                } catch (error) {
-                    console.error('[DYNAMIC FLOWS] Seed error:', error);
-                    this.showNotification(error.message, 'error');
-                } finally {
-                    seedBtn.disabled = false;
-                    seedBtn.textContent = '🌱 Seed Templates';
-                }
-            });
-        }
     }
     
     async toggleFlow(flowId, enabled) {
@@ -7512,7 +7460,7 @@ Sean → Shawn, Shaun`;
         const textarea = document.getElementById('fdb-dc-wantsBooking');
         const yesWordsInput = document.getElementById('fdb-dc-yesWords');
         if (textarea) textarea.value = recommended.join('\\n');
-        // Only seed yes-words if empty to avoid clobbering admin content
+        // Only populate yes-words if empty to avoid clobbering admin content
         if (yesWordsInput && !yesWordsInput.value.trim()) {
             yesWordsInput.value = 'yes, yeah, yep, please, sure, okay, ok';
         }

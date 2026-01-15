@@ -156,7 +156,6 @@ async function loadAllRoutes() {
         routes.scenarioImportRoutes = await loadRouteWithTimeout('./routes/company/scenarioImport', 'scenarioImportRoutes'); // 📥 Scenario Import (Bulk import to company override layer)
         routes.scenarioValidateRoutes = await loadRouteWithTimeout('./routes/company/scenarioValidate', 'scenarioValidateRoutes'); // 🔍 Scenario Validate (Red/Yellow/Green quality report)
         routes.platformSnapshotRoutes = await loadRouteWithTimeout('./routes/company/platformSnapshot', 'platformSnapshotRoutes'); // 📄 Platform Snapshot (Enterprise Introspection - Single Source of Truth)
-        routes.seedGoldenRoutes = await loadRouteWithTimeout('./routes/company/seedGolden', 'seedGoldenRoutes'); // 🟣 Seed Golden Setup (Penguin Air HVAC Reference)
         routes.rawCompanyDataRoutes = await loadRouteWithTimeout('./routes/company/rawCompanyData', 'rawCompanyDataRoutes'); // 🔍 Raw Company Data (DB Echo for Truth Report)
         routes.bookingContractV2Routes = await loadRouteWithTimeout('./routes/company/bookingContractV2', 'bookingContractV2Routes'); // 🧾 Booking Contract V2 (Slot Library + Slot Groups)
         routes.runtimeTruthRoutes = await loadRouteWithTimeout('./routes/company/runtimeTruth', 'runtimeTruthRoutes'); // 🎯 Runtime Truth (THE Single Source of All Runtime Behavior)
@@ -254,7 +253,7 @@ async function loadAllRoutes() {
         routes.adminIntelligenceRoutes = await loadRouteWithTimeout('./routes/admin/adminIntelligence', 'adminIntelligenceRoutes');
         routes.globalIntelligenceRoutes = await loadRouteWithTimeout('./routes/admin/globalIntelligence', 'globalIntelligenceRoutes'); // ADMIN: Global Production Intelligence (platform-wide 3-tier defaults, inheritance system)
         routes.enterpriseSuggestionsRoutes = await loadRouteWithTimeout('./routes/admin/enterpriseSuggestions', 'enterpriseSuggestionsRoutes'); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost)
-        routes.seedDynamicFlowTemplatesRoutes = await loadRouteWithTimeout('./routes/admin/seedDynamicFlowTemplates', 'seedDynamicFlowTemplatesRoutes'); // ADMIN: Seed/Fix Golden Dynamic Flow Templates
+        routes.seedDynamicFlowTemplatesRoutes = await loadRouteWithTimeout('./routes/admin/seedDynamicFlowTemplates', 'seedDynamicFlowTemplatesRoutes'); // ADMIN: Dynamic Flow Template Validation
         routes.jsonExportImportRoutes = await loadRouteWithTimeout('./routes/admin/jsonExportImport', 'jsonExportImportRoutes'); // ADMIN: JSON Export/Import/Patch (ChatGPT workflow)
         routes.healthRoutes = await loadRouteWithTimeout('./routes/health', 'healthRoutes');
         // llm0TraceRoutes REMOVED Dec 2025 - LLM-0 Cortex-Intel nuked, Black Box is better
@@ -525,7 +524,6 @@ function registerRoutes(routes) {
     app.use('/api/company/:companyId/scenarios/validate', routes.scenarioValidateRoutes); // 🔍 Scenario Validate (Red/Yellow/Green quality report)
     app.use('/api/company/:companyId/control-plane', routes.controlPlaneEffectiveRoutes); // ⚡ Control Plane: /effective, /raw, /migrate, /save
     app.use('/api/company/:companyId/platform-snapshot', routes.platformSnapshotRoutes); // 📄 Platform Snapshot (Enterprise Introspection - Single Source of Truth)
-    app.use('/api/company/:companyId/seed-golden', routes.seedGoldenRoutes); // 🟣 Seed Golden Setup (Penguin Air HVAC Reference)
     app.use('/api/company/:companyId/raw', routes.rawCompanyDataRoutes); // 🔍 Raw Company Data (DB Echo for Truth Report)
     app.use('/api/company/:companyId/booking-contract-v2', routes.bookingContractV2Routes); // 🧾 Booking Contract V2 (Slot Library + Slot Groups)
     app.use('/api/company/:companyId/runtime-truth', routes.runtimeTruthRoutes); // 🎯 Runtime Truth (THE Single Source of All Runtime Behavior)
@@ -568,7 +566,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/intelligence', routes.adminIntelligenceRoutes); // ADMIN: 3-Tier Intelligence System (LLM, pattern learning, cost tracking, global patterns)
     app.use('/api/admin', routes.globalIntelligenceRoutes); // ADMIN: Global Production Intelligence API (platform-wide 3-tier defaults, inheritance system)
     app.use('/api/admin/suggestions', routes.enterpriseSuggestionsRoutes); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost projections)
-    app.use('/api/admin/dynamic-flow-templates', routes.seedDynamicFlowTemplatesRoutes); // ADMIN: Seed/Fix Golden Dynamic Flow Templates
+    app.use('/api/admin/dynamic-flow-templates', routes.seedDynamicFlowTemplatesRoutes); // ADMIN: Dynamic Flow Template Validation
     app.use('/api/export', routes.jsonExportImportRoutes); // ADMIN: JSON Export/Import/Patch (ChatGPT workflow)
     // healthRoutes moved to top of routes (before auth-protected routes) for public access
     // llm0TraceRoutes REMOVED Dec 2025 - nuked

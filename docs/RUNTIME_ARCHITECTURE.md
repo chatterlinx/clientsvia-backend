@@ -165,23 +165,6 @@ Enterprise rule:
 
 ---
 
-### Seeding model (what “seeded scenarios” actually means)
-
-There are multiple “seeding” concepts in this repo:
-
-- **Global scenario seeding (template content)**:
-  - Script: `scripts/hvacScenarios/seedScenarios.js`
-  - Writes scenarios into a global HVAC template via admin API.
-
-- **Company golden setup seeding (company config, not scenarios)**:
-  - Endpoint: `POST /api/company/:companyId/seed-golden`
-  - Seeds company config + global dynamic flow templates, not scenario content.
-
-Operational reality:
-- Most companies are “seeded” by **enabling templates** (via `templateReferences`), because scenario content lives globally.
-
----
-
 ### Deploy QA checklist (minimum)
 
 Before calling anything “ready”:

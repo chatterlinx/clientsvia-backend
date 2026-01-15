@@ -653,7 +653,7 @@ async function buildWiringReport({
             label: 'Template References',
             status: 'NOT_LINKED',
             reasons: ['No templates linked to company'],
-            fix: 'Add template reference via Load Golden Setup or manual config'
+            fix: 'Add template reference via templateReferences or admin UI'
         });
     }
     

@@ -133,34 +133,6 @@ class QuickAnswersManager {
         }
     }
 
-    async seed() {
-        try {
-            const token = this.getToken();
-            const response = await fetch(`/api/admin/quick-answers/${this.companyId}/seed`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ overwrite: this.answers.length === 0 })
-            });
-            
-            if (!response.ok) {
-                const result = await response.json();
-                throw new Error(result.message || 'Failed to seed');
-            }
-            
-            const result = await response.json();
-            this.answers = result.data;
-            this.showNotification(`✅ Added ${result.data.length} default answers!`, 'success');
-            return result.data;
-        } catch (error) {
-            console.error('[QUICK ANSWERS] Seed error:', error);
-            this.showNotification('❌ ' + error.message, 'error');
-            throw error;
-        }
-    }
-
     async testMatch(phrase) {
         try {
             const token = this.getToken();
@@ -213,12 +185,6 @@ class QuickAnswersManager {
                         </p>
                     </div>
                     <div style="display: flex; gap: 8px;">
-                        ${this.answers.length === 0 ? `
-                            <button onclick="window.quickAnswersManager.seedAndRerender()" 
-                                style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
-                                🌱 Add Defaults
-                            </button>
-                        ` : ''}
                         <button onclick="window.quickAnswersManager.showAddModal()" 
                             style="padding: 8px 16px; background: #58a6ff; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
                             + Add Answer
@@ -549,15 +515,6 @@ class QuickAnswersManager {
         
         try {
             await this.delete(answerId);
-            this.rerender();
-        } catch (e) {
-            // Error already shown
-        }
-    }
-
-    async seedAndRerender() {
-        try {
-            await this.seed();
             this.rerender();
         } catch (e) {
             // Error already shown

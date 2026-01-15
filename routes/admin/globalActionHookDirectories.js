@@ -13,7 +13,7 @@
  * - POST   /api/admin/global-action-hook-directories           - Create new directory
  * - PUT    /api/admin/global-action-hook-directories/:id       - Update directory
  * - DELETE /api/admin/global-action-hook-directories/:id       - Delete directory
- * - POST   /api/admin/global-action-hook-directories/seed      - Seed default directories
+ * - POST   /api/admin/global-action-hook-directories/seed      - Retired seed endpoint
  * 
  * ============================================================================
  */
@@ -228,9 +228,13 @@ router.delete('/:id', async (req, res) => {
 
 /**
  * POST /api/admin/global-action-hook-directories/seed
- * Seed default action hook directories
+ * Retired seed endpoint
  */
 router.post('/seed', async (req, res) => {
+    return res.status(410).json({
+        success: false,
+        message: 'Seed endpoint retired. Use the admin UI to create directories.'
+    });
     try {
         const existingCount = await GlobalActionHookDirectory.countDocuments();
         if (existingCount > 0) {

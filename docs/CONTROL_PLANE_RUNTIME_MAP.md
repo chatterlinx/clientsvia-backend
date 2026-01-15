@@ -256,26 +256,6 @@ Allowlist maps patch paths → storage targets across:
 
 ---
 
-## Seed Golden (onboarding accelerators)
-
-### API
-- `POST /api/company/:companyId/seed-golden`
-- `POST /api/company/:companyId/seed-golden/copy-templates`
-
-### Backend
-- `routes/company/seedGolden.js`
-
-### Persistence targets
-Seeds multiple company-scoped collections/fields:
-- `CompanyPlaceholders`
-- `CompanyResponseDefaults`
-- `v2Company.aiAgentSettings.frontDeskBehavior`
-- booking config (legacy V48 booking path)
-- call protection / transfers (via cheat sheet versioning)
-- global dynamic flow templates (not company flows)
-
----
-
 ## Known gaps (what to fix next)
 
 1) **Single booking contract**: V48 uses legacy booking config paths. If reintroducing Slot Library/Groups, it must be behind a feature flag, migrated safely, and visible in Runtime Truth.

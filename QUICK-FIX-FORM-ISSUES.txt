@@ -7,19 +7,17 @@ THREE ISSUES:
 2. Fillers show "Loading..."
 3. Synonyms show "Loading..."
 
-ROOT CAUSE: Database not seeded/migrated with data
+ROOT CAUSE: Behaviors missing and fillers/synonyms not migrated
 
 ================================================================================
 DEPLOYMENT STEPS (on Render Console)
 ================================================================================
 
-1. RUN BEHAVIORS SEED:
-   MONGODB_URI="$(echo $MONGODB_URI)" node scripts/seed-behaviors-quick.js
-   
-   Expected output:
-   ✅ Behaviors loaded
-   ✅ Ready for use
-   
+1. ADD BEHAVIORS (Admin UI):
+   Go to Behaviors and add at least 6 behavior templates.
+   ✅ Behavior dropdown has options
+   ✅ Templates can inherit tone/pace
+
 2. RUN FILLERS/SYNONYMS MIGRATION:
    MONGODB_URI="$(echo $MONGODB_URI)" node scripts/migrate-filler-synonyms.js
    
@@ -45,10 +43,9 @@ Read these files for detailed info:
 - FORM-SETUP-ISSUES-COMPLETE-SUMMARY.md (Full overview + checklist)
 
 Scripts:
-- scripts/seed-behaviors-quick.js (Creates default behaviors)
 - scripts/migrate-filler-synonyms.js (Backfills templates with data)
 
 ================================================================================
-TIME ESTIMATE: 5 minutes to run both scripts
+TIME ESTIMATE: 10-15 minutes (UI + migration)
 ================================================================================
 

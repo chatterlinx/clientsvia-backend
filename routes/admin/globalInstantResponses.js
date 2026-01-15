@@ -782,9 +782,13 @@ router.delete('/:id', async (req, res) => {
 
 /**
  * POST /api/admin/global-instant-responses/seed
- * Seed the database with the 8-category test template
+ * Retired seed endpoint
  */
 router.post('/seed', authenticateJWT, async (req, res) => {
+    return res.status(410).json({
+        success: false,
+        message: 'Seed endpoint retired. Create templates via the admin UI.'
+    });
     const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
     
     logger.security('🌱 [SEED CHECKPOINT 1] Seed endpoint called by:', adminUser);
@@ -1952,7 +1956,7 @@ router.get('/:templateId/scenarios', async (req, res) => {
 
 /**
  * POST /api/admin/global-instant-responses/seed-template
- * Seeds a pre-built template into the database
+ * Retired seed endpoint
  * 
  * SECURITY: Admin authentication required
  * USE CASE: One-click seeding from UI, works on any environment
@@ -1967,6 +1971,10 @@ router.get('/:templateId/scenarios', async (req, res) => {
  * - "universal-full-103-categories" - (Future) Production template
  */
 router.post('/seed-template', async (req, res) => {
+    return res.status(410).json({
+        success: false,
+        message: 'Seed endpoint retired. Create templates via the admin UI.'
+    });
     const { templateName, replaceExisting = true } = req.body;
     const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
     
@@ -2129,8 +2137,7 @@ router.post('/seed-template', async (req, res) => {
 
 /**
  * Build Universal Test Template Data
- * This is the same data from seed-templates/universal-test-12-categories.js
- * but as a reusable function for the API endpoint
+ * Legacy test template data retained for reference.
  */
 function buildUniversalTestTemplate(ulid) {
     return {
@@ -3219,9 +3226,13 @@ router.delete('/:id/urgency-keywords/:keywordId', async (req, res) => {
 
 /**
  * POST /:id/urgency-keywords/seed-defaults
- * Seed default urgency keywords
+ * Retired seed endpoint
  */
 router.post('/:id/urgency-keywords/seed-defaults', async (req, res) => {
+    return res.status(410).json({
+        success: false,
+        error: 'Seed endpoint retired. Add urgency keywords via the admin UI.'
+    });
     try {
         const template = await GlobalInstantResponseTemplate.findById(req.params.id);
         

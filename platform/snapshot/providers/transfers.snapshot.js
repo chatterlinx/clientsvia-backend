@@ -37,7 +37,7 @@ module.exports.getSnapshot = async function(companyId) {
             .select('frontDeskBehavior.transfers aiAgentSettings.transferTargets')
             .lean();
         
-        // Fallback 1: Check aiAgentSettings.transferTargets (where seedGolden stores them)
+        // Fallback 1: Check legacy aiAgentSettings.transferTargets
         if (transferRules.length === 0 && company?.aiAgentSettings?.transferTargets?.length > 0) {
             transferRules = company.aiAgentSettings.transferTargets.map(target => ({
                 id: target.id,

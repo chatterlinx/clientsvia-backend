@@ -14,7 +14,7 @@
  * - PUT    /:companyId/:answerId    - Update a quick answer
  * - DELETE /:companyId/:answerId    - Delete a quick answer
  * - POST   /:companyId/match        - Test which answer matches a phrase
- * - POST   /:companyId/seed         - Seed with common defaults
+ * - POST   /:companyId/seed         - Retired seed endpoint
  * 
  * ============================================================================
  */
@@ -27,7 +27,7 @@ const { authenticateJWT } = require('../../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 
 // ============================================================================
-// DEFAULT QUICK ANSWERS (Used for seeding)
+// DEFAULT QUICK ANSWERS (legacy, retained for reference)
 // ============================================================================
 
 const DEFAULT_QUICK_ANSWERS = [
@@ -354,6 +354,10 @@ router.post('/:companyId/match', authenticateJWT, async (req, res) => {
 // POST - Seed with default quick answers
 // ============================================================================
 router.post('/:companyId/seed', authenticateJWT, async (req, res) => {
+    return res.status(410).json({
+        success: false,
+        message: 'Seed endpoint retired. Add quick answers manually.'
+    });
     try {
         const { companyId } = req.params;
         const { overwrite = false } = req.body;

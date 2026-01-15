@@ -13,7 +13,7 @@
  * - POST   /api/admin/global-action-hooks           - Create new hook
  * - PUT    /api/admin/global-action-hooks/:id       - Update hook
  * - DELETE /api/admin/global-action-hooks/:id       - Delete hook
- * - POST   /api/admin/global-action-hooks/seed      - Seed default hooks
+ * - POST   /api/admin/global-action-hooks/seed      - Retired seed endpoint
  * 
  * ============================================================================
  */
@@ -231,9 +231,13 @@ router.delete('/:id', async (req, res) => {
 
 /**
  * POST /api/admin/global-action-hooks/seed
- * Seed default action hooks
+ * Retired seed endpoint
  */
 router.post('/seed', async (req, res) => {
+    return res.status(410).json({
+        success: false,
+        message: 'Seed endpoint retired. Use the admin UI to create action hooks.'
+    });
     try {
         const existingCount = await GlobalActionHook.countDocuments();
         if (existingCount > 0) {

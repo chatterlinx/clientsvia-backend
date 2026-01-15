@@ -186,21 +186,6 @@ class STTSettingsManager {
                 
                 <!-- Quick Actions Bar -->
                 <div style="display: flex; gap: 12px; margin-bottom: 16px; padding: 12px; background: linear-gradient(135deg, #1e293b, #334155); border-radius: 12px;">
-                    <button onclick="window.sttManager.seedAll()" style="
-                        padding: 10px 20px;
-                        background: linear-gradient(135deg, #10b981, #059669);
-                        color: white;
-                        border: none;
-                        border-radius: 8px;
-                        cursor: pointer;
-                        font-weight: 600;
-                        font-size: 14px;
-                        display: flex;
-                        align-items: center;
-                        gap: 8px;
-                    " title="One-click: Add keywords, corrections, and remove bad fillers">
-                        🚀 Seed All Defaults
-                    </button>
                     <button onclick="window.sttManager.cleanBadFillers()" style="
                         padding: 10px 20px;
                         background: linear-gradient(135deg, #f59e0b, #d97706);
@@ -214,7 +199,7 @@ class STTSettingsManager {
                         🧹 Clean Bad Fillers
                     </button>
                     <div style="flex: 1; display: flex; align-items: center; justify-content: flex-end; color: #94a3b8; font-size: 13px;">
-                        💡 Click "Seed All Defaults" to populate with industry-standard settings
+                        💡 Keep fillers minimal to avoid false matches
                     </div>
                 </div>
                 
@@ -1226,17 +1211,6 @@ class STTSettingsManager {
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h3>Boosted Vocabulary / Keywords</h3>
                     <div style="display: flex; gap: 8px;">
-                        <button onclick="window.sttManager.seedHvacKeywords()" style="
-                            padding: 8px 16px;
-                            background: #6366f1;
-                            color: white;
-                            border: none;
-                            border-radius: 8px;
-                            cursor: pointer;
-                            font-size: 13px;
-                        " title="Add 50+ HVAC industry terms">
-                            ❄️ Seed HVAC Keywords
-                        </button>
                         <button onclick="window.sttManager.syncVocabulary()" style="
                             padding: 8px 16px;
                             background: #3b82f6;
@@ -1320,17 +1294,6 @@ class STTSettingsManager {
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h3>Mishear Corrections</h3>
                     <div style="display: flex; gap: 8px;">
-                        <button onclick="window.sttManager.seedAddressCorrections()" style="
-                            padding: 8px 16px;
-                            background: #6366f1;
-                            color: white;
-                            border: none;
-                            border-radius: 8px;
-                            cursor: pointer;
-                            font-size: 13px;
-                        " title="Add ~100 common address/phone corrections">
-                            🏠 Seed Address Defaults
-                        </button>
                         <button onclick="window.sttManager.showAddCorrectionModal()" style="
                             padding: 8px 16px;
                             background: #10b981;
@@ -1770,123 +1733,6 @@ class STTSettingsManager {
             this.showToast('Keyword deleted', 'success');
         } catch (error) {
             this.showToast('Error deleting keyword', 'error');
-        }
-    }
-    
-    /**
-     * Seed default address corrections (~100 rules)
-     * Includes: unit/suite, ordinals, phone patterns, street types, Spanish terms
-     */
-    async seedAddressCorrections() {
-        if (!confirm('Add ~100 default address corrections?\n\nThis includes:\n• Apartment/Suite/Unit (Apt 4B, Ste 200)\n• Ordinals (1st, 2nd, 21st)\n• Numbers (double five → 55)\n• Street types (Ave, Blvd, Pkwy)\n• Directions (N, S, E, W)\n• Spanish terms (calle, avenida)\n\nDuplicates will be skipped.')) {
-            return;
-        }
-        
-        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-        
-        try {
-            this.showToast('⏳ Seeding corrections...', 'info');
-            
-            const response = await fetch(`/api/admin/stt-profile/${this.templateId}/seed-address-corrections`, {
-                method: 'POST',
-                headers: { 
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                await this.loadProfile();
-                this.render();
-                this.showToast(`✅ ${result.message}`, 'success');
-            } else {
-                this.showToast(`❌ ${result.error}`, 'error');
-            }
-        } catch (error) {
-            console.error('[STT] Seed error:', error);
-            this.showToast('Error seeding corrections', 'error');
-        }
-    }
-    
-    /**
-     * Seed default HVAC vocabulary keywords for better recognition
-     */
-    async seedHvacKeywords() {
-        if (!confirm('Add 50+ HVAC industry keywords?\n\nThis includes:\n• Equipment (AC, HVAC, furnace, thermostat)\n• Components (compressor, condenser, evaporator)\n• Services (maintenance, repair, tune-up)\n• Problems (no heat, no AC, leaking, frozen)\n• Booking terms (appointment, schedule, ASAP)\n\nDuplicates will be skipped.')) {
-            return;
-        }
-        
-        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-        
-        try {
-            this.showToast('⏳ Seeding HVAC keywords...', 'info');
-            
-            const response = await fetch(`/api/admin/stt-profile/${this.templateId}/seed-hvac-keywords`, {
-                method: 'POST',
-                headers: { 
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                await this.loadProfile();
-                this.render();
-                this.showToast(`✅ ${result.message}`, 'success');
-            } else {
-                this.showToast(`❌ ${result.error}`, 'error');
-            }
-        } catch (error) {
-            console.error('[STT] Seed keywords error:', error);
-            this.showToast('Error seeding keywords', 'error');
-        }
-    }
-    
-    /**
-     * 🚀 SEED ALL DEFAULTS - One-click comprehensive setup
-     */
-    async seedAll() {
-        if (!confirm('🚀 SEED ALL DEFAULTS\n\nThis will:\n✅ Add 30+ HVAC keywords\n✅ Add common mishear corrections\n✅ Remove bad fillers (yes, no, do, and, etc.)\n\nThis is the recommended starting configuration.\nDuplicates will be skipped.\n\nProceed?')) {
-            return;
-        }
-        
-        const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-        
-        try {
-            this.showToast('🚀 Seeding all defaults...', 'info');
-            
-            console.log('[STT SETTINGS] 🚀 Calling seed-all for template:', this.templateId);
-            
-            const response = await fetch(`/api/admin/stt-profile/${this.templateId}/seed-all`, {
-                method: 'POST',
-                headers: { 
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            console.log('[STT SETTINGS] 🚀 Seed-all response status:', response.status);
-            
-            const result = await response.json();
-            console.log('[STT SETTINGS] 🚀 Seed-all result:', result);
-            
-            if (result.success) {
-                await this.loadProfile();
-                this.render();
-                this.showToast(`✅ ${result.message}`, 'success');
-            } else {
-                console.error('[STT SETTINGS] ❌ Seed-all failed:', result.error);
-                this.showToast(`❌ ${result.error || 'Unknown error'}`, 'error');
-                alert(`Seed failed: ${result.error || 'Check Render logs for CHECKPOINT details'}`);
-            }
-        } catch (error) {
-            console.error('[STT] Seed all error:', error);
-            this.showToast('Error seeding defaults', 'error');
-            alert(`Seed error: ${error.message}`);
         }
     }
     

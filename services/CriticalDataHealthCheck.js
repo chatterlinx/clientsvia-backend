@@ -89,8 +89,8 @@ class CriticalDataHealthCheck {
                         actualCount: 0,
                         issue: 'No active behaviors found in database',
                         impact: 'All AI templates cannot function - categories and scenarios have no behaviors to inherit',
-                        action: 'Run seed script immediately: node scripts/seed-behaviors-quick.js',
-                        suggestedFix: 'cd /Users/marc/MyProjects/clientsvia-backend && node scripts/seed-behaviors-quick.js',
+                        action: 'Create behaviors in Admin UI immediately',
+                        suggestedFix: 'Admin UI → Behaviors: add at least 6 behavior templates',
                         urgency: 'IMMEDIATE - Platform is non-functional',
                         detectedBy: 'Automated health check (not user-triggered)',
                         timestamp: new Date().toISOString()
@@ -122,7 +122,7 @@ class CriticalDataHealthCheck {
                         actualCount: count,
                         issue: 'Fewer behaviors than expected',
                         impact: 'Limited behavior options for AI templates',
-                        action: 'Review behaviors configuration, consider running seed script',
+                        action: 'Review behaviors configuration and add missing behaviors',
                         timestamp: new Date().toISOString()
                     }
                 });
