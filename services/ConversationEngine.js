@@ -2802,22 +2802,27 @@ async function processTurn({
             // V32: Pass expectingName flag - true if we're in BOOKING mode and asking for name
             // V36: Pass custom stop words from company config (UI-controlled)
             // Check activeSlotType (the TYPE, not the custom ID) to see if we're asking for name
-            const expectingName = session.mode === 'BOOKING' && (session.booking?.activeSlotType === 'name' || session.booking?.activeSlot === 'name');
+            const nameSlotAsked = session?.locks?.askedSlots?.name === true || session?.booking?.askedSlots?.name === true;
+            const expectingName = session.mode === 'BOOKING' && (
+                session.booking?.activeSlotType === 'name' ||
+                session.booking?.activeSlot === 'name' ||
+                (nameSlotAsked && !currentSlots.name && !currentSlots.partialName)
+            );
             const customStopWords = company?.aiAgentSettings?.nameStopWords?.custom || [];
             const stopWordsEnabled = company?.aiAgentSettings?.nameStopWords?.enabled !== false;
             let extractedName = SlotExtractors.extractName(userText, { 
                 expectingName, 
                 customStopWords: stopWordsEnabled ? customStopWords : []
             });
-            log('🔍 V36 Extraction result:', extractedName || '(none)', { expectingName, customStopWordsCount: customStopWords.length });
+            log('🔍 V36 Extraction result:', extractedName || '(none)', { expectingName, nameSlotAsked, customStopWordsCount: customStopWords.length });
             
             // ═══════════════════════════════════════════════════════════════════
             // V29 FIX: Context-aware name extraction
             // When we're in BOOKING mode and actively asking for name, be more aggressive
             // "yes it's Mark" / "Mark" / "yes, Mark" should all work
             // ═══════════════════════════════════════════════════════════════════
-            if (!extractedName && session.mode === 'BOOKING' && (session.booking?.activeSlotType === 'name' || session.booking?.activeSlot === 'name')) {
-                log('🔍 V29: Context-aware name extraction (activeSlot=name)');
+            if (!extractedName && expectingName) {
+                log('🔍 V29: Context-aware name extraction (expectingName=true)');
                 
                 // Try to extract a capitalized word from short responses
                 const words = userText.trim().split(/\s+/);
