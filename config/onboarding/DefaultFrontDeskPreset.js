@@ -294,6 +294,28 @@ const DEFAULT_NAME_SPELLING_VARIANTS = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT ACCESS FLOW (Property Type + Gated Access)
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_ACCESS_FLOW = {
+    enabled: false,
+    tradeApplicability: ['hvac', 'plumbing', 'electrical', 'pest', 'carpet'],
+    propertyTypeEnabled: true,
+    propertyTypeQuestion: 'Is that a house, condo, apartment, or commercial property?',
+    unitQuestion: "Got it. What's the unit number?",
+    commercialUnitQuestion: 'Got it. Is that a suite or floor number?',
+    accessInstructionsQuestion: 'Do we need a gate code, elevator access, or should we just knock?',
+    gatedQuestion: "Thanks. One quick thing so the technician can get in — is that inside a gated community, or is it open access?",
+    openAccessFollowupQuestion: 'Got it. Any gate code, building code, or special access we should know about, or just pull up and knock?',
+    gateAccessTypeQuestion: 'Perfect. Do you have a gate code, a gate guard, or both?',
+    gateCodeQuestion: 'Great, what gate code should the technician use?',
+    gateGuardNotifyPrompt: "No problem. Since there’s a gate guard, please let them know {companyName} will be coming during your appointment window so they’ll let our technician in without delays.",
+    gateGuardConfirmPrompt: "Perfect. I’ll note that the gate guard has been notified for {companyName}.",
+    maxPropertyTypeFollowUps: 1,
+    maxUnitFollowUps: 1,
+    maxAccessFollowUps: 2
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // DEFAULT DISCOVERY & CONSENT
 // ═══════════════════════════════════════════════════════════════════════════
 const DEFAULT_DISCOVERY_CONSENT = {
@@ -423,6 +445,9 @@ function getPresetForTrade(tradeKey = 'universal') {
         // V61: Name spelling variants (global config)
         nameSpellingVariants: DEFAULT_NAME_SPELLING_VARIANTS,
 
+        // Access flow (property type + gated access)
+        accessFlow: DEFAULT_ACCESS_FLOW,
+
         // V77: Off-rails recovery protocol (resume booking after interrupts)
         offRailsRecovery: DEFAULT_OFF_RAILS_RECOVERY,
         
@@ -452,6 +477,7 @@ module.exports = {
     DEFAULT_UNIT_OF_WORK,
     DEFAULT_DISCOVERY_CONSENT,
     DEFAULT_NAME_SPELLING_VARIANTS,
+    DEFAULT_ACCESS_FLOW,
     DEFAULT_OFF_RAILS_RECOVERY,
     TRADE_PRESETS
 };

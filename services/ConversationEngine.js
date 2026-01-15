@@ -51,6 +51,14 @@ const { parseSpellingVariantPrompt, parseSpellingVariantResponse } = require('..
 const { extractName: extractNameDeterministic, isTradeContextSentence } = require('../utils/nameExtraction');
 const { isSuspiciousDuplicateName } = require('../utils/nameGuards');
 const { normalizeCityStatePhrase, parseCityStatePhrase, combineAddressParts } = require('../utils/addressNormalization');
+const {
+    isAffirmative: isAffirmativeAccess,
+    isNegative: isNegativeAccess,
+    normalizePropertyType,
+    parseGateAccessType,
+    normalizeUnitValue,
+    buildAccessSnapshot
+} = require('../utils/accessFlow');
 const { buildResumeBookingBlock } = require('../utils/resumeBookingProtocol');
 const { detectBookingClarification } = require('../utils/bookingClarification');
 const { detectConfirmationRequest } = require('../utils/confirmationRequest');
@@ -1712,7 +1720,9 @@ async function processTurn({
 
                 currentSlots: currentSlots || session?.collectedSlots || {},
                 extractedThisTurn: extractedThisTurn || {},
-                nameTrace: nameTrace || session?.booking?.meta?.name?.nameTrace || null
+                nameTrace: nameTrace || session?.booking?.meta?.name?.nameTrace || null,
+                property: buildAccessSnapshot(session?.booking?.meta?.address || {}).property,
+                access: buildAccessSnapshot(session?.booking?.meta?.address || {}).access
             },
 
             flow: {
@@ -3840,7 +3850,19 @@ async function processTurn({
                 session.booking.meta.address = session.booking.meta.address || { 
                     pendingConfirm: false, 
                     confirmed: false,
-                    breakdownStep: null
+                    breakdownStep: null,
+                    propertyType: null,
+                    unit: null,
+                    accessInstructions: null,
+                    accessStep: null,
+                    access: {
+                        gatedCommunity: null,
+                        gateAccessType: [],
+                        gateCode: null,
+                        gateGuardNotifyRequired: false,
+                        gateGuardNotes: null,
+                        additionalInstructions: null
+                    }
                 };
                 session.booking.meta.time = session.booking.meta.time || { 
                     pendingConfirm: false, 
@@ -5447,7 +5469,19 @@ async function processTurn({
                 session.booking.meta.address = session.booking.meta.address || { 
                     pendingConfirm: false, 
                     confirmed: false,
-                    breakdownStep: null // null, 'street', 'city', 'zip'
+                    breakdownStep: null, // null, 'street', 'city', 'zip'
+                    propertyType: null,
+                    unit: null,
+                    accessInstructions: null,
+                    accessStep: null,
+                    access: {
+                        gatedCommunity: null,
+                        gateAccessType: [],
+                        gateCode: null,
+                        gateGuardNotifyRequired: false,
+                        gateGuardNotes: null,
+                        additionalInstructions: null
+                    }
                 };
                 session.booking.meta.time = session.booking.meta.time || { 
                     pendingConfirm: false, 
@@ -5603,6 +5637,313 @@ async function processTurn({
             // ═══════════════════════════════════════════════════════════════════
                 const addressSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'address');
                 const addressMeta = session.booking.meta.address;
+                const accessConfig = company?.aiAgentSettings?.frontDeskBehavior?.accessFlow || {};
+                const forcedAccessCompanyIds = ['68e3f77a9d623b8058c700c4'];
+                const isForcedAccessCompany = forcedAccessCompanyIds.includes(String(company?._id || company?.companyId || ''));
+                const accessEnabled = accessConfig.enabled === true || isForcedAccessCompany;
+                const tradeKey = String(company?.trade || '').toLowerCase().trim();
+                const accessTradeApplicability = Array.isArray(accessConfig.tradeApplicability) && accessConfig.tradeApplicability.length
+                    ? accessConfig.tradeApplicability.map(t => String(t).toLowerCase().trim())
+                    : [];
+                const accessActiveForTrade = accessEnabled &&
+                    (!accessTradeApplicability.length || accessTradeApplicability.includes(tradeKey));
+                const propertyTypeEnabled = accessConfig.propertyTypeEnabled !== false;
+                const propertyTypeQuestion = accessConfig.propertyTypeQuestion || 'Is that a house, condo, apartment, or commercial property?';
+                const unitQuestion = accessConfig.unitQuestion || "Got it. What's the unit number?";
+                const commercialUnitQuestion = accessConfig.commercialUnitQuestion || "Got it. Is that a suite or floor number?";
+                const accessInstructionsQuestion = accessConfig.accessInstructionsQuestion ||
+                    'Do we need a gate code, elevator access, or should we just knock?';
+                const gatedQuestion = accessConfig.gatedQuestion ||
+                    "Thanks. One quick thing so the technician can get in — is that inside a gated community, or is it open access?";
+                const openAccessFollowupQuestion = accessConfig.openAccessFollowupQuestion ||
+                    'Got it. Any gate code, building code, or special access we should know about, or just pull up and knock?';
+                const gateAccessTypeQuestion = accessConfig.gateAccessTypeQuestion ||
+                    'Perfect. Do you have a gate code, a gate guard, or both?';
+                const gateCodeQuestion = accessConfig.gateCodeQuestion ||
+                    "Great, what gate code should the technician use?";
+                const safeCompanyName = company?.companyName || 'our team';
+                const renderWithCompanyName = (template) =>
+                    String(template || '').replace(/\{companyName\}/gi, safeCompanyName);
+                const gateGuardNotifyPrompt = renderWithCompanyName(
+                    accessConfig.gateGuardNotifyPrompt ||
+                    "No problem. Since there’s a gate guard, please let them know {companyName} will be coming during your appointment window so they’ll let our technician in without delays."
+                );
+                const gateGuardConfirmPrompt = renderWithCompanyName(
+                    accessConfig.gateGuardConfirmPrompt ||
+                    "Perfect. I’ll note that the gate guard has been notified for {companyName}."
+                );
+
+                const shouldUseAccessFlow = accessActiveForTrade && addressMeta.confirmed === true;
+                const propertyTypeTriggersUnit = ['condo/townhome', 'apartment', 'commercial'];
+                const propertyTypeTriggersAccessInstructions = ['condo/townhome', 'apartment', 'commercial'];
+                const propertyTypeIsCommercial = addressMeta.propertyType === 'commercial';
+                const maxPropertyTypeFollowUps = Number.isFinite(accessConfig.maxPropertyTypeFollowUps) ? accessConfig.maxPropertyTypeFollowUps : 1;
+                const maxUnitFollowUps = Number.isFinite(accessConfig.maxUnitFollowUps) ? accessConfig.maxUnitFollowUps : 1;
+                const maxAccessFollowUps = Number.isFinite(accessConfig.maxAccessFollowUps) ? accessConfig.maxAccessFollowUps : 2;
+                addressMeta.propertyTypeAskCount = Number.isFinite(addressMeta.propertyTypeAskCount) ? addressMeta.propertyTypeAskCount : 0;
+                addressMeta.unitAskCount = Number.isFinite(addressMeta.unitAskCount) ? addressMeta.unitAskCount : 0;
+                addressMeta.accessFollowUpCount = Number.isFinite(addressMeta.accessFollowUpCount) ? addressMeta.accessFollowUpCount : 0;
+                addressMeta.unitNotApplicable = Boolean(addressMeta.unitNotApplicable);
+
+                const ensureAccessSnapshot = () => {
+                    const snapshot = buildAccessSnapshot(addressMeta);
+                    currentSlots.propertyType = snapshot.property.type;
+                    currentSlots.unit = snapshot.property.unit;
+                    currentSlots.unitNotApplicable = snapshot.property.unitNotApplicable;
+                    currentSlots.accessInstructions = addressMeta.accessInstructions || null;
+                    currentSlots.access = snapshot.access;
+                };
+
+                const handleAccessFlow = () => {
+                    if (!shouldUseAccessFlow) return false;
+
+                    // Property type capture
+                    if (propertyTypeEnabled && !addressMeta.propertyType) {
+                        if (addressMeta.accessStep === 'propertyType') {
+                            const normalizedType = normalizePropertyType(userText);
+                            if (!normalizedType) {
+                                addressMeta.propertyTypeAskCount += 1;
+                                if (addressMeta.propertyTypeAskCount > maxPropertyTypeFollowUps) {
+                                    addressMeta.propertyType = 'other';
+                                    addressMeta.accessStep = null;
+                                } else {
+                                    finalReply = propertyTypeQuestion;
+                                    nextSlotId = 'address';
+                                    session.booking.activeSlot = 'address';
+                                    session.booking.activeSlotType = 'address';
+                                    return true;
+                                }
+                            } else {
+                                addressMeta.propertyType = normalizedType;
+                                addressMeta.accessStep = null;
+                            }
+                        } else {
+                            addressMeta.accessStep = 'propertyType';
+                            addressMeta.propertyTypeAskCount += 1;
+                            finalReply = propertyTypeQuestion;
+                            nextSlotId = 'address';
+                            session.booking.activeSlot = 'address';
+                            session.booking.activeSlotType = 'address';
+                            return true;
+                        }
+                    }
+
+                    // Unit capture for condos/apartments/commercial
+                    if (!addressMeta.unit && (propertyTypeTriggersUnit.includes(addressMeta.propertyType) || propertyTypeIsCommercial)) {
+                        const prompt = propertyTypeIsCommercial ? commercialUnitQuestion : unitQuestion;
+                        if (addressMeta.accessStep === 'unit') {
+                            const normalizedUnit = normalizeUnitValue(userText);
+                            if (!normalizedUnit) {
+                                addressMeta.unitAskCount += 1;
+                                if (addressMeta.unitAskCount > maxUnitFollowUps || isNegativeAccess(userText)) {
+                                    addressMeta.unitNotApplicable = true;
+                                    addressMeta.access.unitResolution = 'unknown_or_not_given';
+                                    addressMeta.accessStep = null;
+                                } else {
+                                    finalReply = prompt;
+                                    nextSlotId = 'address';
+                                    session.booking.activeSlot = 'address';
+                                    session.booking.activeSlotType = 'address';
+                                    return true;
+                                }
+                            } else {
+                                addressMeta.unit = normalizedUnit;
+                                addressMeta.accessStep = null;
+                            }
+                        } else {
+                            addressMeta.accessStep = 'unit';
+                            addressMeta.unitAskCount += 1;
+                            finalReply = prompt;
+                            nextSlotId = 'address';
+                            session.booking.activeSlot = 'address';
+                            session.booking.activeSlotType = 'address';
+                            return true;
+                        }
+                    }
+
+                    // Access instructions (condo/apartment only)
+                    if (!addressMeta.accessInstructions && propertyTypeTriggersAccessInstructions.includes(addressMeta.propertyType)) {
+                        if (addressMeta.accessStep === 'accessInstructions') {
+                            addressMeta.accessInstructions = userText.trim();
+                            addressMeta.accessStep = null;
+                        } else {
+                            addressMeta.accessStep = 'accessInstructions';
+                            finalReply = accessInstructionsQuestion;
+                            nextSlotId = 'address';
+                            session.booking.activeSlot = 'address';
+                            session.booking.activeSlotType = 'address';
+                            return true;
+                        }
+                    }
+
+                    // Gated community check
+                    const access = addressMeta.access || {};
+                    if (access.gatedCommunity === null || access.gatedCommunity === undefined) {
+                        if (addressMeta.accessStep === 'gated') {
+                            if (isAffirmativeAccess(userText)) {
+                                access.gatedCommunity = true;
+                            } else if (isNegativeAccess(userText)) {
+                                access.gatedCommunity = false;
+                            } else {
+                                addressMeta.accessFollowUpCount += 1;
+                                if (addressMeta.accessFollowUpCount > maxAccessFollowUps) {
+                                    access.accessResolution = 'unknown_or_not_given';
+                                    finalReply = `No problem, I’ll note the address as is. If the technician has any trouble getting in, they’ll call you at ${currentSlots.phone || 'the number you provided'}.`;
+                                    nextSlotId = 'time';
+                                    session.booking.activeSlot = 'time';
+                                    session.booking.activeSlotType = 'time';
+                                    addressMeta.access = access;
+                                    return true;
+                                }
+                                finalReply = gatedQuestion;
+                                nextSlotId = 'address';
+                                session.booking.activeSlot = 'address';
+                                session.booking.activeSlotType = 'address';
+                                addressMeta.access = access;
+                                return true;
+                            }
+                            addressMeta.accessStep = null;
+                        } else {
+                            addressMeta.accessStep = 'gated';
+                            finalReply = gatedQuestion;
+                            nextSlotId = 'address';
+                            session.booking.activeSlot = 'address';
+                            session.booking.activeSlotType = 'address';
+                            addressMeta.access = access;
+                            return true;
+                        }
+                    }
+
+                    if (access.gatedCommunity === false) {
+                        if (addressMeta.accessStep === 'openAccess') {
+                            if (!isNegativeAccess(userText)) {
+                                access.additionalInstructions = userText.trim();
+                            }
+                            addressMeta.accessStep = null;
+                        } else {
+                            addressMeta.accessStep = 'openAccess';
+                            finalReply = openAccessFollowupQuestion;
+                            nextSlotId = 'address';
+                            session.booking.activeSlot = 'address';
+                            session.booking.activeSlotType = 'address';
+                            addressMeta.access = access;
+                            return true;
+                        }
+                    }
+
+                    if (access.gatedCommunity === true) {
+                        if (!access.gateAccessType || access.gateAccessType.length === 0) {
+                            if (addressMeta.accessStep === 'gateAccessType') {
+                                const gateTypes = parseGateAccessType(userText);
+                                if (gateTypes.length === 0) {
+                                    addressMeta.accessFollowUpCount += 1;
+                                    if (addressMeta.accessFollowUpCount > maxAccessFollowUps) {
+                                        access.accessResolution = 'unknown_or_not_given';
+                                        finalReply = `No problem, I’ll note the address as is. If the technician has any trouble getting in, they’ll call you at ${currentSlots.phone || 'the number you provided'}.`;
+                                        nextSlotId = 'time';
+                                        session.booking.activeSlot = 'time';
+                                        session.booking.activeSlotType = 'time';
+                                        addressMeta.access = access;
+                                        return true;
+                                    }
+                                    finalReply = gateAccessTypeQuestion;
+                                    nextSlotId = 'address';
+                                    session.booking.activeSlot = 'address';
+                                    session.booking.activeSlotType = 'address';
+                                    return true;
+                                }
+                                access.gateAccessType = gateTypes;
+                                addressMeta.accessStep = null;
+                            } else {
+                                addressMeta.accessStep = 'gateAccessType';
+                                finalReply = gateAccessTypeQuestion;
+                                nextSlotId = 'address';
+                                session.booking.activeSlot = 'address';
+                                session.booking.activeSlotType = 'address';
+                                addressMeta.access = access;
+                                return true;
+                            }
+                        }
+
+                        if (access.gateAccessType.includes('code') && !access.gateCode) {
+                            if (addressMeta.accessStep === 'gateCode') {
+                                const gateCode = userText.trim();
+                                if (!gateCode) {
+                                    addressMeta.accessFollowUpCount += 1;
+                                    if (addressMeta.accessFollowUpCount > maxAccessFollowUps) {
+                                        access.accessResolution = 'unknown_or_not_given';
+                                        finalReply = `No problem, I’ll note the address as is. If the technician has any trouble getting in, they’ll call you at ${currentSlots.phone || 'the number you provided'}.`;
+                                        nextSlotId = 'time';
+                                        session.booking.activeSlot = 'time';
+                                        session.booking.activeSlotType = 'time';
+                                        addressMeta.access = access;
+                                        return true;
+                                    }
+                                    finalReply = gateCodeQuestion;
+                                    nextSlotId = 'address';
+                                    session.booking.activeSlot = 'address';
+                                    session.booking.activeSlotType = 'address';
+                                    return true;
+                                }
+                                access.gateCode = gateCode;
+                                addressMeta.accessStep = null;
+                            } else {
+                                addressMeta.accessStep = 'gateCode';
+                                finalReply = gateCodeQuestion;
+                                nextSlotId = 'address';
+                                session.booking.activeSlot = 'address';
+                                session.booking.activeSlotType = 'address';
+                                addressMeta.access = access;
+                                return true;
+                            }
+                        }
+
+                        if (access.gateAccessType.includes('guard') && !access.gateGuardNotes) {
+                            if (addressMeta.accessStep === 'gateGuardNotify') {
+                                if (isAffirmativeAccess(userText)) {
+                                    access.gateGuardNotifyRequired = true;
+                                    access.gateGuardNotes = `Customer confirmed gate guard is notified for ${company?.companyName || 'our team'}.`;
+                                    finalReply = gateGuardConfirmPrompt;
+                                } else if (isNegativeAccess(userText)) {
+                                    access.gateGuardNotifyRequired = true;
+                                    access.gateGuardNotes = `Customer will notify gate guard that ${company?.companyName || 'our team'} is arriving during the appointment window.`;
+                                } else {
+                                    access.gateGuardNotifyRequired = true;
+                                    access.gateGuardNotes = `Customer will notify gate guard that ${company?.companyName || 'our team'} is arriving during the appointment window.`;
+                                }
+                                addressMeta.accessStep = null;
+                            } else {
+                                addressMeta.accessStep = 'gateGuardNotify';
+                                finalReply = gateGuardNotifyPrompt;
+                                nextSlotId = 'address';
+                                session.booking.activeSlot = 'address';
+                                session.booking.activeSlotType = 'address';
+                                addressMeta.access = access;
+                                return true;
+                            }
+                        }
+                    }
+
+                    addressMeta.access = access;
+                    ensureAccessSnapshot();
+                    return false;
+                };
+
+                const moveToTimeAfterAddress = () => {
+                    if (handleAccessFlow()) {
+                        return true;
+                    }
+
+                    session.booking.activeSlot = 'time';
+                    const timeSlotConfigForPrompt = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'time');
+                    if (timeSlotConfigForPrompt?.required !== false) {
+                        finalReply = "Perfect. " + (timeSlotConfigForPrompt?.question || getMissingConfigPrompt('slot_question', 'time'));
+                        nextSlotId = 'time';
+                    } else {
+                        finalReply = `Perfect. You're all set. We'll be in touch at ${currentSlots.phone} to confirm your appointment.`;
+                    }
+                    return true;
+                };
                 
                 // Check if we should skip address (skipIfKnown + returning customer)
                 const shouldSkipAddress = addressSlotConfig?.skipIfKnown && customerContext?.isReturning && customerContext?.address;
@@ -5611,21 +5952,21 @@ async function processTurn({
                     addressMeta.confirmed = true;
                     log('🏠 ADDRESS: Skipped (skipIfKnown + returning customer)', { address: currentSlots.address });
                 }
+
+                if (addressMeta.confirmed && !addressMeta.pendingConfirm && shouldUseAccessFlow) {
+                    if (moveToTimeAfterAddress()) {
+                        log('🏠 ADDRESS: Access flow started after skip/confirm');
+                        break BOOKING_MODE;
+                    }
+                }
                 
                 if (addressMeta.pendingConfirm && !addressMeta.confirmed) {
                     if (userSaysYes) {
                         addressMeta.confirmed = true;
                         addressMeta.pendingConfirm = false;
-                        session.booking.activeSlot = 'time';
-                        // V35 FIX: Set finalReply to ask for time (prevents fall-through to breakdown)
-                        const timeSlotConfigForPrompt = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'time');
-                        if (timeSlotConfigForPrompt?.required !== false) {
-                            // V59 NUKE: UI-configured time slot question ONLY
-                            finalReply = "Perfect. " + (timeSlotConfigForPrompt?.question || getMissingConfigPrompt('slot_question', 'time'));
-                            nextSlotId = 'time';
-                        } else {
-                            // Time is optional - finalize booking
-                            finalReply = `Perfect. You're all set. We'll be in touch at ${currentSlots.phone} to confirm your appointment.`;
+                        if (moveToTimeAfterAddress()) {
+                            log('🏠 ADDRESS: User confirmed, moving to access/time');
+                            break BOOKING_MODE;
                         }
                         log('🏠 ADDRESS: User confirmed, moving to time');
                     } else if (userSaysNoGeneric) {
@@ -5661,9 +6002,10 @@ async function processTurn({
                         // No unit needed
                         addressMeta.unitCollected = true;
                         addressMeta.confirmed = true;
-                        session.booking.activeSlot = 'time';
-                        finalReply = `Perfect, got it. `;
-                        log('🏠 ADDRESS: No unit needed, moving to time');
+                        if (moveToTimeAfterAddress()) {
+                            log('🏠 ADDRESS: No unit needed, moving to access/time');
+                            break BOOKING_MODE;
+                        }
                     } else if (userTextTrimmed.length > 0 && userTextTrimmed.length < 20) {
                         // User provided unit number
                         const unitNumber = userTextTrimmed.replace(/^(apt|apartment|unit|suite|ste|#)\s*/i, '').trim();
@@ -5676,8 +6018,10 @@ async function processTurn({
                             currentSlots.address = `${currentSlots.address}, Unit ${unitNumber}`;
                         }
                         
-                        session.booking.activeSlot = 'time';
-                        finalReply = `Got it, Unit ${unitNumber}. `;
+                        if (moveToTimeAfterAddress()) {
+                            log('🏠 ADDRESS: Unit collected, moving to access/time', { unit: unitNumber, fullAddress: currentSlots.address });
+                            break BOOKING_MODE;
+                        }
                         log('🏠 ADDRESS: Unit collected', { unit: unitNumber, fullAddress: currentSlots.address });
                     }
                 }
@@ -5712,8 +6056,10 @@ async function processTurn({
                         currentSlots.address = combineAddressParts(street, city, state) || (street || city);
                         addressMeta.breakdownStep = null;
                         addressMeta.confirmed = true;
-                        session.booking.activeSlot = 'time';
-                        finalReply = `Perfect, I have ${currentSlots.address}. `;
+                        if (moveToTimeAfterAddress()) {
+                            log('🏠 ADDRESS: Combined breakdown, moving to access/time', { address: currentSlots.address });
+                            break BOOKING_MODE;
+                        }
                         log('🏠 ADDRESS: Combined breakdown (street_city)', { address: currentSlots.address });
                     }
                 }
@@ -5729,8 +6075,10 @@ async function processTurn({
                     currentSlots.address = parts.join(', ').replace(/, (\d{5})/, ' $1'); // Format: "123 Main, City, State 12345"
                     addressMeta.breakdownStep = null;
                     addressMeta.confirmed = true;
-                    session.booking.activeSlot = 'time';
-                    finalReply = `Perfect, I have ${currentSlots.address}. `;
+                    if (moveToTimeAfterAddress()) {
+                        log('🏠 ADDRESS: Combined breakdown full, moving to access/time', { address: currentSlots.address });
+                        break BOOKING_MODE;
+                    }
                     log('🏠 ADDRESS: Combined breakdown (full)', { address: currentSlots.address });
                 }
                 else if (extractedThisTurn.address && !addressMeta.confirmed) {
@@ -5935,7 +6283,6 @@ async function processTurn({
                         log('🏠 ADDRESS: Confirming back', { address: displayAddress });
                     } else {
                         addressMeta.confirmed = true;
-                        session.booking.activeSlot = 'time';
                         const displayAddress = googleMapsResult?.normalized || extractedThisTurn.address;
                         const city = googleMapsResult?.components?.city;
                         const street = googleMapsResult?.components?.street;
@@ -5943,6 +6290,11 @@ async function processTurn({
                             finalReply = `Perfect — I've got ${street} in ${city}. `;
                         } else {
                             finalReply = 'Perfect. ';
+                        }
+                        currentSlots.address = displayAddress;
+                        if (moveToTimeAfterAddress()) {
+                            log('🏠 ADDRESS: Accepted, moving to access/time', { address: displayAddress, validated: !!googleMapsResult?.validated });
+                            break BOOKING_MODE;
                         }
                         log('🏠 ADDRESS: Accepted', { address: displayAddress, validated: !!googleMapsResult?.validated });
                     }
@@ -5956,7 +6308,10 @@ async function processTurn({
                         currentSlots.address = existingAddress;
                         addressMeta.breakdownStep = null;
                         addressMeta.confirmed = true;
-                        session.booking.activeSlot = 'time';
+                        if (moveToTimeAfterAddress()) {
+                            log('🏠 ADDRESS: Frustration path, moving to access/time', { address: existingAddress });
+                            break BOOKING_MODE;
+                        }
                         finalReply = `You're right, I apologize. I have ${existingAddress}. `;
                         log('🏠 ADDRESS: User frustrated, using existing address', { address: existingAddress });
                     } else {
@@ -7819,6 +8174,14 @@ async function processTurn({
                     dynamicNeed = bookingSlotIds.filter(s => !allSlots[s]);
             }
             
+            const accessSnapshot = buildAccessSnapshot(session.booking?.meta?.address || {});
+            const accessSummary =
+                accessSnapshot.access?.gatedCommunity === true
+                    ? `gated (${(accessSnapshot.access.gateAccessType || []).join('+') || 'unknown'})`
+                    : accessSnapshot.access?.gatedCommunity === false
+                        ? 'open_access'
+                        : 'unknown';
+
             response.debug = {
                 engineVersion: ENGINE_VERSION,
                 channel,
@@ -7902,7 +8265,10 @@ async function processTurn({
                     consentGiven: session.booking?.consentGiven || false,
                     consentPhrase: session.booking?.consentPhrase || null,
                     bookingStarted: session.mode === 'BOOKING',
-                    responseSource: aiResult?.debug?.source || (aiResult?.fromStateMachine ? 'STATE_MACHINE' : 'LLM')
+                    responseSource: aiResult?.debug?.source || (aiResult?.fromStateMachine ? 'STATE_MACHINE' : 'LLM'),
+                    propertyType: accessSnapshot.property.type || null,
+                    unit: accessSnapshot.property.unit || null,
+                    accessSummary
                 },
                 // ════════════════════════════════════════════════════════════════
                 // 🧠 V41: DYNAMIC FLOW TRACE - What the flow engine decided
@@ -7977,6 +8343,8 @@ async function processTurn({
                 currentSlots: session.collectedSlots || {},
                 extractedThisTurn: extractedThisTurn || {},
                 nameTrace: session.booking?.meta?.name?.nameTrace || null,
+                property: buildAccessSnapshot(session.booking?.meta?.address || {}).property,
+                access: buildAccessSnapshot(session.booking?.meta?.address || {}).access,
                 flow: {
                     triggersFired: (dynamicFlowResult?.triggersFired || []).length,
                     flowsActivated: (dynamicFlowResult?.flowsActivated || []).length,

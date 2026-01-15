@@ -2191,6 +2191,28 @@ const companySchema = new mongoose.Schema({
                 // Number of names that were scanned to build the map
                 precomputedFromCount: { type: Number, default: 0 }
             },
+
+            // ═══════════════════════════════════════════════════════════════
+            // V94: ACCESS FLOW (Property Type + Gated Access)
+            // ═══════════════════════════════════════════════════════════════
+            accessFlow: {
+                enabled: { type: Boolean, default: false },
+                tradeApplicability: { type: [String], default: ['hvac', 'plumbing', 'electrical', 'pest', 'carpet'] },
+                propertyTypeEnabled: { type: Boolean, default: true },
+                propertyTypeQuestion: { type: String, trim: true, default: 'Is that a house, condo, apartment, or commercial property?' },
+                unitQuestion: { type: String, trim: true, default: "Got it. What's the unit number?" },
+                commercialUnitQuestion: { type: String, trim: true, default: 'Got it. Is that a suite or floor number?' },
+                accessInstructionsQuestion: { type: String, trim: true, default: 'Do we need a gate code, elevator access, or should we just knock?' },
+                gatedQuestion: { type: String, trim: true, default: 'Thanks. One quick thing so the technician can get in — is that inside a gated community, or is it open access?' },
+                openAccessFollowupQuestion: { type: String, trim: true, default: 'Got it. Any gate code, building code, or special access we should know about, or just pull up and knock?' },
+                gateAccessTypeQuestion: { type: String, trim: true, default: 'Perfect. Do you have a gate code, a gate guard, or both?' },
+                gateCodeQuestion: { type: String, trim: true, default: 'Great, what gate code should the technician use?' },
+                gateGuardNotifyPrompt: { type: String, trim: true, default: 'No problem. Since there’s a gate guard, please let them know {companyName} will be coming during your appointment window so they’ll let our technician in without delays.' },
+                gateGuardConfirmPrompt: { type: String, trim: true, default: 'Perfect. I’ll note that the gate guard has been notified for {companyName}.' },
+                maxPropertyTypeFollowUps: { type: Number, default: 1, min: 0, max: 2 },
+                maxUnitFollowUps: { type: Number, default: 1, min: 0, max: 2 },
+                maxAccessFollowUps: { type: Number, default: 2, min: 0, max: 5 }
+            },
             
             // ═══════════════════════════════════════════════════════════════
             // BOOKING TEMPLATES - Confirmation and completion messages
