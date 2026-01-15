@@ -89,7 +89,8 @@ router.post('/message', async (req, res) => {
             sessionId,
             visitorInfo = {},
             includeDebug = false,
-            forceNewSession = false  // Test Console can force fresh session
+            forceNewSession = false,  // Test Console can force fresh session
+            metadata = {}
         } = req.body;
         
         // ═══════════════════════════════════════════════════════════════════
@@ -132,7 +133,8 @@ router.post('/message', async (req, res) => {
                 name: visitorInfo.name
             },
             includeDebug,
-            forceNewSession  // Test Console can force fresh session
+            forceNewSession,  // Test Console can force fresh session
+            metadata: (typeof metadata === 'object' && metadata !== null) ? metadata : {}
         });
         
         // ═══════════════════════════════════════════════════════════════════

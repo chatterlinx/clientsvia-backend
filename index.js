@@ -960,7 +960,7 @@ async function startServer() {
         
         console.log('[Server] Step 6/6: Binding to port FIRST (AI Gateway health checks deferred)...');
         
-        return app.listen(PORT, '0.0.0.0', () => {
+        const server = app.listen(PORT, '0.0.0.0', () => {
             console.log(`[Server] ✅ Step 6 COMPLETE: HTTP server bound in ${Date.now() - serverStart}ms`);
             console.log(`🎉 SERVER FULLY OPERATIONAL!`);
             console.log(`🌐 Admin dashboard listening at http://0.0.0.0:${PORT}`);
@@ -1026,6 +1026,16 @@ async function startServer() {
             // }
             console.log(`[INIT] ℹ️  Auto-optimization scheduler disabled (optional feature)`);
         });
+        
+        // Attach Test Console production ASR WebSocket (Deepgram) to the HTTP server
+        try {
+            const { attachTestConsoleASRServer } = require('./services/stt/TestConsoleASRServer');
+            attachTestConsoleASRServer(server);
+        } catch (err) {
+            console.error('[Server] ⚠️ Failed to attach Test Console ASR server:', err.message);
+        }
+
+        return server;
     } catch (err) {
         console.error('[Server Startup] ❌ CRITICAL ERROR - Server startup failed!');
         console.error('[Server Startup] Error details:', err.message);

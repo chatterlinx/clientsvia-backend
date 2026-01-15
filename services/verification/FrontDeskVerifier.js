@@ -131,9 +131,13 @@ const VERIFICATION_RULES = {
                 severity: 'warning',
                 weight: 15,
                 check: (config) => {
-                    const fallbacks = config?.frontDeskBehavior?.fallbackResponses;
-                    const hasGeneric = fallbacks?.generic && fallbacks.generic.trim().length > 0;
-                    const hasLowConf = fallbacks?.lowConfidence && fallbacks.lowConfidence.trim().length > 0;
+                    const fallbacks = config?.frontDeskBehavior?.fallbackResponses || {};
+                    const genericRaw = fallbacks.generic;
+                    const lowConfRaw = fallbacks.lowConfidence;
+                    const generic = typeof genericRaw === 'string' ? genericRaw : (genericRaw == null ? '' : String(genericRaw));
+                    const lowConf = typeof lowConfRaw === 'string' ? lowConfRaw : (lowConfRaw == null ? '' : String(lowConfRaw));
+                    const hasGeneric = generic.trim().length > 0;
+                    const hasLowConf = lowConf.trim().length > 0;
                     
                     // For "recovery mode" - should have specific error handling responses
                     const hasRecoveryMode = hasGeneric && hasLowConf;
@@ -231,35 +235,42 @@ const VERIFICATION_RULES = {
                     const dc = config?.frontDeskBehavior?.discoveryConsent || {};
                     const bookingRequiresConsent = dc.bookingRequiresExplicitConsent;
                     const consentPhrases = dc.consentPhrases || [];
+                    const consentYesWords = dc.consentYesWords || [];
+                    const wantsBooking = config?.frontDeskBehavior?.detectionTriggers?.wantsBooking || [];
                     
                     // CRITICAL: If consent is required but no phrases defined = infinite loop
-                    if (bookingRequiresConsent === true && consentPhrases.length === 0) {
+                    if (bookingRequiresConsent === true && (consentPhrases.length === 0 || consentYesWords.length === 0)) {
                         return {
                             passed: false,
-                            value: 'CONSENT_REQUIRED_BUT_NO_PHRASES',
+                            value: 'CONSENT_REQUIRED_BUT_EMPTY',
                             details: {
                                 bookingRequiresConsent: true,
-                                consentPhrasesCount: 0
+                                consentPhrasesCount: consentPhrases.length,
+                                consentYesWordsCount: consentYesWords.length
                             },
-                            fix: 'Either add consent phrases OR disable booking consent requirement'
+                            fix: 'Add consent phrases AND yes-words, or disable booking consent requirement'
                         };
                     }
                     
                     // Check if consent system is consistent
-                    const isConsistent = (bookingRequiresConsent && consentPhrases.length > 0) || 
+                    const isConsistent = (bookingRequiresConsent && consentPhrases.length > 0 && consentYesWords.length > 0) || 
                                          (!bookingRequiresConsent);
                     
                     return {
                         passed: isConsistent,
                         value: isConsistent ? 
-                            (bookingRequiresConsent ? `Enabled (${consentPhrases.length} phrases)` : 'Disabled (no consent needed)') :
+                            (bookingRequiresConsent ? `Enabled (${consentPhrases.length} phrases, ${consentYesWords.length} yes-words)` : 'Disabled (no consent needed)') :
                             'MISCONFIGURED',
                         details: {
                             bookingRequiresConsent,
                             consentPhrasesCount: consentPhrases.length,
-                            samplePhrases: consentPhrases.slice(0, 3)
+                            consentYesWordsCount: consentYesWords.length,
+                            consentPhrasesSample: consentPhrases.slice(0, 3),
+                            consentYesWordsSample: consentYesWords.slice(0, 3),
+                            wantsBookingCount: wantsBooking.length,
+                            wantsBookingSample: wantsBooking.slice(0, 3)
                         },
-                        fix: isConsistent ? null : 'Configure consent phrases or disable consent requirement'
+                        fix: isConsistent ? null : 'Configure consent phrases AND yes-words (or disable consent requirement)'
                     };
                 }
             },
@@ -495,7 +506,45 @@ const VERIFICATION_RULES = {
                 }
             },
             // ─────────────────────────────────────────────────────────────
-            // PROBE 3: SPELLING_VARIANT_WIRING - "Marc with C" handling
+            // PROBE 3: REQUIRED_SLOT_SHAPE - Do core slots have ids, types, questions?
+            // Missing slotId/type/question can stall the state machine or produce null questions.
+            // ─────────────────────────────────────────────────────────────
+            {
+                id: 'REQUIRED_SLOT_SHAPE',
+                description: 'Core booking slots (name/phone/address/time) have id, type, and question',
+                severity: 'error',
+                weight: 25,
+                check: (config) => {
+                    const slots = (config?.frontDeskBehavior?.bookingSlots || []).filter(s => s.enabled !== false);
+                    const requiredTypes = ['name', 'phone', 'address', 'time'];
+                    const findings = [];
+                    for (const rt of requiredTypes) {
+                        const slot = slots.find(s =>
+                            (s.slotId || s.id) === rt || s.type === rt
+                        );
+                        if (!slot) {
+                            findings.push({ slotType: rt, reason: 'missing_slot' });
+                            continue;
+                        }
+                        const missing = [];
+                        if (!slot.slotId && !slot.id) missing.push('id/slotId');
+                        if (!slot.type) missing.push('type');
+                        if (!slot.question) missing.push('question');
+                        if (missing.length > 0) {
+                            findings.push({ slotType: rt, missing });
+                        }
+                    }
+                    const passed = findings.length === 0;
+                    return {
+                        passed,
+                        value: passed ? 'All core slots have id/type/question' : 'Core slots incomplete',
+                        details: { findings },
+                        fix: passed ? null : 'Ensure name/phone/address/time slots each have slotId (or id), type, and question text'
+                    };
+                }
+            },
+            // ─────────────────────────────────────────────────────────────
+            // PROBE 4: SPELLING_VARIANT_WIRING - "Marc with C" handling
             // ─────────────────────────────────────────────────────────────
             {
                 id: 'SPELLING_VARIANT_WIRING',
@@ -774,8 +823,9 @@ const VERIFICATION_RULES = {
                 severity: 'error',
                 weight: 40,
                 check: (config) => {
-                    const fallback = config?.frontDeskBehavior?.fallbackResponses?.generic;
-                    const hasFallback = fallback && fallback.trim().length > 0;
+                    const raw = config?.frontDeskBehavior?.fallbackResponses?.generic;
+                    const fallback = typeof raw === 'string' ? raw : (raw == null ? '' : String(raw));
+                    const hasFallback = fallback.trim().length > 0;
                     return {
                         passed: hasFallback,
                         value: hasFallback ? 'Set' : 'NOT_SET',
@@ -789,8 +839,9 @@ const VERIFICATION_RULES = {
                 severity: 'warning',
                 weight: 30,
                 check: (config) => {
-                    const fallback = config?.frontDeskBehavior?.fallbackResponses?.noResponse;
-                    const hasFallback = fallback && fallback.trim().length > 0;
+                    const raw = config?.frontDeskBehavior?.fallbackResponses?.noResponse;
+                    const fallback = typeof raw === 'string' ? raw : (raw == null ? '' : String(raw));
+                    const hasFallback = fallback.trim().length > 0;
                     return {
                         passed: hasFallback,
                         value: hasFallback ? 'Set' : 'Using default',
@@ -804,8 +855,9 @@ const VERIFICATION_RULES = {
                 severity: 'warning',
                 weight: 30,
                 check: (config) => {
-                    const fallback = config?.frontDeskBehavior?.fallbackResponses?.lowConfidence;
-                    const hasFallback = fallback && fallback.trim().length > 0;
+                    const raw = config?.frontDeskBehavior?.fallbackResponses?.lowConfidence;
+                    const fallback = typeof raw === 'string' ? raw : (raw == null ? '' : String(raw));
+                    const hasFallback = fallback.trim().length > 0;
                     return {
                         passed: hasFallback,
                         value: hasFallback ? 'Set' : 'Using default',
