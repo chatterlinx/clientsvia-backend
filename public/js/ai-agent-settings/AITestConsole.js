@@ -1564,17 +1564,31 @@ ${separator}`;
                 ` : ''}
                 
                 <!-- EXPORT BUTTONS -->
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="window.aiTestConsole.copyPatchJson()" 
-                        style="flex: 1; padding: 10px; background: #21262d; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; cursor: pointer; font-size: 12px; font-weight: 600;">
-                        📋 Copy PATCH JSON
-                    </button>
-                    <button onclick="window.aiTestConsole.downloadPatchJson()" 
-                        style="flex: 1; padding: 10px; background: #21262d; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; cursor: pointer; font-size: 12px; font-weight: 600;">
-                        💾 Download .json
-                    </button>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <!-- Issues Export (Original) -->
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="window.aiTestConsole.copyPatchJson()" 
+                            style="flex: 1; padding: 10px; background: #21262d; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; cursor: pointer; font-size: 12px; font-weight: 600;">
+                            📋 Copy Issues JSON
+                        </button>
+                        <button onclick="window.aiTestConsole.downloadPatchJson()" 
+                            style="flex: 1; padding: 10px; background: #21262d; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; cursor: pointer; font-size: 12px; font-weight: 600;">
+                            💾 Download Issues
+                        </button>
+                    </div>
+                    <!-- Full Debug Export (NEW) -->
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="window.aiTestConsole.copyFullDebug()" 
+                            style="flex: 1; padding: 10px; background: #2d1c2d; border: 1px solid #a371f7; border-radius: 6px; color: #e6dafe; cursor: pointer; font-size: 12px; font-weight: 600;">
+                            📦 Copy Full Debug
+                        </button>
+                        <button onclick="window.aiTestConsole.downloadFullDebug()" 
+                            style="flex: 1; padding: 10px; background: #2d1c2d; border: 1px solid #a371f7; border-radius: 6px; color: #e6dafe; cursor: pointer; font-size: 12px; font-weight: 600;">
+                            📥 Download Full Debug
+                        </button>
+                    </div>
                     <button onclick="window.aiTestConsole.openWiringTab()" 
-                        style="flex: 1; padding: 10px; background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%); color: #000; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700;">
+                        style="width: 100%; padding: 10px; background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%); color: #000; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700;">
                         🔌 Full Wiring →
                     </button>
                 </div>
@@ -1624,7 +1638,7 @@ ${separator}`;
     
     /**
      * Copy PATCH JSON to clipboard
-     * This is the actionable export for instant fix instructions
+     * This is the actionable export for instant fix instructions (ISSUES ONLY)
      */
     copyPatchJson() {
         const patchJson = this.lastDiagnostics?.patchJson;
@@ -1655,7 +1669,76 @@ ${separator}`;
     }
     
     /**
-     * Download PATCH JSON as a file
+     * Copy FULL DEBUG DATA to clipboard
+     * This includes: last response, debugSnapshot, diagnostics, conversation history
+     */
+    copyFullDebug() {
+        const lastDebugEntry = this.debugLog.length > 0 ? this.debugLog[this.debugLog.length - 1] : null;
+        
+        if (!lastDebugEntry) {
+            alert('No test data available. Run a test first.');
+            return;
+        }
+        
+        const fullDebug = {
+            _format: 'AI_TEST_CONSOLE_FULL_DEBUG_V1',
+            companyId: this.companyId,
+            testSessionId: this.testSessionId,
+            generatedAt: new Date().toISOString(),
+            
+            // Last test response
+            lastTest: {
+                userMessage: lastDebugEntry.userMessage,
+                aiResponse: lastDebugEntry.aiResponse,
+                debugSnapshot: lastDebugEntry.debugSnapshot || lastDebugEntry.debug?.debugSnapshot,
+                metadata: lastDebugEntry.metadata
+            },
+            
+            // Wiring diagnostics
+            diagnostics: this.lastDiagnostics || null,
+            
+            // Full conversation history
+            conversationHistory: this.conversationHistory.slice(-10), // Last 10 turns
+            
+            // Session state
+            sessionState: {
+                knownSlots: this.knownSlots,
+                testSessionId: this.testSessionId,
+                conversationLength: this.conversationHistory.length
+            },
+            
+            // Debug log (last 5 entries)
+            recentDebugLog: this.debugLog.slice(-5)
+        };
+        
+        const jsonStr = JSON.stringify(fullDebug, null, 2);
+        
+        navigator.clipboard.writeText(jsonStr).then(() => {
+            const btn = document.querySelector('[onclick*="copyFullDebug"]');
+            if (btn) {
+                const original = btn.innerHTML;
+                btn.innerHTML = '✅ Copied!';
+                btn.style.background = '#238636';
+                btn.style.borderColor = '#238636';
+                setTimeout(() => {
+                    btn.innerHTML = original;
+                    btn.style.background = '#2d1c2d';
+                    btn.style.borderColor = '#a371f7';
+                }, 1500);
+            }
+            console.log('[AI Test] 📦 Full debug data copied to clipboard', {
+                size: jsonStr.length,
+                conversationTurns: fullDebug.conversationHistory.length,
+                hasDebugSnapshot: !!fullDebug.lastTest.debugSnapshot
+            });
+        }).catch(err => {
+            console.error('[AI Test] Failed to copy:', err);
+            alert('Failed to copy. Check console.');
+        });
+    }
+    
+    /**
+     * Download PATCH JSON as a file (ISSUES ONLY)
      * Filename: wiring-patch-{companyId}-{timestamp}.json
      */
     downloadPatchJson() {
@@ -1694,6 +1777,84 @@ ${separator}`;
         }
         
         console.log(`[AI Test] Downloaded: ${filename}`);
+    }
+    
+    /**
+     * Download FULL DEBUG DATA as a file
+     * Filename: test-console-debug-{companyId}-{timestamp}.json
+     */
+    downloadFullDebug() {
+        const lastDebugEntry = this.debugLog.length > 0 ? this.debugLog[this.debugLog.length - 1] : null;
+        
+        if (!lastDebugEntry) {
+            alert('No test data available. Run a test first.');
+            return;
+        }
+        
+        const fullDebug = {
+            _format: 'AI_TEST_CONSOLE_FULL_DEBUG_V1',
+            companyId: this.companyId,
+            testSessionId: this.testSessionId,
+            generatedAt: new Date().toISOString(),
+            
+            // Last test response
+            lastTest: {
+                userMessage: lastDebugEntry.userMessage,
+                aiResponse: lastDebugEntry.aiResponse,
+                debugSnapshot: lastDebugEntry.debugSnapshot || lastDebugEntry.debug?.debugSnapshot,
+                metadata: lastDebugEntry.metadata
+            },
+            
+            // Wiring diagnostics
+            diagnostics: this.lastDiagnostics || null,
+            
+            // Full conversation history
+            conversationHistory: this.conversationHistory.slice(-10), // Last 10 turns
+            
+            // Session state
+            sessionState: {
+                knownSlots: this.knownSlots,
+                testSessionId: this.testSessionId,
+                conversationLength: this.conversationHistory.length
+            },
+            
+            // Debug log (last 5 entries)
+            recentDebugLog: this.debugLog.slice(-5)
+        };
+        
+        const jsonStr = JSON.stringify(fullDebug, null, 2);
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const filename = `test-console-debug-${this.companyId}-${timestamp}.json`;
+        
+        // Create blob and download
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        // Flash success
+        const btn = document.querySelector('[onclick*="downloadFullDebug"]');
+        if (btn) {
+            const original = btn.innerHTML;
+            btn.innerHTML = '✅ Downloaded!';
+            btn.style.background = '#238636';
+            btn.style.borderColor = '#238636';
+            setTimeout(() => {
+                btn.innerHTML = original;
+                btn.style.background = '#2d1c2d';
+                btn.style.borderColor = '#a371f7';
+            }, 1500);
+        }
+        
+        console.log(`[AI Test] 📦 Downloaded full debug: ${filename}`, {
+            size: jsonStr.length,
+            conversationTurns: fullDebug.conversationHistory.length
+        });
     }
     
     /**
