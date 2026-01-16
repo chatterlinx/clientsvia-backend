@@ -50,6 +50,10 @@ class AITestConsole {
         this.processingFinalTranscripts = false;
         this.lastFinalTranscript = null;
         this.lastFinalAt = 0;
+        this.autoStopTimer = null; // Timer to auto-stop after final transcript
+        this.hasReceivedPartial = false; // Track if we've received any speech
+        this.silenceTimeout = null; // Timeout if no speech detected for too long
+        this.MAX_SILENCE_MS = 10000; // 10 seconds max without any speech activity
 
         this.packTestMode = localStorage.getItem('packTestMode') === 'true';
         
@@ -177,7 +181,17 @@ class AITestConsole {
         if (active) {
             btn.style.background = '#f85149';
             btn.style.animation = 'pulse 1s infinite';
-            btn.innerHTML = '🎙️ Listening...';
+            
+            // Show different text based on whether we've detected speech
+            if (this.asrMode === 'deepgram') {
+                if (this.hasReceivedPartial) {
+                    btn.innerHTML = '🎙️ Listening... (detecting speech)';
+                } else {
+                    btn.innerHTML = '🎙️ Listening... (speak now)';
+                }
+            } else {
+                btn.innerHTML = '🎙️ Listening...';
+            }
         } else {
             btn.style.background = '#238636';
             btn.style.animation = 'none';
@@ -231,6 +245,9 @@ class AITestConsole {
         try {
             this.isProdAsrActive = false; // set true only after mic+ws ready
             this.asrStatus = 'connecting';
+            this.hasReceivedPartial = false;
+            this.clearAutoStopTimer();
+            this.clearSilenceTimeout();
             this.updateMicButton();
 
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
@@ -248,6 +265,9 @@ class AITestConsole {
                 try {
                     await this.startMicCapture();
                     this.isProdAsrActive = true;
+                    
+                    // Start silence timeout - if no speech detected in MAX_SILENCE_MS, auto-stop
+                    this.startSilenceTimeout();
                 } catch (err) {
                     console.error('[AI Test] Mic capture failed', err);
                     this.addChatBubble('⚠️ Microphone capture failed. Check permissions and try again.', 'ai', null, true);
@@ -260,12 +280,33 @@ class AITestConsole {
             this.dgSocket.onmessage = (event) => {
                 try {
                     const payload = JSON.parse(event.data);
+                    
                     if (payload.type === 'partial' && payload.text) {
+                        this.hasReceivedPartial = true;
+                        this.updateMicButton(); // Update button to show we're detecting speech
+                        
                         const input = document.getElementById('test-user-input');
                         if (input) input.value = payload.text;
+                        
+                        // Clear any pending auto-stop since we're still receiving speech
+                        this.clearAutoStopTimer();
+                        // Reset silence timeout since we detected speech
+                        this.startSilenceTimeout();
                     }
+                    
                     if (payload.type === 'final' && payload.text) {
                         this.enqueueFinalTranscript(payload.text, { asrProvider: 'deepgram', source: 'test_console' });
+                        
+                        // AUTO-STOP: After receiving final transcript, wait 1.5s for more speech
+                        // If no new partials arrive, auto-stop the ASR session
+                        this.clearAutoStopTimer();
+                        this.clearSilenceTimeout();
+                        this.autoStopTimer = setTimeout(() => {
+                            if (this.isProdAsrActive) {
+                                console.log('[AI Test] Auto-stopping ASR after final transcript');
+                                this.stopProductionASR();
+                            }
+                        }, 1500);
                     }
                 } catch (err) {
                     console.error('[AI Test] Failed to parse ASR message', err);
@@ -329,6 +370,10 @@ class AITestConsole {
     stopProductionASR() {
         this.asrStatus = 'idle';
         this.isProdAsrActive = false;
+        this.hasReceivedPartial = false;
+        this.clearAutoStopTimer();
+        this.clearSilenceTimeout();
+        
         if (this.dgSocket && this.dgSocket.readyState === WebSocket.OPEN) {
             this.dgSocket.close();
         }
@@ -346,6 +391,35 @@ class AITestConsole {
         this.micProcessor = null;
         this.micStream = null;
         this.updateMicButton();
+    }
+
+    clearAutoStopTimer() {
+        if (this.autoStopTimer) {
+            clearTimeout(this.autoStopTimer);
+            this.autoStopTimer = null;
+        }
+    }
+
+    startSilenceTimeout() {
+        this.clearSilenceTimeout();
+        this.silenceTimeout = setTimeout(() => {
+            if (this.isProdAsrActive) {
+                console.log('[AI Test] Auto-stopping ASR due to prolonged silence');
+                const input = document.getElementById('test-user-input');
+                if (input && input.value.trim()) {
+                    // If there's text in the input but no final transcript, send it manually
+                    this.addChatBubble('⏱️ No speech detected for 10s - stopping automatically', 'ai', null, true);
+                }
+                this.stopProductionASR();
+            }
+        }, this.MAX_SILENCE_MS);
+    }
+
+    clearSilenceTimeout() {
+        if (this.silenceTimeout) {
+            clearTimeout(this.silenceTimeout);
+            this.silenceTimeout = null;
+        }
     }
 
     enqueueFinalTranscript(text, meta = {}) {
