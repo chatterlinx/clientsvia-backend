@@ -306,5 +306,114 @@ router.get('/:companyId/voice-info', authenticateJWT, async (req, res) => {
     }
 });
 
+// ============================================================================
+// POST /api/admin/ai-test/supervisor-analysis
+// AI Supervisor: Analyze conversation quality like a QA coach
+// Uses GPT-4 to provide expert feedback on agent responses
+// ============================================================================
+router.post('/supervisor-analysis', authenticateJWT, async (req, res) => {
+    try {
+        const { userMessage, aiResponse, recentHistory, responseSource, scenarioCount, mode } = req.body;
+        
+        if (!userMessage || !aiResponse) {
+            return res.status(400).json({ success: false, error: 'userMessage and aiResponse required' });
+        }
+        
+        logger.info('[AI SUPERVISOR] Analyzing conversation turn', {
+            userMsgLength: userMessage.length,
+            aiResponseLength: aiResponse.length,
+            responseSource,
+            scenarioCount,
+            mode
+        });
+        
+        // Build context for supervisor
+        const historyContext = recentHistory && recentHistory.length > 0
+            ? recentHistory.map(h => `${h.role === 'user' ? 'Customer' : 'Agent'}: ${h.content}`).join('\n')
+            : 'No previous conversation history.';
+        
+        // Build analysis prompt
+        const supervisorPrompt = `You are an expert QA supervisor analyzing AI agent conversations for a service business (HVAC, plumbing, dental, etc.).
+
+Analyze this conversation turn and provide constructive feedback:
+
+CONVERSATION CONTEXT:
+${historyContext}
+
+CURRENT TURN:
+Customer: "${userMessage}"
+Agent: "${aiResponse}"
+
+TECHNICAL CONTEXT:
+- Response source: ${responseSource || 'unknown'}
+- Scenarios available: ${scenarioCount || 0}
+- Conversation mode: ${mode || 'DISCOVERY'}
+
+YOUR TASK:
+Evaluate the agent's response quality and provide feedback. Focus on:
+
+1. TONE MATCHING: Does the agent match the customer's tone (formal/casual/joking/urgent)?
+2. RELEVANCE: Does the response directly address what the customer said?
+3. CONCISENESS: Is it too wordy or just right?
+4. NATURALNESS: Does it sound human or robotic?
+5. VALUE: Does it move the conversation forward or waste time?
+6. CONTEXT AWARENESS: Does it reference previous conversation appropriately?
+
+Provide your analysis in JSON format:
+{
+  "qualityScore": 0-100,
+  "issues": ["issue1", "issue2"],
+  "suggestions": ["suggestion1", "suggestion2"],
+  "overallFeedback": "brief summary"
+}
+
+Be specific and actionable. If response source is LLM with low scenario count, note that wiring issues may be causing generic responses.`;
+
+        // Call OpenAI for supervisor analysis
+        const { getOpenAIClient } = require('../../utils/openaiClient');
+        const openai = getOpenAIClient();
+        
+        const completion = await openai.chat.completions.create({
+            model: 'gpt-4o',
+            messages: [
+                { role: 'system', content: 'You are a QA supervisor providing expert feedback on AI agent conversations. Be constructive, specific, and actionable.' },
+                { role: 'user', content: supervisorPrompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 500,
+            response_format: { type: 'json_object' }
+        });
+        
+        const analysisText = completion.choices[0].message.content;
+        const analysis = JSON.parse(analysisText);
+        
+        // Ensure required fields
+        if (!analysis.qualityScore) analysis.qualityScore = 50;
+        if (!analysis.issues) analysis.issues = [];
+        if (!analysis.suggestions) analysis.suggestions = [];
+        if (!analysis.overallFeedback) analysis.overallFeedback = 'Analysis completed.';
+        
+        res.json({
+            success: true,
+            analysis,
+            tokensUsed: completion.usage.total_tokens
+        });
+        
+    } catch (error) {
+        logger.error('[AI SUPERVISOR] Analysis error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message,
+            // Return a basic fallback analysis so UI doesn't break
+            analysis: {
+                qualityScore: 50,
+                issues: ['Supervisor analysis temporarily unavailable'],
+                suggestions: ['Try again later'],
+                overallFeedback: 'Analysis service encountered an error'
+            }
+        });
+    }
+});
+
 module.exports = router;
 

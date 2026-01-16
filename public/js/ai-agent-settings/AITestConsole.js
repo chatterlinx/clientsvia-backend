@@ -57,6 +57,10 @@ class AITestConsole {
 
         this.packTestMode = localStorage.getItem('packTestMode') === 'true';
         
+        // Conversation Supervisor (AI QA Coach)
+        this.supervisorEnabled = localStorage.getItem('supervisorEnabled') === 'true';
+        this.supervisorAnalyses = []; // Ephemeral - resets with conversation
+        
         // Initialize speech recognition
         this.initSpeechRecognition();
         
@@ -599,6 +603,10 @@ class AITestConsole {
                                 <input type="checkbox" id="pack-test-toggle" ${this.packTestMode ? 'checked' : ''} style="accent-color:#58a6ff;">
                                 Pack Test Mode
                             </label>
+                            <button onclick="window.aiTestConsole.toggleSupervisor()" 
+                                style="background: ${this.supervisorEnabled ? '#6366f1' : '#374151'}; border: 1px solid ${this.supervisorEnabled ? '#818cf8' : '#4b5563'}; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: 600;">
+                                ${this.supervisorEnabled ? '🎓 Supervisor: ON' : '🎓 Supervisor: OFF'}
+                            </button>
                             <div id="voice-status" style="background: #21262d; padding: 6px 12px; border-radius: 6px; font-size: 11px;">
                                 ${this.voiceInfo?.hasVoice 
                                     ? `<span style="color: #3fb950;">🔊 ${this.voiceInfo.voiceName || 'ElevenLabs'}</span>`
@@ -913,17 +921,22 @@ class AITestConsole {
                 // 4. Add AI response bubble with source badge
                 this.addChatBubble(data.response, 'ai', metadata, false, debug);
                 
-                // 5. Update analysis panel immediately (both panels sync)
+                // 5. If supervisor enabled, analyze the conversation
+                if (this.supervisorEnabled && this.conversationHistory.length >= 2) {
+                    await this.runSupervisorAnalysis(message, data.response, debug);
+                }
+                
+                // 6. Update analysis panel immediately (both panels sync)
                 this.updateAnalysis(metadata);
                 
-                // 6. Flash the debug panel to show it updated
+                // 7. Flash the debug panel to show it updated
                 const debugPanel = document.querySelector('[style*="border: 1px solid #f0883e"]');
                 if (debugPanel) {
                     debugPanel.style.boxShadow = '0 0 10px #f0883e';
                     setTimeout(() => { debugPanel.style.boxShadow = 'none'; }, 500);
                 }
                 
-                // 7. Speak the response (async, doesn't block)
+                // 8. Speak the response (async, doesn't block)
                 this.speakResponse(data.response);
             } else {
                 this.addChatBubble(`Error: ${data.error}`, 'ai', null, true);
@@ -1336,6 +1349,7 @@ class AITestConsole {
         this.debugLog = [];
         this.testSessionId = uniqueId;
         this.forceNewSession = true;  // Force backend to create new session on next message
+        this.supervisorAnalyses = []; // Clear supervisor analyses
         
         const container = document.getElementById('test-chat-messages');
         container.innerHTML = `
@@ -1347,6 +1361,136 @@ class AITestConsole {
         `;
         
         this.updateAnalysis();
+    }
+    
+    /**
+     * Run AI Supervisor Analysis
+     * Uses GPT-4 to analyze the conversation quality like a QA supervisor
+     */
+    async runSupervisorAnalysis(userMessage, aiResponse, debug) {
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            
+            // Get last few turns for context
+            const recentHistory = this.conversationHistory.slice(-6);
+            
+            const response = await fetch('/api/admin/ai-test/supervisor-analysis', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    userMessage,
+                    aiResponse,
+                    recentHistory,
+                    responseSource: debug?.routing?.responseSource || (debug?.wasQuickAnswer ? 'QUICK_ANSWER' : 'LLM'),
+                    scenarioCount: debug?.debugSnapshot?.scenarioCount || 0,
+                    mode: debug?.v22BlackBox?.mode || 'DISCOVERY'
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.analysis) {
+                this.supervisorAnalyses.push({
+                    turn: this.conversationHistory.length / 2,
+                    analysis: data.analysis,
+                    timestamp: Date.now()
+                });
+                
+                // Add supervisor bubble to chat
+                this.addSupervisorBubble(data.analysis);
+            }
+        } catch (error) {
+            console.warn('[AI Test] Supervisor analysis failed:', error.message);
+            // Fail silently - supervisor is optional
+        }
+    }
+    
+    /**
+     * Add supervisor analysis bubble to chat
+     */
+    addSupervisorBubble(analysis) {
+        const container = document.getElementById('test-chat-messages');
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble-supervisor';
+        bubble.style.cssText = `
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+            border: 1px solid #6366f1;
+            border-radius: 12px;
+            padding: 12px;
+            margin: 12px 0;
+            color: #e0e7ff;
+            font-size: 12px;
+            box-shadow: 0 4px 6px rgba(99, 102, 241, 0.1);
+        `;
+        
+        const issues = analysis.issues || [];
+        const suggestions = analysis.suggestions || [];
+        const score = analysis.qualityScore || 0;
+        
+        let scoreColor = '#ef4444'; // red
+        if (score >= 80) scoreColor = '#22c55e'; // green
+        else if (score >= 60) scoreColor = '#eab308'; // yellow
+        
+        bubble.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span style="font-size: 16px;">🎓</span>
+                <span style="font-weight: 700; color: #c7d2fe;">AI Supervisor</span>
+                <span style="background: ${scoreColor}; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; margin-left: auto;">
+                    ${score}/100
+                </span>
+            </div>
+            
+            ${issues.length > 0 ? `
+                <div style="margin-bottom: 8px;">
+                    <div style="font-weight: 600; color: #fca5a5; margin-bottom: 4px; font-size: 11px;">
+                        ⚠️ Issues Detected:
+                    </div>
+                    <ul style="margin: 0; padding-left: 20px; color: #fecaca;">
+                        ${issues.map(issue => `<li style="margin: 2px 0;">${issue}</li>`).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+            
+            ${suggestions.length > 0 ? `
+                <div>
+                    <div style="font-weight: 600; color: #a5f3fc; margin-bottom: 4px; font-size: 11px;">
+                        💡 Suggestions:
+                    </div>
+                    <ul style="margin: 0; padding-left: 20px; color: #cffafe;">
+                        ${suggestions.map(sug => `<li style="margin: 2px 0;">${sug}</li>`).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+            
+            ${analysis.overallFeedback ? `
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(99, 102, 241, 0.3); color: #c7d2fe; font-style: italic; font-size: 11px;">
+                    ${analysis.overallFeedback}
+                </div>
+            ` : ''}
+        `;
+        
+        container.appendChild(bubble);
+        container.scrollTop = container.scrollHeight;
+    }
+    
+    /**
+     * Toggle supervisor mode
+     */
+    toggleSupervisor() {
+        this.supervisorEnabled = !this.supervisorEnabled;
+        localStorage.setItem('supervisorEnabled', this.supervisorEnabled);
+        
+        // Update toggle button if it exists
+        const btn = document.querySelector('[onclick*="toggleSupervisor"]');
+        if (btn) {
+            btn.style.background = this.supervisorEnabled ? '#6366f1' : '#374151';
+            btn.innerHTML = this.supervisorEnabled ? '🎓 Supervisor: ON' : '🎓 Supervisor: OFF';
+        }
+        
+        console.log('[AI Test] Supervisor mode:', this.supervisorEnabled ? 'ENABLED' : 'DISABLED');
     }
     
     /**
