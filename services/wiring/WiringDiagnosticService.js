@@ -83,6 +83,22 @@ const FAILURE_NODE_MAP = [
         deepLinkSection: 'gapAnalysis'
     },
     {
+        id: 'LOW_SCENARIO_COUNT',
+        check: (evidence) =>
+            evidence.mode !== 'BOOKING' &&
+            evidence.scenarioCount > 0 &&
+            evidence.scenarioCount < 10 &&
+            (evidence.templateReferences?.length || 0) > 0,
+        severity: 'HIGH',
+        nodeId: 'dataConfig.scenarios',
+        title: 'Suspiciously Low Scenario Count',
+        rule: `Only ${(evidence) => evidence.scenarioCount} scenarios loaded from ${(evidence) => evidence.templateReferences?.length || 0} templates. Most companies have 30-50+ scenarios. Low count causes frequent LLM fallbacks.`,
+        fix: 'Verify templates are loading correctly. Check template content in Global AI Brain. Clear Redis cache if scenarios are stuck.',
+        dbPath: 'aiAgentSettings.templateReferences',
+        deepLinkSection: 'gapAnalysis',
+        getDynamicRule: (evidence) => `Only ${evidence.scenarioCount} scenarios loaded from ${evidence.templateReferences?.length || 0} templates. Most companies have 30-50+ scenarios. Low count causes frequent LLM fallbacks.`
+    },
+    {
         id: 'LLM_FALLBACK_NO_SCENARIOS',
         check: (evidence) =>
             evidence.mode !== 'BOOKING' &&
@@ -106,6 +122,22 @@ const FAILURE_NODE_MAP = [
         fix: 'Disable forceLLMDiscovery to allow scenario auto-responses',
         dbPath: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.forceLLMDiscovery',
         deepLinkSection: 'killSwitches'
+    },
+    {
+        id: 'HIGH_LLM_USAGE_WITH_SCENARIOS',
+        check: (evidence) =>
+            evidence.mode !== 'BOOKING' &&
+            evidence.responseSource === 'LLM' &&
+            evidence.scenarioCount > 5 &&
+            !evidence.killSwitches?.forceLLMDiscovery,
+        severity: 'MEDIUM',
+        nodeId: 'dataConfig.scenarios',
+        title: 'LLM Fallback Despite Having Scenarios',
+        rule: 'Response came from LLM even though scenarios are available. Either scenario matching is too strict, or customer language doesn\'t match scenario triggers.',
+        fix: 'Review scenario trigger phrases to cover more variations. Consider adding casual/informal phrasing. Check if scenarios cover common customer language patterns.',
+        dbPath: 'aiAgentSettings.templateReferences',
+        deepLinkSection: 'gapAnalysis',
+        getDynamicRule: (evidence) => `Response came from LLM even though ${evidence.scenarioCount} scenarios are available. Either scenario matching is too strict, or customer language doesn't match scenario triggers.`
     },
     
     // =========================================================================
@@ -268,7 +300,7 @@ function runDiagnosis(evidence, companyId) {
                     severity: rule.severity,
                     nodeId: rule.nodeId,
                     title: rule.title,
-                    rule: rule.rule,
+                    rule: rule.getDynamicRule ? rule.getDynamicRule(evidence) : rule.rule,
                     fix: rule.fix,
                     dbPath: rule.dbPath,
                     deepLink: `/control-plane-v2.html?companyId=${companyId}&tab=wiring&section=${rule.deepLinkSection}`,
@@ -300,8 +332,10 @@ function extractRelevantEvidence(evidence, ruleId) {
         case 'NO_TEMPLATE_REFERENCES':
             return { templateReferences: evidence.templateReferences, count: evidence.templateReferences?.length || 0 };
         case 'ZERO_SCENARIOS_LOADED':
+        case 'LOW_SCENARIO_COUNT':
         case 'LLM_FALLBACK_NO_SCENARIOS':
-            return { scenarioCount: evidence.scenarioCount, templateReferences: evidence.templateReferences?.length };
+        case 'HIGH_LLM_USAGE_WITH_SCENARIOS':
+            return { scenarioCount: evidence.scenarioCount, templateReferences: evidence.templateReferences?.length, responseSource: evidence.responseSource };
         case 'LLM_FALLBACK_KILL_SWITCH':
             return { responseSource: evidence.responseSource, forceLLMDiscovery: evidence.killSwitches?.forceLLMDiscovery };
         case 'BOOKING_NO_SLOTS':
