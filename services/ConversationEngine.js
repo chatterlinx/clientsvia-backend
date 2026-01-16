@@ -3347,6 +3347,20 @@ async function processTurn({
                 }
             }
                 
+            // Check if askFullName is enabled in booking config (needed for extraction)
+            const bookingConfigCheck = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
+            const nameSlotCheck = (bookingConfigCheck.slots || []).find(s =>
+                (s.slotId || s.id || s.type) === 'name'
+            );
+            // 🎯 PROMPT AS LAW: Default askFullName to FALSE
+            // Only ask for last name if UI explicitly requires it
+            // CHECK BOTH: Direct property (UI saves here) AND nested nameOptions (legacy)
+            // V36 FIX: Check both boolean and string values
+            const askFullNameEnabled = nameSlotCheck?.askFullName === true || nameSlotCheck?.askFullName === 'true' ||
+                                       nameSlotCheck?.requireFullName === true || nameSlotCheck?.requireFullName === 'true' ||
+                                       nameSlotCheck?.nameOptions?.askFullName === true || nameSlotCheck?.nameOptions?.askFullName === 'true' ||
+                                       nameSlotCheck?.nameOptions?.requireFullName === true || nameSlotCheck?.nameOptions?.requireFullName === 'true';
+
             if (extractedName) {
                 const isPartialName = !extractedName.includes(' ');
                 const alreadyAskedForMissingPart = session.askedForMissingNamePart === true;
@@ -3435,18 +3449,6 @@ async function processTurn({
         const inBookingModeForName = session.mode === 'BOOKING' || session.booking?.consentGiven;
         
         // Check if askFullName is enabled in booking config
-        const bookingConfigCheck = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
-        const nameSlotCheck = (bookingConfigCheck.slots || []).find(s => 
-            (s.slotId || s.id || s.type) === 'name'
-        );
-        // 🎯 PROMPT AS LAW: Default askFullName to FALSE
-        // Only ask for last name if UI explicitly requires it
-        // CHECK BOTH: Direct property (UI saves here) AND nested nameOptions (legacy)
-        // V36 FIX: Check both boolean and string values
-        const askFullNameEnabled = nameSlotCheck?.askFullName === true || nameSlotCheck?.askFullName === 'true' ||
-                                   nameSlotCheck?.requireFullName === true || nameSlotCheck?.requireFullName === 'true' ||
-                                   nameSlotCheck?.nameOptions?.askFullName === true || nameSlotCheck?.nameOptions?.askFullName === 'true' ||
-                                   nameSlotCheck?.nameOptions?.requireFullName === true || nameSlotCheck?.nameOptions?.requireFullName === 'true';
         
         if (currentSlots.partialName && !currentSlots.name) {
             if (inBookingModeForName && !askFullNameEnabled) {
