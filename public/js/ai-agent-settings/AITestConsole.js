@@ -1171,6 +1171,96 @@ class AITestConsole {
     }
 
     /**
+     * Build Response Path data (JSON format for export)
+     * Same logic as buildResponsePath but returns structured data
+     */
+    buildResponsePathData(debug) {
+        if (!debug || Object.keys(debug).length === 0) {
+            return null;
+        }
+
+        const routing = debug.routing || {};
+        const snapshot = debug.debugSnapshot || {};
+        const mode = debug.v22BlackBox?.mode || debug.mode || 'DISCOVERY';
+        const slotDiag = debug.slotDiagnostics || {};
+        const bookingConfig = debug.bookingConfig || {};
+        const scenarioCount = snapshot.scenarioCount ?? routing.scenariosAvailable ?? debug.scenarioCount ?? 0;
+        const templatesLinked = snapshot.templateReferences ?? debug.templateReferencesCount ?? 0;
+
+        // Determine response source
+        const responseSource = routing.responseSource || snapshot.responseSource || 
+                              (debug.wasQuickAnswer ? 'QUICK_ANSWER' : 
+                               debug.triageMatched ? 'TRIAGE' : 
+                               debug.wasFallback ? 'FALLBACK' : 
+                               routing.option1_TriageHit ? 'TRIAGE' :
+                               routing.option2_ScenarioMatch ? 'SCENARIO' : 'LLM');
+
+        const result = {
+            mode: {
+                value: mode,
+                phase: mode === 'BOOKING' ? 'Collecting booking info' : 'General conversation',
+                healthy: true
+            },
+            scenarios: null,
+            decision: {
+                source: responseSource,
+                matchedScenarioId: routing.matchedScenarioId || debug.matchedScenarioId || null,
+                reason: null,
+                healthy: responseSource === 'SCENARIO' || responseSource === 'QUICK_ANSWER' || responseSource === 'TRIAGE'
+            },
+            slots: null
+        };
+
+        // Scenarios (only in non-BOOKING mode)
+        if (mode !== 'BOOKING') {
+            result.scenarios = {
+                count: scenarioCount,
+                templatesLinked: templatesLinked,
+                healthy: scenarioCount > 0,
+                issue: scenarioCount === 0 && templatesLinked > 0 
+                    ? 'templates_linked_but_no_scenarios' 
+                    : scenarioCount === 0 
+                    ? 'no_templates_linked' 
+                    : null
+            };
+        }
+
+        // Decision reason
+        if (responseSource === 'SCENARIO') {
+            result.decision.reason = 'Matched scenario template';
+        } else if (responseSource === 'LLM') {
+            result.decision.reason = scenarioCount === 0 ? 'No scenarios available to match' : 'No scenario match found';
+        } else if (responseSource === 'FALLBACK') {
+            result.decision.reason = 'LLM failed, used fallback response';
+        } else if (responseSource === 'TRIAGE') {
+            result.decision.reason = 'Matched triage card';
+        } else if (responseSource === 'QUICK_ANSWER') {
+            result.decision.reason = 'Matched FAQ database';
+        }
+
+        // Slots (only in BOOKING mode)
+        if (mode === 'BOOKING' && bookingConfig.slots) {
+            const totalSlots = bookingConfig.slots.length;
+            const collectedCount = Object.keys(slotDiag.slotsAfterMerge || {}).length;
+            const validSlots = slotDiag.validSlots ?? totalSlots;
+            const rejectedSlots = slotDiag.rejectedSlots ?? 0;
+
+            result.slots = {
+                total: totalSlots,
+                collected: collectedCount,
+                valid: validSlots,
+                rejected: rejectedSlots,
+                complete: collectedCount === totalSlots,
+                healthy: rejectedSlots === 0,
+                slotsCollected: slotDiag.slotsAfterMerge || {},
+                issue: rejectedSlots > 0 ? 'rejected_slot_prompts' : null
+            };
+        }
+
+        return result;
+    }
+
+    /**
      * Add typing indicator
      */
     addTypingIndicator() {
@@ -1786,7 +1876,7 @@ ${separator}`;
     
     /**
      * Copy FULL DEBUG DATA to clipboard
-     * This includes: last response, debugSnapshot, diagnostics, conversation history
+     * This includes: last response, debugSnapshot, diagnostics, conversation history, response path
      */
     copyFullDebug() {
         const lastDebugEntry = this.debugLog.length > 0 ? this.debugLog[this.debugLog.length - 1] : null;
@@ -1796,11 +1886,18 @@ ${separator}`;
             return;
         }
         
+        // Build response path analysis (JSON format)
+        const debug = lastDebugEntry.debug || {};
+        const responsePath = this.buildResponsePathData(debug);
+        
         const fullDebug = {
             _format: 'AI_TEST_CONSOLE_FULL_DEBUG_V1',
             companyId: this.companyId,
             testSessionId: this.testSessionId,
             generatedAt: new Date().toISOString(),
+            
+            // Response Path Analysis (NEW!)
+            responsePath,
             
             // Last test response
             lastTest: {
@@ -1845,7 +1942,8 @@ ${separator}`;
             console.log('[AI Test] 📦 Full debug data copied to clipboard', {
                 size: jsonStr.length,
                 conversationTurns: fullDebug.conversationHistory.length,
-                hasDebugSnapshot: !!fullDebug.lastTest.debugSnapshot
+                hasDebugSnapshot: !!fullDebug.lastTest.debugSnapshot,
+                hasResponsePath: !!fullDebug.responsePath
             });
         }).catch(err => {
             console.error('[AI Test] Failed to copy:', err);
@@ -1907,11 +2005,18 @@ ${separator}`;
             return;
         }
         
+        // Build response path analysis (JSON format)
+        const debug = lastDebugEntry.debug || {};
+        const responsePath = this.buildResponsePathData(debug);
+        
         const fullDebug = {
             _format: 'AI_TEST_CONSOLE_FULL_DEBUG_V1',
             companyId: this.companyId,
             testSessionId: this.testSessionId,
             generatedAt: new Date().toISOString(),
+            
+            // Response Path Analysis (NEW!)
+            responsePath,
             
             // Last test response
             lastTest: {
@@ -1969,7 +2074,8 @@ ${separator}`;
         
         console.log(`[AI Test] 📦 Downloaded full debug: ${filename}`, {
             size: jsonStr.length,
-            conversationTurns: fullDebug.conversationHistory.length
+            conversationTurns: fullDebug.conversationHistory.length,
+            hasResponsePath: !!fullDebug.responsePath
         });
     }
     
