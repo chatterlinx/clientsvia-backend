@@ -308,23 +308,33 @@ router.get('/:companyId/voice-info', authenticateJWT, async (req, res) => {
 
 // ============================================================================
 // POST /api/admin/ai-test/supervisor-analysis
-// AI Supervisor: Analyze conversation quality like a QA coach
-// Uses GPT-4 to provide expert feedback on agent responses
+// AI Supervisor: ENHANCED - Detailed root cause + copy-paste fixes
+// Uses GPT-4o to provide expert, actionable feedback with technical details
 // ============================================================================
 router.post('/supervisor-analysis', authenticateJWT, async (req, res) => {
     try {
-        const { userMessage, aiResponse, recentHistory, responseSource, scenarioCount, mode } = req.body;
+        const { userMessage, aiResponse, recentHistory, debug } = req.body;
         
         if (!userMessage || !aiResponse) {
             return res.status(400).json({ success: false, error: 'userMessage and aiResponse required' });
         }
         
-        logger.info('[AI SUPERVISOR] Analyzing conversation turn', {
+        // Extract technical context from debug snapshot
+        const debugSnapshot = debug?.debugSnapshot || {};
+        const responseSource = debugSnapshot.responseSource || debug?.responseSource || 'UNKNOWN';
+        const scenarioCount = debugSnapshot.scenarioCount || debug?.scenarioCount || 0;
+        const mode = debugSnapshot.mode || debug?.mode || 'DISCOVERY';
+        const matchedScenario = debugSnapshot.matchedScenario || null;
+        const topCandidates = debugSnapshot.topScenarioCandidates || [];
+        const customerEmotion = debugSnapshot.customerEmotion || null;
+        
+        logger.info('[AI SUPERVISOR] Enhanced analysis', {
             userMsgLength: userMessage.length,
             aiResponseLength: aiResponse.length,
             responseSource,
             scenarioCount,
-            mode
+            mode,
+            matchedScenario: matchedScenario?.name || 'none'
         });
         
         // Build context for supervisor
@@ -332,10 +342,22 @@ router.post('/supervisor-analysis', authenticateJWT, async (req, res) => {
             ? recentHistory.map(h => `${h.role === 'user' ? 'Customer' : 'Agent'}: ${h.content}`).join('\n')
             : 'No previous conversation history.';
         
-        // Build analysis prompt
-        const supervisorPrompt = `You are an expert QA supervisor analyzing AI agent conversations for a service business (HVAC, plumbing, dental, etc.).
+        // Build technical details for deep analysis
+        const technicalDetails = `
+TECHNICAL DECISION PATH:
+- Response Source: ${responseSource}
+- Scenarios Loaded: ${scenarioCount}
+- Conversation Mode: ${mode}
+- Matched Scenario: ${matchedScenario ? `"${matchedScenario.name}" (Category: ${matchedScenario.category || 'Unknown'})` : 'None - Used LLM fallback'}
+${topCandidates.length > 0 ? `- Top Candidates (didn't match):
+${topCandidates.slice(0, 3).map(c => `  • "${c.name}" - ${c.score}% match (missing: ${c.missingTriggers?.join(', ') || 'unknown'})`).join('\n')}` : ''}
+${customerEmotion ? `- Detected Customer Emotion: ${customerEmotion}` : ''}
+`;
+        
+        // Build enhanced analysis prompt
+        const supervisorPrompt = `You are a SENIOR AI DEVELOPER and QA expert analyzing AI agent conversations for service businesses.
 
-Analyze this conversation turn and provide constructive feedback:
+Your job: Provide detailed ROOT CAUSE analysis and COPY-PASTE READY FIXES.
 
 CONVERSATION CONTEXT:
 ${historyContext}
@@ -344,54 +366,107 @@ CURRENT TURN:
 Customer: "${userMessage}"
 Agent: "${aiResponse}"
 
-TECHNICAL CONTEXT:
-- Response source: ${responseSource || 'unknown'}
-- Scenarios available: ${scenarioCount || 0}
-- Conversation mode: ${mode || 'DISCOVERY'}
+${technicalDetails}
 
-YOUR TASK:
-Evaluate the agent's response quality and provide feedback. Focus on:
+YOUR TASK - DETAILED ANALYSIS:
 
-1. TONE MATCHING: Does the agent match the customer's tone (formal/casual/joking/urgent)?
-2. RELEVANCE: Does the response directly address what the customer said?
-3. CONCISENESS: Is it too wordy or just right?
-4. NATURALNESS: Does it sound human or robotic?
-5. VALUE: Does it move the conversation forward or waste time?
-6. CONTEXT AWARENESS: Does it reference previous conversation appropriately?
+1. QUALITY ASSESSMENT (0-100):
+   - Tone matching (urgent/casual/formal)
+   - Relevance to customer question
+   - Empathy and professionalism
+   - Conciseness (not too wordy)
+   - Forward progress (booking/solving issue)
 
-Provide your analysis in JSON format:
+2. ROOT CAUSE ANALYSIS (Technical):
+   - WHY did this response happen?
+   - If LLM fallback: What triggers are MISSING?
+   - If scenario matched: Was it the RIGHT scenario?
+   - If wrong tone: Detect customer emotion (urgent/frustrated/casual)
+
+3. MISSING TRIGGER DETECTION:
+   Extract key phrases from customer input that should trigger scenarios but don't.
+   Examples:
+   - "I'm dying here" → Emergency urgency
+   - "how much" → Pricing question
+   - "feeling hot" → Discomfort/emergency
+
+4. COPY-PASTE FIXES:
+   Provide EXACT triggers to add, which scenario to edit, and response template.
+
+Return JSON:
 {
   "qualityScore": 0-100,
-  "issues": ["issue1", "issue2"],
-  "suggestions": ["suggestion1", "suggestion2"],
-  "overallFeedback": "brief summary"
+  "issues": ["Specific issue 1", "Specific issue 2"],
+  "suggestions": ["Actionable suggestion 1", "Actionable suggestion 2"],
+  "overallFeedback": "Brief summary",
+  "rootCause": {
+    "why": "Technical explanation of why this response was generated",
+    "matchingIssue": "Scenario matching problem (if any)",
+    "customerTone": "urgent/casual/frustrated/confused/etc",
+    "agentTone": "professional/casual/robotic/empathetic/etc",
+    "toneMismatch": true/false
+  },
+  "missingTriggers": [
+    {
+      "phrase": "exact phrase from customer",
+      "category": "Emergency/Pricing/Booking/etc",
+      "priority": "CRITICAL/HIGH/MEDIUM"
+    }
+  ],
+  "copyPasteFix": {
+    "hasIssue": true/false,
+    "scenarioToEdit": "Name of scenario to edit (or 'CREATE NEW')",
+    "categoryName": "Category for new/existing scenario",
+    "triggersToAdd": ["trigger 1", "trigger 2", "trigger 3"],
+    "responseTemplate": "Exact response the agent should say instead",
+    "expectedImprovement": "What will improve after this fix"
+  }
 }
 
-Be specific and actionable. If response source is LLM with low scenario count, note that wiring issues may be causing generic responses.`;
+RULES:
+- Be BRUTALLY HONEST about quality issues
+- Provide ACTIONABLE, SPECIFIC fixes (not vague advice)
+- Focus on CUSTOMER EXPERIENCE (not technical perfection)
+- If response is good, qualityScore = 80-100
+- If response is acceptable but could improve, qualityScore = 60-79
+- If response is poor/wrong, qualityScore = 0-59`;
 
-        // Call OpenAI for supervisor analysis
+        // Call OpenAI for enhanced supervisor analysis
         const { getOpenAIClient } = require('../../utils/openaiClient');
         const openai = getOpenAIClient();
         
         const completion = await openai.chat.completions.create({
             model: 'gpt-4o',
             messages: [
-                { role: 'system', content: 'You are a QA supervisor providing expert feedback on AI agent conversations. Be constructive, specific, and actionable.' },
+                { 
+                    role: 'system', 
+                    content: 'You are a senior AI developer and QA expert. Provide detailed technical analysis with actionable, copy-paste ready fixes. Be specific, not vague.' 
+                },
                 { role: 'user', content: supervisorPrompt }
             ],
-            temperature: 0.7,
-            max_tokens: 500,
+            temperature: 0.3, // Lower temp for more consistent technical analysis
+            max_tokens: 1500, // Increased for detailed analysis
             response_format: { type: 'json_object' }
         });
         
         const analysisText = completion.choices[0].message.content;
         const analysis = JSON.parse(analysisText);
         
-        // Ensure required fields
+        // Ensure required fields with enhanced structure
         if (!analysis.qualityScore) analysis.qualityScore = 50;
         if (!analysis.issues) analysis.issues = [];
         if (!analysis.suggestions) analysis.suggestions = [];
         if (!analysis.overallFeedback) analysis.overallFeedback = 'Analysis completed.';
+        if (!analysis.rootCause) analysis.rootCause = { why: 'Unknown', toneMismatch: false };
+        if (!analysis.missingTriggers) analysis.missingTriggers = [];
+        if (!analysis.copyPasteFix) analysis.copyPasteFix = { hasIssue: false };
+        
+        logger.info('[AI SUPERVISOR] Analysis complete', {
+            qualityScore: analysis.qualityScore,
+            issuesFound: analysis.issues.length,
+            missingTriggers: analysis.missingTriggers.length,
+            hasCopyPasteFix: analysis.copyPasteFix.hasIssue
+        });
         
         res.json({
             success: true,
@@ -409,7 +484,10 @@ Be specific and actionable. If response source is LLM with low scenario count, n
                 qualityScore: 50,
                 issues: ['Supervisor analysis temporarily unavailable'],
                 suggestions: ['Try again later'],
-                overallFeedback: 'Analysis service encountered an error'
+                overallFeedback: 'Analysis service encountered an error',
+                rootCause: { why: 'Service error', toneMismatch: false },
+                missingTriggers: [],
+                copyPasteFix: { hasIssue: false }
             }
         });
     }

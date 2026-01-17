@@ -1367,6 +1367,9 @@ class AITestConsole {
      * Run AI Supervisor Analysis
      * Uses GPT-4 to analyze the conversation quality like a QA supervisor
      */
+    /**
+     * Run supervisor analysis on a conversation turn
+     */
     async runSupervisorAnalysis(userMessage, aiResponse, debug) {
         try {
             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
@@ -1384,9 +1387,7 @@ class AITestConsole {
                     userMessage,
                     aiResponse,
                     recentHistory,
-                    responseSource: debug?.routing?.responseSource || (debug?.wasQuickAnswer ? 'QUICK_ANSWER' : 'LLM'),
-                    scenarioCount: debug?.debugSnapshot?.scenarioCount || 0,
-                    mode: debug?.v22BlackBox?.mode || 'DISCOVERY'
+                    debug // Send full debug object for enhanced analysis
                 })
             });
             
@@ -1400,7 +1401,7 @@ class AITestConsole {
                 });
                 
                 // Add supervisor bubble to chat
-                this.addSupervisorBubble(data.analysis);
+                this.addSupervisorBubble(data.analysis, userMessage, aiResponse);
             }
         } catch (error) {
             console.warn('[AI Test] Supervisor analysis failed:', error.message);
@@ -1409,9 +1410,10 @@ class AITestConsole {
     }
     
     /**
-     * Add supervisor analysis bubble to chat
+     * Add ENHANCED supervisor analysis bubble to chat
+     * Now includes: Root Cause, Missing Triggers, Copy-Paste Fixes
      */
-    addSupervisorBubble(analysis) {
+    addSupervisorBubble(analysis, userMessage, aiResponse) {
         const container = document.getElementById('test-chat-messages');
         const bubble = document.createElement('div');
         bubble.className = 'chat-bubble-supervisor';
@@ -1419,7 +1421,7 @@ class AITestConsole {
             background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
             border: 1px solid #6366f1;
             border-radius: 12px;
-            padding: 12px;
+            padding: 14px;
             margin: 12px 0;
             color: #e0e7ff;
             font-size: 12px;
@@ -1429,45 +1431,172 @@ class AITestConsole {
         const issues = analysis.issues || [];
         const suggestions = analysis.suggestions || [];
         const score = analysis.qualityScore || 0;
+        const rootCause = analysis.rootCause || {};
+        const missingTriggers = analysis.missingTriggers || [];
+        const copyPasteFix = analysis.copyPasteFix || {};
         
         let scoreColor = '#ef4444'; // red
-        if (score >= 80) scoreColor = '#22c55e'; // green
-        else if (score >= 60) scoreColor = '#eab308'; // yellow
+        let scoreLabel = 'NEEDS WORK';
+        if (score >= 80) {
+            scoreColor = '#22c55e'; // green
+            scoreLabel = 'EXCELLENT';
+        } else if (score >= 60) {
+            scoreColor = '#eab308'; // yellow
+            scoreLabel = 'GOOD';
+        }
         
         bubble.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                <span style="font-size: 16px;">🎓</span>
-                <span style="font-weight: 700; color: #c7d2fe;">AI Supervisor</span>
-                <span style="background: ${scoreColor}; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; margin-left: auto;">
-                    ${score}/100
+            <!-- HEADER -->
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(99, 102, 241, 0.3);">
+                <span style="font-size: 18px;">🎓</span>
+                <span style="font-weight: 700; color: #c7d2fe; font-size: 13px;">AI SUPERVISOR - DETAILED ANALYSIS</span>
+                <span style="background: ${scoreColor}; color: #000; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; margin-left: auto;">
+                    ${score}/100 ${scoreLabel}
                 </span>
             </div>
             
+            <!-- ISSUES -->
             ${issues.length > 0 ? `
-                <div style="margin-bottom: 8px;">
-                    <div style="font-weight: 600; color: #fca5a5; margin-bottom: 4px; font-size: 11px;">
-                        ⚠️ Issues Detected:
+                <div style="margin-bottom: 12px; background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; padding: 8px 10px; border-radius: 4px;">
+                    <div style="font-weight: 700; color: #fca5a5; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
+                        ❌ Issues Detected (${issues.length})
                     </div>
-                    <ul style="margin: 0; padding-left: 20px; color: #fecaca;">
-                        ${issues.map(issue => `<li style="margin: 2px 0;">${issue}</li>`).join('')}
+                    <ul style="margin: 0; padding-left: 18px; color: #fecaca; font-size: 11px; line-height: 1.6;">
+                        ${issues.map(issue => `<li style="margin: 3px 0;">${issue}</li>`).join('')}
                     </ul>
                 </div>
             ` : ''}
             
+            <!-- ROOT CAUSE ANALYSIS -->
+            ${rootCause.why ? `
+                <div style="margin-bottom: 12px; background: rgba(139, 92, 246, 0.1); border-left: 3px solid #8b5cf6; padding: 8px 10px; border-radius: 4px;">
+                    <div style="font-weight: 700; color: #c4b5fd; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
+                        🔍 Root Cause (Technical)
+                    </div>
+                    <div style="color: #e9d5ff; font-size: 11px; line-height: 1.6; margin-bottom: 8px;">
+                        ${rootCause.why}
+                    </div>
+                    ${rootCause.toneMismatch ? `
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+                            <div style="background: rgba(0, 0, 0, 0.3); padding: 6px; border-radius: 4px;">
+                                <div style="color: #a78bfa; font-size: 9px; text-transform: uppercase; margin-bottom: 2px;">Customer Tone</div>
+                                <div style="color: #e9d5ff; font-size: 11px; font-weight: 600;">${rootCause.customerTone || 'unknown'}</div>
+                            </div>
+                            <div style="background: rgba(0, 0, 0, 0.3); padding: 6px; border-radius: 4px;">
+                                <div style="color: #a78bfa; font-size: 9px; text-transform: uppercase; margin-bottom: 2px;">Agent Tone</div>
+                                <div style="color: #e9d5ff; font-size: 11px; font-weight: 600;">${rootCause.agentTone || 'unknown'}</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 6px; color: #fca5a5; font-size: 10px; font-weight: 600;">
+                            ⚠️ TONE MISMATCH DETECTED
+                        </div>
+                    ` : ''}
+                    ${rootCause.matchingIssue ? `
+                        <div style="margin-top: 8px; padding: 6px; background: rgba(0, 0, 0, 0.3); border-radius: 4px; color: #fbbf24; font-size: 10px;">
+                            🎯 Matching Issue: ${rootCause.matchingIssue}
+                        </div>
+                    ` : ''}
+                </div>
+            ` : ''}
+            
+            <!-- MISSING TRIGGERS -->
+            ${missingTriggers.length > 0 ? `
+                <div style="margin-bottom: 12px; background: rgba(245, 158, 11, 0.1); border-left: 3px solid #f59e0b; padding: 8px 10px; border-radius: 4px;">
+                    <div style="font-weight: 700; color: #fcd34d; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
+                        🎯 Missing Triggers (${missingTriggers.length})
+                    </div>
+                    <div style="font-size: 10px; color: #fde68a; margin-bottom: 6px;">
+                        These phrases from the customer don't match any scenario triggers:
+                    </div>
+                    ${missingTriggers.map(trigger => `
+                        <div style="background: rgba(0, 0, 0, 0.3); padding: 6px 8px; border-radius: 4px; margin-bottom: 4px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+                                <span style="color: #fde68a; font-size: 11px; font-weight: 600;">"${trigger.phrase}"</span>
+                                <span style="background: ${trigger.priority === 'CRITICAL' ? '#ef4444' : trigger.priority === 'HIGH' ? '#f59e0b' : '#8b5cf6'}; color: #000; padding: 1px 6px; border-radius: 8px; font-size: 8px; font-weight: 700;">
+                                    ${trigger.priority}
+                                </span>
+                            </div>
+                            <div style="color: #fde68a; font-size: 10px; opacity: 0.8;">
+                                Category: ${trigger.category || 'Unknown'}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+            
+            <!-- COPY-PASTE FIX -->
+            ${copyPasteFix.hasIssue ? `
+                <div style="margin-bottom: 12px; background: rgba(34, 197, 94, 0.1); border: 2px solid #22c55e; padding: 10px; border-radius: 6px;">
+                    <div style="font-weight: 700; color: #86efac; margin-bottom: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;">
+                        💡 COPY-PASTE FIX (Exact Solution)
+                    </div>
+                    
+                    <div style="background: rgba(0, 0, 0, 0.4); padding: 8px; border-radius: 4px; margin-bottom: 8px;">
+                        <div style="color: #86efac; font-size: 10px; margin-bottom: 4px;">📍 GO TO:</div>
+                        <div style="color: #fff; font-size: 12px; font-weight: 600;">
+                            ${copyPasteFix.scenarioToEdit === 'CREATE NEW' 
+                                ? `Scenario Browser → Create New Scenario`
+                                : `Scenario Browser → "${copyPasteFix.scenarioToEdit}" → Edit`
+                            }
+                        </div>
+                        ${copyPasteFix.categoryName ? `
+                            <div style="color: #86efac; font-size: 10px; margin-top: 4px;">Category: ${copyPasteFix.categoryName}</div>
+                        ` : ''}
+                    </div>
+                    
+                    ${copyPasteFix.triggersToAdd && copyPasteFix.triggersToAdd.length > 0 ? `
+                        <div style="background: rgba(0, 0, 0, 0.4); padding: 8px; border-radius: 4px; margin-bottom: 8px;">
+                            <div style="color: #86efac; font-size: 10px; margin-bottom: 4px;">➕ ADD THESE TRIGGERS:</div>
+                            <div style="font-family: monospace; color: #d9f99d; font-size: 10px; line-height: 1.6;">
+                                ${copyPasteFix.triggersToAdd.map(t => `├─ "${t}"`).join('<br>')}
+                            </div>
+                            <button onclick="navigator.clipboard.writeText('${copyPasteFix.triggersToAdd.join('\\n')}'); alert('✅ Triggers copied to clipboard!')" 
+                                style="margin-top: 6px; padding: 4px 8px; background: #22c55e; color: #000; border: none; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer;">
+                                📋 Copy Triggers
+                            </button>
+                        </div>
+                    ` : ''}
+                    
+                    ${copyPasteFix.responseTemplate ? `
+                        <div style="background: rgba(0, 0, 0, 0.4); padding: 8px; border-radius: 4px; margin-bottom: 8px;">
+                            <div style="color: #86efac; font-size: 10px; margin-bottom: 4px;">💬 RESPONSE TEMPLATE:</div>
+                            <div style="color: #d9f99d; font-size: 11px; line-height: 1.6; font-style: italic;">
+                                "${copyPasteFix.responseTemplate}"
+                            </div>
+                            <button onclick="navigator.clipboard.writeText(\`${copyPasteFix.responseTemplate.replace(/`/g, '\\`')}\`); alert('✅ Response template copied!')" 
+                                style="margin-top: 6px; padding: 4px 8px; background: #22c55e; color: #000; border: none; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer;">
+                                📋 Copy Response
+                            </button>
+                        </div>
+                    ` : ''}
+                    
+                    ${copyPasteFix.expectedImprovement ? `
+                        <div style="background: rgba(0, 0, 0, 0.4); padding: 8px; border-radius: 4px;">
+                            <div style="color: #86efac; font-size: 10px; margin-bottom: 4px;">📈 EXPECTED IMPROVEMENT:</div>
+                            <div style="color: #d9f99d; font-size: 10px; line-height: 1.5;">
+                                ${copyPasteFix.expectedImprovement}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            ` : ''}
+            
+            <!-- SUGGESTIONS -->
             ${suggestions.length > 0 ? `
-                <div>
-                    <div style="font-weight: 600; color: #a5f3fc; margin-bottom: 4px; font-size: 11px;">
-                        💡 Suggestions:
+                <div style="margin-bottom: 12px; background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3b82f6; padding: 8px 10px; border-radius: 4px;">
+                    <div style="font-weight: 700; color: #93c5fd; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
+                        💡 Suggestions (${suggestions.length})
                     </div>
-                    <ul style="margin: 0; padding-left: 20px; color: #cffafe;">
-                        ${suggestions.map(sug => `<li style="margin: 2px 0;">${sug}</li>`).join('')}
+                    <ul style="margin: 0; padding-left: 18px; color: #bfdbfe; font-size: 11px; line-height: 1.6;">
+                        ${suggestions.map(sug => `<li style="margin: 3px 0;">${sug}</li>`).join('')}
                     </ul>
                 </div>
             ` : ''}
             
+            <!-- OVERALL FEEDBACK -->
             ${analysis.overallFeedback ? `
-                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(99, 102, 241, 0.3); color: #c7d2fe; font-style: italic; font-size: 11px;">
-                    ${analysis.overallFeedback}
+                <div style="padding: 8px 10px; border-top: 1px solid rgba(99, 102, 241, 0.3); color: #c7d2fe; font-size: 11px; line-height: 1.6; font-style: italic;">
+                    <strong style="color: #a5b4fc;">Summary:</strong> ${analysis.overallFeedback}
                 </div>
             ` : ''}
         `;
