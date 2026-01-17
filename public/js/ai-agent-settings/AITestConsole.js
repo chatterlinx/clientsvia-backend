@@ -2450,12 +2450,20 @@ ${separator}`;
         // Build category breakdown
         const categoryRows = (distribution.byCategory || [])
             .sort((a, b) => b.count - a.count)
-            .map(cat => `
-                <div style="display: flex; justify-content: space-between; padding: 6px; background: #0d1117; border-radius: 4px; font-size: 11px;">
-                    <span style="color: #c9d1d9;">${cat.category || 'Uncategorized'}</span>
-                    <span style="color: ${cat.count >= 3 ? '#3fb950' : '#f0883e'}; font-weight: 600;">${cat.count} scenarios</span>
-                </div>
-            `).join('');
+            .map(cat => {
+                const categoryLabel = cat.categoryName
+                    || cat.category
+                    || cat.name
+                    || cat.categoryId
+                    || 'Uncategorized';
+                
+                return `
+                    <div style="display: flex; justify-content: space-between; padding: 6px; background: #0d1117; border-radius: 4px; font-size: 11px;">
+                        <span style="color: #c9d1d9;">${categoryLabel}</span>
+                        <span style="color: ${cat.count >= 3 ? '#3fb950' : '#f0883e'}; font-weight: 600;">${cat.count} scenarios</span>
+                    </div>
+                `;
+            }).join('');
 
         // Build template breakdown
         const templateRows = (distribution.byTemplate || [])
