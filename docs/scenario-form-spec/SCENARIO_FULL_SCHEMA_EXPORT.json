@@ -346,9 +346,9 @@
     
     "scenarioType": {
       "type": "String",
-      "enum": ["INFO_FAQ", "ACTION_FLOW", "SYSTEM_ACK", "SMALL_TALK", null],
+      "enum": ["EMERGENCY", "BOOKING", "FAQ", "TROUBLESHOOT", "BILLING", "TRANSFER", "SMALL_TALK", "SYSTEM", null],
       "default": null,
-      "description": "null=inferred at runtime. INFO_FAQ=static info, ACTION_FLOW=drives flow, SYSTEM_ACK=internal, SMALL_TALK=rapport"
+      "description": "null=inferred at runtime. FAQ=static info, BOOKING=schedule intent, EMERGENCY=urgent/safety, SYSTEM=internal"
     },
     "replyStrategy": {
       "type": "String",
@@ -638,7 +638,7 @@
     "followUpFunnel": "Alright — let's make sure we get that heat back on for you. What's the best phone number to reach you at?",
     
     "replySelection": "bandit",
-    "scenarioType": "ACTION_FLOW",
+    "scenarioType": "BOOKING",
     "replyStrategy": "AUTO",
     
     "followUpMode": "ASK_IF_BOOK",

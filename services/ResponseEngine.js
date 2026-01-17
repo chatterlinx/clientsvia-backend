@@ -4,7 +4,7 @@
  * ============================================================================
  * 
  * Purpose: Centralize all reply selection logic based on:
- * - Scenario Type (INFO_FAQ, ACTION_FLOW, SYSTEM_ACK, SMALL_TALK)
+ * - Scenario Type (FAQ, BOOKING, EMERGENCY, TRANSFER, SYSTEM, SMALL_TALK)
  * - Reply Strategy (AUTO, FULL_ONLY, QUICK_ONLY, QUICK_THEN_FULL, LLM_WRAP, LLM_CONTEXT)
  * - Channel (voice, sms, chat)
  * 
@@ -17,6 +17,7 @@
  */
 
 const logger = require('../utils/logger');
+const { normalizeScenarioType } = require('../utils/scenarioTypeDetector');
 
 class ResponseEngine {
   /**
@@ -53,14 +54,16 @@ class ResponseEngine {
       // ========================================================================
       // STEP 1: RESOLVE SCENARIO TYPE
       // ========================================================================
-      let scenarioTypeResolved = scenario.scenarioType;
+      let scenarioTypeResolved = normalizeScenarioType(scenario.scenarioType, { allowUnknown: true });
       
-      if (!scenarioTypeResolved) {
-        // Infer from content
+      if (!scenarioTypeResolved || scenarioTypeResolved === 'UNKNOWN') {
+        // Infer from content using canonical types
         if (scenario.fullReplies && scenario.fullReplies.length > 0) {
-          scenarioTypeResolved = 'INFO_FAQ';
+          scenarioTypeResolved = 'FAQ';
+        } else if (scenario.quickReplies && scenario.quickReplies.length > 0) {
+          scenarioTypeResolved = 'SYSTEM';
         } else {
-          scenarioTypeResolved = 'SYSTEM_ACK';
+          scenarioTypeResolved = 'FAQ';
         }
       }
       
@@ -178,9 +181,9 @@ class ResponseEngine {
     let strategyUsed;
     
     // ========================================================================
-    // VOICE + INFO_FAQ
+    // VOICE + INFO TYPES (FAQ/BILLING/TROUBLESHOOT)
     // ========================================================================
-    if (scenarioTypeResolved === 'INFO_FAQ') {
+    if (['FAQ', 'BILLING', 'TROUBLESHOOT'].includes(scenarioTypeResolved)) {
       if (replyStrategyResolved === 'AUTO' || replyStrategyResolved === 'FULL_ONLY') {
         // Info scenarios on voice MUST always include full reply
         if (hasFullReplies) {
@@ -188,14 +191,14 @@ class ResponseEngine {
           strategyUsed = 'FULL_ONLY';
         } else if (hasQuickReplies) {
           // Fallback to quick if no full replies (scenario broken, but handle gracefully)
-          logger.warn(`⚠️ [RESPONSE ENGINE] INFO_FAQ scenario missing fullReplies`, {
+          logger.warn(`⚠️ [RESPONSE ENGINE] ${scenarioTypeResolved} scenario missing fullReplies`, {
             scenarioName: scenario.name
           });
           text = this._selectRandom(scenario.quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else {
           // No replies at all
-          logger.error(`🚨 [RESPONSE ENGINE] INFO_FAQ scenario has NO replies!`, {
+          logger.error(`🚨 [RESPONSE ENGINE] ${scenarioTypeResolved} scenario has NO replies!`, {
             scenarioName: scenario.name
           });
           text = null;
@@ -220,8 +223,8 @@ class ResponseEngine {
           strategyUsed = 'ERROR_NO_REPLIES';
         }
       } else if (replyStrategyResolved === 'QUICK_ONLY') {
-        // Explicitly requested quick-only (dangerous for INFO_FAQ, but allow)
-        logger.warn(`⚠️ [RESPONSE ENGINE] INFO_FAQ scenario forced to QUICK_ONLY (misconfigured?)`, {
+        // Explicitly requested quick-only (dangerous for info-heavy scenarios, but allow)
+        logger.warn(`⚠️ [RESPONSE ENGINE] ${scenarioTypeResolved} scenario forced to QUICK_ONLY (misconfigured?)`, {
           scenarioName: scenario.name,
           replyStrategy: replyStrategyResolved
         });
@@ -253,9 +256,9 @@ class ResponseEngine {
     }
     
     // ========================================================================
-    // VOICE + SYSTEM_ACK
+    // VOICE + SYSTEM
     // ========================================================================
-    else if (scenarioTypeResolved === 'SYSTEM_ACK') {
+    else if (scenarioTypeResolved === 'SYSTEM') {
       if (replyStrategyResolved === 'AUTO') {
         // Default: quick if available, else full
         if (hasQuickReplies) {
@@ -322,9 +325,9 @@ class ResponseEngine {
     }
     
     // ========================================================================
-    // VOICE + ACTION_FLOW
+    // VOICE + ACTION TYPES (BOOKING/EMERGENCY/TRANSFER)
     // ========================================================================
-    else if (scenarioTypeResolved === 'ACTION_FLOW') {
+    else if (['BOOKING', 'EMERGENCY', 'TRANSFER'].includes(scenarioTypeResolved)) {
       if (replyStrategyResolved === 'AUTO') {
         // Default: quick+full if both exist, else full, else quick
         if (hasQuickReplies && hasFullReplies) {
@@ -442,7 +445,7 @@ class ResponseEngine {
       }
     }
     
-    // Unknown scenario type, default to INFO_FAQ rules
+    // Unknown scenario type, default to FAQ rules
     else {
       if (hasFullReplies) {
         text = this._selectRandom(scenario.fullReplies);

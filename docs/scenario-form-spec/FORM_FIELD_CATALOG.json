@@ -370,13 +370,13 @@
       "label": "Scenario Type",
       "section": "REPLIES_FLOW",
       "inputType": "select",
-      "allowedValues": ["INFO_FAQ", "ACTION_FLOW", "SYSTEM_ACK", "SMALL_TALK", null],
+      "allowedValues": ["EMERGENCY", "BOOKING", "FAQ", "TROUBLESHOOT", "BILLING", "TRANSFER", "SYSTEM", "SMALL_TALK", null],
       "validation": {
         "required": false
       },
       "defaultValue": null,
       "inheritanceBehavior": "none",
-      "runtimeEffect": "INFO_FAQ=static info, ACTION_FLOW=drives flow, SYSTEM_ACK=internal, SMALL_TALK=rapport",
+      "runtimeEffect": "FAQ=static info, BOOKING=schedule intent, EMERGENCY=urgent/safety, SYSTEM=internal, SMALL_TALK=rapport",
       "requiredForProductionSafe": false
     },
     {

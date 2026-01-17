@@ -113,7 +113,7 @@
     "followUpFunnel": "Alright — let's make sure we get that heat back on for you. What's the best phone number to reach you at?",
     
     "replySelection": "bandit",
-    "scenarioType": "ACTION_FLOW",
+  "scenarioType": "BOOKING",
     "replyStrategy": "AUTO",
     "followUpMode": "ASK_IF_BOOK",
     "followUpQuestionText": "Would you like me to schedule an emergency technician right now?",

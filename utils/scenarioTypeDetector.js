@@ -58,8 +58,6 @@ const TYPE_KEYWORDS = {
 const VALID_TYPES = new Set([
     'EMERGENCY', 'BOOKING', 'FAQ', 'TROUBLESHOOT', 'BILLING', 'TRANSFER',
     'SMALL_TALK', 'SYSTEM',
-    // Legacy (accepted for backward compatibility)
-    'INFO_FAQ', 'ACTION_FLOW', 'SYSTEM_ACK',
     'UNKNOWN'
 ]);
 
@@ -77,7 +75,7 @@ function normalizeScenarioType(value, { allowUnknown = false } = {}) {
     if (upper === 'UNKNOWN' && !allowUnknown) {
         return null;
     }
-    
+
     return VALID_TYPES.has(upper) ? upper : null;
 }
 

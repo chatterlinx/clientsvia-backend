@@ -543,7 +543,7 @@ class AIBrain3tierllm {
                 } else {
                     // 🎯 PHASE 2: RESPONSE ENGINE - CENTRALIZED REPLY SELECTION
                     // Delegate ALL reply selection to Response Engine based on:
-                    // - scenarioType (INFO_FAQ, ACTION_FLOW, SYSTEM_ACK, SMALL_TALK)
+                    // - scenarioType (FAQ, BOOKING, EMERGENCY, TRANSFER, SYSTEM, SMALL_TALK)
                     // - replyStrategy (AUTO, FULL_ONLY, QUICK_ONLY, QUICK_THEN_FULL, LLM_WRAP, LLM_CONTEXT)
                     // - channel (voice, sms, chat)
                     

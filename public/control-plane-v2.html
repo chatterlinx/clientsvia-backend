@@ -8989,7 +8989,7 @@ Loading field report...
               <ul style="margin: 0; padding-left: 16px; color: #64748b;">
                 <li>replySelection: <code>bandit</code></li>
                 <li>replyStrategy: <code>AUTO</code></li>
-                <li>followUpMode: <code>NONE</code> (unless ACTION_FLOW)</li>
+                <li>followUpMode: <code>NONE</code> (unless BOOKING/TRANSFER)</li>
               </ul>
             </div>
             <div>
@@ -9716,7 +9716,7 @@ END OF SCENARIO OPS MANUAL
           contextWeight: 0.95,
           handoffPolicy: 'always_on_keyword',
           followUpMode: 'ASK_IF_BOOK',
-          scenarioType: 'ACTION_FLOW',
+          scenarioType: 'EMERGENCY',
           replyStrategy: 'AUTO',
           actionHooks: ['log_emergency_call', 'notify_dispatch']
         },
@@ -9726,7 +9726,7 @@ END OF SCENARIO OPS MANUAL
           contextWeight: 0.80,
           handoffPolicy: 'low_confidence',
           followUpMode: 'ASK_IF_BOOK',
-          scenarioType: 'ACTION_FLOW',
+          scenarioType: 'BOOKING',
           replyStrategy: 'AUTO',
           actionHooks: ['log_booking_intent']
         },
@@ -9736,7 +9736,7 @@ END OF SCENARIO OPS MANUAL
           contextWeight: 0.70,
           handoffPolicy: 'low_confidence',
           followUpMode: 'NONE',
-          scenarioType: 'INFO_FAQ',
+          scenarioType: 'FAQ',
           replyStrategy: 'AUTO',
           actionHooks: []
         },

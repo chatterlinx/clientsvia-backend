@@ -2758,7 +2758,7 @@
             let scenarioType, replyStrategy, replySelection, priorityLevel, personality, handoffPolicy, cooldown;
             
             if (isBooking) {
-                scenarioType = 'ACTION_FLOW';
+                scenarioType = 'BOOKING';
                 replyStrategy = 'FULL_ONLY';
                 replySelection = 'RANDOM';
                 priorityLevel = 90;  // High priority - booking is revenue
@@ -2766,7 +2766,7 @@
                 handoffPolicy = 'LOW_CONFIDENCE_ONLY';
                 cooldown = 0;
             } else if (isEmergency) {
-                scenarioType = 'ACTION_FLOW';
+                scenarioType = 'EMERGENCY';
                 replyStrategy = 'QUICK_THEN_FULL';
                 replySelection = 'SEQUENTIAL';
                 priorityLevel = 100;  // Highest priority - emergencies first
@@ -2774,7 +2774,7 @@
                 handoffPolicy = 'LOW_CONFIDENCE_ONLY';
                 cooldown = 0;
             } else {
-                scenarioType = 'INFO_FAQ';
+                scenarioType = 'FAQ';
                 replyStrategy = 'AUTO';
                 replySelection = 'RANDOM';
                 priorityLevel = 50;  // Normal priority

@@ -278,8 +278,14 @@ class LLMDiscoveryEngine {
             return true;
         }
         
-        // Check scenario type
-        if (scenario.scenarioType === 'ACTION_FLOW') {
+        // Check scenario type (canonical only)
+        const scenarioType = String(scenario.scenarioType || '').toUpperCase();
+        if (['BOOKING', 'TRANSFER', 'EMERGENCY'].includes(scenarioType)) {
+            return true;
+        }
+        
+        // Explicit booking intent/actionType
+        if (scenario.bookingIntent === true || scenario.actionType === 'REQUIRE_BOOKING') {
             return true;
         }
         

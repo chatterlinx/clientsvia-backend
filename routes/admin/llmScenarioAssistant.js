@@ -28,6 +28,9 @@ const {
   getEffectiveModelParams
 } = require('../../config/llmScenarioPrompts');
 const GlobalAIBehaviorTemplate = require('../../models/GlobalAIBehaviorTemplate');
+const { CANONICAL_SCENARIO_TYPES } = require('../../utils/scenarioTypes');
+
+const SCENARIO_TYPE_OPTIONS = CANONICAL_SCENARIO_TYPES.filter(type => type !== 'UNKNOWN');
 
 const router = express.Router();
 
@@ -51,9 +54,9 @@ function sanitizeScenarioDraft(raw) {
   const draft = {
     // BASIC
     name: (raw.name || raw.scenarioName || 'Untitled Scenario').trim(),
-    scenarioType: ['INFO_FAQ', 'ACTION_FLOW', 'SYSTEM_ACK', 'SMALL_TALK'].includes(raw.scenarioType) 
-      ? raw.scenarioType 
-      : 'INFO_FAQ',
+    scenarioType: SCENARIO_TYPE_OPTIONS.includes(raw.scenarioType)
+      ? raw.scenarioType
+      : 'FAQ',
     replyStrategy: ['AUTO', 'FULL_ONLY', 'QUICK_ONLY', 'QUICK_THEN_FULL', 'LLM_WRAP', 'LLM_CONTEXT'].includes(raw.replyStrategy)
       ? raw.replyStrategy
       : 'AUTO',
@@ -444,7 +447,7 @@ Your specific task:
 ENTERPRISE-GRADE VALIDATION CHECKLIST (YOUR INTERNAL PROCESS):
 Before generating a draft, mentally verify:
 1. ✓ Is scenarioType aligned with the described intent?
-2. ✓ Does replyStrategy match the scenarioType (e.g., ACTION_FLOW → QUICK_THEN_FULL)?
+2. ✓ Does replyStrategy match the scenarioType (e.g., BOOKING/EMERGENCY/TRANSFER → QUICK_THEN_FULL)?
 3. ✓ Is minConfidence appropriate for the scenario specificity?
 4. ✓ Are entities captured if the scenario needs data (booking, rescheduling)?
 5. ✓ Is followUpMode set correctly (TRANSFER for escalations, ASK_IF_BOOK for bookings)?
@@ -472,7 +475,7 @@ Set status="needs_clarification" if ANY of these apply:
 2. Scenario type seems misaligned with the intent
 3. You're unsure about entity capture needs
 4. Follow-up behavior is unclear (escalate vs. ask question?)
-5. Settings alignment needs verification (e.g., ACTION_FLOW + confidence level)
+5. Settings alignment needs verification (e.g., BOOKING/EMERGENCY + confidence level)
 6. Negative triggers seem insufficient to prevent false matches
 7. Priority or minConfidence need admin guidance
 8. The scenario needs data capture but no entities defined
@@ -500,7 +503,7 @@ FULL DRAFT SPECIFICATION (Phase C.1):
 {
   "name": "Human-readable scenario name",
 
-  "scenarioType": "INFO_FAQ" | "ACTION_FLOW" | "SYSTEM_ACK" | "SMALL_TALK",
+  "scenarioType": "FAQ" | "TROUBLESHOOT" | "BOOKING" | "EMERGENCY" | "TRANSFER" | "BILLING" | "SYSTEM" | "SMALL_TALK",
   "replyStrategy": "AUTO" | "FULL_ONLY" | "QUICK_ONLY" | "QUICK_THEN_FULL" | "LLM_WRAP" | "LLM_CONTEXT",
 
   // 🎭 AI BEHAVIOR (SELECT FROM LIST ABOVE)
@@ -706,9 +709,9 @@ GUIDELINES:
    - Provide descriptions so the template admin understands what should be filled
 
 5. SCENARIO TYPE DEFAULTS:
-   - INFO_FAQ (facts): replyStrategy often "AUTO" or "FULL_ONLY"
-   - ACTION_FLOW (flows): replyStrategy often "QUICK_THEN_FULL"
-   - SYSTEM_ACK (internal): replyStrategy often "QUICK_ONLY"
+   - FAQ (facts): replyStrategy often "AUTO" or "FULL_ONLY"
+   - BOOKING/EMERGENCY/TRANSFER (action): replyStrategy often "QUICK_THEN_FULL"
+   - SYSTEM (internal): replyStrategy often "QUICK_ONLY"
    - SMALL_TALK: replyStrategy often "QUICK_ONLY"
 
 6. FOLLOW-UP MODES (CRITICAL: ALWAYS SET followUpMode AND GENERATE followUpQuestionText):
