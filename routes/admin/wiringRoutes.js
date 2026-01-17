@@ -1253,5 +1253,36 @@ router.get('/:companyId/compliance', async (req, res) => {
     }
 });
 
+// ============================================================================
+// GET /api/admin/wiring-status/:companyId/scenario-coverage
+// Analyze scenario coverage and identify gaps
+// ============================================================================
+router.get('/:companyId/scenario-coverage', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { daysBack } = req.query;
+        
+        logger.info('[WIRING API] Scenario coverage analysis requested', { companyId });
+        
+        const ScenarioCoverageAnalyzer = require('../../services/ScenarioCoverageAnalyzer');
+        
+        const report = await ScenarioCoverageAnalyzer.analyzeCoverage(companyId, {
+            daysBack: daysBack ? parseInt(daysBack) : 7
+        });
+        
+        return res.json(report);
+        
+    } catch (error) {
+        logger.error('[WIRING API] Scenario coverage analysis error', { 
+            error: error.message, 
+            stack: error.stack 
+        });
+        return res.status(500).json({
+            error: 'Failed to analyze scenario coverage',
+            details: error.message
+        });
+    }
+});
+
 module.exports = router;
 
