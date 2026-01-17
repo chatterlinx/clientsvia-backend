@@ -589,44 +589,44 @@ class AITestConsole {
      */
     render() {
         return `
-            <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 10000; display: flex; align-items: center; justify-content: center;">
-                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 12px; width: 95%; max-width: 1200px; height: 90vh; display: flex; flex-direction: column; overflow: hidden;">
-                    
-                    <!-- Header -->
-                    <div style="padding: 16px 20px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <h2 style="margin: 0; color: #58a6ff; font-size: 18px;">🧪 AI Test Console</h2>
-                            <p style="margin: 4px 0 0 0; color: #8b949e; font-size: 12px;">Test conversations without making real calls</p>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <label style="display:flex; align-items:center; gap:6px; background:#21262d; padding:6px 10px; border-radius:6px; font-size:11px; color:#8b949e;">
-                                <input type="checkbox" id="pack-test-toggle" ${this.packTestMode ? 'checked' : ''} style="accent-color:#58a6ff;">
-                                Pack Test Mode
-                            </label>
-                            <button onclick="window.aiTestConsole.toggleSupervisor()" 
-                                style="background: ${this.supervisorEnabled ? '#6366f1' : '#374151'}; border: 1px solid ${this.supervisorEnabled ? '#818cf8' : '#4b5563'}; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: 600;">
-                                ${this.supervisorEnabled ? '🎓 Supervisor: ON' : '🎓 Supervisor: OFF'}
-                            </button>
-                            <div id="voice-status" style="background: #21262d; padding: 6px 12px; border-radius: 6px; font-size: 11px;">
-                                ${this.voiceInfo?.hasVoice 
-                                    ? `<span style="color: #3fb950;">🔊 ${this.voiceInfo.voiceName || 'ElevenLabs'}</span>`
-                                    : `<span style="color: #f0883e;">⚠️ No voice set</span>`
-                                }
-                            </div>
-                            <button onclick="document.getElementById('ai-test-console-modal').remove()" 
-                                style="background: none; border: none; color: #8b949e; font-size: 24px; cursor: pointer;">×</button>
-                        </div>
+            <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #0d1117; z-index: 10000; display: flex; flex-direction: column;">
+                
+                <!-- Header Bar (Compact) -->
+                <div style="padding: 10px 20px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; background: #161b22;">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <h2 style="margin: 0; color: #58a6ff; font-size: 15px; font-weight: 600;">🧪 AI Test Console</h2>
+                        <span style="color: #6e7681; font-size: 11px;">Test conversations without making real calls</span>
                     </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <label style="display:flex; align-items:center; gap:6px; background:#21262d; padding:5px 10px; border-radius:6px; font-size:11px; color:#8b949e; cursor:pointer;">
+                            <input type="checkbox" id="pack-test-toggle" ${this.packTestMode ? 'checked' : ''} style="accent-color:#58a6ff;">
+                            Pack Test Mode
+                        </label>
+                        <button onclick="window.aiTestConsole.toggleSupervisor()" 
+                            style="background: ${this.supervisorEnabled ? '#6366f1' : '#374151'}; border: 1px solid ${this.supervisorEnabled ? '#818cf8' : '#4b5563'}; color: #fff; padding: 5px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: 600;">
+                            ${this.supervisorEnabled ? '🎓 Supervisor: ON' : '🎓 Supervisor: OFF'}
+                        </button>
+                        <div id="voice-status" style="background: #21262d; padding: 5px 10px; border-radius: 6px; font-size: 11px;">
+                            ${this.voiceInfo?.hasVoice 
+                                ? `<span style="color: #3fb950;">🔊 Voice configured</span>`
+                                : `<span style="color: #f0883e;">⚠️ No voice</span>`
+                            }
+                        </div>
+                        <button onclick="document.getElementById('ai-test-console-modal').remove()" 
+                            style="background: #21262d; border: 1px solid #30363d; color: #8b949e; padding: 3px 10px; border-radius: 6px; font-size: 20px; cursor: pointer; line-height: 1;">×</button>
+                    </div>
+                </div>
+                
+                <!-- Main Content: 50/50 Split -->
+                <div style="flex: 1; display: flex; overflow: hidden;">
                     
-                    <!-- Main Content -->
-                    <div style="flex: 1; display: flex; overflow: hidden;">
+                    <!-- LEFT PANEL: Chat (50%) -->
+                    <div style="width: 50%; display: flex; flex-direction: column; border-right: 1px solid #30363d;">
                         
-                        <!-- Left: Chat Panel -->
-                        <div style="flex: 1; display: flex; flex-direction: column; border-right: 1px solid #30363d;">
-                            
-                            <!-- Quick Scenarios -->
-                            <div style="padding: 12px; border-bottom: 1px solid #30363d; display: flex; gap: 8px; flex-wrap: wrap;">
-                                <span style="color: #8b949e; font-size: 12px; padding: 6px 0;">Test:</span>
+                        <!-- Quick Test Scenarios -->
+                        <div style="padding: 10px 16px; border-bottom: 1px solid #30363d; background: #161b22;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <span style="color: #8b949e; font-size: 11px; font-weight: 600;">Test:</span>
                                 <button onclick="window.aiTestConsole.sendScenario('basic')" class="scenario-btn">👋 Basic Call</button>
                                 <button onclick="window.aiTestConsole.sendScenario('frustrated')" class="scenario-btn">😤 Frustrated</button>
                                 <button onclick="window.aiTestConsole.sendScenario('emergency')" class="scenario-btn">🚨 Emergency</button>
@@ -634,85 +634,93 @@ class AITestConsole {
                                 <button onclick="window.aiTestConsole.sendScenario('question')" class="scenario-btn">❓ Question</button>
                                 <button onclick="window.aiTestConsole.sendScenario('booking')" class="scenario-btn">📅 Full Booking</button>
                             </div>
-                            
-                            <!-- Chat Messages -->
-                            <div id="test-chat-messages" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;">
-                                <div style="text-align: center; color: #8b949e; padding: 40px;">
-                                    <div style="font-size: 48px; margin-bottom: 12px;">💬</div>
-                                    <p>Start typing to test the AI agent</p>
-                                    <p style="font-size: 12px;">Or click a scenario above</p>
-                                </div>
+                        </div>
+                        
+                        <!-- Chat Messages Area -->
+                        <div id="test-chat-messages" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; background: #0d1117;">
+                            <div style="text-align: center; color: #8b949e; padding: 60px 20px;">
+                                <div style="font-size: 64px; margin-bottom: 16px;">💬</div>
+                                <p style="font-size: 14px; margin: 0 0 8px 0; color: #c9d1d9;">Start typing to test the AI agent</p>
+                                <p style="font-size: 12px; margin: 0; color: #6e7681;">Or click a scenario above</p>
                             </div>
-                            
-                            <!-- Voice Controls -->
-                            <div style="padding: 8px 16px; border-top: 1px solid #30363d; display: flex; gap: 10px; align-items: center; background: #161b22; flex-wrap: wrap;">
-                                <span style="color: #8b949e; font-size: 12px;">🎙️ Voice Mode:</span>
-                                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                                    <button id="asr-mode-prod" onclick="window.aiTestConsole.setAsrMode('deepgram')" 
-                                        style="padding: 6px 10px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">
-                                        Production ASR (Deepgram)
-                                    </button>
-                                    <button id="asr-mode-dev" onclick="window.aiTestConsole.setAsrMode('browser')" 
-                                        style="padding: 6px 10px; background: #30363d; color: #c9d1d9; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">
-                                        Dev (Browser ASR)
-                                    </button>
-                                </div>
-                                <div id="asr-mode-badge" style="color: #8b949e; font-size: 12px;">ASR: Deepgram (production config)</div>
+                        </div>
+                        
+                        <!-- Voice Controls Bar -->
+                        <div style="padding: 10px 16px; border-top: 1px solid #30363d; background: #161b22;">
+                            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;">
+                                <span style="color: #8b949e; font-size: 11px; font-weight: 600;">🎙️ Voice Mode:</span>
+                                <button id="asr-mode-prod" onclick="window.aiTestConsole.setAsrMode('deepgram')" 
+                                    style="padding: 5px 10px; background: #238636; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 11px; font-weight: 600;">
+                                    Production ASR (Deepgram)
+                                </button>
+                                <button id="asr-mode-dev" onclick="window.aiTestConsole.setAsrMode('browser')" 
+                                    style="padding: 5px 10px; background: #21262d; color: #8b949e; border: 1px solid #30363d; border-radius: 5px; cursor: pointer; font-size: 11px;">
+                                    Dev (Browser ASR)
+                                </button>
+                                <div id="asr-mode-badge" style="color: #6e7681; font-size: 10px; margin-left: auto;">ASR: Deepgram (production config)</div>
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: center;">
                                 <button id="mic-button" onclick="window.aiTestConsole.toggleMic()" 
-                                    style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s;">
+                                    style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s;">
                                     🎤 Speak
                                 </button>
                                 <button id="voice-toggle" onclick="window.aiTestConsole.toggleVoice()" 
-                                    style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                                    style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;">
                                     🔊 Voice On
                                 </button>
-                                <span style="color: #6e7681; font-size: 11px; margin-left: auto;">Click "Speak" and talk — AI will respond with voice!</span>
+                                <span style="color: #6e7681; font-size: 10px; margin-left: auto;">Click "Speak" and talk — AI will respond with voice!</span>
                             </div>
-                            
-                            <!-- Text Input -->
-                            <div style="padding: 16px; border-top: 1px solid #30363d; display: flex; gap: 10px;">
+                        </div>
+                        
+                        <!-- Text Input Bar -->
+                        <div style="padding: 12px 16px; border-top: 1px solid #30363d; background: #0d1117;">
+                            <div style="display: flex; gap: 10px;">
                                 <input type="text" id="test-user-input" placeholder="Or type a message..." 
-                                    style="flex: 1; padding: 12px 16px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; color: #c9d1d9; font-size: 14px;"
-                                    onkeypress="if(event.key==='Enter') window.aiTestConsole.sendMessage()">
+                                    style="flex: 1; padding: 10px 14px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 13px;"
+                                    onkeypress="if(event.key === 'Enter') window.aiTestConsole.sendMessage()">
                                 <button onclick="window.aiTestConsole.sendMessage()" 
-                                    style="padding: 12px 24px; background: #58a6ff; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                                    style="padding: 10px 24px; background: #1f6feb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;">
                                     Send
                                 </button>
                                 <button onclick="window.aiTestConsole.resetConversation()" 
-                                    style="padding: 12px 16px; background: #30363d; color: #c9d1d9; border: none; border-radius: 8px; cursor: pointer;">
+                                    style="padding: 10px 16px; background: #21262d; color: #8b949e; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; font-size: 13px;">
                                     🔄
                                 </button>
                             </div>
                         </div>
                         
-                        <!-- Right: Report Panel -->
-                        <div style="width: 400px; display: flex; flex-direction: column; overflow: hidden;">
-                            
-                            <!-- Tabs -->
-                            <div style="display: flex; border-bottom: 1px solid #30363d;">
-                                <button id="tab-analysis" onclick="window.aiTestConsole.switchTab('analysis')" 
-                                    style="flex: 1; padding: 12px; background: #161b22; border: none; color: #58a6ff; cursor: pointer; border-bottom: 2px solid #58a6ff;">
-                                    📊 Analysis
-                                </button>
-                                <button id="tab-failures" onclick="window.aiTestConsole.switchTab('failures')" 
-                                    style="flex: 1; padding: 12px; background: transparent; border: none; color: #8b949e; cursor: pointer;">
-                                    ⚠️ Failures
-                                </button>
-                                <button id="tab-wiring" onclick="window.aiTestConsole.switchTab('wiring')" 
-                                    style="flex: 1; padding: 12px; background: transparent; border: none; color: #8b949e; cursor: pointer;">
-                                    🔌 Wiring
-                                </button>
-                            </div>
-                            
-                            <!-- Tab Content -->
-                            <div id="report-content" style="flex: 1; overflow-y: auto; padding: 16px;">
-                                <div style="text-align: center; color: #8b949e; padding: 20px;">
-                                    Loading analysis...
-                                </div>
+                    </div>
+                    
+                    <!-- RIGHT PANEL: Analysis/Wiring (50%) -->
+                    <div style="width: 50%; display: flex; flex-direction: column; background: #0d1117;">
+                        
+                        <!-- Tab Navigation -->
+                        <div style="padding: 0; border-bottom: 1px solid #30363d; display: flex; background: #161b22;">
+                            <button id="tab-analysis" onclick="window.aiTestConsole.switchTab('analysis')" 
+                                style="flex: 1; padding: 10px; background: transparent; border: none; color: #58a6ff; cursor: pointer; font-size: 12px; font-weight: 600; border-bottom: 2px solid #58a6ff;">
+                                📊 Analysis
+                            </button>
+                            <button id="tab-failures" onclick="window.aiTestConsole.switchTab('failures')" 
+                                style="flex: 1; padding: 10px; background: transparent; border: none; color: #8b949e; cursor: pointer; font-size: 12px;">
+                                ⚠️ Failures
+                            </button>
+                            <button id="tab-wiring" onclick="window.aiTestConsole.switchTab('wiring')" 
+                                style="flex: 1; padding: 10px; background: transparent; border: none; color: #8b949e; cursor: pointer; font-size: 12px;">
+                                🔌 Wiring
+                            </button>
+                        </div>
+                        
+                        <!-- Report Content -->
+                        <div id="report-content" style="flex: 1; overflow-y: auto; padding: 16px;">
+                            <div style="text-align: center; color: #8b949e; padding: 20px;">
+                                Loading analysis...
                             </div>
                         </div>
+                        
                     </div>
+                    
                 </div>
+                
             </div>
             
             <style>
