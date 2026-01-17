@@ -7383,9 +7383,14 @@ Sean → Shawn, Shaun`;
                 
                 <!-- Kill Switches Section -->
                 <div style="background: #0d1117; border: 2px solid #f85149; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
-                    <h4 style="margin: 0 0 12px 0; color: #f85149;">🔒 Kill Switches (Safety Controls)</h4>
+                    <h4 style="margin: 0 0 12px 0; color: #f85149; display: flex; align-items: center; gap: 8px;">
+                        🔒 Kill Switches (LLM Discovery Controls)
+                        <span title="LLM Discovery settings: control whether the LLM speaks first and whether scenarios can auto-respond during discovery." style="color: #8b949e; font-size: 12px; cursor: help;">
+                            <i class="fas fa-info-circle"></i>
+                        </span>
+                    </h4>
                     <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 16px;">
-                        These toggles control the core V22 behavior. All should be ON for best results.
+                        These toggles control LLM-led discovery and scenario auto-responses. All should be ON for best results.
                     </p>
                     
                     <div style="display: flex; flex-direction: column; gap: 12px;">
