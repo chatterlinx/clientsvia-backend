@@ -47,6 +47,19 @@ class ScenarioCoverageAnalyzer {
             // ========================================================
             // STEP 2: Analyze scenario distribution
             // ========================================================
+            
+            // DEBUG: Log first scenario to see structure
+            if (enabledScenarios.length > 0) {
+                logger.debug('[SCENARIO COVERAGE] Sample scenario structure:', {
+                    scenarioId: enabledScenarios[0].scenarioId,
+                    name: enabledScenarios[0].name,
+                    categoryName: enabledScenarios[0].categoryName,
+                    categoryId: enabledScenarios[0].categoryId,
+                    category: enabledScenarios[0].category,
+                    templateName: enabledScenarios[0].templateName
+                });
+            }
+            
             const distribution = this._analyzeDistribution(enabledScenarios);
             
             // ========================================================
@@ -140,8 +153,13 @@ class ScenarioCoverageAnalyzer {
         const byType = {};
         
         scenarios.forEach(scenario => {
-            // By category
-            const category = scenario.categoryName || 'Uncategorized';
+            // By category - try multiple fields for compatibility
+            const category = scenario.categoryName 
+                || scenario.category?.name 
+                || scenario.category 
+                || scenario.categoryId 
+                || 'Uncategorized';
+            
             if (!byCategory[category]) {
                 byCategory[category] = {
                     count: 0,
