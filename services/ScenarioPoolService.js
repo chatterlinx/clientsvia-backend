@@ -432,7 +432,7 @@ class ScenarioPoolService {
                             
                             // Category metadata
                             categoryId: category.id || category._id?.toString() || null,
-                            categoryName: category.name || null,
+                            categoryName: category.name || category.id || 'Uncategorized',
                             
                             // Scenario identity
                             scenarioId: normalizedScenario.scenarioId || normalizedScenario._id?.toString(),
