@@ -1105,7 +1105,7 @@ class AITestConsole {
         const steps = [];
         const routing = debug.routing || {};
         const snapshot = debug.debugSnapshot || {};
-        const mode = debug.v22BlackBox?.mode || debug.mode || 'DISCOVERY';
+        const mode = debug.v22BlackBox?.mode || debug.mode || snapshot.mode || 'DISCOVERY';
         const slotDiag = debug.slotDiagnostics || {};
         const bookingConfig = debug.bookingConfig || {};
 
@@ -1121,6 +1121,11 @@ class AITestConsole {
         // STEP 2: Scenario Loading
         const scenarioPoolCount = snapshot.scenarioPoolCount ?? snapshot.scenarioCount ?? routing.scenariosAvailable ?? debug.scenarioCount ?? 0;
         const scenarioToolCount = snapshot.scenarioToolCount ?? snapshot.scenarios?.toolCount ?? null;
+        const scenarioTools = Array.isArray(snapshot.scenarios?.tools) ? snapshot.scenarios.tools : [];
+        const topTool = scenarioTools[0] || null;
+        const topToolLabel = topTool?.title
+            ? `"${topTool.title}"${Number.isFinite(topTool.confidence) ? ` (${topTool.confidence}%)` : ''}`
+            : null;
         const templatesLinked = snapshot.templateReferences ?? debug.templateReferencesCount ?? 0;
         
         if (mode !== 'BOOKING') {
@@ -1133,12 +1138,12 @@ class AITestConsole {
                     ? `⚠️ ${templatesLinked} templates linked but 0 scenarios loaded` 
                     : scenarioPoolCount === 0 
                     ? '⚠️ No templates linked'
-                    : `${templatesLinked} templates → ${scenarioPoolCount} scenarios${Number.isFinite(scenarioToolCount) ? ` (tools: ${scenarioToolCount})` : ''}`
+                    : `${templatesLinked} templates → ${scenarioPoolCount} scenarios${Number.isFinite(scenarioToolCount) ? ` (tools: ${scenarioToolCount}${topToolLabel ? `, top: ${topToolLabel}` : ''})` : ''}`
             });
         }
 
         // STEP 3: Response Source Decision
-        const responseSource = routing.responseSource || snapshot.responseSource || 
+        const responseSource = routing.responseSource || snapshot.responseSource || debug.v22BlackBox?.responseSource || debug.v22?.responseSource ||
                               (debug.wasQuickAnswer ? 'QUICK_ANSWER' : 
                                debug.triageMatched ? 'TRIAGE' : 
                                debug.wasFallback ? 'FALLBACK' : 
@@ -1150,9 +1155,13 @@ class AITestConsole {
             const matched = routing.matchedScenarioId || debug.matchedScenarioId || 'Unknown';
             responseDetail = `Matched: ${matched}`;
         } else if (responseSource === 'OPTION1_LLM_SPEAKS') {
-            responseDetail = `LLM-led discovery (tools: ${Number.isFinite(scenarioToolCount) ? scenarioToolCount : 'N/A'})`;
+            responseDetail = `LLM-led discovery${Number.isFinite(scenarioToolCount) ? ` (tools: ${scenarioToolCount}${topToolLabel ? `, top: ${topToolLabel}` : ''})` : ''}`;
         } else if (responseSource === 'LLM' || responseSource === 'FALLBACK') {
-            responseDetail = scenarioPoolCount === 0 ? 'No scenarios to match' : 'No scenario match found';
+            responseDetail = scenarioPoolCount === 0
+                ? 'No scenarios to match'
+                : Number.isFinite(scenarioToolCount) && scenarioToolCount > 0
+                    ? `LLM responded despite tools${topToolLabel ? ` (top: ${topToolLabel})` : ''}`
+                    : 'No scenario tools retrieved';
         } else if (responseSource === 'TRIAGE') {
             responseDetail = 'Matched triage card';
         } else if (responseSource === 'QUICK_ANSWER') {
@@ -1216,15 +1225,17 @@ class AITestConsole {
 
         const routing = debug.routing || {};
         const snapshot = debug.debugSnapshot || {};
-        const mode = debug.v22BlackBox?.mode || debug.mode || 'DISCOVERY';
+        const mode = debug.v22BlackBox?.mode || debug.mode || snapshot.mode || 'DISCOVERY';
         const slotDiag = debug.slotDiagnostics || {};
         const bookingConfig = debug.bookingConfig || {};
         const scenarioPoolCount = snapshot.scenarioPoolCount ?? snapshot.scenarioCount ?? routing.scenariosAvailable ?? debug.scenarioCount ?? 0;
         const scenarioToolCount = snapshot.scenarioToolCount ?? snapshot.scenarios?.toolCount ?? null;
+        const scenarioTools = Array.isArray(snapshot.scenarios?.tools) ? snapshot.scenarios.tools : [];
+        const topTool = scenarioTools[0] || null;
         const templatesLinked = snapshot.templateReferences ?? debug.templateReferencesCount ?? 0;
 
         // Determine response source
-        const responseSource = routing.responseSource || snapshot.responseSource || 
+        const responseSource = routing.responseSource || snapshot.responseSource || debug.v22BlackBox?.responseSource || debug.v22?.responseSource ||
                               (debug.wasQuickAnswer ? 'QUICK_ANSWER' : 
                                debug.triageMatched ? 'TRIAGE' : 
                                debug.wasFallback ? 'FALLBACK' : 
@@ -1242,7 +1253,7 @@ class AITestConsole {
                 source: responseSource,
                 matchedScenarioId: routing.matchedScenarioId || debug.matchedScenarioId || null,
                 reason: null,
-                healthy: responseSource === 'SCENARIO' || responseSource === 'QUICK_ANSWER' || responseSource === 'TRIAGE'
+                healthy: responseSource === 'SCENARIO' || responseSource === 'QUICK_ANSWER' || responseSource === 'TRIAGE' || responseSource === 'OPTION1_LLM_SPEAKS'
             },
             slots: null
         };
@@ -1266,9 +1277,13 @@ class AITestConsole {
         if (responseSource === 'SCENARIO') {
             result.decision.reason = 'Matched scenario template';
         } else if (responseSource === 'OPTION1_LLM_SPEAKS') {
-            result.decision.reason = `LLM-led discovery (tools: ${Number.isFinite(scenarioToolCount) ? scenarioToolCount : 'N/A'})`;
+            result.decision.reason = `LLM-led discovery (tools: ${Number.isFinite(scenarioToolCount) ? scenarioToolCount : 'N/A'}${topTool?.title ? `, top: "${topTool.title}"` : ''})`;
         } else if (responseSource === 'LLM') {
-            result.decision.reason = scenarioPoolCount === 0 ? 'No scenarios available to match' : 'No scenario match found';
+            result.decision.reason = scenarioPoolCount === 0
+                ? 'No scenarios available to match'
+                : Number.isFinite(scenarioToolCount) && scenarioToolCount > 0
+                    ? `LLM responded despite tools${topTool?.title ? ` (top: "${topTool.title}")` : ''}`
+                    : 'No scenario tools retrieved';
         } else if (responseSource === 'FALLBACK') {
             result.decision.reason = 'LLM failed, used fallback response';
         } else if (responseSource === 'TRIAGE') {
@@ -1536,7 +1551,7 @@ class AITestConsole {
                         🎯 Missing Triggers (${missingTriggers.length})
                     </div>
                     <div style="font-size: 10px; color: #fde68a; margin-bottom: 6px;">
-                        These phrases from the customer don't match any scenario triggers:
+                        Suggested by AI supervisor (not validated against live trigger lists):
                     </div>
                     ${missingTriggers.map(trigger => `
                         <div style="background: rgba(0, 0, 0, 0.3); padding: 6px 8px; border-radius: 4px; margin-bottom: 4px;">
