@@ -1941,6 +1941,12 @@ ${separator}`;
                         style="width: 100%; padding: 10px; background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%); color: #000; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700;">
                         🔌 Full Wiring →
                     </button>
+                    
+                    <!-- Scenario Coverage Analysis -->
+                    <button onclick="window.aiTestConsole.analyzeScenarioCoverage()" 
+                        style="width: 100%; padding: 10px; background: linear-gradient(135deg, #a371f7 0%, #7928ca 100%); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700;">
+                        📊 Analyze Scenario Coverage
+                    </button>
                 </div>
             </div>
         `;
@@ -2241,6 +2247,230 @@ ${separator}`;
             // Fallback: navigate with query param
             window.location.href = `/control-plane-v2.html?companyId=${this.companyId}&tab=wiring`;
         }
+    }
+
+    /**
+     * Analyze Scenario Coverage
+     * Shows what scenarios are loaded, identifies gaps, and suggests improvements
+     */
+    async analyzeScenarioCoverage() {
+        if (!this.companyId) {
+            alert('❌ Cannot analyze coverage: companyId is missing. Open Test Agent from Control Plane.');
+            return;
+        }
+
+        const content = document.getElementById('report-content');
+        content.innerHTML = `
+            <div style="text-align: center; color: #a371f7; padding: 40px;">
+                <div style="font-size: 40px; margin-bottom: 12px; animation: pulse 1s infinite;">📊</div>
+                <div style="font-size: 14px; font-weight: 600;">Analyzing scenario coverage...</div>
+                <div style="font-size: 11px; color: #8b949e; margin-top: 6px;">Checking templates, categories, and gaps</div>
+            </div>
+        `;
+
+        try {
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            const response = await fetch(`/api/admin/wiring-status/${this.companyId}/scenario-coverage?daysBack=7`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const report = await response.json();
+            this.renderCoverageReport(report);
+        } catch (error) {
+            console.error('[COVERAGE] Analysis failed:', error);
+            content.innerHTML = `
+                <div style="background: #2d1c1c; border: 1px solid #f85149; border-radius: 8px; padding: 16px; text-align: center;">
+                    <div style="font-size: 28px; margin-bottom: 8px;">❌</div>
+                    <div style="color: #f85149; font-weight: 600; margin-bottom: 4px;">Analysis Failed</div>
+                    <div style="color: #8b949e; font-size: 11px;">${error.message}</div>
+                </div>
+            `;
+        }
+    }
+
+    /**
+     * Render Scenario Coverage Report
+     */
+    renderCoverageReport(report) {
+        const content = document.getElementById('report-content');
+        
+        const score = report.coverageScore || 0;
+        const inventory = report.inventory || {};
+        const distribution = report.distribution || {};
+        const gaps = report.gaps || {};
+        const unmatched = report.unmatchedPhrases || {};
+        const recommendations = report.recommendations || [];
+
+        // Score color
+        let scoreColor = '#3fb950'; // Green
+        if (score < 70) scoreColor = '#f85149'; // Red
+        else if (score < 85) scoreColor = '#f0883e'; // Orange
+
+        // Build category breakdown
+        const categoryRows = (distribution.byCategory || [])
+            .sort((a, b) => b.count - a.count)
+            .map(cat => `
+                <div style="display: flex; justify-content: space-between; padding: 6px; background: #0d1117; border-radius: 4px; font-size: 11px;">
+                    <span style="color: #c9d1d9;">${cat.category || 'Uncategorized'}</span>
+                    <span style="color: ${cat.count >= 3 ? '#3fb950' : '#f0883e'}; font-weight: 600;">${cat.count} scenarios</span>
+                </div>
+            `).join('');
+
+        // Build template breakdown
+        const templateRows = (distribution.byTemplate || [])
+            .sort((a, b) => b.count - a.count)
+            .map(tpl => `
+                <div style="display: flex; justify-content: space-between; padding: 6px; background: #0d1117; border-radius: 4px; font-size: 11px;">
+                    <span style="color: #c9d1d9;">${tpl.templateName || tpl.templateId}</span>
+                    <span style="color: #58a6ff; font-weight: 600;">${tpl.count} scenarios</span>
+                </div>
+            `).join('');
+
+        // Build gap list
+        const allGaps = [
+            ...(gaps.critical || []).map(g => ({ ...g, severity: 'CRITICAL' })),
+            ...(gaps.high || []).map(g => ({ ...g, severity: 'HIGH' })),
+            ...(gaps.medium || []).map(g => ({ ...g, severity: 'MEDIUM' }))
+        ];
+
+        const gapRows = allGaps.length > 0 ? allGaps.map(gap => {
+            const severityColors = {
+                'CRITICAL': { bg: '#2d1c1c', border: '#f85149', text: '#f85149' },
+                'HIGH': { bg: '#2d2512', border: '#f0883e', text: '#f0883e' },
+                'MEDIUM': { bg: '#1c2128', border: '#8b949e', text: '#8b949e' }
+            };
+            const colors = severityColors[gap.severity] || severityColors.MEDIUM;
+            
+            return `
+                <div style="background: ${colors.bg}; border: 1px solid ${colors.border}; border-radius: 6px; padding: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="color: ${colors.text}; font-weight: 600; font-size: 11px;">${gap.type || 'Gap'}</span>
+                        <span style="color: ${colors.text}; font-size: 9px; text-transform: uppercase;">${gap.severity}</span>
+                    </div>
+                    <div style="color: #c9d1d9; font-size: 11px;">${gap.description || 'No description'}</div>
+                </div>
+            `;
+        }).join('') : '<div style="text-align: center; color: #3fb950; font-size: 12px;">✅ No coverage gaps detected</div>';
+
+        // Build unmatched phrases
+        const unmatchedRows = unmatched.available && unmatched.phrases?.length > 0 ? 
+            unmatched.phrases.slice(0, 10).map(phrase => `
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: #c9d1d9; font-size: 11px;">"${phrase.text}"</span>
+                        <span style="background: #f85149; color: #000; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 700;">${phrase.count}x</span>
+                    </div>
+                </div>
+            `).join('') 
+            : '<div style="text-align: center; color: #8b949e; font-size: 11px;">No recent unmatched phrases (or BlackBox disabled)</div>';
+
+        // Build recommendations
+        const recommendationRows = recommendations.length > 0 ? recommendations.map(rec => {
+            const priorityColors = {
+                'CRITICAL': '#f85149',
+                'HIGH': '#f0883e',
+                'MEDIUM': '#58a6ff'
+            };
+            const color = priorityColors[rec.priority] || '#8b949e';
+            
+            return `
+                <div style="background: #161b22; border-left: 3px solid ${color}; border-radius: 4px; padding: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="color: ${color}; font-weight: 700; font-size: 11px;">${rec.action}</span>
+                        <span style="color: ${color}; font-size: 9px; text-transform: uppercase;">${rec.priority}</span>
+                    </div>
+                    <div style="color: #8b949e; font-size: 10px;">${rec.reason}</div>
+                </div>
+            `;
+        }).join('') : '<div style="text-align: center; color: #3fb950; font-size: 12px;">✅ No recommendations - coverage is strong</div>';
+
+        content.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                
+                <!-- Coverage Score -->
+                <div style="background: linear-gradient(135deg, #1a1f35 0%, #0d1117 100%); border: 2px solid ${scoreColor}; border-radius: 12px; padding: 16px; text-align: center;">
+                    <div style="color: #8b949e; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px;">Coverage Score</div>
+                    <div style="color: ${scoreColor}; font-size: 48px; font-weight: 700; line-height: 1;">${score}</div>
+                    <div style="color: #8b949e; font-size: 11px; margin-top: 4px;">out of 100</div>
+                </div>
+
+                <!-- Inventory Summary -->
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px;">
+                    <h4 style="margin: 0 0 10px 0; color: #58a6ff; font-size: 11px; text-transform: uppercase;">📊 Scenario Inventory</h4>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px;">
+                        <div style="background: #0d1117; padding: 8px; border-radius: 6px; text-align: center;">
+                            <div style="color: #8b949e; font-size: 9px; margin-bottom: 4px;">TOTAL</div>
+                            <div style="color: #3fb950; font-size: 20px; font-weight: 700;">${inventory.total || 0}</div>
+                        </div>
+                        <div style="background: #0d1117; padding: 8px; border-radius: 6px; text-align: center;">
+                            <div style="color: #8b949e; font-size: 9px; margin-bottom: 4px;">ENABLED</div>
+                            <div style="color: #3fb950; font-size: 20px; font-weight: 700;">${inventory.enabled || 0}</div>
+                        </div>
+                        <div style="background: #0d1117; padding: 8px; border-radius: 6px; text-align: center;">
+                            <div style="color: #8b949e; font-size: 9px; margin-bottom: 4px;">TEMPLATES</div>
+                            <div style="color: #58a6ff; font-size: 20px; font-weight: 700;">${inventory.templates?.length || 0}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Category Breakdown -->
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px;">
+                    <h4 style="margin: 0 0 10px 0; color: #a371f7; font-size: 11px; text-transform: uppercase;">📂 By Category</h4>
+                    <div style="display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto;">
+                        ${categoryRows || '<div style="color: #8b949e; font-size: 11px; text-align: center;">No categories</div>'}
+                    </div>
+                </div>
+
+                <!-- Template Breakdown -->
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px;">
+                    <h4 style="margin: 0 0 10px 0; color: #58a6ff; font-size: 11px; text-transform: uppercase;">📋 By Template</h4>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        ${templateRows || '<div style="color: #8b949e; font-size: 11px; text-align: center;">No templates</div>'}
+                    </div>
+                </div>
+
+                <!-- Coverage Gaps -->
+                ${allGaps.length > 0 ? `
+                    <div style="background: #161b22; border: 1px solid #f85149; border-radius: 8px; padding: 12px;">
+                        <h4 style="margin: 0 0 10px 0; color: #f85149; font-size: 11px; text-transform: uppercase;">⚠️ Coverage Gaps (${allGaps.length})</h4>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            ${gapRows}
+                        </div>
+                    </div>
+                ` : `
+                    <div style="background: #1c2d1c; border: 1px solid #238636; border-radius: 8px; padding: 12px; text-align: center;">
+                        <div style="font-size: 20px; margin-bottom: 6px;">✅</div>
+                        <div style="color: #3fb950; font-weight: 600; font-size: 12px;">No Coverage Gaps</div>
+                    </div>
+                `}
+
+                <!-- Unmatched Phrases -->
+                <div style="background: #161b22; border: 1px solid #f0883e; border-radius: 8px; padding: 12px;">
+                    <h4 style="margin: 0 0 10px 0; color: #f0883e; font-size: 11px; text-transform: uppercase;">🔍 Unmatched Customer Phrases (Last 7 Days)</h4>
+                    <div style="display: flex; flex-direction: column; gap: 6px; max-height: 250px; overflow-y: auto;">
+                        ${unmatchedRows}
+                    </div>
+                </div>
+
+                <!-- Recommendations -->
+                <div style="background: #161b22; border: 1px solid #a371f7; border-radius: 8px; padding: 12px;">
+                    <h4 style="margin: 0 0 10px 0; color: #a371f7; font-size: 11px; text-transform: uppercase;">💡 Recommendations</h4>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        ${recommendationRows}
+                    </div>
+                </div>
+
+                <!-- Back Button -->
+                <button onclick="window.aiTestConsole.loadWiringDiagnostics()" 
+                    style="width: 100%; padding: 10px; background: #21262d; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; cursor: pointer; font-size: 12px; font-weight: 600;">
+                    ← Back to Wiring
+                </button>
+            </div>
+        `;
     }
 
     /**
