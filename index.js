@@ -314,8 +314,10 @@ console.log('[INIT] ✅ Sentry middleware configured');
 
 // --- Middleware ---
 console.log('[INIT] Setting up Express middleware...');
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+const BODY_PARSER_LIMIT = process.env.BODY_PARSER_LIMIT || '5mb';
+console.log(`[INIT] Using body parser limit: ${BODY_PARSER_LIMIT}`);
+app.use(express.json({ limit: BODY_PARSER_LIMIT }));
+app.use(express.urlencoded({ extended: false, limit: BODY_PARSER_LIMIT }));
 
 // SESSION CONFIGURATION FOR JWT
 console.log('🔍 SESSION CHECKPOINT 1: Starting session configuration in index.js...');
@@ -1095,10 +1097,50 @@ setInterval(() => {
 // ============================================================================
 
 app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err.stack);
-    if (!res.headersSent) {
-        res.status(500).json({ message: 'Something broke on the server!' });
+    const requestMeta = {
+        method: req.method,
+        url: req.originalUrl,
+        ip: req.ip,
+        contentLength: req.headers['content-length'] || null
+    };
+    
+    const isBodyTooLarge = err && (err.type === 'entity.too.large' || err.status === 413);
+    const isBadJson = err instanceof SyntaxError && err.status === 400 && 'body' in err;
+    
+    console.error('[ERROR] Unhandled error checkpoint', {
+        message: err?.message || 'Unknown error',
+        type: err?.type || null,
+        status: err?.status || null,
+        ...requestMeta
+    });
+    if (err?.stack) {
+        console.error(err.stack);
+    } else {
+        console.error(err);
     }
+    
+    if (res.headersSent) {
+        return;
+    }
+    
+    if (isBodyTooLarge) {
+        return res.status(413).json({
+            message: 'Request payload too large',
+            details: {
+                limit: err?.limit || null,
+                received: err?.length || null
+            }
+        });
+    }
+    
+    if (isBadJson) {
+        return res.status(400).json({
+            message: 'Invalid JSON payload',
+            details: err?.message || 'Malformed JSON'
+        });
+    }
+    
+    res.status(500).json({ message: 'Something broke on the server!' });
 });
 
 // --- Sentry Error Handler (must be last) ---
