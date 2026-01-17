@@ -411,6 +411,17 @@ class ScenarioPoolService {
                 categories.forEach(category => {
                     const scenarios = category.scenarios || [];
                     
+                    // DEBUG: Log first category structure to diagnose "Uncategorized" issue
+                    if (scenarioCount === 0 && categories.length > 0) {
+                        logger.debug('[SCENARIO POOL] First category structure:', {
+                            categoryId: category.id,
+                            categoryName: category.name,
+                            _id: category._id,
+                            hasScenarios: scenarios.length,
+                            fullCategory: JSON.stringify(category).substring(0, 200)
+                        });
+                    }
+                    
                     scenarios.forEach(scenario => {
                         // FILTER: Only active scenarios
                         // isActive is the single source of truth: true = load it, false = don't
