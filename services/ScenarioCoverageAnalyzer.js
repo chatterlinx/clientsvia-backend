@@ -50,7 +50,7 @@ class ScenarioCoverageAnalyzer {
             
             // DEBUG: Log first scenario to see structure
             if (enabledScenarios.length > 0) {
-                logger.debug('[SCENARIO COVERAGE] Sample scenario structure:', {
+                logger.info('[SCENARIO COVERAGE] Sample scenario structure:', {
                     scenarioId: enabledScenarios[0].scenarioId,
                     name: enabledScenarios[0].name,
                     categoryName: enabledScenarios[0].categoryName,
