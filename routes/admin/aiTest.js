@@ -432,8 +432,11 @@ RULES:
 - If response is poor/wrong, qualityScore = 0-59`;
 
         // Call OpenAI for enhanced supervisor analysis
-        const { getOpenAIClient } = require('../../utils/openaiClient');
-        const openai = getOpenAIClient();
+        const openai = require('../../config/openai');
+        
+        if (!openai) {
+            throw new Error('OpenAI client not configured');
+        }
         
         const completion = await openai.chat.completions.create({
             model: 'gpt-4o',
