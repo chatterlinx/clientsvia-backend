@@ -1442,6 +1442,10 @@ class AITestConsole {
         const rootCause = analysis.rootCause || {};
         const missingTriggers = analysis.missingTriggers || [];
         const copyPasteFix = analysis.copyPasteFix || {};
+        const triggersToAddText = (copyPasteFix.triggersToAdd || []).join('\n');
+        const encodedTriggersToAdd = encodeURIComponent(triggersToAddText);
+        const responseTemplateText = copyPasteFix.responseTemplate || '';
+        const encodedResponseTemplate = encodeURIComponent(responseTemplateText);
         
         let scoreColor = '#ef4444'; // red
         let scoreLabel = 'NEEDS WORK';
@@ -1558,7 +1562,7 @@ class AITestConsole {
                             <div style="font-family: monospace; color: #d9f99d; font-size: 10px; line-height: 1.6;">
                                 ${copyPasteFix.triggersToAdd.map(t => `├─ "${t}"`).join('<br>')}
                             </div>
-                            <button onclick="navigator.clipboard.writeText('${copyPasteFix.triggersToAdd.join('\\n')}'); alert('✅ Triggers copied to clipboard!')" 
+                            <button type="button" data-copy-text="${encodedTriggersToAdd}" data-copy-label="Triggers"
                                 style="margin-top: 6px; padding: 4px 8px; background: #22c55e; color: #000; border: none; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer;">
                                 📋 Copy Triggers
                             </button>
@@ -1571,7 +1575,7 @@ class AITestConsole {
                             <div style="color: #d9f99d; font-size: 11px; line-height: 1.6; font-style: italic;">
                                 "${copyPasteFix.responseTemplate}"
                             </div>
-                            <button onclick="navigator.clipboard.writeText(\`${copyPasteFix.responseTemplate.replace(/`/g, '\\`')}\`); alert('✅ Response template copied!')" 
+                            <button type="button" data-copy-text="${encodedResponseTemplate}" data-copy-label="Response template"
                                 style="margin-top: 6px; padding: 4px 8px; background: #22c55e; color: #000; border: none; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer;">
                                 📋 Copy Response
                             </button>
@@ -1610,6 +1614,21 @@ class AITestConsole {
         `;
         
         container.appendChild(bubble);
+        bubble.querySelectorAll('[data-copy-text]').forEach(button => {
+            button.addEventListener('click', async () => {
+                const encodedText = button.getAttribute('data-copy-text') || '';
+                const label = button.getAttribute('data-copy-label') || 'Text';
+                const textToCopy = decodeURIComponent(encodedText);
+                
+                try {
+                    await navigator.clipboard.writeText(textToCopy);
+                    alert(`✅ ${label} copied to clipboard!`);
+                } catch (error) {
+                    console.error('[AI Test] Copy failed:', error);
+                    alert('❌ Copy failed. Please try again.');
+                }
+            });
+        });
         container.scrollTop = container.scrollHeight;
     }
     
