@@ -40,6 +40,7 @@ const GlobalInstantResponseTemplate = require('../../models/GlobalInstantRespons
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const CacheHelper = require('../../utils/cacheHelper');
 const { enhanceTemplate } = require('../../services/globalAIBrainEnhancer');
+const { detectScenarioType, normalizeScenarioType } = require('../../utils/scenarioTypeDetector');
 
 // Middleware alias for consistency
 const adminOnly = requireRole('admin');
@@ -1552,6 +1553,12 @@ router.post('/:templateId/categories/:categoryId/scenarios', async (req, res) =>
             scenarioData.scenarioId = `scenario-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         }
 
+        const normalizedScenarioType = normalizeScenarioType(scenarioData.scenarioType);
+        const inferredScenarioType = normalizedScenarioType || detectScenarioType({
+            name: scenarioData.name,
+            triggers: scenarioData.triggers || []
+        }, category.name);
+
         // Set defaults for V2.0 fields
         const newScenario = {
             scenarioId: scenarioData.scenarioId,
@@ -1564,6 +1571,7 @@ router.post('/:templateId/categories/:categoryId/scenarios', async (req, res) =>
             cooldownSeconds: scenarioData.cooldownSeconds || 0,
             language: scenarioData.language || 'auto',
             channel: scenarioData.channel || 'any',
+            scenarioType: inferredScenarioType,
             
             // Matching
             triggers: scenarioData.triggers || [],
@@ -1707,6 +1715,19 @@ router.patch('/:templateId/categories/:categoryId/scenarios/:scenarioId', async 
         if (updates.fullReplies) {
             scenario.fullReplies = updates.fullReplies;
             changes.push('updated full replies');
+        }
+
+        if (updates.scenarioType !== undefined) {
+            const normalizedScenarioType = normalizeScenarioType(updates.scenarioType);
+            const inferredScenarioType = normalizedScenarioType || detectScenarioType({
+                name: updates.name || scenario.name,
+                triggers: updates.triggers || scenario.triggers || []
+            }, category.name);
+
+            if (scenario.scenarioType !== inferredScenarioType) {
+                changes.push(`scenarioType: "${scenario.scenarioType || 'UNKNOWN'}" → "${inferredScenarioType}"`);
+                scenario.scenarioType = inferredScenarioType;
+            }
         }
 
         // Update all other fields

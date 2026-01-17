@@ -21,85 +21,11 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
+const { detectScenarioType } = require('../utils/scenarioTypeDetector');
 
 const DRY_RUN = process.env.DRY_RUN === 'true';
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// SCENARIO TYPE DETECTION (Same as goldenAutofill.js)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const TYPE_KEYWORDS = {
-    EMERGENCY: [
-        'emergency', 'urgent', 'gas leak', 'no heat', 'no cool', 'freezing',
-        'flooding', 'dangerous', 'carbon monoxide', 'smoke', 'fire', 'water damage',
-        'broken pipe', 'no power', 'sparking', 'electrical shock', 'burning smell',
-        'ceiling leak', 'sewage', 'overflow', 'total failure', 'not turning on'
-    ],
-    BOOKING: [
-        'book', 'schedule', 'appointment', 'reschedule', 'cancel appointment',
-        'someone come out', 'send a tech', 'technician visit', 'set up service',
-        'when available', 'next available', 'time slot', 'calendar'
-    ],
-    TRANSFER: [
-        'speak to human', 'talk to someone', 'real person', 'manager',
-        'supervisor', 'service advisor', 'representative', 'transfer me',
-        'connect me', 'let me talk to'
-    ],
-    SMALL_TALK: [
-        'how are you', 'thank you', 'thanks', 'goodbye', 'bye', 'have a nice day',
-        'wrong number', 'wrong department', 'sorry', 'oops', 'never mind',
-        'just kidding', 'hello', 'hi there', 'good morning', 'good afternoon'
-    ],
-    BILLING: [
-        'billing', 'invoice', 'invoicing', 'bill', 'payment', 'pay', 'paid',
-        'charge', 'charges', 'refund', 'refunded', 'credit', 'debit', 'receipt',
-        'account balance', 'statement', 'past due', 'collections', 'finance'
-    ],
-    TROUBLESHOOT: [
-        'troubleshoot', 'troubleshooting', 'diagnose', 'diagnostic', 'help me fix',
-        'not working', 'stopped working', 'keeps', 'won\'t', 'will not', 'why is',
-        'error code', 'making noise', 'leaking', 'rattling', 'smells', 'smell',
-        'intermittent', 'reset', 'breaker', 'fuse',
-        // HVAC/common field-service phrasing
-        'fan not spinning', 'not spinning', 'outdoor fan', 'condenser fan', 'outdoor unit', 'condenser',
-        'ac not cooling', 'not cooling', 'no cooling', 'not blowing cold', 'not blowing',
-        'compressor', 'capacitor', 'contactors', 'contactor',
-        // Additional HVAC terms
-        'thermostat', 'furnace', 'air handler', 'coil', 'frozen', 'ice', 'icing',
-        'refrigerant', 'freon', 'low charge', 'high pressure', 'low pressure',
-        'ductwork', 'duct', 'vents', 'airflow', 'filter', 'blower'
-    ],
-    FAQ: [
-        'pricing', 'cost', 'how much', 'warranty', 'financing', 'membership',
-        'service area', 'do you service', 'accept credit',
-        'hours', 'open', 'closed', 'location', 'address', 'reviews'
-    ],
-    SYSTEM: [
-        'hold please', 'one moment', 'got it', 'understood', 'okay',
-        'processing', 'looking up', 'checking'
-    ]
-};
-
-function detectScenarioType(scenario, categoryName) {
-    if (scenario.scenarioType && scenario.scenarioType !== 'UNKNOWN') {
-        return scenario.scenarioType;
-    }
-    
-    const searchText = [
-        (scenario.name || '').toLowerCase(),
-        (categoryName || '').toLowerCase(),
-        ...(scenario.triggers || []).map(t => t.toLowerCase())
-    ].join(' ');
-    
-    for (const [type, keywords] of Object.entries(TYPE_KEYWORDS)) {
-        if (keywords.some(k => searchText.includes(k))) {
-            return type;
-        }
-    }
-    
-    // Default to FAQ (never return UNKNOWN)
-    return 'FAQ';
-}
+// Scenario type detection lives in utils/scenarioTypeDetector.js
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN SCRIPT
