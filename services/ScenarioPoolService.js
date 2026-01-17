@@ -389,7 +389,12 @@ class ScenarioPoolService {
                     continue;
                 }
                 
-                logger.debug(`📖 [SCENARIO POOL] Processing template: ${template.name}`);
+                // DEBUG: Log template state
+                logger.info(`📖 [SCENARIO POOL] Processing template: ${template.name}`, {
+                    isPublished: template.isPublished,
+                    isActive: template.isActive,
+                    categoryCount: (template.categories || []).length
+                });
                 
                 templatesUsed.push({
                     templateId: template._id.toString(),
@@ -413,14 +418,19 @@ class ScenarioPoolService {
                     
                     // DEBUG: Log first category structure to diagnose "Uncategorized" issue
                     if (scenarioCount === 0 && categories.length > 0) {
-                        logger.debug('[SCENARIO POOL] First category structure:', {
+                        logger.info('[SCENARIO POOL] First category:', {
                             categoryId: category.id,
                             categoryName: category.name,
-                            _id: category._id,
-                            hasScenarios: scenarios.length,
-                            fullCategory: JSON.stringify(category).substring(0, 200)
+                            scenarioCount: scenarios.length,
+                            firstScenario: scenarios[0] ? {
+                                name: scenarios[0].name,
+                                status: scenarios[0].status,
+                                isActive: scenarios[0].isActive
+                            } : null
                         });
                     }
+                    
+                    let activeInCategory = 0;
                     
                     scenarios.forEach(scenario => {
                         // FILTER: Only active scenarios
@@ -428,6 +438,8 @@ class ScenarioPoolService {
                         if (scenario.isActive !== true) {
                             return;
                         }
+                        
+                        activeInCategory++;
                         
                         // 🎯 PHASE A.1: Ensure all Phase A.1 fields are normalized and present
                         const normalizedScenario = this._ensurePhaseA1Fields(scenario);
@@ -505,9 +517,14 @@ class ScenarioPoolService {
                         
                         scenarioCount++;
                     });
+                    
+                    // DEBUG: Log how many active scenarios in this category
+                    if (activeInCategory > 0) {
+                        logger.info(`[SCENARIO POOL] Category "${category.name || 'Uncategorized'}": ${activeInCategory} active scenarios (${scenarios.length} total)`);
+                    }
                 });
-                
-                logger.debug(`  ✅ Loaded ${scenarioCount} live scenarios from ${categories.length} categories`);
+
+                logger.info(`  ✅ Loaded ${scenarioCount} scenarios from ${categories.length} categories`);
                 
             } catch (error) {
                 logger.error(`❌ [SCENARIO POOL] Error loading template ${ref.templateId}:`, error);
