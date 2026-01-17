@@ -468,6 +468,7 @@ function registerRoutes(routes) {
     // V2: Legacy /api/agent route removed - using /api/company/:companyId/agent-settings V2 route
     app.use('/api/auth', routes.v2AuthRoutes); // V2: User authentication and JWT token management
     app.use('/api/admin', routes.adminRoutes);
+    app.use('/api/debug', require('./routes/debug')); // 🐛 Debug endpoints (force reload, diagnostics)
     app.use('/api/control-plane', routes.controlPlaneRegistryRoutes); // 📋 Control Plane Schema Registry (Self-describing)
     app.use('/api/admin/global-instant-responses', routes.globalInstantResponsesRoutes); // Global AI Brain Management
     app.use('/api/trade-knowledge/templates', routes.templateDebugExportRoutes); // 🔍 Template Debug Export (Read-Only)
