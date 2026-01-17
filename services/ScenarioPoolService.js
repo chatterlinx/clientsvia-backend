@@ -412,13 +412,11 @@ class ScenarioPoolService {
                     const scenarios = category.scenarios || [];
                     
                     scenarios.forEach(scenario => {
-                        // FILTER: Only 'live' and active scenarios
-                        // TEMPORARY: Relaxed filter for testing (allow draft + live)
-                        // TODO: Revert after Global Template scenarios are set to 'live'
+                        // FILTER: Only active scenarios
+                        // isActive is the single source of truth: true = load it, false = don't
                         if (scenario.isActive !== true) {
-                            return; // Still require isActive
+                            return;
                         }
-                        // Removed status check - allow both 'draft' and 'live'
                         
                         // 🎯 PHASE A.1: Ensure all Phase A.1 fields are normalized and present
                         const normalizedScenario = this._ensurePhaseA1Fields(scenario);
