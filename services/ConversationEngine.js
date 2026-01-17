@@ -2264,6 +2264,9 @@ async function processTurn({
             // V51: Add templateReferences for wiring diagnostic
             templateReferences = null,
             scenarioCount = null,
+            scenarioPoolCount = null,
+            scenarioToolCount = null,
+            killSwitches = null,
             // V68: Add spelling variant debug for troubleshooting
             spellingVariantDebug = null,
             promptGuards = null,
@@ -2330,6 +2333,11 @@ async function processTurn({
             // This allows WiringDiagnosticService to see actual template state
             templateReferences: Array.isArray(templateReferences) ? templateReferences : [],
             scenarioCount: typeof scenarioCount === 'number' ? scenarioCount : 0,
+            scenarioPoolCount: Number.isFinite(scenarioPoolCount) ? scenarioPoolCount : null,
+            scenarioToolCount: Number.isFinite(scenarioToolCount)
+                ? scenarioToolCount
+                : (Number.isFinite(scenarios?.toolCount) ? scenarios.toolCount : null),
+            killSwitches: killSwitches || null,
             
             // V68: Spelling variant debug info for troubleshooting
             spellingVariantDebug: spellingVariantDebug || null,
@@ -9266,6 +9274,10 @@ async function processTurn({
                     scenarioType: s.scenarioType || null
                 }))
                 : [];
+            const scenarioToolCount = scenarioToolsExpanded.length;
+            const scenarioPoolCount = Number.isFinite(scenarioRetrieval?.totalAvailable)
+                ? scenarioRetrieval.totalAvailable
+                : null;
 
             // V51: Get templateReferences from company for wiring diagnostic
             const templateRefs = company?.aiAgentSettings?.templateReferences || [];
@@ -9316,13 +9328,16 @@ async function processTurn({
                     stateChanges: dynamicFlowResult?.stateChanges || {}
                 },
                 scenarios: {
-                    toolCount: scenarioToolsExpanded.length,
+                    toolCount: scenarioToolCount,
                     tools: scenarioToolsExpanded
                 },
                 blackBox: { callId: session._id.toString(), source: sourceTruth },
                 // V51: Include templateReferences for wiring diagnostic
                 templateReferences: enabledTemplateRefs,
-                scenarioCount: scenarioToolsExpanded.length,
+                scenarioCount: Number.isFinite(scenarioPoolCount) ? scenarioPoolCount : scenarioToolCount,
+                scenarioPoolCount,
+                scenarioToolCount,
+                killSwitches,
                 // V68: Include spelling variant debug data
                 spellingVariantDebug: spellingVariantDebugData,
                 promptGuards: promptGuardsSnapshot,

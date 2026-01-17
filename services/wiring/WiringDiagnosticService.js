@@ -223,6 +223,12 @@ function extractEvidence(debugSnapshot) {
     const bookingConfig = debugSnapshot.bookingConfig || {};
     const bookingSlotIds = Array.isArray(debugSnapshot.booking?.slotIds) ? debugSnapshot.booking.slotIds : [];
     
+    const scenarioPoolCount = debugSnapshot.scenarioPoolCount ?? v22.scenarioPoolCount ?? null;
+    const scenarioToolCount = debugSnapshot.scenarioToolCount ?? debugSnapshot.scenarios?.toolCount ?? null;
+    const resolvedScenarioCount = Number.isFinite(scenarioPoolCount)
+        ? scenarioPoolCount
+        : (debugSnapshot.scenarioCount ?? v22.scenarioCount ?? null);
+    
     return {
         // Response source
         responseSource: debugSnapshot.routing?.responseSource ||
@@ -235,14 +241,23 @@ function extractEvidence(debugSnapshot) {
         killSwitches: {
             forceLLMDiscovery: v22.forceLLMDiscovery || 
                               debugSnapshot.forceLLMDiscovery ||
+                              debugSnapshot.killSwitches?.forceLLMDiscovery ||
                               v22.killSwitches?.forceLLMDiscovery,
             disableScenarioAutoResponses: v22.disableScenarioAutoResponses ||
                                           debugSnapshot.disableScenarioAutoResponses ||
-                                          v22.killSwitches?.disableScenarioAutoResponses
+                                          debugSnapshot.killSwitches?.disableScenarioAutoResponses ||
+                                          v22.killSwitches?.disableScenarioAutoResponses,
+            autoReplyAllowedScenarioTypes: Array.isArray(debugSnapshot.killSwitches?.autoReplyAllowedScenarioTypes)
+                ? debugSnapshot.killSwitches.autoReplyAllowedScenarioTypes
+                : Array.isArray(v22.killSwitches?.autoReplyAllowedScenarioTypes)
+                    ? v22.killSwitches.autoReplyAllowedScenarioTypes
+                    : []
         },
         
         // Scenarios
-        scenarioCount: debugSnapshot.scenarioCount ?? v22.scenarioCount ?? null,
+        scenarioCount: resolvedScenarioCount,
+        scenarioPoolCount: scenarioPoolCount,
+        scenarioToolCount: scenarioToolCount,
         triggersEvaluated: debugSnapshot.triggersEvaluated ?? v22.triggersEvaluated ?? null,
         
         // Templates

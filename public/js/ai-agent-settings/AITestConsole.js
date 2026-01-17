@@ -1031,6 +1031,17 @@ class AITestConsole {
      * Determine the source of an AI response
      */
     getResponseSource(debug, metadata) {
+        const responseSource = debug?.debugSnapshot?.routing?.responseSource || debug?.debugSnapshot?.responseSource || null;
+        if (responseSource === 'OPTION1_LLM_SPEAKS') {
+            return {
+                label: 'LLM (DISCOVERY)',
+                icon: '🤖',
+                color: '#8b5cf6',
+                textColor: 'white',
+                description: 'LLM-led discovery (scenarios are tools)'
+            };
+        }
+
         // Check what generated this response
         if (debug.wasQuickAnswer) {
             return {
@@ -1108,20 +1119,21 @@ class AITestConsole {
         });
 
         // STEP 2: Scenario Loading
-        const scenarioCount = snapshot.scenarioCount ?? routing.scenariosAvailable ?? debug.scenarioCount ?? 0;
+        const scenarioPoolCount = snapshot.scenarioPoolCount ?? snapshot.scenarioCount ?? routing.scenariosAvailable ?? debug.scenarioCount ?? 0;
+        const scenarioToolCount = snapshot.scenarioToolCount ?? snapshot.scenarios?.toolCount ?? null;
         const templatesLinked = snapshot.templateReferences ?? debug.templateReferencesCount ?? 0;
         
         if (mode !== 'BOOKING') {
             steps.push({
                 icon: '📚',
                 label: 'Scenarios',
-                value: scenarioCount > 0 ? `${scenarioCount} loaded` : '0 loaded',
-                color: scenarioCount > 0 ? '#3fb950' : '#f85149',
-                detail: scenarioCount === 0 && templatesLinked > 0 
+                value: scenarioPoolCount > 0 ? `${scenarioPoolCount} loaded` : '0 loaded',
+                color: scenarioPoolCount > 0 ? '#3fb950' : '#f85149',
+                detail: scenarioPoolCount === 0 && templatesLinked > 0 
                     ? `⚠️ ${templatesLinked} templates linked but 0 scenarios loaded` 
-                    : scenarioCount === 0 
+                    : scenarioPoolCount === 0 
                     ? '⚠️ No templates linked'
-                    : `${templatesLinked} templates → ${scenarioCount} scenarios`
+                    : `${templatesLinked} templates → ${scenarioPoolCount} scenarios${Number.isFinite(scenarioToolCount) ? ` (tools: ${scenarioToolCount})` : ''}`
             });
         }
 
@@ -1134,11 +1146,13 @@ class AITestConsole {
                                routing.option2_ScenarioMatch ? 'SCENARIO' : 'LLM');
         
         let responseDetail = '';
-        if (responseSource === 'SCENARIO' || responseSource === 'OPTION1_LLM_SPEAKS') {
+        if (responseSource === 'SCENARIO') {
             const matched = routing.matchedScenarioId || debug.matchedScenarioId || 'Unknown';
             responseDetail = `Matched: ${matched}`;
+        } else if (responseSource === 'OPTION1_LLM_SPEAKS') {
+            responseDetail = `LLM-led discovery (tools: ${Number.isFinite(scenarioToolCount) ? scenarioToolCount : 'N/A'})`;
         } else if (responseSource === 'LLM' || responseSource === 'FALLBACK') {
-            responseDetail = scenarioCount === 0 ? 'No scenarios to match' : 'No scenario match found';
+            responseDetail = scenarioPoolCount === 0 ? 'No scenarios to match' : 'No scenario match found';
         } else if (responseSource === 'TRIAGE') {
             responseDetail = 'Matched triage card';
         } else if (responseSource === 'QUICK_ANSWER') {
@@ -1205,7 +1219,8 @@ class AITestConsole {
         const mode = debug.v22BlackBox?.mode || debug.mode || 'DISCOVERY';
         const slotDiag = debug.slotDiagnostics || {};
         const bookingConfig = debug.bookingConfig || {};
-        const scenarioCount = snapshot.scenarioCount ?? routing.scenariosAvailable ?? debug.scenarioCount ?? 0;
+        const scenarioPoolCount = snapshot.scenarioPoolCount ?? snapshot.scenarioCount ?? routing.scenariosAvailable ?? debug.scenarioCount ?? 0;
+        const scenarioToolCount = snapshot.scenarioToolCount ?? snapshot.scenarios?.toolCount ?? null;
         const templatesLinked = snapshot.templateReferences ?? debug.templateReferencesCount ?? 0;
 
         // Determine response source
@@ -1235,12 +1250,13 @@ class AITestConsole {
         // Scenarios (only in non-BOOKING mode)
         if (mode !== 'BOOKING') {
             result.scenarios = {
-                count: scenarioCount,
+                count: scenarioPoolCount,
+                toolCount: Number.isFinite(scenarioToolCount) ? scenarioToolCount : null,
                 templatesLinked: templatesLinked,
-                healthy: scenarioCount > 0,
-                issue: scenarioCount === 0 && templatesLinked > 0 
+                healthy: scenarioPoolCount > 0,
+                issue: scenarioPoolCount === 0 && templatesLinked > 0 
                     ? 'templates_linked_but_no_scenarios' 
-                    : scenarioCount === 0 
+                    : scenarioPoolCount === 0 
                     ? 'no_templates_linked' 
                     : null
             };
@@ -1249,8 +1265,10 @@ class AITestConsole {
         // Decision reason
         if (responseSource === 'SCENARIO') {
             result.decision.reason = 'Matched scenario template';
+        } else if (responseSource === 'OPTION1_LLM_SPEAKS') {
+            result.decision.reason = `LLM-led discovery (tools: ${Number.isFinite(scenarioToolCount) ? scenarioToolCount : 'N/A'})`;
         } else if (responseSource === 'LLM') {
-            result.decision.reason = scenarioCount === 0 ? 'No scenarios available to match' : 'No scenario match found';
+            result.decision.reason = scenarioPoolCount === 0 ? 'No scenarios available to match' : 'No scenario match found';
         } else if (responseSource === 'FALLBACK') {
             result.decision.reason = 'LLM failed, used fallback response';
         } else if (responseSource === 'TRIAGE') {
@@ -2004,9 +2022,15 @@ ${separator}`;
                             <span style="color: #58a6ff; font-weight: 600; margin-left: 4px;">${evidence.mode || 'N/A'}</span>
                         </div>
                         <div style="background: #0d1117; padding: 6px 8px; border-radius: 4px;">
-                            <span style="color: #8b949e;">scenarioCount:</span>
-                            <span style="color: ${(evidence.scenarioCount || 0) > 0 ? '#3fb950' : '#f85149'}; font-weight: 600; margin-left: 4px;">
-                                ${evidence.scenarioCount ?? 'N/A'}
+                            <span style="color: #8b949e;">scenarioPool:</span>
+                            <span style="color: ${(evidence.scenarioPoolCount ?? evidence.scenarioCount ?? 0) > 0 ? '#3fb950' : '#f85149'}; font-weight: 600; margin-left: 4px;">
+                                ${evidence.scenarioPoolCount ?? evidence.scenarioCount ?? 'N/A'}
+                            </span>
+                        </div>
+                        <div style="background: #0d1117; padding: 6px 8px; border-radius: 4px;">
+                            <span style="color: #8b949e;">toolsRetrieved:</span>
+                            <span style="color: ${(evidence.scenarioToolCount ?? 0) > 0 ? '#3fb950' : '#f85149'}; font-weight: 600; margin-left: 4px;">
+                                ${evidence.scenarioToolCount ?? 'N/A'}
                             </span>
                         </div>
                         <div style="background: #0d1117; padding: 6px 8px; border-radius: 4px;">
@@ -2019,6 +2043,14 @@ ${separator}`;
                             <span style="color: #8b949e;">killSwitches:</span>
                             <span style="color: ${evidence.killSwitches?.forceLLMDiscovery || evidence.killSwitches?.disableScenarioAutoResponses ? '#f85149' : '#3fb950'}; font-weight: 600; margin-left: 4px;">
                                 forceLLM=${evidence.killSwitches?.forceLLMDiscovery ?? 'N/A'}, disableAuto=${evidence.killSwitches?.disableScenarioAutoResponses ?? 'N/A'}
+                            </span>
+                        </div>
+                        <div style="background: #0d1117; padding: 6px 8px; border-radius: 4px; grid-column: span 2;">
+                            <span style="color: #8b949e;">allowVerbatimTypes:</span>
+                            <span style="color: #58a6ff; font-weight: 600; margin-left: 4px;">
+                                ${(evidence.killSwitches?.autoReplyAllowedScenarioTypes || []).length > 0
+                                    ? evidence.killSwitches.autoReplyAllowedScenarioTypes.join(', ')
+                                    : 'N/A'}
                             </span>
                         </div>
                     </div>
