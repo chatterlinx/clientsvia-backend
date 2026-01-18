@@ -4317,6 +4317,61 @@ async function processTurn({
                         confirmationSlotPre
                     });
                 } else {
+                // ═══════════════════════════════════════════════════════════════════
+                // 🆕 MID-BOOKING INTERRUPT TRACKING (UI-CONTROLLED)
+                // ═══════════════════════════════════════════════════════════════════
+                // Track interrupt count and offer transfer if max exceeded.
+                // Prevents callers from going on endless tangents.
+                // ═══════════════════════════════════════════════════════════════════
+                const bookingInterruptCfg = company.aiAgentSettings?.frontDeskBehavior?.bookingInterruption || {};
+                const maxInterruptsBeforeTransfer = Number.isFinite(bookingInterruptCfg.maxInterruptsBeforeTransfer)
+                    ? bookingInterruptCfg.maxInterruptsBeforeTransfer
+                    : 3;
+                
+                // Track interrupt count in session
+                session.bookingInterruptCount = (session.bookingInterruptCount || 0) + 1;
+                
+                log('📝 BOOKING INTERRUPT TRACKING', {
+                    interruptCount: session.bookingInterruptCount,
+                    maxBeforeTransfer: maxInterruptsBeforeTransfer,
+                    allowedCategories: bookingInterruptCfg.allowedCategories || []
+                });
+                
+                // Check if we've exceeded max interrupts - offer transfer
+                if (maxInterruptsBeforeTransfer > 0 && session.bookingInterruptCount > maxInterruptsBeforeTransfer) {
+                    const transferOfferPrompt = bookingInterruptCfg.transferOfferPrompt ||
+                        "I want to make sure I'm helping you the best way I can. Would you like me to connect you with someone who can answer all your questions, or should we continue with the scheduling?";
+                    
+                    log('⚠️ MAX BOOKING INTERRUPTS EXCEEDED - OFFERING TRANSFER', {
+                        interruptCount: session.bookingInterruptCount,
+                        maxBeforeTransfer: maxInterruptsBeforeTransfer
+                    });
+                    
+                    aiResult = {
+                        reply: transferOfferPrompt,
+                        conversationMode: 'booking',
+                        intent: 'TRANSFER_OFFER_MAX_INTERRUPTS',
+                        nextGoal: 'AWAIT_TRANSFER_DECISION',
+                        filledSlots: currentSlots,
+                        signals: { 
+                            wantsBooking: true,
+                            consentGiven: true,
+                            maxInterruptsReached: true,
+                            offeringTransfer: true
+                        },
+                        latencyMs: Date.now() - aiStartTime,
+                        tokensUsed: 0,
+                        fromStateMachine: true,
+                        mode: 'BOOKING',
+                        debug: {
+                            source: 'BOOKING_MAX_INTERRUPTS_TRANSFER_OFFER',
+                            interruptCount: session.bookingInterruptCount,
+                            maxBeforeTransfer: maxInterruptsBeforeTransfer
+                        }
+                    };
+                    break BOOKING_MODE;
+                }
+                
                 // Caller went off-rails during booking (asked a question, etc.)
                 // LLM handles it, then returns to booking slot
                 log('CHECKPOINT 9c: 🔄 Booking interruption - checking cheat sheets first');

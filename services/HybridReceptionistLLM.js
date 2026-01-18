@@ -612,7 +612,10 @@ class HybridReceptionistLLM {
                     maxSentences: Number.isFinite(interruptionCfgRaw.maxSentences) ? interruptionCfgRaw.maxSentences : 2,
                     shortClarificationPatterns: Array.isArray(interruptionCfgRaw.shortClarificationPatterns)
                         ? interruptionCfgRaw.shortClarificationPatterns
-                        : []
+                        : [],
+                    // 🆕 Configurable return-to-slot phrasing
+                    returnToSlotPrompt: interruptionCfgRaw.returnToSlotPrompt || 'Now, back to scheduling — {slotQuestion}',
+                    returnToSlotShort: interruptionCfgRaw.returnToSlotShort || 'So, {slotQuestion}'
                 };
 
                 const promptKeys = {
@@ -654,7 +657,7 @@ class HybridReceptionistLLM {
                     return promptTexts.ackShort || promptTexts.genericAck || '';
                 };
 
-                const buildFinalReply = (ackText) => {
+                const buildFinalReply = (ackText, isShortAnswer = false) => {
                     let ack = ackText || '';
                     if (interruptionCfg.oneSlotPerTurn && returnToQuestion) {
                         ack = removeQuestionSentences(ack, returnToQuestion);
@@ -667,14 +670,25 @@ class HybridReceptionistLLM {
                         ack = applyProhibitedPhrases(ack, prohibitPhrases);
                     }
                     let reply = ack.trim();
+                    
+                    // 🆕 Use configurable return-to-slot phrasing
                     if (interruptionCfg.forceReturnToQuestionAsLastLine && returnToQuestion) {
-                        reply = reply ? `${reply}\n\n${returnToQuestion}` : returnToQuestion;
+                        const slotLabel = enterpriseContext.activeSlotLabel || '';
+                        const returnTemplate = isShortAnswer
+                            ? interruptionCfg.returnToSlotShort
+                            : interruptionCfg.returnToSlotPrompt;
+                        const returnPhrase = returnTemplate
+                            .replace('{slotQuestion}', returnToQuestion)
+                            .replace('{slotLabel}', slotLabel)
+                            .replace('{callerName}', nameValue || '');
+                        reply = reply ? `${reply}\n\n${returnPhrase}` : returnPhrase;
                     }
                     return reply.trim();
                 };
 
                 if (interruptionCfg.enabled && isShortClarification && returnToQuestion) {
-                    const quickReply = buildFinalReply(buildAck());
+                    // Short clarification = use short return-to-slot phrasing
+                    const quickReply = buildFinalReply(buildAck(), true);
                     const guarded = this.applyForbiddenPhrasesToReply(
                         this.applyVocabularyGuardrailsToReply(quickReply, company).reply,
                         company

@@ -395,7 +395,13 @@ class FrontDeskBehaviorManager {
                 forceReturnToQuestionAsLastLine: true,
                 allowEmpathyLanguage: false,
                 maxSentences: 2,
-                shortClarificationPatterns: ['mark?', 'yes?', 'hello?', 'what?']
+                shortClarificationPatterns: ['mark?', 'yes?', 'hello?', 'what?'],
+                // 🆕 Mid-booking interruption handling
+                allowedCategories: ['FAQ', 'HOURS', 'SERVICE_AREA', 'PRICING', 'SMALL_TALK', 'EMERGENCY'],
+                maxInterruptsBeforeTransfer: 3,
+                transferOfferPrompt: "I want to make sure I'm helping you the best way I can. Would you like me to connect you with someone who can answer all your questions, or should we continue with the scheduling?",
+                returnToSlotPrompt: "Now, back to scheduling — {slotQuestion}",
+                returnToSlotShort: "So, {slotQuestion}"
             },
             emotionResponses: {
                 stressed: { enabled: true, acknowledgments: ["I understand, that sounds stressful."], followUp: "Let me help you get this taken care of." },
@@ -1963,7 +1969,94 @@ class FrontDeskBehaviorManager {
                     </div>
                 </div>
 
-                <div style="display:grid; gap:12px; background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:16px;">
+                <!-- ═══════════════════════════════════════════════════════════════════════ -->
+                <!-- 🆕 MID-BOOKING INTERRUPTION HANDLING - Humans go off on tangents! -->
+                <!-- ═══════════════════════════════════════════════════════════════════════ -->
+                <div style="background:#0d1117; border:2px solid #f0883e; border-radius:8px; padding:16px; margin-top:16px;">
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+                        <span style="font-size:20px;">🧠</span>
+                        <div>
+                            <h4 style="margin:0; color:#f0883e;">Mid-Booking Interruption Handling</h4>
+                            <p style="margin:4px 0 0 0; color:#8b949e; font-size:12px;">
+                                When caller asks questions mid-booking, AI answers briefly then returns to the slot.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div style="display:grid; gap:14px;">
+                        <!-- Allowed Interrupt Categories -->
+                        <div>
+                            <label style="display:block; margin-bottom:8px; color:#c9d1d9; font-weight:500;">
+                                Allowed Interrupt Categories 
+                                <span style="color:#6e7681; font-weight:normal; font-size:12px;">(uncheck to ignore that type during booking)</span>
+                            </label>
+                            <div style="display:flex; flex-wrap:wrap; gap:10px; background:#161b22; padding:12px; border-radius:6px;">
+                                ${['FAQ', 'HOURS', 'SERVICE_AREA', 'PRICING', 'SMALL_TALK', 'EMERGENCY'].map(cat => {
+                                    const categories = bookingInterruption.allowedCategories || ['FAQ', 'HOURS', 'SERVICE_AREA', 'PRICING', 'SMALL_TALK', 'EMERGENCY'];
+                                    const checked = categories.includes(cat);
+                                    const labels = {
+                                        'FAQ': '❓ FAQ',
+                                        'HOURS': '🕐 Hours',
+                                        'SERVICE_AREA': '📍 Service Area',
+                                        'PRICING': '💰 Pricing',
+                                        'SMALL_TALK': '💬 Small Talk',
+                                        'EMERGENCY': '🚨 Emergency'
+                                    };
+                                    return \`
+                                        <label style="display:flex; align-items:center; gap:6px; padding:6px 10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; cursor:pointer;">
+                                            <input type="checkbox" class="fdb-interrupt-category" data-category="\${cat}" \${checked ? 'checked' : ''} style="accent-color:#58a6ff;">
+                                            <span style="color:#c9d1d9; font-size:13px;">\${labels[cat] || cat}</span>
+                                        </label>
+                                    \`;
+                                }).join('')}
+                            </div>
+                            <p style="margin:6px 0 0 0; color:#6e7681; font-size:11px;">
+                                Example: If caller asks "do you service Miami?" mid-booking, AI answers (SERVICE_AREA) then returns to slot.
+                            </p>
+                        </div>
+                        
+                        <!-- Max Interrupts Before Transfer -->
+                        <div style="display:grid; grid-template-columns:200px 1fr; gap:12px; align-items:start;">
+                            <div>
+                                <label style="display:block; margin-bottom:6px; color:#c9d1d9; font-weight:500;">Max Interrupts Before Transfer</label>
+                                <input id="fdb-interrupt-maxBeforeTransfer" type="number" min="0" max="10" 
+                                    value="${Number(bookingInterruption.maxInterruptsBeforeTransfer ?? 3)}"
+                                    style="width:100%; padding:8px; background:#161b22; border:1px solid #30363d; border-radius:6px; color:#c9d1d9;">
+                                <p style="margin:4px 0 0 0; color:#6e7681; font-size:11px;">After this many tangents, offer transfer. (0 = never)</p>
+                            </div>
+                            <div>
+                                <label style="display:block; margin-bottom:6px; color:#c9d1d9; font-weight:500;">Transfer Offer Prompt</label>
+                                <textarea id="fdb-interrupt-transferOffer" rows="2" 
+                                    placeholder="I want to make sure I'm helping you the best way I can..."
+                                    style="width:100%; padding:10px; background:#161b22; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; resize:vertical;">${this.escapeHtml(bookingInterruption.transferOfferPrompt || "I want to make sure I'm helping you the best way I can. Would you like me to connect you with someone who can answer all your questions, or should we continue with the scheduling?")}</textarea>
+                            </div>
+                        </div>
+                        
+                        <!-- Return-to-Slot Phrasing -->
+                        <div>
+                            <label style="display:block; margin-bottom:8px; color:#c9d1d9; font-weight:500;">
+                                Return-to-Slot Phrasing
+                                <span style="color:#6e7681; font-weight:normal; font-size:12px;">Placeholders: {slotQuestion}, {slotLabel}, {callerName}</span>
+                            </label>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                                <div>
+                                    <label style="display:block; margin-bottom:4px; color:#8b949e; font-size:12px;">Standard (after longer answer)</label>
+                                    <textarea id="fdb-interrupt-returnPrompt" rows="2" 
+                                        placeholder="Now, back to scheduling — {slotQuestion}"
+                                        style="width:100%; padding:10px; background:#161b22; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; resize:vertical;">${this.escapeHtml(bookingInterruption.returnToSlotPrompt || "Now, back to scheduling — {slotQuestion}")}</textarea>
+                                </div>
+                                <div>
+                                    <label style="display:block; margin-bottom:4px; color:#8b949e; font-size:12px;">Short (after quick answer)</label>
+                                    <textarea id="fdb-interrupt-returnShort" rows="2" 
+                                        placeholder="So, {slotQuestion}"
+                                        style="width:100%; padding:10px; background:#161b22; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; resize:vertical;">${this.escapeHtml(bookingInterruption.returnToSlotShort || "So, {slotQuestion}")}</textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:grid; gap:12px; background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:16px; margin-top:16px;">
                     <div>
                         <label style="display:block; margin-bottom:6px; color:#c9d1d9; font-weight:500;">System Prompt (Interruption)</label>
                         <input type="text" value="${this.escapeHtml(interruptionKeys.systemHeader)}" disabled
@@ -9009,13 +9102,26 @@ Sean → Shawn, Shaun`;
                 .map(v => v.trim())
                 .filter(Boolean);
 
+            // Collect allowed interrupt categories
+            const allowedCategories = [];
+            document.querySelectorAll('.fdb-interrupt-category:checked').forEach(cb => {
+                const cat = cb.getAttribute('data-category');
+                if (cat) allowedCategories.push(cat);
+            });
+
             this.config.bookingInterruption = {
                 enabled: getChecked('fdb-interrupt-enabled') === true,
                 oneSlotPerTurn: getChecked('fdb-interrupt-oneSlot') !== false,
                 forceReturnToQuestionAsLastLine: getChecked('fdb-interrupt-forceReturn') !== false,
                 allowEmpathyLanguage: getChecked('fdb-interrupt-allowEmpathy') === true,
                 maxSentences: Number(get('fdb-interrupt-maxSentences') || 2),
-                shortClarificationPatterns: shortClarifications
+                shortClarificationPatterns: shortClarifications,
+                // 🆕 Mid-booking interruption handling
+                allowedCategories: allowedCategories.length > 0 ? allowedCategories : ['FAQ', 'HOURS', 'SERVICE_AREA', 'PRICING', 'SMALL_TALK', 'EMERGENCY'],
+                maxInterruptsBeforeTransfer: Number(get('fdb-interrupt-maxBeforeTransfer') || 3),
+                transferOfferPrompt: get('fdb-interrupt-transferOffer') || "I want to make sure I'm helping you the best way I can. Would you like me to connect you with someone who can answer all your questions, or should we continue with the scheduling?",
+                returnToSlotPrompt: get('fdb-interrupt-returnPrompt') || "Now, back to scheduling — {slotQuestion}",
+                returnToSlotShort: get('fdb-interrupt-returnShort') || "So, {slotQuestion}"
             };
 
             this.config.bookingPromptsMap = bookingPromptsMap;

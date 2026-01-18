@@ -2285,13 +2285,61 @@ const companySchema = new mongoose.Schema({
             // ═══════════════════════════════════════════════════════════════
             // BOOKING INTERRUPTION - Slot-safe interruption handling
             // ═══════════════════════════════════════════════════════════════
+            // Handles callers who ask questions mid-booking (FAQ, pricing, etc.)
+            // Answer the question briefly, then return to the exact slot.
+            // ═══════════════════════════════════════════════════════════════
             bookingInterruption: {
                 enabled: { type: Boolean, default: true },
                 oneSlotPerTurn: { type: Boolean, default: true },
                 forceReturnToQuestionAsLastLine: { type: Boolean, default: true },
                 allowEmpathyLanguage: { type: Boolean, default: false },
                 maxSentences: { type: Number, default: 2, min: 1, max: 5 },
-                shortClarificationPatterns: { type: [String], default: ['mark?', 'yes?', 'hello?', 'what?'] }
+                shortClarificationPatterns: { type: [String], default: ['mark?', 'yes?', 'hello?', 'what?'] },
+                
+                // ═══════════════════════════════════════════════════════════════
+                // 🆕 ALLOWED INTERRUPT CATEGORIES
+                // ═══════════════════════════════════════════════════════════════
+                // Which types of questions/scenarios can interrupt booking?
+                // If caller asks something NOT in this list, AI stays on the slot.
+                // Empty array = allow all interruptions (legacy behavior)
+                allowedCategories: {
+                    type: [String],
+                    default: ['FAQ', 'HOURS', 'SERVICE_AREA', 'PRICING', 'SMALL_TALK', 'EMERGENCY']
+                },
+                
+                // ═══════════════════════════════════════════════════════════════
+                // 🆕 MAX INTERRUPTS BEFORE TRANSFER OFFER
+                // ═══════════════════════════════════════════════════════════════
+                // After X interruptions in one booking session, offer to transfer
+                // to a human. Prevents endless tangents.
+                // 0 = never offer transfer (not recommended)
+                maxInterruptsBeforeTransfer: { type: Number, default: 3, min: 0, max: 10 },
+                
+                // What to say when max interrupts is reached
+                // Placeholders: {interruptCount}
+                transferOfferPrompt: {
+                    type: String,
+                    trim: true,
+                    default: "I want to make sure I'm helping you the best way I can. Would you like me to connect you with someone who can answer all your questions, or should we continue with the scheduling?"
+                },
+                
+                // ═══════════════════════════════════════════════════════════════
+                // 🆕 RETURN-TO-SLOT PHRASING
+                // ═══════════════════════════════════════════════════════════════
+                // After answering an interrupt, how does AI return to the slot?
+                // Placeholders: {slotQuestion}, {slotLabel}, {callerName}
+                returnToSlotPrompt: {
+                    type: String,
+                    trim: true,
+                    default: "Now, back to scheduling — {slotQuestion}"
+                },
+                
+                // Shorter variant for quick answers
+                returnToSlotShort: {
+                    type: String,
+                    trim: true,
+                    default: "So, {slotQuestion}"
+                }
             },
 
             // LEGACY: Keep old bookingPrompts for backward compatibility
