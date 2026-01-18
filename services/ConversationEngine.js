@@ -2403,15 +2403,56 @@ async function processTurn({
         });
         
         // ═══════════════════════════════════════════════════════════════════
-        // STEP 1: Load company
+        // STEP 1: Load company (with Redis caching for speed)
         // ═══════════════════════════════════════════════════════════════════
         log('CHECKPOINT 2: Loading company...');
-        const company = await Company.findById(companyId);
         
-        if (!company) {
-            throw new Error(`Company not found: ${companyId}`);
+        // 🚀 SPEED OPTIMIZATION (Jan 18, 2026): Cache company in Redis
+        // Company config rarely changes but is loaded on EVERY turn
+        // Cache saves 30-50ms per turn (MongoDB query latency)
+        const COMPANY_CACHE_TTL = 60; // 1 minute TTL (balance between speed and freshness)
+        const companyCacheKey = `company:${companyId}`;
+        let company = null;
+        let companyFromCache = false;
+        
+        try {
+            const { redisClient } = require('../db');
+            if (redisClient && typeof redisClient.get === 'function') {
+                const cached = await redisClient.get(companyCacheKey);
+                if (cached) {
+                    company = JSON.parse(cached);
+                    companyFromCache = true;
+                    log('CHECKPOINT 2: ✅ Company loaded from REDIS cache', { name: company.companyName });
+                }
+            }
+        } catch (cacheErr) {
+            // Cache miss or error - fall back to MongoDB
+            log('⚠️ Company cache miss/error, falling back to MongoDB');
         }
-        log('CHECKPOINT 2: ✅ Company loaded', { name: company.companyName });
+        
+        // If not in cache, load from MongoDB and cache it
+        if (!company) {
+            company = await Company.findById(companyId);
+            
+            if (!company) {
+                throw new Error(`Company not found: ${companyId}`);
+            }
+            
+            // Cache for future requests
+            try {
+                const { redisClient } = require('../db');
+                if (redisClient && typeof redisClient.setEx === 'function') {
+                    // Convert to plain object for caching (Mongoose doc → JSON)
+                    const companyJson = company.toObject ? company.toObject() : company;
+                    await redisClient.setEx(companyCacheKey, COMPANY_CACHE_TTL, JSON.stringify(companyJson));
+                    log('💾 Company cached in Redis (TTL: 60s)');
+                }
+            } catch (cacheWriteErr) {
+                // Non-critical - continue without caching
+            }
+            
+            log('CHECKPOINT 2: ✅ Company loaded from MongoDB', { name: company.companyName });
+        }
         
         // ═══════════════════════════════════════════════════════════════════
         // STEP 1.5: Load Cheat Sheets (PHASE 1 - Runtime Integration)
