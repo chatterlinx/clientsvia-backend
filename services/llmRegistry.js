@@ -51,8 +51,13 @@ const CONFIG = {
     // gpt-4o = Premium, accurate, expensive
     LLM0_MODEL: process.env.LLM0_MODEL || 'gpt-4o-mini',
     TIER3_MODEL: process.env.TIER3_MODEL || 'gpt-4o-mini',
-    LLM0_TIMEOUT_MS: parseInt(process.env.LLM0_TIMEOUT_MS) || 4000,
-    TIER3_TIMEOUT_MS: parseInt(process.env.TIER3_TIMEOUT_MS) || 5000,
+    // ════════════════════════════════════════════════════════════════════════
+    // 🚨 TIMEOUT: Increased from 4s to 6s on Jan 18, 2026
+    // OpenAI can be slow (2-4s) under load. 4s was causing call failures.
+    // The phone route has its own 8s timeout on top of this.
+    // ════════════════════════════════════════════════════════════════════════
+    LLM0_TIMEOUT_MS: parseInt(process.env.LLM0_TIMEOUT_MS) || 6000,
+    TIER3_TIMEOUT_MS: parseInt(process.env.TIER3_TIMEOUT_MS) || 6000,
     LOG_PROMPTS: process.env.LOG_LLM_PROMPTS === 'true'
 };
 

@@ -2920,6 +2920,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             // ════════════════════════════════════════════════════════════════════════
             const ConversationEngine = require('../services/ConversationEngine');
             
+            // ════════════════════════════════════════════════════════════════════════
+            // 🚨 TIMEOUT: 8 seconds (increased from 4s on Jan 18, 2026)
+            // Root cause: OpenAI gpt-4o-mini can take 2-4s under load, plus ~1s for
+            // scenario matching, session management, etc. 4s was too tight.
+            // ════════════════════════════════════════════════════════════════════════
+            const CONVERSATION_ENGINE_TIMEOUT_MS = parseInt(process.env.CONVERSATION_ENGINE_TIMEOUT_MS) || 8000;
+            
             const engineResult = await Promise.race([
               ConversationEngine.processTurn({
                 companyId: companyID,
@@ -2935,7 +2942,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 includeDebug: false  // No debug for production calls
               }),
               new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('ConversationEngine timeout (4s)')), 4000)
+                setTimeout(() => reject(new Error(`ConversationEngine timeout (${CONVERSATION_ENGINE_TIMEOUT_MS}ms)`)), CONVERSATION_ENGINE_TIMEOUT_MS)
               )
             ]);
             
