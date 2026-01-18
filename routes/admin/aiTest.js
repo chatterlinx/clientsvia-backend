@@ -356,7 +356,7 @@ router.post('/supervisor-analysis', authenticateJWT, async (req, res) => {
                 
                 if (templateId) {
                     const template = await GlobalInstantResponseTemplate.findById(templateId)
-                        .select('fillerWords nlpConfig.fillerWords urgencyKeywords synonymMap nlpConfig.synonyms')
+                        .select('fillerWords nlpConfig.fillerWords urgencyKeywords synonymMap nlpConfig.synonyms categories')
                         .lean();
                     
                     const fillerWords = template?.fillerWords || template?.nlpConfig?.fillerWords || [];

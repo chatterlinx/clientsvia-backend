@@ -174,9 +174,15 @@ class CacheHelper {
                         logger.info(`🔄 [CACHE HELPER] Invalidating live-scenarios cache for ${companies.length} companies using template ${templateId}`);
                         
                         for (const company of companies) {
-                            const companyKey = `live-scenarios:${company._id.toString()}`;
-                            await redisClient.del(companyKey);
-                            logger.debug(`  ✅ Cleared: ${companyKey} (${company.companyName})`);
+                            const companyIdStr = company._id.toString();
+                            const keysToClear = [
+                                `live-scenarios:${companyIdStr}`,
+                                `scenario-pool:${companyIdStr}` // 🔧 ensures runtime matcher sees template edits immediately
+                            ];
+                            for (const k of keysToClear) {
+                                await redisClient.del(k);
+                                logger.debug(`  ✅ Cleared: ${k} (${company.companyName})`);
+                            }
                         }
                     }
                 }
