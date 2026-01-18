@@ -4568,25 +4568,51 @@ async function processTurn({
                             value = (slotIdByType && currentSlots[slotIdByType]) || (slotTypeRequested && currentSlots[slotTypeRequested]) || null;
                         }
 
-                        // Special-case: caller asks "what is my last name" but we don't have a reliable last name yet.
-                        if (slotTypeRequested === 'name' && /\b(last name|surname)\b/i.test(userText || '')) {
+                        // Special-case: caller asks "what is my last name" or "what is my first name"
+                        const askedForLastName = slotTypeRequested === 'name' && /\b(last name|surname)\b/i.test(userText || '');
+                        const askedForFirstName = slotTypeRequested === 'name' && /\b(first name)\b/i.test(userText || '');
+                        
+                        if (askedForLastName || askedForFirstName) {
                             const nameStr = String(currentSlots.name || '').trim();
                             const parts = nameStr ? nameStr.split(/\s+/).filter(Boolean) : [];
                             const hasLast = parts.length >= 2;
                             const first = parts[0] || '';
                             const last = parts.slice(1).join(' ');
-                            const invalidLast = !hasLast || (first && last && first.toLowerCase() === last.toLowerCase());
-
-                            if (invalidLast) {
-                                const lastNameQuestion = slotConfig?.lastNameQuestion || nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
-                                finalReply = String(lastNameQuestion).replace('{firstName}', first);
-                                nextSlotId = 'name';
-                                // Keep booking focused on name collection until last name is captured
-                                session.booking.activeSlot = 'name';
-                                session.booking.activeSlotType = 'name';
-                                recordNamePrompt('missing_last', finalReply);
-                                log('🧾 CONFIRMATION(last name): last name not available - re-asking', { first });
-                                break BOOKING_MODE;
+                            
+                            if (askedForLastName) {
+                                const invalidLast = !hasLast || (first && last && first.toLowerCase() === last.toLowerCase());
+                                
+                                if (invalidLast) {
+                                    // We don't have a valid last name - ask for it
+                                    const lastNameQuestion = slotConfig?.lastNameQuestion || nameSlotConfig?.lastNameQuestion || getMissingConfigPrompt('lastNameQuestion', 'name');
+                                    finalReply = String(lastNameQuestion).replace('{firstName}', first);
+                                    nextSlotId = 'name';
+                                    session.booking.activeSlot = 'name';
+                                    session.booking.activeSlotType = 'name';
+                                    recordNamePrompt('missing_last', finalReply);
+                                    log('🧾 CONFIRMATION(last name): last name not available - re-asking', { first });
+                                    break BOOKING_MODE;
+                                } else {
+                                    // We HAVE a valid last name - return JUST the last name, not full name
+                                    value = last;
+                                    log('🧾 CONFIRMATION(last name): returning last name only', { last, fullName: nameStr });
+                                }
+                            } else if (askedForFirstName) {
+                                if (!first) {
+                                    // We don't have a first name - ask for it
+                                    const firstNameQuestion = slotConfig?.firstNameQuestion || nameSlotConfig?.firstNameQuestion || getMissingConfigPrompt('firstNameQuestion', 'name');
+                                    finalReply = firstNameQuestion;
+                                    nextSlotId = 'name';
+                                    session.booking.activeSlot = 'name';
+                                    session.booking.activeSlotType = 'name';
+                                    recordNamePrompt('missing_first', finalReply);
+                                    log('🧾 CONFIRMATION(first name): first name not available - re-asking');
+                                    break BOOKING_MODE;
+                                } else {
+                                    // We HAVE a first name - return JUST the first name, not full name
+                                    value = first;
+                                    log('🧾 CONFIRMATION(first name): returning first name only', { first, fullName: nameStr });
+                                }
                             }
                         }
 
