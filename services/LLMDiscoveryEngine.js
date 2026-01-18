@@ -191,17 +191,46 @@ class LLMDiscoveryEngine {
                 });
             }
             
+            // ═══════════════════════════════════════════════════════════════════
+            // V2: RETURN TOP MATCH FOR TIER-1 SHORT-CIRCUIT
+            // ═══════════════════════════════════════════════════════════════════
+            // If we have a high-confidence direct match, include the FULL scenario
+            // so ConversationEngine can short-circuit the LLM and use it directly.
+            // ═══════════════════════════════════════════════════════════════════
+            const topMatch = matchResult?.scenario ? {
+                scenarioId: matchResult.scenario.scenarioId || matchResult.scenario._id,
+                name: matchResult.scenario.name,
+                confidence: matchResult.confidence ?? 0,
+                quickReplies: matchResult.scenario.quickReplies || [],
+                fullReplies: matchResult.scenario.fullReplies || [],
+                scenarioType: matchResult.scenario.scenarioType,
+                categoryName: matchResult.scenario.categoryName,
+                priority: matchResult.scenario.priority || 0,
+                // Include triggers for debugging
+                triggers: matchResult.scenario.triggers || []
+            } : null;
+            
             logger.info('[LLM DISCOVERY] ✅ Scenarios retrieved', {
                 count: scenarioSummaries.length,
                 retrievalTimeMs,
-                topScenario: scenarioSummaries[0]?.title
+                topScenario: scenarioSummaries[0]?.title,
+                // V2: Log match info
+                topMatchConfidence: topMatch?.confidence ?? 0,
+                topMatchName: topMatch?.name || null
             });
             
             return {
                 scenarios: scenarioSummaries,
                 retrievalTimeMs,
                 totalAvailable: enabledScenarios.length,
-                effectiveConfigVersion: poolResult?.effectiveConfigVersion || null
+                effectiveConfigVersion: poolResult?.effectiveConfigVersion || null,
+                // ═══════════════════════════════════════════════════════════════
+                // V2: TOP MATCH INFO FOR TIER-1 SHORT-CIRCUIT
+                // ConversationEngine can check topMatchConfidence >= threshold
+                // and use topMatch.quickReplies/fullReplies directly without LLM
+                // ═══════════════════════════════════════════════════════════════
+                topMatch,
+                topMatchConfidence: topMatch?.confidence ?? 0
             };
             
         } catch (error) {

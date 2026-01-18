@@ -6376,9 +6376,25 @@ async function processTurn({
                 
                 // Check if user is responding to a confirmBack question
                 // V37 FIX: Added "absolutely", "definitely", "certainly", "perfect", "exactly", "that's it", "you got it"
-                const userSaysYes = /^(yes|yeah|yep|correct|that's right|right|yup|uh huh|mhm|affirmative|sure|ok|okay|absolutely|definitely|certainly|perfect|exactly|that's it|you got it|sounds good|that works)/i.test(userText.trim());
-                const userSaysNoGeneric = /^(no|nope|nah|that's wrong|wrong|incorrect|not right|that's not right)/i.test(userText.trim());
-                const userSaysTextMe = /\b(text\s*me|send\s*(me\s+)?a?\s*text|text\s*(is\s+)?(fine|good|ok|okay))\b/i.test(userText.trim());
+                // V80 FIX: Also check for affirmations anywhere in text (not just start) because filler removal can leave leading punctuation
+                const userTextClean = userText.trim().replace(/^[,.\s]+/, '').trim(); // Strip leading punctuation from filler removal
+                const userSaysYes = /^(yes|yeah|yep|correct|that's right|right|yup|uh huh|mhm|affirmative|sure|ok|okay|absolutely|definitely|certainly|perfect|exactly|that's it|you got it|sounds good|that works)/i.test(userTextClean);
+                const userSaysNoGeneric = /^(no|nope|nah|that's wrong|wrong|incorrect|not right|that's not right)/i.test(userTextClean);
+                const userSaysTextMe = /\b(text\s*me|send\s*(me\s+)?a?\s*text|text\s*(is\s+)?(fine|good|ok|okay))\b/i.test(userTextClean);
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // V80 FIX: PHONE NUMBER CONFIRMATION PATTERNS
+                // ═══════════════════════════════════════════════════════════════════
+                // When we offered caller ID and user confirms with phrases like:
+                // - "that is a good number"
+                // - "that's a good number"  
+                // - "that number is fine"
+                // - "use that number"
+                // - "the number I'm calling from is fine"
+                // - "that one is fine"
+                // ═══════════════════════════════════════════════════════════════════
+                const phoneConfirmPatterns = /\b(that('s|\s+is)?\s+(a\s+)?(good|fine|correct|ok|okay)|use\s+that(\s+number)?|calling\s+from\s+is\s+(fine|good|ok|okay)|that\s+one(\s+is)?\s+(fine|good|ok|okay)|that\s+number(\s+is)?\s+(fine|good|ok|okay|works)|good\s+number)\b/i;
+                const userConfirmsPhone = phoneConfirmPatterns.test(userTextClean);
                 
                 // Get caller ID from metadata if available
                 const callerId = metadata?.callerPhone || callerPhone || null;
@@ -6466,12 +6482,16 @@ async function processTurn({
                     log('📞 PHONE: Offering caller ID', { callerId });
                 }
                 // Handle response to caller ID offer
-                else if (phoneMeta.offeredCallerId && !currentSlots.phone && userSaysYes && callerId) {
+                // V80 FIX: Accept both generic "yes" AND phone-specific confirmations like "that is a good number"
+                else if (phoneMeta.offeredCallerId && !currentSlots.phone && (userSaysYes || userConfirmsPhone) && callerId) {
                     currentSlots.phone = callerId;
                     phoneMeta.confirmed = true;
                     session.booking.activeSlot = 'address';
                     finalReply = "Perfect. ";
-                    log('📞 PHONE: User accepted caller ID', { phone: callerId });
+                    log('📞 PHONE: User accepted caller ID', { 
+                        phone: callerId,
+                        matchedBy: userSaysYes ? 'userSaysYes' : 'userConfirmsPhone'
+                    });
                 }
                 else if (phoneMeta.offeredCallerId && !currentSlots.phone && userSaysNoGeneric) {
                     // V59 NUKE: UI-configured question ONLY
@@ -8048,6 +8068,97 @@ async function processTurn({
                 }
             } catch (e) {
                 log('⚠️ Deterministic issue capture failed (non-fatal)', { error: e.message });
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // 🎯 V2: TIER-1 SCENARIO SHORT-CIRCUIT (ZERO TOKENS!)
+            // ═══════════════════════════════════════════════════════════════════
+            // If HybridScenarioSelector found a HIGH-CONFIDENCE match, use it 
+            // directly WITHOUT going to LLM. This is the "free" tier that makes
+            // the AI deterministic and fast for well-defined scenarios.
+            //
+            // Threshold: 0.80 by default (UI-configurable)
+            // When match >= threshold:
+            //   - Use scenario's quickReply or fullReply directly
+            //   - No LLM call = 0 tokens, ~50ms response
+            //   - Log as SCENARIO_MATCHED tier1
+            // ═══════════════════════════════════════════════════════════════════
+            const tier1Threshold = company.aiAgentSettings?.aiAgentLogic?.thresholds?.tier1DirectMatch ?? 0.80;
+            const tier1Match = scenarioRetrieval.topMatch;
+            const tier1Confidence = scenarioRetrieval.topMatchConfidence ?? 0;
+            const allowTier1AutoResponse = killSwitches.disableScenarioAutoResponses !== true;
+            
+            log('CHECKPOINT 9c.0: 🎯 Tier-1 Short-Circuit Check', {
+                tier1Threshold,
+                tier1Confidence,
+                hasMatch: !!tier1Match,
+                matchName: tier1Match?.name || null,
+                allowAutoResponse: allowTier1AutoResponse,
+                triggersMatched: tier1Match?.triggers?.slice(0, 5) || []
+            });
+            
+            if (tier1Match && tier1Confidence >= tier1Threshold && allowTier1AutoResponse) {
+                // Use scenario response directly - NO LLM!
+                const quickReplies = tier1Match.quickReplies || [];
+                const fullReplies = tier1Match.fullReplies || [];
+                
+                // Select a reply (prefer quickReplies for voice, fullReplies as fallback)
+                let selectedReply = null;
+                if (quickReplies.length > 0) {
+                    // Pick random from quickReplies for variety
+                    const idx = Math.floor(Math.random() * quickReplies.length);
+                    selectedReply = typeof quickReplies[idx] === 'string' 
+                        ? quickReplies[idx] 
+                        : quickReplies[idx]?.text;
+                } else if (fullReplies.length > 0) {
+                    const idx = Math.floor(Math.random() * fullReplies.length);
+                    selectedReply = typeof fullReplies[idx] === 'string' 
+                        ? fullReplies[idx] 
+                        : fullReplies[idx]?.text;
+                }
+                
+                if (selectedReply && selectedReply.trim()) {
+                    aiLatencyMs = Date.now() - aiStartTime;
+                    
+                    log('🎯 TIER-1 SCENARIO MATCHED! (0 tokens, deterministic)', {
+                        scenarioId: tier1Match.scenarioId,
+                        scenarioName: tier1Match.name,
+                        confidence: tier1Confidence,
+                        replyPreview: selectedReply.substring(0, 80),
+                        latencyMs: aiLatencyMs
+                    });
+                    
+                    aiResult = {
+                        reply: selectedReply,
+                        conversationMode: 'discovery',
+                        intent: 'scenario_matched',
+                        nextGoal: 'CONTINUE_DISCOVERY',
+                        filledSlots: currentSlots,
+                        signals: {},
+                        latencyMs: aiLatencyMs,
+                        tokensUsed: 0,  // 🎯 ZERO TOKENS! This is the whole point.
+                        fromStateMachine: true,  // For backwards compat (tier1 = deterministic)
+                        mode: 'DISCOVERY',
+                        tier: 'tier1',
+                        matchSource: 'SCENARIO_MATCHED',
+                        debug: {
+                            source: 'TIER1_SCENARIO_MATCH',
+                            scenarioId: tier1Match.scenarioId,
+                            scenarioName: tier1Match.name,
+                            categoryName: tier1Match.categoryName,
+                            confidence: tier1Confidence,
+                            threshold: tier1Threshold,
+                            scenarioType: tier1Match.scenarioType,
+                            triggersUsed: tier1Match.triggers?.slice(0, 3) || []
+                        }
+                    };
+                } else {
+                    log('⚠️ TIER-1 match found but no reply available, falling through to LLM', {
+                        scenarioId: tier1Match.scenarioId,
+                        quickRepliesCount: quickReplies.length,
+                        fullRepliesCount: fullReplies.length
+                    });
+                }
             }
             
             // ═══════════════════════════════════════════════════════════════════
