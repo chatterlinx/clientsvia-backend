@@ -1076,8 +1076,9 @@
 
   <!-- ═══════════════════════════════════════════════════════════════════════════
        MAIN NAVIGATION - SINGLE LEVEL, FLAT STRUCTURE
-       Final Navigation: Front Desk | Flow Tree | Dynamic Flow | Call Protection | 
-                        Transfer Calls | Call Center | Company Contacts | Links | Version History
+       Final Navigation (Jan 2026): Front Desk | Flow Tree | Dynamic Flow | Call Protection | 
+                                   Transfer Calls | Call Center | Links | Test Console | Data & Config
+       REMOVED: Company Contacts (merged into Transfer Calls), Version History (save per tab), Cheat Sheets (replaced)
        ═══════════════════════════════════════════════════════════════════════════ -->
   <nav class="main-nav">
     <button class="nav-tab active" data-tab="front-desk">
@@ -1114,10 +1115,7 @@
       <i class="fas fa-headset"></i>
       <span>Call Center</span>
     </button>
-    <button class="nav-tab" data-tab="company-contacts">
-      <i class="fas fa-address-book"></i>
-      <span>Company Contacts</span>
-    </button>
+    <!-- REMOVED: Company Contacts tab (Jan 2026) - Merged into Transfer Calls -->
     <button class="nav-tab" data-tab="links">
       <i class="fas fa-link"></i>
       <span>Links</span>
@@ -1600,8 +1598,7 @@
           </button>
           <!-- REMOVED: Cheat Sheets tab (Jan 2026) - Features moved to dedicated tabs:
                - Edge Cases → Call Protection tab
-               - Transfer Rules → Transfer Calls tab
-               - Company Contacts → Company Contacts tab
+               - Transfer Rules + Company Contacts → Transfer Calls tab (unified)
                - Guardrails/Behavior → Front Desk tab -->
           <button class="data-config-subtab" data-subtab="execution-map" style="padding: 10px 20px; border: none; background: #f1f5f9; color: #64748b; border-radius: 8px 8px 0 0; font-weight: 600; cursor: pointer;">
             <i class="fas fa-project-diagram"></i> Execution Map
@@ -1877,8 +1874,7 @@
         <!-- REMOVED: Cheat Sheets section (Jan 2026)
              Features distributed to dedicated tabs:
              - Edge Cases → Call Protection tab (CallProtectionManager.js)
-             - Transfer Rules → Transfer Calls tab
-             - Company Contacts → Company Contacts tab
+             - Transfer Rules + Company Contacts → Transfer Calls tab (TransferDirectoryManager.js)
              - Guardrails/Behavior → Front Desk tab
         -->
 
@@ -2114,59 +2110,25 @@
       </div>
 
     <!-- ═══════════════════════════════════════════════════════════════════════
-         TRANSFER CALLS - Transfer Target Directory
+         TRANSFER CALLS - Unified Contact Directory & Transfer Rules (Jan 2026)
          ═══════════════════════════════════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="transfer-calls">
         <div class="card">
-        <h2>📞 Transfer Calls</h2>
-        <p class="muted">Transfer target directory. DFLOW references transferTargetId. Defines destination, availability, and pre-transfer script.</p>
+        <h2>📞 Transfer Directory</h2>
+        <p class="muted">Manage contacts and transfer routing rules. AI can transfer calls to these contacts based on intent triggers.</p>
         <div id="transfer-calls-container">
-          <!-- CheatSheetManager will render Transfer Rules here -->
-          <div id="cheatsheet-subtab-transfer-calls">
-            <div id="transfer-rules-section" class="bg-white rounded-lg p-6">
-              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
-                <div>
-                  <h4 style="font-size: 16px; font-weight: 600; color: #111827; margin:0;">
-                    <i class="fas fa-phone" style="margin-right:6px; color:#2563eb;"></i>Transfer Rules
-                  </h4>
-                  <p style="font-size: 12px; color:#6b7280; margin-top:4px;">
-                    Transfer rules route calls to specific departments or people based on intent.
-                  </p>
-          </div>
-                <button type="button" data-cheatsheet-action="add-transfer-rule" style="padding:8px 14px; border-radius:8px; border:none; background:#2563eb; color:#fff; font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
-                  <i class="fas fa-plus"></i>Add Transfer Rule
-                </button>
-              </div>
-              <div id="transfer-rules-list" style="display:flex; flex-direction:column; gap:12px;">
-                <div class="loading-container">
-                  <i class="fas fa-phone-alt fa-spin"></i>
-                  <p>Loading Transfer Directory...</p>
-                </div>
-              </div>
+          <!-- TransferDirectoryManager renders unified Contacts + Rules here -->
+          <div id="transfer-rules-list" style="min-height: 200px;">
+            <div class="loading-container">
+              <i class="fas fa-phone-alt fa-spin"></i>
+              <p>Loading Transfer Directory...</p>
             </div>
           </div>
         </div>
         </div>
       </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════════════
-         COMPANY CONTACTS - Directory of humans for escalation
-         ═══════════════════════════════════════════════════════════════════════ -->
-    <div class="tab-panel" data-panel="company-contacts">
-        <div class="card">
-        <h2>📋 Company Contacts</h2>
-        <p class="muted">Directory of humans AI can escalate or notify. Used by transfers, escalations, and notifications.</p>
-        <div id="company-contacts-container">
-          <!-- CheatSheetManager will render Company Contacts here -->
-          <div id="cheatsheet-v2-dynamic-content" data-section="company-contacts" style="background: #fff; border-radius: 12px; min-height: 200px;">
-            <div class="loading-container">
-              <i class="fas fa-address-book fa-spin"></i>
-              <p>Loading Company Contacts...</p>
-            </div>
-          </div>
-          </div>
-        </div>
-      </div>
+    <!-- REMOVED: Company Contacts panel (Jan 2026) - Merged into Transfer Calls tab -->
 
     <!-- ═══════════════════════════════════════════════════════════════════════
          LINKS - Outbound customer delivery
@@ -2712,9 +2674,7 @@
           case 'transfer-calls':
             await initTransferCalls();
             break;
-          case 'company-contacts':
-            await initCompanyContacts();
-            break;
+          // REMOVED: company-contacts case (Jan 2026) - Merged into transfer-calls
           case 'links':
             await initLinks();
             break;
@@ -2878,55 +2838,24 @@
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // TRANSFER CALLS INITIALIZATION
+    // TRANSFER CALLS INITIALIZATION (Unified Contacts + Transfer Rules)
     // ═══════════════════════════════════════════════════════════════════════════
     async function initTransferCalls() {
-      console.log('📞 [INIT] Initializing Transfer Calls...');
+      console.log('📞 [INIT] Initializing Transfer Directory...');
       
-      await loadScript('/js/ai-agent-settings/CheatSheetVersioningAdapter.js');
-      await loadScript('/js/ai-agent-settings/CheatSheetManager.js');
+      // Load the new TransferDirectoryManager (unified contacts + rules)
+      await loadScript('/js/ai-agent-settings/TransferDirectoryManager.js');
       
-      if (window.cheatSheetManager) {
-        if (window.cheatSheetManager.companyId !== currentCompanyId) {
-          await window.cheatSheetManager.load(currentCompanyId);
-        }
-        
-        // Attach action handlers for Add Transfer Rule button
-        const container = document.getElementById('transfer-calls-container');
-          if (container) {
-          container.addEventListener('click', (e) => {
-            const actionBtn = e.target.closest('[data-cheatsheet-action]');
-            if (actionBtn && actionBtn.getAttribute('data-cheatsheet-action') === 'add-transfer-rule') {
-              e.preventDefault();
-              window.cheatSheetManager.addTransferRule();
-            }
-          });
-        }
-        
-        window.cheatSheetManager.renderTransferRules();
-        console.log('✅ [INIT] Transfer Calls initialized');
+      if (window.TransferDirectoryManager) {
+        window.transferDirectoryManager = new window.TransferDirectoryManager(currentCompanyId);
+        await window.transferDirectoryManager.init();
+        console.log('✅ [INIT] Transfer Directory initialized (Contacts + Rules unified)');
+      } else {
+        console.error('❌ [INIT] TransferDirectoryManager not loaded');
       }
     }
     
-    // ═══════════════════════════════════════════════════════════════════════════
-    // COMPANY CONTACTS INITIALIZATION
-    // ═══════════════════════════════════════════════════════════════════════════
-    async function initCompanyContacts() {
-      console.log('📋 [INIT] Initializing Company Contacts...');
-      
-      await loadScript('/js/ai-agent-settings/CheatSheetVersioningAdapter.js');
-      await loadScript('/js/ai-agent-settings/CheatSheetManager.js');
-      
-      if (window.cheatSheetManager) {
-        if (window.cheatSheetManager.companyId !== currentCompanyId) {
-          await window.cheatSheetManager.load(currentCompanyId);
-        }
-        
-        // renderCompanyContacts expects #cheatsheet-v2-dynamic-content
-        window.cheatSheetManager.renderCompanyContacts();
-        console.log('✅ [INIT] Company Contacts initialized');
-      }
-    }
+    // REMOVED: initCompanyContacts function (Jan 2026) - Merged into Transfer Calls
     
     // ═══════════════════════════════════════════════════════════════════════════
     // LINKS INITIALIZATION

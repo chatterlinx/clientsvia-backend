@@ -725,6 +725,194 @@ router.put('/:companyId/edge-cases', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * PUT /api/cheatsheet/:companyId/company-contacts
+ * Update company contacts directly (for Transfer Directory Manager)
+ */
+router.put('/:companyId/company-contacts', authMiddleware, async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { companyContacts } = req.body;
+    const userEmail = getUserEmail(req);
+    const metadata = extractMetadata(req);
+    
+    if (!Array.isArray(companyContacts)) {
+      return res.status(400).json({
+        success: false,
+        error: 'INVALID_INPUT',
+        message: 'companyContacts must be an array'
+      });
+    }
+    
+    logger.info('[TRANSFER DIRECTORY API] Updating company contacts', {
+      companyId,
+      contactCount: companyContacts.length,
+      userEmail
+    });
+    
+    // Get current live config
+    const { CheatSheetRuntimeService } = require('../../services/cheatsheet');
+    let currentConfig = {};
+    
+    try {
+      const liveConfig = await CheatSheetRuntimeService.getLiveConfig(companyId);
+      if (liveConfig?.config) {
+        currentConfig = liveConfig.config;
+      }
+    } catch (err) {
+      logger.info('[TRANSFER DIRECTORY API] No existing config, starting fresh');
+    }
+    
+    // Update company contacts in config
+    const updatedConfig = {
+      ...currentConfig,
+      companyContacts: companyContacts
+    };
+    
+    // Create/update draft and push to live
+    const CheatSheetVersion = require('../../models/cheatsheet/CheatSheetVersion');
+    let draft = await CheatSheetVersion.findOne({ companyId, status: 'draft' });
+    const draftName = `Contact Directory Update - ${new Date().toLocaleDateString()}`;
+    
+    if (draft) {
+      draft.config = updatedConfig;
+      draft.updatedBy = userEmail;
+      draft.updatedAt = new Date();
+      await draft.save();
+    } else {
+      draft = await CheatSheetVersionService.createDraft(companyId, draftName, userEmail, null, metadata);
+      await CheatSheetVersionService.saveDraft(companyId, draft.versionId, updatedConfig, userEmail, draft.__v, metadata);
+    }
+    
+    // Push to live
+    const liveVersion = await CheatSheetVersionService.pushDraftLive(companyId, draft.versionId, userEmail, metadata);
+    await CheatSheetRuntimeService.invalidateCache(companyId);
+    
+    logger.info('[TRANSFER DIRECTORY API] Contacts updated and pushed to live', {
+      companyId,
+      contactCount: companyContacts.length,
+      versionId: liveVersion.versionId
+    });
+    
+    res.json({
+      success: true,
+      message: 'Company contacts updated successfully',
+      data: {
+        versionId: liveVersion.versionId,
+        contactCount: companyContacts.length,
+        activatedAt: liveVersion.activatedAt
+      }
+    });
+    
+  } catch (err) {
+    logger.error('CHEATSHEET_API_UPDATE_CONTACTS_ERROR', {
+      companyId: req.params.companyId,
+      error: err.message,
+      stack: err.stack
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: err.code || 'INTERNAL_ERROR',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * PUT /api/cheatsheet/:companyId/transfer-rules
+ * Update transfer rules directly (for Transfer Directory Manager)
+ */
+router.put('/:companyId/transfer-rules', authMiddleware, async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { transferRules } = req.body;
+    const userEmail = getUserEmail(req);
+    const metadata = extractMetadata(req);
+    
+    if (!Array.isArray(transferRules)) {
+      return res.status(400).json({
+        success: false,
+        error: 'INVALID_INPUT',
+        message: 'transferRules must be an array'
+      });
+    }
+    
+    logger.info('[TRANSFER DIRECTORY API] Updating transfer rules', {
+      companyId,
+      ruleCount: transferRules.length,
+      userEmail
+    });
+    
+    // Get current live config
+    const { CheatSheetRuntimeService } = require('../../services/cheatsheet');
+    let currentConfig = {};
+    
+    try {
+      const liveConfig = await CheatSheetRuntimeService.getLiveConfig(companyId);
+      if (liveConfig?.config) {
+        currentConfig = liveConfig.config;
+      }
+    } catch (err) {
+      logger.info('[TRANSFER DIRECTORY API] No existing config, starting fresh');
+    }
+    
+    // Update transfer rules in config
+    const updatedConfig = {
+      ...currentConfig,
+      transferRules: transferRules
+    };
+    
+    // Create/update draft and push to live
+    const CheatSheetVersion = require('../../models/cheatsheet/CheatSheetVersion');
+    let draft = await CheatSheetVersion.findOne({ companyId, status: 'draft' });
+    const draftName = `Transfer Rules Update - ${new Date().toLocaleDateString()}`;
+    
+    if (draft) {
+      draft.config = updatedConfig;
+      draft.updatedBy = userEmail;
+      draft.updatedAt = new Date();
+      await draft.save();
+    } else {
+      draft = await CheatSheetVersionService.createDraft(companyId, draftName, userEmail, null, metadata);
+      await CheatSheetVersionService.saveDraft(companyId, draft.versionId, updatedConfig, userEmail, draft.__v, metadata);
+    }
+    
+    // Push to live
+    const liveVersion = await CheatSheetVersionService.pushDraftLive(companyId, draft.versionId, userEmail, metadata);
+    await CheatSheetRuntimeService.invalidateCache(companyId);
+    
+    logger.info('[TRANSFER DIRECTORY API] Transfer rules updated and pushed to live', {
+      companyId,
+      ruleCount: transferRules.length,
+      versionId: liveVersion.versionId
+    });
+    
+    res.json({
+      success: true,
+      message: 'Transfer rules updated successfully',
+      data: {
+        versionId: liveVersion.versionId,
+        ruleCount: transferRules.length,
+        activatedAt: liveVersion.activatedAt
+      }
+    });
+    
+  } catch (err) {
+    logger.error('CHEATSHEET_API_UPDATE_TRANSFER_RULES_ERROR', {
+      companyId: req.params.companyId,
+      error: err.message,
+      stack: err.stack
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: err.code || 'INTERNAL_ERROR',
+      message: err.message
+    });
+  }
+});
+
 // ============================================================================
 // ERROR HANDLER (Catch-all)
 // ============================================================================
