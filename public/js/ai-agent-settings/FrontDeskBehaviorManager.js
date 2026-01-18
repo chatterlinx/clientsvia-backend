@@ -437,7 +437,25 @@ class FrontDeskBehaviorManager {
                 onLoop: 'rephrase',
                 rephraseIntro: "Let me try this differently - "
             },
-            forbiddenPhrases: ["tell me more about what you need", "what specific issues are you experiencing", "how can I help you", "what can I do for you today"],
+            forbiddenPhrases: [
+                // Generic AI filler questions
+                "tell me more about what you need",
+                "what specific issues are you experiencing",
+                "how can I help you",
+                "what can I do for you today",
+                // Robotic empathy phrases (sounds AI-generated)
+                "I understand that it can be really frustrating",
+                "I can see this is really frustrating",
+                "I understand how frustrating",
+                "I understand that's frustrating",
+                "that sounds frustrating",
+                "I know how frustrating",
+                "that must be frustrating",
+                // Generic padding
+                "I'm here to help",
+                "I appreciate you sharing that",
+                "Thank you for your patience"
+            ],
             
             // ════════════════════════════════════════════════════════════════════
             // NEW: Detection Triggers - Control what AI detects

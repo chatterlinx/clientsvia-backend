@@ -54,6 +54,13 @@ class AITestConsole {
         this.hasReceivedPartial = false; // Track if we've received any speech
         this.silenceTimeout = null; // Timeout if no speech detected for too long
         this.MAX_SILENCE_MS = 10000; // 10 seconds max without any speech activity
+        
+        // 🆕 PHONE MODE: When enabled, mimics real phone call behavior:
+        // - No auto-stop after final transcript (keeps listening)
+        // - User must manually stop or wait for 30s silence
+        // - More accurate simulation of real caller experience
+        this.phoneMode = localStorage.getItem('testPhoneMode') === 'true';
+        this.PHONE_MODE_SILENCE_MS = 30000; // 30 seconds in phone mode before auto-stop
 
         this.packTestMode = localStorage.getItem('packTestMode') === 'true';
         
@@ -301,16 +308,31 @@ class AITestConsole {
                     if (payload.type === 'final' && payload.text) {
                         this.enqueueFinalTranscript(payload.text, { asrProvider: 'deepgram', source: 'test_console' });
                         
-                        // AUTO-STOP: After receiving final transcript, wait 1.5s for more speech
-                        // If no new partials arrive, auto-stop the ASR session
+                        // Clear timers first
                         this.clearAutoStopTimer();
                         this.clearSilenceTimeout();
-                        this.autoStopTimer = setTimeout(() => {
-                            if (this.isProdAsrActive) {
-                                console.log('[AI Test] Auto-stopping ASR after final transcript');
-                                this.stopProductionASR();
-                            }
-                        }, 1500);
+                        
+                        // 🆕 PHONE MODE: In phone mode, DON'T auto-stop after final transcript
+                        // This mimics real phone call behavior where ASR keeps listening
+                        // until the caller hangs up or 30s of total silence
+                        if (this.phoneMode) {
+                            console.log('[AI Test] 📞 Phone mode: keeping ASR active after final transcript');
+                            // In phone mode, use longer silence timeout
+                            this.silenceTimeout = setTimeout(() => {
+                                if (this.isProdAsrActive) {
+                                    console.log('[AI Test] 📞 Phone mode: auto-stopping after 30s silence');
+                                    this.stopProductionASR();
+                                }
+                            }, this.PHONE_MODE_SILENCE_MS);
+                        } else {
+                            // Quick test mode: auto-stop after 1.5s of silence
+                            this.autoStopTimer = setTimeout(() => {
+                                if (this.isProdAsrActive) {
+                                    console.log('[AI Test] Auto-stopping ASR after final transcript');
+                                    this.stopProductionASR();
+                                }
+                            }, 1500);
+                        }
                     }
                 } catch (err) {
                     console.error('[AI Test] Failed to parse ASR message', err);
@@ -582,6 +604,7 @@ class AITestConsole {
         this.loadFailureReport();
         this.updateAsrModeUI();
         this.initPackTestToggle();
+        this.initPhoneModeToggle();
     }
 
     /**
@@ -598,6 +621,10 @@ class AITestConsole {
                         <span style="color: #6e7681; font-size: 11px;">Test conversations without making real calls</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
+                        <label style="display:flex; align-items:center; gap:6px; background:${this.phoneMode ? '#7c2d12' : '#21262d'}; padding:5px 10px; border-radius:6px; font-size:11px; color:${this.phoneMode ? '#fdba74' : '#8b949e'}; cursor:pointer; border:1px solid ${this.phoneMode ? '#c2410c' : 'transparent'};" title="When enabled, ASR keeps listening like a real phone call (30s silence timeout instead of 1.5s)">
+                            <input type="checkbox" id="phone-mode-toggle" ${this.phoneMode ? 'checked' : ''} style="accent-color:#f0883e;">
+                            📞 Phone Mode
+                        </label>
                         <label style="display:flex; align-items:center; gap:6px; background:#21262d; padding:5px 10px; border-radius:6px; font-size:11px; color:#8b949e; cursor:pointer;">
                             <input type="checkbox" id="pack-test-toggle" ${this.packTestMode ? 'checked' : ''} style="accent-color:#58a6ff;">
                             Pack Test Mode
@@ -780,6 +807,38 @@ class AITestConsole {
             localStorage.setItem('packTestMode', enabled ? 'true' : 'false');
             this.updateAnalysis(this.lastMetadata || null);
         });
+    }
+    
+    /**
+     * 🆕 Phone Mode toggle: mimics real phone call ASR behavior
+     * - When ON: ASR keeps listening for 30s of silence (like a real call)
+     * - When OFF: ASR auto-stops 1.5s after final transcript (quick testing)
+     */
+    initPhoneModeToggle() {
+        const toggle = document.getElementById('phone-mode-toggle');
+        if (!toggle) return;
+        toggle.checked = this.phoneMode === true;
+        toggle.addEventListener('change', (event) => {
+            const enabled = event.target.checked === true;
+            this.phoneMode = enabled;
+            localStorage.setItem('testPhoneMode', enabled ? 'true' : 'false');
+            console.log(`[AI Test] 📞 Phone Mode: ${enabled ? 'ON (30s silence timeout)' : 'OFF (1.5s auto-stop)'}`);
+            // Re-render to update toggle styling
+            this.refreshUI();
+        });
+    }
+    
+    /**
+     * Refresh UI without full re-render (preserves chat)
+     */
+    refreshUI() {
+        const label = document.querySelector('label[title*="Phone Mode"]') || 
+                      document.querySelector('label:has(#phone-mode-toggle)');
+        if (label) {
+            label.style.background = this.phoneMode ? '#7c2d12' : '#21262d';
+            label.style.color = this.phoneMode ? '#fdba74' : '#8b949e';
+            label.style.border = this.phoneMode ? '1px solid #c2410c' : '1px solid transparent';
+        }
     }
 
     /**
