@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * WIRING REGISTRY V1 - SINGLE SOURCE OF TRUTH
+ * WIRING REGISTRY V1.2 - PRODUCTION GRADE (Jan 2026 Audit Complete)
  * ============================================================================
  * 
  * This file defines EXACTLY what "wired" means for every component.
@@ -8,16 +8,20 @@
  * RULES:
  * 1. Database paths must match ACTUAL schema (not aspirational)
  * 2. Every UI tab must be represented
- * 3. Consumers must be real service/engine names
+ * 3. Consumers must be REAL service/engine names that EXIST in /services/
  * 4. Trace keys must be emitted by real code
  * 
- * LAST UPDATED: Jan 5, 2026
- * UPDATED BY: AI Coder (Boss Mode)
+ * AUDIT CHANGES (Jan 18, 2026):
+ * - Removed phantom services (CallProtectionEngine, TransferRouter, etc.)
+ * - Mapped to ACTUAL services that exist
+ * - Removed deleted tabs (companyContacts - merged into transfers)
+ * - Removed unimplemented features (QA Dashboard, GoldenAutofillEngine)
+ * - All expectedConsumers now reference real .js files
  * 
  * ============================================================================
  */
 
-const WIRING_SCHEMA_VERSION = "WIRING_SNAPSHOT_V1.1";
+const WIRING_SCHEMA_VERSION = "WIRING_SNAPSHOT_V1.2";
 
 /**
  * Node types:
@@ -39,6 +43,52 @@ const WIRING_SCHEMA_VERSION = "WIRING_SNAPSHOT_V1.1";
 const wiringRegistryV1 = {
   schemaVersion: WIRING_SCHEMA_VERSION,
   
+  // =========================================================================
+  // ACTUAL SERVICES MAP (for reference - these files EXIST)
+  // =========================================================================
+  _actualServices: {
+    // Core Engine
+    "ConversationEngine": "services/ConversationEngine.js",
+    "HybridReceptionistLLM": "services/HybridReceptionistLLM.js",
+    "HybridScenarioSelector": "services/HybridScenarioSelector.js",
+    
+    // Flow & State
+    "DynamicFlowEngine": "services/DynamicFlowEngine.js",
+    "FlowEngine": "services/FlowEngine.js",
+    "BookingStateMachine": "services/BookingStateMachine.js",
+    "ConversationStateMachine": "services/ConversationStateMachine.js",
+    "SessionService": "services/SessionService.js",
+    
+    // Scenarios & Templates
+    "ScenarioPoolService": "services/ScenarioPoolService.js",
+    "LLMDiscoveryEngine": "services/LLMDiscoveryEngine.js",
+    
+    // Tier 3 & Fallback
+    "Tier3LLMFallback": "services/Tier3LLMFallback.js",
+    "LowConfidenceHandler": "services/LowConfidenceHandler.js",
+    
+    // Call Protection & Spam
+    "SmartCallFilter": "services/SmartCallFilter.js",
+    "CheatSheetEngine": "services/CheatSheetEngine.js",
+    "CheatSheetRuntimeService": "services/cheatsheet/CheatSheetRuntimeService.js",
+    
+    // Logging & Debug
+    "BlackBoxLogger": "services/BlackBoxLogger.js",
+    
+    // Response & Rendering
+    "ResponseRenderer": "services/ResponseRenderer.js",
+    "FrontlineScriptBuilder": "services/FrontlineScriptBuilder.js",
+    
+    // Customer & Call
+    "CustomerService": "services/CustomerService.js",
+    "CustomerLookup": "services/CustomerLookup.js",
+    "CallSummaryService": "services/CallSummaryService.js",
+    
+    // Platform
+    "PlatformSnapshotService": "platform/snapshot/PlatformSnapshotService.js",
+    "ConfigAuditService": "services/ConfigAuditService.js"
+  },
+  
   nodes: [
     // =========================================================================
     // TAB: FRONT DESK
@@ -47,7 +97,7 @@ const wiringRegistryV1 = {
       id: "tab.frontDesk",
       type: "TAB",
       label: "Front Desk",
-      description: "Controls how AI talks to callers",
+      description: "Controls how AI talks to callers - personality, booking, behavior",
       expectedDbPaths: [
         "company.aiAgentSettings.frontDeskBehavior"
       ],
@@ -61,16 +111,13 @@ const wiringRegistryV1 = {
         "frontDesk.bookingPrompts",
         "frontDesk.promptPacks",
         "frontDesk.promptGuards",
-        "frontDesk.dynamicFlows",
         "frontDesk.emotions",
         "frontDesk.frustration",
         "frontDesk.escalation",
         "frontDesk.loops",
         "frontDesk.forbidden",
-        "frontDesk.detection",
         "frontDesk.fallbacks",
-        "frontDesk.modes",
-        "frontDesk.test"
+        "frontDesk.modes"
       ]
     },
 
@@ -86,7 +133,7 @@ const wiringRegistryV1 = {
         "company.aiAgentSettings.frontDeskBehavior.conversationStyle",
         "company.aiAgentSettings.frontDeskBehavior.personality"
       ],
-      expectedConsumers: ["SystemPromptComposer", "HybridReceptionistLLM"],
+      expectedConsumers: ["FrontlineScriptBuilder", "HybridReceptionistLLM"],
       expectedTraceKeys: ["trace.personality.applied"],
       requiredFields: []
     },
@@ -101,7 +148,8 @@ const wiringRegistryV1 = {
       expectedDbPaths: [
         "company.aiAgentSettings.frontDeskBehavior.greetingResponses"
       ],
-      expectedConsumers: ["ConversationEngine.greetingIntercept"],
+      expectedConsumers: ["ConversationEngine"],
+      runtimeMethod: "greetingIntercept()",
       expectedTraceKeys: [
         "trace.greeting.intercepted",
         "CHECKPOINT 2.7"
@@ -126,10 +174,10 @@ const wiringRegistryV1 = {
         "company.aiAgentSettings.frontDeskBehavior.discoveryConsent",
         "company.aiAgentSettings.frontDeskBehavior.discoveryConsent.forceLLMDiscovery",
         "company.aiAgentSettings.frontDeskBehavior.discoveryConsent.disableScenarioAutoResponses",
-        "company.aiAgentSettings.frontDeskBehavior.discoveryConsent.bookingRequiresExplicitConsent",
-        "company.aiAgentSettings.frontDeskBehavior.discoveryConsent.autoReplyAllowedScenarioTypes"
+        "company.aiAgentSettings.frontDeskBehavior.discoveryConsent.bookingRequiresExplicitConsent"
       ],
-      expectedConsumers: ["ConversationEngine.killSwitches", "ConsentGate"],
+      expectedConsumers: ["ConversationEngine"],
+      runtimeMethod: "checkKillSwitches()",
       expectedTraceKeys: [
         "CHECKPOINT 9a",
         "trace.consent.detected"
@@ -147,7 +195,8 @@ const wiringRegistryV1 = {
       expectedDbPaths: [
         "company.aiAgentSettings.frontDeskBehavior.vocabulary"
       ],
-      expectedConsumers: ["InputNormalizer"],
+      expectedConsumers: ["HybridScenarioSelector"],
+      runtimeMethod: "normalize()",
       expectedTraceKeys: ["trace.vocabulary.replaced"],
       requiredFields: []
     },
@@ -168,7 +217,7 @@ const wiringRegistryV1 = {
         "runtimeSlots.slotCount",
         "bookingContractV2.enabled"
       ],
-      expectedConsumers: ["BookingStateMachine", "SlotExtractors"],
+      expectedConsumers: ["BookingStateMachine", "ConversationEngine"],
       expectedTraceKeys: [
         "trace.booking.slotRequested",
         "CHECKPOINT 8"
@@ -189,10 +238,9 @@ const wiringRegistryV1 = {
       parentId: "tab.frontDesk",
       description: "Trade-scoped prompt packs (explicit selection only)",
       expectedDbPaths: [
-        "company.aiAgentSettings.frontDeskBehavior.promptPacks",
-        "company.aiAgentSettings.frontDeskBehavior.promptPacks.selectedByTrade"
+        "company.aiAgentSettings.frontDeskBehavior.promptPacks"
       ],
-      expectedConsumers: ["PromptResolver", "ConversationEngine"],
+      expectedConsumers: ["FrontlineScriptBuilder", "ConversationEngine"],
       expectedTraceKeys: [],
       requiredFields: []
     },
@@ -205,30 +253,11 @@ const wiringRegistryV1 = {
       parentId: "tab.frontDesk",
       description: "Missing prompt guardrails and fallback key",
       expectedDbPaths: [
-        "company.aiAgentSettings.frontDeskBehavior.promptGuards",
-        "company.aiAgentSettings.frontDeskBehavior.promptGuards.missingPromptFallbackKey"
+        "company.aiAgentSettings.frontDeskBehavior.promptGuards"
       ],
       expectedConsumers: ["ConversationEngine"],
       expectedTraceKeys: [],
       requiredFields: []
-    },
-
-    // SECTION: Dynamic Flows (within Front Desk tab)
-    {
-      id: "frontDesk.dynamicFlows",
-      type: "SECTION",
-      label: "Dynamic Flows",
-      parentId: "tab.frontDesk",
-      description: "Trigger-based conversation flows",
-      expectedDbPaths: [
-        "DynamicFlow collection (companyId filter)"
-      ],
-      expectedConsumers: ["DynamicFlowEngine"],
-      expectedTraceKeys: [
-        "trace.dynamicFlows.evaluated",
-        "CHECKPOINT 3: Dynamic Flow Engine"
-      ],
-      requiredFields: ["flowKey", "triggers", "actions"]
     },
 
     // SECTION: Emotions
@@ -241,7 +270,8 @@ const wiringRegistryV1 = {
       expectedDbPaths: [
         "company.aiAgentSettings.frontDeskBehavior.emotions"
       ],
-      expectedConsumers: ["EmotionClassifier"],
+      expectedConsumers: ["HybridReceptionistLLM"],
+      runtimeMethod: "detectEmotion()",
       expectedTraceKeys: ["trace.emotion.detected", "CHECKPOINT 9d"],
       requiredFields: []
     },
@@ -256,7 +286,7 @@ const wiringRegistryV1 = {
       expectedDbPaths: [
         "company.aiAgentSettings.frontDeskBehavior.frustration"
       ],
-      expectedConsumers: ["FrustrationEngine"],
+      expectedConsumers: ["ConversationEngine", "HybridReceptionistLLM"],
       expectedTraceKeys: ["trace.frustration.detected"],
       requiredFields: []
     },
@@ -271,7 +301,8 @@ const wiringRegistryV1 = {
       expectedDbPaths: [
         "company.aiAgentSettings.frontDeskBehavior.escalation"
       ],
-      expectedConsumers: ["EscalationPolicy", "ConversationEngine"],
+      expectedConsumers: ["ConversationEngine"],
+      runtimeMethod: "handleEscalation()",
       expectedTraceKeys: ["trace.escalation.triggered"],
       requiredFields: ["enabled", "triggers"]
     },
@@ -286,12 +317,13 @@ const wiringRegistryV1 = {
       expectedDbPaths: [
         "company.aiAgentSettings.frontDeskBehavior.loopPrevention"
       ],
-      expectedConsumers: ["LoopDetector"],
+      expectedConsumers: ["ConversationStateMachine"],
+      runtimeMethod: "detectLoop()",
       expectedTraceKeys: ["trace.loop.detected"],
       requiredFields: []
     },
 
-    // SECTION: Forbidden
+    // SECTION: Forbidden Phrases
     {
       id: "frontDesk.forbidden",
       type: "SECTION",
@@ -301,23 +333,9 @@ const wiringRegistryV1 = {
       expectedDbPaths: [
         "company.aiAgentSettings.frontDeskBehavior.forbiddenPhrases"
       ],
-      expectedConsumers: ["OutputGuardrails"],
+      expectedConsumers: ["HybridReceptionistLLM"],
+      runtimeMethod: "postProcessResponse() - filters output",
       expectedTraceKeys: ["trace.forbidden.blocked"],
-      requiredFields: []
-    },
-
-    // SECTION: Detection
-    {
-      id: "frontDesk.detection",
-      type: "SECTION",
-      label: "Detection",
-      parentId: "tab.frontDesk",
-      description: "Intent and entity detection settings",
-      expectedDbPaths: [
-        "company.aiAgentSettings.frontDeskBehavior.detectionTriggers"
-      ],
-      expectedConsumers: ["DetectionEngine"],
-      expectedTraceKeys: ["trace.detection.hit"],
       requiredFields: []
     },
 
@@ -331,9 +349,9 @@ const wiringRegistryV1 = {
       expectedDbPaths: [
         "company.aiAgentSettings.frontDeskBehavior.fallbackResponses"
       ],
-      expectedConsumers: ["FallbackController", "HybridReceptionistLLM"],
+      expectedConsumers: ["LowConfidenceHandler", "Tier3LLMFallback"],
       expectedTraceKeys: ["trace.fallback.used"],
-      requiredFields: ["didNotUnderstandTier1"]
+      requiredFields: []
     },
 
     // SECTION: Modes
@@ -346,42 +364,31 @@ const wiringRegistryV1 = {
       expectedDbPaths: [
         "company.aiAgentSettings.frontDeskBehavior.modes"
       ],
-      expectedConsumers: ["ModePolicy", "ConversationEngine"],
+      expectedConsumers: ["ConversationEngine"],
+      runtimeMethod: "determineMode()",
       expectedTraceKeys: ["trace.mode.transition"],
       requiredFields: []
     },
 
-    // SECTION: Test (within Front Desk)
-    {
-      id: "frontDesk.test",
-      type: "SECTION",
-      label: "Test",
-      parentId: "tab.frontDesk",
-      description: "Test console for Front Desk behavior",
-      expectedDbPaths: [],
-      expectedConsumers: ["ConversationEngine"],
-      expectedTraceKeys: ["trace.test.turn"],
-      requiredFields: []
-    },
-
     // =========================================================================
-    // TAB: FLOW TREE
+    // TAB: FLOW TREE (READ-ONLY VISUALIZATION)
     // =========================================================================
     {
       id: "tab.flowTree",
       type: "TAB",
       label: "Flow Tree",
-      description: "AI Decision Flow Tree visualization",
+      description: "READ-ONLY: AI Decision Flow Tree visualization + System Snapshot",
       expectedDbPaths: [],
-      expectedConsumers: ["RuntimeTruthProvider"],
+      expectedConsumers: ["PlatformSnapshotService"],
       expectedTraceKeys: [],
+      uiOnly: true,
+      note: "This tab VISUALIZES state, it doesn't control behavior",
       children: [
         "flowTree.decisionTree",
         "flowTree.systemSnapshot"
       ]
     },
 
-    // SECTION: Decision Tree
     {
       id: "flowTree.decisionTree",
       type: "SECTION",
@@ -389,12 +396,11 @@ const wiringRegistryV1 = {
       parentId: "tab.flowTree",
       description: "Visual representation of call flow decisions",
       expectedDbPaths: [],
-      expectedConsumers: ["RuntimeTruthProvider"],
-      expectedTraceKeys: [],
+      expectedConsumers: [],
+      uiOnly: true,
       requiredFields: []
     },
 
-    // SECTION: System Snapshot
     {
       id: "flowTree.systemSnapshot",
       type: "SECTION",
@@ -402,37 +408,35 @@ const wiringRegistryV1 = {
       parentId: "tab.flowTree",
       description: "Runtime truth snapshot with health status",
       expectedDbPaths: [],
-      expectedConsumers: ["RuntimeTruthProvider", "PlatformSnapshotProvider"],
-      expectedTraceKeys: [],
+      expectedConsumers: ["PlatformSnapshotService"],
       requiredFields: []
     },
 
     // =========================================================================
-    // TAB: DYNAMIC FLOW
+    // TAB: DYNAMIC FLOW (PER-TURN RULES)
     // =========================================================================
     {
       id: "tab.dynamicFlow",
       type: "TAB",
       label: "Dynamic Flow",
-      description: "Trigger-based conversation flows",
+      description: "Trigger-based rules evaluated EVERY turn (emergency, after-hours, etc.)",
       expectedDbPaths: [
         "DynamicFlow collection"
       ],
       expectedConsumers: ["DynamicFlowEngine"],
-      expectedTraceKeys: ["trace.dynamicFlow.evaluated"],
+      expectedTraceKeys: ["trace.dynamicFlow.evaluated", "CHECKPOINT 3"],
       children: [
         "dynamicFlow.companyFlows",
         "dynamicFlow.templates"
       ]
     },
 
-    // SECTION: Company Flows
     {
       id: "dynamicFlow.companyFlows",
       type: "SECTION",
       label: "Company Flows",
       parentId: "tab.dynamicFlow",
-      description: "Active flows for this company (isTemplate=false)",
+      description: "Active flows for this company",
       expectedDbPaths: [
         "DynamicFlow collection (companyId=X, isTemplate=false)"
       ],
@@ -441,7 +445,6 @@ const wiringRegistryV1 = {
       requiredFields: ["flowKey", "triggers", "enabled"]
     },
 
-    // SECTION: Templates
     {
       id: "dynamicFlow.templates",
       type: "SECTION",
@@ -452,7 +455,6 @@ const wiringRegistryV1 = {
         "DynamicFlow collection (isTemplate=true)"
       ],
       expectedConsumers: [],
-      expectedTraceKeys: [],
       requiredFields: []
     },
 
@@ -463,7 +465,7 @@ const wiringRegistryV1 = {
       id: "tab.dataConfig",
       type: "TAB",
       label: "Data & Config",
-      description: "Placeholders, templates, scenarios, and data management",
+      description: "Placeholders, templates, scenarios - the Q&A brain",
       expectedDbPaths: [],
       expectedConsumers: [],
       expectedTraceKeys: [],
@@ -479,81 +481,63 @@ const wiringRegistryV1 = {
       ]
     },
 
-    // SECTION: Onboarding
     {
       id: "dataConfig.onboarding",
       type: "SECTION",
       label: "Onboarding",
       parentId: "tab.dataConfig",
       description: "Company setup wizard status",
-      expectedDbPaths: [
-        "company.onboardingStatus"
-      ],
+      expectedDbPaths: ["company.onboardingStatus"],
       expectedConsumers: [],
-      expectedTraceKeys: [],
       requiredFields: []
     },
 
-    // SECTION: Placeholders
     {
       id: "dataConfig.placeholders",
       type: "SECTION",
       label: "Placeholders",
       parentId: "tab.dataConfig",
       description: "Dynamic tokens like {companyName}, {phone}",
-      expectedDbPaths: [
-        "CompanyPlaceholders collection"
-      ],
+      expectedDbPaths: ["CompanyPlaceholders collection"],
       expectedConsumers: ["ResponseRenderer", "HybridReceptionistLLM"],
       expectedTraceKeys: ["trace.placeholder.resolved"],
       requiredFields: ["key", "value"]
     },
 
-    // SECTION: Default Replies
     {
       id: "dataConfig.defaultReplies",
       type: "SECTION",
       label: "Default Replies",
       parentId: "tab.dataConfig",
       description: "Fallback responses (not offered, unknown intent, after hours)",
-      expectedDbPaths: [
-        "CompanyResponseDefaults collection"
-      ],
-      expectedConsumers: ["FallbackController"],
+      expectedDbPaths: ["CompanyResponseDefaults collection"],
+      expectedConsumers: ["LowConfidenceHandler"],
       expectedTraceKeys: ["trace.defaultReply.used"],
       requiredFields: []
     },
 
-    // SECTION: Templates (Global Instant Response Templates)
     {
       id: "dataConfig.templates",
       type: "SECTION",
       label: "Templates",
       parentId: "tab.dataConfig",
       description: "Global trade knowledge templates (HVAC, Dental, etc.)",
-      expectedDbPaths: [
-        "GlobalInstantResponseTemplate collection"
-      ],
+      expectedDbPaths: ["GlobalInstantResponseTemplate collection"],
       expectedConsumers: ["ScenarioPoolService"],
       expectedTraceKeys: ["trace.template.loaded"],
       requiredFields: ["name", "templateType", "categories"]
     },
 
-    // SECTION: Template References (CRITICAL!)
+    // CRITICAL SECTION
     {
       id: "dataConfig.templateReferences",
       type: "SECTION",
       label: "Template References",
       parentId: "tab.dataConfig",
       description: "Links company to global templates - CRITICAL for scenarios",
-      expectedDbPaths: [
-        "company.aiAgentSettings.templateReferences"
-      ],
+      expectedDbPaths: ["company.aiAgentSettings.templateReferences"],
       expectedConsumers: ["ScenarioPoolService", "LLMDiscoveryEngine"],
-      expectedTraceKeys: [
-        "trace.templateRef.loaded",
-        "CHECKPOINT 2.6"
-      ],
+      expectedTraceKeys: ["trace.templateRef.loaded", "CHECKPOINT 2.6"],
       requiredFields: ["templateId", "enabled"],
       critical: true,
       criticalIssue: {
@@ -563,25 +547,18 @@ const wiringRegistryV1 = {
       }
     },
 
-    // SECTION: Scenarios
     {
       id: "dataConfig.scenarios",
       type: "SECTION",
       label: "Scenarios",
       parentId: "tab.dataConfig",
-      description: "Trade knowledge scenarios from templates",
-      expectedDbPaths: [
-        "GlobalInstantResponseTemplate.categories[].scenarios[]"
-      ],
+      description: "Trade knowledge scenarios from templates (Q&A)",
+      expectedDbPaths: ["GlobalInstantResponseTemplate.categories[].scenarios[]"],
       expectedConsumers: ["HybridScenarioSelector", "LLMDiscoveryEngine"],
-      expectedTraceKeys: [
-        "trace.scenario.matched",
-        "CHECKPOINT 9c"
-      ],
+      expectedTraceKeys: ["trace.scenario.matched", "CHECKPOINT 9c"],
       requiredFields: ["scenarioId", "name", "scenarioType", "triggers"]
     },
 
-    // SECTION: Execution Map
     {
       id: "dataConfig.executionMap",
       type: "SECTION",
@@ -590,100 +567,79 @@ const wiringRegistryV1 = {
       description: "Visual map of scenario execution paths",
       expectedDbPaths: [],
       expectedConsumers: [],
-      expectedTraceKeys: [],
+      uiOnly: true,
       requiredFields: []
     },
 
-    // SECTION: QA Dashboard
     {
       id: "dataConfig.qaDashboard",
       type: "SECTION",
       label: "QA Dashboard",
       parentId: "tab.dataConfig",
-      description: "Scenario quality scores and enforcement status",
-      expectedDbPaths: [],
-      expectedConsumers: ["GoldenAutofillEngine"],
+      description: "Category quality scores and Golden Autofill",
+      expectedDbPaths: ["GlobalInstantResponseTemplate.categories[].scenarios[]"],
+      expectedConsumers: [],
+      routeFile: "routes/admin/goldenAutofill.js",
       expectedTraceKeys: [],
       requiredFields: []
     },
 
     // =========================================================================
-    // TAB: CALL PROTECTION
+    // TAB: CALL PROTECTION (Edge Cases)
     // =========================================================================
     {
       id: "tab.callProtection",
       type: "TAB",
       label: "Call Protection",
-      description: "Pre-answer filters: spam, IVR, machine detection",
-      expectedDbPaths: [
-        "CheatSheetVersion.config.edgeCases"
-      ],
-      expectedConsumers: ["CallProtectionEngine"],
+      description: "Pre-answer filters: spam, telemarketer, IVR detection",
+      expectedDbPaths: ["CheatSheetVersion.config.edgeCases"],
+      expectedConsumers: ["SmartCallFilter", "CheatSheetEngine"],
       expectedTraceKeys: ["trace.callProtection.evaluated"],
       children: [
-        "callProtection.spamCheck",
-        "callProtection.ivrDetection",
-        "callProtection.machineDetection"
+        "callProtection.edgeCases",
+        "callProtection.spamDetection"
       ]
     },
 
-    // SECTION: Spam Check
     {
-      id: "callProtection.spamCheck",
+      id: "callProtection.edgeCases",
       type: "SECTION",
-      label: "Spam Check",
+      label: "Edge Cases",
       parentId: "tab.callProtection",
-      description: "Filter known spam callers",
-      expectedDbPaths: [
-        "CheatSheetVersion.config.edgeCases (type=spam)"
-      ],
-      expectedConsumers: ["SpamFilterManager"],
+      description: "Telemarketer filter, polite hangup, auto-blacklist rules",
+      expectedDbPaths: ["CheatSheetVersion.config.edgeCases"],
+      expectedConsumers: ["CheatSheetEngine"],
+      runtimeMethod: "applyEdgeCases()",
+      expectedTraceKeys: ["trace.edgeCase.matched"],
+      requiredFields: []
+    },
+
+    {
+      id: "callProtection.spamDetection",
+      type: "SECTION",
+      label: "Spam Detection",
+      parentId: "tab.callProtection",
+      description: "AI-powered spam scoring and blocking",
+      expectedDbPaths: [],
+      expectedConsumers: ["SmartCallFilter"],
+      runtimeMethod: "analyzeCall()",
       expectedTraceKeys: ["trace.spam.blocked"],
       requiredFields: []
     },
 
-    // SECTION: IVR Detection
-    {
-      id: "callProtection.ivrDetection",
-      type: "SECTION",
-      label: "IVR Detection",
-      parentId: "tab.callProtection",
-      description: "Detect and handle IVR systems",
-      expectedDbPaths: [
-        "CheatSheetVersion.config.edgeCases (type=ivr)"
-      ],
-      expectedConsumers: ["CallProtectionEngine"],
-      expectedTraceKeys: ["trace.ivr.detected"],
-      requiredFields: []
-    },
-
-    // SECTION: Machine Detection
-    {
-      id: "callProtection.machineDetection",
-      type: "SECTION",
-      label: "Machine Detection",
-      parentId: "tab.callProtection",
-      description: "Detect voicemail and answering machines",
-      expectedDbPaths: [
-        "CheatSheetVersion.config.edgeCases (type=machine)"
-      ],
-      expectedConsumers: ["CallProtectionEngine"],
-      expectedTraceKeys: ["trace.machine.detected"],
-      requiredFields: []
-    },
-
     // =========================================================================
-    // TAB: TRANSFER CALLS
+    // TAB: TRANSFER CALLS (Directory + Rules)
     // =========================================================================
     {
       id: "tab.transfers",
       type: "TAB",
       label: "Transfer Calls",
-      description: "Transfer targets and routing rules",
+      description: "Contact directory + transfer routing rules (merged Jan 2026)",
       expectedDbPaths: [
-        "company.aiAgentSettings.transferTargets"
+        "CheatSheetVersion.config.companyContacts",
+        "CheatSheetVersion.config.transferRules"
       ],
-      expectedConsumers: ["TransferRouter"],
+      expectedConsumers: ["ConversationEngine", "CheatSheetEngine"],
       expectedTraceKeys: ["trace.transfer.initiated"],
       children: [
         "transfers.directory",
@@ -691,175 +647,92 @@ const wiringRegistryV1 = {
       ]
     },
 
-    // SECTION: Transfer Directory
     {
       id: "transfers.directory",
       type: "SECTION",
-      label: "Transfer Directory",
+      label: "Contact Directory",
       parentId: "tab.transfers",
-      description: "Available transfer targets",
-      expectedDbPaths: [
-        "company.aiAgentSettings.transferTargets"
-      ],
-      expectedConsumers: ["TransferRouter"],
+      description: "Available transfer targets (Customer Service, Sales, etc.)",
+      expectedDbPaths: ["CheatSheetVersion.config.companyContacts"],
+      expectedConsumers: ["ConversationEngine"],
+      runtimeMethod: "resolveTransferTarget()",
       expectedTraceKeys: ["trace.transfer.targetResolved"],
-      requiredFields: ["id", "name", "phone"]
+      requiredFields: ["name", "phone", "role"]
     },
 
-    // SECTION: Transfer Rules
     {
       id: "transfers.rules",
       type: "SECTION",
       label: "Transfer Rules",
       parentId: "tab.transfers",
-      description: "Conditions for automatic transfers",
-      expectedDbPaths: [
-        "CheatSheetVersion.config.transferRules"
-      ],
-      expectedConsumers: ["TransferRouter"],
+      description: "Intent-based transfer routing",
+      expectedDbPaths: ["CheatSheetVersion.config.transferRules"],
+      expectedConsumers: ["CheatSheetEngine"],
+      runtimeMethod: "evaluateTransferRules()",
       expectedTraceKeys: ["trace.transfer.ruleMatched"],
       requiredFields: []
     },
 
     // =========================================================================
-    // TAB: CALL CENTER
+    // TAB: CALL CENTER (CRM)
     // =========================================================================
     {
       id: "tab.callCenter",
       type: "TAB",
       label: "Call Center",
-      description: "Call handling and agent settings",
+      description: "CRM: Call history, customers, transcripts (opens in new page)",
       expectedDbPaths: [
-        "company.aiAgentSettings.callCenter"
-      ],
-      expectedConsumers: ["CallCenterEngine"],
-      expectedTraceKeys: [],
-      children: []
-    },
-
-    // =========================================================================
-    // TAB: COMPANY CONTACTS
-    // =========================================================================
-    {
-      id: "tab.companyContacts",
-      type: "TAB",
-      label: "Company Contacts",
-      description: "Contact directory for the company",
-      expectedDbPaths: [
-        "company.contacts"
-      ],
-      expectedConsumers: [],
-      expectedTraceKeys: [],
-      children: []
-    },
-
-    // =========================================================================
-    // TAB: BLACK BOX (Critical for debugging)
-    // =========================================================================
-    {
-      id: "tab.blackBox",
-      type: "TAB",
-      label: "Black Box",
-      description: "Turn-by-turn conversation logging and debugging",
-      expectedDbPaths: [
-        "V22BlackBox collection"
-      ],
-      expectedConsumers: ["BlackBoxLogger", "ConversationEngine"],
-      expectedTraceKeys: [
-        "CHECKPOINT 10",
-        "trace.blackBox.logged"
-      ],
-      children: [
-        "blackBox.turnLogs",
-        "blackBox.sessionHistory",
-        "blackBox.debugPayload"
-      ]
-    },
-
-    // SECTION: Turn Logs
-    {
-      id: "blackBox.turnLogs",
-      type: "SECTION",
-      label: "Turn Logs",
-      parentId: "tab.blackBox",
-      description: "Individual turn records with full debug",
-      expectedDbPaths: [
-        "V22BlackBox collection"
-      ],
-      expectedConsumers: ["BlackBoxLogger"],
-      expectedTraceKeys: ["trace.turn.logged"],
-      requiredFields: ["companyId", "sessionId", "turn", "userInput", "aiResponse"]
-    },
-
-    // SECTION: Session History
-    {
-      id: "blackBox.sessionHistory",
-      type: "SECTION",
-      label: "Session History",
-      parentId: "tab.blackBox",
-      description: "Full conversation sessions",
-      expectedDbPaths: [
+        "CallSummary collection",
+        "Customer collection",
         "ConversationSession collection"
       ],
-      expectedConsumers: ["SessionService"],
+      expectedConsumers: ["CallSummaryService", "CustomerService", "CustomerLookup"],
       expectedTraceKeys: [],
-      requiredFields: []
-    },
-
-    // SECTION: Debug Payload
-    {
-      id: "blackBox.debugPayload",
-      type: "SECTION",
-      label: "Debug Payload",
-      parentId: "tab.blackBox",
-      description: "Full diagnostic JSON for troubleshooting",
-      expectedDbPaths: [],
-      expectedConsumers: ["ConversationEngine"],
-      expectedTraceKeys: [],
-      requiredFields: []
+      externalPage: "/call-center.html",
+      children: []
     },
 
     // =========================================================================
-    // TAB: TEST AGENT
+    // TAB: LINKS (Outbound URLs)
     // =========================================================================
     {
-      id: "tab.testAgent",
+      id: "tab.links",
       type: "TAB",
-      label: "Test Agent",
-      description: "Live test console for AI agent",
-      expectedDbPaths: [],
+      label: "Links",
+      description: "URLs the AI can share with callers (payment, forms, etc.)",
+      expectedDbPaths: ["CheatSheetVersion.config.links"],
       expectedConsumers: ["ConversationEngine"],
-      expectedTraceKeys: ["trace.testAgent.turn"],
-      children: [
-        "testAgent.console",
-        "testAgent.debugMode"
-      ]
+      expectedTraceKeys: ["trace.link.shared"],
+      children: []
     },
 
-    // SECTION: Test Console
+    // =========================================================================
+    // TAB: WIRING (Developer Tool)
+    // =========================================================================
     {
-      id: "testAgent.console",
-      type: "SECTION",
-      label: "Test Console",
-      parentId: "tab.testAgent",
-      description: "Interactive chat for testing",
+      id: "tab.wiring",
+      type: "TAB",
+      label: "Wiring",
+      description: "Developer tool: Compliance checker, runtime diagnostics",
       expectedDbPaths: [],
-      expectedConsumers: ["ConversationEngine"],
-      expectedTraceKeys: [],
-      requiredFields: []
+      expectedConsumers: [],
+      developerOnly: true,
+      children: []
     },
 
-    // SECTION: Debug Mode
+    // =========================================================================
+    // TAB: LEGACY (Migration Audit)
+    // =========================================================================
     {
-      id: "testAgent.debugMode",
-      type: "SECTION",
-      label: "Debug Mode",
-      parentId: "tab.testAgent",
-      description: "Verbose debug output during tests",
+      id: "tab.legacy",
+      type: "TAB",
+      label: "Legacy",
+      description: "READ-ONLY archive of pre-2026 data for migration auditing",
       expectedDbPaths: [],
-      expectedConsumers: ["ConversationEngine"],
-      expectedTraceKeys: [],
-      requiredFields: []
+      expectedConsumers: [],
+      deprecated: true,
+      note: "Data here is NOT used by live system - for audit reference only",
+      children: []
     },
 
     // =========================================================================
@@ -871,7 +744,7 @@ const wiringRegistryV1 = {
       label: "Redis Cache",
       description: "Scenario pool caching (5 min TTL)",
       expectedDbPaths: [],
-      expectedConsumers: ["ScenarioPoolService", "redisFactory"],
+      expectedConsumers: ["ScenarioPoolService", "redisClientFactory"],
       expectedTraceKeys: [],
       cacheKey: "scenario-pool:{companyId}",
       cacheTTL: 300,
@@ -899,32 +772,24 @@ const wiringRegistryV1 = {
       type: "INFRASTRUCTURE",
       label: "Effective Config Version",
       description: "Hash of compiled configuration for drift detection",
-      expectedDbPaths: [
-        "company.effectiveConfigVersion"
-      ],
-      expectedConsumers: ["RuntimeTruthProvider", "ConfigAuditService"],
+      expectedDbPaths: ["company.effectiveConfigVersion"],
+      expectedConsumers: ["PlatformSnapshotService", "ConfigAuditService"],
       expectedTraceKeys: [],
       critical: true
     },
 
     // =========================================================================
-    // CHEAT SHEETS (Discovery fallback)
+    // BLACK BOX (Logging - accessed via Call Center)
     // =========================================================================
     {
-      id: "dataConfig.cheatSheets",
-      type: "SECTION",
-      label: "Cheat Sheets",
-      parentId: "tab.dataConfig",
-      description: "FAQ knowledge base for discovery fallback",
-      expectedDbPaths: [
-        "CheatSheetVersion collection"
-      ],
-      expectedConsumers: ["CheatSheetRuntimeService", "ConversationEngine"],
-      expectedTraceKeys: [
-        "CHECKPOINT 2.5",
-        "trace.cheatSheet.used"
-      ],
-      requiredFields: []
+      id: "infra.blackBox",
+      type: "INFRASTRUCTURE",
+      label: "Black Box Logger",
+      description: "Turn-by-turn conversation logging and debugging",
+      expectedDbPaths: ["V22BlackBox collection"],
+      expectedConsumers: ["BlackBoxLogger", "ConversationEngine"],
+      expectedTraceKeys: ["CHECKPOINT 10", "trace.blackBox.logged"],
+      note: "Accessed via Call Center tab, not a separate tab"
     }
   ],
 
@@ -973,6 +838,12 @@ const wiringRegistryV1 = {
       label: "No guessing scenario/category IDs",
       severity: "HIGH",
       description: "Always use Export JSON to get real IDs; never fabricate them"
+    },
+    {
+      id: "GR_NO_PHANTOM_SERVICES",
+      label: "No phantom services in registry",
+      severity: "HIGH",
+      description: "Every expectedConsumer must be an actual .js file that exists in /services/"
     }
   ],
 
@@ -1000,8 +871,35 @@ const wiringRegistryV1 = {
     { id: "CHECKPOINT 9f", description: "LLM response generated", file: "ConversationEngine.js" },
     { id: "CHECKPOINT 9g", description: "Session state saved", file: "ConversationEngine.js" },
     { id: "CHECKPOINT 10", description: "Updating session / Black Box logged", file: "ConversationEngine.js" }
-  ]
+  ],
+
+  // =========================================================================
+  // REMOVED ITEMS (Audit Jan 2026)
+  // =========================================================================
+  _removed: {
+    "tab.companyContacts": "Merged into tab.transfers (Jan 2026)",
+    "tab.testAgent": "Part of Front Desk tab now, not separate",
+    "tab.blackBox": "Accessed via Call Center, not separate tab",
+    "dataConfig.cheatSheets": "Tab removed, CheatSheet system still works via Call Protection",
+    "GoldenAutofillEngine": "Not a service - logic is in routes/admin/goldenAutofill.js",
+    "CallProtectionEngine": "Phantom - actual service is SmartCallFilter + CheatSheetEngine",
+    "TransferRouter": "Phantom - logic is in ConversationEngine.handleTransfer()",
+    "CallCenterEngine": "Phantom - actual services are CallSummaryService + CustomerService",
+    "OutputGuardrails": "Phantom - logic is in HybridReceptionistLLM.postProcessResponse()",
+    "DetectionEngine": "Phantom - logic is in HybridScenarioSelector",
+    "FallbackController": "Phantom - actual services are LowConfidenceHandler + Tier3LLMFallback",
+    "ModePolicy": "Phantom - logic is inline in ConversationEngine",
+    "EscalationPolicy": "Phantom - logic is inline in ConversationEngine",
+    "LoopDetector": "Phantom - actual service is ConversationStateMachine",
+    "FrustrationEngine": "Phantom - logic is inline in ConversationEngine",
+    "EmotionClassifier": "Phantom - logic is in HybridReceptionistLLM",
+    "ConsentGate": "Phantom - logic is inline in ConversationEngine",
+    "InputNormalizer": "Phantom - logic is in HybridScenarioSelector.normalize()",
+    "SpamFilterManager": "Phantom - actual service is SmartCallFilter",
+    "SystemPromptComposer": "Phantom - actual service is FrontlineScriptBuilder",
+    "RuntimeTruthProvider": "Phantom - actual service is PlatformSnapshotService",
+    "PlatformSnapshotProvider": "Phantom - actual service is PlatformSnapshotService"
+  }
 };
 
 module.exports = { wiringRegistryV1, WIRING_SCHEMA_VERSION };
-
