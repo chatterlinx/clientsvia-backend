@@ -80,6 +80,75 @@ router.get('/healthz', (req, res) => {
     });
 });
 
+// ============================================================================
+// OPENAI HEALTH CHECK - Quick test of LLM connectivity
+// ============================================================================
+router.get('/openai-status', async (req, res) => {
+    const startTime = Date.now();
+    
+    try {
+        // Check if OpenAI client is loaded
+        let openaiClient;
+        try {
+            openaiClient = require('../config/openai');
+        } catch (e) {
+            return res.status(500).json({
+                success: false,
+                error: 'OpenAI client not loaded',
+                message: e.message,
+                hint: 'Check OPENAI_API_KEY environment variable'
+            });
+        }
+        
+        if (!openaiClient) {
+            return res.status(500).json({
+                success: false,
+                error: 'OpenAI client is null',
+                hint: 'OPENAI_API_KEY may not be set in environment'
+            });
+        }
+        
+        // Try a minimal API call
+        const response = await Promise.race([
+            openaiClient.chat.completions.create({
+                model: 'gpt-4o-mini',
+                messages: [{ role: 'user', content: 'Say OK' }],
+                max_tokens: 5
+            }),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout after 5s')), 5000)
+            )
+        ]);
+        
+        const latencyMs = Date.now() - startTime;
+        
+        return res.status(200).json({
+            success: true,
+            status: 'connected',
+            latencyMs,
+            model: 'gpt-4o-mini',
+            tokensUsed: response.usage?.total_tokens || 0,
+            response: response.choices?.[0]?.message?.content || ''
+        });
+        
+    } catch (error) {
+        const latencyMs = Date.now() - startTime;
+        
+        return res.status(500).json({
+            success: false,
+            status: 'error',
+            error: error.message,
+            errorType: error.constructor?.name,
+            latencyMs,
+            hint: error.message.includes('API key') 
+                ? 'Invalid or missing OPENAI_API_KEY'
+                : error.message.includes('timeout')
+                ? 'Network issue or OpenAI is slow'
+                : 'Check Render logs for details'
+        });
+    }
+});
+
 router.get('/readyz', async (req, res) => {
     const mongoReady = mongoose.connection.readyState === 1;
     const redisConfigured = isRedisConfigured();
