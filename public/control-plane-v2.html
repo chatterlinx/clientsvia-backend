@@ -638,6 +638,22 @@
       font-size: 16px;
     }
     
+    .nav-tab .tab-info {
+      font-size: 12px;
+      color: #64748b;
+      margin-left: auto;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    
+    .nav-tab:hover .tab-info {
+      opacity: 1;
+    }
+    
+    .nav-tab .tab-info:hover {
+      color: #22d3ee;
+    }
+    
     .nav-divider {
       width: 1px;
       height: 24px;
@@ -1084,18 +1100,22 @@
     <button class="nav-tab active" data-tab="front-desk">
       <i class="fas fa-concierge-bell"></i>
       <span>Front Desk</span>
+      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('front-desk')"></i>
     </button>
     <button class="nav-tab" data-tab="flow-tree">
       <i class="fas fa-project-diagram"></i>
       <span>Flow Tree</span>
+      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('flow-tree')"></i>
     </button>
     <button class="nav-tab" data-tab="dynamic-flow">
       <i class="fas fa-code-branch"></i>
       <span>Dynamic Flow</span>
+      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('dynamic-flow')"></i>
     </button>
     <button class="nav-tab" data-tab="data-config">
       <i class="fas fa-database"></i>
       <span>Data & Config</span>
+      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('data-config')"></i>
     </button>
     
     <div class="nav-divider"></div>
@@ -1103,10 +1123,12 @@
     <button class="nav-tab" data-tab="call-protection">
       <i class="fas fa-shield-alt"></i>
       <span>Call Protection</span>
+      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('call-protection')"></i>
     </button>
     <button class="nav-tab" data-tab="transfer-calls">
       <i class="fas fa-phone-alt"></i>
       <span>Transfer Calls</span>
+      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('transfer-calls')"></i>
     </button>
     
     <div class="nav-divider"></div>
@@ -1114,11 +1136,13 @@
     <button class="nav-tab" data-tab="call-center" onclick="openCallCenter(); return false;">
       <i class="fas fa-headset"></i>
       <span>Call Center</span>
+      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('call-center')"></i>
     </button>
     <!-- REMOVED: Company Contacts tab (Jan 2026) - Merged into Transfer Calls -->
     <button class="nav-tab" data-tab="links">
       <i class="fas fa-link"></i>
       <span>Links</span>
+      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('links')"></i>
     </button>
     
     <div class="nav-divider"></div>
@@ -1129,6 +1153,7 @@
     <button class="nav-tab" data-tab="wiring" style="color: #22d3ee;">
       <i class="fas fa-plug"></i>
       <span>🔌 Wiring</span>
+      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('wiring')"></i>
     </button>
     
     <div class="nav-divider"></div>
@@ -1136,8 +1161,23 @@
     <button class="nav-tab" data-tab="legacy" style="color: #f59e0b;">
       <i class="fas fa-archive"></i>
       <span>📦 Legacy</span>
+      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('legacy')"></i>
     </button>
   </nav>
+  
+  <!-- Tab Info Modal -->
+  <div id="tab-info-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 10000; align-items: center; justify-content: center;">
+    <div style="background: #1e293b; border-radius: 16px; padding: 24px; max-width: 500px; margin: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); border: 1px solid #334155;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 id="tab-info-title" style="margin: 0; font-size: 18px; color: #f1f5f9;"></h3>
+        <button onclick="closeTabInfo()" style="background: none; border: none; color: #94a3b8; font-size: 24px; cursor: pointer;">×</button>
+      </div>
+      <div id="tab-info-content" style="color: #cbd5e1; font-size: 14px; line-height: 1.7;"></div>
+      <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #334155; font-size: 11px; color: #64748b;">
+        💡 Click the ℹ️ icon on any tab for a quick reminder of what it does.
+      </div>
+    </div>
+  </div>
 
   <!-- ═══════════════════════════════════════════════════════════════════════════
        🔒 DRIFT DETECTION BANNER - Salesforce-Grade Config Governance
@@ -2472,6 +2512,154 @@
         document.body.appendChild(script);
       });
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // TAB INFO SYSTEM - Quick Reference for Each Tab
+    // ═══════════════════════════════════════════════════════════════════════════
+    const TAB_INFO = {
+      'front-desk': {
+        title: '🛎️ Front Desk',
+        content: `<p><strong>Purpose:</strong> Configure the AI receptionist's personality, behavior, and booking settings.</p>
+          <p><strong>Key Features:</strong></p>
+          <ul style="margin: 8px 0; padding-left: 20px;">
+            <li><strong>Personality:</strong> Greeting, tone, voice</li>
+            <li><strong>Booking Slots:</strong> What info to collect (name, phone, address, issue)</li>
+            <li><strong>Conversation Style:</strong> Confident, Balanced, or Polite</li>
+            <li><strong>Interruption Handling:</strong> How to handle off-topic questions</li>
+          </ul>
+          <p><strong>Runtime Impact:</strong> Directly controls LLM system prompt and slot collection.</p>`
+      },
+      'flow-tree': {
+        title: '🌳 Flow Tree (Visualization)',
+        content: `<p><strong>Purpose:</strong> READ-ONLY dashboard showing the overall system architecture and current state.</p>
+          <p><strong>What It Shows:</strong></p>
+          <ul style="margin: 8px 0; padding-left: 20px;">
+            <li><strong>AI Decision Flow Tree:</strong> Visual representation of how calls are processed</li>
+            <li><strong>System Snapshot:</strong> Runtime truth (JSON) - what's actually running</li>
+            <li><strong>Health Status:</strong> Flows, transfers, contacts count</li>
+          </ul>
+          <p><strong>Note:</strong> This tab does NOT control behavior — it visualizes it. Use "Dynamic Flow" to add/edit flows.</p>`
+      },
+      'dynamic-flow': {
+        title: '🧠 Dynamic Flow (Per-Turn Rules)',
+        content: `<p><strong>Purpose:</strong> Create trigger-based rules that fire EVERY TURN during a conversation.</p>
+          <p><strong>Examples:</strong></p>
+          <ul style="margin: 8px 0; padding-left: 20px;">
+            <li><strong>Emergency Service Detection:</strong> Detect keywords like "no heat", "flooding"</li>
+            <li><strong>After Hours Detection:</strong> Apply special rules outside business hours</li>
+            <li><strong>Technician Request:</strong> When caller asks for a specific technician</li>
+          </ul>
+          <p><strong>How It Works:</strong> DynamicFlowEngine evaluates these each turn → fires events → applies state changes.</p>
+          <p><strong>vs FlowEngine:</strong> FlowEngine routes the CALL TYPE once. DynamicFlow applies RULES every turn.</p>`
+      },
+      'data-config': {
+        title: '📊 Data & Config',
+        content: `<p><strong>Purpose:</strong> Manage Q&A scenarios, execution map, and data configuration.</p>
+          <p><strong>Key Features:</strong></p>
+          <ul style="margin: 8px 0; padding-left: 20px;">
+            <li><strong>Scenarios:</strong> Q&A responses (FAQ, pricing, hours, service area)</li>
+            <li><strong>Execution Map:</strong> How scenarios are evaluated (3-Tier intelligence)</li>
+            <li><strong>Categories:</strong> Group scenarios by topic</li>
+          </ul>
+          <p><strong>3-Tier System:</strong> Tier 1 (rule-based, FREE) → Tier 2 (semantic, FREE) → Tier 3 (LLM, costs $)</p>`
+      },
+      'call-protection': {
+        title: '🛡️ Call Protection (Edge Cases)',
+        content: `<p><strong>Purpose:</strong> Enterprise-level call filtering that runs BEFORE the AI answers.</p>
+          <p><strong>Examples:</strong></p>
+          <ul style="margin: 8px 0; padding-left: 20px;">
+            <li><strong>Telemarketer Filter:</strong> Block sales calls, robocalls</li>
+            <li><strong>Spam Detection:</strong> Use spam score to block/flag</li>
+            <li><strong>IVR Detection:</strong> Hang up on automated systems</li>
+            <li><strong>Polite Hangup:</strong> "Sorry, we don't accept solicitation calls"</li>
+          </ul>
+          <p><strong>Runtime:</strong> Evaluated first via CheatSheetEngine before any AI processing.</p>`
+      },
+      'transfer-calls': {
+        title: '📞 Transfer Calls (Directory)',
+        content: `<p><strong>Purpose:</strong> Manage contacts and transfer routing rules for the AI.</p>
+          <p><strong>Two Sections:</strong></p>
+          <ul style="margin: 8px 0; padding-left: 20px;">
+            <li><strong>Contact Directory:</strong> People AI can transfer to (Customer Service, Sales, Manager)</li>
+            <li><strong>Transfer Rules:</strong> When to transfer (e.g., "billing questions" → Accounting)</li>
+          </ul>
+          <p><strong>Runtime:</strong> AI uses these for "Let me transfer you to..." and escalations.</p>`
+      },
+      'call-center': {
+        title: '📱 Call Center (CRM)',
+        content: `<p><strong>Purpose:</strong> View all calls, customers, and transcripts. This is your CRM.</p>
+          <p><strong>Key Features:</strong></p>
+          <ul style="margin: 8px 0; padding-left: 20px;">
+            <li><strong>Recent Calls:</strong> See all incoming calls with outcomes</li>
+            <li><strong>Customers:</strong> Customer database with history</li>
+            <li><strong>Transcripts:</strong> Full conversation logs for each call</li>
+            <li><strong>Analytics:</strong> Tier usage, peak hours, top intents</li>
+          </ul>
+          <p><strong>AI Integration:</strong> Customer context (name, address, history) is injected into AI during calls.</p>`
+      },
+      'links': {
+        title: '🔗 Links (Outbound Delivery)',
+        content: `<p><strong>Purpose:</strong> URLs the AI can share with callers (payment links, forms, etc.)</p>
+          <p><strong>Examples:</strong></p>
+          <ul style="margin: 8px 0; padding-left: 20px;">
+            <li>Payment portal link</li>
+            <li>Service request form</li>
+            <li>Financing application</li>
+            <li>Review/feedback form</li>
+          </ul>
+          <p><strong>Runtime:</strong> AI can say "I'll text you a link to..." and reference linkId.</p>`
+      },
+      'wiring': {
+        title: '🔌 Wiring (Developer Tool)',
+        content: `<p><strong>Purpose:</strong> Advanced diagnostics showing how all systems are connected.</p>
+          <p><strong>For Developers:</strong></p>
+          <ul style="margin: 8px 0; padding-left: 20px;">
+            <li><strong>Compliance Checker:</strong> Verify all tabs are wired correctly</li>
+            <li><strong>Runtime Readers:</strong> Debug which services read which config</li>
+            <li><strong>Schema Validation:</strong> Ensure data matches expected format</li>
+          </ul>
+          <p><strong>Warning:</strong> This is technical — use for debugging, not daily operations.</p>`
+      },
+      'legacy': {
+        title: '📦 Legacy (Migration Audit)',
+        content: `<p><strong>Purpose:</strong> READ-ONLY archive of old data from before the Control Plane cleanup.</p>
+          <p><strong>Why It Exists:</strong></p>
+          <ul style="margin: 8px 0; padding-left: 20px;">
+            <li>Prove nothing was lost during migration</li>
+            <li>View old triage cards, behavior rules, guardrails</li>
+            <li>Reference for manual migration if needed</li>
+          </ul>
+          <p><strong>Note:</strong> This tab is for auditing only. Data here is NOT used by the live system.</p>`
+      }
+    };
+    
+    function showTabInfo(tabId) {
+      const info = TAB_INFO[tabId];
+      if (!info) return;
+      
+      document.getElementById('tab-info-title').textContent = info.title;
+      document.getElementById('tab-info-content').innerHTML = info.content;
+      document.getElementById('tab-info-modal').style.display = 'flex';
+    }
+    
+    function closeTabInfo() {
+      document.getElementById('tab-info-modal').style.display = 'none';
+    }
+    
+    // Close modal on backdrop click
+    document.addEventListener('click', (e) => {
+      const modal = document.getElementById('tab-info-modal');
+      if (e.target === modal) {
+        closeTabInfo();
+      }
+    });
+    
+    // Close modal on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeTabInfo();
+      }
+    });
 
     // ═══════════════════════════════════════════════════════════════════════════
     // TAB SWITCHING
