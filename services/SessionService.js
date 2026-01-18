@@ -63,19 +63,36 @@ class SessionService {
             // Try to find customer by phone
             const phone = identifiers.callerPhone || identifiers.smsPhone;
             if (phone) {
+                // ═══════════════════════════════════════════════════════════════════
+                // BUG FIX (Jan 18, 2026): Handle null customer from findOrCreate
+                // CustomerService.findOrCreate can return { customer: null } if:
+                // - No valid identifier provided
+                // - Customer creation failed (duplicate key, validation error, etc.)
+                // We must NOT crash - sessions can work without customer linkage.
+                // ═══════════════════════════════════════════════════════════════════
                 const { customer: foundCustomer, isNew } = await CustomerService.findOrCreate(
                     companyId,
                     { phone },
                     channel
                 );
-                customerId = foundCustomer._id;
-                customerContext = CustomerService.buildContextForAI(foundCustomer);
                 
-                logger.info('[SESSION SERVICE] Customer lookup result', {
-                    customerId,
-                    isNew,
-                    name: foundCustomer.getDisplayName()
-                });
+                if (foundCustomer) {
+                    customerId = foundCustomer._id;
+                    customerContext = CustomerService.buildContextForAI(foundCustomer);
+                    
+                    logger.info('[SESSION SERVICE] Customer lookup result', {
+                        customerId,
+                        isNew,
+                        name: foundCustomer.getDisplayName?.() || 'Unknown'
+                    });
+                } else {
+                    // Customer lookup/creation failed - session can still work!
+                    logger.warn('[SESSION SERVICE] ⚠️ Customer lookup returned null (non-fatal)', {
+                        companyId,
+                        phone,
+                        channel
+                    });
+                }
             }
         }
         
