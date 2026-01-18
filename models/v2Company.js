@@ -2324,21 +2324,32 @@ const companySchema = new mongoose.Schema({
                 },
                 
                 // ═══════════════════════════════════════════════════════════════
-                // 🆕 RETURN-TO-SLOT PHRASING
+                // 🆕 RETURN-TO-SLOT PHRASING (MULTIPLE VARIANTS - AVOID ROBOTIC)
                 // ═══════════════════════════════════════════════════════════════
                 // After answering an interrupt, how does AI return to the slot?
+                // AI picks RANDOMLY from these to sound natural, not robotic.
                 // Placeholders: {slotQuestion}, {slotLabel}, {callerName}
-                returnToSlotPrompt: {
-                    type: String,
-                    trim: true,
-                    default: "Now, back to scheduling — {slotQuestion}"
+                // ═══════════════════════════════════════════════════════════════
+                returnToSlotVariants: {
+                    type: [String],
+                    default: [
+                        "Now, back to scheduling — {slotQuestion}",
+                        "Alright, {slotQuestion}",
+                        "So, {slotQuestion}",
+                        "Anyway, {slotQuestion}",
+                        "Back to your appointment — {slotQuestion}"
+                    ]
                 },
                 
-                // Shorter variant for quick answers
-                returnToSlotShort: {
-                    type: String,
-                    trim: true,
-                    default: "So, {slotQuestion}"
+                // Shorter variants for quick answers (1-2 sentence responses)
+                returnToSlotShortVariants: {
+                    type: [String],
+                    default: [
+                        "So, {slotQuestion}",
+                        "{slotQuestion}",
+                        "Alright — {slotQuestion}",
+                        "Now, {slotQuestion}"
+                    ]
                 }
             },
 

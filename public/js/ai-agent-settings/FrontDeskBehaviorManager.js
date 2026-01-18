@@ -400,8 +400,20 @@ class FrontDeskBehaviorManager {
                 allowedCategories: ['FAQ', 'HOURS', 'SERVICE_AREA', 'PRICING', 'SMALL_TALK', 'EMERGENCY'],
                 maxInterruptsBeforeTransfer: 3,
                 transferOfferPrompt: "I want to make sure I'm helping you the best way I can. Would you like me to connect you with someone who can answer all your questions, or should we continue with the scheduling?",
-                returnToSlotPrompt: "Now, back to scheduling — {slotQuestion}",
-                returnToSlotShort: "So, {slotQuestion}"
+                // Multiple variants to avoid robotic repetition
+                returnToSlotVariants: [
+                    "Now, back to scheduling — {slotQuestion}",
+                    "Alright, {slotQuestion}",
+                    "So, {slotQuestion}",
+                    "Anyway, {slotQuestion}",
+                    "Back to your appointment — {slotQuestion}"
+                ],
+                returnToSlotShortVariants: [
+                    "So, {slotQuestion}",
+                    "{slotQuestion}",
+                    "Alright — {slotQuestion}",
+                    "Now, {slotQuestion}"
+                ]
             },
             emotionResponses: {
                 stressed: { enabled: true, acknowledgments: ["I understand, that sounds stressful."], followUp: "Let me help you get this taken care of." },
@@ -2032,24 +2044,29 @@ class FrontDeskBehaviorManager {
                             </div>
                         </div>
                         
-                        <!-- Return-to-Slot Phrasing -->
+                        <!-- Return-to-Slot Phrasing (Multiple Variants) -->
                         <div>
                             <label style="display:block; margin-bottom:8px; color:#c9d1d9; font-weight:500;">
-                                Return-to-Slot Phrasing
-                                <span style="color:#6e7681; font-weight:normal; font-size:12px;">Placeholders: {slotQuestion}, {slotLabel}, {callerName}</span>
+                                Return-to-Slot Phrasing 
+                                <span style="color:#3fb950; font-weight:normal; font-size:12px;">🎲 AI picks randomly to avoid robotic repetition</span>
                             </label>
+                            <p style="margin:0 0 8px 0; color:#6e7681; font-size:12px;">
+                                Placeholders: <code style="background:#0d1117; padding:2px 6px; border-radius:4px;">{slotQuestion}</code>
+                                <code style="background:#0d1117; padding:2px 6px; border-radius:4px;">{slotLabel}</code>
+                                <code style="background:#0d1117; padding:2px 6px; border-radius:4px;">{callerName}</code>
+                            </p>
                             <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
                                 <div>
-                                    <label style="display:block; margin-bottom:4px; color:#8b949e; font-size:12px;">Standard (after longer answer)</label>
-                                    <textarea id="fdb-interrupt-returnPrompt" rows="2" 
-                                        placeholder="Now, back to scheduling — {slotQuestion}"
-                                        style="width:100%; padding:10px; background:#161b22; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; resize:vertical;">${this.escapeHtml(bookingInterruption.returnToSlotPrompt || "Now, back to scheduling — {slotQuestion}")}</textarea>
+                                    <label style="display:block; margin-bottom:4px; color:#8b949e; font-size:12px;">Standard Variants (one per line)</label>
+                                    <textarea id="fdb-interrupt-returnVariants" rows="5" 
+                                        placeholder="Now, back to scheduling — {slotQuestion}&#10;Alright, {slotQuestion}&#10;So, {slotQuestion}"
+                                        style="width:100%; padding:10px; background:#161b22; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; resize:vertical; font-family:monospace; font-size:12px;">${this.escapeHtml((bookingInterruption.returnToSlotVariants || ["Now, back to scheduling — {slotQuestion}", "Alright, {slotQuestion}", "So, {slotQuestion}", "Anyway, {slotQuestion}", "Back to your appointment — {slotQuestion}"]).join('\n'))}</textarea>
                                 </div>
                                 <div>
-                                    <label style="display:block; margin-bottom:4px; color:#8b949e; font-size:12px;">Short (after quick answer)</label>
-                                    <textarea id="fdb-interrupt-returnShort" rows="2" 
-                                        placeholder="So, {slotQuestion}"
-                                        style="width:100%; padding:10px; background:#161b22; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; resize:vertical;">${this.escapeHtml(bookingInterruption.returnToSlotShort || "So, {slotQuestion}")}</textarea>
+                                    <label style="display:block; margin-bottom:4px; color:#8b949e; font-size:12px;">Short Variants (one per line)</label>
+                                    <textarea id="fdb-interrupt-returnShortVariants" rows="5" 
+                                        placeholder="So, {slotQuestion}&#10;{slotQuestion}&#10;Alright — {slotQuestion}"
+                                        style="width:100%; padding:10px; background:#161b22; border:1px solid #30363d; border-radius:6px; color:#c9d1d9; resize:vertical; font-family:monospace; font-size:12px;">${this.escapeHtml((bookingInterruption.returnToSlotShortVariants || ["So, {slotQuestion}", "{slotQuestion}", "Alright — {slotQuestion}", "Now, {slotQuestion}"]).join('\n'))}</textarea>
                                 </div>
                             </div>
                         </div>
@@ -9109,6 +9126,25 @@ Sean → Shawn, Shaun`;
                 if (cat) allowedCategories.push(cat);
             });
 
+            // Parse return-to-slot variants (one per line)
+            const parseVariants = (raw, defaults) => {
+                const lines = (raw || '').split('\n').map(v => v.trim()).filter(Boolean);
+                return lines.length > 0 ? lines : defaults;
+            };
+            const defaultReturnVariants = [
+                "Now, back to scheduling — {slotQuestion}",
+                "Alright, {slotQuestion}",
+                "So, {slotQuestion}",
+                "Anyway, {slotQuestion}",
+                "Back to your appointment — {slotQuestion}"
+            ];
+            const defaultShortVariants = [
+                "So, {slotQuestion}",
+                "{slotQuestion}",
+                "Alright — {slotQuestion}",
+                "Now, {slotQuestion}"
+            ];
+
             this.config.bookingInterruption = {
                 enabled: getChecked('fdb-interrupt-enabled') === true,
                 oneSlotPerTurn: getChecked('fdb-interrupt-oneSlot') !== false,
@@ -9120,8 +9156,9 @@ Sean → Shawn, Shaun`;
                 allowedCategories: allowedCategories.length > 0 ? allowedCategories : ['FAQ', 'HOURS', 'SERVICE_AREA', 'PRICING', 'SMALL_TALK', 'EMERGENCY'],
                 maxInterruptsBeforeTransfer: Number(get('fdb-interrupt-maxBeforeTransfer') || 3),
                 transferOfferPrompt: get('fdb-interrupt-transferOffer') || "I want to make sure I'm helping you the best way I can. Would you like me to connect you with someone who can answer all your questions, or should we continue with the scheduling?",
-                returnToSlotPrompt: get('fdb-interrupt-returnPrompt') || "Now, back to scheduling — {slotQuestion}",
-                returnToSlotShort: get('fdb-interrupt-returnShort') || "So, {slotQuestion}"
+                // Multiple variants to avoid robotic repetition - AI picks randomly
+                returnToSlotVariants: parseVariants(get('fdb-interrupt-returnVariants'), defaultReturnVariants),
+                returnToSlotShortVariants: parseVariants(get('fdb-interrupt-returnShortVariants'), defaultShortVariants)
             };
 
             this.config.bookingPromptsMap = bookingPromptsMap;

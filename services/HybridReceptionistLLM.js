@@ -613,9 +613,13 @@ class HybridReceptionistLLM {
                     shortClarificationPatterns: Array.isArray(interruptionCfgRaw.shortClarificationPatterns)
                         ? interruptionCfgRaw.shortClarificationPatterns
                         : [],
-                    // 🆕 Configurable return-to-slot phrasing
-                    returnToSlotPrompt: interruptionCfgRaw.returnToSlotPrompt || 'Now, back to scheduling — {slotQuestion}',
-                    returnToSlotShort: interruptionCfgRaw.returnToSlotShort || 'So, {slotQuestion}'
+                    // 🆕 Multiple variants to avoid robotic repetition - AI picks randomly
+                    returnToSlotVariants: Array.isArray(interruptionCfgRaw.returnToSlotVariants) && interruptionCfgRaw.returnToSlotVariants.length > 0
+                        ? interruptionCfgRaw.returnToSlotVariants
+                        : ['Now, back to scheduling — {slotQuestion}', 'Alright, {slotQuestion}', 'So, {slotQuestion}'],
+                    returnToSlotShortVariants: Array.isArray(interruptionCfgRaw.returnToSlotShortVariants) && interruptionCfgRaw.returnToSlotShortVariants.length > 0
+                        ? interruptionCfgRaw.returnToSlotShortVariants
+                        : ['So, {slotQuestion}', '{slotQuestion}', 'Alright — {slotQuestion}']
                 };
 
                 const promptKeys = {
@@ -671,12 +675,15 @@ class HybridReceptionistLLM {
                     }
                     let reply = ack.trim();
                     
-                    // 🆕 Use configurable return-to-slot phrasing
+                    // 🆕 Pick RANDOMLY from variants to avoid robotic repetition
                     if (interruptionCfg.forceReturnToQuestionAsLastLine && returnToQuestion) {
                         const slotLabel = enterpriseContext.activeSlotLabel || '';
-                        const returnTemplate = isShortAnswer
-                            ? interruptionCfg.returnToSlotShort
-                            : interruptionCfg.returnToSlotPrompt;
+                        const variants = isShortAnswer
+                            ? interruptionCfg.returnToSlotShortVariants
+                            : interruptionCfg.returnToSlotVariants;
+                        // Random selection from variants
+                        const randomIndex = Math.floor(Math.random() * variants.length);
+                        const returnTemplate = variants[randomIndex] || variants[0] || '{slotQuestion}';
                         const returnPhrase = returnTemplate
                             .replace('{slotQuestion}', returnToQuestion)
                             .replace('{slotLabel}', slotLabel)
