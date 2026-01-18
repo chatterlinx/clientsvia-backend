@@ -382,12 +382,16 @@ class HybridScenarioSelector {
             }
             
             // ============================================
-            // STEP 1.5: EXACT-MATCH BYPASS (100% CONFIDENCE)
+            // STEP 1.5: EXACT-MATCH & CONTAINS-MATCH BYPASS
             // ============================================
-            // 🎯 CRITICAL: If normalized input exactly matches any normalized trigger,
-            // fire immediately with 100% confidence, bypassing all thresholds.
-            // This prevents "60% = NO MATCH" nonsense when caller says the exact phrase.
+            // 🎯 CRITICAL: Two-stage trigger matching:
+            // 1. EXACT MATCH: normalizedPhrase === normalizedTrigger → 100% confidence
+            // 2. CONTAINS MATCH: normalizedPhrase contains normalizedTrigger → 95% confidence
+            //    This handles "yes, my thermostat is blank" matching "my thermostat is blank"
+            // This prevents "60% = NO MATCH" nonsense when caller says the trigger phrase.
             const exactMatchStart = Date.now();
+            let containsMatchCandidate = null; // Track best contains match as fallback
+            
             for (const scenario of safeScenarios) {
                 if (!scenario || typeof scenario !== 'object') {continue;}
                 if (scenario.status !== 'live' || scenario.isActive === false) {continue;}
@@ -395,6 +399,11 @@ class HybridScenarioSelector {
                 const triggers = this.toArr(scenario.triggers);
                 for (const trigger of triggers) {
                     const normalizedTrigger = this.normalizePhrase(trigger);
+                    if (!normalizedTrigger || normalizedTrigger.length < 3) {continue;}
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // CHECK 1: EXACT MATCH → 100% confidence, instant return
+                    // ═══════════════════════════════════════════════════════════════
                     if (normalizedPhrase === normalizedTrigger) {
                         trace.timingMs.exactMatch = Date.now() - exactMatchStart;
                         trace.selectionReason = `EXACT MATCH BYPASS (normalized phrase = normalized trigger)`;
@@ -434,8 +443,75 @@ class HybridScenarioSelector {
                             trace
                         };
                     }
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // CHECK 2: CONTAINS MATCH → 95% confidence
+                    // ═══════════════════════════════════════════════════════════════
+                    // Handle cases like "yes, my thermostat is blank" containing trigger
+                    // "my thermostat is blank". The trigger must be at least 3 words to
+                    // avoid false positives from short triggers like "ac" or "help".
+                    const triggerWordCount = normalizedTrigger.split(' ').filter(w => w.length > 0).length;
+                    if (triggerWordCount >= 3 && normalizedPhrase.includes(normalizedTrigger)) {
+                        // Track this as a candidate but keep looking for exact match
+                        const priority = scenario.priority || 0;
+                        if (!containsMatchCandidate || priority > (containsMatchCandidate.priority || 0)) {
+                            containsMatchCandidate = {
+                                scenario,
+                                trigger,
+                                normalizedTrigger,
+                                priority,
+                                triggerWordCount
+                            };
+                        }
+                    }
                 }
             }
+            
+            // ═══════════════════════════════════════════════════════════════
+            // CONTAINS MATCH FALLBACK: Return 95% confidence match
+            // ═══════════════════════════════════════════════════════════════
+            if (containsMatchCandidate) {
+                const { scenario, trigger, normalizedTrigger, triggerWordCount } = containsMatchCandidate;
+                trace.timingMs.exactMatch = Date.now() - exactMatchStart;
+                trace.selectionReason = `CONTAINS MATCH BYPASS (phrase contains ${triggerWordCount}-word trigger)`;
+                trace.selectedScenario = {
+                    scenarioId: scenario.scenarioId,
+                    name: scenario.name,
+                    score: 0.95,
+                    confidence: 0.95,
+                    priority: scenario.priority || 0,
+                    containsMatchTrigger: trigger
+                };
+                trace.topCandidates = [{
+                    scenarioId: scenario.scenarioId,
+                    name: scenario.name,
+                    score: '0.950',
+                    confidence: '0.950',
+                    priority: scenario.priority || 0,
+                    breakdown: { containsMatch: 0.95 }
+                }];
+                trace.timingMs.total = Date.now() - startTime;
+                
+                logger.info('🎯 [SCENARIO SELECTOR] CONTAINS MATCH BYPASS', {
+                    phrase,
+                    normalizedPhrase,
+                    trigger,
+                    normalizedTrigger,
+                    triggerWordCount,
+                    scenarioId: scenario.scenarioId,
+                    name: scenario.name,
+                    timeMs: trace.timingMs.total
+                });
+                
+                return {
+                    scenario,
+                    score: 0.95,
+                    confidence: 0.95,
+                    breakdown: { containsMatch: 0.95 },
+                    trace
+                };
+            }
+            
             trace.timingMs.exactMatch = Date.now() - exactMatchStart;
             
             // ============================================
