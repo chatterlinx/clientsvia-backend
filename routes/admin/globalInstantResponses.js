@@ -1611,6 +1611,7 @@ router.post('/:templateId/categories/:categoryId/scenarios', async (req, res) =>
             },
             
             // Voice
+            behavior: scenarioData.behavior || scenarioData.behaviorId || null,
             toneLevel: scenarioData.toneLevel || 2,
             ttsOverride: scenarioData.ttsOverride || {},
             
@@ -1736,7 +1737,8 @@ router.patch('/:templateId/categories/:categoryId/scenarios/:scenarioId', async 
             'regexTriggers', 'negativeTriggers', 'contextWeight', 'preconditions', 'effects',
             'followUpFunnel', 'replySelection', 'entityCapture', 'entityValidation',
             'dynamicVariables', 'actionHooks', 'handoffPolicy', 'sensitiveInfoRule',
-            'customMasking', 'timedFollowUp', 'silencePolicy', 'toneLevel', 'ttsOverride'
+            'customMasking', 'timedFollowUp', 'silencePolicy', 'toneLevel', 'ttsOverride',
+            'behavior'
         ];
 
         updatableFields.forEach(field => {
