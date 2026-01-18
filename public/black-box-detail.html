@@ -553,13 +553,19 @@
             padding: 0 4px;
         }
 
+        /* V2: Updated segment colors for new architecture */
         .segment-STT { background: #22d3ee; }
-        .segment-Brain-1 { background: #f59e0b; }
-        .segment-Triage { background: #a78bfa; }
-        .segment-Brain-2 { background: #3b82f6; }
+        .segment-Match { background: #22c55e; }  /* Scenario matched - green */
+        .segment-Fast { background: #22c55e; }  /* Fast match (legacy) */
+        .segment-LLM { background: #f59e0b; }  /* LLM tier3 - orange */
+        .segment-Processing { background: #a78bfa; }  /* Generic processing */
         .segment-TTS { background: #ec4899; }
         .segment-slow { background: repeating-linear-gradient(45deg, #f59e0b, #f59e0b 5px, #d97706 5px, #d97706 10px); }
         .segment-failed { background: #ef4444; }
+        /* Legacy support */
+        .segment-Brain-1 { background: #f59e0b; }
+        .segment-Triage { background: #a78bfa; }
+        .segment-Brain-2 { background: #3b82f6; }
 
         .waterfall-legend {
             display: flex;
@@ -616,18 +622,62 @@
             text-align: center;
         }
 
+        /* === V2 Event Type Colors (Jan 2026) === */
+        /* Call Lifecycle */
         .type-CALL_START, .type-CALL_END { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
         .type-GREETING_SENT { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
-        .type-GATHER_FINAL { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+        .type-GATHER_FINAL, .type-GATHER_PARTIAL { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+        .type-GATHER_TIMEOUT { background: rgba(234, 179, 8, 0.2); color: var(--accent-yellow); }
+        
+        /* V2: Scenario Matching */
+        .type-SCENARIO_MATCH_ATTEMPT { background: rgba(6, 182, 212, 0.2); color: var(--accent-cyan); }
+        .type-SCENARIO_MATCHED { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
+        .type-SCENARIO_NO_MATCH { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); }
+        .type-TIER3_FALLBACK { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); }
+        
+        /* Response */
+        .type-AGENT_RESPONSE_BUILT { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .type-TURN_COMPLETE { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
+        
+        /* State & Routing */
+        .type-STATE_LOADED, .type-STATE_SAVED { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
+        .type-ROUTING_DECISION { background: rgba(6, 182, 212, 0.2); color: var(--accent-cyan); }
+        .type-HYBRID_PATH_START, .type-HYBRID_PATH_SUCCESS { background: rgba(6, 182, 212, 0.2); color: var(--accent-cyan); }
+        .type-PATH_RESOLVED { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        
+        /* Intent & Mode */
+        .type-INTENT_DETECTED { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
+        .type-MODE_CHANGED { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+        
+        /* Booking */
+        .type-BOOKING_MODE_LOCKED { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+        .type-SLOT_COLLECTED, .type-SLOT_ASKING { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+        .type-BOOKING_COMPLETE { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
+        
+        /* TTS */
+        .type-TTS_STARTED, .type-TTS_COMPLETED { background: rgba(236, 72, 153, 0.2); color: var(--accent-pink); }
+        .type-TWIML_SENT, .type-GATHER_CONFIGURED { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
+        
+        /* STT */
+        .type-STT_PREPROCESSING { background: rgba(6, 182, 212, 0.2); color: var(--accent-cyan); }
+        .type-STT_HINTS_LOADED { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
+        
+        /* Errors & Warnings */
+        .type-BAILOUT_TRIGGERED { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+        .type-LOOP_DETECTED { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); }
+        .type-CONVERSATION_ENGINE_ERROR { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+        .type-ERROR_OCCURRED { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+        
+        /* Transfer & Customer */
+        .type-TRANSFER_INITIATED { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
+        .type-CUSTOMER_IDENTIFIED { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        
+        /* Legacy Support */
         .type-FAST_MATCH_HIT { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
         .type-SYNONYM_TRANSLATION { background: rgba(236, 72, 153, 0.2); color: var(--accent-pink); }
         .type-MATCHING_PIPELINE { background: rgba(6, 182, 212, 0.2); color: var(--accent-cyan); }
         .type-LLM_FALLBACK { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); }
-        .type-INTENT_DETECTED { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
         .type-TRIAGE_DECISION { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
-        .type-BAILOUT_TRIGGERED { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
-        .type-LOOP_DETECTED { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); }
-        .type-TRANSFER_INITIATED { background: rgba(139, 92, 246, 0.2); color: var(--accent-purple); }
 
         .timeline-data {
             flex: 1;
@@ -998,15 +1048,23 @@
         // CLIENT-SIDE VISUALIZATION GENERATORS (fallback for older recordings)
         // ═══════════════════════════════════════════════════════════════════
         
+        // ═══════════════════════════════════════════════════════════════════
+        // V2 VISUALIZATION (Updated Jan 2026 for new architecture)
+        // - Brain-1/Brain-2 → ConversationEngine
+        // - Triage → ScenarioMatcher
+        // - FAST_MATCH_HIT → SCENARIO_MATCHED
+        // - LLM_FALLBACK → TIER3_FALLBACK
+        // ═══════════════════════════════════════════════════════════════════
+        
         function generateSequenceDiagramFromEvents(events) {
             if (!events || events.length === 0) return null;
             
             let mermaid = `sequenceDiagram
     participant C as Caller
     participant T as Twilio
-    participant B1 as Brain-1
-    participant TR as Triage
-    participant B2 as Brain-2
+    participant CE as ConversationEngine
+    participant SM as ScenarioMatcher
+    participant LLM as LLM (Tier3)
     participant TTS as TTS
 `;
             
@@ -1023,48 +1081,67 @@
                         break;
                     case 'GATHER_FINAL':
                         mermaid += `    C->>T: ${time} "${truncText(event.data?.text, 25)}"\n`;
-                        mermaid += `    T->>B1: Process\n`;
+                        mermaid += `    T->>CE: Process\n`;
                         break;
-                    case 'SYNONYM_TRANSLATION':
-                        const synCount = event.data?.count || event.data?.replacements?.length || 0;
-                        mermaid += `    Note over T: 🗣️ Slang Translated (${synCount})\n`;
-                        break;
-                    case 'MATCHING_PIPELINE':
-                        const mp = event.data?.matching || {};
-                        const mpDecision = mp.decision || '?';
-                        const mpSelected = mp.selected || 'none';
-                        if (mpDecision === 'FAST_MATCH') {
-                            mermaid += `    Note over B1: 🔬 Pipeline: ${mpSelected}\n`;
-                        } else {
-                            mermaid += `    Note over B1: ⚠️ Pipeline: ${mp.fallbackReason || 'NO_MATCH'}\n`;
+                    case 'STT_PREPROCESSING':
+                        const fillers = event.data?.fillersRemoved?.length || 0;
+                        if (fillers > 0) {
+                            mermaid += `    Note over T: 🔇 ${fillers} fillers removed\n`;
                         }
                         break;
+                    case 'SCENARIO_MATCH_ATTEMPT':
+                        const scenCount = event.data?.scenariosChecked || '?';
+                        mermaid += `    CE->>SM: Check ${scenCount} scenarios\n`;
+                        break;
+                    case 'SCENARIO_MATCHED':
+                        const scenario = truncText(event.data?.scenarioName || '?', 20);
+                        const tier = event.data?.tier || 'tier1';
+                        mermaid += `    SM->>CE: ✅ ${tier.toUpperCase()}: ${scenario}\n`;
+                        break;
+                    case 'TIER3_FALLBACK':
+                        mermaid += `    SM->>LLM: ⚠️ No match - LLM fallback\n`;
+                        mermaid += `    LLM->>CE: Response (${event.data?.latencyMs || '?'}ms)\n`;
+                        break;
+                    // Legacy support for old event types
                     case 'FAST_MATCH_HIT':
-                        mermaid += `    B1->>TR: ✅ Fast Match\n`;
+                        mermaid += `    CE->>SM: ✅ Fast Match (legacy)\n`;
                         break;
                     case 'LLM_FALLBACK':
-                        mermaid += `    Note over B1: ⚠️ LLM Fallback\n`;
-                        break;
-                    case 'INTENT_DETECTED':
-                        mermaid += `    B1->>TR: Intent: ${event.data?.intent || '?'}\n`;
+                        mermaid += `    Note over CE: ⚠️ LLM Fallback (legacy)\n`;
                         break;
                     case 'TRIAGE_DECISION':
-                        mermaid += `    TR->>B2: Route: ${event.data?.route || 'MESSAGE_ONLY'}\n`;
+                        mermaid += `    SM->>CE: Route: ${event.data?.route || 'MESSAGE_ONLY'}\n`;
+                        break;
+                    case 'INTENT_DETECTED':
+                        mermaid += `    Note over CE: Intent: ${event.data?.intent || '?'}\n`;
+                        break;
+                    case 'MODE_CHANGED':
+                        mermaid += `    Note over CE: Mode: ${event.data?.toMode || '?'}\n`;
                         break;
                     case 'AGENT_RESPONSE_BUILT':
-                        mermaid += `    B2->>TTS: Response ready\n`;
+                        const source = event.data?.source || 'unknown';
+                        mermaid += `    CE->>TTS: Response (${source})\n`;
                         break;
-                    case 'TTS_GENERATED':
+                    case 'TTS_COMPLETED':
                         mermaid += `    TTS-->>C: ${time} Audio\n`;
                         break;
+                    case 'BOOKING_MODE_LOCKED':
+                        mermaid += `    Note over CE: 📅 BOOKING LOCKED\n`;
+                        break;
+                    case 'SLOT_COLLECTED':
+                        mermaid += `    Note over CE: ✅ ${event.data?.slot}: ${truncText(event.data?.value, 15)}\n`;
+                        break;
                     case 'LOOP_DETECTED':
-                        mermaid += `    Note over B1: 🔄 LOOP\n`;
+                        mermaid += `    Note over CE: 🔄 LOOP DETECTED\n`;
                         break;
                     case 'BAILOUT_TRIGGERED':
-                        mermaid += `    Note over B1: 🚨 BAILOUT\n`;
+                        mermaid += `    Note over CE: 🚨 BAILOUT\n`;
                         break;
                     case 'TRANSFER_INITIATED':
-                        mermaid += `    B1->>T: TRANSFER\n`;
+                        mermaid += `    CE->>T: 📞 TRANSFER\n`;
+                        break;
+                    case 'CONVERSATION_ENGINE_ERROR':
+                        mermaid += `    Note over CE: ❌ ERROR\n`;
                         break;
                 }
             }
@@ -1076,11 +1153,14 @@
         function generateDecisionTreeFromEvents(events) {
             if (!events || events.length === 0) return null;
             
-            const fastMatch = events.find(e => e.type === 'FAST_MATCH_HIT');
-            const llmFallback = events.find(e => e.type === 'LLM_FALLBACK');
+            // V2: Support both new and legacy event types
+            const scenarioMatch = events.find(e => e.type === 'SCENARIO_MATCHED');
+            const tier3Fallback = events.find(e => e.type === 'TIER3_FALLBACK');
+            const fastMatch = events.find(e => e.type === 'FAST_MATCH_HIT'); // Legacy
+            const llmFallback = events.find(e => e.type === 'LLM_FALLBACK'); // Legacy
             const intentDetected = events.find(e => e.type === 'INTENT_DETECTED');
-            const triageDecision = events.find(e => e.type === 'TRIAGE_DECISION');
-            const bookingActivated = events.find(e => e.type === 'BOOKING_MODE_ACTIVATED');
+            const bookingLocked = events.find(e => e.type === 'BOOKING_MODE_LOCKED');
+            const bookingActivated = events.find(e => e.type === 'BOOKING_MODE_ACTIVATED'); // Legacy
             const bailout = events.find(e => e.type === 'BAILOUT_TRIGGERED');
             const transfer = events.find(e => e.type === 'TRANSFER_INITIATED');
             const agentResponse = events.find(e => e.type === 'AGENT_RESPONSE_BUILT');
@@ -1097,16 +1177,24 @@
             let nodeId = 0;
             const nextNode = () => 'N' + (++nodeId);
             
-            // Fast match or LLM path
-            if (fastMatch) {
+            // V2: Scenario matching with tier info
+            if (scenarioMatch) {
                 const n = nextNode();
-                lines.push(`    ${lastNode} --> ${n}[Fast Match Hit]`);
+                const tier = scenarioMatch.data?.tier || 'tier1';
+                const name = sanitize(scenarioMatch.data?.scenarioName || 'Matched');
+                lines.push(`    ${lastNode} --> ${n}[${tier.toUpperCase()}: ${name}]`);
                 lines.push(`    style ${n} fill:#22c55e,color:#fff`);
                 lastNode = n;
-            } else if (llmFallback) {
+            } else if (tier3Fallback || llmFallback) {
                 const n = nextNode();
-                lines.push(`    ${lastNode} --> ${n}[LLM Fallback]`);
+                lines.push(`    ${lastNode} --> ${n}[LLM Tier-3 Fallback]`);
                 lines.push(`    style ${n} fill:#f59e0b,color:#000`);
+                lastNode = n;
+            } else if (fastMatch) {
+                // Legacy support
+                const n = nextNode();
+                lines.push(`    ${lastNode} --> ${n}[Fast Match (legacy)]`);
+                lines.push(`    style ${n} fill:#22c55e,color:#fff`);
                 lastNode = n;
             } else {
                 const n = nextNode();
@@ -1122,18 +1210,10 @@
                 lastNode = n;
             }
             
-            // Triage decision
-            if (triageDecision) {
+            // V2: Booking locked (replaces booking activated)
+            if (bookingLocked || bookingActivated) {
                 const n = nextNode();
-                const route = sanitize(triageDecision.data?.route || 'MESSAGE_ONLY');
-                lines.push(`    ${lastNode} --> ${n}[Route: ${route}]`);
-                lastNode = n;
-            }
-            
-            // Booking flow
-            if (bookingActivated) {
-                const n = nextNode();
-                lines.push(`    ${lastNode} --> ${n}[Booking Flow]`);
+                lines.push(`    ${lastNode} --> ${n}[📅 Booking Locked]`);
                 lines.push(`    style ${n} fill:#3b82f6,color:#fff`);
                 lastNode = n;
             }
@@ -1141,7 +1221,7 @@
             // Loop detected
             if (recording.flags?.loopDetected) {
                 const n = nextNode();
-                lines.push(`    ${lastNode} --> ${n}[LOOP DETECTED]`);
+                lines.push(`    ${lastNode} --> ${n}[🔄 LOOP DETECTED]`);
                 lines.push(`    style ${n} fill:#f97316,color:#fff`);
                 lastNode = n;
             }
@@ -1149,7 +1229,8 @@
             // Bailout
             if (bailout) {
                 const n = nextNode();
-                lines.push(`    ${lastNode} --> ${n}[BAILOUT]`);
+                const reason = sanitize(bailout.data?.reason || '');
+                lines.push(`    ${lastNode} --> ${n}[🚨 BAILOUT${reason ? ': ' + reason : ''}]`);
                 lines.push(`    style ${n} fill:#ef4444,color:#fff`);
                 lastNode = n;
             }
@@ -1157,15 +1238,16 @@
             // Transfer
             if (transfer) {
                 const n = nextNode();
-                lines.push(`    ${lastNode} --> ${n}[TRANSFER]`);
+                lines.push(`    ${lastNode} --> ${n}[📞 TRANSFER]`);
                 lines.push(`    style ${n} fill:#8b5cf6,color:#fff`);
                 lastNode = n;
             }
             
-            // Final response
+            // Final response - show response source if available
             if (agentResponse && !bailout && !transfer) {
                 const n = nextNode();
-                lines.push(`    ${lastNode} --> ${n}[Agent Response]`);
+                const source = agentResponse.data?.source || 'Response';
+                lines.push(`    ${lastNode} --> ${n}[✅ ${sanitize(source)}]`);
                 lines.push(`    style ${n} fill:#10b981,color:#fff`);
             }
             
@@ -1201,23 +1283,48 @@
                 });
                 currentOffset += 300;
                 
-                // Brain-1 segment
-                const fastMatch = turnEvents.find(e => e.type === 'FAST_MATCH_HIT');
-                const llmResponse = turnEvents.find(e => e.type === 'LLM_RESPONSE');
+                // V2: Scenario Matching segment (replaces Brain-1)
+                const scenarioMatch = turnEvents.find(e => e.type === 'SCENARIO_MATCHED');
+                const tier3Fallback = turnEvents.find(e => e.type === 'TIER3_FALLBACK');
+                const fastMatch = turnEvents.find(e => e.type === 'FAST_MATCH_HIT'); // Legacy
+                const llmResponse = turnEvents.find(e => e.type === 'LLM_RESPONSE'); // Legacy
                 
-                if (fastMatch) {
+                if (scenarioMatch) {
+                    const tier = scenarioMatch.data?.tier || 'tier1';
+                    const ms = scenarioMatch.data?.latencyMs || 50;
                     segments.push({
-                        name: 'Brain-1',
+                        name: `Match (${tier})`,
+                        startMs: currentOffset,
+                        durationMs: ms,
+                        status: 'ok',
+                        detail: scenarioMatch.data?.scenarioName || 'Scenario matched'
+                    });
+                    currentOffset += ms;
+                } else if (tier3Fallback) {
+                    const llmMs = tier3Fallback.data?.latencyMs || 2000;
+                    segments.push({
+                        name: 'LLM (tier3)',
+                        startMs: currentOffset,
+                        durationMs: llmMs,
+                        status: llmMs > 3000 ? 'slow' : 'ok',
+                        detail: `LLM fallback: ${llmMs}ms`
+                    });
+                    currentOffset += llmMs;
+                } else if (fastMatch) {
+                    // Legacy support
+                    segments.push({
+                        name: 'Fast Match',
                         startMs: currentOffset,
                         durationMs: 50,
                         status: 'ok',
-                        detail: 'Fast match'
+                        detail: 'Fast match (legacy)'
                     });
                     currentOffset += 50;
                 } else if (llmResponse) {
+                    // Legacy support
                     const llmMs = llmResponse.data?.ms || 2000;
                     segments.push({
-                        name: 'Brain-1',
+                        name: 'LLM',
                         startMs: currentOffset,
                         durationMs: llmMs,
                         status: llmMs > 3000 ? 'slow' : 'ok',
@@ -1225,38 +1332,29 @@
                     });
                     currentOffset += llmMs;
                 } else {
+                    // Check for response to estimate processing time
+                    const response = turnEvents.find(e => e.type === 'AGENT_RESPONSE_BUILT');
+                    const estimatedMs = response ? Math.max(50, (response.t || 0) - (turnStart + 300)) : 500;
                     segments.push({
-                        name: 'Brain-1',
+                        name: 'Processing',
                         startMs: currentOffset,
-                        durationMs: 500,
-                        status: 'ok',
-                        detail: 'Processing'
+                        durationMs: Math.min(estimatedMs, 3000),
+                        status: estimatedMs > 3000 ? 'slow' : 'ok',
+                        detail: `ConversationEngine: ~${Math.round(estimatedMs)}ms`
                     });
-                    currentOffset += 500;
+                    currentOffset += Math.min(estimatedMs, 3000);
                 }
                 
-                // Triage segment
-                const triage = turnEvents.find(e => e.type === 'TRIAGE_DECISION');
-                if (triage) {
-                    segments.push({
-                        name: 'Triage',
-                        startMs: currentOffset,
-                        durationMs: 50,
-                        status: 'ok',
-                        detail: `Route: ${triage.data?.route || 'MESSAGE_ONLY'}`
-                    });
-                    currentOffset += 50;
-                }
-                
-                // TTS segment
-                const tts = turnEvents.find(e => e.type === 'TTS_GENERATED');
+                // TTS segment (V2: use TTS_COMPLETED)
+                const tts = turnEvents.find(e => e.type === 'TTS_COMPLETED') || 
+                            turnEvents.find(e => e.type === 'TTS_GENERATED'); // Legacy
                 if (tts) {
-                    const ttsMs = tts.data?.ms || 400;
+                    const ttsMs = tts.data?.latencyMs || tts.data?.ms || 400;
                     segments.push({
                         name: 'TTS',
                         startMs: currentOffset,
                         durationMs: ttsMs,
-                        status: ttsMs > 1000 ? 'slow' : 'ok',
+                        status: ttsMs > 2000 ? 'slow' : 'ok',
                         detail: `TTS: ${ttsMs}ms`
                     });
                     currentOffset += ttsMs;
@@ -1340,9 +1438,9 @@
             html += `
                 <div class="waterfall-legend">
                     <div class="legend-item"><div class="legend-color" style="background: #22d3ee;"></div> STT</div>
-                    <div class="legend-item"><div class="legend-color" style="background: #f59e0b;"></div> Brain-1</div>
-                    <div class="legend-item"><div class="legend-color" style="background: #a78bfa;"></div> Triage</div>
-                    <div class="legend-item"><div class="legend-color" style="background: #3b82f6;"></div> Brain-2</div>
+                    <div class="legend-item"><div class="legend-color" style="background: #22c55e;"></div> Scenario Match (Free)</div>
+                    <div class="legend-item"><div class="legend-color" style="background: #f59e0b;"></div> LLM Tier-3 ($)</div>
+                    <div class="legend-item"><div class="legend-color" style="background: #a78bfa;"></div> Processing</div>
                     <div class="legend-item"><div class="legend-color" style="background: #ec4899;"></div> TTS</div>
                 </div>
             </div>`;
@@ -3147,31 +3245,113 @@
 
         function formatEventData(event) {
             const data = event.data || {};
+            const truncate = (str, len) => str && str.length > len ? str.substring(0, len) + '...' : str || '';
+            
             switch (event.type) {
+                // === Call Lifecycle ===
+                case 'CALL_START':
+                    return `${data.from || '?'} → ${data.to || '?'} (${data.source || 'voice'})`;
                 case 'GREETING_SENT':
-                case 'AGENT_RESPONSE_BUILT':
-                    return `"${(data.text || '').substring(0, 60)}..."`;
+                    return `"${truncate(data.text, 50)}"`;
                 case 'GATHER_FINAL':
-                    return `"${(data.text || '').substring(0, 60)}..."`;
+                case 'GATHER_PARTIAL':
+                    return `"${truncate(data.text, 50)}" (conf: ${(data.confidence || 0).toFixed(2)})`;
+                case 'GATHER_TIMEOUT':
+                    return `${data.reason || 'No speech'} → ${data.nextAction || '?'}`;
+                    
+                // === V2: Scenario Matching ===
+                case 'SCENARIO_MATCH_ATTEMPT':
+                    return `Checking ${data.scenariosChecked || '?'} scenarios for "${truncate(data.normalizedInput, 30)}"`;
+                case 'SCENARIO_MATCHED':
+                    return `✅ ${(data.tier || 'tier1').toUpperCase()}: ${data.scenarioName || '?'} (${(data.confidence || 0).toFixed(2)})`;
+                case 'SCENARIO_NO_MATCH':
+                    return `Best: ${data.bestCandidate || 'none'} (${(data.bestConfidence || 0).toFixed(2)} < ${data.threshold || 0.7})`;
+                case 'TIER3_FALLBACK':
+                    return `⚠️ LLM called: ${data.latencyMs || '?'}ms, ${data.tokensUsed || 0} tokens`;
+                    
+                // === Response ===
+                case 'AGENT_RESPONSE_BUILT':
+                    const source = data.source || 'unknown';
+                    const tokens = data.tokensUsed ? ` (${data.tokensUsed} tokens)` : '';
+                    return `[${source}]${tokens} "${truncate(data.text, 40)}"`;
+                case 'TURN_COMPLETE':
+                    return `${data.handler || '?'} → ${data.action || '?'}`;
+                    
+                // === State ===
+                case 'STATE_LOADED':
+                    return `${data.source || '?'} (turn ${data.turnCount || 0})`;
+                case 'STATE_SAVED':
+                    return `${data.result || '?'}`;
+                case 'ROUTING_DECISION':
+                    return `${data.path || '?'} (LLM-0: ${data.llm0Enabled ? 'ON' : 'OFF'})`;
+                case 'HYBRID_PATH_START':
+                    return `"${truncate(data.userInput, 40)}"`;
+                case 'HYBRID_PATH_SUCCESS':
+                    return `${data.latencyMs || '?'}ms - mode: ${data.mode || '?'}`;
+                case 'PATH_RESOLVED':
+                    return `${data.usedPath || '?'}: ${data.latencyMs || '?'}ms`;
+                    
+                // === Intent & Mode ===
                 case 'INTENT_DETECTED':
-                    return `${data.intent || '?'} (${data.confidence?.toFixed(2) || '?'})`;
+                    return `${data.intent || '?'} (${(data.confidence || 0).toFixed(2)})`;
+                case 'MODE_CHANGED':
+                    return `${data.fromMode || '?'} → ${data.toMode || '?'}`;
+                    
+                // === Booking ===
+                case 'BOOKING_MODE_LOCKED':
+                    return `Intent confidence: ${(data.intentConfidence || 0).toFixed(2)}`;
+                case 'SLOT_COLLECTED':
+                    return `✅ ${data.slot}: "${truncate(data.value, 30)}"`;
+                case 'SLOT_ASKING':
+                    return `Asking: ${data.slot}`;
+                case 'BOOKING_COMPLETE':
+                    return `All slots filled`;
+                    
+                // === TTS ===
+                case 'TTS_STARTED':
+                    return `${data.voiceId || '?'} (${data.textLength || 0} chars)`;
+                case 'TTS_COMPLETED':
+                    return `${data.latencyMs || '?'}ms`;
+                case 'TWIML_SENT':
+                    return `${data.route || '?'} (${data.twimlLength || 0} bytes)`;
+                    
+                // === STT ===
+                case 'STT_PREPROCESSING':
+                    const fillers = data.fillersRemoved?.length || 0;
+                    return `${fillers} fillers removed → "${truncate(data.cleaned, 40)}"`;
+                case 'STT_HINTS_LOADED':
+                    return `${data.hintsCount || 0} hints from ${data.source || '?'}`;
+                    
+                // === Errors ===
+                case 'BAILOUT_TRIGGERED':
+                    return `🚨 ${data.type || '?'} - ${data.reason || '?'}`;
+                case 'CONVERSATION_ENGINE_ERROR':
+                    return `❌ ${data.errorType || 'Error'}: ${truncate(data.error, 60)}`;
+                case 'ERROR_OCCURRED':
+                    return `❌ ${data.source || '?'}: ${truncate(data.message, 60)}`;
+                    
+                // === Customer ===
+                case 'CUSTOMER_IDENTIFIED':
+                    return `${data.isReturning ? '🔄 Returning' : '🆕 New'}: ${data.customerName || '?'}`;
+                    
+                // === Legacy ===
                 case 'TRIAGE_DECISION':
                     return `${data.route || data.cardName || '?'}`;
                 case 'LLM_FALLBACK':
                     return `${data.ms || '?'}ms`;
-                case 'BAILOUT_TRIGGERED':
-                    return `${data.type} - ${data.reason}`;
+                case 'FAST_MATCH_HIT':
+                    return `${data.cardName || '?'}`;
                 case 'SYNONYM_TRANSLATION':
                     const reps = data.replacements || [];
                     return `🗣️ ${reps.length > 0 ? reps.slice(0, 2).join(', ') : 'none'}`;
                 case 'MATCHING_PIPELINE':
                     const m = data.matching || {};
-                    const decision = m.decision || '?';
-                    const selected = m.selected || 'none';
-                    const reason = m.fallbackReason ? ` (${m.fallbackReason})` : '';
-                    return `🔬 ${decision}: ${selected}${reason}`;
+                    return `🔬 ${m.decision || '?'}: ${m.selected || 'none'}`;
+                    
                 default:
-                    return JSON.stringify(data).substring(0, 80);
+                    // Compact JSON display for unknown events
+                    const json = JSON.stringify(data);
+                    return json.length > 80 ? json.substring(0, 77) + '...' : json;
             }
         }
 

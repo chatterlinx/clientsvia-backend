@@ -3310,29 +3310,54 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       timestamp: new Date().toISOString()
     });
     
-    // 📼 BLACK BOX: Log agent response
+    // 📼 BLACK BOX V2: Log agent response with full source tracking
     if (BlackBoxLogger) {
       const responseText = result.response || result.text || '';
+      const matchSource = result.matchSource || 'UNKNOWN';
+      const tier = result.tier || 'tier3';
+      const tokensUsed = result.tokensUsed || result.debug?.tokensUsed || 0;
       
       BlackBoxLogger.QuickLog.responseBuilt(
         callSid,
         companyID,
         turnCount,
         responseText,
-        result.matchSource || result.tier || 'unknown'
+        matchSource,  // V2: Separate source field
+        tier,         // V2: Tier field (tier1, tier2, tier3)
+        tokensUsed    // V2: Token count for cost tracking
       ).catch(() => {});
       
-      // Add to transcript
+      // Add to transcript with source tracking
       BlackBoxLogger.addTranscript({
         callId: callSid,
         companyId: companyID,
         speaker: 'agent',
         turn: turnCount,
         text: responseText,
-        source: result.matchSource || result.tier || 'unknown'
+        source: `${matchSource}:${tier}`  // V2: Combined source:tier
       }).catch(() => {});
       
-      // Log key events based on result
+      // V2: Log tier-specific events
+      if (tier === 'tier3' || matchSource === 'LLM_FALLBACK') {
+        BlackBoxLogger.QuickLog.tier3Fallback(
+          callSid, companyID, turnCount,
+          result.debug?.fallbackReason || 'no_scenario_match',
+          result.debug?.latencyMs || result.latencyMs || 0,
+          tokensUsed
+        ).catch(() => {});
+      } else if (matchSource === 'SCENARIO_MATCH' || matchSource === 'STATE_MACHINE') {
+        BlackBoxLogger.QuickLog.scenarioMatched(
+          callSid, companyID, turnCount,
+          result.debug?.scenarioId || null,
+          result.debug?.scenarioName || matchSource,
+          tier,
+          result.debug?.confidence || 0.9,
+          result.debug?.matchReason || 'rule_match',
+          result.debug?.latencyMs || 0
+        ).catch(() => {});
+      }
+      
+      // Legacy: Log triage decision if present
       if (result.triageCardMatched) {
         BlackBoxLogger.QuickLog.triageDecision(
           callSid, companyID, turnCount,

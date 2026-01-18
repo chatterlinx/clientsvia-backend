@@ -1,12 +1,18 @@
 /**
  * ============================================================================
- * BLACK BOX LOGGER SERVICE
+ * BLACK BOX LOGGER SERVICE - V2 (Jan 2026)
  * ============================================================================
  * 
  * THE SINGLE ENTRY POINT FOR ALL CALL RECORDING.
  * 
- * Every part of the call flow (Twilio, Brain-1, Triage, Booking, TTS) 
- * calls THIS service. No direct model access from elsewhere.
+ * ARCHITECTURE UPDATE (Jan 18, 2026):
+ * - Renamed "Brain-1" → "ConversationEngine"
+ * - Renamed "Brain-2" → Removed (merged into ConversationEngine)
+ * - Renamed "Triage" → "ScenarioMatcher"
+ * - Added 3-Tier Intelligence tracking (Tier1=Rules, Tier2=Semantic, Tier3=LLM)
+ * - Added response source tracking (matchSource, tier, tokensUsed)
+ * - Added scenario matching events
+ * - Added mode transition events
  * 
  * METHODS:
  * - initCall()     → Start recording a new call
@@ -42,16 +48,6 @@ function truncate(text, maxLen = 40) {
 /**
  * Initialize a new call recording
  * Call this at the START of /voice endpoint, test console, SMS, or web chat
- * 
- * @param {Object} options
- * @param {string} options.callId - Unique call/session identifier
- * @param {string} options.companyId - Company ID
- * @param {string} options.from - Caller phone/identifier
- * @param {string} options.to - Called number/identifier
- * @param {string} options.source - 'voice' | 'test' | 'sms' | 'web'
- * @param {string} options.customerId - Customer ID (optional)
- * @param {Object} options.customerContext - Customer context (optional)
- * @param {Object} options.sessionSnapshot - Initial session state (optional)
  */
 async function initCall({ callId, companyId, from, to, source = 'voice', customerId, customerContext, sessionSnapshot }) {
   const now = new Date();
@@ -62,11 +58,11 @@ async function initCall({ callId, companyId, from, to, source = 'voice', custome
       companyId,
       from,
       to,
-      source,  // 🆕 Phase 2: Source field
+      source,
       startedAt: now,
       customerId: customerId || null,
       customerContext: customerContext || {},
-      sessionSnapshot: sessionSnapshot || {  // 🆕 Phase 2: Session snapshot
+      sessionSnapshot: sessionSnapshot || {
         phase: 'greeting',
         mode: 'DISCOVERY',
         locks: {
@@ -91,7 +87,7 @@ async function initCall({ callId, companyId, from, to, source = 'voice', custome
         data: {
           from,
           to,
-          source,  // 🆕 Include source in event data
+          source,
           customerId: customerId || null,
           isReturning: customerContext?.isReturning || false
         }
@@ -106,7 +102,7 @@ async function initCall({ callId, companyId, from, to, source = 'voice', custome
       callId,
       companyId: companyId.toString(),
       from,
-      source  // 🆕 Log source
+      source
     });
     
     return recording;
@@ -125,10 +121,6 @@ async function initCall({ callId, companyId, from, to, source = 'voice', custome
 
 /**
  * Ensure a call recording exists (idempotent).
- * If a recording already exists, return it; otherwise initialize one.
- *
- * This prevents "recording not found" drops on web/sms/test paths where
- * turn counters and session reuse can make "first turn" heuristics unreliable.
  */
 async function ensureCall({ callId, companyId, from, to, source = 'voice', customerId, customerContext, sessionSnapshot }) {
   try {
@@ -150,33 +142,8 @@ async function ensureCall({ callId, companyId, from, to, source = 'voice', custo
 // LOG EVENT - Append to timeline
 // ============================================================================
 
-/**
- * Log an event to the call timeline
- * Events are append-only and immutable
- */
 async function logEvent({ callId, companyId, type, turn, data = {} }) {
   const now = new Date();
-  
-  // ════════════════════════════════════════════════════════════════════════════
-  // 🧠 BRAIN VALIDATION: Ensure LLM_RESPONSE events identify which brain spoke
-  // ════════════════════════════════════════════════════════════════════════════
-  // This is CRITICAL for debugging. Every LLM response must say which brain:
-  // - brain: 'LLM0' = Frontline brain
-  // - brain: 'TIER3' = Fallback brain
-  // If missing, it's a rogue LLM call that needs to be hunted down.
-  // ════════════════════════════════════════════════════════════════════════════
-  if (type === 'LLM_RESPONSE' && !data?.brain) {
-    logger.error('[BLACK BOX] ⚠️ CRITICAL: LLM_RESPONSE missing brain identifier!', {
-      callId,
-      companyId,
-      type,
-      data,
-      stack: new Error().stack?.substring(0, 1000)
-    });
-    // Add a flag so we can find these in the data
-    data.brain = 'UNKNOWN_ROGUE';
-    data._missingBrainWarning = true;
-  }
   
   try {
     // Get startedAt for calculating offset
@@ -232,9 +199,6 @@ async function logEvent({ callId, companyId, type, turn, data = {} }) {
 // APPEND ERROR
 // ============================================================================
 
-/**
- * Log an error that occurred during the call
- */
 async function appendError({ callId, companyId, source, error }) {
   const now = new Date();
   
@@ -280,9 +244,6 @@ async function appendError({ callId, companyId, source, error }) {
 // ADD TRANSCRIPT
 // ============================================================================
 
-/**
- * Add a transcript entry (caller or agent)
- */
 async function addTranscript({ callId, companyId, speaker, turn, text, confidence, source }) {
   try {
     const rec = await BlackBoxRecording.findOne(
@@ -318,7 +279,7 @@ async function addTranscript({ callId, companyId, speaker, turn, text, confidenc
               turn,
               t,
               text,
-              source: source || 'FRONTLINE'
+              source: source || 'UNKNOWN'
             }
           }
         }
@@ -341,57 +302,41 @@ async function addTranscript({ callId, companyId, speaker, turn, text, confidenc
 // FINALIZE CALL - Compute summary + visualizations
 // ============================================================================
 
-/**
- * Finalize the call recording
- * Computes: performance summary, flags, diagnosis, visualizations
- * Call this when the call ends (hangup, transfer complete, etc.)
- */
 async function finalizeCall({ callId, companyId, endedAt, callOutcome, performanceData }) {
   try {
-    const now = endedAt || new Date();
+    const recording = await BlackBoxRecording.findOne({ callId, companyId });
     
-    // Get the full recording to analyze
-    const recording = await BlackBoxRecording.findOne({ callId, companyId }).lean();
     if (!recording) {
       logger.warn('[BLACK BOX] Cannot finalize - recording not found', { callId });
-      return false;
+      return null;
     }
     
+    const events = recording.events || [];
+    const now = endedAt || new Date();
+    
+    // Calculate duration
     const durationMs = now.getTime() - new Date(recording.startedAt).getTime();
     
-    // ──────────────────────────────────────────────────────────────────────
-    // COMPUTE PERFORMANCE SUMMARY
-    // ──────────────────────────────────────────────────────────────────────
-    const events = recording.events || [];
+    // Compute performance metrics
     const performance = computePerformance(events, performanceData);
     
-    // ──────────────────────────────────────────────────────────────────────
-    // COMPUTE FLAGS
-    // ──────────────────────────────────────────────────────────────────────
+    // Compute flags
     const flags = computeFlags(events, recording);
     
-    // ──────────────────────────────────────────────────────────────────────
-    // COMPUTE BOOKING STORY
-    // ──────────────────────────────────────────────────────────────────────
-    const booking = computeBookingStory(events, recording.booking);
+    // Compute booking story
+    const booking = computeBookingStory(events, recording.bookingProgress);
     
-    // ──────────────────────────────────────────────────────────────────────
-    // COMPUTE DIAGNOSIS
-    // ──────────────────────────────────────────────────────────────────────
-    const diagnosis = computeDiagnosis(events, flags, booking, performance);
+    // Compute diagnosis
+    const diagnosis = computeDiagnosis(events, flags, booking, recording);
     
-    // ──────────────────────────────────────────────────────────────────────
-    // GENERATE VISUALIZATIONS
-    // ──────────────────────────────────────────────────────────────────────
+    // Generate visualizations
     const visualization = {
-      sequenceDiagram: generateSequenceDiagram(events, recording),
-      decisionTree: generateDecisionTree(events, flags),
-      waterfall: generateWaterfall(events, performanceData)
+      sequenceDiagram: generateSequenceDiagram(events),
+      waterfall: generateWaterfall(events, performanceData),
+      decisionTree: generateDecisionTree(events, flags)
     };
     
-    // ──────────────────────────────────────────────────────────────────────
-    // UPDATE RECORDING
-    // ──────────────────────────────────────────────────────────────────────
+    // Update recording
     await BlackBoxRecording.updateOne(
       { callId, companyId },
       {
@@ -404,154 +349,127 @@ async function finalizeCall({ callId, companyId, endedAt, callOutcome, performan
           booking,
           diagnosis,
           visualization
-        },
-        $push: {
-          events: {
-            type: 'CALL_END',
-            ts: now,
-            t: durationMs,
-            turn: performance.totalTurns || 0,
-            data: { outcome: callOutcome || 'COMPLETED' }
-          }
         }
       }
     );
     
     logger.info('[BLACK BOX] 📼 Recording finalized', {
       callId,
-      companyId: companyId.toString(),
       durationMs,
       outcome: callOutcome,
-      turns: performance.totalTurns,
-      flags: Object.keys(flags).filter(k => flags[k])
+      flags
     });
     
-    return true;
+    return { callId, durationMs, callOutcome, flags, diagnosis };
     
   } catch (error) {
-    logger.error('[BLACK BOX] Failed to finalize recording (non-fatal)', {
+    logger.error('[BLACK BOX] Failed to finalize recording', {
       callId,
-      error: error.message,
-      stack: error.stack
+      error: error.message
     });
-    return false;
+    return null;
   }
 }
 
 // ============================================================================
-// COMPUTE HELPERS
+// COMPUTE FUNCTIONS
 // ============================================================================
 
 function computePerformance(events, performanceData = {}) {
-  // Count turns from GATHER_FINAL events
   const gatherEvents = events.filter(e => e.type === 'GATHER_FINAL');
   const responseEvents = events.filter(e => e.type === 'AGENT_RESPONSE_BUILT');
   const totalTurns = gatherEvents.length;
   
-  // ════════════════════════════════════════════════════════════════════════════
-  // TURN-LEVEL PERFORMANCE BREAKDOWN
-  // ════════════════════════════════════════════════════════════════════════════
-  // For each turn, calculate:
-  // - STT ms (from GATHER_PARTIAL to GATHER_FINAL)
-  // - Brain-1 ms (from GATHER_FINAL to INTENT_DETECTED)
-  // - 3-Tier ms (from TIER3_ENTERED to TIER3_EXIT)
-  // - LLM ms (if TIER3_LLM_FALLBACK_CALLED)
-  // - TTS ms (TTS_GENERATED timing)
-  // ════════════════════════════════════════════════════════════════════════════
+  // Calculate turn latencies
+  const turnLatencies = [];
+  
+  for (let i = 0; i < gatherEvents.length; i++) {
+    const gather = gatherEvents[i];
+    const nextResponse = responseEvents.find(r => r.t > gather.t);
+    
+    if (nextResponse) {
+      const latency = nextResponse.t - gather.t;
+      turnLatencies.push(latency);
+    }
+  }
+  
+  const avgTurnTimeMs = turnLatencies.length > 0 
+    ? Math.round(turnLatencies.reduce((a, b) => a + b, 0) / turnLatencies.length)
+    : 0;
+  
+  // Find slowest turn
+  const slowestTurnMs = Math.max(...turnLatencies, 0);
+  const slowestTurnIndex = turnLatencies.indexOf(slowestTurnMs);
+  
+  // Build turn breakdowns
   const turnBreakdowns = [];
   
   for (let i = 0; i < gatherEvents.length; i++) {
     const gather = gatherEvents[i];
-    const turnNum = i + 1;
-    
-    // Find events for this turn
     const nextGather = gatherEvents[i + 1];
-    const turnEndTime = nextGather?.t || Infinity;
     
-    const turnEvents = events.filter(e => e.t >= gather.t && e.t < turnEndTime);
+    const turnEvents = events.filter(e => 
+      e.t >= gather.t && 
+      (nextGather ? e.t < nextGather.t : true)
+    );
     
     // Find specific events in this turn
-    const intentEvent = turnEvents.find(e => e.type === 'INTENT_DETECTED');
-    const tier3Enter = turnEvents.find(e => e.type === 'TIER3_ENTERED');
-    const tier3Exit = turnEvents.find(e => e.type === 'TIER3_EXIT');
-    const llmFallback = turnEvents.find(e => e.type === 'TIER3_LLM_FALLBACK_CALLED');
-    const ttsEvent = turnEvents.find(e => e.type === 'TTS_GENERATED');
+    const scenarioMatch = turnEvents.find(e => e.type === 'SCENARIO_MATCHED');
+    const tier3Event = turnEvents.find(e => e.type === 'TIER3_FALLBACK');
+    const ttsEvent = turnEvents.find(e => e.type === 'TTS_COMPLETED');
     const responseEvent = turnEvents.find(e => e.type === 'AGENT_RESPONSE_BUILT');
     
     const breakdown = {
-      turn: turnNum,
+      turn: i + 1,
+      sttMs: 300, // Approximate
+      matchingMs: scenarioMatch?.data?.latencyMs || 50,
+      tier3Ms: tier3Event?.data?.latencyMs || 0,
+      ttsMs: ttsEvent?.data?.latencyMs || 0,
       totalMs: responseEvent ? (responseEvent.t - gather.t) : 0,
-      sttMs: 0, // Would need GATHER_PARTIAL timing
-      brain1Ms: intentEvent ? (intentEvent.t - gather.t) : 0,
-      tier3Ms: (tier3Enter && tier3Exit) ? (tier3Exit.t - tier3Enter.t) : 0,
-      llmMs: llmFallback?.data?.ms || 0,
-      ttsMs: ttsEvent?.data?.ms || 0,
       bottleneck: 'UNKNOWN'
     };
     
     // Determine bottleneck
-    const maxComponent = Math.max(breakdown.brain1Ms, breakdown.tier3Ms, breakdown.llmMs, breakdown.ttsMs);
-    if (maxComponent === breakdown.llmMs && breakdown.llmMs > 0) {
+    const maxComponent = Math.max(breakdown.sttMs, breakdown.matchingMs, breakdown.tier3Ms, breakdown.ttsMs);
+    if (maxComponent === breakdown.tier3Ms && breakdown.tier3Ms > 0) {
       breakdown.bottleneck = 'LLM';
     } else if (maxComponent === breakdown.ttsMs && breakdown.ttsMs > 0) {
       breakdown.bottleneck = 'TTS';
-    } else if (maxComponent === breakdown.tier3Ms && breakdown.tier3Ms > 0) {
-      breakdown.bottleneck = 'TIER3';
-    } else if (breakdown.brain1Ms > 0) {
-      breakdown.bottleneck = 'BRAIN1';
+    } else if (maxComponent === breakdown.matchingMs) {
+      breakdown.bottleneck = 'MATCHING';
+    } else {
+      breakdown.bottleneck = 'STT';
     }
     
     turnBreakdowns.push(breakdown);
   }
   
-  // Calculate averages and find slowest
-  let avgTurnTimeMs = 0;
-  let slowestTurn = { turnNumber: 0, totalMs: 0, bottleneck: 'UNKNOWN' };
+  // Count LLM calls by tier
+  const tier1Matches = events.filter(e => e.type === 'SCENARIO_MATCHED' && e.data?.tier === 'tier1').length;
+  const tier2Matches = events.filter(e => e.type === 'SCENARIO_MATCHED' && e.data?.tier === 'tier2').length;
+  const tier3Fallbacks = events.filter(e => e.type === 'TIER3_FALLBACK').length;
   
-  if (turnBreakdowns.length > 0) {
-    avgTurnTimeMs = Math.round(
-      turnBreakdowns.reduce((sum, t) => sum + t.totalMs, 0) / turnBreakdowns.length
-    );
-    
-    const slowest = turnBreakdowns.reduce(
-      (max, t) => t.totalMs > max.totalMs ? t : max, 
-      turnBreakdowns[0]
-    );
-    slowestTurn = {
-      turnNumber: slowest.turn,
-      totalMs: slowest.totalMs,
-      bottleneck: slowest.bottleneck,
-      breakdown: {
-        brain1Ms: slowest.brain1Ms,
-        tier3Ms: slowest.tier3Ms,
-        llmMs: slowest.llmMs,
-        ttsMs: slowest.ttsMs
-      }
-    };
-  }
-  
-  // Count LLM calls (both Brain-1 and Tier-3)
-  const brain1LlmEvents = events.filter(e => e.type === 'LLM_RESPONSE');
-  const tier3LlmEvents = events.filter(e => e.type === 'TIER3_LLM_FALLBACK_CALLED');
-  const allLlmEvents = [...brain1LlmEvents, ...tier3LlmEvents];
-  
-  const llmCalls = {
-    count: allLlmEvents.length,
-    totalMs: allLlmEvents.reduce((sum, e) => sum + (e.data?.ms || 0), 0),
-    brain1Count: brain1LlmEvents.length,
-    tier3Count: tier3LlmEvents.length
-  };
+  // Calculate total LLM tokens
+  const tokensUsed = events
+    .filter(e => e.data?.tokensUsed > 0)
+    .reduce((sum, e) => sum + (e.data.tokensUsed || 0), 0);
   
   // TTS total
-  const ttsEvents = events.filter(e => e.type === 'TTS_GENERATED');
-  const ttsTotalMs = ttsEvents.reduce((sum, e) => sum + (e.data?.ms || 0), 0);
+  const ttsEvents = events.filter(e => e.type === 'TTS_COMPLETED');
+  const ttsTotalMs = ttsEvents.reduce((sum, e) => sum + (e.data?.latencyMs || 0), 0);
   
   return {
     totalTurns,
     avgTurnTimeMs,
-    slowestTurn,
+    slowestTurn: slowestTurnIndex + 1,
+    slowestTurnMs,
     turnBreakdowns,
-    llmCalls,
+    tierStats: {
+      tier1: tier1Matches,
+      tier2: tier2Matches,
+      tier3: tier3Fallbacks,
+      tokensUsed
+    },
     ttsTotalMs
   };
 }
@@ -560,65 +478,41 @@ function computeFlags(events, recording) {
   const flags = {
     loopDetected: events.some(e => e.type === 'LOOP_DETECTED'),
     bailoutTriggered: events.some(e => e.type === 'BAILOUT_TRIGGERED'),
-    noTriageMatch: events.filter(e => e.type === 'LLM_FALLBACK').length > 
-                   events.filter(e => e.type === 'FAST_MATCH_HIT').length,
+    noScenarioMatch: events.filter(e => e.type === 'TIER3_FALLBACK').length > 
+                     events.filter(e => e.type === 'SCENARIO_MATCHED').length,
     customerFrustrated: events.some(e => 
-      e.type === 'BEHAVIOR_EVENT' && e.data?.type === 'FRUSTRATED'
+      e.type === 'EMOTION_DETECTED' && e.data?.emotion === 'frustrated'
     ),
     slowResponse: false,
     bookingIgnored: false
   };
   
-  // ════════════════════════════════════════════════════════════════════════════
-  // BOOKING IGNORED DETECTION
-  // ════════════════════════════════════════════════════════════════════════════
-  // bookingIgnored = TRUE when:
-  // 1. Booking intent was detected with confidence >= 0.65
-  // 2. BUT system never entered BOOKING_MODE_ACTIVATED
-  // 3. AND we asked 2+ more questions after booking intent
-  // ════════════════════════════════════════════════════════════════════════════
-  const intentEvents = events.filter(e => e.type === 'INTENT_DETECTED');
-  const bookingActivated = events.find(e => e.type === 'BOOKING_MODE_ACTIVATED');
+  // Check booking ignored
+  const bookingIntents = events.filter(e => e.type === 'INTENT_DETECTED' && e.data?.intent === 'BOOKING');
+  const bookingLocked = events.find(e => e.type === 'BOOKING_MODE_LOCKED');
   
-  // Find first clear booking intent
-  const firstBookingIntent = intentEvents.find(e => {
-    const intent = (e.data?.intent || '').toLowerCase();
-    const confidence = e.data?.confidence || 0;
-    const isBookingIntent = intent.includes('book') || 
-                            intent.includes('schedule') || 
-                            intent.includes('appointment');
-    return isBookingIntent && confidence >= 0.65;
-  });
-  
-  if (firstBookingIntent && !bookingActivated) {
-    // Booking intent detected but never locked - count questions after
+  if (bookingIntents.length >= 2 && !bookingLocked) {
     const gatherAfterIntent = events.filter(e => 
       e.type === 'GATHER_FINAL' && 
-      e.t > firstBookingIntent.t
+      e.t > (bookingIntents[0]?.t || 0)
     );
     
-    if (gatherAfterIntent.length >= 1) {
-      // Customer had to answer another question after clear booking intent
+    if (gatherAfterIntent.length >= 2) {
       flags.bookingIgnored = true;
     }
   }
   
-  // ════════════════════════════════════════════════════════════════════════════
-  // SLOW RESPONSE DETECTION
-  // ════════════════════════════════════════════════════════════════════════════
-  // Check for any turn taking > 8 seconds (exceptionally slow)
+  // Check for slow responses (>8 seconds)
   const responseEvents = events.filter(e => e.type === 'AGENT_RESPONSE_BUILT');
   const gatherEvents = events.filter(e => e.type === 'GATHER_FINAL');
   
   for (let i = 0; i < gatherEvents.length; i++) {
     const gather = gatherEvents[i];
     const nextResponse = responseEvents.find(r => r.t > gather.t);
-    if (nextResponse) {
-      const turnMs = nextResponse.t - gather.t;
-      if (turnMs > 8000) {
-        flags.slowResponse = true;
-        break;
-      }
+    
+    if (nextResponse && (nextResponse.t - gather.t) > 8000) {
+      flags.slowResponse = true;
+      break;
     }
   }
   
@@ -626,342 +520,237 @@ function computeFlags(events, recording) {
 }
 
 function computeBookingStory(events, existingBooking = {}) {
-  const intentEvents = events.filter(e => e.type === 'INTENT_DETECTED');
-  const bookingActivated = events.find(e => e.type === 'BOOKING_MODE_ACTIVATED');
-  
-  // Find first booking intent
-  const firstBookingIntent = intentEvents.find(e => 
-    e.data?.intent?.toLowerCase().includes('book') ||
-    e.data?.intent?.toLowerCase().includes('schedule') ||
-    e.data?.intent?.toLowerCase().includes('appointment')
-  );
-  
   const booking = {
-    ...existingBooking,
-    firstIntentDetectedAtMs: firstBookingIntent?.t || existingBooking.firstIntentDetectedAtMs || null,
-    intentLockedAtMs: bookingActivated?.t || existingBooking.intentLockedAtMs || null
+    primaryIntent: 'unknown',
+    firstBookingIntentAtMs: null,
+    intentLockedAtMs: null,
+    questionsAskedBeforeLock: 0,
+    modeActive: false,
+    modeLocked: false,
+    currentStep: 'NONE',
+    collected: {
+      name: null,
+      address: null,
+      phone: null,
+      time: null
+    },
+    slotsRemaining: 4
   };
   
-  // Count questions between first intent and lock
-  if (booking.firstIntentDetectedAtMs && booking.intentLockedAtMs) {
-    const gatherEvents = events.filter(e => 
+  // Find intent events
+  const intentEvents = events.filter(e => e.type === 'INTENT_DETECTED');
+  const bookingLocked = events.find(e => e.type === 'BOOKING_MODE_LOCKED');
+  
+  // Determine primary intent
+  if (intentEvents.length > 0) {
+    const intentCounts = {};
+    intentEvents.forEach(e => {
+      const intent = e.data?.intent || 'unknown';
+      intentCounts[intent] = (intentCounts[intent] || 0) + 1;
+    });
+    booking.primaryIntent = Object.entries(intentCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'unknown';
+  }
+  
+  // Find first booking intent
+  const firstBooking = intentEvents.find(e => e.data?.intent === 'BOOKING');
+  if (firstBooking) {
+    booking.firstBookingIntentAtMs = firstBooking.t;
+  }
+  
+  // Check if locked
+  if (bookingLocked) {
+    booking.intentLockedAtMs = bookingLocked.t;
+    booking.modeLocked = true;
+    booking.modeActive = true;
+  }
+  
+  // Count questions before lock
+  if (booking.firstBookingIntentAtMs && booking.intentLockedAtMs) {
+    const gathersBetween = events.filter(e => 
       e.type === 'GATHER_FINAL' &&
-      e.t > booking.firstIntentDetectedAtMs &&
+      e.t > booking.firstBookingIntentAtMs &&
       e.t < booking.intentLockedAtMs
     );
-    booking.questionsAskedBeforeLock = gatherEvents.length;
+    booking.questionsAskedBeforeLock = gathersBetween.length;
+  }
+  
+  // Get slot collection status
+  const slotEvents = events.filter(e => e.type === 'SLOT_COLLECTED');
+  slotEvents.forEach(e => {
+    const slot = e.data?.slot;
+    const value = e.data?.value;
+    if (slot && value && booking.collected.hasOwnProperty(slot)) {
+      booking.collected[slot] = value;
+    }
+  });
+  
+  // Calculate remaining
+  booking.slotsRemaining = Object.values(booking.collected).filter(v => v === null).length;
+  
+  // Get current step
+  const modeEvents = events.filter(e => e.type === 'MODE_CHANGED' || e.type === 'SLOT_ASKING');
+  if (modeEvents.length > 0) {
+    const lastMode = modeEvents[modeEvents.length - 1];
+    booking.currentStep = lastMode.data?.nextSlot || lastMode.data?.mode || 'UNKNOWN';
   }
   
   return booking;
 }
 
-function computeDiagnosis(events, flags, booking, performance) {
+function computeDiagnosis(events, flags, booking, recording) {
   const diagnosis = {
-    primaryBottleneck: null,
+    primaryBottleneck: 'NONE',
     rootCause: null,
     suggestedFix: null,
     severity: 'INFO'
   };
   
-  // ════════════════════════════════════════════════════════════════════════════
-  // BOOKING OVERRIDDEN - THE #1 STATE MACHINE CONFLICT
-  // ════════════════════════════════════════════════════════════════════════════
-  // Check if booking was activated but then another module hijacked the conversation
-  const bookingActivated = events.filter(e => e.type === 'BOOKING_MODE_ACTIVATED');
-  const bookingOverridden = events.filter(e => e.type === 'BOOKING_OVERRIDDEN');
-  const bookingLocked = events.find(e => e.type === 'BOOKING_MODE_LOCKED');
-  
-  // Multiple BOOKING_MODE_ACTIVATED events = booking isn't staying locked
-  if (bookingActivated.length > 1) {
-    diagnosis.primaryBottleneck = 'STATE_MACHINE_CONFLICT';
-    diagnosis.rootCause = `Booking mode activated ${bookingActivated.length} times - this means bookingMode ` +
-      `is not persistent. Each time customer speaks, booking resets instead of staying locked.`;
-    diagnosis.suggestedFix = 'Implement BOOKING_MODE_LOCKED as a hard lock in callState. ' +
-      'Once locked, bypass Brain-1 and triage entirely - go straight to BookingHandler for slot-filling.';
-    diagnosis.severity = 'CRITICAL';
-    return diagnosis;
-  }
-  
-  // Booking overridden by triage/troubleshooting
-  if (bookingOverridden.length > 0) {
-    const firstOverride = bookingOverridden[0];
-    diagnosis.primaryBottleneck = 'BOOKING_OVERRIDDEN';
-    diagnosis.rootCause = `Booking was active but ${firstOverride.data?.overriddenBy || 'another module'} ` +
-      `hijacked the conversation at ${((firstOverride.t || 0) / 1000).toFixed(1)}s. ` +
-      `Booking step was: ${firstOverride.data?.bookingStep || 'unknown'}. ` +
-      `Agent said: "${firstOverride.data?.responseText || '?'}" instead of continuing booking.`;
-    diagnosis.suggestedFix = 'Implement hard booking lock: once bookingModeLocked=true, ' +
-      'slot-filling should NOT go through Brain-1 or triage. Only BookingHandler should speak. ' +
-      'Intent detection during booking = the bug.';
-    diagnosis.severity = 'CRITICAL';
-    return diagnosis;
-  }
-  
-  // Booking activated but never locked (weak state)
-  if (bookingActivated.length === 1 && !bookingLocked) {
-    // Check if troubleshooting happened after booking
-    const bookingTime = bookingActivated[0].t || 0;
-    const troubleshootingAfter = events.find(e => 
-      e.t > bookingTime && 
-      (e.type === 'TRIAGE_DECISION' && e.data?.route !== 'BOOKING_FLOW')
-    );
-    
-    if (troubleshootingAfter) {
-      diagnosis.primaryBottleneck = 'BOOKING_OVERRIDDEN';
-      diagnosis.rootCause = `Booking was activated at ${(bookingTime / 1000).toFixed(1)}s but never LOCKED. ` +
-        `Triage then routed to ${troubleshootingAfter.data?.route || 'MESSAGE_ONLY'} at ` +
-        `${((troubleshootingAfter.t || 0) / 1000).toFixed(1)}s, hijacking the booking flow.`;
-      diagnosis.suggestedFix = 'After BOOKING_MODE_ACTIVATED, immediately set BOOKING_MODE_LOCKED. ' +
-        'All subsequent turns should bypass intent detection and go straight to BookingHandler.';
-      diagnosis.severity = 'CRITICAL';
-      return diagnosis;
-    }
-  }
-  
-  // ════════════════════════════════════════════════════════════════════════════
-  // BOOKING IGNORED - Never entered booking at all
-  // ════════════════════════════════════════════════════════════════════════════
-  if (flags.bookingIgnored) {
-    // Find the first booking intent for details
-    const firstBookingIntent = events.find(e => {
-      const intent = (e.data?.intent || '').toLowerCase();
-      const confidence = e.data?.confidence || 0;
-      return (intent.includes('book') || intent.includes('schedule') || intent.includes('appointment')) 
-             && confidence >= 0.65;
-    });
-    
-    // Check what route was taken instead
-    const triageAfterBooking = events.find(e => 
-      e.type === 'TRIAGE_DECISION' && 
-      e.t > (firstBookingIntent?.t || 0)
-    );
-    
-    diagnosis.primaryBottleneck = 'BOOKING_IGNORED';
-    diagnosis.rootCause = `Booking intent detected (${firstBookingIntent?.data?.intent || 'booking'}, ` +
-      `confidence=${(firstBookingIntent?.data?.confidence || 0).toFixed(2)}) at ` +
-      `${((firstBookingIntent?.t || 0) / 1000).toFixed(1)}s, but system routed to ` +
-      `${triageAfterBooking?.data?.route || 'MESSAGE_ONLY'} instead of BOOKING_FLOW.`;
-    diagnosis.suggestedFix = 'Check BOOKING_INTENT_THRESHOLD in FrontlineIntelEngine.js. ' +
-      'Current threshold is 0.65. If booking intent confidence was above this but still not ' +
-      'routed to BOOK, check if the triage router is overriding the action.';
-    diagnosis.severity = 'CRITICAL';
-    return diagnosis;
-  }
-  
-  // Booking delayed (we eventually got to booking, but asked too many questions first)
-  if (booking.firstIntentDetectedAtMs && 
-      booking.intentLockedAtMs && 
-      booking.questionsAskedBeforeLock >= 3) {
-    diagnosis.primaryBottleneck = 'BOOKING_DELAYED';
-    diagnosis.rootCause = `Customer asked to book at ${(booking.firstIntentDetectedAtMs / 1000).toFixed(1)}s, ` +
-      `but system asked ${booking.questionsAskedBeforeLock} more questions before committing at ` +
-      `${(booking.intentLockedAtMs / 1000).toFixed(1)}s.`;
-    diagnosis.suggestedFix = 'Tighten booking behavior rules - when booking intent confidence > 0.65, ' +
-      'enter booking flow immediately without additional troubleshooting.';
-    diagnosis.severity = 'CRITICAL';
-    return diagnosis;
-  }
-  
-  // Loop detected is CRITICAL
-  if (flags.loopDetected) {
-    diagnosis.primaryBottleneck = 'BEHAVIOR_RULE';
-    diagnosis.rootCause = 'AI repeated similar responses, triggering loop detection.';
-    diagnosis.suggestedFix = 'Review triage cards and response templates for variety. ' +
-      'Ensure each scenario has distinct responses.';
-    diagnosis.severity = 'CRITICAL';
-    return diagnosis;
-  }
-  
-  // Bailout is WARNING
+  // Check for critical issues first
   if (flags.bailoutTriggered) {
     const bailoutEvent = events.find(e => e.type === 'BAILOUT_TRIGGERED');
-    diagnosis.primaryBottleneck = 'BEHAVIOR_RULE';
-    diagnosis.rootCause = `Bailout triggered: ${bailoutEvent?.data?.reason || 'unknown reason'}`;
-    diagnosis.suggestedFix = 'Review ResponseValidator patterns and triage card matching.';
+    diagnosis.primaryBottleneck = 'BAILOUT';
+    diagnosis.rootCause = `Bailout triggered: ${bailoutEvent?.data?.reason || 'unknown'}`;
+    diagnosis.suggestedFix = 'Review bailout triggers and add missing scenarios';
+    diagnosis.severity = 'CRITICAL';
+    return diagnosis;
+  }
+  
+  if (flags.loopDetected) {
+    diagnosis.primaryBottleneck = 'LOOP';
+    diagnosis.rootCause = 'Conversation entered a repetitive loop';
+    diagnosis.suggestedFix = 'Review conversation flow and add loop breakers';
+    diagnosis.severity = 'ERROR';
+    return diagnosis;
+  }
+  
+  if (flags.bookingIgnored) {
+    diagnosis.primaryBottleneck = 'BOOKING_IGNORED';
+    diagnosis.rootCause = 'Customer requested booking but AI kept asking questions';
+    diagnosis.suggestedFix = 'Lower booking intent threshold or add more booking triggers';
     diagnosis.severity = 'WARNING';
     return diagnosis;
   }
   
-  // Triage miss is WARNING
-  if (flags.noTriageMatch) {
-    diagnosis.primaryBottleneck = 'TRIAGE_MISS';
-    diagnosis.rootCause = 'Fast match failed multiple times - caller phrases not matching triage keywords.';
-    diagnosis.suggestedFix = 'Add missing keywords to triage cards based on actual caller phrases.';
+  if (flags.noScenarioMatch) {
+    diagnosis.primaryBottleneck = 'SCENARIO_COVERAGE';
+    diagnosis.rootCause = 'Most turns went to LLM fallback (no scenario matched)';
+    diagnosis.suggestedFix = 'Add scenarios for common questions in this call';
     diagnosis.severity = 'WARNING';
     return diagnosis;
   }
   
-  // LLM slow is WARNING
-  if (performance.llmCalls.count > 3 && performance.llmCalls.totalMs > 10000) {
-    diagnosis.primaryBottleneck = 'LLM_SLOW';
-    diagnosis.rootCause = `${performance.llmCalls.count} LLM calls totaling ${(performance.llmCalls.totalMs / 1000).toFixed(1)}s.`;
-    diagnosis.suggestedFix = 'Improve triage card keywords to reduce LLM fallback.';
+  if (flags.slowResponse) {
+    diagnosis.primaryBottleneck = 'LATENCY';
+    diagnosis.rootCause = 'One or more responses took >8 seconds';
+    diagnosis.suggestedFix = 'Check LLM timeouts and scenario matching performance';
     diagnosis.severity = 'WARNING';
     return diagnosis;
   }
   
-  // Default
-  diagnosis.primaryBottleneck = null;
-  diagnosis.rootCause = 'Call completed normally.';
-  diagnosis.severity = 'INFO';
+  // Check for high LLM usage
+  const tierStats = computePerformance(events).tierStats;
+  if (tierStats.tier3 > tierStats.tier1 + tierStats.tier2) {
+    diagnosis.primaryBottleneck = 'LLM_HEAVY';
+    diagnosis.rootCause = 'More LLM calls than scenario matches - expensive and slow';
+    diagnosis.suggestedFix = 'Add scenario triggers for patterns that went to LLM';
+    diagnosis.severity = 'INFO';
+    return diagnosis;
+  }
   
   return diagnosis;
 }
 
 // ============================================================================
-// VISUALIZATION GENERATORS
+// VISUALIZATION GENERATORS (Updated for V2 Architecture)
 // ============================================================================
 
-function generateSequenceDiagram(events, recording) {
+function generateSequenceDiagram(events) {
   let mermaid = `sequenceDiagram
     participant C as Caller
     participant T as Twilio
-    participant B1 as Brain-1
-    participant TR as Triage
-    participant B2 as Brain-2
+    participant CE as ConversationEngine
+    participant SM as ScenarioMatcher
+    participant LLM as LLM (Tier3)
     participant TTS as TTS
 `;
-
+  
   for (const event of events) {
-    const time = `${(event.t / 1000).toFixed(0)}s`;
+    const time = `${((event.t || 0) / 1000).toFixed(0)}s`;
     
     switch (event.type) {
       case 'CALL_START':
         mermaid += `    Note over C,TTS: CALL START\n`;
         break;
-        
       case 'GREETING_SENT':
-        mermaid += `    TTS-->>C: ${time} "${truncate(event.data?.text, 25)}"\n`;
+        mermaid += `    TTS-->>C: ${time} Greeting\n`;
         break;
-        
       case 'GATHER_FINAL':
-        mermaid += `    C->>T: ${time} "${truncate(event.data?.text, 30)}"\n`;
-        mermaid += `    T->>B1: Process\n`;
+        const text = truncate(event.data?.text || '', 25);
+        mermaid += `    C->>T: ${time} "${text}"\n`;
+        mermaid += `    T->>CE: Process\n`;
         break;
-        
-      case 'FAST_MATCH_HIT':
-        mermaid += `    B1->>TR: ✅ Fast Match: ${event.data?.cardName || 'matched'}\n`;
+      case 'STT_PREPROCESSING':
+        const fillers = event.data?.fillersRemoved?.length || 0;
+        if (fillers > 0) {
+          mermaid += `    Note over T: 🔇 ${fillers} fillers removed\n`;
+        }
         break;
-        
-      case 'LLM_FALLBACK':
-        mermaid += `    Note over B1: ⚠️ LLM Fallback (${event.data?.ms || '?'}ms)\n`;
+      case 'SCENARIO_MATCH_ATTEMPT':
+        const count = event.data?.scenariosChecked || '?';
+        mermaid += `    CE->>SM: Check ${count} scenarios\n`;
         break;
-        
+      case 'SCENARIO_MATCHED':
+        const scenario = truncate(event.data?.scenarioName || '?', 20);
+        const tier = event.data?.tier || 'tier1';
+        mermaid += `    SM->>CE: ✅ ${tier.toUpperCase()}: ${scenario}\n`;
+        break;
+      case 'TIER3_FALLBACK':
+        mermaid += `    SM->>LLM: ⚠️ No match, LLM fallback\n`;
+        mermaid += `    LLM->>CE: Response (${event.data?.latencyMs || '?'}ms)\n`;
+        break;
       case 'INTENT_DETECTED':
-        mermaid += `    B1->>TR: Intent: ${event.data?.intent || '?'}\n`;
+        mermaid += `    Note over CE: Intent: ${event.data?.intent || '?'}\n`;
         break;
-        
-      case 'TRIAGE_DECISION':
-        mermaid += `    TR->>B2: Route: ${event.data?.route || event.data?.cardName || 'MESSAGE_ONLY'}\n`;
+      case 'MODE_CHANGED':
+        mermaid += `    Note over CE: Mode: ${event.data?.newMode || '?'}\n`;
         break;
-        
       case 'AGENT_RESPONSE_BUILT':
-        mermaid += `    B2->>TTS: Response ready\n`;
+        const source = event.data?.source || 'unknown';
+        mermaid += `    CE->>TTS: Response (${source})\n`;
         break;
-        
-      case 'TTS_GENERATED':
-        mermaid += `    TTS-->>C: ${time} (${event.data?.ms || '?'}ms)\n`;
+      case 'TTS_COMPLETED':
+        mermaid += `    TTS-->>C: ${time} Audio\n`;
         break;
-        
+      case 'BOOKING_MODE_LOCKED':
+        mermaid += `    Note over CE: 📅 BOOKING LOCKED\n`;
+        break;
+      case 'SLOT_COLLECTED':
+        mermaid += `    Note over CE: ✅ ${event.data?.slot}: ${truncate(event.data?.value, 15)}\n`;
+        break;
       case 'LOOP_DETECTED':
-        mermaid += `    Note over B1: 🔄 LOOP DETECTED\n`;
+        mermaid += `    Note over CE: 🔄 LOOP DETECTED\n`;
         break;
-        
       case 'BAILOUT_TRIGGERED':
-        mermaid += `    Note over B1: 🚨 BAILOUT: ${event.data?.reason || 'unknown'}\n`;
+        mermaid += `    Note over CE: 🚨 BAILOUT\n`;
         break;
-        
       case 'TRANSFER_INITIATED':
-        mermaid += `    B1->>T: TRANSFER\n`;
-        mermaid += `    T-->>C: Connecting...\n`;
-        break;
-        
-      case 'CALL_END':
-        mermaid += `    Note over C,TTS: CALL END (${event.data?.outcome || 'COMPLETED'})\n`;
+        mermaid += `    CE->>T: 📞 TRANSFER\n`;
         break;
     }
   }
   
-  return mermaid;
-}
-
-function generateDecisionTree(events, flags) {
-  const fastMatch = events.find(e => e.type === 'FAST_MATCH_HIT');
-  const llmFallback = events.find(e => e.type === 'LLM_FALLBACK');
-  const intentDetected = events.find(e => e.type === 'INTENT_DETECTED');
-  const triageDecision = events.find(e => e.type === 'TRIAGE_DECISION');
-  const bookingActivated = events.find(e => e.type === 'BOOKING_MODE_ACTIVATED');
-  const bailout = events.find(e => e.type === 'BAILOUT_TRIGGERED');
-  const transfer = events.find(e => e.type === 'TRANSFER_INITIATED');
-  
-  let mermaid = `flowchart TD
-    A["📞 Caller Input"] --> B{Fast Match?}
-`;
-  
-  if (fastMatch) {
-    mermaid += `    B -->|"✅ Yes"| C["Card: ${truncate(fastMatch.data?.cardName, 20)}"]
-    style C fill:#22c55e,color:#fff
-`;
-    if (triageDecision) {
-      mermaid += `    C --> D["Route: ${triageDecision.data?.route || 'MESSAGE_ONLY'}"]
-`;
-    }
-  } else if (llmFallback) {
-    mermaid += `    B -->|"❌ No"| E["LLM Fallback"]
-    style E fill:#f59e0b,color:#000
-`;
-    
-    if (intentDetected) {
-      mermaid += `    E --> F["Intent: ${intentDetected.data?.intent || '?'}"]
-`;
-      if (triageDecision) {
-        mermaid += `    F --> D["Route: ${triageDecision.data?.route || 'MESSAGE_ONLY'}"]
-`;
-      }
-    }
-  } else {
-    mermaid += `    B --> D["Route: MESSAGE_ONLY"]
-`;
-  }
-  
-  if (bookingActivated) {
-    mermaid += `    D --> G["📅 Booking Flow"]
-    style G fill:#3b82f6,color:#fff
-`;
-  }
-  
-  if (flags.loopDetected) {
-    mermaid += `    D --> H["🔄 LOOP DETECTED"]
-    style H fill:#f97316,color:#fff
-`;
-  }
-  
-  if (bailout) {
-    mermaid += `    D --> I["🚨 BAILOUT: ${bailout.data?.reason || '?'}"]
-    style I fill:#ef4444,color:#fff
-`;
-  }
-  
-  if (transfer) {
-    mermaid += `    I --> J["📞 TRANSFER"]
-    style J fill:#8b5cf6,color:#fff
-`;
-  }
-  
+  mermaid += `    Note over C,TTS: CALL END`;
   return mermaid;
 }
 
 function generateWaterfall(events, performanceData = {}) {
   const waterfall = [];
-  
-  // Group events by turn
   const gatherEvents = events.filter(e => e.type === 'GATHER_FINAL');
   
   gatherEvents.forEach((gatherEvent, index) => {
     const turn = index + 1;
     const turnStart = gatherEvent.t;
     
-    // Find events for this turn (between this gather and next)
     const nextGather = gatherEvents[index + 1];
     const turnEnd = nextGather ? nextGather.t : (events[events.length - 1]?.t || turnStart + 5000);
     
@@ -974,54 +763,43 @@ function generateWaterfall(events, performanceData = {}) {
     segments.push({
       name: 'STT',
       startMs: currentOffset,
-      durationMs: 300, // Approximate
+      durationMs: 300,
       status: 'ok',
       detail: `Speech: "${truncate(gatherEvent.data?.text, 30)}"`
     });
     currentOffset += 300;
     
-    // Brain-1 segment
-    const fastMatch = turnEvents.find(e => e.type === 'FAST_MATCH_HIT');
-    const llmFallback = turnEvents.find(e => e.type === 'LLM_FALLBACK');
+    // Scenario Matching segment
+    const scenarioMatch = turnEvents.find(e => e.type === 'SCENARIO_MATCHED');
+    const tier3Event = turnEvents.find(e => e.type === 'TIER3_FALLBACK');
     
-    if (fastMatch) {
+    if (scenarioMatch) {
+      const tier = scenarioMatch.data?.tier || 'tier1';
+      const ms = scenarioMatch.data?.latencyMs || 50;
       segments.push({
-        name: 'Brain-1 (Fast)',
+        name: `Match (${tier})`,
         startMs: currentOffset,
-        durationMs: 50,
+        durationMs: ms,
         status: 'ok',
-        detail: `Fast match: ${fastMatch.data?.cardName || 'matched'}`
+        detail: `${scenarioMatch.data?.scenarioName || 'matched'}`
       });
-      currentOffset += 50;
-    } else if (llmFallback) {
-      const llmMs = llmFallback.data?.ms || 3000;
+      currentOffset += ms;
+    } else if (tier3Event) {
+      const ms = tier3Event.data?.latencyMs || 3000;
       segments.push({
-        name: 'Brain-1 (LLM)',
+        name: 'LLM (tier3)',
         startMs: currentOffset,
-        durationMs: llmMs,
-        status: llmMs > 3000 ? 'slow' : 'ok',
-        detail: `LLM fallback: ${llmMs}ms`
+        durationMs: ms,
+        status: ms > 3000 ? 'slow' : 'ok',
+        detail: `LLM fallback: ${ms}ms`
       });
-      currentOffset += llmMs;
-    }
-    
-    // Triage segment
-    const triage = turnEvents.find(e => e.type === 'TRIAGE_DECISION');
-    if (triage) {
-      segments.push({
-        name: 'Triage',
-        startMs: currentOffset,
-        durationMs: 50,
-        status: 'ok',
-        detail: `Route: ${triage.data?.route || 'MESSAGE_ONLY'}`
-      });
-      currentOffset += 50;
+      currentOffset += ms;
     }
     
     // TTS segment
-    const tts = turnEvents.find(e => e.type === 'TTS_GENERATED');
+    const tts = turnEvents.find(e => e.type === 'TTS_COMPLETED');
     if (tts) {
-      const ttsMs = tts.data?.ms || 2000;
+      const ttsMs = tts.data?.latencyMs || 2000;
       segments.push({
         name: 'TTS',
         startMs: currentOffset,
@@ -1042,98 +820,230 @@ function generateWaterfall(events, performanceData = {}) {
   return waterfall;
 }
 
+function generateDecisionTree(events, flags) {
+  const scenarioMatch = events.find(e => e.type === 'SCENARIO_MATCHED');
+  const tier3Fallback = events.find(e => e.type === 'TIER3_FALLBACK');
+  const intentDetected = events.find(e => e.type === 'INTENT_DETECTED');
+  const bookingLocked = events.find(e => e.type === 'BOOKING_MODE_LOCKED');
+  const bailout = events.find(e => e.type === 'BAILOUT_TRIGGERED');
+  const transfer = events.find(e => e.type === 'TRANSFER_INITIATED');
+  
+  const sanitize = (str) => (str || '?').replace(/["\[\]{}|<>]/g, '').substring(0, 30);
+  
+  let lines = [];
+  lines.push('flowchart TD');
+  lines.push('    A[Caller Input]');
+  
+  // Scenario matching path
+  if (scenarioMatch) {
+    const tier = scenarioMatch.data?.tier || 'tier1';
+    const name = sanitize(scenarioMatch.data?.scenarioName);
+    lines.push(`    A --> B{Scenario Match?}`);
+    lines.push(`    B -->|"✅ ${tier.toUpperCase()}"| C["${name}"]`);
+    lines.push(`    style C fill:#22c55e,color:#fff`);
+  } else if (tier3Fallback) {
+    lines.push(`    A --> B{Scenario Match?}`);
+    lines.push(`    B -->|"❌ No Match"| C["LLM Tier-3"]`);
+    lines.push(`    style C fill:#f59e0b,color:#000`);
+  }
+  
+  // Intent detection
+  if (intentDetected) {
+    const intent = sanitize(intentDetected.data?.intent);
+    const lastNode = scenarioMatch || tier3Fallback ? 'C' : 'A';
+    lines.push(`    ${lastNode} --> D["Intent: ${intent}"]`);
+    
+    // Booking path
+    if (bookingLocked) {
+      lines.push(`    D --> E["📅 Booking Locked"]`);
+      lines.push(`    style E fill:#3b82f6,color:#fff`);
+    }
+  }
+  
+  // Error states
+  if (flags.loopDetected) {
+    lines.push(`    ${scenarioMatch || tier3Fallback ? 'C' : 'A'} --> LOOP["🔄 LOOP"]`);
+    lines.push(`    style LOOP fill:#f97316,color:#fff`);
+  }
+  
+  if (bailout) {
+    const reason = sanitize(bailout.data?.reason);
+    lines.push(`    ${intentDetected ? 'D' : (scenarioMatch || tier3Fallback ? 'C' : 'A')} --> BAIL["🚨 BAILOUT: ${reason}"]`);
+    lines.push(`    style BAIL fill:#ef4444,color:#fff`);
+  }
+  
+  if (transfer) {
+    lines.push(`    BAIL --> XFER["📞 TRANSFER"]`);
+    lines.push(`    style XFER fill:#8b5cf6,color:#fff`);
+  }
+  
+  return lines.join('\n');
+}
+
 // ============================================================================
-// CONVENIENCE: Quick log methods
+// QUICK LOG METHODS (V2 - Updated for New Architecture)
 // ============================================================================
 
 const QuickLog = {
+  // === Core Call Events ===
   greetingSent: (callId, companyId, text, ttsMs) => 
     logEvent({ callId, companyId, type: 'GREETING_SENT', turn: 0, data: { text, ttsMs } }),
     
   gatherFinal: (callId, companyId, turn, text, confidence) =>
     logEvent({ callId, companyId, type: 'GATHER_FINAL', turn, data: { text, confidence } }),
     
-  fastMatchHit: (callId, companyId, turn, cardId, cardName, keywords) =>
-    logEvent({ callId, companyId, type: 'FAST_MATCH_HIT', turn, data: { cardId, cardName, keywords } }),
+  gatherTimeout: (callId, companyId, turn, reason, nextAction) =>
+    logEvent({ callId, companyId, type: 'GATHER_TIMEOUT', turn, data: { reason, nextAction } }),
     
-  llmFallback: (callId, companyId, turn, ms, reason) =>
-    logEvent({ callId, companyId, type: 'LLM_FALLBACK', turn, data: { ms, reason } }),
+  gatherPartial: (callId, companyId, turn, text, confidence, sequence) =>
+    logEvent({ callId, companyId, type: 'GATHER_PARTIAL', turn, data: { text, confidence, sequence } }),
+  
+  // === STT Events ===
+  sttPreprocessing: (callId, companyId, turn, raw, cleaned, fillersRemoved, correctionsApplied) =>
+    logEvent({ callId, companyId, type: 'STT_PREPROCESSING', turn, data: { 
+      raw, 
+      cleaned, 
+      fillersRemoved: fillersRemoved || [],
+      correctionsApplied: correctionsApplied || [],
+      processingTimeMs: 0
+    }}),
     
+  sttHintsLoaded: (callId, companyId, templateId, hintsCount, hintsPreview) =>
+    logEvent({ callId, companyId, type: 'STT_HINTS_LOADED', turn: 0, data: { 
+      templateId, 
+      hintsCount, 
+      hintsPreview,
+      source: 'STT_PROFILE'
+    }}),
+
+  // === Scenario Matching Events (NEW!) ===
+  scenarioMatchAttempt: (callId, companyId, turn, input, normalizedInput, scenariosChecked) =>
+    logEvent({ callId, companyId, type: 'SCENARIO_MATCH_ATTEMPT', turn, data: { 
+      input: truncate(input, 50),
+      normalizedInput: truncate(normalizedInput, 50),
+      scenariosChecked
+    }}),
+    
+  scenarioMatched: (callId, companyId, turn, scenarioId, scenarioName, tier, confidence, matchReason, latencyMs) =>
+    logEvent({ callId, companyId, type: 'SCENARIO_MATCHED', turn, data: { 
+      scenarioId,
+      scenarioName,
+      tier,  // 'tier1', 'tier2', 'tier3'
+      confidence,
+      matchReason,
+      latencyMs
+    }}),
+    
+  scenarioNoMatch: (callId, companyId, turn, input, bestCandidate, bestConfidence, threshold, reason) =>
+    logEvent({ callId, companyId, type: 'SCENARIO_NO_MATCH', turn, data: { 
+      input: truncate(input, 50),
+      bestCandidate,
+      bestConfidence,
+      threshold,
+      reason
+    }}),
+    
+  tier3Fallback: (callId, companyId, turn, reason, latencyMs, tokensUsed) =>
+    logEvent({ callId, companyId, type: 'TIER3_FALLBACK', turn, data: { 
+      reason,
+      latencyMs,
+      tokensUsed
+    }}),
+  
+  // === Response Building (Updated!) ===
+  responseBuilt: (callId, companyId, turn, text, source, tier, tokensUsed) =>
+    logEvent({ callId, companyId, type: 'AGENT_RESPONSE_BUILT', turn, data: { 
+      text: truncate(text, 100), 
+      source,  // 'GREETING_INTERCEPT', 'SCENARIO_MATCH', 'STATE_MACHINE', 'LLM_FALLBACK', etc.
+      tier,    // 'tier1', 'tier2', 'tier3'
+      tokensUsed: tokensUsed || 0
+    }}),
+    
+  // === Intent & Mode Events ===
   intentDetected: (callId, companyId, turn, intent, confidence, source) =>
     logEvent({ callId, companyId, type: 'INTENT_DETECTED', turn, data: { intent, confidence, source } }),
     
-  triageDecision: (callId, companyId, turn, route, cardId, cardName, source) =>
-    logEvent({ callId, companyId, type: 'TRIAGE_DECISION', turn, data: { route, cardId, cardName, source } }),
+  modeChanged: (callId, companyId, turn, fromMode, toMode, trigger) =>
+    logEvent({ callId, companyId, type: 'MODE_CHANGED', turn, data: { fromMode, toMode, trigger } }),
     
-  responseBuilt: (callId, companyId, turn, text, source) =>
-    logEvent({ callId, companyId, type: 'AGENT_RESPONSE_BUILT', turn, data: { text: truncate(text, 100), source } }),
-    
-  ttsGenerated: (callId, companyId, turn, ms, audioUrl) =>
-    logEvent({ callId, companyId, type: 'TTS_GENERATED', turn, data: { ms, audioUrl } }),
-    
-  loopDetected: (callId, companyId, turn) =>
-    logEvent({ callId, companyId, type: 'LOOP_DETECTED', turn, data: {} }),
-    
-  bailoutTriggered: (callId, companyId, turn, type, reason) =>
-    logEvent({ callId, companyId, type: 'BAILOUT_TRIGGERED', turn, data: { type, reason } }),
-  
-  // LOW CONFIDENCE HANDLING - STT Quality Guard
-  lowConfidenceHit: (callId, companyId, turn, confidence, transcript, repeatCount) =>
-    logEvent({ callId, companyId, type: 'LOW_CONFIDENCE_HIT', turn, data: { 
-      confidence, 
-      transcript: truncate(transcript, 100), 
-      repeatCount,
-      suggestion: 'STT confidence below threshold - caller asked to repeat'
-    } }),
-  
-  lowConfidenceEscalation: (callId, companyId, turn, repeatCount, reason) =>
-    logEvent({ callId, companyId, type: 'LOW_CONFIDENCE_ESCALATION', turn, data: { 
-      repeatCount, 
-      reason,
-      suggestion: 'Max repeats reached due to persistent low STT confidence - transferring to human'
-    } }),
-    
-  transferInitiated: (callId, companyId, turn, target, reason) =>
-    logEvent({ callId, companyId, type: 'TRANSFER_INITIATED', turn, data: { target, reason } }),
-    
-  // ════════════════════════════════════════════════════════════════════════════
-  // BOOKING PROGRESS EVENTS
-  // ════════════════════════════════════════════════════════════════════════════
-  
+  // === Booking Events ===
   bookingModeLocked: (callId, companyId, turn, intentConfidence) =>
     logEvent({ callId, companyId, type: 'BOOKING_MODE_LOCKED', turn, data: { intentConfidence, locked: true } }),
     
-  bookingSlotFilled: (callId, companyId, turn, slot, value) =>
-    logEvent({ callId, companyId, type: 'BOOKING_SLOT_FILLED', turn, data: { slot, value: truncate(value, 50) } }),
-    
-  bookingOverridden: (callId, companyId, turn, overriddenBy, bookingStep, responseText) =>
-    logEvent({ callId, companyId, type: 'BOOKING_OVERRIDDEN', turn, data: { 
-      overriddenBy, 
-      bookingStep, 
-      responseText: truncate(responseText, 60) 
+  slotCollected: (callId, companyId, turn, slot, value, extractionMethod) =>
+    logEvent({ callId, companyId, type: 'SLOT_COLLECTED', turn, data: { 
+      slot, 
+      value: truncate(value, 50),
+      extractionMethod
     }}),
+    
+  slotAsking: (callId, companyId, turn, slot, question) =>
+    logEvent({ callId, companyId, type: 'SLOT_ASKING', turn, data: { slot, question: truncate(question, 80) } }),
     
   bookingComplete: (callId, companyId, turn, collected) =>
     logEvent({ callId, companyId, type: 'BOOKING_COMPLETE', turn, data: { collected } }),
     
-  // ════════════════════════════════════════════════════════════════════════════
-  // SYSTEM/INFRASTRUCTURE EVENTS (replaces Render log searching)
-  // ════════════════════════════════════════════════════════════════════════════
+  // === State Events ===
+  stateLoaded: (callId, companyId, turn, source, bookingModeLocked, bookingState, turnCount) =>
+    logEvent({ callId, companyId, type: 'STATE_LOADED', turn, data: { 
+      source,  // 'REDIS', 'REDIS_EMPTY', 'MEMORY', 'ERROR'
+      error: null,
+      bookingModeLocked,
+      bookingState,
+      currentBookingStep: null,
+      turnCount
+    }}),
+    
+  stateSaved: (callId, companyId, turn, result, bookingModeLocked, bookingState, bookingCollected) =>
+    logEvent({ callId, companyId, type: 'STATE_SAVED', turn, data: { 
+      result,  // 'REDIS_OK', 'REDIS_ERROR', 'MEMORY_OK'
+      error: null,
+      bookingModeLocked,
+      bookingState,
+      currentBookingStep: null,
+      bookingCollected
+    }}),
+    
+  // === Routing Events ===
+  routingDecision: (callId, companyId, turn, llm0Enabled, reason, bookingModeLocked, path) =>
+    logEvent({ callId, companyId, type: 'ROUTING_DECISION', turn, data: { 
+      llm0Enabled,
+      reason,
+      bookingModeLocked,
+      bookingState: null,
+      currentBookingStep: null,
+      path  // 'HybridReceptionistLLM', 'StateMachine', 'BookingFlow'
+    }}),
+    
+  hybridPathStart: (callId, companyId, turn, reason, bookingModeLocked, userInput) =>
+    logEvent({ callId, companyId, type: 'HYBRID_PATH_START', turn, data: { 
+      reason,
+      bookingModeLocked,
+      userInput: truncate(userInput, 60)
+    }}),
+    
+  hybridPathSuccess: (callId, companyId, turn, latencyMs, responsePreview, mode) =>
+    logEvent({ callId, companyId, type: 'HYBRID_PATH_SUCCESS', turn, data: { 
+      latencyMs,
+      responsePreview: truncate(responsePreview, 100),
+      mode
+    }}),
+    
+  pathResolved: (callId, companyId, turn, usedPath, latencyMs, responseLength) =>
+    logEvent({ callId, companyId, type: 'PATH_RESOLVED', turn, data: { usedPath, latencyMs, responseLength } }),
+    
+  turnComplete: (callId, companyId, turn, handler, action, responsePreview, bookingModeLocked, bookingState, bookingCollected) =>
+    logEvent({ callId, companyId, type: 'TURN_COMPLETE', turn, data: { 
+      handler,
+      action,
+      responsePreview: truncate(responsePreview, 100),
+      bookingModeLocked,
+      bookingState,
+      currentBookingStep: null,
+      bookingCollected
+    }}),
   
-  // Redis/Cache events
-  redisConnected: (callId, companyId) =>
-    logEvent({ callId, companyId, type: 'REDIS_CONNECTED', turn: 0, data: { status: 'connected' } }),
-    
-  redisFailed: (callId, companyId, error) =>
-    logEvent({ callId, companyId, type: 'REDIS_FAILED', turn: 0, data: { error: truncate(error, 200), fallback: 'memory' } }),
-    
-  cacheHit: (callId, companyId, turn, key, source) =>
-    logEvent({ callId, companyId, type: 'CACHE_HIT', turn, data: { key, source } }),
-    
-  cacheMiss: (callId, companyId, turn, key) =>
-    logEvent({ callId, companyId, type: 'CACHE_MISS', turn, data: { key } }),
-    
-  // TTS/Voice events
+  // === TTS Events ===
   ttsStarted: (callId, companyId, turn, voiceId, textLength) =>
     logEvent({ callId, companyId, type: 'TTS_STARTED', turn, data: { voiceId, textLength } }),
     
@@ -1143,61 +1053,94 @@ const QuickLog = {
   ttsFailed: (callId, companyId, turn, error, fallback) =>
     logEvent({ callId, companyId, type: 'TTS_FAILED', turn, data: { error: truncate(error, 200), fallback } }),
     
-  // LLM events
-  llmRequestStarted: (callId, companyId, turn, brain, promptLength) =>
-    logEvent({ callId, companyId, type: 'LLM_REQUEST_STARTED', turn, data: { brain, promptLength } }),
+  twimlSent: (callId, companyId, turn, route, twimlLength, hasGather, hasPlay, hasSay, actionUrl, twimlPreview) =>
+    logEvent({ callId, companyId, type: 'TWIML_SENT', turn, data: { 
+      route, twimlLength, hasGather, hasPlay, hasSay, actionUrl, twimlPreview: truncate(twimlPreview, 500)
+    }}),
     
-  llmTimeout: (callId, companyId, turn, brain, timeoutMs) =>
-    logEvent({ callId, companyId, type: 'LLM_TIMEOUT', turn, data: { brain, timeoutMs, suggestion: 'Consider increasing timeout or optimizing prompt' } }),
+  gatherConfigured: (callId, companyId, turn, actionUrl, timeout, speechTimeout, bargeIn, hintsCount) =>
+    logEvent({ callId, companyId, type: 'GATHER_CONFIGURED', turn, data: { 
+      actionUrl, timeout, speechTimeout, bargeIn, hintsCount
+    }}),
+  
+  // === Error/Warning Events ===
+  loopDetected: (callId, companyId, turn) =>
+    logEvent({ callId, companyId, type: 'LOOP_DETECTED', turn, data: {} }),
     
-  llmError: (callId, companyId, turn, brain, error) =>
-    logEvent({ callId, companyId, type: 'LLM_ERROR', turn, data: { brain, error: truncate(error, 200) } }),
+  bailoutTriggered: (callId, companyId, turn, type, reason) =>
+    logEvent({ callId, companyId, type: 'BAILOUT_TRIGGERED', turn, data: { type, reason } }),
     
-  // Call lifecycle events
-  callerHangup: (callId, companyId, turn, afterEvent) =>
-    logEvent({ callId, companyId, type: 'CALLER_HANGUP', turn, data: { afterEvent, reason: 'Caller disconnected' } }),
+  conversationEngineError: (callId, companyId, turn, error, errorType, lastCheckpoint, stackPreview, latencyMs) =>
+    logEvent({ callId, companyId, type: 'CONVERSATION_ENGINE_ERROR', turn, data: { 
+      error,
+      errorType,
+      lastCheckpoint,
+      stackPreview,
+      latencyMs
+    }}),
     
-  gatherTimeout: (callId, companyId, turn, timeoutSeconds, nextAction) =>
-    logEvent({ callId, companyId, type: 'GATHER_TIMEOUT', turn, data: { timeoutSeconds, nextAction } }),
+  lowConfidenceHit: (callId, companyId, turn, confidence, transcript, repeatCount) =>
+    logEvent({ callId, companyId, type: 'LOW_CONFIDENCE_HIT', turn, data: { 
+      confidence, 
+      transcript: truncate(transcript, 100), 
+      repeatCount
+    }}),
     
-  noSpeechDetected: (callId, companyId, turn, promptedAgain) =>
-    logEvent({ callId, companyId, type: 'NO_SPEECH_DETECTED', turn, data: { promptedAgain, suggestion: 'Caller may be on hold or connection issue' } }),
+  // === Transfer Events ===
+  transferInitiated: (callId, companyId, turn, target, reason) =>
+    logEvent({ callId, companyId, type: 'TRANSFER_INITIATED', turn, data: { target, reason } }),
     
-  // Phase/Flow events
-  phaseTransition: (callId, companyId, turn, fromPhase, toPhase, reason) =>
-    logEvent({ callId, companyId, type: 'PHASE_TRANSITION', turn, data: { fromPhase, toPhase, reason } }),
+  // === Customer Events ===
+  customerIdentified: (callId, companyId, turn, customerId, isReturning, customerName) =>
+    logEvent({ callId, companyId, type: 'CUSTOMER_IDENTIFIED', turn, data: { 
+      customerId,
+      isReturning,
+      customerName: truncate(customerName, 30)
+    }}),
     
-  fallbackUsed: (callId, companyId, turn, fallbackType, reason) =>
-    logEvent({ callId, companyId, type: 'FALLBACK_USED', turn, data: { fallbackType, reason } }),
-    
-  // Configuration events
-  configLoaded: (callId, companyId, configType, success) =>
-    logEvent({ callId, companyId, type: 'CONFIG_LOADED', turn: 0, data: { configType, success } }),
-    
-  configMissing: (callId, companyId, configType, usingDefault) =>
-    logEvent({ callId, companyId, type: 'CONFIG_MISSING', turn: 0, data: { configType, usingDefault } }),
-    
-  // Error/Exception events  
-  exceptionCaught: (callId, companyId, turn, location, error, recovered) =>
-    logEvent({ callId, companyId, type: 'EXCEPTION_CAUGHT', turn, data: { 
-      location, 
-      error: truncate(error, 300),
-      recovered,
-      severity: recovered ? 'WARNING' : 'CRITICAL'
-    } }),
-    
-  // Performance events
-  slowOperation: (callId, companyId, turn, operation, latencyMs, threshold) =>
-    logEvent({ callId, companyId, type: 'SLOW_OPERATION', turn, data: { 
-      operation, 
-      latencyMs, 
-      threshold,
-      suggestion: `${operation} took ${latencyMs}ms (threshold: ${threshold}ms)`
-    } })
+  // === Emotion Detection ===
+  emotionDetected: (callId, companyId, turn, emotion, confidence) =>
+    logEvent({ callId, companyId, type: 'EMOTION_DETECTED', turn, data: { emotion, confidence } })
 };
 
 // ============================================================================
-// UPDATE BOOKING PROGRESS (called during booking flow)
+// UPDATE SESSION SNAPSHOT
+// ============================================================================
+
+async function updateSessionSnapshot(callId, companyId, session) {
+  try {
+    const snapshot = {
+      phase: session.phase || session.conversationMemory?.currentStage || 'unknown',
+      mode: session.mode || 'DISCOVERY',
+      locks: {
+        greeted: session.locks?.greeted || false,
+        issueCaptured: session.locks?.issueCaptured || false,
+        bookingStarted: session.locks?.bookingStarted || false,
+        bookingLocked: session.locks?.bookingLocked || false,
+        askedSlots: session.locks?.askedSlots || {}
+      },
+      memory: {
+        rollingSummary: session.memory?.rollingSummary || '',
+        facts: session.memory?.facts || {},
+        lastUserIntent: session.memory?.lastUserIntent || null
+      }
+    };
+    
+    await BlackBoxRecording.updateOne(
+      { callId, companyId },
+      { $set: { sessionSnapshot: snapshot } }
+    );
+    
+  } catch (error) {
+    logger.error('[BLACK BOX] Failed to update session snapshot (non-fatal)', {
+      callId,
+      error: error.message
+    });
+  }
+}
+
+// ============================================================================
+// UPDATE BOOKING PROGRESS
 // ============================================================================
 
 async function updateBookingProgress(callId, companyId, progress) {
@@ -1212,193 +1155,22 @@ async function updateBookingProgress(callId, companyId, progress) {
 }
 
 // ============================================================================
-// 🆕 PHASE 2: UPDATE SESSION SNAPSHOT (called each turn)
-// ============================================================================
-
-/**
- * Update the session snapshot in Black Box
- * Called each turn to persist state + locks + memory
- * 
- * @param {string} callId - Call/session identifier
- * @param {string|ObjectId} companyId - Company ID
- * @param {Object} session - Session object with locks, memory, mode, phase
- */
-async function updateSessionSnapshot(callId, companyId, session) {
-  try {
-    const snapshot = {
-      phase: session.phase || session.conversationMemory?.currentStage || 'unknown',
-      mode: session.mode || 'DISCOVERY',
-      locks: {
-        greeted: session.locks?.greeted || false,
-        issueCaptured: session.locks?.issueCaptured || false,
-        bookingStarted: session.locks?.bookingStarted || false,
-        bookingLocked: session.locks?.bookingLocked || false,
-        askedSlots: session.locks?.askedSlots || {},
-        flowAcked: session.locks?.flowAcked || {}
-      },
-      memory: {
-        rollingSummary: session.memory?.rollingSummary || '',
-        facts: session.memory?.facts || {},
-        lastUserIntent: session.memory?.lastUserIntent || null,
-        acknowledgedClaims: session.memory?.acknowledgedClaims || []
-      },
-      callLedger: {
-        activeScenarios: session.callLedger?.activeScenarios || [],
-        entries: session.callLedger?.entries || [],
-        facts: session.callLedger?.facts || {}
-      }
-    };
-    
-    await BlackBoxRecording.updateOne(
-      { callId, companyId },
-      { $set: { sessionSnapshot: snapshot } }
-    );
-    
-    logger.debug('[BLACK BOX] Session snapshot updated', {
-      callId,
-      mode: snapshot.mode,
-      locks: snapshot.locks,
-      summaryLength: snapshot.memory.rollingSummary?.length || 0
-    });
-    
-  } catch (error) {
-    logger.error('[BLACK BOX] Failed to update session snapshot (non-fatal)', {
-      callId,
-      error: error.message
-    });
-  }
-}
-
-// ============================================================================
-// 🆕 PHASE 3 PLACEHOLDER: LOG DYNAMIC FLOW TRACE
-// ============================================================================
-
-/**
- * Log a dynamic flow trace entry
- * Called when triggers are evaluated and events fire
- * 
- * @param {string} callId - Call/session identifier
- * @param {string|ObjectId} companyId - Company ID
- * @param {number} turn - Turn number
- * @param {Object} trace - Trace data
- */
-async function logDynamicFlowTrace(callId, companyId, turn, trace) {
-  try {
-    // Map triggersFired (from DynamicFlowEngine) to fired (BlackBox schema)
-    // Each entry: { key, matchScore, matchScoreSource }
-    const firedArray = (trace.triggersFired || trace.fired || []).map(f => ({
-      key: f.key || f.flowKey,
-      matchScore: f.matchScore,
-      matchScoreSource: f.matchScoreSource
-    }));
-    
-    // Map actionsExecuted to structured objects
-    const actionsArray = (trace.actionsExecuted || []).map(a => ({
-      type: a.type,
-      payload: a.payload || a.config,
-      flowKey: a.flowKey
-    }));
-    
-    // Map ledgerAppends to structured objects
-    const ledgerArray = (trace.ledgerAppends || []).map(l => ({
-      type: l.type,
-      key: l.key,
-      note: l.note,
-      flowKey: l.flowKey
-    }));
-    
-    // Map modeChange to structured object
-    const modeChangeObj = trace.modeChange ? {
-      from: trace.modeChange.from,
-      to: trace.modeChange.to,
-      flowKey: trace.modeChange.flowKey
-    } : null;
-    
-    await BlackBoxRecording.updateOne(
-      { callId, companyId },
-      {
-        $push: {
-          dynamicFlowTrace: {
-            turn,
-            timestamp: trace.timestamp || new Date(),
-            inputSnippet: trace.inputSnippet || '',
-            triggersEvaluated: trace.triggersEvaluated || [],
-            fired: firedArray,
-            actionsExecuted: actionsArray,
-            ledgerAppends: ledgerArray,
-            modeChange: modeChangeObj
-          }
-        }
-      }
-    );
-    
-    logger.debug('[BLACK BOX] Dynamic flow trace logged', {
-      callId,
-      turn,
-      triggersFired: firedArray.length
-    });
-    
-  } catch (error) {
-    logger.error('[BLACK BOX] Failed to log dynamic flow trace (non-fatal)', {
-      callId,
-      error: error.message
-    });
-  }
-}
-
-// ============================================================================
-// LOG BOOKING CONFLICT (when booking is overridden by another module)
-// ============================================================================
-
-async function logBookingConflict(callId, companyId, conflictData) {
-  try {
-    const { t, overriddenBy, bookingStep, responseText } = conflictData;
-    
-    await BlackBoxRecording.updateOne(
-      { callId, companyId },
-      {
-        $inc: { 'conflicts.bookingOverriddenCount': 1 },
-        $set: {
-          'conflicts.bookingVsTriage': overriddenBy === 'TRIAGE',
-          'conflicts.bookingVsTroubleshooting': ['TROUBLESHOOTING', 'MESSAGE_ONLY'].includes(overriddenBy)
-        },
-        $push: {
-          'conflicts.overrideEvents': {
-            t,
-            overriddenBy,
-            bookingStep,
-            responseText: truncate(responseText, 60)
-          }
-        }
-      }
-    );
-    
-    logger.warn('[BLACK BOX] ⚠️ BOOKING CONFLICT DETECTED', {
-      callId,
-      overriddenBy,
-      bookingStep
-    });
-    
-  } catch (error) {
-    logger.error('[BLACK BOX] Failed to log booking conflict', { callId, error: error.message });
-  }
-}
-
-// ============================================================================
-// EXPORT
+// EXPORTS
 // ============================================================================
 
 module.exports = {
+  // Core methods
   initCall,
   ensureCall,
   logEvent,
   appendError,
   addTranscript,
   finalizeCall,
-  updateBookingProgress,
-  logBookingConflict,
-  updateSessionSnapshot,     // 🆕 Phase 2
-  logDynamicFlowTrace,       // 🆕 Phase 3 placeholder
-  QuickLog
+  
+  // Quick log helpers
+  QuickLog,
+  
+  // State updates
+  updateSessionSnapshot,
+  updateBookingProgress
 };
-
