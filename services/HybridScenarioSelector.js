@@ -120,8 +120,36 @@ class HybridScenarioSelector {
         const activeFillerWords = Array.isArray(fillerWordsArray) && fillerWordsArray.length > 0 
             ? fillerWordsArray 
             : defaultFillerWords;
+
+        // 🚨 SAFETY: never allow "meaningful" words to be treated as fillers.
+        // These words destroy matching by stripping core meaning ("i'm" → "m", "it's" → "s", etc).
+        // This is a deterministic safety guardrail; it prevents misconfiguration from breaking runtime.
+        const PROTECTED_FILLERS = new Set([
+            // pronouns
+            'i','im','i m','me','my','mine','you','your','yours','we','us','our','ours','they','them','their','theirs',
+            // articles / core grammar
+            'a','an','the','is','are','was','were','be','been','being','it','its','it s',
+            // question words (meaningful for intent)
+            'what','when','where','who','why','how',
+            // confirmations/negations
+            'yes','no','yeah','yep','nope','ok','okay','sure',
+        ]);
+        const filteredFillerWords = activeFillerWords
+            .map(w => String(w).toLowerCase().trim())
+            .filter(Boolean)
+            .filter(w => !PROTECTED_FILLERS.has(w));
+
+        const removedProtected = activeFillerWords
+            .map(w => String(w).toLowerCase().trim())
+            .filter(Boolean)
+            .filter(w => PROTECTED_FILLERS.has(w));
+        if (removedProtected.length > 0) {
+            logger.warn('⚠️ [HYBRID SELECTOR] Ignoring protected filler words from template (misconfiguration)', {
+                removed: [...new Set(removedProtected)].slice(0, 20)
+            });
+        }
         
-        this.fillerWords = new Set(activeFillerWords.map(w => String(w).toLowerCase().trim()));
+        this.fillerWords = new Set(filteredFillerWords);
         
         logger.info('🔇 [HYBRID SELECTOR] Filler words initialized', {
             source: fillerWordsArray ? 'template' : 'defaults',
