@@ -1864,6 +1864,86 @@
         </div>
     </div>
     
+    <!-- Call Detail Modal -->
+    <div class="modal-overlay" id="call-modal">
+        <div class="modal" style="max-width: 800px;">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <div class="customer-avatar" id="call-modal-avatar">?</div>
+                    <div>
+                        <h2 id="call-modal-customer-name">Unknown Caller</h2>
+                        <div style="display: flex; gap: 12px; align-items: center; font-size: 13px; color: var(--text-secondary);">
+                            <span id="call-modal-phone">—</span>
+                            <span>•</span>
+                            <span id="call-modal-date">—</span>
+                            <span>•</span>
+                            <span id="call-modal-duration">—</span>
+                        </div>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeCallModal()">✕</button>
+            </div>
+            
+            <div class="modal-body" style="padding: 24px;">
+                <!-- Call Stats -->
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+                    <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Outcome</div>
+                        <div style="font-size: 18px; font-weight: 600;" id="call-modal-outcome">—</div>
+                    </div>
+                    <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Intent</div>
+                        <div style="font-size: 14px; font-weight: 500;" id="call-modal-intent">—</div>
+                    </div>
+                    <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Routing Tier</div>
+                        <div style="font-size: 18px; font-weight: 600;" id="call-modal-tier">—</div>
+                    </div>
+                    <div style="background: var(--bg-card); padding: 16px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Turns</div>
+                        <div style="font-size: 18px; font-weight: 600;" id="call-modal-turns">—</div>
+                    </div>
+                </div>
+                
+                <!-- Transcript Section -->
+                <div style="margin-bottom: 24px;">
+                    <h3 style="font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">
+                        📝 Conversation Transcript
+                    </h3>
+                    <div id="call-modal-transcript" style="background: var(--bg-card); border-radius: 8px; padding: 16px; max-height: 400px; overflow-y: auto;">
+                        <div style="text-align: center; color: var(--text-muted); padding: 40px;">
+                            Loading transcript...
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- AI Summary -->
+                <div id="call-modal-summary-section" style="display: none; margin-bottom: 24px;">
+                    <h3 style="font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">
+                        🤖 AI Summary
+                    </h3>
+                    <div id="call-modal-summary" style="background: var(--bg-card); border-radius: 8px; padding: 16px; color: var(--text-secondary); font-size: 14px;">
+                    </div>
+                </div>
+                
+                <!-- Slots Collected -->
+                <div id="call-modal-slots-section" style="display: none;">
+                    <h3 style="font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">
+                        📋 Information Collected
+                    </h3>
+                    <div id="call-modal-slots" style="background: var(--bg-card); border-radius: 8px; padding: 16px;">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeCallModal()">Close</button>
+                <button class="btn" style="background: var(--accent-yellow); color: #000;" onclick="flagCallFromModal()">🚩 Flag Call</button>
+                <button class="btn btn-primary" onclick="viewCustomerFromCall()">👤 View Customer</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- Scripts -->
     <script>
         /**
@@ -3272,12 +3352,163 @@
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // CALL DETAIL
+        // CALL DETAIL MODAL
         // ═══════════════════════════════════════════════════════════════════════════
         
-        function viewCall(callId) {
-            // For now, just show basic info
-            alert(`Call details for ${callId} - Full modal coming soon!`);
+        let currentCall = null;
+        
+        async function viewCall(callId) {
+            const modal = document.getElementById('call-modal');
+            modal.classList.add('open');
+            
+            // Reset modal state
+            document.getElementById('call-modal-transcript').innerHTML = `
+                <div style="text-align: center; color: var(--text-muted); padding: 40px;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
+                    <p>Loading transcript...</p>
+                </div>
+            `;
+            
+            try {
+                // Load call with transcript
+                const res = await apiCall(`/api/admin/call-center/${currentCompanyId}/calls/${callId}?includeTranscript=true`);
+                currentCall = res.data;
+                
+                populateCallModal(currentCall);
+                
+            } catch (err) {
+                console.error('Failed to load call:', err);
+                document.getElementById('call-modal-transcript').innerHTML = `
+                    <div style="text-align: center; color: var(--accent-red); padding: 40px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 24px; margin-bottom: 12px;"></i>
+                        <p>Failed to load call: ${err.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function populateCallModal(call) {
+            // Header info
+            const initials = getInitials(call.callerName || call.phone);
+            document.getElementById('call-modal-avatar').textContent = initials;
+            document.getElementById('call-modal-avatar').className = `customer-avatar ${call.isReturning ? 'returning' : ''}`;
+            document.getElementById('call-modal-customer-name').textContent = call.callerName || 'Unknown Caller';
+            document.getElementById('call-modal-phone').textContent = formatPhone(call.phone);
+            document.getElementById('call-modal-date').textContent = new Date(call.startedAt).toLocaleString();
+            document.getElementById('call-modal-duration').textContent = formatDuration(call.durationSeconds);
+            
+            // Stats
+            document.getElementById('call-modal-outcome').textContent = call.outcome || '—';
+            document.getElementById('call-modal-outcome').style.color = 
+                call.outcome === 'booked' ? 'var(--accent-green)' :
+                call.outcome === 'completed' ? 'var(--accent-cyan)' :
+                call.outcome === 'abandoned' ? 'var(--accent-red)' : 'var(--text-primary)';
+            document.getElementById('call-modal-intent').textContent = call.primaryIntent || 'Unknown';
+            document.getElementById('call-modal-tier').textContent = call.routingTier ? `Tier ${call.routingTier}` : '—';
+            document.getElementById('call-modal-turns').textContent = call.turnCount || '—';
+            
+            // Transcript
+            renderCallTranscript(call);
+            
+            // AI Summary
+            if (call.aiSummary) {
+                document.getElementById('call-modal-summary-section').style.display = 'block';
+                document.getElementById('call-modal-summary').textContent = call.aiSummary;
+            } else {
+                document.getElementById('call-modal-summary-section').style.display = 'none';
+            }
+            
+            // Slots Collected
+            if (call.slotsCollected && Object.keys(call.slotsCollected).length > 0) {
+                document.getElementById('call-modal-slots-section').style.display = 'block';
+                document.getElementById('call-modal-slots').innerHTML = Object.entries(call.slotsCollected)
+                    .map(([key, value]) => `
+                        <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border-light);">
+                            <span style="color: var(--text-muted); font-size: 13px;">${key}</span>
+                            <span style="color: var(--text-primary); font-weight: 500;">${value || '—'}</span>
+                        </div>
+                    `).join('');
+            } else {
+                document.getElementById('call-modal-slots-section').style.display = 'none';
+            }
+        }
+        
+        function renderCallTranscript(call) {
+            const transcriptEl = document.getElementById('call-modal-transcript');
+            
+            // Check for transcript data
+            const turns = call.transcript?.turns || call.turns || [];
+            
+            if (turns.length === 0) {
+                transcriptEl.innerHTML = `
+                    <div style="text-align: center; color: var(--text-muted); padding: 40px;">
+                        <i class="fas fa-comment-slash" style="font-size: 32px; margin-bottom: 12px;"></i>
+                        <p>No transcript available for this call</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            transcriptEl.innerHTML = turns.map((turn, idx) => {
+                const isCaller = turn.speaker === 'caller' || turn.role === 'user';
+                const isAgent = turn.speaker === 'agent' || turn.role === 'assistant';
+                
+                return `
+                    <div style="display: flex; gap: 12px; margin-bottom: 16px; ${isCaller ? 'flex-direction: row;' : 'flex-direction: row-reverse;'}">
+                        <div style="
+                            width: 32px; height: 32px; border-radius: 50%;
+                            background: ${isCaller ? 'var(--accent-cyan)' : 'var(--accent-purple)'};
+                            display: flex; align-items: center; justify-content: center;
+                            font-size: 12px; font-weight: 600; flex-shrink: 0;
+                            color: ${isCaller ? '#000' : '#fff'};
+                        ">
+                            ${isCaller ? '👤' : '🤖'}
+                        </div>
+                        <div style="
+                            max-width: 70%; padding: 12px 16px; border-radius: 12px;
+                            background: ${isCaller ? 'rgba(34, 211, 238, 0.1)' : 'rgba(168, 85, 247, 0.1)'};
+                            color: var(--text-primary); font-size: 14px; line-height: 1.5;
+                        ">
+                            <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 4px;">
+                                ${isCaller ? 'Caller' : 'AI Agent'} ${turn.timestamp ? '• ' + new Date(turn.timestamp).toLocaleTimeString() : ''}
+                            </div>
+                            ${turn.text || turn.content || '(empty)'}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function closeCallModal() {
+            document.getElementById('call-modal').classList.remove('open');
+            currentCall = null;
+        }
+        
+        async function flagCallFromModal() {
+            if (!currentCall) return;
+            
+            const reason = prompt('Enter flag reason:');
+            if (!reason) return;
+            
+            try {
+                await apiCall(`/api/admin/call-center/${currentCompanyId}/calls/${currentCall.callId}/flag`, {
+                    method: 'POST',
+                    body: JSON.stringify({ reason })
+                });
+                alert('Call flagged successfully!');
+                await loadCalls();
+            } catch (err) {
+                alert('Failed to flag call: ' + err.message);
+            }
+        }
+        
+        function viewCustomerFromCall() {
+            if (!currentCall || !currentCall.customerId) {
+                alert('No customer associated with this call');
+                return;
+            }
+            closeCallModal();
+            viewCustomer(currentCall.customerId);
         }
         
         async function flagCall(callId) {

@@ -643,9 +643,51 @@ class CallSummaryService {
     }
     
     // Include transcript if requested
-    if (includeTranscript && call.transcriptRef) {
-      const transcript = await CallTranscript.findById(call.transcriptRef).lean();
-      call.transcript = transcript?.turns || [];
+    if (includeTranscript) {
+      // Try CallTranscript first
+      if (call.transcriptRef) {
+        const transcript = await CallTranscript.findById(call.transcriptRef).lean();
+        call.transcript = transcript || { turns: [] };
+      }
+      
+      // Fallback to BlackBoxRecording if no transcript found
+      if (!call.transcript || !call.transcript.turns || call.transcript.turns.length === 0) {
+        const BlackBoxRecording = require('../models/BlackBoxRecording');
+        const blackBox = await BlackBoxRecording.findOne({ callId, companyId }).lean();
+        
+        if (blackBox?.transcript) {
+          // Convert BlackBox format to standard format
+          const combinedTurns = [];
+          const callerTurns = blackBox.transcript.callerTurns || [];
+          const agentTurns = blackBox.transcript.agentTurns || [];
+          
+          // Merge and sort by turn number
+          callerTurns.forEach(turn => {
+            combinedTurns.push({
+              speaker: 'caller',
+              text: turn.text,
+              timestamp: turn.t ? new Date(blackBox.startedAt.getTime() + turn.t) : null,
+              turnNumber: turn.turn
+            });
+          });
+          
+          agentTurns.forEach(turn => {
+            combinedTurns.push({
+              speaker: 'agent',
+              text: turn.text,
+              timestamp: turn.t ? new Date(blackBox.startedAt.getTime() + turn.t) : null,
+              turnNumber: turn.turn,
+              source: turn.source
+            });
+          });
+          
+          // Sort by turn number
+          combinedTurns.sort((a, b) => (a.turnNumber || 0) - (b.turnNumber || 0));
+          
+          call.transcript = { turns: combinedTurns };
+          call.transcriptSource = 'BlackBoxRecording';
+        }
+      }
     }
     
     // Include customer info
