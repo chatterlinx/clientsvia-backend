@@ -284,6 +284,61 @@ router.get('/stats', async (req, res) => {
 });
 
 // ============================================================================
+// HELPER: Format Latency Analysis
+// ============================================================================
+// Formats the latency analysis into a readable text block for the snapshot.
+// This appears automatically in every Black Box snapshot for quick diagnosis.
+// ============================================================================
+
+function formatLatencyAnalysis(latencyAnalysis) {
+  if (!latencyAnalysis) {
+    return `
+Latency Analysis:
+- (No latency analysis available - check BlackBoxLogger)
+`;
+  }
+  
+  const summary = latencyAnalysis.summary || {};
+  const averages = latencyAnalysis.averages || {};
+  const recommendations = latencyAnalysis.recommendations || [];
+  const turnAnalyses = latencyAnalysis.turnAnalyses || [];
+  
+  // Grade emoji
+  const gradeEmoji = {
+    'A': '🟢',
+    'B': '🟡',
+    'C': '🟠',
+    'D': '🔴',
+    'F': '⛔'
+  };
+  
+  // Build turn-by-turn breakdown (max 5 turns shown)
+  const turnBreakdownLines = turnAnalyses.slice(0, 5).map(t => {
+    const statusEmoji = t.status === 'GOOD' ? '✅' : t.status === 'ACCEPTABLE' ? '⚠️' : '❌';
+    return `    Turn ${t.turn}: ${t.timing.totalMs}ms (AI=${t.timing.aiMs}ms, TTS=${t.timing.ttsMs}ms) ${statusEmoji} ${t.tier.toUpperCase()} [${t.bottleneck}]`;
+  }).join('\n');
+  
+  // Build recommendations
+  const recommendationLines = recommendations.length > 0
+    ? recommendations.slice(0, 3).map(r => `    [${r.priority}] ${r.issue}\n      → ${r.action}`).join('\n')
+    : '    (No issues detected)';
+  
+  return `
+Latency Analysis: ${gradeEmoji[summary.overallGrade] || '?'} Grade ${summary.overallGrade || '?'}
+- avgResponseMs: ${summary.avgResponseMs || 0}ms (target: <1500ms for tier1, <2500ms for tier3)
+- primaryBottleneck: ${summary.primaryBottleneck || 'UNKNOWN'}
+- tier1Usage: ${summary.tier1Percentage || 0}% (higher = faster + cheaper)
+- averages: AI=${averages.aiMs || 0}ms, TTS=${averages.ttsMs || 0}ms
+
+Turn-by-Turn Timing:
+${turnBreakdownLines || '    (no turns recorded)'}
+
+Recommendations:
+${recommendationLines}
+`;
+}
+
+// ============================================================================
 // HELPER: Generate Engineering Snapshot
 // ============================================================================
 
@@ -364,7 +419,7 @@ Performance:
   └─ breakdown: brain1=${recording.performance?.slowestTurn?.breakdown?.brain1Ms || 0}ms, tier3=${recording.performance?.slowestTurn?.breakdown?.tier3Ms || 0}ms, llm=${recording.performance?.slowestTurn?.breakdown?.llmMs || 0}ms, tts=${recording.performance?.slowestTurn?.breakdown?.ttsMs || 0}ms
 - llmCalls: { count: ${recording.performance?.llmCalls?.count || 0}, brain1: ${recording.performance?.llmCalls?.brain1Count || 0}, tier3: ${recording.performance?.llmCalls?.tier3Count || 0}, totalMs: ${recording.performance?.llmCalls?.totalMs || 0} }
 - ttsTotalMs: ${recording.performance?.ttsTotalMs || 0}
-
+${formatLatencyAnalysis(recording.performance?.latencyAnalysis)}
 Key Timeline:
 `;
 

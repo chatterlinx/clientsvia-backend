@@ -458,6 +458,15 @@ function computePerformance(events, performanceData = {}) {
   const ttsEvents = events.filter(e => e.type === 'TTS_COMPLETED');
   const ttsTotalMs = ttsEvents.reduce((sum, e) => sum + (e.data?.latencyMs || 0), 0);
   
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LATENCY ANALYSIS - Automatic Performance Diagnostics
+  // ═══════════════════════════════════════════════════════════════════════════
+  const latencyAnalysis = computeLatencyAnalysis(events, turnBreakdowns, {
+    tier1: tier1Matches,
+    tier2: tier2Matches,
+    tier3: tier3Fallbacks
+  }, ttsTotalMs);
+  
   return {
     totalTurns,
     avgTurnTimeMs,
@@ -470,7 +479,177 @@ function computePerformance(events, performanceData = {}) {
       tier3: tier3Fallbacks,
       tokensUsed
     },
-    ttsTotalMs
+    ttsTotalMs,
+    // ═══════════════════════════════════════════════════════════════════════
+    // V2: LATENCY ANALYSIS (auto-embedded in every Black Box report)
+    // ═══════════════════════════════════════════════════════════════════════
+    latencyAnalysis
+  };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * LATENCY ANALYSIS - Automatic Performance Diagnostics
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * Computes detailed latency breakdown for every call, identifying:
+ * - Where delays occur (AI, TTS, STT)
+ * - Performance vs targets
+ * - Bottleneck identification
+ * - Recommendations
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+function computeLatencyAnalysis(events, turnBreakdowns, tierStats, ttsTotalMs) {
+  // Performance targets (ms)
+  const TARGETS = {
+    tier1Response: 1000,      // Scenario match + TTS: target <1s
+    tier3Response: 2500,      // LLM + TTS: target <2.5s
+    ttsGeneration: 1000,      // TTS: target <1s
+    aiProcessingTier1: 300,   // Scenario matching: target <300ms
+    aiProcessingTier3: 2000,  // LLM call: target <2s
+    fullCycleGood: 1500,      // Good experience: <1.5s
+    fullCycleAcceptable: 2500,// Acceptable: <2.5s
+    fullCyclePoor: 4000       // Poor: >4s
+  };
+  
+  // Analyze each turn
+  const turnAnalyses = turnBreakdowns.map((turn, idx) => {
+    const aiMs = turn.tier3Ms > 0 ? turn.tier3Ms : turn.matchingMs;
+    const ttsMs = turn.ttsMs || 0;
+    const totalMs = turn.totalMs || 0;
+    const tier = turn.tier3Ms > 0 ? 'tier3' : 'tier1';
+    
+    // Calculate targets for this turn's tier
+    const aiTarget = tier === 'tier3' ? TARGETS.aiProcessingTier3 : TARGETS.aiProcessingTier1;
+    const totalTarget = tier === 'tier3' ? TARGETS.tier3Response : TARGETS.tier1Response;
+    
+    // Status determination
+    let status = 'GOOD';
+    let grade = 'A';
+    if (totalMs > TARGETS.fullCyclePoor) {
+      status = 'CRITICAL';
+      grade = 'F';
+    } else if (totalMs > TARGETS.fullCycleAcceptable) {
+      status = 'SLOW';
+      grade = 'D';
+    } else if (totalMs > TARGETS.fullCycleGood) {
+      status = 'ACCEPTABLE';
+      grade = 'C';
+    } else if (totalMs > 800) {
+      grade = 'B';
+    }
+    
+    return {
+      turn: idx + 1,
+      tier,
+      timing: {
+        aiMs,
+        ttsMs,
+        totalMs,
+        aiTarget,
+        totalTarget
+      },
+      status,
+      grade,
+      bottleneck: turn.bottleneck,
+      overTarget: totalMs > totalTarget
+    };
+  });
+  
+  // Calculate averages
+  const avgAiMs = turnAnalyses.length > 0
+    ? Math.round(turnAnalyses.reduce((sum, t) => sum + t.timing.aiMs, 0) / turnAnalyses.length)
+    : 0;
+  const avgTtsMs = turnAnalyses.length > 0
+    ? Math.round(turnAnalyses.reduce((sum, t) => sum + t.timing.ttsMs, 0) / turnAnalyses.length)
+    : 0;
+  const avgTotalMs = turnAnalyses.length > 0
+    ? Math.round(turnAnalyses.reduce((sum, t) => sum + t.timing.totalMs, 0) / turnAnalyses.length)
+    : 0;
+  
+  // Identify primary bottleneck across all turns
+  const bottleneckCounts = { LLM: 0, TTS: 0, MATCHING: 0, STT: 0, UNKNOWN: 0 };
+  turnAnalyses.forEach(t => {
+    bottleneckCounts[t.bottleneck] = (bottleneckCounts[t.bottleneck] || 0) + 1;
+  });
+  const primaryBottleneck = Object.entries(bottleneckCounts)
+    .sort((a, b) => b[1] - a[1])[0]?.[0] || 'UNKNOWN';
+  
+  // Calculate overall grade
+  const gradeWeights = { A: 4, B: 3, C: 2, D: 1, F: 0 };
+  const avgGradeScore = turnAnalyses.length > 0
+    ? turnAnalyses.reduce((sum, t) => sum + gradeWeights[t.grade], 0) / turnAnalyses.length
+    : 0;
+  let overallGrade = 'A';
+  if (avgGradeScore < 1) overallGrade = 'F';
+  else if (avgGradeScore < 2) overallGrade = 'D';
+  else if (avgGradeScore < 2.5) overallGrade = 'C';
+  else if (avgGradeScore < 3.5) overallGrade = 'B';
+  
+  // Generate recommendations
+  const recommendations = [];
+  
+  if (primaryBottleneck === 'LLM' && tierStats.tier3 > tierStats.tier1) {
+    recommendations.push({
+      priority: 'HIGH',
+      issue: 'LLM fallback used more than scenarios',
+      action: 'Add more scenario triggers to reduce LLM calls',
+      impact: 'Save 1-2s per response + reduce costs'
+    });
+  }
+  
+  if (avgTtsMs > TARGETS.ttsGeneration) {
+    recommendations.push({
+      priority: 'MEDIUM',
+      issue: `TTS averaging ${avgTtsMs}ms (target: ${TARGETS.ttsGeneration}ms)`,
+      action: 'Implement TTS caching for common phrases',
+      impact: 'Save 800-1200ms on cached responses'
+    });
+  }
+  
+  if (primaryBottleneck === 'LLM') {
+    recommendations.push({
+      priority: 'MEDIUM',
+      issue: 'LLM is the primary bottleneck',
+      action: 'Enable latency masking ("One moment please")',
+      impact: 'Eliminates perceived dead silence'
+    });
+  }
+  
+  const slowTurns = turnAnalyses.filter(t => t.status === 'CRITICAL' || t.status === 'SLOW');
+  if (slowTurns.length > 0) {
+    recommendations.push({
+      priority: 'HIGH',
+      issue: `${slowTurns.length} of ${turnAnalyses.length} turns exceeded acceptable latency`,
+      action: 'Review slow turns for trigger improvements',
+      impact: 'Better caller experience'
+    });
+  }
+  
+  // Summary
+  const summary = {
+    overallGrade,
+    avgResponseMs: avgTotalMs,
+    primaryBottleneck,
+    tier1Percentage: turnAnalyses.length > 0 
+      ? Math.round((turnAnalyses.filter(t => t.tier === 'tier1').length / turnAnalyses.length) * 100)
+      : 0,
+    targets: {
+      tier1: TARGETS.tier1Response,
+      tier3: TARGETS.tier3Response,
+      tts: TARGETS.ttsGeneration
+    }
+  };
+  
+  return {
+    summary,
+    turnAnalyses,
+    averages: {
+      aiMs: avgAiMs,
+      ttsMs: avgTtsMs,
+      totalMs: avgTotalMs
+    },
+    bottleneckBreakdown: bottleneckCounts,
+    recommendations
   };
 }
 
