@@ -515,6 +515,12 @@ Agent: "${aiResponse}"
 
 ${technicalDetails}
 
+GROUND TRUTH RULES (CRITICAL):
+- The "AI Agent Match Trace" above is the platform's actual matcher output. Treat it as ground truth.
+- If the trace shows a selected scenario, you MUST NOT claim "no scenario matched".
+- If the agent still used the LLM despite a selected scenario, explain the real reason (e.g., discovery mode uses scenarios as tools, thresholds, minConfidence, or configuration).
+- If the trace shows no selected scenario, then and only then diagnose missing triggers/regex as the primary cause.
+
 YOUR TASK - DETAILED ANALYSIS:
 
 1. QUALITY ASSESSMENT (0-100):
@@ -534,6 +540,7 @@ YOUR TASK - DETAILED ANALYSIS:
    Extract key phrases from customer input that should trigger scenarios but don't.
    Use the NORMALIZED INPUT above (fillers removed) so suggestions match runtime matching.
    Avoid suggesting filler-only phrases that are stripped by the system.
+   If the AI Agent Match Trace shows a selected scenario, only suggest triggers if it would materially improve confidence (e.g., from 32% to 70%+).
    Examples:
    - "I'm dying here" → Emergency urgency
    - "how much" → Pricing question
@@ -617,6 +624,32 @@ RULES:
         }
         if (agentMatchTrace) {
             analysis.agentMatchTrace = agentMatchTrace;
+        }
+
+        // ============================================================
+        // CONSISTENCY CHECK (NO MASKING)
+        // ============================================================
+        // Flag contradictions between GPT narrative and actual matcher trace.
+        const conflicts = [];
+        const traceSelected = !!analysis.agentMatchTrace?.selectedScenario?.name;
+        const gptWhy = String(analysis.rootCause?.why || '').toLowerCase();
+        const gptMatchingIssue = String(analysis.rootCause?.matchingIssue || '').toLowerCase();
+
+        if (traceSelected) {
+            if (gptWhy.includes('no matched scenario') || gptWhy.includes('no scenario matched') || gptMatchingIssue.includes('no scenario matched')) {
+                conflicts.push({
+                    type: 'GPT_CONTRADICTS_MATCH_TRACE',
+                    message: 'GPT claims no scenario matched, but the AI Agent Match Trace shows a selected scenario.',
+                    traceSelectedScenario: analysis.agentMatchTrace.selectedScenario?.name || null
+                });
+            }
+        }
+
+        if (conflicts.length > 0) {
+            analysis.consistency = {
+                conflicts,
+                note: 'These conflicts indicate GPT narrative drift. Trust the AI Agent Match Trace for what the platform actually did.'
+            };
         }
         
         // Post-process missing triggers: flag ones that already exist in templates

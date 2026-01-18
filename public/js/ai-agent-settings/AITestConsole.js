@@ -1481,6 +1481,7 @@ class AITestConsole {
         const regexMatchCount = Number.isFinite(normalization.regexMatchCount) ? normalization.regexMatchCount : 0;
         const regexMatches = Array.isArray(normalization.regexMatches) ? normalization.regexMatches : [];
         const agentMatchTrace = analysis.agentMatchTrace || null;
+        const consistency = analysis.consistency || null;
         const copyPasteFix = analysis.copyPasteFix || {};
         const triggersToAddText = (copyPasteFix.triggersToAdd || []).join('\n');
         const encodedTriggersToAdd = encodeURIComponent(triggersToAddText);
@@ -1627,6 +1628,26 @@ class AITestConsole {
                             </div>
                         ` : ''}
                     </div>
+                </div>
+            ` : ''}
+
+            <!-- CONSISTENCY CHECK (NO MASKING) -->
+            ${consistency?.conflicts?.length > 0 ? `
+                <div style="margin-bottom: 12px; background: rgba(248, 113, 113, 0.12); border-left: 3px solid #f87171; padding: 8px 10px; border-radius: 4px;">
+                    <div style="font-weight: 700; color: #fecaca; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
+                        ⚠️ Consistency Check (No Masking)
+                    </div>
+                    <div style="font-size: 10px; color: #fecaca; margin-bottom: 6px; opacity: 0.9;">
+                        GPT analysis can drift. These conflicts are automatically detected against the platform’s actual matcher trace.
+                    </div>
+                    <div style="color: #fecaca; font-size: 10px; line-height: 1.5;">
+                        ${(consistency.conflicts || []).map(c => `• ${c.message}`).join('<br>')}
+                    </div>
+                    ${consistency.note ? `
+                        <div style="margin-top: 6px; font-size: 10px; color: #fee2e2; opacity: 0.9;">
+                            <strong>Note:</strong> ${consistency.note}
+                        </div>
+                    ` : ''}
                 </div>
             ` : ''}
             
