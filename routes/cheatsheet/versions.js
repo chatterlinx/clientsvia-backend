@@ -557,6 +557,175 @@ router.post(
 );
 
 // ============================================================================
+// LIVE CONFIG ENDPOINTS (for Call Protection UI)
+// ============================================================================
+
+/**
+ * GET /api/cheatsheet/:companyId/live
+ * Get the live config (used by Call Protection Manager)
+ */
+router.get('/:companyId/live', authMiddleware, async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    
+    const { CheatSheetRuntimeService } = require('../../services/cheatsheet');
+    const liveConfig = await CheatSheetRuntimeService.getLiveConfig(companyId);
+    
+    if (!liveConfig) {
+      return res.status(404).json({
+        success: false,
+        error: 'NO_LIVE_CONFIG',
+        message: 'No live configuration found for this company'
+      });
+    }
+    
+    res.json({
+      success: true,
+      ...liveConfig
+    });
+    
+  } catch (err) {
+    logger.error('CHEATSHEET_API_GET_LIVE_ERROR', {
+      companyId: req.params.companyId,
+      error: err.message
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'INTERNAL_ERROR',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * PUT /api/cheatsheet/:companyId/edge-cases
+ * Update edge cases directly (for Call Protection Manager)
+ * Creates a new version with updated edge cases and pushes to live
+ */
+router.put('/:companyId/edge-cases', authMiddleware, async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { edgeCases } = req.body;
+    const userEmail = getUserEmail(req);
+    const metadata = extractMetadata(req);
+    
+    if (!Array.isArray(edgeCases)) {
+      return res.status(400).json({
+        success: false,
+        error: 'INVALID_INPUT',
+        message: 'edgeCases must be an array'
+      });
+    }
+    
+    logger.info('[CALL PROTECTION API] Updating edge cases', {
+      companyId,
+      edgeCaseCount: edgeCases.length,
+      userEmail
+    });
+    
+    // Get current live config
+    const { CheatSheetRuntimeService } = require('../../services/cheatsheet');
+    let currentConfig = {};
+    
+    try {
+      const liveConfig = await CheatSheetRuntimeService.getLiveConfig(companyId);
+      if (liveConfig?.config) {
+        currentConfig = liveConfig.config;
+      }
+    } catch (err) {
+      // No live config yet, start fresh
+      logger.info('[CALL PROTECTION API] No existing config, starting fresh');
+    }
+    
+    // Update edge cases in config
+    const updatedConfig = {
+      ...currentConfig,
+      edgeCases: edgeCases
+    };
+    
+    // Create a draft with the updated config
+    const draftName = `Call Protection Update - ${new Date().toLocaleDateString()}`;
+    
+    // Check if draft already exists, if so update it
+    const CheatSheetVersion = require('../../models/cheatsheet/CheatSheetVersion');
+    let draft = await CheatSheetVersion.findOne({ 
+      companyId, 
+      status: 'draft' 
+    });
+    
+    if (draft) {
+      // Update existing draft
+      draft.config = updatedConfig;
+      draft.updatedBy = userEmail;
+      draft.updatedAt = new Date();
+      await draft.save();
+      logger.info('[CALL PROTECTION API] Updated existing draft', { versionId: draft.versionId });
+    } else {
+      // Create new draft
+      draft = await CheatSheetVersionService.createDraft(
+        companyId,
+        draftName,
+        userEmail,
+        null, // No base version
+        metadata
+      );
+      
+      // Update the draft with our config
+      await CheatSheetVersionService.saveDraft(
+        companyId,
+        draft.versionId,
+        updatedConfig,
+        userEmail,
+        draft.__v,
+        metadata
+      );
+      logger.info('[CALL PROTECTION API] Created new draft', { versionId: draft.versionId });
+    }
+    
+    // Push to live immediately
+    const liveVersion = await CheatSheetVersionService.pushDraftLive(
+      companyId,
+      draft.versionId,
+      userEmail,
+      metadata
+    );
+    
+    // Invalidate cache
+    await CheatSheetRuntimeService.invalidateCache(companyId);
+    
+    logger.info('[CALL PROTECTION API] Edge cases updated and pushed to live', {
+      companyId,
+      edgeCaseCount: edgeCases.length,
+      versionId: liveVersion.versionId
+    });
+    
+    res.json({
+      success: true,
+      message: 'Edge cases updated successfully',
+      data: {
+        versionId: liveVersion.versionId,
+        edgeCaseCount: edgeCases.length,
+        activatedAt: liveVersion.activatedAt
+      }
+    });
+    
+  } catch (err) {
+    logger.error('CHEATSHEET_API_UPDATE_EDGE_CASES_ERROR', {
+      companyId: req.params.companyId,
+      error: err.message,
+      stack: err.stack
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: err.code || 'INTERNAL_ERROR',
+      message: err.message
+    });
+  }
+});
+
+// ============================================================================
 // ERROR HANDLER (Catch-all)
 // ============================================================================
 

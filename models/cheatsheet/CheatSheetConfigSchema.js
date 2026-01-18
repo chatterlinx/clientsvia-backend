@@ -248,13 +248,14 @@ const CheatSheetConfigSchema = new mongoose.Schema({
   schemaVersion: { type: Number, default: 1, required: true },
   
   // ============================================================================
-  // V1 LEGACY SECTIONS (Keep as Object for backward compatibility)
+  // POLICY RULES (Used by CheatSheetEngine for runtime behavior)
   // ============================================================================
-  triage: { type: Object, default: {} },
-  frontlineIntel: { type: Object, default: {} },
-  transferRules: { type: Object, default: {} },
-  behavior: { type: Object, default: {} },
-  guardrails: { type: Object, default: {} },
+  // NOTE (Jan 2026): triage and frontlineIntel REMOVED - replaced by Scenarios
+  // These were legacy V1 fields that are no longer used in the 3-Tier architecture
+  
+  transferRules: { type: Object, default: {} },  // Intent-based transfer triggers
+  behavior: { type: Object, default: {} },       // Tone/style adjustments
+  guardrails: { type: Object, default: {} },     // Content filtering rules
   
   // ============================================================================
   // EDGE CASES (Upgraded from Object to Structured Array - Nov 2025)

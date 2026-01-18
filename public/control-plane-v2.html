@@ -2885,33 +2885,21 @@
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // CALL PROTECTION INITIALIZATION (formerly Edge Cases)
+    // CALL PROTECTION INITIALIZATION (Enterprise Edge Cases UI)
     // ═══════════════════════════════════════════════════════════════════════════
     async function initCallProtection() {
       console.log('🛡️ [INIT] Initializing Call Protection...');
       
-      await loadScript('/js/ai-agent-settings/CheatSheetVersioningAdapter.js');
-      await loadScript('/js/ai-agent-settings/CheatSheetManager.js');
+      // Load the new CallProtectionManager
+      await loadScript('/js/ai-agent-settings/CallProtectionManager.js');
       
-      if (window.cheatSheetManager) {
-        if (window.cheatSheetManager.companyId !== currentCompanyId) {
-          await window.cheatSheetManager.load(currentCompanyId);
-        }
-        
-        // Attach action handlers for Add Edge Case button
-        const container = document.getElementById('call-protection-container');
-          if (container) {
-          container.addEventListener('click', (e) => {
-            const actionBtn = e.target.closest('[data-cheatsheet-action]');
-            if (actionBtn && actionBtn.getAttribute('data-cheatsheet-action') === 'add-edge-case') {
-              e.preventDefault();
-              window.cheatSheetManager.addEdgeCase();
-            }
-          });
-        }
-        
-        window.cheatSheetManager.renderEdgeCases();
-        console.log('✅ [INIT] Call Protection initialized');
+      // Initialize Call Protection Manager
+      if (window.CallProtectionManager) {
+        window.callProtectionManager = new window.CallProtectionManager(currentCompanyId);
+        await window.callProtectionManager.init();
+        console.log('✅ [INIT] Call Protection initialized with enterprise features');
+      } else {
+        console.error('❌ [INIT] CallProtectionManager not loaded');
       }
     }
     
