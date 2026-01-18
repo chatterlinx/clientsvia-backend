@@ -1760,6 +1760,34 @@ const globalInstantResponseTemplateSchema = new Schema({
             default: ''
             // Admin notes about NLP changes (e.g., "Added HVAC synonyms 2025-11-10")
         }
+        ,
+        
+        // ========== LLM DISCOVERY TOOL PACKING ==========
+        // Controls how much scenario detail is passed to the LLM during discovery.
+        // This does NOT change what the agent is allowed to say; it only improves grounding.
+        llmToolConfig: {
+            enabled: { type: Boolean, default: true },
+            
+            // How many scenarios to pass as tools
+            topN: { type: Number, default: 3, min: 1, max: 10 },
+            minToolConfidence: { type: Number, default: 0.35, min: 0, max: 1 },
+            
+            // How much scenario content to include per tool (caps prevent token blowups)
+            includeTriggers: { type: Boolean, default: true },
+            includeRegexTriggers: { type: Boolean, default: false },
+            includeNegativeTriggers: { type: Boolean, default: false },
+            includeFollowUp: { type: Boolean, default: true },
+            includeScenarioType: { type: Boolean, default: true },
+            includeBehavior: { type: Boolean, default: false },
+            
+            // Reply samples
+            includeQuickReplies: { type: Boolean, default: true },
+            includeFullReplies: { type: Boolean, default: true },
+            maxQuickReplies: { type: Number, default: 2, min: 0, max: 10 },
+            maxFullReplies: { type: Number, default: 2, min: 0, max: 10 },
+            maxCharsPerReply: { type: Number, default: 260, min: 60, max: 600 },
+            maxTotalCharsPerScenario: { type: Number, default: 900, min: 200, max: 5000 }
+        }
     },
     
     // ============================================

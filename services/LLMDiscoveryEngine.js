@@ -95,11 +95,13 @@ class LLMDiscoveryEngine {
             
             // Step 4: Find relevant scenarios (selector API is selectScenario())
             // NOTE: For LLM tool context we can include lower-confidence candidates; LLM decides relevance.
-            // DEFAULT - OVERRIDE IN UI (if/when template adds an explicit "llmToolMinConfidence" field)
-            const toolTopN = 3;
-            const minToolConfidence = Number.isFinite(template?.nlpConfig?.llmToolMinConfidence)
-                ? template.nlpConfig.llmToolMinConfidence
-                : 0.35;
+            const toolCfg = (template?.nlpConfig && typeof template.nlpConfig === 'object')
+                ? (template.nlpConfig.llmToolConfig || {})
+                : {};
+            const toolTopN = Number.isFinite(toolCfg.topN) ? toolCfg.topN : 3;
+            const minToolConfidence = Number.isFinite(toolCfg.minToolConfidence)
+                ? toolCfg.minToolConfidence
+                : (Number.isFinite(template?.nlpConfig?.llmToolMinConfidence) ? template.nlpConfig.llmToolMinConfidence : 0.35);
             
             const matchResult = await selector.selectScenario(utterance, enabledScenarios, {
                 trade,
@@ -150,7 +152,7 @@ class LLMDiscoveryEngine {
                 seen.add(id);
                 if ((c.confidence ?? 0) < minToolConfidence) continue;
                 
-                scenarioSummaries.push(this._buildScenarioSummary(c.scenario, c.confidence));
+                scenarioSummaries.push(this._buildScenarioSummary(c.scenario, c.confidence, toolCfg));
                 if (scenarioSummaries.length >= toolTopN) break;
             }
 
@@ -162,7 +164,7 @@ class LLMDiscoveryEngine {
                     .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0];
                 
                 if (best?.scenario) {
-                    scenarioSummaries.push(this._buildScenarioSummary(best.scenario, best.confidence ?? 0));
+                    scenarioSummaries.push(this._buildScenarioSummary(best.scenario, best.confidence ?? 0, toolCfg));
                 }
             }
             
@@ -221,34 +223,86 @@ class LLMDiscoveryEngine {
      * Build a compressed scenario summary for LLM context
      * This keeps token usage low while providing useful knowledge
      */
-    static _buildScenarioSummary(scenario, confidence) {
-        // Extract the best reply to use as knowledge
-        let knowledge = '';
+    static _buildScenarioSummary(scenario, confidence, toolCfg = {}) {
+        const cfg = (toolCfg && typeof toolCfg === 'object') ? toolCfg : {};
+        const maxQuickReplies = Number.isFinite(cfg.maxQuickReplies) ? cfg.maxQuickReplies : 2;
+        const maxFullReplies = Number.isFinite(cfg.maxFullReplies) ? cfg.maxFullReplies : 2;
+        const maxCharsPerReply = Number.isFinite(cfg.maxCharsPerReply) ? cfg.maxCharsPerReply : 260;
+        const maxTotalCharsPerScenario = Number.isFinite(cfg.maxTotalCharsPerScenario) ? cfg.maxTotalCharsPerScenario : 900;
         
-        if (scenario.fullReplies?.length > 0) {
-            const reply = scenario.fullReplies[0];
-            knowledge = typeof reply === 'string' ? reply : reply.text || '';
-        } else if (scenario.quickReplies?.length > 0) {
-            const reply = scenario.quickReplies[0];
-            knowledge = typeof reply === 'string' ? reply : reply.text || '';
-        }
+        const includeQuickReplies = cfg.includeQuickReplies !== false;
+        const includeFullReplies = cfg.includeFullReplies !== false;
+        const includeTriggers = cfg.includeTriggers === true;
+        const includeRegexTriggers = cfg.includeRegexTriggers === true;
+        const includeNegativeTriggers = cfg.includeNegativeTriggers === true;
+        const includeFollowUp = cfg.includeFollowUp !== false;
+        const includeScenarioType = cfg.includeScenarioType !== false;
+        const includeBehavior = cfg.includeBehavior === true;
         
-        // Truncate if too long (save tokens)
-        if (knowledge.length > 300) {
-            knowledge = knowledge.substring(0, 297) + '...';
-        }
+        const truncate = (s, maxChars) => {
+            const str = (s || '').toString();
+            if (str.length <= maxChars) return str;
+            return str.substring(0, Math.max(0, maxChars - 3)) + '...';
+        };
         
-        return {
+        const extractReplyTexts = (arr, maxItems) => {
+            if (!Array.isArray(arr) || maxItems <= 0) return [];
+            const out = [];
+            for (const item of arr) {
+                if (out.length >= maxItems) break;
+                const raw = (typeof item === 'string') ? item : (item?.text || '');
+                const trimmed = (raw || '').toString().trim();
+                if (!trimmed) continue;
+                out.push(truncate(trimmed, maxCharsPerReply));
+            }
+            return out;
+        };
+        
+        const quickSamples = includeQuickReplies ? extractReplyTexts(scenario.quickReplies, maxQuickReplies) : [];
+        const fullSamples = includeFullReplies ? extractReplyTexts(scenario.fullReplies, maxFullReplies) : [];
+        
+        // Build a compact knowledge string (bounded)
+        const knowledgeParts = [];
+        if (fullSamples.length > 0) knowledgeParts.push(`Full reply examples: ${fullSamples.map(t => `"${t}"`).join(' | ')}`);
+        if (quickSamples.length > 0) knowledgeParts.push(`Quick reply examples: ${quickSamples.map(t => `"${t}"`).join(' | ')}`);
+        let knowledge = knowledgeParts.join('\n');
+        knowledge = truncate(knowledge, maxTotalCharsPerScenario);
+        
+        const category = scenario.categoryName || scenario.categories?.[0] || 'General';
+        const scenarioType = (scenario.scenarioType || 'UNKNOWN').toString().trim().toUpperCase();
+        
+        const summary = {
             scenarioId: scenario.scenarioId || scenario.id,
             templateId: scenario.templateId || null,
             title: scenario.name || scenario.title || 'Unknown',
-            category: scenario.categoryName || scenario.categories?.[0] || 'General',
-            scenarioType: (scenario.scenarioType || 'UNKNOWN').toString().trim().toUpperCase(),
+            category,
+            scenarioType: includeScenarioType ? scenarioType : undefined,
             knowledge: knowledge,
             urgency: this._detectUrgency(scenario),
             bookingRecommended: this._shouldRecommendBooking(scenario),
             confidence: Math.round(confidence * 100)
         };
+        
+        if (includeTriggers) summary.triggers = Array.isArray(scenario.triggers) ? scenario.triggers.slice(0, 20) : [];
+        if (includeRegexTriggers) summary.regexTriggers = Array.isArray(scenario.regexTriggers) ? scenario.regexTriggers.slice(0, 10) : [];
+        if (includeNegativeTriggers) summary.negativeTriggers = Array.isArray(scenario.negativeTriggers) ? scenario.negativeTriggers.slice(0, 10) : [];
+        
+        if (includeFollowUp) {
+            summary.followUp = {
+                mode: scenario.followUpMode || 'NONE',
+                questionText: scenario.followUpQuestionText || null,
+                transferTarget: scenario.transferTarget || null
+            };
+        }
+        
+        if (includeBehavior) {
+            summary.behavior = scenario.behavior || null;
+        }
+        
+        // Remove undefined keys for cleanliness
+        Object.keys(summary).forEach(k => summary[k] === undefined && delete summary[k]);
+        
+        return summary;
     }
     
     /**

@@ -4676,6 +4676,52 @@ can't hold"></textarea>
                             </p>
                         </details>
 
+                        <!-- LLM Discovery Tool Packing (Template NLP Config) -->
+                        <details style="border: 2px solid #f5f3ff; background: #f5f3ff; border-radius: 10px; padding: 18px; margin-top: 14px;">
+                            <summary style="cursor: pointer; font-weight: 600; color: #5b21b6; font-size: 15px;">
+                                <i class="fas fa-brain mr-2"></i>LLM Discovery Tool Packing 🧠 (Advanced)
+                            </summary>
+                            <p style="margin: 10px 0 0; font-size: 13px; color: #5b21b6;">
+                                Controls how much scenario detail is passed to the LLM during discovery. More detail = smarter grounding, but higher token usage.
+                            </p>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px;">
+                                <div style="background:#fff; border:1px solid #ddd6fe; border-radius:8px; padding:12px;">
+                                    <label style="display:block; font-weight:600; color:#4c1d95; margin-bottom:6px;">Top Scenarios (tools)</label>
+                                    <input id="nlp-llmTool-topN" type="number" min="1" max="10" step="1" value="3" style="width:100%; padding:10px; border:1px solid #ddd6fe; border-radius:6px;">
+                                    <p style="margin:6px 0 0; font-size:12px; color:#6b7280;">How many scenarios to send as tools (default 3).</p>
+                                </div>
+                                <div style="background:#fff; border:1px solid #ddd6fe; border-radius:8px; padding:12px;">
+                                    <label style="display:block; font-weight:600; color:#4c1d95; margin-bottom:6px;">Min Tool Confidence</label>
+                                    <input id="nlp-llmTool-minConfidence" type="number" min="0" max="1" step="0.05" value="0.35" style="width:100%; padding:10px; border:1px solid #ddd6fe; border-radius:6px;">
+                                    <p style="margin:6px 0 0; font-size:12px; color:#6b7280;">Include lower-confidence candidates for grounding (default 0.35).</p>
+                                </div>
+                                <div style="background:#fff; border:1px solid #ddd6fe; border-radius:8px; padding:12px;">
+                                    <label style="display:block; font-weight:600; color:#4c1d95; margin-bottom:6px;">Max Full Replies per tool</label>
+                                    <input id="nlp-llmTool-maxFullReplies" type="number" min="0" max="10" step="1" value="2" style="width:100%; padding:10px; border:1px solid #ddd6fe; border-radius:6px;">
+                                </div>
+                                <div style="background:#fff; border:1px solid #ddd6fe; border-radius:8px; padding:12px;">
+                                    <label style="display:block; font-weight:600; color:#4c1d95; margin-bottom:6px;">Max Quick Replies per tool</label>
+                                    <input id="nlp-llmTool-maxQuickReplies" type="number" min="0" max="10" step="1" value="2" style="width:100%; padding:10px; border:1px solid #ddd6fe; border-radius:6px;">
+                                </div>
+                                <div style="background:#fff; border:1px solid #ddd6fe; border-radius:8px; padding:12px;">
+                                    <label style="display:block; font-weight:600; color:#4c1d95; margin-bottom:6px;">Max chars per reply</label>
+                                    <input id="nlp-llmTool-maxCharsPerReply" type="number" min="60" max="600" step="10" value="260" style="width:100%; padding:10px; border:1px solid #ddd6fe; border-radius:6px;">
+                                </div>
+                                <div style="background:#fff; border:1px solid #ddd6fe; border-radius:8px; padding:12px;">
+                                    <label style="display:block; font-weight:600; color:#4c1d95; margin-bottom:6px;">Max total chars per scenario</label>
+                                    <input id="nlp-llmTool-maxTotalChars" type="number" min="200" max="5000" step="50" value="900" style="width:100%; padding:10px; border:1px solid #ddd6fe; border-radius:6px;">
+                                </div>
+                            </div>
+                            <div style="margin-top: 12px; background:#fff; border:1px solid #ddd6fe; border-radius:8px; padding:12px;">
+                                <div style="font-weight:600; color:#4c1d95; margin-bottom:8px;">Include fields</div>
+                                <label style="display:inline-flex; gap:8px; align-items:center; margin-right:14px;"><input id="nlp-llmTool-includeTriggers" type="checkbox" checked>Triggers</label>
+                                <label style="display:inline-flex; gap:8px; align-items:center; margin-right:14px;"><input id="nlp-llmTool-includeFollowUp" type="checkbox" checked>Follow-up</label>
+                                <label style="display:inline-flex; gap:8px; align-items:center; margin-right:14px;"><input id="nlp-llmTool-includeScenarioType" type="checkbox" checked>Scenario type</label>
+                                <label style="display:inline-flex; gap:8px; align-items:center; margin-right:14px;"><input id="nlp-llmTool-includeRegexTriggers" type="checkbox">Regex triggers</label>
+                                <label style="display:inline-flex; gap:8px; align-items:center; margin-right:14px;"><input id="nlp-llmTool-includeNegativeTriggers" type="checkbox">Negative triggers</label>
+                            </div>
+                        </details>
+
                         <!-- Min Confidence & Priority -->
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                             <div style="border: 2px solid #ecfdf5; background: #ecfdf5; border-radius: 10px; padding: 18px;">
@@ -12957,6 +13003,16 @@ Higher = detailed, thorough scenarios (more context)
             } else {
                 console.error('🧠 [V7] ScenarioArchitectPanel not initialized yet');
             }
+
+            // Template-level NLP config → LLM tool packing (populate once per template load)
+            try {
+                const cfg = activeTemplate?.nlpConfig?.llmToolConfig || data?.nlpConfig?.llmToolConfig || null;
+                if (cfg && typeof setLlmToolConfigToUi === 'function') {
+                    setLlmToolConfigToUi(cfg);
+                }
+            } catch (e) {
+                // non-fatal
+            }
         }
 
         function openScenarioAIAssistant() {
@@ -13650,6 +13706,53 @@ Higher = detailed, thorough scenarios (more context)
             console.log('📤 [EXPORT JSON] Collected:', Object.keys(scenario).length, 'fields');
             return scenario;
         }
+
+        // ============================================================================
+        // TEMPLATE NLP CONFIG: LLM TOOL PACKING (DISCOVERY)
+        // ============================================================================
+        function getLlmToolConfigFromUi() {
+            return {
+                enabled: true,
+                topN: parseInt(document.getElementById('nlp-llmTool-topN')?.value, 10) || 3,
+                minToolConfidence: parseFloat(document.getElementById('nlp-llmTool-minConfidence')?.value) || 0.35,
+                includeTriggers: !!document.getElementById('nlp-llmTool-includeTriggers')?.checked,
+                includeRegexTriggers: !!document.getElementById('nlp-llmTool-includeRegexTriggers')?.checked,
+                includeNegativeTriggers: !!document.getElementById('nlp-llmTool-includeNegativeTriggers')?.checked,
+                includeFollowUp: !!document.getElementById('nlp-llmTool-includeFollowUp')?.checked,
+                includeScenarioType: !!document.getElementById('nlp-llmTool-includeScenarioType')?.checked,
+                maxQuickReplies: parseInt(document.getElementById('nlp-llmTool-maxQuickReplies')?.value, 10) || 2,
+                maxFullReplies: parseInt(document.getElementById('nlp-llmTool-maxFullReplies')?.value, 10) || 2,
+                maxCharsPerReply: parseInt(document.getElementById('nlp-llmTool-maxCharsPerReply')?.value, 10) || 260,
+                maxTotalCharsPerScenario: parseInt(document.getElementById('nlp-llmTool-maxTotalChars')?.value, 10) || 900
+            };
+        }
+
+        function setLlmToolConfigToUi(cfg) {
+            const c = (cfg && typeof cfg === 'object') ? cfg : {};
+            const setVal = (id, val) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.value = val;
+            };
+            const setChk = (id, val) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.checked = !!val;
+            };
+            
+            setVal('nlp-llmTool-topN', Number.isFinite(c.topN) ? c.topN : 3);
+            setVal('nlp-llmTool-minConfidence', Number.isFinite(c.minToolConfidence) ? c.minToolConfidence : 0.35);
+            setVal('nlp-llmTool-maxQuickReplies', Number.isFinite(c.maxQuickReplies) ? c.maxQuickReplies : 2);
+            setVal('nlp-llmTool-maxFullReplies', Number.isFinite(c.maxFullReplies) ? c.maxFullReplies : 2);
+            setVal('nlp-llmTool-maxCharsPerReply', Number.isFinite(c.maxCharsPerReply) ? c.maxCharsPerReply : 260);
+            setVal('nlp-llmTool-maxTotalChars', Number.isFinite(c.maxTotalCharsPerScenario) ? c.maxTotalCharsPerScenario : 900);
+            
+            setChk('nlp-llmTool-includeTriggers', c.includeTriggers !== false);
+            setChk('nlp-llmTool-includeFollowUp', c.includeFollowUp !== false);
+            setChk('nlp-llmTool-includeScenarioType', c.includeScenarioType !== false);
+            setChk('nlp-llmTool-includeRegexTriggers', c.includeRegexTriggers === true);
+            setChk('nlp-llmTool-includeNegativeTriggers', c.includeNegativeTriggers === true);
+        }
         
         /**
          * Try to parse JSON, return object or empty object on failure
@@ -14298,7 +14401,11 @@ Higher = detailed, thorough scenarios (more context)
                         'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify({
-                        categories: activeTemplate.categories
+                        categories: activeTemplate.categories,
+                        nlpConfig: {
+                            ...(activeTemplate?.nlpConfig || {}),
+                            llmToolConfig: getLlmToolConfigFromUi()
+                        }
                     })
                 });
 
@@ -16893,6 +17000,18 @@ Higher = detailed, thorough scenarios (more context)
                         name: activeTemplate.name,
                         categoriesCount: activeTemplate.categories?.length || 0
                     });
+
+                    // Populate LLM tool packing controls from template NLP config
+                    try {
+                        const cfg = activeTemplate?.nlpConfig?.llmToolConfig || null;
+                        if (cfg && typeof setLlmToolConfigToUi === 'function') {
+                            setLlmToolConfigToUi(cfg);
+                        } else if (typeof setLlmToolConfigToUi === 'function') {
+                            setLlmToolConfigToUi(null); // defaults
+                        }
+                    } catch (e) {
+                        // non-fatal
+                    }
                     
                     // Update stats
                     updateDashboardStats();
