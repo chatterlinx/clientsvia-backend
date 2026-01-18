@@ -1480,6 +1480,7 @@ class AITestConsole {
         const synonymsApplied = Array.isArray(normalization.synonymsApplied) ? normalization.synonymsApplied : [];
         const regexMatchCount = Number.isFinite(normalization.regexMatchCount) ? normalization.regexMatchCount : 0;
         const regexMatches = Array.isArray(normalization.regexMatches) ? normalization.regexMatches : [];
+        const agentMatchTrace = analysis.agentMatchTrace || null;
         const copyPasteFix = analysis.copyPasteFix || {};
         const triggersToAddText = (copyPasteFix.triggersToAdd || []).join('\n');
         const encodedTriggersToAdd = encodeURIComponent(triggersToAddText);
@@ -1603,6 +1604,29 @@ class AITestConsole {
                             ` : ''}
                         </div>
                     `).join('')}
+                </div>
+            ` : ''}
+
+            <!-- AI AGENT MATCH TRACE -->
+            ${agentMatchTrace ? `
+                <div style="margin-bottom: 12px; background: rgba(59, 130, 246, 0.12); border-left: 3px solid #3b82f6; padding: 8px 10px; border-radius: 4px;">
+                    <div style="font-weight: 700; color: #93c5fd; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
+                        🧠 AI Agent Match Trace (Real Runtime)
+                    </div>
+                    <div style="font-size: 10px; color: #bfdbfe; margin-bottom: 6px;">
+                        This is what the platform’s matcher found (not GPT guesses).
+                    </div>
+                    <div style="background: rgba(0, 0, 0, 0.25); padding: 6px 8px; border-radius: 4px; font-size: 10px; color: #bfdbfe;">
+                        <div><strong>Pool:</strong> ${agentMatchTrace.enabledScenarioCount}/${agentMatchTrace.scenarioPoolCount} enabled</div>
+                        ${agentMatchTrace.selectionReason ? `<div style="margin-top: 4px;"><strong>Reason:</strong> ${agentMatchTrace.selectionReason}</div>` : ''}
+                        ${agentMatchTrace.selectedScenario?.name ? `<div style="margin-top: 4px;"><strong>Selected:</strong> ${agentMatchTrace.selectedScenario.name}</div>` : `<div style="margin-top: 4px;"><strong>Selected:</strong> none</div>`}
+                        ${(agentMatchTrace.topCandidates || []).length > 0 ? `
+                            <div style="margin-top: 6px;"><strong>Top candidates:</strong></div>
+                            <div style="margin-top: 4px; font-family: monospace;">
+                                ${(agentMatchTrace.topCandidates || []).map(c => `- ${c.confidencePct ?? 'N/A'}%: ${c.name}`).join('<br>')}
+                            </div>
+                        ` : ''}
+                    </div>
                 </div>
             ` : ''}
             

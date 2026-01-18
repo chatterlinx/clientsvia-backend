@@ -17,6 +17,7 @@ const Company = require('../../models/v2Company');
 const ConversationEngine = require('../../services/ConversationEngine');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 const HybridScenarioSelector = require('../../services/HybridScenarioSelector');
+const ScenarioPoolService = require('../../services/ScenarioPoolService');
 const BookingScriptEngine = require('../../services/BookingScriptEngine');
 const BlackBoxLogger = require('../../services/BlackBoxLogger');
 const elevenLabsService = require('../../services/v2elevenLabsService');
@@ -336,6 +337,7 @@ router.post('/supervisor-analysis', authenticateJWT, async (req, res) => {
         let selector = null;
         let triggerIndex = [];
         let regexMatches = [];
+        let agentMatchTrace = null;
         if (companyId) {
             try {
                 const companyDoc = await Company.findById(companyId)
@@ -417,6 +419,44 @@ router.post('/supervisor-analysis', authenticateJWT, async (req, res) => {
                             normalization.regexMatches = regexMatches.slice(0, 5);
                         }
                     }
+
+                    // ============================================================
+                    // ✅ RUNTIME MATCH TRACE (AI Agent perspective)
+                    // ============================================================
+                    // This recomputes the scenario selection using the same selector logic
+                    // against the *company's enabled scenario pool* (not GPT opinions).
+                    try {
+                        const pool = await ScenarioPoolService.getScenarioPoolForCompany(companyId, { bypassCache: true });
+                        const all = Array.isArray(pool?.scenarios) ? pool.scenarios : [];
+                        const enabled = all.filter(s => s && s.isEnabledForCompany !== false && s.isActive !== false);
+                        const match = await selector.selectScenario(userMessage, enabled, {
+                            trade: companyDoc?.trade || 'HVAC',
+                            companyId
+                        });
+                        
+                        const trace = match?.trace || {};
+                        const top = Array.isArray(trace.topCandidates) ? trace.topCandidates : [];
+                        agentMatchTrace = {
+                            scenarioPoolCount: all.length,
+                            enabledScenarioCount: enabled.length,
+                            selectionReason: trace.selectionReason || null,
+                            normalizedPhrase: trace.normalizedPhrase || null,
+                            phraseTerms: trace.phraseTerms || [],
+                            selectedScenario: trace.selectedScenario || null,
+                            topCandidates: top.slice(0, 5).map(c => ({
+                                scenarioId: c.scenarioId || null,
+                                name: c.name || null,
+                                confidencePct: Number.isFinite(Number(c.confidence)) ? Math.round(Number(c.confidence) * 100) : null,
+                                priority: c.priority ?? null,
+                                breakdown: c.breakdown || null
+                            }))
+                        };
+                    } catch (traceError) {
+                        logger.warn('[AI SUPERVISOR] Runtime match trace failed (non-fatal)', {
+                            companyId,
+                            error: traceError.message
+                        });
+                    }
                 }
             } catch (normalizeError) {
                 logger.warn('[AI SUPERVISOR] Normalization lookup failed', {
@@ -453,6 +493,12 @@ ${customerEmotion ? `- Detected Customer Emotion: ${customerEmotion}` : ''}
 ${normalization?.normalizedInput ? `- Normalized Input (fillers removed): "${normalization.normalizedInput}"
 - Fillers Removed: ${normalization.fillersRemoved.length > 0 ? normalization.fillersRemoved.join(', ') : 'none'}
 - Synonyms Applied: ${normalization.synonymsApplied.length > 0 ? normalization.synonymsApplied.map(pair => `${pair.from}→${pair.to}`).join(', ') : 'none'}` : ''}
+${agentMatchTrace ? `- AI Agent Match Trace:
+  • Pool: ${agentMatchTrace.enabledScenarioCount}/${agentMatchTrace.scenarioPoolCount} enabled
+  • Selection Reason: ${agentMatchTrace.selectionReason || 'n/a'}
+  • Selected: ${agentMatchTrace.selectedScenario?.name ? `"${agentMatchTrace.selectedScenario.name}"` : 'none'}
+  • Top Candidates:
+${(agentMatchTrace.topCandidates || []).map(c => `    - ${c.confidencePct ?? 'n/a'}%: "${c.name}"`).join('\n')}` : ''}
 `;
         
         // Build enhanced analysis prompt
@@ -568,6 +614,9 @@ RULES:
         if (!analysis.copyPasteFix) analysis.copyPasteFix = { hasIssue: false };
         if (normalization?.normalizedInput) {
             analysis.normalization = normalization;
+        }
+        if (agentMatchTrace) {
+            analysis.agentMatchTrace = agentMatchTrace;
         }
         
         // Post-process missing triggers: flag ones that already exist in templates

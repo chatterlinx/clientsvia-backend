@@ -114,6 +114,7 @@ class ScenarioPoolService {
      */
     static async getScenarioPoolForCompany(companyId, _options = {}) {
         const startTime = Date.now();
+        const { bypassCache = false } = (_options && typeof _options === 'object') ? _options : {};
         const cacheKey = `scenario-pool:${companyId}`;
         const CACHE_TTL = 300; // 5 minutes
         
@@ -128,23 +129,27 @@ class ScenarioPoolService {
             if (!redisClient || typeof redisClient.get !== 'function') {
                 logger.warn('⚠️ [SCENARIO POOL CACHE] Redis client unavailable - caching disabled');
             } else {
-            try {
-                const cached = await redisClient.get(cacheKey);
-                if (cached) {
-                    const parsed = JSON.parse(cached);
-                    const cacheHitTime = Date.now() - startTime;
-                    logger.info(`✅ [SCENARIO POOL CACHE] Cache HIT (${cacheHitTime}ms) - ${parsed.scenarios?.length || 0} scenarios`);
-                    console.log(`[🚀 CACHE HIT] Scenario pool loaded in ${cacheHitTime}ms (30x faster!)`);
-                    return parsed;
+                if (bypassCache) {
+                    logger.info(`🧪 [SCENARIO POOL CACHE] Bypassing cache (force fresh)`, { cacheKey });
+                } else {
+                    try {
+                        const cached = await redisClient.get(cacheKey);
+                        if (cached) {
+                            const parsed = JSON.parse(cached);
+                            const cacheHitTime = Date.now() - startTime;
+                            logger.info(`✅ [SCENARIO POOL CACHE] Cache HIT (${cacheHitTime}ms) - ${parsed.scenarios?.length || 0} scenarios`);
+                            console.log(`[🚀 CACHE HIT] Scenario pool loaded in ${cacheHitTime}ms (30x faster!)`);
+                            return parsed;
+                        }
+                    } catch (cacheError) {
+                        logger.warn(`⚠️ [SCENARIO POOL CACHE] Redis error (non-critical)`, {
+                            message: cacheError?.message || String(cacheError),
+                            name: cacheError?.name || null,
+                            code: cacheError?.code || null
+                        });
+                        // Continue to MongoDB fallback
+                    }
                 }
-            } catch (cacheError) {
-                logger.warn(`⚠️ [SCENARIO POOL CACHE] Redis error (non-critical)`, {
-                    message: cacheError?.message || String(cacheError),
-                    name: cacheError?.name || null,
-                    code: cacheError?.code || null
-                });
-                // Continue to MongoDB fallback
-            }
             }
             
             logger.info(`⚪ [SCENARIO POOL CACHE] Cache MISS, loading from MongoDB...`);
