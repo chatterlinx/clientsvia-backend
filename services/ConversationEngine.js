@@ -2573,8 +2573,17 @@ async function processTurn({
         
         // Check if this is JUST a greeting (not "hi I need help with my AC")
         // Short message + starts with greeting-like word
-        const isShortMessage = userTextLower.length < 30;
-        const startsWithGreeting = /^(good\s*(morning|afternoon|evening)|hi|hello|hey|howdy|yo|sup|what'?s\s*up|greetings?|morning|afternoon|evening|gm)\b/i.test(userTextLower);
+        const isShortMessage = userTextLower.length < 40; // Increased to handle "yes, good morning"
+        
+        // ════════════════════════════════════════════════════════════════════════
+        // 🆕 FIX (Jan 18, 2026): Strip filler words before checking for greeting
+        // "yes, good morning" → "good morning" → GREETING INTERCEPT!
+        // This saves 2-4 seconds and 0 tokens vs going to LLM
+        // ════════════════════════════════════════════════════════════════════════
+        const FILLER_PREFIXES = /^(yes|yeah|yep|yup|uh|um|uh\s*huh|ok|okay|sure|well|so|right|alright|,|\s)+/i;
+        const textWithoutFillers = userTextLower.replace(FILLER_PREFIXES, '').trim();
+        
+        const startsWithGreeting = /^(good\s*(morning|afternoon|evening)|hi|hello|hey|howdy|yo|sup|what'?s\s*up|greetings?|morning|afternoon|evening|gm)\b/i.test(textWithoutFillers);
         
         // V34: Only intercept as greeting if NOT a time preference
         // 🆕 PHASE 1: Also skip if we've already greeted (existing session)
@@ -2676,6 +2685,7 @@ async function processTurn({
             
             log('CHECKPOINT 2.7: ✅ GREETING INTERCEPT - 0 tokens!', {
                 userText,
+                textWithoutFillers: textWithoutFillers !== userTextLower ? textWithoutFillers : undefined,
                 matchedTrigger,
                 matchType,
                 rulesCount: greetingRules.length,
