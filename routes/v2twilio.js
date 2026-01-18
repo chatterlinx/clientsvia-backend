@@ -2909,6 +2909,17 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   userInput: speechResult?.substring(0, 100)
                 }
               }).catch(() => {});
+              
+              // 📼 BLACK BOX V2: Log scenario match attempt (BEFORE processing)
+              // This helps debug what the system is trying to match
+              BlackBoxLogger.QuickLog.scenarioMatchAttempt(
+                callSid,
+                companyID,
+                turnCount,
+                speechResult || '[empty]',
+                cleanedText || speechResult || '[empty]',
+                'checking...'  // Scenarios count will be in matched/no-match event
+              ).catch(() => {});
             }
             
             // ════════════════════════════════════════════════════════════════════════
@@ -3024,7 +3035,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             tracer.step(engineResult.success === false ? 'HYBRID_PATH_ERROR' : 'HYBRID_PATH_SUCCESS', 
               `🚀 Hybrid completed in ${hybridLatencyMs}ms${engineResult.success === false ? ' (WITH ERROR)' : ''}`);
             
-            // 📼 BLACK BOX: Log hybrid success
+            // 📼 BLACK BOX: Log hybrid success with source tracking
             if (BlackBoxLogger) {
               BlackBoxLogger.logEvent({
                 callId: callSid,
@@ -3035,7 +3046,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   latencyMs: hybridLatencyMs,
                   responsePreview: (result?.text || result?.response || '').substring(0, 100),
                   mode: result?.debug?.mode,
-                  filledSlots: result?.debug?.filledSlots
+                  filledSlots: result?.debug?.filledSlots,
+                  // 🆕 Source tracking for debugging
+                  matchSource: result?.matchSource || 'UNKNOWN',
+                  tier: result?.tier || 'tier3',
+                  tokensUsed: result?.tokensUsed || 0
                 }
               }).catch(() => {});
             }
@@ -3337,15 +3352,26 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         source: `${matchSource}:${tier}`  // V2: Combined source:tier
       }).catch(() => {});
       
-      // V2: Log tier-specific events
+      // V2: Log tier-specific events with detailed tracking
       if (tier === 'tier3' || matchSource === 'LLM_FALLBACK') {
+        // Log that no scenario matched FIRST (helps debug what was tried)
+        BlackBoxLogger.QuickLog.scenarioNoMatch(
+          callSid, companyID, turnCount,
+          cleanedText || speechResult || '[unknown input]',
+          result.debug?.bestCandidate || null,
+          result.debug?.bestConfidence || 0,
+          result.debug?.matchThreshold || 0.7,
+          result.debug?.fallbackReason || 'no_scenario_match'
+        ).catch(() => {});
+        
+        // Then log the LLM fallback
         BlackBoxLogger.QuickLog.tier3Fallback(
           callSid, companyID, turnCount,
           result.debug?.fallbackReason || 'no_scenario_match',
           result.debug?.latencyMs || result.latencyMs || 0,
           tokensUsed
         ).catch(() => {});
-      } else if (matchSource === 'SCENARIO_MATCH' || matchSource === 'STATE_MACHINE') {
+      } else if (matchSource === 'SCENARIO_MATCH' || matchSource === 'STATE_MACHINE' || matchSource === 'SCENARIO_MATCHED') {
         BlackBoxLogger.QuickLog.scenarioMatched(
           callSid, companyID, turnCount,
           result.debug?.scenarioId || null,

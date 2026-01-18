@@ -653,6 +653,187 @@ function computeLatencyAnalysis(events, turnBreakdowns, tierStats, ttsTotalMs) {
   };
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * RESPONSE SOURCE AUDIT - Detect Legacy Paths & Hijacking
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * Tracks WHERE each response came from and WHY.
+ * Flags suspicious sources that might indicate legacy code hijacking.
+ * 
+ * LEGITIMATE SOURCES (Production-Ready):
+ * - SCENARIO_MATCHED: Scenario from template matched (BEST - free, fast)
+ * - GREETING_INTERCEPT: Greeting handled without LLM (GOOD - free)
+ * - STATE_MACHINE: Booking flow deterministic response (GOOD - free)
+ * - LLM_FALLBACK/TIER3: No scenario matched, LLM generated (OK - costs $)
+ * - QUICK_ANSWER: Company quick answers matched (GOOD - free)
+ * 
+ * SUSPICIOUS SOURCES (May indicate legacy/bug):
+ * - unknown: Source not tracked - INVESTIGATE
+ * - undefined: Missing source field - BUG
+ * - HARDCODED: Hardcoded fallback triggered - LEGACY ALERT
+ * - LEGACY_*: Any source starting with LEGACY - OLD CODE STILL RUNNING
+ * - null: Null source - ERROR IN LOGGING
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+function computeResponseSourceAudit(events) {
+  // Define legitimate vs suspicious sources
+  const LEGITIMATE_SOURCES = [
+    'SCENARIO_MATCHED', 'TIER1_SCENARIO_MATCH',
+    'GREETING_INTERCEPT', 'GREETING',
+    'STATE_MACHINE', 'STATE_MACHINE_BOOKING', 'STATE_MACHINE_DISCOVERY',
+    'STATE_MACHINE_GREETING', 'STATE_MACHINE_UI', 'STATE_MACHINE_DEFAULT',
+    'LLM_FALLBACK', 'TIER3_FALLBACK', 'LLM',
+    'QUICK_ANSWER', 'CHEATSHEET_MATCH',
+    'BOOKING_SLOT', 'BOOKING_CONFIRM', 'BOOKING_COMPLETE',
+    'FAST_PATH_BOOKING', 'BOOKING_SAFETY_NET'
+  ];
+  
+  const SUSPICIOUS_PATTERNS = [
+    /^unknown$/i,
+    /^undefined$/i,
+    /^null$/i,
+    /^HARDCODED/i,
+    /^LEGACY/i,
+    /^DEFAULT.*FALLBACK/i,
+    /^MISSING/i,
+    /^ERROR/i
+  ];
+  
+  // Get all response events
+  const responseEvents = events.filter(e => e.type === 'AGENT_RESPONSE_BUILT');
+  const gatherEvents = events.filter(e => e.type === 'GATHER_FINAL');
+  const scenarioEvents = events.filter(e => e.type === 'SCENARIO_MATCHED' || e.type === 'SCENARIO_NO_MATCH');
+  
+  // Build turn-by-turn source audit
+  const turnAudits = [];
+  const sourceStats = {};
+  const alerts = [];
+  
+  for (let i = 0; i < responseEvents.length; i++) {
+    const response = responseEvents[i];
+    const source = response.data?.source || 'unknown';
+    const tier = response.data?.tier || 'unknown';
+    const text = response.data?.text || '';
+    
+    // Find corresponding gather event
+    const prevGather = gatherEvents.filter(g => g.t < response.t).pop();
+    const userText = prevGather?.data?.text || '';
+    
+    // Find scenario match attempt for this turn
+    const scenarioForTurn = scenarioEvents.find(s => 
+      s.t >= (prevGather?.t || 0) && s.t <= response.t
+    );
+    
+    // Count sources
+    sourceStats[source] = (sourceStats[source] || 0) + 1;
+    
+    // Check if source is legitimate
+    const isLegitimate = LEGITIMATE_SOURCES.some(leg => 
+      source.toUpperCase().includes(leg.toUpperCase())
+    );
+    
+    // Check if source is suspicious
+    const isSuspicious = SUSPICIOUS_PATTERNS.some(pattern => pattern.test(source));
+    
+    // Determine status
+    let status = 'OK';
+    let flag = null;
+    
+    if (isSuspicious) {
+      status = 'ALERT';
+      flag = `⚠️ SUSPICIOUS SOURCE: "${source}" - May be legacy code or missing tracking`;
+      alerts.push({
+        turn: i + 1,
+        type: 'SUSPICIOUS_SOURCE',
+        source,
+        message: flag,
+        userText: userText.substring(0, 50),
+        responseText: text.substring(0, 50)
+      });
+    } else if (!isLegitimate && source !== 'unknown') {
+      status = 'REVIEW';
+      flag = `🔍 UNKNOWN SOURCE: "${source}" - Not in legitimate list, review needed`;
+      alerts.push({
+        turn: i + 1,
+        type: 'UNKNOWN_SOURCE',
+        source,
+        message: flag,
+        userText: userText.substring(0, 50),
+        responseText: text.substring(0, 50)
+      });
+    } else if (source === 'unknown') {
+      status = 'MISSING';
+      flag = `❓ SOURCE NOT TRACKED - Response has no source identifier`;
+      alerts.push({
+        turn: i + 1,
+        type: 'MISSING_SOURCE',
+        source,
+        message: flag,
+        userText: userText.substring(0, 50),
+        responseText: text.substring(0, 50)
+      });
+    }
+    
+    // Check for scenario mismatch (should have matched but didn't)
+    if (scenarioForTurn?.type === 'SCENARIO_NO_MATCH' && tier === 'tier3') {
+      const noMatchReason = scenarioForTurn.data?.reason || 'unknown';
+      alerts.push({
+        turn: i + 1,
+        type: 'SCENARIO_MISS',
+        source,
+        message: `📉 NO SCENARIO MATCHED: "${userText.substring(0, 40)}" → LLM fallback (reason: ${noMatchReason})`,
+        userText: userText.substring(0, 50),
+        responseText: text.substring(0, 50),
+        suggestion: 'Consider adding scenario triggers for this phrase'
+      });
+    }
+    
+    turnAudits.push({
+      turn: i + 1,
+      source,
+      tier,
+      status,
+      flag,
+      userTextPreview: userText.substring(0, 50),
+      responsePreview: text.substring(0, 50),
+      scenarioMatched: scenarioForTurn?.type === 'SCENARIO_MATCHED' ? scenarioForTurn.data?.scenarioName : null,
+      tokensUsed: response.data?.tokensUsed || 0
+    });
+  }
+  
+  // Calculate health score
+  const totalResponses = turnAudits.length;
+  const okResponses = turnAudits.filter(t => t.status === 'OK').length;
+  const healthScore = totalResponses > 0 ? Math.round((okResponses / totalResponses) * 100) : 100;
+  
+  // Determine overall status
+  let overallStatus = 'HEALTHY';
+  if (alerts.some(a => a.type === 'SUSPICIOUS_SOURCE')) {
+    overallStatus = 'LEGACY_DETECTED';
+  } else if (alerts.some(a => a.type === 'MISSING_SOURCE')) {
+    overallStatus = 'TRACKING_GAPS';
+  } else if (alerts.filter(a => a.type === 'SCENARIO_MISS').length > totalResponses / 2) {
+    overallStatus = 'LOW_SCENARIO_COVERAGE';
+  }
+  
+  // Build decision path summary
+  const decisionPath = turnAudits.map(t => 
+    `T${t.turn}: ${t.source}${t.tier !== 'unknown' ? ` (${t.tier})` : ''}${t.status !== 'OK' ? ` ${t.flag}` : ''}`
+  );
+  
+  return {
+    overallStatus,
+    healthScore,
+    totalResponses,
+    sourceStats,
+    turnAudits,
+    alerts,
+    decisionPath,
+    legitimateSources: LEGITIMATE_SOURCES
+  };
+}
+
 function computeFlags(events, recording) {
   const flags = {
     loopDetected: events.some(e => e.type === 'LOOP_DETECTED'),

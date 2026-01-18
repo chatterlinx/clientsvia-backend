@@ -2746,6 +2746,8 @@ async function processTurn({
                 tokensUsed: 0,
                 llmUsed: false,
                 source: 'GREETING_INTERCEPT',
+                matchSource: 'GREETING_INTERCEPT',  // 🎯 BlackBox source tracking
+                tier: 'tier1',  // 🎯 Tier1 = deterministic, no LLM
                 latencyMs: Date.now() - startTime,
                 slotsCollected: {},
                 debug: includeDebug ? {
@@ -2828,6 +2830,8 @@ async function processTurn({
                     tokensUsed: 0,
                     llmUsed: false,
                     source: 'ESCALATION_INTERCEPT',
+                    matchSource: 'ESCALATION_INTERCEPT',  // 🎯 BlackBox source tracking
+                    tier: 'tier1',  // 🎯 Tier1 = deterministic, no LLM
                     latencyMs: Date.now() - startTime,
                     slotsCollected: {},
                     requiresTransfer: true,
@@ -9196,25 +9200,28 @@ async function processTurn({
         // Used by BlackBox to show WHERE the response came from
         // This is CRITICAL for debugging - "source: unknown" tells us nothing!
         // ════════════════════════════════════════════════════════════════════════
-        let matchSource = 'LLM_FALLBACK';  // Default
-        let tier = 'tier3';  // Default (LLM)
+        let matchSource = aiResult.matchSource || 'LLM_FALLBACK';  // Use aiResult if already set
+        let tier = aiResult.tier || 'tier3';  // Default (LLM)
         
-        if (aiResult.fromStateMachine) {
-            matchSource = 'STATE_MACHINE';
-            tier = 'tier1';
-        } else if (aiResult.fromQuickAnswers) {
-            matchSource = 'QUICK_ANSWER';
-            tier = 'tier1';
-        } else if (aiResult.scenarioMatched || aiResult.debug?.scenarioMatched) {
-            matchSource = 'SCENARIO_MATCH';
-            tier = aiResult.tier || 'tier2';
-        } else if (aiResult.triageCardMatched) {
-            matchSource = 'TRIAGE_MATCH';
-            tier = 'tier1';
-        } else if (aiResult.tokensUsed === 0) {
-            // No tokens used = rule-based (state machine or scenario)
-            matchSource = 'RULE_BASED';
-            tier = 'tier1';
+        // Override based on aiResult flags if matchSource wasn't explicitly set
+        if (!aiResult.matchSource) {
+            if (aiResult.fromStateMachine) {
+                matchSource = 'STATE_MACHINE';
+                tier = 'tier1';
+            } else if (aiResult.fromQuickAnswers) {
+                matchSource = 'QUICK_ANSWER';
+                tier = 'tier1';
+            } else if (aiResult.scenarioMatched || aiResult.debug?.scenarioMatched) {
+                matchSource = 'SCENARIO_MATCH';
+                tier = aiResult.tier || 'tier2';
+            } else if (aiResult.triageCardMatched) {
+                matchSource = 'TRIAGE_MATCH';
+                tier = 'tier1';
+            } else if (aiResult.tokensUsed === 0) {
+                // No tokens used = rule-based (state machine or scenario)
+                matchSource = 'RULE_BASED';
+                tier = 'tier1';
+            }
         }
         
         const response = {

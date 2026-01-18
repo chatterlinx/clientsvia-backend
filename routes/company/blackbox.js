@@ -284,6 +284,199 @@ router.get('/stats', async (req, res) => {
 });
 
 // ============================================================================
+// HELPER: Compute Response Source Audit
+// ============================================================================
+// Analyzes WHERE each response came from and flags legacy/hijack paths.
+// This is CRITICAL for quickly identifying when the AI is using wrong paths.
+// ============================================================================
+
+function computeResponseSourceAudit(events) {
+  // Define LEGITIMATE sources (expected, production-ready)
+  const LEGITIMATE_SOURCES = [
+    'SCENARIO_MATCHED', 'TIER1_SCENARIO_MATCH', 'scenario_match', 'tier1',
+    'GREETING_INTERCEPT', 'greeting', 'GREETING',
+    'STATE_MACHINE', 'state_machine', 'statemachine',
+    'LLM_FALLBACK', 'TIER3_FALLBACK', 'tier3', 'llm', 'LLM',
+    'QUICK_ANSWER', 'CHEATSHEET_MATCH',
+    'BOOKING_SLOT', 'BOOKING_CONFIRM', 'BOOKING_COMPLETE',
+    'FAST_PATH_BOOKING', 'BOOKING_SAFETY_NET',
+    'silence_response', 'SILENCE_RESPONSE'
+  ];
+  
+  // Get all response events
+  const responseEvents = events.filter(e => e.type === 'AGENT_RESPONSE_BUILT');
+  const gatherEvents = events.filter(e => e.type === 'GATHER_FINAL');
+  const scenarioEvents = events.filter(e => e.type === 'SCENARIO_MATCHED' || e.type === 'SCENARIO_NO_MATCH');
+  const llmEvents = events.filter(e => e.type === 'TIER3_FALLBACK' || e.type === 'LLM_RESPONSE');
+  
+  const turnAudits = [];
+  const sourceStats = {};
+  const alerts = [];
+  
+  for (let i = 0; i < responseEvents.length; i++) {
+    const response = responseEvents[i];
+    const source = response.data?.source || 'unknown';
+    const tier = response.data?.tier || 'unknown';
+    const text = response.data?.text || '';
+    const tokensUsed = response.data?.tokensUsed || 0;
+    
+    // Find corresponding gather event
+    const prevGather = gatherEvents.filter(g => g.t < response.t).pop();
+    const userText = prevGather?.data?.text || '[silence]';
+    
+    // Find scenario match for this turn
+    const scenarioForTurn = scenarioEvents.find(s => 
+      s.t >= (prevGather?.t || 0) && s.t <= response.t
+    );
+    
+    // Find LLM call for this turn
+    const llmForTurn = llmEvents.find(l =>
+      l.t >= (prevGather?.t || 0) && l.t <= response.t
+    );
+    
+    // Count sources
+    sourceStats[source] = (sourceStats[source] || 0) + 1;
+    
+    // Check if source is legitimate
+    const isLegitimate = LEGITIMATE_SOURCES.some(leg => 
+      source.toLowerCase().includes(leg.toLowerCase())
+    );
+    
+    // Determine status and flags
+    let status = 'OK';
+    let flag = '';
+    let emoji = '✅';
+    
+    if (source === 'unknown' || source === 'undefined' || source === 'null' || !source) {
+      status = 'MISSING';
+      flag = '❓ SOURCE NOT TRACKED - code path not instrumented';
+      emoji = '❓';
+      alerts.push({
+        turn: i + 1,
+        type: 'MISSING_SOURCE',
+        severity: 'HIGH',
+        message: `Turn ${i + 1}: Response has no source identifier - cannot trace where this came from`,
+        userText: userText.substring(0, 60),
+        responseText: text.substring(0, 60)
+      });
+    } else if (!isLegitimate) {
+      status = 'SUSPICIOUS';
+      flag = `⚠️ UNEXPECTED SOURCE: "${source}" - may be legacy code`;
+      emoji = '⚠️';
+      alerts.push({
+        turn: i + 1,
+        type: 'UNEXPECTED_SOURCE',
+        severity: 'MEDIUM',
+        message: `Turn ${i + 1}: Source "${source}" not in expected list - review code path`,
+        userText: userText.substring(0, 60),
+        responseText: text.substring(0, 60)
+      });
+    }
+    
+    // Check for scenario mismatch (user asked something, no scenario matched, went to LLM)
+    if (tier === 'tier3' || source.toLowerCase().includes('llm') || source.toLowerCase().includes('tier3')) {
+      if (scenarioForTurn?.type !== 'SCENARIO_MATCHED') {
+        alerts.push({
+          turn: i + 1,
+          type: 'LLM_FALLBACK',
+          severity: 'LOW',
+          message: `Turn ${i + 1}: No scenario matched, used LLM (tokens: ${tokensUsed}, cost: ~$${((tokensUsed / 1000) * 0.002).toFixed(4)})`,
+          userText: userText.substring(0, 60),
+          suggestion: 'Consider adding scenario triggers for this phrase'
+        });
+      }
+    }
+    
+    turnAudits.push({
+      turn: i + 1,
+      source,
+      tier,
+      status,
+      flag,
+      emoji,
+      userTextPreview: userText.substring(0, 60),
+      responsePreview: text.substring(0, 60),
+      scenarioMatched: scenarioForTurn?.data?.scenarioName || scenarioForTurn?.data?.scenarioId || null,
+      tokensUsed
+    });
+  }
+  
+  // Calculate health metrics
+  const totalResponses = turnAudits.length;
+  const trackedResponses = turnAudits.filter(t => t.status === 'OK').length;
+  const healthScore = totalResponses > 0 ? Math.round((trackedResponses / totalResponses) * 100) : 100;
+  
+  // Overall status
+  let overallStatus = 'HEALTHY';
+  let overallEmoji = '🟢';
+  if (alerts.some(a => a.severity === 'HIGH')) {
+    overallStatus = 'TRACKING_GAPS';
+    overallEmoji = '🔴';
+  } else if (alerts.some(a => a.severity === 'MEDIUM')) {
+    overallStatus = 'REVIEW_NEEDED';
+    overallEmoji = '🟡';
+  } else if (alerts.filter(a => a.type === 'LLM_FALLBACK').length > totalResponses / 2) {
+    overallStatus = 'LOW_SCENARIO_COVERAGE';
+    overallEmoji = '🟠';
+  }
+  
+  return {
+    overallStatus,
+    overallEmoji,
+    healthScore,
+    totalResponses,
+    sourceStats,
+    turnAudits,
+    alerts
+  };
+}
+
+// ============================================================================
+// HELPER: Format Response Source Audit
+// ============================================================================
+
+function formatResponseSourceAudit(events) {
+  const audit = computeResponseSourceAudit(events);
+  
+  if (audit.totalResponses === 0) {
+    return `
+Response Source Audit:
+- (No responses recorded)
+`;
+  }
+  
+  // Build turn-by-turn source log
+  const turnLines = audit.turnAudits.map(t => 
+    `    T${t.turn}: ${t.emoji} ${t.source}${t.tier !== 'unknown' ? ` (${t.tier})` : ''} ${t.scenarioMatched ? `[scenario: ${t.scenarioMatched}]` : ''}${t.tokensUsed > 0 ? ` [tokens: ${t.tokensUsed}]` : ''}`
+  ).join('\n');
+  
+  // Build source breakdown
+  const sourceBreakdown = Object.entries(audit.sourceStats)
+    .sort((a, b) => b[1] - a[1])
+    .map(([source, count]) => `${source}: ${count}`)
+    .join(', ');
+  
+  // Build alerts
+  const alertLines = audit.alerts.length > 0
+    ? audit.alerts.slice(0, 5).map(a => 
+        `    [${a.severity}] ${a.message}${a.suggestion ? `\n           → ${a.suggestion}` : ''}`
+      ).join('\n')
+    : '    (No issues detected - all sources properly tracked)';
+  
+  return `
+Response Source Audit: ${audit.overallEmoji} ${audit.overallStatus} (${audit.healthScore}% tracked)
+- Sources: ${sourceBreakdown}
+- Expected: scenario_match, tier1, tier3, greeting, state_machine, booking_slot
+
+Turn-by-Turn Sources (WHERE DID RESPONSE COME FROM?):
+${turnLines}
+
+Alerts:
+${alertLines}
+`;
+}
+
+// ============================================================================
 // HELPER: Format Latency Analysis
 // ============================================================================
 // Formats the latency analysis into a readable text block for the snapshot.
@@ -420,6 +613,7 @@ Performance:
 - llmCalls: { count: ${recording.performance?.llmCalls?.count || 0}, brain1: ${recording.performance?.llmCalls?.brain1Count || 0}, tier3: ${recording.performance?.llmCalls?.tier3Count || 0}, totalMs: ${recording.performance?.llmCalls?.totalMs || 0} }
 - ttsTotalMs: ${recording.performance?.ttsTotalMs || 0}
 ${formatLatencyAnalysis(recording.performance?.latencyAnalysis)}
+${formatResponseSourceAudit(recording.events || [])}
 Key Timeline:
 `;
 
@@ -427,15 +621,22 @@ Key Timeline:
   const keyEvents = (recording.events || [])
     .filter(e => [
       'GREETING_SENT', 'GATHER_FINAL', 'INTENT_DETECTED', 'TRIAGE_DECISION',
+      // Scenario matching events (CRITICAL for debugging)
+      'SCENARIO_MATCH_ATTEMPT', 'SCENARIO_MATCHED', 'SCENARIO_NO_MATCH',
+      // Tier-3 LLM events
       'TIER3_ENTERED', 'TIER3_FAST_MATCH', 'TIER3_EMBEDDING_MATCH',
-      'TIER3_LLM_FALLBACK_CALLED', 'TIER3_LLM_FALLBACK_RESPONSE', 'TIER3_EXIT',
+      'TIER3_FALLBACK', 'TIER3_LLM_FALLBACK_CALLED', 'TIER3_LLM_FALLBACK_RESPONSE', 'TIER3_EXIT',
+      // Booking events
       'BOOKING_MODE_ACTIVATED', 'BOOKING_MODE_LOCKED', 'BOOKING_STEP', 
       'BOOKING_SLOT_FILLED', 'BOOKING_OVERRIDDEN', 'BOOKING_COMPLETE',
       'BOOKING_INTENT_OVERRIDE',
+      // Response and call events
       'AGENT_RESPONSE_BUILT', 'LOOP_DETECTED', 'BAILOUT_TRIGGERED', 
-      'TRANSFER_INITIATED', 'CALL_END'
+      'TRANSFER_INITIATED', 'CALL_END',
+      // Mode changes
+      'MODE_CHANGED', 'SLOT_COLLECTED', 'CUSTOMER_IDENTIFIED'
     ].includes(e.type))
-    .slice(0, 35);
+    .slice(0, 40);
   
   for (const event of keyEvents) {
     const time = formatTime(event.t || 0);
@@ -455,9 +656,14 @@ Key Timeline:
       case 'TRIAGE_DECISION':
         detail = `${event.data?.route || event.data?.cardName || '?'} intent=${event.data?.intentTag || '?'}${source}`;
         break;
-      case 'AGENT_RESPONSE_BUILT':
-        detail = `"${(event.data?.text || '').substring(0, 50)}..."${source}`;
+      case 'AGENT_RESPONSE_BUILT': {
+        const src = event.data?.source || 'unknown';
+        const tier = event.data?.tier || '';
+        const tokens = event.data?.tokensUsed || 0;
+        const srcEmoji = src === 'unknown' ? '❓' : (tier === 'tier3' || src.includes('llm') || src.includes('LLM')) ? '💰' : '✅';
+        detail = `${srcEmoji} [${src}${tier ? '/' + tier : ''}] "${(event.data?.text || '').substring(0, 40)}..."${tokens > 0 ? ` (${tokens} tokens)` : ''}`;
         break;
+      }
       case 'BAILOUT_TRIGGERED':
         detail = `type=${event.data?.bailoutType || event.data?.type} reason=${event.data?.reason}`;
         break;
@@ -506,6 +712,29 @@ Key Timeline:
         break;
       case 'LOOP_DETECTED':
         detail = `pattern=${event.data?.pattern || '?'}`;
+        break;
+      // === SCENARIO MATCHING EVENTS (Critical for debugging) ===
+      case 'SCENARIO_MATCH_ATTEMPT':
+        detail = `🔍 Looking for: "${(event.data?.userText || '').substring(0, 40)}..." in ${event.data?.scenarioCount || '?'} scenarios`;
+        break;
+      case 'SCENARIO_MATCHED':
+        detail = `✅ MATCH: ${event.data?.scenarioName || event.data?.scenarioId || '?'} (${(event.data?.confidence || 0).toFixed(2)}) → "${(event.data?.reply || '').substring(0, 40)}..."`;
+        break;
+      case 'SCENARIO_NO_MATCH':
+        detail = `❌ NO MATCH: ${event.data?.reason || 'unknown'}, top candidate: ${event.data?.topCandidate || 'none'} (${(event.data?.topConfidence || 0).toFixed(2)})`;
+        break;
+      case 'TIER3_FALLBACK':
+        detail = `💰 LLM FALLBACK: reason=${event.data?.reason || '?'} tokens=${event.data?.tokensUsed || '?'}`;
+        break;
+      // === MODE & STATE EVENTS ===
+      case 'MODE_CHANGED':
+        detail = `${event.data?.from || '?'} → ${event.data?.to || '?'} (reason: ${event.data?.reason || '?'})`;
+        break;
+      case 'SLOT_COLLECTED':
+        detail = `📝 ${event.data?.slotKey || '?'} = "${event.data?.value || '?'}"`;
+        break;
+      case 'CUSTOMER_IDENTIFIED':
+        detail = `👤 ${event.data?.customerName || 'unknown'} (returning: ${event.data?.isReturning || false})`;
         break;
       default:
         detail = JSON.stringify(event.data || {}).substring(0, 50);
