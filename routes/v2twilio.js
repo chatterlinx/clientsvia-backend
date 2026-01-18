@@ -2990,6 +2990,14 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               transferReason: engineResult.requiresTransfer === true
                 ? (engineResult.transferReason || 'runtime_requires_transfer')
                 : null,
+              // ═══════════════════════════════════════════════════════════════════
+              // 🎯 RESPONSE SOURCE TRACKING (Jan 18, 2026)
+              // These fields power BlackBox "source" tracking so we can see
+              // WHERE each response came from (scenario, LLM, state machine, etc.)
+              // ═══════════════════════════════════════════════════════════════════
+              matchSource: engineResult.matchSource || 'LLM_FALLBACK',
+              tier: engineResult.tier || 'tier3',
+              tokensUsed: engineResult.tokensUsed || 0,
               callState: {
                 ...callState,
                 sessionId: engineResult.sessionId,
@@ -3004,7 +3012,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 // V33: Include error info if present
                 engineError: engineResult.error || null,
                 engineErrorType: engineResult.errorType || null,
-                lastCheckpoint: engineResult.debug?.lastCheckpoint || null
+                lastCheckpoint: engineResult.debug?.lastCheckpoint || null,
+                // 🆕 Response source for debugging
+                matchSource: engineResult.matchSource || 'LLM_FALLBACK',
+                tier: engineResult.tier || 'tier3'
               }
             };
             
