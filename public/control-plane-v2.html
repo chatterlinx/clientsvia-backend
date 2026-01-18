@@ -1599,9 +1599,11 @@
           <button class="data-config-subtab" data-subtab="scenarios" style="padding: 10px 20px; border: none; background: #f1f5f9; color: #64748b; border-radius: 8px 8px 0 0; font-weight: 600; cursor: pointer;">
             <i class="fas fa-theater-masks"></i> Scenarios
           </button>
-          <button class="data-config-subtab" data-subtab="cheat-sheets" style="padding: 10px 20px; border: none; background: #f1f5f9; color: #64748b; border-radius: 8px 8px 0 0; font-weight: 600; cursor: pointer;">
-            <i class="fas fa-clipboard-list"></i> Cheat Sheets
-          </button>
+          <!-- REMOVED: Cheat Sheets tab (Jan 2026) - Features moved to dedicated tabs:
+               - Edge Cases → Call Protection tab
+               - Transfer Rules → Transfer Calls tab
+               - Company Contacts → Company Contacts tab
+               - Guardrails/Behavior → Front Desk tab -->
           <button class="data-config-subtab" data-subtab="execution-map" style="padding: 10px 20px; border: none; background: #f1f5f9; color: #64748b; border-radius: 8px 8px 0 0; font-weight: 600; cursor: pointer;">
             <i class="fas fa-project-diagram"></i> Execution Map
           </button>
@@ -1873,23 +1875,13 @@
         </div>
       </div>
       
-        <!-- CHEAT SHEETS ANCHOR (Stub for Wiring deep-links) -->
-        <!-- CheatSheets has its own editor at frontline-intel-editor.html -->
-        <!-- This stub allows ControlPlaneNav to find the anchor and highlight -->
-        <div id="data-config-cheat-sheets" 
-             data-section-id="cheat-sheets" 
-             data-field-id="cheatSheets"
-             style="display: none;">
-          <div style="padding: 40px; text-align: center; color: #64748b;">
-            <div style="font-size: 48px; margin-bottom: 16px;">📋</div>
-            <h3 style="margin: 0 0 8px 0; color: #334155;">Cheat Sheets</h3>
-            <p style="margin: 0 0 16px 0;">FAQ knowledge base for quick answers</p>
-            <a href="frontline-intel-editor.html" 
-               style="display: inline-block; padding: 10px 20px; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600;">
-              Open Cheat Sheet Editor →
-            </a>
-          </div>
-        </div>
+        <!-- REMOVED: Cheat Sheets section (Jan 2026)
+             Features distributed to dedicated tabs:
+             - Edge Cases → Call Protection tab (CallProtectionManager.js)
+             - Transfer Rules → Transfer Calls tab
+             - Company Contacts → Company Contacts tab
+             - Guardrails/Behavior → Front Desk tab
+        -->
 
         <!-- SCENARIOS (Using AiCoreLiveScenariosManager - YOUR original system) -->
         <div id="data-config-scenarios" class="data-config-content" style="display: none;">
