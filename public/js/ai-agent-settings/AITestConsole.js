@@ -1474,6 +1474,10 @@ class AITestConsole {
         const score = analysis.qualityScore || 0;
         const rootCause = analysis.rootCause || {};
         const missingTriggers = analysis.missingTriggers || [];
+        const normalization = analysis.normalization || {};
+        const normalizedInput = normalization.normalizedInput || '';
+        const fillersRemoved = Array.isArray(normalization.fillersRemoved) ? normalization.fillersRemoved : [];
+        const synonymsApplied = Array.isArray(normalization.synonymsApplied) ? normalization.synonymsApplied : [];
         const copyPasteFix = analysis.copyPasteFix || {};
         const triggersToAddText = (copyPasteFix.triggersToAdd || []).join('\n');
         const encodedTriggersToAdd = encodeURIComponent(triggersToAddText);
@@ -1553,6 +1557,20 @@ class AITestConsole {
                     <div style="font-size: 10px; color: #fde68a; margin-bottom: 6px;">
                         Suggested by AI supervisor (not validated against live trigger lists):
                     </div>
+                    ${normalizedInput ? `
+                        <div style="background: rgba(0, 0, 0, 0.25); padding: 6px 8px; border-radius: 4px; margin-bottom: 6px; font-size: 10px; color: #fde68a;">
+                            <div style="font-weight: 600; margin-bottom: 2px;">Normalized input (fillers removed):</div>
+                            <div style="font-family: monospace;">"${normalizedInput}"</div>
+                            ${fillersRemoved.length > 0 ? `
+                                <div style="margin-top: 4px; opacity: 0.85;">Fillers removed: ${fillersRemoved.join(', ')}</div>
+                            ` : ''}
+                            ${synonymsApplied.length > 0 ? `
+                                <div style="margin-top: 4px; opacity: 0.85;">
+                                    Synonyms applied: ${synonymsApplied.map(pair => `${pair.from}→${pair.to}`).join(', ')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    ` : ''}
                     ${missingTriggers.map(trigger => `
                         <div style="background: rgba(0, 0, 0, 0.3); padding: 6px 8px; border-radius: 4px; margin-bottom: 4px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">

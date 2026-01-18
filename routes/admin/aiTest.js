@@ -15,6 +15,8 @@ const router = express.Router();
 const { authenticateJWT } = require('../../middleware/auth');
 const Company = require('../../models/v2Company');
 const ConversationEngine = require('../../services/ConversationEngine');
+const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+const HybridScenarioSelector = require('../../services/HybridScenarioSelector');
 const BookingScriptEngine = require('../../services/BookingScriptEngine');
 const BlackBoxLogger = require('../../services/BlackBoxLogger');
 const elevenLabsService = require('../../services/v2elevenLabsService');
@@ -327,6 +329,57 @@ router.post('/supervisor-analysis', authenticateJWT, async (req, res) => {
         const matchedScenario = debugSnapshot.matchedScenario || null;
         const topCandidates = debugSnapshot.topScenarioCandidates || [];
         const customerEmotion = debugSnapshot.customerEmotion || null;
+        const companyId = debugSnapshot.companyId || debug?.companyId || req.body.companyId || null;
+        
+        // Normalize user input with company fillers/synonyms so supervisor suggestions match runtime behavior
+        let normalization = null;
+        if (companyId) {
+            try {
+                const companyDoc = await Company.findById(companyId)
+                    .select('aiAgentSettings.templateReferences trade companyName businessName')
+                    .lean();
+                
+                const templateRefs = Array.isArray(companyDoc?.aiAgentSettings?.templateReferences)
+                    ? companyDoc.aiAgentSettings.templateReferences
+                    : [];
+                const activeRef = templateRefs.find(ref => {
+                    if (typeof ref === 'string') return true;
+                    return ref?.enabled !== false;
+                }) || templateRefs[0];
+                
+                const templateId = typeof activeRef === 'string'
+                    ? activeRef
+                    : (activeRef?.templateId || activeRef?.id || activeRef?._id || null);
+                
+                if (templateId) {
+                    const template = await GlobalInstantResponseTemplate.findById(templateId)
+                        .select('fillerWords nlpConfig.fillerWords urgencyKeywords synonymMap nlpConfig.synonyms')
+                        .lean();
+                    
+                    const fillerWords = template?.fillerWords || template?.nlpConfig?.fillerWords || [];
+                    const urgencyKeywords = template?.urgencyKeywords || [];
+                    const synonymMap = template?.synonymMap || template?.nlpConfig?.synonyms || {};
+                    
+                    const selector = new HybridScenarioSelector(fillerWords, urgencyKeywords, synonymMap);
+                    const normalizedInput = selector.normalizePhrase(userMessage);
+                    const pipeline = selector.lastPipelineDiagnostic || {};
+                    
+                    normalization = {
+                        normalizedInput,
+                        fillersRemoved: pipeline.stages?.fillers?.removed || [],
+                        fillerCount: pipeline.stages?.fillers?.listSize || 0,
+                        synonymsApplied: pipeline.stages?.synonyms?.applied || [],
+                        synonymCount: pipeline.stages?.synonyms?.mapSize || 0,
+                        templateId: templateId.toString()
+                    };
+                }
+            } catch (normalizeError) {
+                logger.warn('[AI SUPERVISOR] Normalization lookup failed', {
+                    companyId,
+                    error: normalizeError.message
+                });
+            }
+        }
         
         logger.info('[AI SUPERVISOR] Enhanced analysis', {
             userMsgLength: userMessage.length,
@@ -352,6 +405,9 @@ TECHNICAL DECISION PATH:
 ${topCandidates.length > 0 ? `- Top Candidates (didn't match):
 ${topCandidates.slice(0, 3).map(c => `  • "${c.name}" - ${c.score}% match (missing: ${c.missingTriggers?.join(', ') || 'unknown'})`).join('\n')}` : ''}
 ${customerEmotion ? `- Detected Customer Emotion: ${customerEmotion}` : ''}
+${normalization?.normalizedInput ? `- Normalized Input (fillers removed): "${normalization.normalizedInput}"
+- Fillers Removed: ${normalization.fillersRemoved.length > 0 ? normalization.fillersRemoved.join(', ') : 'none'}
+- Synonyms Applied: ${normalization.synonymsApplied.length > 0 ? normalization.synonymsApplied.map(pair => `${pair.from}→${pair.to}`).join(', ') : 'none'}` : ''}
 `;
         
         // Build enhanced analysis prompt
@@ -385,6 +441,8 @@ YOUR TASK - DETAILED ANALYSIS:
 
 3. MISSING TRIGGER DETECTION:
    Extract key phrases from customer input that should trigger scenarios but don't.
+   Use the NORMALIZED INPUT above (fillers removed) so suggestions match runtime matching.
+   Avoid suggesting filler-only phrases that are stripped by the system.
    Examples:
    - "I'm dying here" → Emergency urgency
    - "how much" → Pricing question
@@ -463,6 +521,9 @@ RULES:
         if (!analysis.rootCause) analysis.rootCause = { why: 'Unknown', toneMismatch: false };
         if (!analysis.missingTriggers) analysis.missingTriggers = [];
         if (!analysis.copyPasteFix) analysis.copyPasteFix = { hasIssue: false };
+        if (normalization?.normalizedInput) {
+            analysis.normalization = normalization;
+        }
         
         logger.info('[AI SUPERVISOR] Analysis complete', {
             qualityScore: analysis.qualityScore,
