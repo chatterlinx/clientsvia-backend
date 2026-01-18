@@ -1488,6 +1488,10 @@ class AITestConsole {
         const responseTemplateText = copyPasteFix.responseTemplate || '';
         const encodedResponseTemplate = encodeURIComponent(responseTemplateText);
         
+        // 🆕 Session state and performance data
+        const sessionState = analysis.sessionState || {};
+        const performance = analysis.performance || {};
+        
         let scoreColor = '#ef4444'; // red
         let scoreLabel = 'NEEDS WORK';
         if (score >= 80) {
@@ -1514,6 +1518,68 @@ class AITestConsole {
                     ✕
                 </button>
             </div>
+            
+            <!-- 🆕 SESSION STATE (GROUND TRUTH) -->
+            ${sessionState.mode ? `
+                <div style="margin-bottom: 12px; background: rgba(34, 197, 94, 0.1); border-left: 3px solid #22c55e; padding: 8px 10px; border-radius: 4px;">
+                    <div style="font-weight: 700; color: #86efac; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
+                        📊 Session State (Ground Truth)
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; font-size: 10px;">
+                        <div style="background: rgba(0,0,0,0.3); padding: 5px 7px; border-radius: 4px;">
+                            <div style="color: #4ade80; font-size: 9px; text-transform: uppercase;">Turn</div>
+                            <div style="color: #bbf7d0; font-weight: 600;">#${sessionState.turnNumber || 1}</div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.3); padding: 5px 7px; border-radius: 4px;">
+                            <div style="color: #4ade80; font-size: 9px; text-transform: uppercase;">Mode</div>
+                            <div style="color: #bbf7d0; font-weight: 600;">${sessionState.mode || 'DISCOVERY'}</div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.3); padding: 5px 7px; border-radius: 4px;">
+                            <div style="color: #4ade80; font-size: 9px; text-transform: uppercase;">Consent</div>
+                            <div style="color: ${sessionState.consentGiven ? '#86efac' : '#fca5a5'}; font-weight: 600;">${sessionState.consentGiven ? '✅ YES' : '⬜ NO'}</div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.3); padding: 5px 7px; border-radius: 4px;">
+                            <div style="color: #4ade80; font-size: 9px; text-transform: uppercase;">Issue</div>
+                            <div style="color: #bbf7d0; font-weight: 600; font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${sessionState.discoveryIssue || 'Not captured'}">${sessionState.discoveryIssue || '—'}</div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.3); padding: 5px 7px; border-radius: 4px;">
+                            <div style="color: #4ade80; font-size: 9px; text-transform: uppercase;">Active Slot</div>
+                            <div style="color: #bbf7d0; font-weight: 600;">${sessionState.activeSlot || '—'}</div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.3); padding: 5px 7px; border-radius: 4px;">
+                            <div style="color: #4ade80; font-size: 9px; text-transform: uppercase;">Slots</div>
+                            <div style="color: #bbf7d0; font-weight: 600;">${sessionState.slotsCollectedCount || 0}/${sessionState.slotsTotalCount || 4}</div>
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
+            
+            <!-- 🆕 COST & PERFORMANCE -->
+            ${performance.tier ? `
+                <div style="margin-bottom: 12px; background: rgba(168, 85, 247, 0.1); border-left: 3px solid #a855f7; padding: 8px 10px; border-radius: 4px;">
+                    <div style="font-weight: 700; color: #d8b4fe; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
+                        💰 Cost & Performance
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 10px;">
+                        <div style="background: rgba(0,0,0,0.3); padding: 5px 7px; border-radius: 4px;">
+                            <div style="color: #c084fc; font-size: 9px; text-transform: uppercase;">Tier</div>
+                            <div style="color: ${performance.tokensUsed > 0 ? '#fca5a5' : '#86efac'}; font-weight: 600; font-size: 9px;">${performance.tokensUsed > 0 ? 'LLM ($)' : 'FREE'}</div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.3); padding: 5px 7px; border-radius: 4px;">
+                            <div style="color: #c084fc; font-size: 9px; text-transform: uppercase;">Tokens</div>
+                            <div style="color: #e9d5ff; font-weight: 600;">${performance.tokensUsed || 0}</div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.3); padding: 5px 7px; border-radius: 4px;">
+                            <div style="color: #c084fc; font-size: 9px; text-transform: uppercase;">Latency</div>
+                            <div style="color: #e9d5ff; font-weight: 600;">${performance.latencyMs || 0}ms</div>
+                        </div>
+                        <div style="background: rgba(0,0,0,0.3); padding: 5px 7px; border-radius: 4px;">
+                            <div style="color: #c084fc; font-size: 9px; text-transform: uppercase;">Scenarios</div>
+                            <div style="color: #e9d5ff; font-weight: 600;">${performance.scenarioCount || 0}</div>
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
             
             <!-- ISSUES -->
             ${issues.length > 0 ? `

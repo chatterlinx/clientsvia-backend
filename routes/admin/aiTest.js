@@ -324,13 +324,43 @@ router.post('/supervisor-analysis', authenticateJWT, async (req, res) => {
         
         // Extract technical context from debug snapshot
         const debugSnapshot = debug?.debugSnapshot || {};
-        const responseSource = debugSnapshot.responseSource || debug?.responseSource || 'UNKNOWN';
-        const scenarioCount = debugSnapshot.scenarioCount || debug?.scenarioCount || 0;
+        const responseSource = debugSnapshot.responseSource || debugSnapshot.routing?.responseSource || debug?.responseSource || 'UNKNOWN';
+        const scenarioCount = debugSnapshot.scenarioCount || debugSnapshot.scenarioPoolCount || debug?.scenarioCount || 0;
+        const scenarioToolCount = debugSnapshot.scenarioToolCount || debugSnapshot.scenarios?.toolCount || 0;
         const mode = debugSnapshot.mode || debug?.mode || 'DISCOVERY';
+        const phase = debugSnapshot.phase || debug?.phase || mode?.toLowerCase() || 'unknown';
         const matchedScenario = debugSnapshot.matchedScenario || null;
         const topCandidates = debugSnapshot.topScenarioCandidates || [];
         const customerEmotion = debugSnapshot.customerEmotion || null;
         const companyId = debugSnapshot.companyId || debug?.companyId || req.body.companyId || null;
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 ENHANCED SESSION STATE (for enterprise-level diagnostics)
+        // ═══════════════════════════════════════════════════════════════════
+        // debugSnapshot has these at root level, not nested under booking
+        const slotsCollected = debugSnapshot.currentSlots || debugSnapshot.slots?.current || debug?.slotsCollected || {};
+        const activeSlot = debugSnapshot.activeSlotId || debug?.activeSlot || null;
+        const consentGiven = debugSnapshot.consentGiven === true || debug?.consentGiven === true;
+        const consentPhrase = debugSnapshot.consentPhrase || debug?.consentPhrase || null;
+        const slotIds = debugSnapshot.slotIds || debug?.slotIds || [];
+        const slotsCollectedCount = Object.keys(slotsCollected).filter(k => slotsCollected[k]).length;
+        const slotsTotalCount = slotIds.length || 4;
+        
+        // Cost/Performance metrics
+        const tokensUsed = debug?.tokensUsed || debug?.tokens || debugSnapshot.tokensUsed || 0;
+        const latencyMs = debug?.latencyMs || debugSnapshot.latencyMs || 0;
+        const aiLatencyMs = debug?.aiLatencyMs || debugSnapshot.aiLatencyMs || 0;
+        const turnNumber = debugSnapshot.turnNumber || debug?.turn || 1;
+        
+        // Tier detection (for cost tracking)
+        const llmBrain = debugSnapshot.llmBrain || debug?.llmBrain || {};
+        const llmSource = llmBrain.source || responseSource;
+        const tier = tokensUsed > 0 ? 'Tier 3 (LLM - $$$)' : 
+                     (llmSource?.includes('SCENARIO') || llmSource?.includes('CHEATSHEET')) ? 'Tier 1 (Rule-based - FREE)' :
+                     'Tier 2 (Semantic - FREE)';
+        
+        // Discovery issue captured
+        const discoveryIssue = debugSnapshot.memory?.facts?.issue || llmBrain.discoveryIssue || null;
         
         // Normalize user input with company fillers/synonyms so supervisor suggestions match runtime behavior
         let normalization = null;
@@ -481,24 +511,58 @@ router.post('/supervisor-analysis', authenticateJWT, async (req, res) => {
             : 'No previous conversation history.';
         
         // Build technical details for deep analysis
+        const slotsDisplay = slotIds.length > 0 
+            ? slotIds.map(id => slotsCollected[id] ? `✅ ${id}: "${slotsCollected[id]}"` : `⬜ ${id}`).join('\n  ')
+            : 'No slots configured';
+        
         const technicalDetails = `
-TECHNICAL DECISION PATH:
+═══════════════════════════════════════════════════════════════════
+SESSION STATE (GROUND TRUTH)
+═══════════════════════════════════════════════════════════════════
+- Turn Number: ${turnNumber}
+- Current Mode: ${mode} (${mode === 'DISCOVERY' ? 'Understanding caller need' : mode === 'BOOKING' ? 'Collecting appointment info' : 'General support'})
+- Phase: ${phase}
+- Consent Given: ${consentGiven ? `YES ("${consentPhrase || 'detected'}")` : 'NO (still in discovery)'}
+- Discovery Issue: ${discoveryIssue || 'Not yet captured'}
+- Active Slot: ${activeSlot || 'None'}
+- Slots Progress: ${slotsCollectedCount}/${slotsTotalCount} collected
+  ${slotsDisplay}
+
+═══════════════════════════════════════════════════════════════════
+RESPONSE DECISION PATH
+═══════════════════════════════════════════════════════════════════
 - Response Source: ${responseSource}
-- Scenarios Loaded: ${scenarioCount}
-- Conversation Mode: ${mode}
+- Tier: ${tier}
+- Scenarios Available: ${scenarioCount} total, ${scenarioToolCount} passed to LLM as tools
 - Matched Scenario: ${matchedScenario ? `"${matchedScenario.name}" (Category: ${matchedScenario.category || 'Unknown'})` : 'None - Used LLM fallback'}
 ${topCandidates.length > 0 ? `- Top Candidates (didn't match):
 ${topCandidates.slice(0, 3).map(c => `  • "${c.name}" - ${c.score}% match (missing: ${c.missingTriggers?.join(', ') || 'unknown'})`).join('\n')}` : ''}
 ${customerEmotion ? `- Detected Customer Emotion: ${customerEmotion}` : ''}
-${normalization?.normalizedInput ? `- Normalized Input (fillers removed): "${normalization.normalizedInput}"
+
+═══════════════════════════════════════════════════════════════════
+INPUT NORMALIZATION (What matcher actually saw)
+═══════════════════════════════════════════════════════════════════
+${normalization?.normalizedInput ? `- Original: "${userMessage}"
+- Normalized: "${normalization.normalizedInput}"
 - Fillers Removed: ${normalization.fillersRemoved.length > 0 ? normalization.fillersRemoved.join(', ') : 'none'}
-- Synonyms Applied: ${normalization.synonymsApplied.length > 0 ? normalization.synonymsApplied.map(pair => `${pair.from}→${pair.to}`).join(', ') : 'none'}` : ''}
-${agentMatchTrace ? `- AI Agent Match Trace:
-  • Pool: ${agentMatchTrace.enabledScenarioCount}/${agentMatchTrace.scenarioPoolCount} enabled
-  • Selection Reason: ${agentMatchTrace.selectionReason || 'n/a'}
-  • Selected: ${agentMatchTrace.selectedScenario?.name ? `"${agentMatchTrace.selectedScenario.name}"` : 'none'}
-  • Top Candidates:
-${(agentMatchTrace.topCandidates || []).map(c => `    - ${c.confidencePct ?? 'n/a'}%: "${c.name}"`).join('\n')}` : ''}
+- Synonyms Applied: ${normalization.synonymsApplied.length > 0 ? normalization.synonymsApplied.map(pair => `${pair.from}→${pair.to}`).join(', ') : 'none'}` : '- Normalization data not available'}
+
+═══════════════════════════════════════════════════════════════════
+AI AGENT MATCH TRACE (GROUND TRUTH - NOT GPT OPINION)
+═══════════════════════════════════════════════════════════════════
+${agentMatchTrace ? `- Scenario Pool: ${agentMatchTrace.enabledScenarioCount}/${agentMatchTrace.scenarioPoolCount} enabled
+- Selection Reason: ${agentMatchTrace.selectionReason || 'n/a'}
+- Selected Scenario: ${agentMatchTrace.selectedScenario?.name ? `"${agentMatchTrace.selectedScenario.name}"` : 'NONE (LLM fallback)'}
+- Top Candidates:
+${(agentMatchTrace.topCandidates || []).map(c => `  • ${c.confidencePct ?? 'n/a'}%: "${c.name}"`).join('\n') || '  (none)'}` : '- Match trace not available'}
+
+═══════════════════════════════════════════════════════════════════
+COST & PERFORMANCE
+═══════════════════════════════════════════════════════════════════
+- Tokens Used: ${tokensUsed} ${tokensUsed > 0 ? '(LLM called - $$$)' : '(FREE - no LLM)'}
+- Total Latency: ${latencyMs}ms
+- AI Latency: ${aiLatencyMs}ms
+- Cost Tier: ${tier}
 `;
         
         // Build enhanced analysis prompt
@@ -625,6 +689,32 @@ RULES:
         if (agentMatchTrace) {
             analysis.agentMatchTrace = agentMatchTrace;
         }
+        
+        // 🆕 Add session state for enterprise diagnostics
+        analysis.sessionState = {
+            turnNumber,
+            mode,
+            phase,
+            consentGiven,
+            consentPhrase,
+            discoveryIssue,
+            activeSlot,
+            slotsCollected,
+            slotsCollectedCount,
+            slotsTotalCount,
+            slotIds
+        };
+        
+        // 🆕 Add cost/performance metrics
+        analysis.performance = {
+            tokensUsed,
+            latencyMs,
+            aiLatencyMs,
+            tier,
+            responseSource,
+            scenarioCount,
+            scenarioToolCount
+        };
 
         // ============================================================
         // CONSISTENCY CHECK (NO MASKING)
