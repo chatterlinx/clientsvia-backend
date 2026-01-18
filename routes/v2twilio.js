@@ -2912,12 +2912,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               
               // 📼 BLACK BOX V2: Log scenario match attempt (BEFORE processing)
               // This helps debug what the system is trying to match
+              // Note: speechResult is already cleaned at this point (STT preprocessing happened above)
               BlackBoxLogger.QuickLog.scenarioMatchAttempt(
                 callSid,
                 companyID,
                 turnCount,
-                speechResult || '[empty]',
-                cleanedText || speechResult || '[empty]',
+                rawSpeechResult || speechResult || '[empty]',  // Original from Twilio
+                speechResult || '[empty]',  // Cleaned (after STT preprocessing)
                 'checking...'  // Scenarios count will be in matched/no-match event
               ).catch(() => {});
             }
@@ -3357,7 +3358,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         // Log that no scenario matched FIRST (helps debug what was tried)
         BlackBoxLogger.QuickLog.scenarioNoMatch(
           callSid, companyID, turnCount,
-          cleanedText || speechResult || '[unknown input]',
+          speechResult || '[unknown input]',  // speechResult is already cleaned
           result.debug?.bestCandidate || null,
           result.debug?.bestConfidence || 0,
           result.debug?.matchThreshold || 0.7,
