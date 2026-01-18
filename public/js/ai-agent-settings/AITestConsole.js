@@ -1502,6 +1502,13 @@ class AITestConsole {
                 <span style="background: ${scoreColor}; color: #000; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; margin-left: auto;">
                     ${score}/100 ${scoreLabel}
                 </span>
+                <button type="button" data-close-supervisor 
+                    style="background: transparent; border: none; color: #94a3b8; font-size: 18px; cursor: pointer; padding: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.2s;"
+                    onmouseover="this.style.background='rgba(248, 113, 113, 0.2)'; this.style.color='#f87171';"
+                    onmouseout="this.style.background='transparent'; this.style.color='#94a3b8';"
+                    title="Close analysis">
+                    ✕
+                </button>
             </div>
             
             <!-- ISSUES -->
@@ -1662,9 +1669,21 @@ class AITestConsole {
                     <strong style="color: #a5b4fc;">Summary:</strong> ${analysis.overallFeedback}
                 </div>
             ` : ''}
+            
+            <!-- ACTIONS -->
+            <div style="display: flex; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(99, 102, 241, 0.3);">
+                <button type="button" data-copy-full-analysis
+                    style="flex: 1; padding: 8px 12px; background: #6366f1; color: white; border: none; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+                    onmouseover="this.style.background='#4f46e5';"
+                    onmouseout="this.style.background='#6366f1';">
+                    📋 Copy Full Report
+                </button>
+            </div>
         `;
         
         container.appendChild(bubble);
+        
+        // Attach copy button event listeners
         bubble.querySelectorAll('[data-copy-text]').forEach(button => {
             button.addEventListener('click', async () => {
                 const encodedText = button.getAttribute('data-copy-text') || '';
@@ -1680,7 +1699,141 @@ class AITestConsole {
                 }
             });
         });
+        
+        // Attach close button event listener
+        const closeBtn = bubble.querySelector('[data-close-supervisor]');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                bubble.style.transition = 'opacity 0.2s, transform 0.2s';
+                bubble.style.opacity = '0';
+                bubble.style.transform = 'scale(0.95)';
+                setTimeout(() => bubble.remove(), 200);
+            });
+        }
+        
+        // Attach "Copy Full Report" button event listener
+        const copyFullBtn = bubble.querySelector('[data-copy-full-analysis]');
+        if (copyFullBtn) {
+            copyFullBtn.addEventListener('click', async () => {
+                // Build a plain-text version of the entire analysis
+                const report = this._buildAnalysisReport(analysis, userMessage, aiResponse);
+                
+                try {
+                    await navigator.clipboard.writeText(report);
+                    alert('✅ Full analysis report copied to clipboard!');
+                } catch (error) {
+                    console.error('[AI Test] Copy failed:', error);
+                    alert('❌ Copy failed. Please try again.');
+                }
+            });
+        }
+        
         container.scrollTop = container.scrollHeight;
+    }
+    
+    /**
+     * Build plain-text analysis report for copying
+     */
+    _buildAnalysisReport(analysis, userMessage, aiResponse) {
+        const issues = analysis.issues || [];
+        const suggestions = analysis.suggestions || [];
+        const score = analysis.qualityScore || 0;
+        const rootCause = analysis.rootCause || {};
+        const missingTriggers = analysis.missingTriggers || [];
+        const normalization = analysis.normalization || {};
+        const copyPasteFix = analysis.copyPasteFix || {};
+        
+        let report = `AI SUPERVISOR - DETAILED ANALYSIS REPORT
+${'='.repeat(60)}
+
+QUALITY SCORE: ${score}/100
+
+CUSTOMER MESSAGE:
+${userMessage}
+
+AI RESPONSE:
+${aiResponse}
+
+`;
+
+        if (issues.length > 0) {
+            report += `ISSUES DETECTED (${issues.length}):\n`;
+            issues.forEach((issue, i) => {
+                report += `  ${i + 1}. ${issue}\n`;
+            });
+            report += '\n';
+        }
+        
+        if (rootCause.why) {
+            report += `ROOT CAUSE (TECHNICAL):\n`;
+            report += `  Why: ${rootCause.why}\n`;
+            if (rootCause.matchingIssue) report += `  Matching Issue: ${rootCause.matchingIssue}\n`;
+            if (rootCause.customerTone) report += `  Customer Tone: ${rootCause.customerTone}\n`;
+            if (rootCause.agentTone) report += `  Agent Tone: ${rootCause.agentTone}\n`;
+            if (rootCause.toneMismatch) report += `  Tone Mismatch: ${rootCause.toneMismatch}\n`;
+            report += '\n';
+        }
+        
+        if (normalization.normalizedInput) {
+            report += `INPUT NORMALIZATION:\n`;
+            report += `  Normalized Input: "${normalization.normalizedInput}"\n`;
+            if (normalization.fillersRemoved?.length > 0) {
+                report += `  Fillers Removed: ${normalization.fillersRemoved.join(', ')}\n`;
+            }
+            if (normalization.synonymsApplied?.length > 0) {
+                report += `  Synonyms Applied: ${normalization.synonymsApplied.map(p => `${p.from}→${p.to}`).join(', ')}\n`;
+            }
+            report += '\n';
+        }
+        
+        if (missingTriggers.length > 0) {
+            report += `MISSING TRIGGERS (${missingTriggers.length}):\n`;
+            missingTriggers.forEach((trigger, i) => {
+                report += `  ${i + 1}. "${trigger.phrase}" → ${trigger.category} [Priority: ${trigger.priority}]\n`;
+            });
+            report += '\n';
+        }
+        
+        if (copyPasteFix.hasIssue) {
+            report += `COPY-PASTE FIX:\n`;
+            if (copyPasteFix.scenarioToEdit) {
+                report += `  Scenario to Edit: ${copyPasteFix.scenarioToEdit}\n`;
+            }
+            if (copyPasteFix.categoryName) {
+                report += `  Category: ${copyPasteFix.categoryName}\n`;
+            }
+            if (copyPasteFix.triggersToAdd?.length > 0) {
+                report += `  Triggers to Add:\n`;
+                copyPasteFix.triggersToAdd.forEach(t => {
+                    report += `    - "${t}"\n`;
+                });
+            }
+            if (copyPasteFix.responseTemplate) {
+                report += `  Response Template:\n`;
+                report += `    "${copyPasteFix.responseTemplate}"\n`;
+            }
+            if (copyPasteFix.expectedImprovement) {
+                report += `  Expected Improvement: ${copyPasteFix.expectedImprovement}\n`;
+            }
+            report += '\n';
+        }
+        
+        if (suggestions.length > 0) {
+            report += `SUGGESTIONS (${suggestions.length}):\n`;
+            suggestions.forEach((sug, i) => {
+                report += `  ${i + 1}. ${sug}\n`;
+            });
+            report += '\n';
+        }
+        
+        if (analysis.overallFeedback) {
+            report += `SUMMARY:\n${analysis.overallFeedback}\n\n`;
+        }
+        
+        report += `${'='.repeat(60)}\n`;
+        report += `Generated: ${new Date().toISOString()}\n`;
+        
+        return report;
     }
     
     /**
