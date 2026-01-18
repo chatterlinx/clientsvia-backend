@@ -529,9 +529,9 @@ SESSION STATE (GROUND TRUTH)
   ${slotsDisplay}
 
 ═══════════════════════════════════════════════════════════════════
-RESPONSE DECISION PATH
+RESPONSE DECISION PATH ⭐ KEY DATA FOR SCORING
 ═══════════════════════════════════════════════════════════════════
-- Response Source: ${responseSource}
+- Response Source: ${responseSource} ${responseSource === 'GREETING_INTERCEPT' ? '✅ UI-configured greeting matched (PERFECT, 0 tokens)' : responseSource?.includes('SCENARIO') || responseSource?.includes('CHEATSHEET') ? '✅ Rule-based match (FREE)' : '⚠️ LLM generated'}
 - Tier: ${tier}
 - Scenarios Available: ${scenarioCount} total, ${scenarioToolCount} passed to LLM as tools
 - Matched Scenario: ${matchedScenario ? `"${matchedScenario.name}" (Category: ${matchedScenario.category || 'Unknown'})` : 'None - Used LLM fallback'}
@@ -580,10 +580,25 @@ Agent: "${aiResponse}"
 ${technicalDetails}
 
 GROUND TRUTH RULES (CRITICAL):
-- The "AI Agent Match Trace" above is the platform's actual matcher output. Treat it as ground truth.
+
+RESPONSE SOURCE TYPES (from most preferred to least):
+1. GREETING_INTERCEPT = UI-configured greeting matched → EXCELLENT (95+) - FREE, instant, configured by admin
+2. CHEATSHEET_MATCH = Scenario/cheatsheet matched → EXCELLENT (90+) - FREE rule-based match
+3. SCENARIO_MATCH = Scenario matched with high confidence → GOOD (80+) - FREE
+4. SEMANTIC_MATCH = Tier 2 semantic matching → GOOD (75+) - FREE
+5. LLM_FALLBACK = No match, LLM generated response → ACCEPTABLE if appropriate (60-80) - COSTS $$
+
+CRITICAL SCORING RULES:
+- If Response Source is "GREETING_INTERCEPT" → Score 90-100. This is PERFECT behavior. The admin configured this greeting, it matched, and it used 0 tokens.
+- If Response Source is "CHEATSHEET_MATCH" or "SCENARIO_MATCH" → Score 85-100. Scenarios matched correctly.
+- If tokensUsed = 0 → The response was FREE. Do NOT penalize for "no scenario match" if the response is correct.
+- Only suggest "missing triggers" if the response was WRONG or used expensive LLM unnecessarily.
+
+The "AI Agent Match Trace" above is the platform's actual matcher output. Treat it as ground truth.
 - If the trace shows a selected scenario, you MUST NOT claim "no scenario matched".
+- If Response Source shows GREETING_INTERCEPT, the greeting system handled it perfectly - do NOT suggest creating scenarios for greetings.
 - If the agent still used the LLM despite a selected scenario, explain the real reason (e.g., discovery mode uses scenarios as tools, thresholds, minConfidence, or configuration).
-- If the trace shows no selected scenario, then and only then diagnose missing triggers/regex as the primary cause.
+- If the trace shows no selected scenario AND Response Source is LLM, then and only then diagnose missing triggers/regex as the primary cause.
 
 YOUR TASK - DETAILED ANALYSIS:
 
