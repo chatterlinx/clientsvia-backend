@@ -1118,24 +1118,34 @@ const globalInstantResponseTemplateSchema = new Schema({
     // 🔇 FILLER WORDS (NOISE FILTER)
     // ============================================
     // Global filter applied to ALL scenarios in this template
-    // Removes conversational fluff before matching
-    // Examples: "hi", "hey", "please", "you guys", "today"
-    // Inherited by companies when they clone this template
+    // Removes conversational fluff ONLY - NOT meaningful words!
+    // 
+    // ⚠️ CRITICAL (Jan 18, 2026): DO NOT add time-related words like:
+    //    - "today", "tomorrow", "now", "asap" (scheduling info!)
+    //    - "urgent", "emergency", "right away" (priority signals!)
+    //    
+    // ⚠️ ALSO DO NOT add words that carry semantic meaning like:
+    //    - Question words: "what", "when", "where", "who", "how", "why"
+    //    - Verbs: "is", "are", "was", "have", "has", "do", "does"
+    //    - Articles mid-sentence change meaning
+    //    
+    // SAFE TO REMOVE: Greeting prefixes, pure interjections
     fillerWords: {
         type: [String],
         default: [
-            'um', 'uh', 'like', 'you', 'know', 'i', 'mean', 'basically',
-            'actually', 'so', 'well', 'okay', 'alright', 'right', 'the',
-            'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were',
-            'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does',
-            'did', 'will', 'would', 'should', 'could', 'can', 'may',
-            'might', 'must', 'what', 'when', 'where', 'who', 'how', 'why',
-            'please', 'thanks', 'thank', 'yes', 'no', 'yeah', 'yep', 'nope',
-            'hi', 'hey', 'hello', 'you guys', 'today', 'there'
+            // Pure interjections (add no meaning)
+            'um', 'uh', 'erm', 'er', 'hmm', 'mm',
+            // Verbal fillers
+            'like', 'you know', 'i mean', 'basically', 'actually',
+            // Greeting prefixes (ONLY when at start)
+            'hi', 'hey', 'hello', 'yo',
+            // Politeness markers (remove for matching, keep meaning)
+            'please', 'thanks', 'thank you'
         ],
         trim: true
         // Each word is lowercased and trimmed
         // Applied during normalization in HybridScenarioSelector
+        // Keep the list SHORT - aggressive removal destroys meaning!
     },
     
     // ============================================

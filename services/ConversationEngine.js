@@ -9079,6 +9079,33 @@ async function processTurn({
         // ═══════════════════════════════════════════════════════════════════
         // STEP 11: Build response
         // ═══════════════════════════════════════════════════════════════════
+        
+        // ════════════════════════════════════════════════════════════════════════
+        // 🎯 RESPONSE SOURCE TRACKING (Jan 18, 2026)
+        // Used by BlackBox to show WHERE the response came from
+        // This is CRITICAL for debugging - "source: unknown" tells us nothing!
+        // ════════════════════════════════════════════════════════════════════════
+        let matchSource = 'LLM_FALLBACK';  // Default
+        let tier = 'tier3';  // Default (LLM)
+        
+        if (aiResult.fromStateMachine) {
+            matchSource = 'STATE_MACHINE';
+            tier = 'tier1';
+        } else if (aiResult.fromQuickAnswers) {
+            matchSource = 'QUICK_ANSWER';
+            tier = 'tier1';
+        } else if (aiResult.scenarioMatched || aiResult.debug?.scenarioMatched) {
+            matchSource = 'SCENARIO_MATCH';
+            tier = aiResult.tier || 'tier2';
+        } else if (aiResult.triageCardMatched) {
+            matchSource = 'TRIAGE_MATCH';
+            tier = 'tier1';
+        } else if (aiResult.tokensUsed === 0) {
+            // No tokens used = rule-based (state machine or scenario)
+            matchSource = 'RULE_BASED';
+            tier = 'tier1';
+        }
+        
         const response = {
             success: true,
             reply: aiResponse,
@@ -9087,7 +9114,11 @@ async function processTurn({
             slotsCollected: { ...session.collectedSlots, ...(aiResult.filledSlots || {}) },
             wantsBooking: aiResult.wantsBooking || false,
             conversationMode: aiResult.conversationMode || 'free',
-            latencyMs
+            latencyMs,
+            // 🆕 Response source tracking for BlackBox
+            matchSource,
+            tier,
+            tokensUsed: aiResult.tokensUsed || 0
         };
 
         // V93: Allow deterministic mid-call rules (and other protocols) to request transfer in a visible way

@@ -503,16 +503,25 @@ conversationSessionSchema.index({ customerId: 1, startedAt: -1 });
 // INSTANCE METHODS
 
 conversationSessionSchema.methods.addTurn = function(role, content, metadata = {}) {
+    // ═══════════════════════════════════════════════════════════════════════
+    // BUG FIX (Jan 18, 2026): Handle empty/null content gracefully
+    // When user is silent (GATHER_TIMEOUT), content is empty string.
+    // Mongoose validation fails with "Path `content` is required".
+    // Solution: Use placeholder for empty content, mark as silence event.
+    // ═══════════════════════════════════════════════════════════════════════
+    const isSilence = !content || content.trim() === '';
+    const safeContent = isSilence ? '[silence]' : content;
+    
     const turn = {
         role,
-        content,
+        content: safeContent,
         timestamp: new Date(),
         latencyMs: metadata.latencyMs,
         tokensUsed: metadata.tokensUsed,
-        responseSource: metadata.responseSource,
+        responseSource: isSilence ? 'SILENCE' : metadata.responseSource,
         confidence: metadata.confidence,
         slotsExtracted: metadata.slotsExtracted || {},
-        speechToText: metadata.speechToText
+        speechToText: isSilence ? { isSilence: true } : metadata.speechToText
     };
     
     this.turns.push(turn);
