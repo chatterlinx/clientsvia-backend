@@ -2003,24 +2003,7 @@ class FrontDeskBehaviorManager {
                                 <span style="color:#6e7681; font-weight:normal; font-size:12px;">(uncheck to ignore that type during booking)</span>
                             </label>
                             <div style="display:flex; flex-wrap:wrap; gap:10px; background:#161b22; padding:12px; border-radius:6px;">
-                                ${['FAQ', 'HOURS', 'SERVICE_AREA', 'PRICING', 'SMALL_TALK', 'EMERGENCY'].map(cat => {
-                                    const categories = bookingInterruption.allowedCategories || ['FAQ', 'HOURS', 'SERVICE_AREA', 'PRICING', 'SMALL_TALK', 'EMERGENCY'];
-                                    const checked = categories.includes(cat);
-                                    const labels = {
-                                        'FAQ': '❓ FAQ',
-                                        'HOURS': '🕐 Hours',
-                                        'SERVICE_AREA': '📍 Service Area',
-                                        'PRICING': '💰 Pricing',
-                                        'SMALL_TALK': '💬 Small Talk',
-                                        'EMERGENCY': '🚨 Emergency'
-                                    };
-                                    return \`
-                                        <label style="display:flex; align-items:center; gap:6px; padding:6px 10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; cursor:pointer;">
-                                            <input type="checkbox" class="fdb-interrupt-category" data-category="\${cat}" \${checked ? 'checked' : ''} style="accent-color:#58a6ff;">
-                                            <span style="color:#c9d1d9; font-size:13px;">\${labels[cat] || cat}</span>
-                                        </label>
-                                    \`;
-                                }).join('')}
+                                ${this.renderInterruptCategoryCheckboxes(bookingInterruption.allowedCategories)}
                             </div>
                             <p style="margin:6px 0 0 0; color:#6e7681; font-size:11px;">
                                 Example: If caller asks "do you service Miami?" mid-booking, AI answers (SERVICE_AREA) then returns to slot.
@@ -2697,6 +2680,28 @@ Sean → Shawn, Shaun"
                   .replace(/>/g, '&gt;')
                   .replace(/"/g, '&quot;')
                   .replace(/'/g, '&#039;');
+    }
+    
+    // Helper to render interrupt category checkboxes (avoids nested template literal issues)
+    renderInterruptCategoryCheckboxes(allowedCategories) {
+        const categories = allowedCategories || ['FAQ', 'HOURS', 'SERVICE_AREA', 'PRICING', 'SMALL_TALK', 'EMERGENCY'];
+        const labels = {
+            'FAQ': '❓ FAQ',
+            'HOURS': '🕐 Hours',
+            'SERVICE_AREA': '📍 Service Area',
+            'PRICING': '💰 Pricing',
+            'SMALL_TALK': '💬 Small Talk',
+            'EMERGENCY': '🚨 Emergency'
+        };
+        
+        return ['FAQ', 'HOURS', 'SERVICE_AREA', 'PRICING', 'SMALL_TALK', 'EMERGENCY'].map(cat => {
+            const checked = categories.includes(cat) ? 'checked' : '';
+            const label = labels[cat] || cat;
+            return '<label style="display:flex; align-items:center; gap:6px; padding:6px 10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; cursor:pointer;">' +
+                '<input type="checkbox" class="fdb-interrupt-category" data-category="' + cat + '" ' + checked + ' style="accent-color:#58a6ff;">' +
+                '<span style="color:#c9d1d9; font-size:13px;">' + label + '</span>' +
+                '</label>';
+        }).join('');
     }
     
     addGreetingRow() {
