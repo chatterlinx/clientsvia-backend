@@ -1125,10 +1125,9 @@
     
     <div class="nav-divider"></div>
     
-    <button class="nav-tab" data-tab="version-history">
-      <i class="fas fa-history"></i>
-      <span>Version History</span>
-    </button>
+    <!-- REMOVED: Version History tab (Jan 2026)
+         Individual feature tabs now save directly to live.
+         Rollback capability can be added via backend API if needed. -->
     <button class="nav-tab" data-tab="wiring" style="color: #22d3ee;">
       <i class="fas fa-plug"></i>
       <span>🔌 Wiring</span>
@@ -2188,24 +2187,9 @@
         </div>
       </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════════════
-         VERSION HISTORY - Front Desk Configuration versioning
-         ═══════════════════════════════════════════════════════════════════════ -->
-    <div class="tab-panel" data-panel="version-history">
-        <div class="card">
-        <h2>📚 Version History</h2>
-        <p class="muted">Versioning for Front Desk Configuration. Isolate LIVE vs DRAFT safely during calls.</p>
-        <div id="version-history-container">
-          <!-- CheatSheetManager will render Version History here -->
-          <div id="cheatsheet-v2-version-content" data-section="version-history" style="background: #fff; border-radius: 12px; min-height: 200px;">
-            <div class="loading-container">
-              <i class="fas fa-history fa-spin"></i>
-              <p>Loading Version History...</p>
-            </div>
-          </div>
-          </div>
-        </div>
-      </div>
+    <!-- REMOVED: Version History panel (Jan 2026)
+         Individual feature tabs now save directly to live.
+         CheatSheet versioning still works in backend for rollback API if needed. -->
 
     <!-- ═══════════════════════════════════════════════════════════════════════
          WIRING TAB - Enterprise Single Source of Truth
@@ -2734,9 +2718,7 @@
           case 'links':
             await initLinks();
             break;
-          case 'version-history':
-            await initVersionHistory();
-            break;
+          // REMOVED: version-history case (Jan 2026) - tab deleted
           case 'wiring':
             await initWiring();
             break;
@@ -2970,28 +2952,9 @@
       }
     }
     
-    // ═══════════════════════════════════════════════════════════════════════════
-    // VERSION HISTORY INITIALIZATION
-    // ═══════════════════════════════════════════════════════════════════════════
-    async function initVersionHistory() {
-      console.log('📚 [INIT] Initializing Version History...');
-      
-      await loadScript('/js/ai-agent-settings/CheatSheetVersioningAdapter.js');
-      await loadScript('/js/ai-agent-settings/CheatSheetManager.js');
-      
-      if (window.cheatSheetManager) {
-        if (window.cheatSheetManager.companyId !== currentCompanyId) {
-          await window.cheatSheetManager.load(currentCompanyId);
-        }
-        
-        // Version history needs its own container
-        const versionContainer = document.getElementById('cheatsheet-v2-version-content');
-        if (versionContainer) {
-          window.cheatSheetManager.renderVersionHistoryToContainer(versionContainer);
-        }
-        console.log('✅ [INIT] Version History initialized');
-      }
-    }
+    // REMOVED: initVersionHistory function (Jan 2026)
+    // Individual feature tabs now save directly to live.
+    // CheatSheet versioning still works in backend for rollback API if needed.
     
     // ═══════════════════════════════════════════════════════════════════════════
     // DATA & CONFIG INITIALIZATION
