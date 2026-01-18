@@ -1478,6 +1478,8 @@ class AITestConsole {
         const normalizedInput = normalization.normalizedInput || '';
         const fillersRemoved = Array.isArray(normalization.fillersRemoved) ? normalization.fillersRemoved : [];
         const synonymsApplied = Array.isArray(normalization.synonymsApplied) ? normalization.synonymsApplied : [];
+        const regexMatchCount = Number.isFinite(normalization.regexMatchCount) ? normalization.regexMatchCount : 0;
+        const regexMatches = Array.isArray(normalization.regexMatches) ? normalization.regexMatches : [];
         const copyPasteFix = analysis.copyPasteFix || {};
         const triggersToAddText = (copyPasteFix.triggersToAdd || []).join('\n');
         const encodedTriggersToAdd = encodeURIComponent(triggersToAddText);
@@ -1576,6 +1578,11 @@ class AITestConsole {
                                     Synonyms applied: ${synonymsApplied.map(pair => `${pair.from}→${pair.to}`).join(', ')}
                                 </div>
                             ` : ''}
+                            ${regexMatchCount > 0 ? `
+                                <div style="margin-top: 4px; opacity: 0.85;">
+                                    Regex matches: ${regexMatchCount}${regexMatches.length > 0 ? ` (e.g., ${regexMatches.map(m => `${m.pattern} → ${m.scenarioName}`).join('; ')})` : ''}
+                                </div>
+                            ` : ''}
                         </div>
                     ` : ''}
                     ${missingTriggers.map(trigger => `
@@ -1589,6 +1596,11 @@ class AITestConsole {
                             <div style="color: #fde68a; font-size: 10px; opacity: 0.8;">
                                 Category: ${trigger.category || 'Unknown'}
                             </div>
+                            ${trigger.alreadyExists ? `
+                                <div style="margin-top: 4px; color: #a7f3d0; font-size: 10px; font-weight: 600;">
+                                    ✅ Already exists in: ${(trigger.existingScenarios || []).join(', ') || 'current template'}
+                                </div>
+                            ` : ''}
                         </div>
                     `).join('')}
                 </div>

@@ -333,6 +333,9 @@ router.post('/supervisor-analysis', authenticateJWT, async (req, res) => {
         
         // Normalize user input with company fillers/synonyms so supervisor suggestions match runtime behavior
         let normalization = null;
+        let selector = null;
+        let triggerIndex = [];
+        let regexMatches = [];
         if (companyId) {
             try {
                 const companyDoc = await Company.findById(companyId)
@@ -360,7 +363,7 @@ router.post('/supervisor-analysis', authenticateJWT, async (req, res) => {
                     const urgencyKeywords = template?.urgencyKeywords || [];
                     const synonymMap = template?.synonymMap || template?.nlpConfig?.synonyms || {};
                     
-                    const selector = new HybridScenarioSelector(fillerWords, urgencyKeywords, synonymMap);
+                    selector = new HybridScenarioSelector(fillerWords, urgencyKeywords, synonymMap);
                     const normalizedInput = selector.normalizePhrase(userMessage);
                     const pipeline = selector.lastPipelineDiagnostic || {};
                     
@@ -372,6 +375,48 @@ router.post('/supervisor-analysis', authenticateJWT, async (req, res) => {
                         synonymCount: pipeline.stages?.synonyms?.mapSize || 0,
                         templateId: templateId.toString()
                     };
+
+                    // Build trigger index + detect regex matches against normalized input
+                    if (normalizedInput && template?.categories?.length) {
+                        for (const category of template.categories) {
+                            const scenarios = Array.isArray(category.scenarios) ? category.scenarios : [];
+                            for (const scenario of scenarios) {
+                                const scenarioName = scenario?.name || scenario?.title || 'Unknown Scenario';
+                                const triggers = Array.isArray(scenario?.triggers) ? scenario.triggers : [];
+                                for (const trigger of triggers) {
+                                    const normalizedTrigger = selector.normalizePhrase(trigger);
+                                    if (normalizedTrigger) {
+                                        triggerIndex.push({
+                                            phrase: trigger,
+                                            normalized: normalizedTrigger,
+                                            scenarioName
+                                        });
+                                    }
+                                }
+                                
+                                const regexTriggers = Array.isArray(scenario?.regexTriggers) ? scenario.regexTriggers : [];
+                                for (const pattern of regexTriggers) {
+                                    if (!pattern || typeof pattern !== 'string') continue;
+                                    try {
+                                        const regex = new RegExp(pattern, 'i');
+                                        if (regex.test(normalizedInput)) {
+                                            regexMatches.push({
+                                                pattern,
+                                                scenarioName
+                                            });
+                                        }
+                                    } catch (regexError) {
+                                        // Invalid regex patterns are ignored for diagnostics
+                                    }
+                                }
+                            }
+                        }
+
+                        if (regexMatches.length > 0) {
+                            normalization.regexMatchCount = regexMatches.length;
+                            normalization.regexMatches = regexMatches.slice(0, 5);
+                        }
+                    }
                 }
             } catch (normalizeError) {
                 logger.warn('[AI SUPERVISOR] Normalization lookup failed', {
@@ -523,6 +568,28 @@ RULES:
         if (!analysis.copyPasteFix) analysis.copyPasteFix = { hasIssue: false };
         if (normalization?.normalizedInput) {
             analysis.normalization = normalization;
+        }
+        
+        // Post-process missing triggers: flag ones that already exist in templates
+        if (analysis.missingTriggers && analysis.missingTriggers.length > 0 && selector && triggerIndex.length > 0) {
+            analysis.missingTriggers = analysis.missingTriggers.map((trigger) => {
+                const phrase = trigger?.phrase || '';
+                const normalizedPhrase = selector.normalizePhrase(phrase);
+                if (!normalizedPhrase) return trigger;
+                
+                const matches = triggerIndex.filter(t =>
+                    t.normalized === normalizedPhrase ||
+                    t.normalized.includes(normalizedPhrase) ||
+                    normalizedPhrase.includes(t.normalized)
+                );
+                
+                if (matches.length > 0) {
+                    trigger.alreadyExists = true;
+                    trigger.existingScenarios = [...new Set(matches.map(m => m.scenarioName))].slice(0, 3);
+                }
+                
+                return trigger;
+            });
         }
         
         logger.info('[AI SUPERVISOR] Analysis complete', {
