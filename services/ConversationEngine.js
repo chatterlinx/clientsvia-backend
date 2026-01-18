@@ -8913,10 +8913,10 @@ async function processTurn({
         // Also add to response debug for UI visibility
         if (aiResult) {
             aiResult.v22BlackBox = v22BlackBoxLog;
+            
+            // Merge extracted slots
+            aiResult.filledSlots = { ...(aiResult.filledSlots || {}), ...extractedThisTurn };
         }
-        
-        // Merge extracted slots
-        aiResult.filledSlots = { ...(aiResult.filledSlots || {}), ...extractedThisTurn };
         
         // ═══════════════════════════════════════════════════════════════════════
         // CRITICAL: Update session.collectedSlots IMMEDIATELY after extraction

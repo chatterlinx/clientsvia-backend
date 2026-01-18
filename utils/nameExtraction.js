@@ -78,7 +78,7 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
   // and does NOT contain explicit name-intent phrases, do not extract.
   // This prevents garbage like lastName="Not" from "it's not cooling".
   const tradeWords = /\b(unit|ac|a\/c|air\s*con|air\s*condition(?:er|ing)?|cooling|not\s+cool(?:ing)?|heat|heating|furnace|thermostat|compressor|condenser|leak|leaking|drip|dripping|broken|not\s+working|stopped\s+working)\b/i;
-  if (expectingName && !hasNameIntent && tradeWords.test(raw)) {
+  if (expectingName && !hasExplicitNameIntent && tradeWords.test(raw)) {
     return null;
   }
 
