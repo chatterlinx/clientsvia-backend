@@ -3194,7 +3194,10 @@ async function processTurn({
                 'morning', 'afternoon', 'evening', 'yes', 'no', 'yeah', 'yep',
                 'thanks', 'thank you', 'okay', 'ok', 'sure', 'please',
                 'having just', 'doing great', 'doing good', 'doing fine',
-                'having some', 'having issues', 'having problems'
+                'having some', 'having issues', 'having problems',
+                // V81: Question words that get misheard as names
+                'what', 'who', 'where', 'when', 'why', 'how',
+                'that', 'this', 'which', 'whose'
             ];
             
             // Words that should NEVER be in a name
@@ -6491,8 +6494,13 @@ async function processTurn({
                     currentSlots.phone = callerId;
                     phoneMeta.confirmed = true;
                     session.booking.activeSlot = 'address';
-                    finalReply = "Perfect. ";
-                    log('📞 PHONE: User accepted caller ID', { 
+                    // V81 FIX: After phone confirmed, immediately ask for address (don't just say "Perfect.")
+                    // This prevents SAFETY_FALLBACK_TRIGGERED due to too-short response
+                    const addressSlotCfg = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'address');
+                    const addressQuestion = addressSlotCfg?.question || "What's the address for the service?";
+                    finalReply = `Perfect. ${addressQuestion}`;
+                    nextSlotId = 'address';
+                    log('📞 PHONE: User accepted caller ID, moving to address', { 
                         phone: callerId,
                         matchedBy: userSaysYes ? 'userSaysYes' : 'userConfirmsPhone'
                     });
