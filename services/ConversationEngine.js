@@ -2042,8 +2042,10 @@ const SlotExtractors = {
         // V83 FIX: Clean up ALL common prefixes (including fillers like "yeah", "uh")
         // This was only applying to full addresses, but should apply to ALL extractions
         fullAddress = fullAddress.replace(/^(yeah|yes|yep|uh|um|ok|okay|so|well)[,.\s]+/i, '');
-        fullAddress = fullAddress.replace(/^(my\s+)?(address\s+is|it'?s|that'?s)\s*/i, '');
-        fullAddress = fullAddress.replace(/^(the\s+)?address\s*:?\s*/i, '');
+        // V84 FIX: Handle "here in the address is", "the address is", etc.
+        fullAddress = fullAddress.replace(/^(here|over here|we'?re at|i'?m at|located at)\s*(in)?\s*/i, '');
+        fullAddress = fullAddress.replace(/^(my\s+)?(the\s+)?(address\s+is|it'?s|that'?s)\s*/i, '');
+        fullAddress = fullAddress.replace(/^(the\s+)?address\s*:?\s*(is)?\s*/i, '');
         fullAddress = fullAddress.replace(/^(it\s+is|that\s+is|it's|that's)\s*/i, '');
         // Remove trailing punctuation
         fullAddress = fullAddress.replace(/[.!?,]+$/, '').trim();
