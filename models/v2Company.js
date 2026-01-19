@@ -2251,7 +2251,8 @@ const companySchema = new mongoose.Schema({
             },
 
             promptGuards: {
-                missingPromptFallbackKey: { type: String, trim: true, default: 'booking.universal.guardrails.missing_prompt_fallback' }
+                // V83 FIX: Use colons instead of dots - Mongoose Maps don't allow dots in keys
+                missingPromptFallbackKey: { type: String, trim: true, default: 'booking:universal:guardrails:missing_prompt_fallback' }
             },
 
             promptPacks: {

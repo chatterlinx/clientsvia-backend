@@ -351,8 +351,9 @@ const DEFAULT_BOOKING_PROMPTS_MAP = {};
 // ═══════════════════════════════════════════════════════════════════════════
 // DEFAULT PROMPT GUARDS (runtime safety)
 // ═══════════════════════════════════════════════════════════════════════════
+// V83 FIX: Use colons instead of dots - Mongoose Maps don't allow dots in keys
 const DEFAULT_PROMPT_GUARDS = {
-    missingPromptFallbackKey: 'booking.universal.guardrails.missing_prompt_fallback'
+    missingPromptFallbackKey: 'booking:universal:guardrails:missing_prompt_fallback'
 };
 
 // ═══════════════════════════════════════════════════════════════════════════

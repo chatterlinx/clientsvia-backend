@@ -5,9 +5,10 @@ const PROMPT_PACKS = {
         version: 'v1',
         label: 'Universal Defaults v1',
         description: 'Safe defaults used only when explicitly selected by a company.',
+        // V83 FIX: Use colons instead of dots - Mongoose Maps don't allow dots in keys
         prompts: {
-            'booking.universal.guardrails.missing_prompt_fallback': 'Would you like to schedule a service visit?',
-            'booking.universal.interruption.system_header': `You are the BOOKING INTERRUPTION brain for a service business call.
+            'booking:universal:guardrails:missing_prompt_fallback': 'Would you like to schedule a service visit?',
+            'booking:universal:interruption:system_header': `You are the BOOKING INTERRUPTION brain for a service business call.
 
 Your ONLY job is to handle quick interruptions or clarifications WHILE a booking form is in progress, then immediately return the caller to the active booking question.
 
@@ -55,11 +56,11 @@ FORMAT:
 - Plain conversational text, no bullets, no emojis.
 - Maximum 2 short paragraphs.
 
-If the caller’s message is completely unrelated AND there is a returnToQuestion, briefly acknowledge and then restate returnToQuestion.`,
-            'booking.universal.interruption.ack_with_name': 'Got it, {name}.',
-            'booking.universal.interruption.ack_short': 'Thanks for confirming.',
-            'booking.universal.interruption.generic_ack': 'No problem.',
-            'booking.universal.interruption.prohibit_phrases': [
+If the caller's message is completely unrelated AND there is a returnToQuestion, briefly acknowledge and then restate returnToQuestion.`,
+            'booking:universal:interruption:ack_with_name': 'Got it, {name}.',
+            'booking:universal:interruption:ack_short': 'Thanks for confirming.',
+            'booking:universal:interruption:generic_ack': 'No problem.',
+            'booking:universal:interruption:prohibit_phrases': [
                 'I understand it can be confusing',
                 'I know this is frustrating',
                 'I apologize for any confusion'
@@ -73,10 +74,10 @@ If the caller’s message is completely unrelated AND there is a returnToQuestio
         label: 'HVAC Service Flow v1',
         description: 'Service consent + triage prompts for HVAC.',
         prompts: {
-            'booking.hvac.service.non_urgent_consent': 'Got it — service on your AC. Would you like me to schedule a technician?',
-            'booking.hvac.service.urgent_triage_question': 'Got it — is it completely not cooling at all, or just not keeping up?',
-            'booking.hvac.service.post_triage_consent': 'Thanks, that helps. Would you like me to schedule a technician to come out and take a look?',
-            'booking.hvac.service.consent_clarify': 'Just to confirm, would you like to book a service visit?'
+            'booking:hvac:service:non_urgent_consent': 'Got it — service on your AC. Would you like me to schedule a technician?',
+            'booking:hvac:service:urgent_triage_question': 'Got it — is it completely not cooling at all, or just not keeping up?',
+            'booking:hvac:service:post_triage_consent': 'Thanks, that helps. Would you like me to schedule a technician to come out and take a look?',
+            'booking:hvac:service:consent_clarify': 'Just to confirm, would you like to book a service visit?'
         }
     },
     hvac_v2: {
@@ -86,10 +87,10 @@ If the caller’s message is completely unrelated AND there is a returnToQuestio
         label: 'HVAC Service Flow v2',
         description: 'Refined HVAC prompts with clearer consent wording.',
         prompts: {
-            'booking.hvac.service.non_urgent_consent': 'Got it — service on your AC. Should I schedule a technician to come out?',
-            'booking.hvac.service.urgent_triage_question': 'Got it — is it not cooling at all, or just not keeping up?',
-            'booking.hvac.service.post_triage_consent': 'Thanks, that helps. Would you like me to book a technician to take a look?',
-            'booking.hvac.service.consent_clarify': 'Just to confirm, should we schedule a service visit?'
+            'booking:hvac:service:non_urgent_consent': 'Got it — service on your AC. Should I schedule a technician to come out?',
+            'booking:hvac:service:urgent_triage_question': 'Got it — is it not cooling at all, or just not keeping up?',
+            'booking:hvac:service:post_triage_consent': 'Thanks, that helps. Would you like me to book a technician to take a look?',
+            'booking:hvac:service:consent_clarify': 'Just to confirm, should we schedule a service visit?'
         }
     },
     plumbing_v1: {
@@ -99,10 +100,10 @@ If the caller’s message is completely unrelated AND there is a returnToQuestio
         label: 'Plumbing Service Flow v1',
         description: 'Service consent + triage prompts for plumbing.',
         prompts: {
-            'booking.plumbing.service.non_urgent_consent': 'Got it — plumbing service for an existing issue. Would you like me to schedule a technician?',
-            'booking.plumbing.service.urgent_triage_question': 'Got it — is there active leaking or flooding right now, or can it wait for a regular appointment?',
-            'booking.plumbing.service.post_triage_consent': 'Thanks, that helps. Would you like me to schedule a technician to come out and take a look?',
-            'booking.plumbing.service.consent_clarify': 'Just to confirm, would you like to book a service visit?'
+            'booking:plumbing:service:non_urgent_consent': 'Got it — plumbing service for an existing issue. Would you like me to schedule a technician?',
+            'booking:plumbing:service:urgent_triage_question': 'Got it — is there active leaking or flooding right now, or can it wait for a regular appointment?',
+            'booking:plumbing:service:post_triage_consent': 'Thanks, that helps. Would you like me to schedule a technician to come out and take a look?',
+            'booking:plumbing:service:consent_clarify': 'Just to confirm, would you like to book a service visit?'
         }
     },
     electrical_v1: {
@@ -112,10 +113,10 @@ If the caller’s message is completely unrelated AND there is a returnToQuestio
         label: 'Electrical Service Flow v1',
         description: 'Service consent + triage prompts for electrical.',
         prompts: {
-            'booking.electrical.service.non_urgent_consent': 'Got it — electrical service for an existing issue. Would you like me to schedule a technician?',
-            'booking.electrical.service.urgent_triage_question': 'Got it — is there sparking, burning smell, or a power loss right now, or can it wait for a regular appointment?',
-            'booking.electrical.service.post_triage_consent': 'Thanks, that helps. Would you like me to schedule a technician to come out and take a look?',
-            'booking.electrical.service.consent_clarify': 'Just to confirm, would you like to book a service visit?'
+            'booking:electrical:service:non_urgent_consent': 'Got it — electrical service for an existing issue. Would you like me to schedule a technician?',
+            'booking:electrical:service:urgent_triage_question': 'Got it — is there sparking, burning smell, or a power loss right now, or can it wait for a regular appointment?',
+            'booking:electrical:service:post_triage_consent': 'Thanks, that helps. Would you like me to schedule a technician to come out and take a look?',
+            'booking:electrical:service:consent_clarify': 'Just to confirm, would you like to book a service visit?'
         }
     },
     appliance_v1: {
@@ -125,10 +126,10 @@ If the caller’s message is completely unrelated AND there is a returnToQuestio
         label: 'Appliance Service Flow v1',
         description: 'Service consent + triage prompts for appliance repair.',
         prompts: {
-            'booking.appliance.service.non_urgent_consent': 'Got it — appliance service for an existing issue. Would you like me to schedule a technician?',
-            'booking.appliance.service.urgent_triage_question': 'Got it — is the appliance completely down or leaking, or is it still running but not working correctly?',
-            'booking.appliance.service.post_triage_consent': 'Thanks, that helps. Would you like me to schedule a technician to come out and take a look?',
-            'booking.appliance.service.consent_clarify': 'Just to confirm, would you like to book a service visit?'
+            'booking:appliance:service:non_urgent_consent': 'Got it — appliance service for an existing issue. Would you like me to schedule a technician?',
+            'booking:appliance:service:urgent_triage_question': 'Got it — is the appliance completely down or leaking, or is it still running but not working correctly?',
+            'booking:appliance:service:post_triage_consent': 'Thanks, that helps. Would you like me to schedule a technician to come out and take a look?',
+            'booking:appliance:service:consent_clarify': 'Just to confirm, would you like to book a service visit?'
         }
     }
 };

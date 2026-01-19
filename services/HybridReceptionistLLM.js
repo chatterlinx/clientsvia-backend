@@ -622,12 +622,13 @@ class HybridReceptionistLLM {
                         : ['So, {slotQuestion}', '{slotQuestion}', 'Alright — {slotQuestion}']
                 };
 
+                // V83 FIX: Use colons instead of dots - Mongoose Maps don't allow dots in keys
                 const promptKeys = {
-                    systemHeader: 'booking.universal.interruption.system_header',
-                    ackWithName: 'booking.universal.interruption.ack_with_name',
-                    ackShort: 'booking.universal.interruption.ack_short',
-                    genericAck: 'booking.universal.interruption.generic_ack',
-                    prohibitPhrases: 'booking.universal.interruption.prohibit_phrases'
+                    systemHeader: 'booking:universal:interruption:system_header',
+                    ackWithName: 'booking:universal:interruption:ack_with_name',
+                    ackShort: 'booking:universal:interruption:ack_short',
+                    genericAck: 'booking:universal:interruption:generic_ack',
+                    prohibitPhrases: 'booking:universal:interruption:prohibit_phrases'
                 };
                 const promptTexts = {
                     systemHeader: resolveBookingPrompt(company, promptKeys.systemHeader, { tradeKey: 'universal' }) || '',
@@ -872,11 +873,12 @@ class HybridReceptionistLLM {
                     maxSentences: Number.isFinite(interruptionCfgRaw.maxSentences) ? interruptionCfgRaw.maxSentences : 2
                 };
 
+                // V83 FIX: Use colons instead of dots - Mongoose Maps don't allow dots in keys
                 const promptKeys = {
-                    ackWithName: 'booking.universal.interruption.ack_with_name',
-                    ackShort: 'booking.universal.interruption.ack_short',
-                    genericAck: 'booking.universal.interruption.generic_ack',
-                    prohibitPhrases: 'booking.universal.interruption.prohibit_phrases'
+                    ackWithName: 'booking:universal:interruption:ack_with_name',
+                    ackShort: 'booking:universal:interruption:ack_short',
+                    genericAck: 'booking:universal:interruption:generic_ack',
+                    prohibitPhrases: 'booking:universal:interruption:prohibit_phrases'
                 };
                 const promptTexts = {
                     ackWithName: resolveBookingPrompt(company, promptKeys.ackWithName, { tradeKey: 'universal' }) || '',

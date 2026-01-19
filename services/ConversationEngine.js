@@ -570,7 +570,8 @@ function resolveTenantPromptOrFallback({ company, promptKey, contextLabel, sessi
     if (prompt) return prompt;
 
     const frontDesk = company.aiAgentSettings?.frontDeskBehavior || {};
-    const fallbackKey = frontDesk.promptGuards?.missingPromptFallbackKey || 'booking.universal.guardrails.missing_prompt_fallback';
+    // V83 FIX: Use colons instead of dots - Mongoose Maps don't allow dots in keys
+    const fallbackKey = frontDesk.promptGuards?.missingPromptFallbackKey || 'booking:universal:guardrails:missing_prompt_fallback';
 
     if (session) {
         session.memory = session.memory || {};

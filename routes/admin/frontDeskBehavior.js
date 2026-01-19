@@ -64,7 +64,8 @@ const UI_DEFAULTS = {
         promptKeysByTrade: {}
     },
     promptGuards: {
-        missingPromptFallbackKey: 'booking.universal.guardrails.missing_prompt_fallback'
+        // V83 FIX: Use colons instead of dots - Mongoose Maps don't allow dots in keys
+        missingPromptFallbackKey: 'booking:universal:guardrails:missing_prompt_fallback'
     },
     promptPacks: {
         enabled: true,

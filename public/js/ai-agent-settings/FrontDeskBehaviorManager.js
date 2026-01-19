@@ -381,7 +381,8 @@ class FrontDeskBehaviorManager {
                 promptKeysByTrade: {}
             },
             promptGuards: {
-                missingPromptFallbackKey: 'booking.universal.guardrails.missing_prompt_fallback'
+                // V83 FIX: Use colons instead of dots - Mongoose Maps don't allow dots in keys
+                missingPromptFallbackKey: 'booking:universal:guardrails:missing_prompt_fallback'
             },
             promptPacks: {
                 enabled: true,
@@ -1557,9 +1558,11 @@ class FrontDeskBehaviorManager {
         const promptPacks = this.config.promptPacks || {};
         const promptPackRegistry = this.promptPackRegistry || { packs: {}, byTrade: {} };
         const selectedPacksByTrade = promptPacks.selectedByTrade || {};
-        const missingPromptFallbackKey = promptGuards.missingPromptFallbackKey || 'booking.universal.guardrails.missing_prompt_fallback';
+        // V83 FIX: Use colons instead of dots - Mongoose Maps don't allow dots in keys
+        const missingPromptFallbackKey = promptGuards.missingPromptFallbackKey || 'booking:universal:guardrails:missing_prompt_fallback';
         const resolvePackPrompt = (promptKey) => {
-            const match = /^booking\.([a-z0-9_]+)\./i.exec(String(promptKey || '').trim());
+            // V83 FIX: Support BOTH dots (legacy prompt packs) and colons (new keys)
+            const match = /^booking[.:]([a-z0-9_]+)[.:]/i.exec(String(promptKey || '').trim());
             const tradeKey = match ? match[1].toLowerCase() : 'universal';
             const packId = selectedPacksByTrade[tradeKey] || selectedPacksByTrade.universal || null;
             if (!packId) return '';
@@ -1570,12 +1573,13 @@ class FrontDeskBehaviorManager {
             serviceFlowPromptsMap[missingPromptFallbackKey] || resolvePackPrompt(missingPromptFallbackKey) || ''
         );
         const bookingInterruption = this.config.bookingInterruption || this.getDefaultConfig().bookingInterruption;
+        // V83 FIX: Use colons instead of dots - Mongoose Maps don't allow dots in keys
         const interruptionKeys = {
-            systemHeader: 'booking.universal.interruption.system_header',
-            ackWithName: 'booking.universal.interruption.ack_with_name',
-            ackShort: 'booking.universal.interruption.ack_short',
-            genericAck: 'booking.universal.interruption.generic_ack',
-            prohibitPhrases: 'booking.universal.interruption.prohibit_phrases'
+            systemHeader: 'booking:universal:interruption:system_header',
+            ackWithName: 'booking:universal:interruption:ack_with_name',
+            ackShort: 'booking:universal:interruption:ack_short',
+            genericAck: 'booking:universal:interruption:generic_ack',
+            prohibitPhrases: 'booking:universal:interruption:prohibit_phrases'
         };
         const interruptionTexts = {
             systemHeader: this.escapeHtml(serviceFlowPromptsMap[interruptionKeys.systemHeader] || resolvePackPrompt(interruptionKeys.systemHeader) || ''),
@@ -1594,10 +1598,11 @@ class FrontDeskBehaviorManager {
             if (!tradeKey) return '';
             const safeId = tradeKey.replace(/[^a-z0-9]+/gi, '_');
             const existingKeys = serviceFlowPromptKeysByTrade[tradeKey] || {};
-            const keyNonUrgent = existingKeys.nonUrgentConsent || `booking.${tradeKey}.service.non_urgent_consent`;
-            const keyUrgent = existingKeys.urgentTriageQuestion || `booking.${tradeKey}.service.urgent_triage_question`;
-            const keyPostTriage = existingKeys.postTriageConsent || `booking.${tradeKey}.service.post_triage_consent`;
-            const keyClarify = existingKeys.consentClarify || `booking.${tradeKey}.service.consent_clarify`;
+            // V83 FIX: Use colons instead of dots - Mongoose Maps don't allow dots in keys
+            const keyNonUrgent = existingKeys.nonUrgentConsent || `booking:${tradeKey}:service:non_urgent_consent`;
+            const keyUrgent = existingKeys.urgentTriageQuestion || `booking:${tradeKey}:service:urgent_triage_question`;
+            const keyPostTriage = existingKeys.postTriageConsent || `booking:${tradeKey}:service:post_triage_consent`;
+            const keyClarify = existingKeys.consentClarify || `booking:${tradeKey}:service:consent_clarify`;
             const nonUrgentText = this.escapeHtml(serviceFlowPromptsMap[keyNonUrgent] || resolvePackPrompt(keyNonUrgent) || '');
             const urgentText = this.escapeHtml(serviceFlowPromptsMap[keyUrgent] || resolvePackPrompt(keyUrgent) || '');
             const postTriageText = this.escapeHtml(serviceFlowPromptsMap[keyPostTriage] || resolvePackPrompt(keyPostTriage) || '');
@@ -9107,7 +9112,8 @@ Sean → Shawn, Shaun`;
 
         // Prompt guardrails (missing prompt fallback)
         if (document.getElementById('fdb-missingPromptFallback')) {
-            const missingPromptFallbackKey = get('fdb-missingPromptFallbackKey') || 'booking.universal.guardrails.missing_prompt_fallback';
+            // V83 FIX: Use colons instead of dots - Mongoose Maps don't allow dots in keys
+            const missingPromptFallbackKey = get('fdb-missingPromptFallbackKey') || 'booking:universal:guardrails:missing_prompt_fallback';
             const bookingPromptsMap = { ...(this.config.bookingPromptsMap || {}) };
             const fallbackTextRaw = get('fdb-missingPromptFallback');
             if (fallbackTextRaw || fallbackTextRaw === '') {
@@ -9123,12 +9129,13 @@ Sean → Shawn, Shaun`;
         // Booking interruption behavior + prompts
         if (document.getElementById('fdb-interrupt-enabled')) {
             const bookingPromptsMap = { ...(this.config.bookingPromptsMap || {}) };
+            // V83 FIX: Use colons instead of dots - Mongoose Maps don't allow dots in keys
             const interruptKeys = {
-                systemHeader: 'booking.universal.interruption.system_header',
-                ackWithName: 'booking.universal.interruption.ack_with_name',
-                ackShort: 'booking.universal.interruption.ack_short',
-                genericAck: 'booking.universal.interruption.generic_ack',
-                prohibitPhrases: 'booking.universal.interruption.prohibit_phrases'
+                systemHeader: 'booking:universal:interruption:system_header',
+                ackWithName: 'booking:universal:interruption:ack_with_name',
+                ackShort: 'booking:universal:interruption:ack_short',
+                genericAck: 'booking:universal:interruption:generic_ack',
+                prohibitPhrases: 'booking:universal:interruption:prohibit_phrases'
             };
 
             bookingPromptsMap[interruptKeys.systemHeader] = get('fdb-interrupt-systemHeader') || '';
