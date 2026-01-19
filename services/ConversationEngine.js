@@ -4611,6 +4611,10 @@ async function processTurn({
                 
                 const bookingConfigSafe = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
                 const bookingSlotsSafe = bookingConfigSafe.slots || [];
+                
+                // V81 FIX: Declare finalReply and nextSlotId EARLY so confirmation request handling can use them
+                let finalReply = '';
+                let nextSlotId = null;
 
                 // ═══════════════════════════════════════════════════════════════════
                 // V78: CONFIRMATION REQUESTS (caller asks: "did you get my ___ right?")
@@ -4993,8 +4997,7 @@ async function processTurn({
                 });
                 
                 aiLatencyMs = Date.now() - aiStartTime;
-                let finalReply = '';
-                let nextSlotId = null;
+                // V81 FIX: finalReply and nextSlotId already declared earlier (for confirmation request handling)
                 
                 // ═══════════════════════════════════════════════════════════════════
                 // NAME SLOT STATE MACHINE (from brainstorming doc)
@@ -8998,10 +9001,10 @@ async function processTurn({
         }
         
         log('CHECKPOINT 9: ✅ Response generated', { 
-            source: aiResult.fromStateMachine ? 'STATE_MACHINE' : 'LLM',
+            source: aiResult?.fromStateMachine ? 'STATE_MACHINE' : 'LLM',
             latencyMs: aiLatencyMs, 
-            tokensUsed: aiResult.tokensUsed,
-            mode: aiResult.conversationMode
+            tokensUsed: aiResult?.tokensUsed || 0,
+            mode: aiResult?.conversationMode || 'unknown'
         });
         
         // ═══════════════════════════════════════════════════════════════════
@@ -9266,12 +9269,13 @@ async function processTurn({
         // 🎯 RESPONSE SOURCE TRACKING (Jan 18, 2026)
         // Used by BlackBox to show WHERE the response came from
         // This is CRITICAL for debugging - "source: unknown" tells us nothing!
+        // V81 FIX: Add null safety for aiResult
         // ════════════════════════════════════════════════════════════════════════
-        let matchSource = aiResult.matchSource || 'LLM_FALLBACK';  // Use aiResult if already set
-        let tier = aiResult.tier || 'tier3';  // Default (LLM)
+        let matchSource = aiResult?.matchSource || 'LLM_FALLBACK';  // Use aiResult if already set
+        let tier = aiResult?.tier || 'tier3';  // Default (LLM)
         
         // Override based on aiResult flags if matchSource wasn't explicitly set
-        if (!aiResult.matchSource) {
+        if (aiResult && !aiResult.matchSource) {
             if (aiResult.fromStateMachine) {
                 matchSource = 'STATE_MACHINE';
                 tier = 'tier1';
@@ -9296,14 +9300,14 @@ async function processTurn({
             reply: aiResponse,
             sessionId: session._id.toString(),
             phase: newPhase,
-            slotsCollected: { ...session.collectedSlots, ...(aiResult.filledSlots || {}) },
-            wantsBooking: aiResult.wantsBooking || false,
-            conversationMode: aiResult.conversationMode || 'free',
+            slotsCollected: { ...session.collectedSlots, ...(aiResult?.filledSlots || {}) },
+            wantsBooking: aiResult?.wantsBooking || false,
+            conversationMode: aiResult?.conversationMode || 'free',
             latencyMs,
             // 🆕 Response source tracking for BlackBox
             matchSource,
             tier,
-            tokensUsed: aiResult.tokensUsed || 0
+            tokensUsed: aiResult?.tokensUsed || 0
         };
 
         // V93: Allow deterministic mid-call rules (and other protocols) to request transfer in a visible way
@@ -9315,10 +9319,11 @@ async function processTurn({
         // Add debug info if requested
         if (includeDebug) {
             // Determine response source for display
+            // V81 FIX: Add null safety for aiResult
             let responseSource = 'LLM';
-            if (aiResult.fromStateMachine) {
+            if (aiResult?.fromStateMachine) {
                 responseSource = 'STATE_MACHINE (0 tokens)';
-            } else if (aiResult.fromQuickAnswers) {
+            } else if (aiResult?.fromQuickAnswers) {
                 responseSource = 'QUICK_ANSWER';
             }
             
@@ -9551,13 +9556,14 @@ async function processTurn({
                     }))
                 },
                 // 🤖 STATE MACHINE DEBUG - What the state machine decided
-                stateMachine: aiResult.fromStateMachine ? {
-                    action: aiResult.debug?.action,
-                    state: aiResult.debug?.stateMachineState,
-                    response: aiResult.debug?.response
+                // V81 FIX: Add null safety for aiResult
+                stateMachine: aiResult?.fromStateMachine ? {
+                    action: aiResult?.debug?.action,
+                    state: aiResult?.debug?.stateMachineState,
+                    response: aiResult?.debug?.response
                 } : null,
                 // 🧠 LLM BRAIN DEBUG - What the LLM decided (if used)
-                llmBrain: !aiResult.fromStateMachine ? (aiResult.debug || null) : null,
+                llmBrain: !aiResult?.fromStateMachine ? (aiResult?.debug || null) : null,
                 debugLog,
                 // ════════════════════════════════════════════════════════════════
                 // V22 BLACK BOX - AUTHORITATIVE MODE TRACKING (UI reads this)
