@@ -386,27 +386,21 @@ const compression = require('compression');
 app.use(compression());
 
 // ============================================================================
-// 🚫 LEGACY UI NUKED (Jan 2026)
+// COMPANY PROFILE UI (Operator entry point)
 // ============================================================================
-// We intentionally prevent access to the legacy company-profile UI to eliminate
-// "two sources of truth" and stop admins from editing the wrong config tree.
-//
-// Truth UI: /control-plane-v2.html?companyId=...
-// Legacy UI: /company-profile.html (DISABLED)
-//
-// NOTE: This MUST be registered BEFORE express.static(public) or the static
-// file will be served and the redirect will never execute.
+// Control Plane back button should return to company-profile.html.
+// Keep a lightweight server guard for missing/invalid companyId.
 // ============================================================================
 app.get('/company-profile.html', (req, res) => {
     const rawId = req.query.companyId || req.query.id || req.query.company || '';
     const companyId = String(rawId || '').trim();
     const isMongoId = /^[a-f0-9]{24}$/i.test(companyId);
-    
-    const target = isMongoId
-        ? `/control-plane-v2.html?companyId=${encodeURIComponent(companyId)}`
-        : `/control-plane-v2.html`;
-    
-    return res.redirect(302, target);
+
+    if (!isMongoId) {
+        return res.redirect(302, '/directory.html');
+    }
+
+    return res.sendFile(path.join(__dirname, 'public', 'company-profile.html'));
 });
 
 // ============================================================================
