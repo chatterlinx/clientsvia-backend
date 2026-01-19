@@ -2038,13 +2038,18 @@ const SlotExtractors = {
         // Pattern: number + street name + street type + optional city/state/zip
         let fullAddress = text.trim();
         
-        // Clean up common prefixes
+        // V83 FIX: Clean up ALL common prefixes (including fillers like "yeah", "uh")
+        // This was only applying to full addresses, but should apply to ALL extractions
+        fullAddress = fullAddress.replace(/^(yeah|yes|yep|uh|um|ok|okay|so|well)[,.\s]+/i, '');
         fullAddress = fullAddress.replace(/^(my\s+)?(address\s+is|it'?s|that'?s)\s*/i, '');
         fullAddress = fullAddress.replace(/^(the\s+)?address\s*:?\s*/i, '');
+        fullAddress = fullAddress.replace(/^(it\s+is|that\s+is|it's|that's)\s*/i, '');
+        // Remove trailing punctuation
+        fullAddress = fullAddress.replace(/[.!?,]+$/, '').trim();
         
         // If we have a complete address (has zip OR state), return the whole thing
         if (hasZip || hasState) {
-            logger.debug('[ADDRESS EXTRACTOR] V34: Complete address detected', { 
+            logger.debug('[ADDRESS EXTRACTOR] V83: Complete address detected', { 
                 address: fullAddress, 
                 hasZip, 
                 hasState 
@@ -2052,9 +2057,10 @@ const SlotExtractors = {
             return fullAddress;
         }
         
+        // V83 FIX: Use cleaned fullAddress for pattern matching, not raw text
         // Otherwise, extract just the street portion
         const addressPattern = /\b(\d{1,5}\s+[\w\s]+(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|court|ct|boulevard|blvd|way|place|pl|circle|cir|parkway|pkwy|highway|hwy|terrace|ter|trail|trl|loop|alley|aly|path|crossing|xing|square|sq|plaza|plz|commons|point|pt|ridge|run|pass|grove|park|estates|meadow|meadows|valley|hills|heights|view|vista|landing|springs|creek|glen|cove|bay|beach|shore|pointe)[\w\s,]*)/i;
-        const match = text.match(addressPattern);
+        const match = fullAddress.match(addressPattern);
         
         if (match && match[1] && match[1].length > 10) {
             return match[1].trim();
@@ -3243,8 +3249,24 @@ async function processTurn({
             }
         }
         
-        // Copy other slots as-is (address, time, etc.)
-        if (rawSlots.address) currentSlots.address = rawSlots.address;
+        // V83 FIX: Clean address before copying - remove prefixes like "yeah, my address is"
+        if (rawSlots.address) {
+            let cleanedAddress = String(rawSlots.address).trim();
+            // Remove common speech prefixes that shouldn't be part of the address
+            cleanedAddress = cleanedAddress.replace(/^(yeah|yes|yep|uh|um|ok|okay|so|well)[,.\s]+/i, '');
+            cleanedAddress = cleanedAddress.replace(/^(my\s+)?(address\s+is|it'?s|that'?s)\s*/i, '');
+            cleanedAddress = cleanedAddress.replace(/^(the\s+)?address\s*:?\s*/i, '');
+            cleanedAddress = cleanedAddress.replace(/^(it\s+is|that\s+is|it's|that's)\s*/i, '');
+            cleanedAddress = cleanedAddress.replace(/[.!?,]+$/, '').trim();
+            
+            // Only store if it still looks like an address (has numbers and street words)
+            if (/\d/.test(cleanedAddress) && cleanedAddress.length > 5) {
+                currentSlots.address = cleanedAddress;
+                log('📍 ADDRESS CLEANED', { raw: rawSlots.address, cleaned: cleanedAddress });
+            } else {
+                currentSlots.address = rawSlots.address; // Keep original if cleaning failed
+            }
+        }
         if (rawSlots.time) currentSlots.time = rawSlots.time;
         if (rawSlots.partialName) {
             const pn = String(rawSlots.partialName || '').trim();
@@ -6508,11 +6530,26 @@ async function processTurn({
                 // Offer caller ID if configured and available
                 else if (!currentSlots.phone && !phoneMeta.offeredCallerId && phoneSlotConfig?.offerCallerId && callerId && session.booking.activeSlot === 'phone') {
                     phoneMeta.offeredCallerId = true;
+                    
+                    // V83 FIX: Format phone number in friendly format (239-565-2202) instead of raw (+12395652202)
+                    const formatFriendlyPhone = (phone) => {
+                        if (!phone) return phone;
+                        const digits = String(phone).replace(/\D/g, '');
+                        // Remove leading 1 for US numbers
+                        const cleaned = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+                        if (cleaned.length === 10) {
+                            return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+                        }
+                        return phone; // Return original if can't format
+                    };
+                    const friendlyCallerId = formatFriendlyPhone(callerId);
+                    
+                    // V83 FIX: Improved caller ID prompt that mentions booking confirmation and updates
                     const callerIdPrompt = phoneSlotConfig?.callerIdPrompt || 
-                        "I see you're calling from {callerId} - is that a good number for text confirmations, or would you prefer a different one?";
-                    finalReply = callerIdPrompt.replace('{callerId}', callerId);
+                        "I see you're calling from {callerId}. Is that a good number to contact you for updates and text you a booking confirmation, or is there a better number?";
+                    finalReply = callerIdPrompt.replace('{callerId}', friendlyCallerId);
                     nextSlotId = 'phone';
-                    log('📞 PHONE: Offering caller ID', { callerId });
+                    log('📞 PHONE: Offering caller ID', { callerId, friendlyCallerId });
                 }
                 // Handle response to caller ID offer
                 // V80 FIX: Accept both generic "yes" AND phone-specific confirmations like "that is a good number"
