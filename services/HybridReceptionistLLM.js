@@ -893,7 +893,8 @@ class HybridReceptionistLLM {
                 const nameMeta = enterpriseContext.nameMeta || {};
                 const nameValue = (collectedSlots.name || collectedSlots.partialName || nameMeta.first || '').trim();
 
-                const ackRaw = (parsed.ack || parsed.say || content || '').trim();
+                // V38 FIX: Handle LLM returning {"response": "..."} instead of {"ack": "..."}
+                const ackRaw = (parsed.ack || parsed.say || parsed.response || parsed.reply || '').trim();
                 let ack = ackRaw || (nameValue && promptTexts.ackWithName ? promptTexts.ackWithName.replace('{name}', nameValue) : '') ||
                     promptTexts.ackShort || promptTexts.genericAck || '';
 

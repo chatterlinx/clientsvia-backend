@@ -1135,10 +1135,16 @@ const globalInstantResponseTemplateSchema = new Schema({
         default: [
             // Pure interjections (add no meaning)
             'um', 'uh', 'erm', 'er', 'hmm', 'mm',
-            // Verbal fillers
-            'like', 'you know', 'i mean',
             // Greeting prefixes (ONLY when at start)
             'hi', 'hey', 'hello', 'yo'
+            // ════════════════════════════════════════════════════════════════════
+            // V38 FIX: REMOVED 'like', 'you know', 'i mean'
+            // ════════════════════════════════════════════════════════════════════
+            // These words BREAK questions when removed:
+            // - "Do you know my name?" → "do my name?" (BROKEN!)
+            // - "I'd like to schedule" → "i'd to schedule" (BROKEN!)
+            // - "I mean it's really hot" → "it's really hot" (loses emphasis)
+            // ════════════════════════════════════════════════════════════════════
             // V37 FIX: REMOVED 'please', 'thanks', 'thank you', 'basically', 'actually'
             // These words carry MEANING and should NOT be removed:
             // - "yes please" → confirmation with politeness

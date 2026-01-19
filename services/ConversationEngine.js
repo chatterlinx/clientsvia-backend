@@ -3818,14 +3818,31 @@ async function processTurn({
             // Answer directly from filledSlots instead of going to LLM
             // ═══════════════════════════════════════════════════════════════════════
             const lowerUserText = (userText || '').toLowerCase();
+            // ═══════════════════════════════════════════════════════════════════════
+            // V38 FIX: Enhanced patterns for read-back detection
+            // Handle: "Do you know my address?" → "do my address?" (filler stripped)
+            // Handle: "What's my name?" / "my address" / "what address"
+            // ═══════════════════════════════════════════════════════════════════════
             const asksAboutAddress = /\b(what|which)\b.*\b(address|location|where)\b.*\b(have|got|on file|saved|recorded|booked)\b/i.test(userText) ||
-                                     /\b(address|location)\b.*\b(we|you|i)\b.*\b(have)\b/i.test(userText);
+                                     /\b(address|location)\b.*\b(we|you|i)\b.*\b(have)\b/i.test(userText) ||
+                                     /\bdo\s+my\s+address\b/i.test(userText) ||  // V38: "do my address?" (filler-stripped)
+                                     /\bwhat('?s?|is)?\s+(my|the)\s+address\b/i.test(userText) ||  // "what's my address"
+                                     /\b(my|the)\s+address\s*\??$/i.test(userText.trim());  // "my address?"
             const asksAboutName = /\b(what|which)\b.*\b(name)\b.*\b(have|got|on file|saved|recorded)\b/i.test(userText) ||
-                                  /\b(name)\b.*\b(we|you|i)\b.*\b(have)\b/i.test(userText);
+                                  /\b(name)\b.*\b(we|you|i)\b.*\b(have)\b/i.test(userText) ||
+                                  /\bdo\s+my\s+name\b/i.test(userText) ||  // V38: "do my name?" (filler-stripped)
+                                  /\bwhat('?s?|is)?\s+(my|the)\s+name\b/i.test(userText) ||  // "what's my name"
+                                  /\b(my|the)\s+name\s*\??$/i.test(userText.trim());  // "my name?"
             const asksAboutPhone = /\b(what|which)\b.*\b(phone|number|cell)\b.*\b(have|got|on file|saved|recorded)\b/i.test(userText) ||
-                                   /\b(phone|number)\b.*\b(we|you|i)\b.*\b(have)\b/i.test(userText);
+                                   /\b(phone|number)\b.*\b(we|you|i)\b.*\b(have)\b/i.test(userText) ||
+                                   /\bdo\s+my\s+(phone|number)\b/i.test(userText) ||  // V38: "do my phone?" (filler-stripped)
+                                   /\bwhat('?s?|is)?\s+(my|the)\s+(phone|number)\b/i.test(userText) ||  // "what's my phone"
+                                   /\b(my|the)\s+(phone|number)\s*\??$/i.test(userText.trim());  // "my phone?"
             const asksAboutTime = /\b(what|which)\b.*\b(time|when|appointment)\b.*\b(have|got|on file|saved|scheduled|booked)\b/i.test(userText) ||
-                                  /\b(time|when)\b.*\b(booked|scheduled)\b/i.test(userText);
+                                  /\b(time|when)\b.*\b(booked|scheduled)\b/i.test(userText) ||
+                                  /\bdo\s+my\s+(time|appointment)\b/i.test(userText) ||  // V38: "do my time?" (filler-stripped)
+                                  /\bwhat('?s?|is)?\s+(my|the)\s+(time|appointment)\b/i.test(userText) ||  // "what's my time"
+                                  /\b(my|the)\s+(time|appointment)\s*\??$/i.test(userText.trim());  // "my time?"
             const asksAboutBooking = /\b(what|can you|could you)\b.*\b(booking|appointment|info|information|details)\b.*\b(have|read|tell|confirm)\b/i.test(userText) ||
                                      /\b(confirm|read back|repeat)\b.*\b(booking|appointment|info)\b/i.test(userText);
             
@@ -7415,7 +7432,7 @@ async function processTurn({
                         slotConfig: timeSlotConfig,
                         slotMeta: timeMeta,
                         currentSlots,
-                        extractedValue: extractedThisTurn.time,
+                        extractedValue: extractedThisTurn?.time, // V38 FIX: null-safety
                         userSaysYes,
                         userSaysNoGeneric,
                         reaskPrefix: 'No problem. ',
@@ -7483,7 +7500,7 @@ async function processTurn({
                         log('⏰ TIME: Accepted', { time: currentSlots.time, dayPart, windowPart });
                     }
                 }
-                else if (extractedThisTurn.time && !timeMeta.confirmed) {
+                else if (extractedThisTurn?.time && !timeMeta.confirmed) {
                     const timeConfirmBack = timeSlotConfig?.confirmBack === true || timeSlotConfig?.confirmBack === 'true';
                     // V59 NUKE: UI-configured confirm prompt ONLY
                     const timeConfirmPrompt = timeSlotConfig?.confirmPrompt || getMissingConfigPrompt('confirmPrompt', 'time');
