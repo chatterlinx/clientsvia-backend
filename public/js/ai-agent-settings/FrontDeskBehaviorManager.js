@@ -742,6 +742,33 @@ class FrontDeskBehaviorManager {
                 hasBookingOutcome: !!this.config.bookingOutcome
             });
             
+            // V83 FIX: Sanitize bookingPromptsMap - convert any dotted keys to colon keys
+            // This handles legacy data that might have been loaded with dots
+            if (this.config.bookingPromptsMap) {
+                const sanitizedMap = {};
+                let keysConverted = 0;
+                for (const [key, value] of Object.entries(this.config.bookingPromptsMap)) {
+                    if (key.includes('.')) {
+                        const newKey = key.replace(/\./g, ':');
+                        sanitizedMap[newKey] = value;
+                        keysConverted++;
+                    } else {
+                        sanitizedMap[key] = value;
+                    }
+                }
+                this.config.bookingPromptsMap = sanitizedMap;
+                if (keysConverted > 0) {
+                    console.log(`[FRONT DESK BEHAVIOR] 🔧 V83: Converted ${keysConverted} dotted keys to colon keys in bookingPromptsMap`);
+                }
+            }
+            
+            // V83 FIX: Also sanitize promptGuards.missingPromptFallbackKey
+            if (this.config.promptGuards?.missingPromptFallbackKey?.includes('.')) {
+                const oldKey = this.config.promptGuards.missingPromptFallbackKey;
+                this.config.promptGuards.missingPromptFallbackKey = oldKey.replace(/\./g, ':');
+                console.log(`[FRONT DESK BEHAVIOR] 🔧 V83: Converted missingPromptFallbackKey: "${oldKey}" → "${this.config.promptGuards.missingPromptFallbackKey}"`);
+            }
+            
             const payloadSize = JSON.stringify(this.config).length;
             console.log(`[FRONT DESK BEHAVIOR] 💾 SAVE CHECKPOINT 2: Payload prepared in ${(performance.now() - prepareStart).toFixed(1)}ms (${(payloadSize / 1024).toFixed(1)}KB)`);
             
@@ -9205,7 +9232,8 @@ Sean → Shawn, Shaun`;
             const promptKeysByTrade = {};
             const bookingPromptsMap = { ...(this.config.bookingPromptsMap || {}) };
 
-            const buildKey = (trade, suffix) => `booking.${trade}.service.${suffix}`;
+            // V83 FIX: Use colons instead of dots - Mongoose Maps don't allow dots in keys
+            const buildKey = (trade, suffix) => `booking:${trade}:service:${suffix}`;
             const toSafeId = (trade) => trade.replace(/[^a-z0-9]+/gi, '_');
 
             for (const trade of trades) {
