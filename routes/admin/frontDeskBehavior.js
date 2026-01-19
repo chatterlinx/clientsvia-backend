@@ -23,6 +23,7 @@ const { authenticateJWT } = require('../../middleware/auth');
 const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
 const { DEFAULT_FRONT_DESK_CONFIG } = require('../../config/frontDeskPrompt');
 const { getPromptPackRegistry } = require('../../config/promptPacks');
+const { getLegacyPromptKeyMap } = require('../../config/promptPacks/migrationMap.v1');
 const ConfigAuditService = require('../../services/ConfigAuditService');
 const { computeEffectiveConfigVersion } = require('../../utils/effectiveConfigVersion');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
@@ -235,6 +236,161 @@ const UI_DEFAULTS = {
 };
 
 // ============================================================================
+// PROMPT KEY SANITIZATION (Map-safe; dots → colons, legacy → new)
+// ============================================================================
+const PROMPT_KEY_DOT_REGEX = /\./g;
+const BLOCKED_PROMPT_MAP_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+function normalizePromptKey(rawKey, legacyKeyMap) {
+    if (rawKey === null || rawKey === undefined) return rawKey;
+    const key = String(rawKey).trim();
+    if (!key) return key;
+    if (legacyKeyMap[key]) return legacyKeyMap[key];
+    if (key.includes('.')) return key.replace(PROMPT_KEY_DOT_REGEX, ':');
+    return key;
+}
+
+function readMapEntries(value) {
+    if (!value) return [];
+    if (typeof value.entries === 'function') {
+        return Array.from(value.entries());
+    }
+    return Object.entries(value);
+}
+
+function sanitizeBookingPromptsMap(input, { legacyKeyMap, companyId }) {
+    if (!input || typeof input !== 'object') {
+        return { value: input, conversions: [], conflicts: [] };
+    }
+
+    const entries = readMapEntries(input);
+    const canonicalEntries = [];
+    const legacyEntries = [];
+
+    for (const [key, value] of entries) {
+        const normalizedKey = normalizePromptKey(key, legacyKeyMap);
+        const needsConversion = normalizedKey !== String(key || '').trim();
+        if (needsConversion) {
+            legacyEntries.push([key, value, normalizedKey]);
+        } else {
+            canonicalEntries.push([key, value, normalizedKey]);
+        }
+    }
+
+    const sanitized = {};
+    const conversions = [];
+    const conflicts = [];
+
+    const applyEntry = (key, value, normalizedKey, isLegacy) => {
+        if (!normalizedKey) return;
+        if (BLOCKED_PROMPT_MAP_KEYS.has(normalizedKey)) {
+            logger.warn('[FRONT DESK BEHAVIOR] ⚠️ Skipped unsafe bookingPromptsMap key', {
+                companyId,
+                key: normalizedKey
+            });
+            return;
+        }
+        if (Object.prototype.hasOwnProperty.call(sanitized, normalizedKey)) {
+            if (sanitized[normalizedKey] !== value) {
+                conflicts.push({ normalizedKey, existingKey: normalizedKey, incomingKey: key });
+            }
+            return;
+        }
+        sanitized[normalizedKey] = value;
+        if (normalizedKey !== key) {
+            conversions.push({ from: key, to: normalizedKey, legacy: isLegacy });
+        }
+    };
+
+    canonicalEntries.forEach(([key, value, normalizedKey]) => applyEntry(key, value, normalizedKey, false));
+    legacyEntries.forEach(([key, value, normalizedKey]) => applyEntry(key, value, normalizedKey, true));
+
+    if (conversions.length > 0) {
+        logger.warn('[FRONT DESK BEHAVIOR] ⚠️ Normalized bookingPromptsMap keys', {
+            companyId,
+            conversionsCount: conversions.length,
+            sample: conversions.slice(0, 5)
+        });
+    }
+
+    if (conflicts.length > 0) {
+        logger.warn('[FRONT DESK BEHAVIOR] ⚠️ bookingPromptsMap key conflicts detected', {
+            companyId,
+            conflictsCount: conflicts.length,
+            sample: conflicts.slice(0, 5)
+        });
+    }
+
+    return { value: sanitized, conversions, conflicts };
+}
+
+function sanitizePromptGuards(input, { legacyKeyMap, companyId }) {
+    if (!input || typeof input !== 'object') {
+        return { value: input, changed: false };
+    }
+    if (input.missingPromptFallbackKey === undefined) {
+        return { value: input, changed: false };
+    }
+    const normalizedKey = normalizePromptKey(input.missingPromptFallbackKey, legacyKeyMap);
+    if (normalizedKey !== input.missingPromptFallbackKey) {
+        logger.warn('[FRONT DESK BEHAVIOR] ⚠️ Normalized promptGuards.missingPromptFallbackKey', {
+            companyId,
+            from: input.missingPromptFallbackKey,
+            to: normalizedKey
+        });
+        return {
+            value: { ...input, missingPromptFallbackKey: normalizedKey },
+            changed: true
+        };
+    }
+    return { value: input, changed: false };
+}
+
+function sanitizeServiceFlow(input, { legacyKeyMap, companyId }) {
+    if (!input || typeof input !== 'object') {
+        return { value: input, conversions: [] };
+    }
+    const promptKeysByTrade = input.promptKeysByTrade;
+    if (!promptKeysByTrade || typeof promptKeysByTrade !== 'object') {
+        return { value: input, conversions: [] };
+    }
+
+    const entries = readMapEntries(promptKeysByTrade);
+    const sanitizedPromptKeysByTrade = {};
+    const conversions = [];
+
+    for (const [tradeKey, keys] of entries) {
+        if (!keys || typeof keys !== 'object') {
+            sanitizedPromptKeysByTrade[tradeKey] = keys;
+            continue;
+        }
+        const sanitizedKeys = { ...keys };
+        for (const [field, value] of Object.entries(keys)) {
+            if (typeof value !== 'string') continue;
+            const normalizedKey = normalizePromptKey(value, legacyKeyMap);
+            if (normalizedKey !== value) {
+                conversions.push({ tradeKey, field, from: value, to: normalizedKey });
+                sanitizedKeys[field] = normalizedKey;
+            }
+        }
+        sanitizedPromptKeysByTrade[tradeKey] = sanitizedKeys;
+    }
+
+    if (conversions.length > 0) {
+        logger.warn('[FRONT DESK BEHAVIOR] ⚠️ Normalized serviceFlow.promptKeysByTrade prompt keys', {
+            companyId,
+            conversionsCount: conversions.length,
+            sample: conversions.slice(0, 5)
+        });
+    }
+
+    return {
+        value: { ...input, promptKeysByTrade: sanitizedPromptKeysByTrade },
+        conversions
+    };
+}
+
+// ============================================================================
 // GET - Fetch current config
 // ============================================================================
 router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
@@ -379,6 +535,7 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
     try {
         const { companyId } = req.params;
         const updates = req.body;
+        const legacyPromptKeyMap = getLegacyPromptKeyMap();
         
         logger.info('[FRONT DESK BEHAVIOR] Updating config', {
             companyId,
@@ -393,6 +550,31 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             sample: (updates.commonFirstNames || []).slice(0, 5),
             rawValue: updates.commonFirstNames
         });
+
+        // Guard against legacy/dotted prompt keys before Map casting
+        if (updates.bookingPromptsMap) {
+            const sanitized = sanitizeBookingPromptsMap(updates.bookingPromptsMap, {
+                legacyKeyMap: legacyPromptKeyMap,
+                companyId
+            });
+            updates.bookingPromptsMap = sanitized.value;
+        }
+
+        if (updates.promptGuards) {
+            const sanitized = sanitizePromptGuards(updates.promptGuards, {
+                legacyKeyMap: legacyPromptKeyMap,
+                companyId
+            });
+            updates.promptGuards = sanitized.value;
+        }
+
+        if (updates.serviceFlow) {
+            const sanitized = sanitizeServiceFlow(updates.serviceFlow, {
+                legacyKeyMap: legacyPromptKeyMap,
+                companyId
+            });
+            updates.serviceFlow = sanitized.value;
+        }
         
         // Immutable config audit: BEFORE snapshot (company-scoped)
         const beforeCompany = await v2Company.findById(companyId)
