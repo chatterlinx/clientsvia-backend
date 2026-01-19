@@ -2454,6 +2454,15 @@ async function processTurn({
             log('CHECKPOINT 2: ✅ Company loaded from MongoDB', { name: company.companyName });
         }
         
+        // 🔴 CRITICAL DEBUG: Verify commonFirstNames is loaded
+        const _cfn = company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+        log('CHECKPOINT 2.1: 👤 COMMON_FIRST_NAMES_LOADED', {
+            count: _cfn.length,
+            sample: _cfn.slice(0, 10).join(', '),
+            hasMarkLower: _cfn.map(n => String(n).toLowerCase()).includes('mark'),
+            source: companyFromCache ? 'REDIS' : 'MONGODB'
+        });
+        
         // ═══════════════════════════════════════════════════════════════════
         // STEP 1.5: Load Cheat Sheets (PHASE 1 - Runtime Integration)
         // ═══════════════════════════════════════════════════════════════════
@@ -5008,7 +5017,21 @@ async function processTurn({
                     const commonFirstNames = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
                     const commonFirstNamesSet = new Set(commonFirstNames.map(n => n.toLowerCase()));
                     const listIsEmpty = commonFirstNames.length === 0;
-                    const isCommonFirstName = listIsEmpty || commonFirstNamesSet.has(partialName.toLowerCase());
+                    const isInList = commonFirstNamesSet.has(partialName.toLowerCase());
+                    const isCommonFirstName = listIsEmpty || isInList;
+                    
+                    // 🔴 CRITICAL DEBUG: Log commonFirstNames lookup for Black Box
+                    log('📝 COMMON_FIRST_NAMES_CHECK', {
+                        partialName,
+                        partialNameLower: partialName.toLowerCase(),
+                        commonFirstNamesCount: commonFirstNames.length,
+                        commonFirstNamesSample: commonFirstNames.slice(0, 15).join(', '),
+                        listIsEmpty,
+                        isInList,
+                        decision: isCommonFirstName ? 'FIRST_NAME' : 'LAST_NAME',
+                        testMarkInList: commonFirstNamesSet.has('mark'),
+                        path: 'V33_FIX_BOOKING_MODE_INIT'
+                    });
                     
                     if (isCommonFirstName) {
                         nameMeta.first = partialName;
