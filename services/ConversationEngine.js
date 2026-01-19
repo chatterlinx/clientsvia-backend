@@ -8298,9 +8298,16 @@ async function processTurn({
             }
             
             // Check if we should auto-offer scheduling
+            // V81 FIX: Only auto-offer if:
+            // 1. We've ALREADY checked scenarios and have no match
+            // 2. AND issue has been captured
+            // 3. AND we haven't already offered
+            // 4. AND caller hasn't asked a question (detected by ending with ?)
             const hasIssue = !!session.discovery.issue;
             const exceededMaxTurns = discoveryTurnCount > maxDiscoveryTurns;
-            const shouldAutoOffer = hasIssue || exceededMaxTurns;
+            const userAskedQuestion = userText.trim().endsWith('?');
+            // V81: Don't auto-offer if user is asking a question - let scenarios/LLM answer first
+            const shouldAutoOffer = hasIssue && !userAskedQuestion && exceededMaxTurns;
             
             log('CHECKPOINT 9d.0: 🔄 V31 Discovery Turn Check', {
                 discoveryTurnCount,
@@ -8368,11 +8375,13 @@ async function processTurn({
             // Offer to schedule immediately. Caller can still ask questions.
             // ═══════════════════════════════════════════════════════════════════
             const modeSwitchingCfg = company.aiAgentSettings?.frontDeskBehavior?.modeSwitching || {};
+            // V81 FIX: Increase default from 2 to 3 to give scenarios/LLM more chances
             const minTurnsBeforeBooking = Number.isFinite(modeSwitchingCfg.minTurnsBeforeBooking)
                 ? modeSwitchingCfg.minTurnsBeforeBooking
-                : 2;
+                : 3;
 
-            if (shouldAutoOffer && !session.discovery.offeredScheduling && currentTurnNumber >= minTurnsBeforeBooking) {
+            // V81 FIX: Also check that we don't have an aiResult already (scenario might have matched)
+            if (!aiResult && shouldAutoOffer && !session.discovery.offeredScheduling && currentTurnNumber >= minTurnsBeforeBooking) {
                 let autoOfferResponse = null;
                 let autoOfferIntent = 'auto_offer_scheduling';
 
@@ -8505,8 +8514,14 @@ async function processTurn({
             });
             
             // If fast-path triggered, respond with offer script instead of LLM
+            // V81 FIX: Only trigger auto-rescue if:
+            // 1. Fast-path keyword EXPLICITLY triggered (caller said "schedule", "send someone", etc.)
+            // 2. NOT if user asked a question (let scenarios/LLM answer questions first!)
+            // 3. NOT if we already have an aiResult from scenarios
             const autoRescueOnFrustration = modeSwitchingCfg.autoRescueOnFrustration !== false;
-            if (fastPathTriggered || (autoRescueOnFrustration && fastPathEnabled && exceededMaxQuestions && emotion.emotion === 'frustrated')) {
+            const shouldFastPath = fastPathTriggered && !userAskedQuestion;
+            const shouldAutoRescue = autoRescueOnFrustration && fastPathEnabled && exceededMaxQuestions && emotion.emotion === 'frustrated' && !userAskedQuestion;
+            if (!aiResult && (shouldFastPath || shouldAutoRescue)) {
                 let offerScript = fastPathConfig.offerScript || 
                     "Got it — I completely understand. We can get someone out to you. Would you like me to schedule a technician now?";
                 const oneQuestionScript = fastPathConfig.oneQuestionScript || "";
@@ -8947,6 +8962,27 @@ async function processTurn({
             
             // Merge extracted slots
             aiResult.filledSlots = { ...(aiResult.filledSlots || {}), ...extractedThisTurn };
+            
+            // V81 FIX: Validate and sanitize filledSlots.name - prevent invalid names like "Air Conditioner"
+            if (aiResult.filledSlots?.name) {
+                const nameToCheck = String(aiResult.filledSlots.name).toLowerCase();
+                const nameWords = nameToCheck.split(/\s+/);
+                const invalidNameWords = [
+                    'air', 'ac', 'hvac', 'heating', 'cooling', 'conditioning', 'conditioner',
+                    'service', 'services', 'repair', 'repairs', 'maintenance', 'unit', 'system',
+                    'plumbing', 'electrical', 'appointment', 'schedule', 'booking',
+                    'having', 'doing', 'calling', 'looking', 'trying', 'getting', 'going',
+                    'issues', 'problems', 'trouble', 'great', 'fine', 'good', 'bad'
+                ];
+                const hasInvalidWord = nameWords.some(w => invalidNameWords.includes(w));
+                if (hasInvalidWord) {
+                    log('🚨 V81 INVALID NAME IN FILLED SLOTS - removing:', { 
+                        invalidName: aiResult.filledSlots.name,
+                        reason: 'contains_service_word'
+                    });
+                    delete aiResult.filledSlots.name;
+                }
+            }
         }
         
         // ═══════════════════════════════════════════════════════════════════════
