@@ -1136,11 +1136,14 @@ const globalInstantResponseTemplateSchema = new Schema({
             // Pure interjections (add no meaning)
             'um', 'uh', 'erm', 'er', 'hmm', 'mm',
             // Verbal fillers
-            'like', 'you know', 'i mean', 'basically', 'actually',
+            'like', 'you know', 'i mean',
             // Greeting prefixes (ONLY when at start)
-            'hi', 'hey', 'hello', 'yo',
-            // Politeness markers (remove for matching, keep meaning)
-            'please', 'thanks', 'thank you'
+            'hi', 'hey', 'hello', 'yo'
+            // V37 FIX: REMOVED 'please', 'thanks', 'thank you', 'basically', 'actually'
+            // These words carry MEANING and should NOT be removed:
+            // - "yes please" → confirmation with politeness
+            // - "actually, my name is..." → correction intent
+            // - "thanks for calling" → meaningful greeting
         ],
         trim: true
         // Each word is lowercased and trimmed

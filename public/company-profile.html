@@ -19,12 +19,7 @@
 
     <script>
         // ============================================================================
-        // 🚫 LEGACY UI NUKED (Jan 2026)
-        // ============================================================================
-        // Defense-in-depth: even if this file is served directly (CDN cache, static host,
-        // or a dev environment bypass), immediately redirect admins to the Truth UI.
-        //
-        // Truth UI: /control-plane-v2.html?companyId=...
+        // Guard: Company Profile requires a valid companyId
         // ============================================================================
         (function() {
             try {
@@ -33,9 +28,7 @@
                 const companyId = String(rawId || '').trim();
                 const isMongoId = /^[a-f0-9]{24}$/i.test(companyId);
 
-                if (isMongoId) {
-                    window.location.replace(`/control-plane-v2.html?companyId=${encodeURIComponent(companyId)}`);
-                } else {
+                if (!isMongoId) {
                     window.location.replace('/directory.html');
                 }
             } catch (e) {

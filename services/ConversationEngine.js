@@ -3600,16 +3600,35 @@ async function processTurn({
         
         // ═══════════════════════════════════════════════════════════════════════
         // MODE RESTORATION - Restore mode from session state
-        // Priority: COMPLETE > BOOKING (if consent given) > DISCOVERY
+        // Priority: COMPLETE > BOOKING (if consent given OR pending confirmations) > DISCOVERY
+        // V37 FIX: Also restore BOOKING mode if any slot has pendingConfirm
         // ═══════════════════════════════════════════════════════════════════════
+        
+        // V37 FIX: Check for pending confirmations (phone, address, etc.)
+        const hasPendingConfirm = 
+            session.booking?.meta?.phone?.pendingConfirm === true ||
+            session.booking?.meta?.address?.pendingConfirm === true ||
+            session.booking?.meta?.time?.pendingConfirm === true ||
+            session.booking?.meta?.email?.pendingConfirm === true ||
+            session.booking?.meta?.serviceType?.pendingConfirm === true;
+        
         if (session.booking.completedAt || session.mode === 'COMPLETE') {
             // 🔒 COMPLETE MODE LOCK: Booking already finalized
             // Never re-ask slots after completion
             session.mode = 'COMPLETE';
             log('✅ MODE RESTORED: Booking already COMPLETE - will not re-ask slots');
-        } else if (session.booking.consentGiven) {
+        } else if (session.booking.consentGiven || hasPendingConfirm) {
             session.mode = 'BOOKING';
-            log('📋 MODE RESTORED: Consent was given previously, restoring BOOKING mode');
+            if (hasPendingConfirm && !session.booking.consentGiven) {
+                // V37: Force consent if we have pending confirmations (safety net)
+                session.booking.consentGiven = true;
+                log('📋 MODE RESTORED: Pending slot confirmation detected - forcing BOOKING mode', {
+                    phonePending: session.booking?.meta?.phone?.pendingConfirm,
+                    addressPending: session.booking?.meta?.address?.pendingConfirm
+                });
+            } else {
+                log('📋 MODE RESTORED: Consent was given previously, restoring BOOKING mode');
+            }
         } else if (!session.mode) {
             session.mode = 'DISCOVERY';
             log('🔍 MODE INITIALIZED: Starting in DISCOVERY mode');

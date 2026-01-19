@@ -39,7 +39,7 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
     'having', 'doing', 'calling', 'looking', 'trying', 'getting', 'going', 'coming',
     'waiting', 'hoping', 'thinking', 'wondering', 'needing', 'wanting', 'asking',
     'dealing', 'experiencing', 'seeing', 'feeling', 'hearing', 'running', 'working',
-    // Generic “noise” adjectives often present in human rambling
+    // Generic "noise" adjectives often present in human rambling
     'pretty', 'long', 'short', 'kinda', 'kind', 'sorta', 'sort',
     // Problem-related words (generic)
     'problem', 'problems', 'issue', 'issues', 'trouble', 'wrong', 'weird', 'strange',
@@ -47,7 +47,13 @@ function extractName(text, { expectingName = false, customStopWords = [] } = {})
     'any', 'some', 'with',
     // Meta-words that appear in rambling but are NOT name parts
     // (prevents false extraction like "Last Name" from "my last name is")
-    'name', 'last', 'surname'
+    'name', 'last', 'surname',
+    // V37 FIX: Common words that sound like names but aren't
+    // "I'm probably going to..." was being extracted as name "Probably"
+    'probably', 'maybe', 'perhaps', 'possibly', 'apparently', 'actually',
+    'basically', 'literally', 'honestly', 'seriously', 'obviously',
+    // Filler words that STT might capitalize
+    'along', 'customer', 'res', 'chance'
   ];
 
   const STOP_WORDS = new Set([
