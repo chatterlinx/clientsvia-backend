@@ -3793,7 +3793,89 @@ async function processTurn({
             // Check if user wants to start a NEW booking
             const wantsNewBooking = /\b(another|new|different|schedule|book)\s*(appointment|service|call)?\b/i.test(userText);
             
-            if (wantsNewBooking) {
+            // ═══════════════════════════════════════════════════════════════════════
+            // V85: READ BACK HANDLER - If user asks about collected booking info
+            // "What is the address?" / "What name do you have?" / "What time?"
+            // Answer directly from filledSlots instead of going to LLM
+            // ═══════════════════════════════════════════════════════════════════════
+            const lowerUserText = (userText || '').toLowerCase();
+            const asksAboutAddress = /\b(what|which)\b.*\b(address|location|where)\b.*\b(have|got|on file|saved|recorded|booked)\b/i.test(userText) ||
+                                     /\b(address|location)\b.*\b(we|you|i)\b.*\b(have)\b/i.test(userText);
+            const asksAboutName = /\b(what|which)\b.*\b(name)\b.*\b(have|got|on file|saved|recorded)\b/i.test(userText) ||
+                                  /\b(name)\b.*\b(we|you|i)\b.*\b(have)\b/i.test(userText);
+            const asksAboutPhone = /\b(what|which)\b.*\b(phone|number|cell)\b.*\b(have|got|on file|saved|recorded)\b/i.test(userText) ||
+                                   /\b(phone|number)\b.*\b(we|you|i)\b.*\b(have)\b/i.test(userText);
+            const asksAboutTime = /\b(what|which)\b.*\b(time|when|appointment)\b.*\b(have|got|on file|saved|scheduled|booked)\b/i.test(userText) ||
+                                  /\b(time|when)\b.*\b(booked|scheduled)\b/i.test(userText);
+            const asksAboutBooking = /\b(what|can you|could you)\b.*\b(booking|appointment|info|information|details)\b.*\b(have|read|tell|confirm)\b/i.test(userText) ||
+                                     /\b(confirm|read back|repeat)\b.*\b(booking|appointment|info)\b/i.test(userText);
+            
+            if (asksAboutAddress || asksAboutName || asksAboutPhone || asksAboutTime || asksAboutBooking) {
+                log('📋 V85: READ BACK REQUEST DETECTED', { 
+                    asksAboutAddress, asksAboutName, asksAboutPhone, asksAboutTime, asksAboutBooking,
+                    currentSlots
+                });
+                
+                let readBackReply = '';
+                
+                if (asksAboutBooking) {
+                    // Read back ALL collected info
+                    const parts = [];
+                    if (currentSlots.name) parts.push(`name: ${currentSlots.name}`);
+                    if (currentSlots.phone) {
+                        // Format phone friendly
+                        const digits = String(currentSlots.phone).replace(/\D/g, '');
+                        const cleaned = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+                        const friendlyPhone = cleaned.length === 10 
+                            ? `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`
+                            : currentSlots.phone;
+                        parts.push(`phone: ${friendlyPhone}`);
+                    }
+                    if (currentSlots.address) parts.push(`address: ${currentSlots.address}`);
+                    if (currentSlots.time) parts.push(`time: ${currentSlots.time}`);
+                    
+                    if (parts.length > 0) {
+                        readBackReply = `Sure! I have: ${parts.join(', ')}. Is there anything else I can help with?`;
+                    } else {
+                        readBackReply = "I don't seem to have the booking details saved. Is there anything else I can help with?";
+                    }
+                } else if (asksAboutAddress && currentSlots.address) {
+                    readBackReply = `The address I have on file is ${currentSlots.address}. Is there anything else?`;
+                } else if (asksAboutName && currentSlots.name) {
+                    readBackReply = `The name I have is ${currentSlots.name}. Is there anything else?`;
+                } else if (asksAboutPhone && currentSlots.phone) {
+                    const digits = String(currentSlots.phone).replace(/\D/g, '');
+                    const cleaned = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+                    const friendlyPhone = cleaned.length === 10 
+                        ? `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`
+                        : currentSlots.phone;
+                    readBackReply = `The phone number I have is ${friendlyPhone}. Is there anything else?`;
+                } else if (asksAboutTime && currentSlots.time) {
+                    readBackReply = `The appointment time is ${currentSlots.time}. Is there anything else?`;
+                } else {
+                    // They asked about something we don't have
+                    readBackReply = "I don't have that information on file. Is there anything else I can help with?";
+                }
+                
+                aiResult = {
+                    reply: readBackReply,
+                    conversationMode: 'complete',
+                    intent: 'read_back',
+                    nextGoal: 'END_CALL',
+                    filledSlots: currentSlots,
+                    signals: { bookingComplete: true },
+                    latencyMs: Date.now() - aiStartTime,
+                    tokensUsed: 0,
+                    fromStateMachine: true,
+                    mode: 'COMPLETE',
+                    debug: {
+                        source: 'READ_BACK_HANDLER',
+                        stage: 'complete',
+                        requested: { asksAboutAddress, asksAboutName, asksAboutPhone, asksAboutTime, asksAboutBooking }
+                    }
+                };
+                log('📋 V85: READ BACK RESPONSE', { reply: readBackReply });
+            } else if (wantsNewBooking) {
                 // Reset for new booking
                 log('🔄 COMPLETE MODE: User wants NEW booking, resetting');
                 session.mode = 'DISCOVERY';
@@ -7784,7 +7866,46 @@ async function processTurn({
                         } else {
                             // Use reprompt variant if asked multiple times
                             let exactQuestion;
-                            if (askedCount >= 2 && DEFAULT_PROMPT_VARIANTS.reprompt[nextSlotId]) {
+                            
+                            // ═══════════════════════════════════════════════════════════════
+                            // V85: PHONE SLOT - OFFER CALLER ID FIRST (before asking for number)
+                            // If this is the first time asking for phone AND offerCallerId is enabled
+                            // AND we have a caller ID, offer it FIRST to save customer time
+                            // ═══════════════════════════════════════════════════════════════
+                            const slotType = nextMissingSlotSafe.type || nextSlotId;
+                            const phoneSlotCfg = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'phone');
+                            const phoneMeta = session.booking.meta.phone || {};
+                            const callerIdForPhone = callerId; // Already defined above from session.fromPhone
+                            
+                            if (slotType === 'phone' && askedCount === 0 && 
+                                phoneSlotCfg?.offerCallerId && callerIdForPhone && !phoneMeta.offeredCallerId) {
+                                // V85: Offer caller ID FIRST instead of asking for number
+                                phoneMeta.offeredCallerId = true;
+                                session.booking.meta.phone = phoneMeta;
+                                
+                                // Format phone number in friendly format (239-565-2202)
+                                const formatFriendlyPhoneForOffer = (phone) => {
+                                    if (!phone) return phone;
+                                    const digits = String(phone).replace(/\D/g, '');
+                                    const cleaned = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+                                    if (cleaned.length === 10) {
+                                        return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+                                    }
+                                    return phone;
+                                };
+                                const friendlyId = formatFriendlyPhoneForOffer(callerIdForPhone);
+                                
+                                // Use UI-configured callerIdPrompt or default
+                                exactQuestion = phoneSlotCfg?.callerIdPrompt || 
+                                    "I see you're calling from {callerId}. Is that a good number to contact you for updates and text you a booking confirmation, or is there a better number?";
+                                exactQuestion = exactQuestion.replace('{callerId}', friendlyId);
+                                
+                                log('📞 V85: PHONE - Offering caller ID FIRST (before asking for number)', { 
+                                    callerId: callerIdForPhone,
+                                    friendlyId,
+                                    offerCallerId: phoneSlotCfg?.offerCallerId
+                                });
+                            } else if (askedCount >= 2 && DEFAULT_PROMPT_VARIANTS.reprompt[nextSlotId]) {
                                 // Use reprompt variant (more helpful phrasing)
                                 exactQuestion = getVariant(DEFAULT_PROMPT_VARIANTS.reprompt[nextSlotId], askedCount - 2);
                                 log('📋 V33: Using REPROMPT variant', { slotId: nextSlotId, askedCount });
