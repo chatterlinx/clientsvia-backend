@@ -756,6 +756,226 @@
             from { transform: translateX(100%); opacity: 0; } 
             to { transform: translateX(0); opacity: 1; } 
         }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           ROADMAP TAB STYLES
+           ═══════════════════════════════════════════════════════════════════ */
+        .roadmap-container {
+            padding: 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .roadmap-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .roadmap-header h2 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .roadmap-overall {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 32px;
+            border: 1px solid var(--border-color);
+        }
+        .roadmap-overall-title {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .roadmap-overall-bar {
+            height: 24px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+        .roadmap-overall-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #22c55e 0%, #f59e0b 50%, #ef4444 100%);
+            border-radius: 12px;
+            transition: width 0.5s ease;
+            position: relative;
+        }
+        .roadmap-overall-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            animation: shimmer 2s infinite;
+        }
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        .roadmap-overall-text {
+            font-size: 32px;
+            font-weight: 700;
+            text-align: center;
+            margin-top: 12px;
+        }
+        .roadmap-phase {
+            background: var(--bg-card);
+            border-radius: 12px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+        .roadmap-phase-header {
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .roadmap-phase-header:hover {
+            background: var(--bg-hover);
+        }
+        .roadmap-phase-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .roadmap-phase-icon {
+            font-size: 24px;
+        }
+        .roadmap-phase-name {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .roadmap-phase-meta {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+        .roadmap-phase-progress {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .roadmap-phase-bar {
+            width: 120px;
+            height: 8px;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .roadmap-phase-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+        .roadmap-phase-fill.high { background: var(--accent-green); }
+        .roadmap-phase-fill.medium { background: var(--accent-yellow); }
+        .roadmap-phase-fill.low { background: var(--accent-red); }
+        .roadmap-phase-pct {
+            font-size: 14px;
+            font-weight: 600;
+            min-width: 45px;
+            text-align: right;
+        }
+        .roadmap-items {
+            padding: 0 20px 20px;
+        }
+        .roadmap-item {
+            display: grid;
+            grid-template-columns: 32px 1fr 100px 80px 80px;
+            gap: 16px;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .roadmap-item:last-child { border-bottom: none; }
+        .roadmap-item-checkbox {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            border: 2px solid var(--border-color);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            background: var(--bg-secondary);
+        }
+        .roadmap-item-checkbox:hover {
+            border-color: var(--accent-blue);
+        }
+        .roadmap-item-checkbox.checked {
+            background: var(--accent-green);
+            border-color: var(--accent-green);
+        }
+        .roadmap-item-checkbox.partial {
+            background: var(--accent-yellow);
+            border-color: var(--accent-yellow);
+        }
+        .roadmap-item-name {
+            font-size: 14px;
+        }
+        .roadmap-item-name.completed {
+            color: var(--text-muted);
+            text-decoration: line-through;
+        }
+        .roadmap-item-status {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .roadmap-item-status.done { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+        .roadmap-item-status.partial { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .roadmap-item-status.todo { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .roadmap-item-priority {
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            text-align: center;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        .roadmap-item-priority.high { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .roadmap-item-priority.med { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .roadmap-item-priority.low { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+        .roadmap-item-pct {
+            font-size: 14px;
+            font-weight: 500;
+            text-align: right;
+        }
+        .roadmap-footer {
+            text-align: center;
+            padding: 24px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        .roadmap-footer a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+        .roadmap-target {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .roadmap-target-badge {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
@@ -792,6 +1012,9 @@
         <button class="tab-btn" data-tab="sttAnalysis" style="color: #10b981;">
             🎙️ STT Analysis
         </button>
+        <button class="tab-btn" data-tab="roadmap" style="color: #f59e0b;">
+            🚀 Roadmap
+        </button>
     </div>
 
     <!-- Tab Content -->
@@ -804,6 +1027,7 @@
     <div id="tabRaw" class="tab-content"></div>
     <div id="tabTodo" class="tab-content"></div>
     <div id="tabSttAnalysis" class="tab-content"></div>
+    <div id="tabRoadmap" class="tab-content"></div>
 
     <script>
         // ═══════════════════════════════════════════════════════════════════
@@ -887,6 +1111,7 @@
             renderRawEvents();
             renderTodo();
             renderSttAnalysis();
+            renderRoadmap();
         }
 
         function renderHeader() {
@@ -2404,6 +2629,224 @@
                 
                 <div id="sttComparisonResults"></div>
             `;
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // ROADMAP TAB - Production Readiness Checklist
+        // ═══════════════════════════════════════════════════════════════════
+        function renderRoadmap() {
+            const container = document.getElementById('tabRoadmap');
+            
+            // Load saved state from localStorage
+            const savedState = JSON.parse(localStorage.getItem('roadmapState') || '{}');
+            
+            // Roadmap data structure
+            const roadmap = {
+                phases: [
+                    {
+                        id: 'speed',
+                        name: 'Speed Optimization',
+                        icon: '⚡',
+                        target: '<1.5 second response time',
+                        timeline: 'Week 1 (CRITICAL)',
+                        current: '2-3 seconds',
+                        goal: '<1.5 seconds',
+                        items: [
+                            { id: 'tts-cache', name: 'TTS caching for common phrases', status: savedState['tts-cache'] || 'todo', priority: 'high', need: 'Cache greetings, slot questions, confirmations' },
+                            { id: 'latency-mask', name: 'Latency masking', status: savedState['latency-mask'] || 'todo', priority: 'high', need: '"One moment" filler audio during LLM' },
+                            { id: 'redis-cache', name: 'Redis caching optimized', status: savedState['redis-cache'] || 'partial', priority: 'med', need: 'Scenario pool, company config pre-loaded' },
+                            { id: 'scenario-coverage', name: '90%+ tier-1 scenario coverage', status: savedState['scenario-coverage'] || 'todo', priority: 'high', need: 'Add triggers until 90% match without LLM' },
+                            { id: 'prewarm-tts', name: 'Pre-warm next TTS', status: savedState['prewarm-tts'] || 'todo', priority: 'med', need: 'Predict likely next response, pre-generate' }
+                        ]
+                    },
+                    {
+                        id: 'reliability',
+                        name: 'Reliability & Stability',
+                        icon: '🛡️',
+                        target: 'Zero crashes, graceful degradation',
+                        timeline: 'Week 1-2',
+                        items: [
+                            { id: 'error-handling', name: 'Error handling all paths', status: savedState['error-handling'] || 'partial', priority: 'high', need: 'Every code path has try/catch + recovery' },
+                            { id: 'graceful-degrade', name: 'Graceful degradation', status: savedState['graceful-degrade'] || 'partial', priority: 'med', need: 'Never hang up, always give helpful response' },
+                            { id: 'staging-env', name: 'Staging environment', status: savedState['staging-env'] || 'todo', priority: 'med', need: 'Test on staging before production deploy' },
+                            { id: 'smoke-tests', name: 'Automated smoke tests', status: savedState['smoke-tests'] || 'todo', priority: 'med', need: 'Test critical flows before every deploy' },
+                            { id: 'error-alerting', name: 'Error alerting', status: savedState['error-alerting'] || 'todo', priority: 'med', need: 'Slack/email notification on production errors' }
+                        ]
+                    },
+                    {
+                        id: 'intelligence',
+                        name: 'Conversation Intelligence',
+                        icon: '🧠',
+                        target: 'Human-like conversations',
+                        timeline: 'Week 2-3',
+                        items: [
+                            { id: 'name-detection', name: 'Smart name detection', status: savedState['name-detection'] || 'partial', priority: 'high', need: 'commonFirstNames list wired, first/last detection' },
+                            { id: 'phone-confirm', name: 'Natural phone confirmation', status: savedState['phone-confirm'] || 'done', priority: 'med', need: '"that\'s a good number" understood' },
+                            { id: 'scenario-matching', name: 'High-confidence scenario matching', status: savedState['scenario-matching'] || 'partial', priority: 'high', need: 'Tier-1 short-circuit working' },
+                            { id: 'interruption-handling', name: 'Mid-booking interruption handling', status: savedState['interruption-handling'] || 'partial', priority: 'med', need: 'Answer questions, return to slot' },
+                            { id: 'empathy-control', name: 'Empathy language control', status: savedState['empathy-control'] || 'done', priority: 'low', need: 'forbiddenPhrases configured' }
+                        ]
+                    },
+                    {
+                        id: 'ui',
+                        name: 'UI & Configuration',
+                        icon: '🎛️',
+                        target: 'All settings exposed in UI',
+                        timeline: 'Week 2-3',
+                        items: [
+                            { id: 'booking-prompts', name: 'Booking prompts UI-controlled', status: savedState['booking-prompts'] || 'done', priority: 'high', need: 'All slot questions from UI' },
+                            { id: 'transfer-calls', name: 'Transfer Calls tab functional', status: savedState['transfer-calls'] || 'done', priority: 'med', need: 'Company switchboard working' },
+                            { id: 'call-protection', name: 'Call Protection (Edge Cases) UI', status: savedState['call-protection'] || 'done', priority: 'med', need: 'Spam/escalation rules in UI' },
+                            { id: 'behavior-rules', name: 'Behavior rules UI', status: savedState['behavior-rules'] || 'partial', priority: 'med', need: 'Tone, style settings exposed' },
+                            { id: 'blackbox-roadmap', name: 'Black Box Roadmap tab', status: 'done', priority: 'low', need: 'This tab!' }
+                        ]
+                    },
+                    {
+                        id: 'integrations',
+                        name: 'Integrations',
+                        icon: '🔗',
+                        target: 'Calendar + SMS working',
+                        timeline: 'Week 3-4',
+                        items: [
+                            { id: 'gcal-integration', name: 'Google Calendar integration', status: savedState['gcal-integration'] || 'todo', priority: 'high', need: 'Real-time availability, booking creation' },
+                            { id: 'sms-confirm', name: 'SMS confirmations', status: savedState['sms-confirm'] || 'todo', priority: 'high', need: 'Booking confirmation texts' },
+                            { id: 'customer-lookup', name: 'Customer recognition', status: savedState['customer-lookup'] || 'partial', priority: 'med', need: 'Phone number → customer context' },
+                            { id: 'webhook-events', name: 'Webhook events', status: savedState['webhook-events'] || 'todo', priority: 'low', need: 'Post call events to external systems' }
+                        ]
+                    }
+                ]
+            };
+            
+            // Calculate progress for each phase and overall
+            function calculatePhaseProgress(phase) {
+                const statusValues = { done: 100, partial: 50, todo: 0 };
+                const total = phase.items.reduce((sum, item) => sum + statusValues[item.status], 0);
+                return Math.round(total / phase.items.length);
+            }
+            
+            function calculateOverallProgress() {
+                const allItems = roadmap.phases.flatMap(p => p.items);
+                const statusValues = { done: 100, partial: 50, todo: 0 };
+                const total = allItems.reduce((sum, item) => sum + statusValues[item.status], 0);
+                return Math.round(total / allItems.length);
+            }
+            
+            const overallProgress = calculateOverallProgress();
+            const totalItems = roadmap.phases.flatMap(p => p.items).length;
+            const doneItems = roadmap.phases.flatMap(p => p.items).filter(i => i.status === 'done').length;
+            const partialItems = roadmap.phases.flatMap(p => p.items).filter(i => i.status === 'partial').length;
+            
+            // Determine overall color
+            let overallColor = overallProgress >= 70 ? '#22c55e' : overallProgress >= 40 ? '#f59e0b' : '#ef4444';
+            
+            container.innerHTML = `
+                <div class="roadmap-container">
+                    <div class="roadmap-header">
+                        <h2>🚀 Production Readiness Roadmap</h2>
+                        <p style="color: var(--text-secondary);">ClientsVia.ai → World-Class Enterprise AI Receptionist</p>
+                    </div>
+                    
+                    <div class="roadmap-overall">
+                        <div class="roadmap-overall-title">Overall Progress</div>
+                        <div class="roadmap-overall-bar">
+                            <div class="roadmap-overall-fill" style="width: ${overallProgress}%;"></div>
+                        </div>
+                        <div class="roadmap-overall-text" style="color: ${overallColor};">${overallProgress}%</div>
+                        <div style="text-align: center; color: var(--text-secondary); font-size: 13px; margin-top: 8px;">
+                            ${doneItems} done · ${partialItems} in progress · ${totalItems - doneItems - partialItems} todo
+                        </div>
+                    </div>
+                    
+                    ${roadmap.phases.map(phase => {
+                        const progress = calculatePhaseProgress(phase);
+                        const fillClass = progress >= 70 ? 'high' : progress >= 40 ? 'medium' : 'low';
+                        return `
+                            <div class="roadmap-phase">
+                                <div class="roadmap-phase-header" onclick="togglePhase('${phase.id}')">
+                                    <div class="roadmap-phase-title">
+                                        <span class="roadmap-phase-icon">${phase.icon}</span>
+                                        <div>
+                                            <div class="roadmap-phase-name">${phase.name}</div>
+                                            <div class="roadmap-phase-meta">${phase.timeline} · Target: ${phase.target}</div>
+                                        </div>
+                                    </div>
+                                    <div class="roadmap-phase-progress">
+                                        <div class="roadmap-phase-bar">
+                                            <div class="roadmap-phase-fill ${fillClass}" style="width: ${progress}%;"></div>
+                                        </div>
+                                        <span class="roadmap-phase-pct">${progress}%</span>
+                                    </div>
+                                </div>
+                                <div class="roadmap-items" id="phase-${phase.id}">
+                                    ${phase.items.map(item => `
+                                        <div class="roadmap-item">
+                                            <div class="roadmap-item-checkbox ${item.status}" 
+                                                 onclick="toggleRoadmapItem('${item.id}', '${item.status}')"
+                                                 title="Click to toggle status">
+                                                ${item.status === 'done' ? '✓' : item.status === 'partial' ? '~' : ''}
+                                            </div>
+                                            <div class="roadmap-item-name ${item.status === 'done' ? 'completed' : ''}">${item.name}
+                                                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${item.need}</div>
+                                            </div>
+                                            <div class="roadmap-item-status ${item.status}">
+                                                ${item.status === 'done' ? '✅ Done' : item.status === 'partial' ? '🔄 Partial' : '❌ TODO'}
+                                            </div>
+                                            <div class="roadmap-item-priority ${item.priority}">${item.priority}</div>
+                                            <div class="roadmap-item-pct">
+                                                ${item.status === 'done' ? '100%' : item.status === 'partial' ? '50%' : '0%'}
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                    
+                    <div class="roadmap-footer">
+                        <p>💾 Progress auto-saved to browser · <a href="#" onclick="resetRoadmap(); return false;">Reset to defaults</a></p>
+                        <p style="margin-top: 8px;">Last updated: ${new Date().toLocaleString()}</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function togglePhase(phaseId) {
+            const items = document.getElementById('phase-' + phaseId);
+            if (items) {
+                items.style.display = items.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+        
+        function toggleRoadmapItem(itemId, currentStatus) {
+            // Cycle through: todo → partial → done → todo
+            const nextStatus = {
+                'todo': 'partial',
+                'partial': 'done',
+                'done': 'todo'
+            };
+            const newStatus = nextStatus[currentStatus] || 'todo';
+            
+            // Save to localStorage
+            const savedState = JSON.parse(localStorage.getItem('roadmapState') || '{}');
+            savedState[itemId] = newStatus;
+            localStorage.setItem('roadmapState', JSON.stringify(savedState));
+            
+            // Re-render
+            renderRoadmap();
+            
+            // Show toast
+            const statusText = newStatus === 'done' ? '✅ Marked complete!' : 
+                              newStatus === 'partial' ? '🔄 Marked in progress' : 
+                              '⏳ Reset to TODO';
+            showToast(statusText, newStatus === 'done' ? 'success' : 'info');
+        }
+        
+        function resetRoadmap() {
+            if (confirm('Reset all roadmap progress to defaults?')) {
+                localStorage.removeItem('roadmapState');
+                renderRoadmap();
+                showToast('Roadmap reset to defaults', 'info');
+            }
         }
         
         function calculateAverageConfidence() {
