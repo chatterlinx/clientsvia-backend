@@ -94,7 +94,9 @@ async function validateAddress(rawAddress, options = {}) {
         log('✅ Address validated', {
             normalized: parsed.normalized,
             confidence: parsed.confidence,
-            needsUnit: parsed.needsUnit
+            needsUnit: parsed.needsUnit,
+            buildingType: parsed.unitDetection?.buildingType,
+            buildingLabel: parsed.unitDetection?.buildingLabel
         });
         
         return {
@@ -106,6 +108,7 @@ async function validateAddress(rawAddress, options = {}) {
             components: parsed.components,
             location: parsed.location,
             needsUnit: parsed.needsUnit,
+            unitDetection: parsed.unitDetection, // Full building type info
             placeId: result.place_id,
             formattedAddress: result.formatted_address
         };
@@ -156,7 +159,7 @@ async function callGeocodingAPI(address) {
 function parseGeocodingResult(result) {
     const components = extractAddressComponents(result.address_components);
     const confidence = calculateConfidence(result);
-    const needsUnit = detectNeedsUnit(result);
+    const unitDetection = detectNeedsUnit(result);
     
     // Build normalized address
     const normalized = buildNormalizedAddress(components);
@@ -164,7 +167,8 @@ function parseGeocodingResult(result) {
     return {
         normalized,
         confidence,
-        needsUnit,
+        needsUnit: unitDetection.needsUnit,
+        unitDetection, // Full detection result with building type
         components,
         location: {
             lat: result.geometry?.location?.lat,
@@ -262,32 +266,105 @@ function calculateConfidence(result) {
 }
 
 /**
- * Detect if address might need a unit number
+ * Detect if address might need a unit number and identify building type
  * @param {Object} result - Google Geocoding result
  * @param {Object} options - Detection options
- * @returns {boolean} True if unit number might be needed
+ * @returns {Object} Detection result with building type info
  */
 function detectNeedsUnit(result, options = {}) {
     const types = result.types || [];
     const components = result.address_components || [];
-    
-    // Check if it's a multi-unit building type
-    const multiUnitTypes = ['premise', 'subpremise', 'establishment'];
-    const isMultiUnit = types.some(t => multiUnitTypes.includes(t));
+    const formattedAddress = result.formatted_address?.toLowerCase() || '';
     
     // Check if unit already exists in components
     const hasUnit = components.some(c => c.types?.includes('subpremise'));
     
     // If unit already provided, don't ask again
-    if (hasUnit) return false;
+    if (hasUnit) {
+        return {
+            needsUnit: false,
+            reason: 'unit_already_provided',
+            buildingType: null
+        };
+    }
     
-    // Needs unit if it's a multi-unit type but no unit provided
-    // Also check for common multi-unit indicators in the address
-    const formattedAddress = result.formatted_address?.toLowerCase() || '';
-    const defaultIndicators = ['apartment', 'apt', 'suite', 'ste', 'unit', 'building', 'bldg', 'floor', 'fl'];
-    const hasMultiUnitIndicator = defaultIndicators.some(ind => formattedAddress.includes(ind));
+    // Detect building type from Google Maps
+    let buildingType = null;
+    let needsUnit = false;
+    let reason = 'no_signals';
     
-    return isMultiUnit || hasMultiUnitIndicator;
+    // Check Google Maps types for building classification
+    if (types.includes('premise')) {
+        // "premise" often indicates a named building/complex
+        buildingType = 'building_complex';
+        needsUnit = true;
+        reason = 'google_premise_type';
+    }
+    
+    // Check formatted address for specific building indicators
+    const buildingPatterns = [
+        { pattern: /\bapartment(s)?\b/i, type: 'apartment_building', label: 'an apartment building' },
+        { pattern: /\bcondo(minium)?(s)?\b/i, type: 'condo_building', label: 'a condominium' },
+        { pattern: /\btower(s)?\b/i, type: 'tower', label: 'a tower building' },
+        { pattern: /\bplaza\b/i, type: 'plaza', label: 'a plaza' },
+        { pattern: /\bcomplex\b/i, type: 'complex', label: 'a complex' },
+        { pattern: /\bloft(s)?\b/i, type: 'lofts', label: 'a loft building' },
+        { pattern: /\bresidence(s)?\b/i, type: 'residences', label: 'a residential building' },
+        { pattern: /\bsuites?\b/i, type: 'office_suites', label: 'an office building' },
+        { pattern: /\boffice\s*(building|park|center)?\b/i, type: 'office', label: 'an office building' },
+        { pattern: /\bmedical\s*(center|building|plaza)?\b/i, type: 'medical', label: 'a medical building' },
+        { pattern: /\bprofessional\s*(center|building)?\b/i, type: 'professional', label: 'a professional building' },
+        { pattern: /\b(senior|assisted)\s*(living|care)\b/i, type: 'senior_living', label: 'a senior living facility' },
+        { pattern: /\bstudent\s*(housing|living)\b/i, type: 'student_housing', label: 'student housing' },
+        { pattern: /\bvillas?\b/i, type: 'villas', label: 'a villa complex' },
+        { pattern: /\btownhome(s)?|townhouse(s)?\b/i, type: 'townhomes', label: 'a townhome community' }
+    ];
+    
+    for (const { pattern, type, label } of buildingPatterns) {
+        if (pattern.test(formattedAddress)) {
+            buildingType = type;
+            needsUnit = true;
+            reason = 'google_address_pattern';
+            return {
+                needsUnit: true,
+                reason,
+                buildingType: type,
+                buildingLabel: label,
+                detectedFrom: 'google_maps'
+            };
+        }
+    }
+    
+    // Check for generic multi-unit indicators
+    const genericIndicators = ['apt', 'ste', 'unit', 'bldg', 'floor', 'fl', '#'];
+    const hasGenericIndicator = genericIndicators.some(ind => formattedAddress.includes(ind));
+    
+    if (hasGenericIndicator) {
+        return {
+            needsUnit: true,
+            reason: 'generic_indicator',
+            buildingType: 'multi_unit',
+            buildingLabel: 'a multi-unit building',
+            detectedFrom: 'address_format'
+        };
+    }
+    
+    // Check if it's a premise type (named building)
+    if (types.includes('premise')) {
+        return {
+            needsUnit: true,
+            reason: 'google_premise_type',
+            buildingType: 'named_building',
+            buildingLabel: 'a building',
+            detectedFrom: 'google_maps'
+        };
+    }
+    
+    return {
+        needsUnit: false,
+        reason: 'no_signals',
+        buildingType: null
+    };
 }
 
 /**
@@ -682,8 +759,20 @@ function buildConfirmationPhrase(validationResult, type) {
     const normalized = validationResult.normalized || validationResult.raw;
     const city = validationResult.components?.city;
     const street = validationResult.components?.street;
+    const unitDetection = validationResult.unitDetection || {};
+    const buildingLabel = unitDetection.buildingLabel;
+    const detectedFrom = unitDetection.detectedFrom;
     
     if (type === 'unit') {
+        // If Google Maps detected the building type, mention it!
+        if (buildingLabel && detectedFrom === 'google_maps') {
+            if (street && city) {
+                return `Got it — ${street} in ${city}. Google Maps shows this is ${buildingLabel}. Is there an apartment or unit number I should include?`;
+            }
+            return `Got that address. It looks like this is ${buildingLabel}. Is there a unit or apartment number?`;
+        }
+        
+        // Generic unit question
         if (street && city) {
             return `Got it — ${street} in ${city}. Is there an apartment or unit number?`;
         }
