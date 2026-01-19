@@ -8140,15 +8140,40 @@ async function processTurn({
                 const quickReplies = tier1Match.quickReplies || [];
                 const fullReplies = tier1Match.fullReplies || [];
                 
-                // Select a reply (prefer quickReplies for voice, fullReplies as fallback)
+                // ═══════════════════════════════════════════════════════════════
+                // V82 FIX: Smart reply selection based on caller input complexity
+                // ═══════════════════════════════════════════════════════════════
+                // PROBLEM: quickReplies are too short for detailed caller descriptions
+                // Example: Caller describes AC issue for 30 seconds, agent says only
+                //          "Let me help you identify the issue." - this is BAD!
+                //
+                // SOLUTION: Use fullReplies for complex/detailed inputs:
+                // - More than 30 words = caller gave detailed description
+                // - Contains issue keywords (not cooling, broken, problem, etc.)
+                // - Uses quickReplies only for very simple inputs (<15 words)
+                // ═══════════════════════════════════════════════════════════════
+                const wordCount = (userText || '').split(/\s+/).filter(w => w.length > 0).length;
+                const hasDetailedIssue = /not (cool|heat|work)|broken|problem|issue|temperature|thermostat|leak|noise|smell/i.test(userText);
+                const useFullReply = fullReplies.length > 0 && (wordCount > 30 || (wordCount > 15 && hasDetailedIssue));
+                
                 let selectedReply = null;
-                if (quickReplies.length > 0) {
-                    // Pick random from quickReplies for variety
+                
+                if (useFullReply) {
+                    // Caller provided detailed description - use thorough fullReply
+                    const idx = Math.floor(Math.random() * fullReplies.length);
+                    selectedReply = typeof fullReplies[idx] === 'string' 
+                        ? fullReplies[idx] 
+                        : fullReplies[idx]?.text;
+                    log('📋 V82: Using FULL reply for detailed input', { wordCount, hasDetailedIssue });
+                } else if (quickReplies.length > 0) {
+                    // Simple/short input - use quickReply
                     const idx = Math.floor(Math.random() * quickReplies.length);
                     selectedReply = typeof quickReplies[idx] === 'string' 
                         ? quickReplies[idx] 
                         : quickReplies[idx]?.text;
+                    log('⚡ V82: Using QUICK reply for simple input', { wordCount, hasDetailedIssue });
                 } else if (fullReplies.length > 0) {
+                    // No quickReplies available, use fullReply as fallback
                     const idx = Math.floor(Math.random() * fullReplies.length);
                     selectedReply = typeof fullReplies[idx] === 'string' 
                         ? fullReplies[idx] 

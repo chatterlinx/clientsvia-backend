@@ -3664,6 +3664,17 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         try {
           logger.info(`🎤 V2 ELEVENLABS: Using voice ${elevenLabsVoice} for response`);
           
+          // 📼 BLACK BOX: Log TTS started for agent response
+          if (BlackBoxLogger) {
+            BlackBoxLogger.QuickLog.ttsStarted(
+              callSid,
+              companyID,
+              turnCount,
+              elevenLabsVoice,
+              responseText.length
+            ).catch(() => {});
+          }
+          
           // Generate ElevenLabs audio
           const ttsStart = Date.now();
           const { synthesizeSpeech } = require('../services/v2elevenLabsService');
@@ -3709,6 +3720,17 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           perfCheckpoints.audioStorage = Date.now() - storageStart;
           perfCheckpoints.storageMethod = storageMethod;
           
+          // 📼 BLACK BOX: Log TTS completed for agent response
+          if (BlackBoxLogger) {
+            BlackBoxLogger.QuickLog.ttsCompleted(
+              callSid,
+              companyID,
+              turnCount,
+              elevenLabsVoice,
+              perfCheckpoints.ttsGeneration
+            ).catch(() => {});
+          }
+          
           twiml.play(audioUrl);
           
         } catch (elevenLabsError) {
@@ -3719,6 +3741,23 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             responseTextLength: responseText?.length,
             hasCompany: !!company
           });
+          
+          // 📼 BLACK BOX: Log TTS failure
+          if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+              callId: callSid,
+              companyId: companyID,
+              type: 'TTS_FAILED',
+              turn: turnCount,
+              data: {
+                error: elevenLabsError.message?.substring(0, 200),
+                voiceId: elevenLabsVoice,
+                textLength: responseText?.length,
+                fallback: 'TWILIO_SAY'
+              }
+            }).catch(() => {});
+          }
+          
           // Fallback to Twilio voice
           twiml.say({
             voice: result.controlFlags?.tone === 'robotic' ? 'Polly.Joanna' : 'alice'
@@ -3727,6 +3766,21 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       } else {
         // Use Twilio voice as fallback
         logger.info('🎤 V2 FALLBACK: Using Twilio voice (no ElevenLabs configured)');
+        
+        // 📼 BLACK BOX: Log Twilio fallback voice used
+        if (BlackBoxLogger) {
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'TWILIO_VOICE_FALLBACK',
+            turn: turnCount,
+            data: {
+              reason: !elevenLabsVoice ? 'no_voice_configured' : 'no_response_text',
+              textLength: responseText?.length || 0
+            }
+          }).catch(() => {});
+        }
+        
         twiml.say({
           voice: result.controlFlags?.tone === 'robotic' ? 'Polly.Joanna' : 'alice'
         }, escapeTwiML(responseText));
