@@ -506,6 +506,153 @@ function buildGateCodePrompt(companyName = 'our technician') {
 }
 
 /**
+ * V35 WORLD-CLASS: Equipment access detection and prompts
+ * Determines if we should ask about equipment location/access
+ * 
+ * @param {Object} unitDetection - Building type detection result
+ * @param {Object} config - Equipment access configuration
+ * @returns {Object} Detection result with prompt
+ */
+function shouldAskEquipmentAccess(unitDetection, config = {}) {
+    const {
+        equipmentAccessMode = 'smart', // 'smart', 'always', 'never'
+        equipmentType = 'HVAC',        // 'HVAC', 'electrical', 'plumbing', 'general'
+        customEquipmentName = null,    // e.g., "condenser", "AC unit", "electrical panel"
+        askForResidential = false,     // Usually not needed for houses
+        askForCommercial = true        // Usually needed for commercial
+    } = config;
+    
+    // Mode: never - skip
+    if (equipmentAccessMode === 'never') {
+        return { shouldAsk: false, reason: 'mode_never' };
+    }
+    
+    const buildingType = unitDetection?.buildingType;
+    const buildingLabel = unitDetection?.buildingLabel;
+    
+    // Determine if residential or commercial
+    const residentialTypes = [
+        'apartment_building', 'condo_building', 'townhomes', 'villas',
+        'lofts', 'residences', 'senior_living', 'student_housing'
+    ];
+    const commercialTypes = [
+        'office', 'office_suites', 'medical', 'professional', 'warehouse',
+        'industrial', 'business_park', 'corporate', 'shopping_center',
+        'retail', 'strip_mall', 'hotel', 'motel', 'resort', 'restaurant',
+        'religious', 'educational', 'healthcare', 'bank', 'storage',
+        'factory', 'distribution', 'data_center', 'tower', 'plaza', 'complex'
+    ];
+    
+    const isResidential = residentialTypes.includes(buildingType);
+    const isCommercial = commercialTypes.includes(buildingType);
+    
+    // Mode: always - always ask
+    if (equipmentAccessMode === 'always') {
+        return {
+            shouldAsk: true,
+            reason: 'mode_always',
+            prompt: buildEquipmentAccessPrompt(equipmentType, customEquipmentName, buildingType)
+        };
+    }
+    
+    // Mode: smart - based on building type
+    if (isCommercial && askForCommercial) {
+        return {
+            shouldAsk: true,
+            reason: 'commercial_building',
+            buildingType,
+            prompt: buildEquipmentAccessPrompt(equipmentType, customEquipmentName, buildingType)
+        };
+    }
+    
+    if (isResidential && askForResidential) {
+        return {
+            shouldAsk: true,
+            reason: 'residential_multi_unit',
+            buildingType,
+            prompt: buildEquipmentAccessPrompt(equipmentType, customEquipmentName, buildingType)
+        };
+    }
+    
+    // Special cases that always need access info
+    const alwaysAskTypes = ['warehouse', 'industrial', 'factory', 'data_center', 'healthcare', 'hotel', 'resort'];
+    if (alwaysAskTypes.includes(buildingType)) {
+        return {
+            shouldAsk: true,
+            reason: 'high_access_complexity',
+            buildingType,
+            prompt: buildEquipmentAccessPrompt(equipmentType, customEquipmentName, buildingType)
+        };
+    }
+    
+    return { shouldAsk: false, reason: 'not_needed' };
+}
+
+/**
+ * Build equipment access prompt based on equipment type and building
+ * @param {string} equipmentType - Type of equipment (HVAC, electrical, plumbing)
+ * @param {string} customName - Custom equipment name override
+ * @param {string} buildingType - Detected building type
+ * @returns {string} Natural language prompt
+ */
+function buildEquipmentAccessPrompt(equipmentType = 'HVAC', customName = null, buildingType = null) {
+    // Equipment-specific terminology
+    const equipmentTerms = {
+        'HVAC': {
+            name: customName || 'the AC unit or condenser',
+            locations: ['rooftop', 'mechanical room', 'utility closet', 'outside'],
+            accessTypes: ['roof access', 'a key to the mechanical room', 'building manager coordination']
+        },
+        'electrical': {
+            name: customName || 'the electrical panel',
+            locations: ['basement', 'utility room', 'garage', 'outside'],
+            accessTypes: ['basement access', 'a key to the utility room']
+        },
+        'plumbing': {
+            name: customName || 'the water heater or main shutoff',
+            locations: ['basement', 'utility closet', 'garage', 'crawl space'],
+            accessTypes: ['basement access', 'crawl space access']
+        },
+        'general': {
+            name: customName || 'the equipment',
+            locations: ['a specific location'],
+            accessTypes: ['special access']
+        }
+    };
+    
+    const terms = equipmentTerms[equipmentType] || equipmentTerms['general'];
+    
+    // Building-specific prompts
+    const buildingPrompts = {
+        'warehouse': `For warehouse service — do you know where ${terms.name} is located? Will the tech need roof access or keys to any areas?`,
+        'industrial': `Since this is an industrial facility — where is ${terms.name} located, and will our tech need any special access like roof keys or security clearance?`,
+        'factory': `For factory service — is ${terms.name} on the roof, in a mechanical room, or another location? Any access requirements we should know about?`,
+        'data_center': `Data centers often have specific access protocols — where is ${terms.name}, and does the tech need to coordinate with your facilities team?`,
+        'hotel': `For hotel service — is ${terms.name} on the roof or in a mechanical room? Should the tech check in with engineering or the front desk?`,
+        'resort': `For resort service — where is ${terms.name} located? Will our tech need to coordinate with your maintenance or engineering team?`,
+        'healthcare': `Since this is a healthcare facility — where is ${terms.name}? Are there any access restrictions or coordination needed with facilities?`,
+        'office': `Quick question — do you know where ${terms.name} is in the building? Is it rooftop, mechanical room, or somewhere the tech might need access to?`,
+        'shopping_center': `For shopping center service — is ${terms.name} on the roof or behind the building? Will the tech need a key or to coordinate with property management?`,
+        'condo_building': `One more thing — do you know where ${terms.name} is? Some condos have rooftop units that need building access.`,
+        'apartment_building': `Quick question — is ${terms.name} in a utility closet, on the roof, or somewhere the tech might need building access?`
+    };
+    
+    // Return building-specific prompt or generic one
+    if (buildingPrompts[buildingType]) {
+        return buildingPrompts[buildingType];
+    }
+    
+    // Generic commercial prompt
+    const genericPrompts = [
+        `One more thing — do you know where ${terms.name} is located? Will our tech need roof access, keys, or to check in with anyone?`,
+        `Quick question — is ${terms.name} somewhere that requires special access, like a rooftop or locked mechanical room?`,
+        `Just to make sure our tech is prepared — where is ${terms.name}, and is there any special access needed?`
+    ];
+    
+    return genericPrompts[Math.floor(Math.random() * genericPrompts.length)];
+}
+
+/**
  * V35 WORLD-CLASS: Advanced unit number detection
  * Checks multiple signals to determine if unit number should be asked
  * 
@@ -827,8 +974,10 @@ module.exports = {
     shouldConfirmAddress,
     shouldAskForUnit,
     shouldAskForGateCode,
+    shouldAskEquipmentAccess,
     buildConfirmationPhrase,
     buildGateCodePrompt,
+    buildEquipmentAccessPrompt,
     CONFIDENCE
 };
 
