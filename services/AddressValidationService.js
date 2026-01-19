@@ -317,7 +317,27 @@ function detectNeedsUnit(result, options = {}) {
         { pattern: /\b(senior|assisted)\s*(living|care)\b/i, type: 'senior_living', label: 'a senior living facility' },
         { pattern: /\bstudent\s*(housing|living)\b/i, type: 'student_housing', label: 'student housing' },
         { pattern: /\bvillas?\b/i, type: 'villas', label: 'a villa complex' },
-        { pattern: /\btownhome(s)?|townhouse(s)?\b/i, type: 'townhomes', label: 'a townhome community' }
+        { pattern: /\btownhome(s)?|townhouse(s)?\b/i, type: 'townhomes', label: 'a townhome community' },
+        // Commercial/B2B building types
+        { pattern: /\bwarehouse\b/i, type: 'warehouse', label: 'a warehouse' },
+        { pattern: /\bindustrial\s*(park|center|building)?\b/i, type: 'industrial', label: 'an industrial facility' },
+        { pattern: /\bbusiness\s*(park|center|complex)\b/i, type: 'business_park', label: 'a business park' },
+        { pattern: /\bcorporate\s*(center|park|campus)\b/i, type: 'corporate', label: 'a corporate campus' },
+        { pattern: /\bshopping\s*(center|plaza|mall)\b/i, type: 'shopping_center', label: 'a shopping center' },
+        { pattern: /\bretail\s*(center|plaza|park)\b/i, type: 'retail', label: 'a retail center' },
+        { pattern: /\bstrip\s*(mall|center|plaza)\b/i, type: 'strip_mall', label: 'a strip mall' },
+        { pattern: /\bhotel\b/i, type: 'hotel', label: 'a hotel' },
+        { pattern: /\bmotel\b/i, type: 'motel', label: 'a motel' },
+        { pattern: /\bresort\b/i, type: 'resort', label: 'a resort' },
+        { pattern: /\brestaurant\b/i, type: 'restaurant', label: 'a restaurant' },
+        { pattern: /\bchurch|worship|temple|mosque|synagogue\b/i, type: 'religious', label: 'a place of worship' },
+        { pattern: /\bschool|academy|university|college\b/i, type: 'educational', label: 'an educational facility' },
+        { pattern: /\bhospital|clinic\b/i, type: 'healthcare', label: 'a healthcare facility' },
+        { pattern: /\bbank\b/i, type: 'bank', label: 'a bank' },
+        { pattern: /\bself\s*storage|storage\s*(facility|unit)\b/i, type: 'storage', label: 'a storage facility' },
+        { pattern: /\bfactory|manufacturing\b/i, type: 'factory', label: 'a manufacturing facility' },
+        { pattern: /\bdistribution\s*(center)?\b/i, type: 'distribution', label: 'a distribution center' },
+        { pattern: /\bdata\s*center\b/i, type: 'data_center', label: 'a data center' }
     ];
     
     for (const { pattern, type, label } of buildingPatterns) {
