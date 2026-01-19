@@ -291,6 +291,124 @@ function detectNeedsUnit(result, options = {}) {
 }
 
 /**
+ * V35 WORLD-CLASS: Smart gate code detection
+ * Detects if address is likely in a gated community and needs access instructions
+ * 
+ * @param {string} rawAddress - Original user input
+ * @param {Object} googleResult - Google Maps validation result (optional)
+ * @param {Object} config - Gate code configuration
+ * @returns {Object} Detection result with reason
+ */
+function shouldAskForGateCode(rawAddress, googleResult, config = {}) {
+    const {
+        gateCodeMode = 'smart',
+        gateTriggerWords = [],
+        gateAlwaysAskZips = [],
+        gateNeverAskZips = []
+    } = config;
+    
+    // Mode: never - skip all detection
+    if (gateCodeMode === 'never') {
+        return { shouldAsk: false, reason: 'mode_never' };
+    }
+    
+    // Mode: always - always ask
+    if (gateCodeMode === 'always') {
+        return { shouldAsk: true, reason: 'mode_always' };
+    }
+    
+    // Mode: smart - use multiple signals
+    const rawLower = (rawAddress || '').toLowerCase();
+    const normalizedAddress = (googleResult?.normalized || rawAddress || '').toLowerCase();
+    
+    // Check if gate code already mentioned
+    const gateCodePatterns = [
+        /\bgate\s*(code|#)?\s*:?\s*[#*]?\d{3,6}\b/i,
+        /\bcode\s*(is|:)?\s*[#*]?\d{3,6}\b/i,
+        /\bcall\s*(the\s*)?(gate|guard|security)/i
+    ];
+    const hasGateCodeProvided = gateCodePatterns.some(p => p.test(rawLower));
+    if (hasGateCodeProvided) {
+        return { shouldAsk: false, reason: 'gate_code_already_provided' };
+    }
+    
+    // Extract ZIP code for ZIP-based rules
+    const zipMatch = rawLower.match(/\b(\d{5})(-\d{4})?\b/);
+    const zipCode = zipMatch ? zipMatch[1] : null;
+    
+    // Check ZIP-based rules (highest priority)
+    if (zipCode) {
+        if (gateNeverAskZips.includes(zipCode)) {
+            return { shouldAsk: false, reason: 'zip_never_ask', zip: zipCode };
+        }
+        if (gateAlwaysAskZips.includes(zipCode)) {
+            return { shouldAsk: true, reason: 'zip_always_ask', zip: zipCode };
+        }
+    }
+    
+    // Default trigger words for gated communities
+    const defaultGateTriggers = [
+        // Explicit gate mentions
+        'gated', 'gate', 'guard gate', 'guardhouse', 'security gate',
+        // Common gated community naming patterns
+        'country club', 'golf club', 'yacht club', 'beach club',
+        'estates', 'preserve', 'sanctuary', 'reserve',
+        'plantation', 'ranch', 'hacienda',
+        'isle', 'isles', 'island', 'islands', 'key', 'keys', 'cay',
+        'shores', 'harbor', 'harbour', 'bay', 'cove', 'pointe',
+        'palms', 'pines', 'oaks', 'willows', 'cypress',
+        'meadows', 'woods', 'forest', 'grove',
+        'lakes', 'lake', 'pond', 'springs', 'creek', 'falls',
+        'ridge', 'hills', 'highlands', 'bluffs', 'cliff',
+        'crossing', 'commons', 'village', 'villas',
+        'royal', 'imperial', 'colonial', 'heritage',
+        // Florida-specific
+        'pelican', 'heron', 'egret', 'ibis', 'flamingo',
+        'coconut', 'palm beach', 'boca', 'bonita',
+        // HOA indicators
+        'hoa', 'homeowners', 'association'
+    ];
+    
+    const allGateTriggers = [...new Set([...defaultGateTriggers, ...gateTriggerWords])];
+    const foundTrigger = allGateTriggers.find(word => {
+        const wordLower = word.toLowerCase();
+        return rawLower.includes(wordLower) || normalizedAddress.includes(wordLower);
+    });
+    
+    if (foundTrigger) {
+        return { shouldAsk: true, reason: 'trigger_word', trigger: foundTrigger };
+    }
+    
+    // Check Google Maps place types that suggest gated communities
+    if (googleResult?.components) {
+        const formattedAddress = (googleResult.formattedAddress || '').toLowerCase();
+        // Check if formatted address contains gated indicators
+        const gatedIndicators = ['gated', 'private', 'country club', 'golf'];
+        if (gatedIndicators.some(ind => formattedAddress.includes(ind))) {
+            return { shouldAsk: true, reason: 'google_maps_indicator' };
+        }
+    }
+    
+    // Default: don't ask (assume not gated)
+    return { shouldAsk: false, reason: 'no_signals' };
+}
+
+/**
+ * Build gate code prompt phrase
+ * @param {string} companyName - Company name for personalization
+ * @returns {string} Gate code prompt
+ */
+function buildGateCodePrompt(companyName = 'our technician') {
+    const phrases = [
+        `One more thing — is there a gate code, or should the tech call you to get buzzed in?`,
+        `Is there a gate code for the community, or will ${companyName} need to call you at the gate?`,
+        `Got it! Does ${companyName} need a gate code to access the property?`,
+        `Perfect — is there a gate code, or should they call the guard?`
+    ];
+    return phrases[Math.floor(Math.random() * phrases.length)];
+}
+
+/**
  * V35 WORLD-CLASS: Advanced unit number detection
  * Checks multiple signals to determine if unit number should be asked
  * 
@@ -484,9 +602,10 @@ function createFailedResult(rawAddress, status, errorMessage = null) {
  * @param {Object} validationResult - Result from validateAddress
  * @param {Object} config - Address slot configuration
  * @param {string} rawAddress - Original user input (for unit detection)
+ * @param {string} companyName - Company name for gate code prompts
  * @returns {Object} Confirmation decision with suggested phrase
  */
-function shouldConfirmAddress(validationResult, config = {}, rawAddress = '') {
+function shouldConfirmAddress(validationResult, config = {}, rawAddress = '', companyName = 'our technician') {
     const {
         googleMapsValidationMode = 'confirm_low_confidence'
     } = config;
@@ -494,13 +613,18 @@ function shouldConfirmAddress(validationResult, config = {}, rawAddress = '') {
     // V35 WORLD-CLASS: Use advanced unit detection
     const unitDecision = shouldAskForUnit(rawAddress, validationResult, config);
     
+    // V35 WORLD-CLASS: Use advanced gate code detection
+    const gateDecision = shouldAskForGateCode(rawAddress, validationResult, config);
+    
     // Mode: silent - never confirm
     if (googleMapsValidationMode === 'silent') {
         return {
             shouldConfirm: false,
             shouldAskUnit: false,
+            shouldAskGateCode: false,
             reason: 'silent_mode',
-            unitReason: unitDecision.reason
+            unitReason: unitDecision.reason,
+            gateReason: gateDecision.reason
         };
     }
     
@@ -509,9 +633,12 @@ function shouldConfirmAddress(validationResult, config = {}, rawAddress = '') {
         return {
             shouldConfirm: true,
             shouldAskUnit: unitDecision.shouldAsk,
+            shouldAskGateCode: gateDecision.shouldAsk,
             reason: 'always_confirm_mode',
             unitReason: unitDecision.reason,
-            suggestedPhrase: buildConfirmationPhrase(validationResult, 'confirm')
+            gateReason: gateDecision.reason,
+            suggestedPhrase: buildConfirmationPhrase(validationResult, 'confirm'),
+            gateCodePrompt: gateDecision.shouldAsk ? buildGateCodePrompt(companyName) : null
         };
     }
     
@@ -520,22 +647,28 @@ function shouldConfirmAddress(validationResult, config = {}, rawAddress = '') {
                          validationResult.failed || 
                          !validationResult.validated;
     
-    if (!needsConfirm && !unitDecision.shouldAsk) {
+    if (!needsConfirm && !unitDecision.shouldAsk && !gateDecision.shouldAsk) {
         return {
             shouldConfirm: false,
             shouldAskUnit: false,
+            shouldAskGateCode: false,
             reason: 'high_confidence',
-            unitReason: unitDecision.reason
+            unitReason: unitDecision.reason,
+            gateReason: gateDecision.reason
         };
     }
     
     return {
         shouldConfirm: needsConfirm,
         shouldAskUnit: unitDecision.shouldAsk,
-        reason: needsConfirm ? `${validationResult.confidence.toLowerCase()}_confidence` : 'needs_unit',
+        shouldAskGateCode: gateDecision.shouldAsk,
+        reason: needsConfirm ? `${validationResult.confidence.toLowerCase()}_confidence` : (unitDecision.shouldAsk ? 'needs_unit' : 'needs_gate_code'),
         unitReason: unitDecision.reason,
         unitTrigger: unitDecision.trigger,
-        suggestedPhrase: buildConfirmationPhrase(validationResult, unitDecision.shouldAsk ? 'unit' : 'confirm')
+        gateReason: gateDecision.reason,
+        gateTrigger: gateDecision.trigger,
+        suggestedPhrase: buildConfirmationPhrase(validationResult, unitDecision.shouldAsk ? 'unit' : 'confirm'),
+        gateCodePrompt: gateDecision.shouldAsk ? buildGateCodePrompt(companyName) : null
     };
 }
 
@@ -584,7 +717,9 @@ module.exports = {
     validateAddress,
     shouldConfirmAddress,
     shouldAskForUnit,
+    shouldAskForGateCode,
     buildConfirmationPhrase,
+    buildGateCodePrompt,
     CONFIDENCE
 };
 
