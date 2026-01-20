@@ -4596,12 +4596,12 @@ Sean → Shawn, Shaun`;
         // Address type options
         if (type === 'address' || slot.id === 'address') {
             return `
-                <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: #1a2233; border-radius: 4px; border: 1px solid #58a6ff40;">
+                <div style="display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; background: #1a2233; border-radius: 4px; border: 1px solid #58a6ff40;">
                     <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                        <span style="font-size: 11px; color: #58a6ff; font-weight: 600;">📍 Address Options:</span>
-                        <label style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: #8b949e;">
+                        <span style="font-size: 14px; color: #58a6ff; font-weight: 600;">📍 Address Options:</span>
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: #8b949e;">
                             Confirm back:
-                            <select class="slot-addressConfirmLevel" data-index="${index}" style="padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                            <select class="slot-addressConfirmLevel" data-index="${index}" style="padding: 6px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px;">
                                 <option value="street_only" ${slot.addressConfirmLevel === 'street_only' ? 'selected' : ''}>Street only</option>
                                 <option value="street_city" ${(slot.addressConfirmLevel === 'street_city' || !slot.addressConfirmLevel) ? 'selected' : ''}>Street + City</option>
                                 <option value="full" ${slot.addressConfirmLevel === 'full' ? 'selected' : ''}>Full address</option>
@@ -4609,214 +4609,214 @@ Sean → Shawn, Shaun`;
                         </label>
                     </div>
                     <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                        <input type="checkbox" class="slot-acceptPartialAddress" data-index="${index}" ${slot.acceptPartialAddress ? 'checked' : ''} style="accent-color: #58a6ff;">
-                        <span style="font-size: 12px; color: #c9d1d9;">Accept partial address if caller unsure (e.g. "somewhere on Main St")</span>
+                        <input type="checkbox" class="slot-acceptPartialAddress" data-index="${index}" ${slot.acceptPartialAddress ? 'checked' : ''} style="accent-color: #58a6ff; width: 16px; height: 16px;">
+                        <span style="font-size: 14px; color: #c9d1d9;">Accept partial address if caller unsure (e.g. "somewhere on Main St")</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="If AI doesn't understand, ask street → city → zip step by step">
-                        <input type="checkbox" class="slot-breakDownIfUnclear" data-index="${index}" ${slot.breakDownIfUnclear ? 'checked' : ''} style="accent-color: #f0883e;">
-                        <span style="font-size: 12px; color: #c9d1d9;">Break down if unclear (street → city → zip)</span>
+                        <input type="checkbox" class="slot-breakDownIfUnclear" data-index="${index}" ${slot.breakDownIfUnclear ? 'checked' : ''} style="accent-color: #f0883e; width: 16px; height: 16px;">
+                        <span style="font-size: 14px; color: #c9d1d9;">Break down if unclear (street → city → zip)</span>
                     </label>
                     
                     <!-- V35: Google Maps Validation -->
-                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #30363d;">
-                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px;">
-                            <span style="font-size: 11px; color: #238636; font-weight: 600;">🗺️ Google Maps Validation:</span>
+                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #30363d;">
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px;">
+                            <span style="font-size: 14px; color: #238636; font-weight: 600;">🗺️ Google Maps Validation:</span>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Use Google Maps to validate and normalize addresses (requires API key)">
-                                <input type="checkbox" class="slot-useGoogleMapsValidation" data-index="${index}" ${slot.useGoogleMapsValidation ? 'checked' : ''} style="accent-color: #238636;" onchange="window.frontDeskManager.toggleGoogleMapsOptions(${index}, this.checked)">
-                                <span style="font-size: 12px; color: #c9d1d9;">Enable Google Maps validation</span>
+                                <input type="checkbox" class="slot-useGoogleMapsValidation" data-index="${index}" ${slot.useGoogleMapsValidation ? 'checked' : ''} style="accent-color: #238636; width: 16px; height: 16px;" onchange="window.frontDeskManager.toggleGoogleMapsOptions(${index}, this.checked)">
+                                <span style="font-size: 14px; color: #c9d1d9;">Enable Google Maps validation</span>
                     </label>
                         </div>
-                        <div class="google-maps-options" style="display: ${slot.useGoogleMapsValidation ? 'flex' : 'none'}; flex-direction: column; gap: 8px; padding: 8px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;">
-                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                <label style="font-size: 12px; color: #8b949e;">Validation mode:</label>
-                                <select class="slot-googleMapsValidationMode" data-index="${index}" style="padding: 4px 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                        <div class="google-maps-options" style="display: ${slot.useGoogleMapsValidation ? 'flex' : 'none'}; flex-direction: column; gap: 10px; padding: 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;">
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                <label style="font-size: 14px; color: #8b949e;">Validation mode:</label>
+                                <select class="slot-googleMapsValidationMode" data-index="${index}" style="padding: 6px 10px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px;">
                                     <option value="silent" ${slot.googleMapsValidationMode === 'silent' ? 'selected' : ''}>Silent (normalize only, never ask)</option>
                                     <option value="confirm_low_confidence" ${(slot.googleMapsValidationMode === 'confirm_low_confidence' || !slot.googleMapsValidationMode) ? 'selected' : ''}>Confirm if low confidence</option>
                                     <option value="always_confirm" ${slot.googleMapsValidationMode === 'always_confirm' ? 'selected' : ''}>Always confirm normalized address</option>
                                 </select>
                             </div>
-                            <div style="font-size: 10px; color: #6e7681; font-style: italic; margin-top: 4px;">
+                            <div style="font-size: 13px; color: #6e7681; font-style: italic; margin-top: 4px;">
                                 💡 Google Maps validates silently in the background — never blocks conversation or asks redundant questions.
                             </div>
                         </div>
                     </div>
                     
                     <!-- V35: Unit/Apartment Number Detection (World-Class) -->
-                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #30363d;">
-                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px;">
-                            <span style="font-size: 11px; color: #f0883e; font-weight: 600;">🏢 Unit/Apartment Detection:</span>
-                            <select class="slot-unitNumberMode" data-index="${index}" style="padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;" onchange="window.frontDeskManager.toggleUnitOptions(${index}, this.value)">
+                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #30363d;">
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px;">
+                            <span style="font-size: 14px; color: #f0883e; font-weight: 600;">🏢 Unit/Apartment Detection:</span>
+                            <select class="slot-unitNumberMode" data-index="${index}" style="padding: 6px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px;" onchange="window.frontDeskManager.toggleUnitOptions(${index}, this.value)">
                                 <option value="smart" ${(slot.unitNumberMode === 'smart' || !slot.unitNumberMode) ? 'selected' : ''}>🧠 Smart (detect condos, apartments, offices)</option>
                                 <option value="always" ${slot.unitNumberMode === 'always' ? 'selected' : ''}>✅ Always ask for unit number</option>
                                 <option value="never" ${slot.unitNumberMode === 'never' ? 'selected' : ''}>❌ Never ask (single-family homes only)</option>
                             </select>
                         </div>
-                        <div class="unit-options" style="display: ${slot.unitNumberMode !== 'never' ? 'flex' : 'none'}; flex-direction: column; gap: 8px; padding: 8px; background: #0d1117; border-radius: 4px; border: 1px solid #f0883e;">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <label style="font-size: 12px; color: #8b949e; white-space: nowrap;">Unit prompt:</label>
+                        <div class="unit-options" style="display: ${slot.unitNumberMode !== 'never' ? 'flex' : 'none'}; flex-direction: column; gap: 10px; padding: 10px; background: #0d1117; border-radius: 4px; border: 1px solid #f0883e;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <label style="font-size: 14px; color: #8b949e; white-space: nowrap;">Unit prompt:</label>
                                 <input type="text" class="slot-unitNumberPrompt" data-index="${index}" value="${slot.unitNumberPrompt || 'Is there an apartment or unit number?'}" 
-                                    style="flex: 1; padding: 4px 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 12px;">
+                                    style="flex: 1; padding: 8px 10px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px;">
                             </div>
                             
                             <!-- Prompt Variants -->
-                            <div style="display: flex; flex-direction: column; gap: 4px;">
-                                <label style="font-size: 11px; color: #8b949e;">Prompt variants (one per line, agent picks randomly):</label>
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <label style="font-size: 13px; color: #8b949e;">Prompt variants (one per line, agent picks randomly):</label>
                                 <textarea class="slot-unitPromptVariants" data-index="${index}" rows="3" 
                                     placeholder="Is there an apartment or unit number?\nWhat's the apartment or suite number?\nIs there a unit or building number I should note?"
-                                    style="width: 100%; padding: 6px 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px; resize: vertical;">${(slot.unitPromptVariants || ['Is there an apartment or unit number?', "What's the apartment or suite number?", 'Is there a unit or building number I should note?']).join('\n')}</textarea>
+                                    style="width: 100%; padding: 8px 10px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px; resize: vertical;">${(slot.unitPromptVariants || ['Is there an apartment or unit number?', "What's the apartment or suite number?", 'Is there a unit or building number I should note?']).join('\n')}</textarea>
                             </div>
                             
                             <!-- Smart Mode Options -->
-                            <div class="smart-mode-options" style="display: ${slot.unitNumberMode !== 'always' ? 'block' : 'none'}; margin-top: 8px; padding: 8px; background: #161b22; border-radius: 4px; border: 1px dashed #30363d;">
-                                <div style="font-size: 11px; color: #f0883e; font-weight: 600; margin-bottom: 8px;">🧠 Smart Detection Settings:</div>
+                            <div class="smart-mode-options" style="display: ${slot.unitNumberMode !== 'always' ? 'block' : 'none'}; margin-top: 10px; padding: 10px; background: #161b22; border-radius: 4px; border: 1px dashed #30363d;">
+                                <div style="font-size: 14px; color: #f0883e; font-weight: 600; margin-bottom: 10px;">🧠 Smart Detection Settings:</div>
                                 
                                 <!-- Trigger Words -->
-                                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
-                                    <label style="font-size: 11px; color: #8b949e;">Trigger words (ask for unit if address contains these):</label>
+                                <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px;">
+                                    <label style="font-size: 13px; color: #8b949e;">Trigger words (ask for unit if address contains these):</label>
                                     <textarea class="slot-unitTriggerWords" data-index="${index}" rows="2" 
                                         placeholder="apartment, condo, tower, plaza, suite, office..."
-                                        style="width: 100%; padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px; resize: vertical;">${(slot.unitTriggerWords || []).join(', ')}</textarea>
-                                    <div style="font-size: 10px; color: #6e7681;">Default triggers: apartment, condo, tower, plaza, suite, loft, manor, terrace, village, office, etc.</div>
+                                        style="width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px; resize: vertical;">${(slot.unitTriggerWords || []).join(', ')}</textarea>
+                                    <div style="font-size: 12px; color: #6e7681;">Default triggers: apartment, condo, tower, plaza, suite, loft, manor, terrace, village, office, etc.</div>
                                 </div>
                                 
                                 <!-- ZIP Code Rules -->
                                 <div style="display: flex; gap: 12px; flex-wrap: wrap;">
                                     <div style="flex: 1; min-width: 200px;">
-                                        <label style="font-size: 11px; color: #8b949e; display: block; margin-bottom: 4px;">Always ask in these ZIPs (downtown, urban):</label>
+                                        <label style="font-size: 13px; color: #8b949e; display: block; margin-bottom: 6px;">Always ask in these ZIPs (downtown, urban):</label>
                                         <input type="text" class="slot-unitAlwaysAskZips" data-index="${index}" 
                                             value="${(slot.unitAlwaysAskZips || []).join(', ')}"
                                             placeholder="33101, 33130, 33132..."
-                                            style="width: 100%; padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                            style="width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px;">
                                     </div>
                                     <div style="flex: 1; min-width: 200px;">
-                                        <label style="font-size: 11px; color: #8b949e; display: block; margin-bottom: 4px;">Never ask in these ZIPs (rural, single-family):</label>
+                                        <label style="font-size: 13px; color: #8b949e; display: block; margin-bottom: 6px;">Never ask in these ZIPs (rural, single-family):</label>
                                         <input type="text" class="slot-unitNeverAskZips" data-index="${index}" 
                                             value="${(slot.unitNeverAskZips || []).join(', ')}"
                                             placeholder="33912, 33913..."
-                                            style="width: 100%; padding: 4px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                            style="width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px;">
                                     </div>
                                 </div>
                             </div>
                             
-                            <div style="font-size: 10px; color: #6e7681; font-style: italic; margin-top: 4px;">
+                            <div style="font-size: 13px; color: #6e7681; font-style: italic; margin-top: 6px;">
                                 🏢 Smart mode detects: condos, apartments, office buildings, towers, plazas, and more. Customize with trigger words and ZIP rules.
                             </div>
                         </div>
                     </div>
                     
                     <!-- V72: Service Area Validation -->
-                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #30363d;">
-                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px;">
-                            <span style="font-size: 11px; color: #da3633; font-weight: 600;">📍 Service Area Validation:</span>
+                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #30363d;">
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px;">
+                            <span style="font-size: 14px; color: #da3633; font-weight: 600;">📍 Service Area Validation:</span>
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Check if address is within your service area before proceeding">
-                                <input type="checkbox" class="slot-serviceAreaEnabled" data-index="${index}" ${slot.serviceAreaEnabled ? 'checked' : ''} style="accent-color: #da3633;" onchange="window.frontDeskManager.toggleServiceAreaOptions(${index}, this.checked)">
-                                <span style="font-size: 12px; color: #c9d1d9;">Enable service area validation</span>
+                                <input type="checkbox" class="slot-serviceAreaEnabled" data-index="${index}" ${slot.serviceAreaEnabled ? 'checked' : ''} style="accent-color: #da3633; width: 16px; height: 16px;" onchange="window.frontDeskManager.toggleServiceAreaOptions(${index}, this.checked)">
+                                <span style="font-size: 14px; color: #c9d1d9;">Enable service area validation</span>
                             </label>
                         </div>
-                        <div class="service-area-options" style="display: ${slot.serviceAreaEnabled ? 'flex' : 'none'}; flex-direction: column; gap: 10px; padding: 10px; background: #0d1117; border-radius: 4px; border: 1px solid #da3633;">
+                        <div class="service-area-options" style="display: ${slot.serviceAreaEnabled ? 'flex' : 'none'}; flex-direction: column; gap: 12px; padding: 12px; background: #0d1117; border-radius: 4px; border: 1px solid #da3633;">
                             
                             <!-- ZIP Codes -->
                             <div>
-                                <label style="font-size: 11px; color: #da3633; display: block; margin-bottom: 4px; font-weight: 600;">ZIP Codes We Service (comma-separated):</label>
+                                <label style="font-size: 14px; color: #da3633; display: block; margin-bottom: 6px; font-weight: 600;">ZIP Codes We Service (comma-separated):</label>
                                 <textarea class="slot-servicedZipCodes" data-index="${index}" rows="2" 
                                     placeholder="33901, 33903, 33904, 33905, 33907, 33908, 33909, 33912, 33913, 33916, 33919"
-                                    style="width: 100%; padding: 6px 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px; resize: vertical;">${(slot.servicedZipCodes || []).join(', ')}</textarea>
+                                    style="width: 100%; padding: 8px 10px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px; resize: vertical;">${(slot.servicedZipCodes || []).join(', ')}</textarea>
                             </div>
                             
                             <!-- Cities -->
                             <div>
-                                <label style="font-size: 11px; color: #da3633; display: block; margin-bottom: 4px; font-weight: 600;">Cities We Service (comma-separated):</label>
+                                <label style="font-size: 14px; color: #da3633; display: block; margin-bottom: 6px; font-weight: 600;">Cities We Service (comma-separated):</label>
                                 <input type="text" class="slot-servicedCities" data-index="${index}" 
                                     value="${(slot.servicedCities || []).join(', ')}"
                                     placeholder="Fort Myers, Cape Coral, Naples, Bonita Springs, Estero"
-                                    style="width: 100%; padding: 6px 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                    style="width: 100%; padding: 8px 10px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px;">
                             </div>
                             
                             <!-- Radius-based coverage (OPTIONAL) -->
-                            <div style="padding: 10px; background: #161b22; border-radius: 4px; border: 1px dashed #30363d;">
-                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                            <div style="padding: 12px; background: #161b22; border-radius: 4px; border: 1px dashed #30363d;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
                                     <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                        <input type="checkbox" class="slot-radiusCoverageEnabled" data-index="${index}" ${slot.radiusCoverageEnabled ? 'checked' : ''} style="accent-color: #da3633;" onchange="window.frontDeskManager.toggleRadiusOptions(${index}, this.checked)">
-                                        <span style="font-size: 12px; color: #c9d1d9; font-weight: 600;">🗺️ OPTIONAL: Use radius coverage</span>
+                                        <input type="checkbox" class="slot-radiusCoverageEnabled" data-index="${index}" ${slot.radiusCoverageEnabled ? 'checked' : ''} style="accent-color: #da3633; width: 16px; height: 16px;" onchange="window.frontDeskManager.toggleRadiusOptions(${index}, this.checked)">
+                                        <span style="font-size: 14px; color: #c9d1d9; font-weight: 600;">🗺️ OPTIONAL: Use radius coverage</span>
                                     </label>
                                 </div>
-                                <div style="font-size: 10px; color: #8b949e; margin-bottom: 8px; padding: 6px; background: #0d1117; border-radius: 4px;">
+                                <div style="font-size: 13px; color: #8b949e; margin-bottom: 10px; padding: 8px; background: #0d1117; border-radius: 4px; line-height: 1.5;">
                                     💡 <strong>When to use radius:</strong> If callers ask "Do you service [city]?" and you want to auto-check if that city is within X miles of your shop.<br>
                                     ⚠️ <strong>Not needed if:</strong> Your service area is different from your shop location — just use ZIP codes and cities above.
                                 </div>
-                                <div class="radius-options" style="display: ${slot.radiusCoverageEnabled ? 'flex' : 'none'}; flex-direction: column; gap: 8px;">
+                                <div class="radius-options" style="display: ${slot.radiusCoverageEnabled ? 'flex' : 'none'}; flex-direction: column; gap: 10px;">
                                     <!-- Center Address (user-friendly) -->
                                     <div>
-                                        <label style="font-size: 10px; color: #8b949e; display: block; margin-bottom: 2px;">📍 Shop/Center Address:</label>
-                                        <div style="display: flex; gap: 6px;">
+                                        <label style="font-size: 13px; color: #8b949e; display: block; margin-bottom: 6px;">📍 Shop/Center Address:</label>
+                                        <div style="display: flex; gap: 8px;">
                                             <input type="text" class="slot-centerAddress" data-index="${index}" 
                                                 value="${slot.centerAddress || ''}"
                                                 placeholder="123 Main St, Fort Myers FL 33901"
-                                                style="flex: 1; padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                                style="flex: 1; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px;">
                                             <button type="button" class="geocode-btn" data-index="${index}"
                                                 onclick="window.frontDeskManager.geocodeCenterAddress(${index})"
-                                                style="padding: 6px 12px; background: #238636; border: none; border-radius: 4px; color: white; font-size: 11px; cursor: pointer; white-space: nowrap;">
+                                                style="padding: 8px 14px; background: #238636; border: none; border-radius: 4px; color: white; font-size: 14px; cursor: pointer; white-space: nowrap;">
                                                 📍 Get Coordinates
                                             </button>
                                         </div>
                                     </div>
                                     
                                     <!-- Coordinates (auto-filled or manual) -->
-                                    <div style="display: flex; gap: 10px; flex-wrap: wrap; padding: 8px; background: #0d1117; border-radius: 4px;">
-                                        <div style="flex: 1; min-width: 100px;">
-                                            <label style="font-size: 10px; color: #6e7681; display: block; margin-bottom: 2px;">Latitude:</label>
+                                    <div style="display: flex; gap: 12px; flex-wrap: wrap; padding: 10px; background: #0d1117; border-radius: 4px;">
+                                        <div style="flex: 1; min-width: 120px;">
+                                            <label style="font-size: 13px; color: #6e7681; display: block; margin-bottom: 4px;">Latitude:</label>
                                             <input type="number" step="0.0001" class="slot-centerLat" data-index="${index}" 
                                                 value="${slot.centerLat || ''}"
                                                 placeholder="26.6406"
-                                                style="width: 100%; padding: 4px 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                                style="width: 100%; padding: 8px 10px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px;">
                                         </div>
-                                        <div style="flex: 1; min-width: 100px;">
-                                            <label style="font-size: 10px; color: #6e7681; display: block; margin-bottom: 2px;">Longitude:</label>
+                                        <div style="flex: 1; min-width: 120px;">
+                                            <label style="font-size: 13px; color: #6e7681; display: block; margin-bottom: 4px;">Longitude:</label>
                                             <input type="number" step="0.0001" class="slot-centerLng" data-index="${index}" 
                                                 value="${slot.centerLng || ''}"
                                                 placeholder="-81.8723"
-                                                style="width: 100%; padding: 4px 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                                style="width: 100%; padding: 8px 10px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px;">
                                         </div>
                                         <div style="flex: 1; min-width: 80px;">
                                             <label style="font-size: 10px; color: #6e7681; display: block; margin-bottom: 2px;">Radius (miles):</label>
                                             <input type="number" class="slot-radiusMiles" data-index="${index}" 
                                                 value="${slot.radiusMiles || 25}"
                                                 placeholder="25"
-                                                style="width: 100%; padding: 4px 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                                style="width: 100%; padding: 8px 10px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px;">
                                         </div>
                                     </div>
-                                    <div id="geocode-status-${index}" style="font-size: 10px; color: #6e7681; display: none;"></div>
+                                    <div id="geocode-status-${index}" style="font-size: 13px; color: #6e7681; display: none;"></div>
                                 </div>
                             </div>
                             
                             <!-- Responses -->
-                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                                <div style="flex: 1; min-width: 200px;">
-                                    <label style="font-size: 10px; color: #8b949e; display: block; margin-bottom: 2px;">✅ In service area response:</label>
+                            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                                <div style="flex: 1; min-width: 240px;">
+                                    <label style="font-size: 13px; color: #8b949e; display: block; margin-bottom: 6px;">✅ In service area response:</label>
                                     <input type="text" class="slot-inAreaResponse" data-index="${index}" 
                                         value="${slot.inAreaResponse || 'Great! We do service {city}. Let me help you get scheduled.'}"
                                         placeholder="Great! We do service {city}."
-                                        style="width: 100%; padding: 4px 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                        style="width: 100%; padding: 8px 10px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px;">
                                 </div>
-                                <div style="flex: 1; min-width: 200px;">
-                                    <label style="font-size: 10px; color: #8b949e; display: block; margin-bottom: 2px;">❌ Out of area response:</label>
+                                <div style="flex: 1; min-width: 240px;">
+                                    <label style="font-size: 13px; color: #8b949e; display: block; margin-bottom: 6px;">❌ Out of area response:</label>
                                     <input type="text" class="slot-outOfAreaResponse" data-index="${index}" 
                                         value="${slot.outOfAreaResponse || "I'm sorry, we don't service {area}. We cover {serviceAreaSummary}."}"
                                         placeholder="I'm sorry, we don't service {area}."
-                                        style="width: 100%; padding: 4px 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                        style="width: 100%; padding: 8px 10px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px;">
                                 </div>
                             </div>
                             
                             <!-- Service Area Summary -->
                             <div>
-                                <label style="font-size: 10px; color: #8b949e; display: block; margin-bottom: 2px;">Service area summary (used in responses):</label>
+                                <label style="font-size: 13px; color: #8b949e; display: block; margin-bottom: 6px;">Service area summary (used in responses):</label>
                                 <input type="text" class="slot-serviceAreaSummary" data-index="${index}" 
                                     value="${slot.serviceAreaSummary || ''}"
                                     placeholder="Fort Myers, Cape Coral, Naples, and surrounding areas"
-                                    style="width: 100%; padding: 4px 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                    style="width: 100%; padding: 8px 10px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 14px;">
                             </div>
                             
-                            <div style="font-size: 10px; color: #6e7681; font-style: italic;">
+                            <div style="font-size: 13px; color: #6e7681; font-style: italic; line-height: 1.5;">
                                 📍 When caller gives address or asks "Do you service {city}?", agent checks against your ZIP codes and radius. Use {city}, {area}, {serviceAreaSummary} in responses.
                             </div>
                         </div>
@@ -4830,15 +4830,15 @@ Sean → Shawn, Shaun`;
         // Email type options
         if (type === 'email') {
             return `
-                <div style="display: flex; align-items: center; gap: 16px; padding: 10px 12px; background: #1a2233; border-radius: 4px; border: 1px solid #58a6ff40; flex-wrap: wrap;">
-                    <span style="font-size: 11px; color: #58a6ff; font-weight: 600;">📧 Email Options:</span>
+                <div style="display: flex; align-items: center; gap: 16px; padding: 12px 14px; background: #1a2233; border-radius: 4px; border: 1px solid #58a6ff40; flex-wrap: wrap;">
+                    <span style="font-size: 14px; color: #58a6ff; font-weight: 600;">📧 Email Options:</span>
                     <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                        <input type="checkbox" class="slot-spellOutEmail" data-index="${index}" ${slot.spellOutEmail !== false ? 'checked' : ''} style="accent-color: #58a6ff;">
-                        <span style="font-size: 12px; color: #c9d1d9;">AI spells back email for confirmation</span>
+                        <input type="checkbox" class="slot-spellOutEmail" data-index="${index}" ${slot.spellOutEmail !== false ? 'checked' : ''} style="accent-color: #58a6ff; width: 16px; height: 16px;">
+                        <span style="font-size: 14px; color: #c9d1d9;">AI spells back email for confirmation</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                        <input type="checkbox" class="slot-offerToSendText" data-index="${index}" ${slot.offerToSendText ? 'checked' : ''} style="accent-color: #58a6ff;">
-                        <span style="font-size: 12px; color: #c9d1d9;">Offer "I can text you to confirm the spelling"</span>
+                        <input type="checkbox" class="slot-offerToSendText" data-index="${index}" ${slot.offerToSendText ? 'checked' : ''} style="accent-color: #58a6ff; width: 16px; height: 16px;">
+                        <span style="font-size: 14px; color: #c9d1d9;">Offer "I can text you to confirm the spelling"</span>
                     </label>
                 </div>
             `;
