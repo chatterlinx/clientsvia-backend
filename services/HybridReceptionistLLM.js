@@ -1302,10 +1302,83 @@ class HybridReceptionistLLM {
                 ? 'Move a bit slower; add brief confirmations when appropriate.'
                 : '';
         
-        // Customer context (brief)
-        const callerInfo = customerContext?.isReturning 
-            ? `Returning customer${customerContext.name ? `: ${customerContext.name}` : ''}`
-            : 'New caller';
+        // V76: Customer Intelligence - Full context for returning callers
+        let callerInfo = 'New caller';
+        let customerIntelligence = '';
+        
+        if (customerContext?.hasContext && customerContext?.isReturning) {
+            // Rich customer context loaded
+            const name = customerContext.identity?.name?.displayName || customerContext.name || 'Customer';
+            const totalCalls = customerContext.metrics?.totalCalls || 1;
+            const customerSince = customerContext.metrics?.customerSince || '';
+            
+            callerInfo = `RETURNING CUSTOMER: ${name} (${totalCalls} previous calls, customer for ${customerSince})`;
+            
+            // Build customer intelligence section
+            const intel = [];
+            
+            // Equipment info
+            if (customerContext.equipment?.length > 0) {
+                const eq = customerContext.equipment[0];
+                let eqInfo = `Equipment: ${eq.type}`;
+                if (eq.brand) eqInfo += ` ${eq.brand}`;
+                if (eq.model) eqInfo += ` ${eq.model}`;
+                if (eq.installYear) eqInfo += ` (${eq.installYear})`;
+                if (eq.warrantyStatus === 'active') eqInfo += ' [WARRANTY ACTIVE]';
+                else if (eq.warrantyStatus === 'expired') eqInfo += ' [OUT OF WARRANTY]';
+                intel.push(eqInfo);
+            }
+            
+            // Last service visit
+            if (customerContext.serviceVisits?.length > 0) {
+                const visit = customerContext.serviceVisits[0];
+                let visitInfo = `Last visit: ${visit.dateFormatted}`;
+                if (visit.technicianName) visitInfo += ` by ${visit.technicianName}`;
+                if (visit.issueDescription) visitInfo += ` - "${visit.issueDescription}"`;
+                if (visit.resolution) visitInfo += ` → ${visit.resolution}`;
+                intel.push(visitInfo);
+            }
+            
+            // Last call summary
+            if (customerContext.callHistory?.length > 0) {
+                const lastCall = customerContext.callHistory[0];
+                intel.push(`Last call: ${lastCall.daysAgo} days ago - ${lastCall.summary || lastCall.outcome || 'general inquiry'}`);
+            }
+            
+            // Key quotes from past calls
+            if (customerContext.pastTranscripts?.length > 0) {
+                const transcript = customerContext.pastTranscripts[0];
+                if (transcript.summary) {
+                    intel.push(`Past issue: ${transcript.summary}`);
+                }
+            }
+            
+            // Preferred technician
+            if (customerContext.preferences?.preferredTechnician) {
+                intel.push(`Preferred tech: ${customerContext.preferences.preferredTechnician}`);
+            }
+            
+            // Address on file
+            if (customerContext.identity?.primaryAddress?.formatted) {
+                intel.push(`Address on file: ${customerContext.identity.primaryAddress.formatted}`);
+                if (customerContext.identity.primaryAddress.notes) {
+                    intel.push(`⚠️ Address note: ${customerContext.identity.primaryAddress.notes}`);
+                }
+            }
+            
+            // AI notes
+            if (customerContext.aiNotes?.length > 0) {
+                const topNotes = customerContext.aiNotes.slice(0, 2).map(n => n.note);
+                intel.push(`Notes: ${topNotes.join('; ')}`);
+            }
+            
+            if (intel.length > 0) {
+                customerIntelligence = `\n\n🧠 CUSTOMER INTELLIGENCE (reference naturally, don't read verbatim):\n${intel.join('\n')}`;
+            }
+        } else if (customerContext?.isReturning) {
+            // Basic returning customer info (no full context loaded)
+            callerInfo = `Returning customer${customerContext.name ? `: ${customerContext.name}` : ''}`;
+        }
         
         // Forbidden phrases from config (keep short)
         const uiConfig = loadFrontDeskConfig(company);
@@ -1330,7 +1403,8 @@ class HybridReceptionistLLM {
         
         const prompt = `You are ${companyName}'s receptionist (${trade}). ${styleHint}${warmthHint ? ` ${warmthHint}` : ''}${paceHint ? ` ${paceHint}` : ''}
 
-CALLER: ${callerInfo}
+CALLER: ${callerInfo}${customerIntelligence}
+
 HAVE: ${collected.join(', ') || 'nothing yet'}
 NEED (in order): ${needed.join(' → ') || 'nothing - ready to confirm'}
 

@@ -36,6 +36,7 @@ const Company = require('../models/v2Company');
 const BookingRequest = require('../models/BookingRequest');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const CustomerService = require('./CustomerService');
+const CustomerContextLoader = require('./CustomerContextLoader');
 const SessionService = require('./SessionService');
 const RunningSummaryService = require('./RunningSummaryService');
 const HybridReceptionistLLM = require('./HybridReceptionistLLM');
@@ -3140,11 +3141,42 @@ async function processTurn({
         log('CHECKPOINT 5: Building customer context...');
         let customerContext;
         try {
+            // V76: Load FULL customer intelligence (past calls, transcripts, equipment, notes)
+            if (customer && customer._id) {
+                // Load comprehensive context for returning customers
+                const fullContext = await CustomerContextLoader.loadCustomerContext(
+                    company._id, 
+                    customer._id
+                );
+                
+                if (fullContext.hasContext) {
+                    // Rich context with past transcripts, service visits, equipment
+                    customerContext = {
+                        ...CustomerService.buildContextForAI(customer),
+                        ...fullContext,
+                        // Preserve both isKnown and hasContext flags
+                        isKnown: true
+                    };
+                    log('📚 CUSTOMER INTELLIGENCE LOADED', {
+                        name: fullContext.identity?.name?.displayName,
+                        totalCalls: fullContext.metrics?.totalCalls,
+                        pastTranscripts: fullContext.pastTranscripts?.length || 0,
+                        serviceVisits: fullContext.serviceVisits?.length || 0,
+                        equipment: fullContext.equipment?.length || 0,
+                        loadTimeMs: fullContext.loadTimeMs
+                    });
+                } else {
+                    // Fallback to basic context
+                    customerContext = CustomerService.buildContextForAI(customer);
+                }
+            } else {
+                customerContext = { isKnown: false, summary: `New ${channel} visitor` };
+            }
+        } catch (ctxErr) {
+            log('⚠️ Customer context load failed (using basic)', { error: ctxErr.message });
             customerContext = customer 
                 ? CustomerService.buildContextForAI(customer)
                 : { isKnown: false, summary: `New ${channel} visitor` };
-        } catch (ctxErr) {
-            customerContext = { isKnown: false, summary: `New ${channel} visitor` };
         }
         log('CHECKPOINT 5: ✅ Customer context built');
         
@@ -10100,6 +10132,79 @@ async function processTurn({
             } catch (bbErr) {
                 // Non-blocking: Don't let Black Box failures kill the conversation
                 log('⚠️ Black Box logging failed (non-fatal)', { error: bbErr.message });
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V76: SAVE CUSTOMER LEARNINGS (Non-blocking)
+        // ═══════════════════════════════════════════════════════════════════════════
+        // After each turn, save any new insights back to the customer record.
+        // This builds the customer's profile over time for future calls.
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (session.customerId && extractedThisTurn) {
+            try {
+                const learnings = {
+                    sessionId: session._id
+                };
+                
+                // Save name if extracted this turn
+                if (extractedThisTurn.name) {
+                    const nameParts = extractedThisTurn.name.split(' ');
+                    learnings.name = {
+                        full: extractedThisTurn.name,
+                        first: nameParts[0] || null,
+                        last: nameParts.slice(1).join(' ') || null
+                    };
+                }
+                
+                // Save address if extracted this turn
+                if (extractedThisTurn.address) {
+                    const addrParts = parseCityStatePhrase(extractedThisTurn.address);
+                    learnings.address = {
+                        street: addrParts?.street || extractedThisTurn.address,
+                        city: addrParts?.city || null,
+                        state: addrParts?.state || null,
+                        zip: addrParts?.zip || null,
+                        notes: extractedThisTurn.unit ? `Unit: ${extractedThisTurn.unit}` : null
+                    };
+                }
+                
+                // Save notes from discovery
+                const notes = [];
+                if (session.discovery?.issue) {
+                    notes.push(`Issue: ${session.discovery.issue}`);
+                }
+                if (session.discovery?.symptoms?.length > 0) {
+                    notes.push(`Symptoms: ${session.discovery.symptoms.join(', ')}`);
+                }
+                // Detect preferred technician mention
+                const techMatch = userText.match(/(?:want|prefer|like|ask for|request)\s+(?:the same\s+)?(?:technician|tech|guy|person)?\s*(?:named?\s+)?(\w+)/i);
+                if (techMatch) {
+                    learnings.preferredTechnician = techMatch[1];
+                }
+                // Detect time preference
+                const timeMatch = userText.match(/(?:prefer|need|want|only)\s+(?:in the\s+)?(morning|afternoon|evening|early|late)/i);
+                if (timeMatch) {
+                    learnings.preferredTime = timeMatch[1];
+                }
+                
+                if (notes.length > 0) {
+                    learnings.notes = notes;
+                }
+                
+                // Only save if we have something new
+                if (Object.keys(learnings).length > 1) { // More than just sessionId
+                    CustomerContextLoader.saveCallLearnings(
+                        company._id,
+                        session.customerId,
+                        learnings
+                    ).catch(learnErr => {
+                        log('⚠️ Failed to save customer learnings (non-fatal)', { error: learnErr.message });
+                    });
+                }
+            } catch (learnErr) {
+                // Non-blocking
+                log('⚠️ Customer learning extraction failed (non-fatal)', { error: learnErr.message });
             }
         }
         
