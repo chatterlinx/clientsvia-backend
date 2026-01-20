@@ -22,6 +22,19 @@ const TEMPLATE_ID = '68fb535130d19aec696d8123';
 // Fix the callback vs "not sure" scenario mismatch
 // ============================================================================
 router.post('/fix-callback-scenario', authenticateJWT, async (req, res) => {
+    runCallbackFix(req, res);
+});
+
+// TEMPORARY: GET version for easy browser access (remove after use)
+router.get('/fix-callback-scenario/run', async (req, res) => {
+    // Secret key required for unauthenticated access
+    if (req.query.key !== 'penguin-air-fix-2026') {
+        return res.status(403).json({ error: 'Invalid key' });
+    }
+    runCallbackFix(req, res);
+});
+
+async function runCallbackFix(req, res) {
     console.log('\n============================================================');
     console.log('🔧 RUNNING: Fix Callback vs "Not Sure" Scenario Mismatch');
     console.log('============================================================\n');
@@ -196,7 +209,7 @@ router.post('/fix-callback-scenario', authenticateJWT, async (req, res) => {
         logger.error('[SCENARIO MIGRATION] Callback fix failed', { error: error.message });
         res.status(500).json(results);
     }
-});
+}
 
 // ============================================================================
 // GET /status - Check current scenario configuration
