@@ -18,7 +18,10 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 
+// V81: Comprehensive list of words that should NEVER be stripped as fillers
+// These words carry MEANING and destroying them breaks understanding
 const WORDS_TO_REMOVE = [
+    // TIME-RELATED (scheduling info!)
     'today',
     'tomorrow',
     'now',
@@ -30,7 +33,26 @@ const WORDS_TO_REMOVE = [
     'tonight',
     'morning',
     'afternoon',
-    'evening'
+    'evening',
+    
+    // QUESTION-BREAKING (stripping these breaks questions!)
+    'you know',    // "Do you know my name?" → "do my name?" BROKEN!
+    'like',        // "I'd like to schedule" → "i'd to schedule" BROKEN!
+    'i mean',      // "I mean it's really hot" → loses emphasis
+    
+    // CONTEXT-BREAKING (stripping these loses info!)
+    'you guys',    // "you guys were here last week" → "were at my house" loses the subject
+    
+    // POLITENESS (should be preserved for tone)
+    'please',
+    'thanks',
+    'thank you',
+    
+    // EMPHASIS (carries meaning)
+    'actually',
+    'basically',
+    'really',
+    'very'
 ];
 
 async function fixFillerWords() {

@@ -623,9 +623,34 @@ Answer: ${cheatSheetKnowledge.answer}
         }
         
         // Build discovery state context
+        // V81: Include ALL extracted context for smart conversations
         let discoveryContext = '';
-        if (session?.discovery?.issue) {
-            discoveryContext = `\nCALLER'S ISSUE: ${session.discovery.issue}`;
+        const disc = session?.discovery || {};
+        
+        // Build comprehensive context
+        const contextParts = [];
+        
+        if (disc.issue) {
+            contextParts.push(`ISSUE: ${disc.issue}`);
+        }
+        if (disc.mentionedTechName) {
+            contextParts.push(`TECH MENTIONED: ${disc.mentionedTechName}`);
+        }
+        if (disc.previousVisitTime) {
+            contextParts.push(`PREVIOUS VISIT: ${disc.previousVisitTime}`);
+        }
+        if (disc.mentionedEquipment) {
+            contextParts.push(`EQUIPMENT: ${disc.mentionedEquipment}`);
+        }
+        
+        if (contextParts.length > 0) {
+            discoveryContext = `
+WHAT CALLER HAS TOLD YOU THIS CALL:
+${contextParts.map(p => `- ${p}`).join('\n')}
+
+IMPORTANT: If the caller asks about something they already mentioned (like "do you know who was out here?"), 
+reference this context! Example: "Yes, you mentioned ${disc.mentionedTechName || 'the technician'} was out ${disc.previousVisitTime || 'recently'}."
+`;
         }
         
         // ═══════════════════════════════════════════════════════════════════

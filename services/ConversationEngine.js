@@ -72,7 +72,7 @@ const BlackBoxLogger = require('./BlackBoxLogger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V42-BLACKBOX-LOGGER-FIX';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V81-SMART-DISCOVERY-CONTEXT';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -1910,6 +1910,24 @@ const ConsentDetector = {
         // This catches: "yes", "yes please", "yes can you please", "yeah", etc.
         // We check if the AI just asked about scheduling in the last turn
         // ═══════════════════════════════════════════════════════════════════
+        
+        // V81 FIX: If user is ASKING A QUESTION, don't treat acknowledgments as consent
+        // "Okay, do you know who was out here?" → NOT consent, it's a question!
+        const userAskedQuestion = textLower.trim().endsWith('?');
+        if (userAskedQuestion) {
+            // User is asking a question - "okay" at the start is just conversational
+            return { hasConsent: false, matchedPhrase: null, reason: 'user_asked_question' };
+        }
+        
+        // V81 FIX: If user says "okay" but then has 10+ more words, they're not consenting
+        // They're acknowledging and then saying something else
+        const words = textLower.split(/\s+/).filter(w => w.length > 0);
+        const firstWord = words[0] || '';
+        const acknowledgmentWords = ['okay', 'ok', 'alright', 'sure'];
+        const isJustAcknowledgment = acknowledgmentWords.includes(firstWord) && words.length > 8;
+        if (isJustAcknowledgment) {
+            return { hasConsent: false, matchedPhrase: null, reason: 'acknowledgment_with_followup' };
+        }
         
         // Check if last AI response asked about scheduling
         const lastTurns = session?.turns || [];
@@ -8671,6 +8689,68 @@ async function processTurn({
             session.discovery = session.discovery || {};
             session.discovery.turnCount = (session.discovery.turnCount || 0) + 1;
             const discoveryTurnCount = session.discovery.turnCount;
+            
+            // ═══════════════════════════════════════════════════════════════════════
+            // V81: ENTITY EXTRACTION - Capture context for smart conversations
+            // ═══════════════════════════════════════════════════════════════════════
+            // Extract tech name mentioned: "his name was Dustin", "Dustin was here", "guy named Dustin"
+            const techNamePatterns = [
+                /(?:his|her|the)\s+name\s+(?:was|is)\s+(\w+)/i,
+                /(?:guy|tech|technician|person)\s+(?:named?|called)\s+(\w+)/i,
+                /(\w+)\s+(?:was|came)\s+(?:here|out)/i,
+                /(?:same|same guy|prefer)\s+(\w+)/i
+            ];
+            for (const pattern of techNamePatterns) {
+                const match = userText.match(pattern);
+                if (match && match[1] && match[1].length > 2 && !/^(the|was|out|here|guy|came)$/i.test(match[1])) {
+                    if (!session.discovery.mentionedTechName) {
+                        session.discovery.mentionedTechName = match[1];
+                        log('📝 V81: Tech name extracted', { techName: match[1], pattern: pattern.toString() });
+                    }
+                    break;
+                }
+            }
+            
+            // Extract previous visit timeframe: "a week ago", "2 weeks ago", "last week", "recently"
+            const visitTimePatterns = [
+                /(\d+)\s*(?:days?|weeks?|months?)\s+ago/i,
+                /(last|past)\s+(week|month|few days)/i,
+                /(yesterday|recently|other day)/i
+            ];
+            for (const pattern of visitTimePatterns) {
+                const match = userText.match(pattern);
+                if (match) {
+                    if (!session.discovery.previousVisitTime) {
+                        session.discovery.previousVisitTime = match[0];
+                        log('📝 V81: Previous visit time extracted', { visitTime: match[0] });
+                    }
+                    break;
+                }
+            }
+            
+            // Extract equipment mentioned: "thermostat", "AC unit", "system", "furnace"
+            const equipmentMatch = userText.match(/\b(thermostat|ac unit|ac|air conditioner|system|furnace|heat pump|condenser|handler|blower)\b/i);
+            if (equipmentMatch && !session.discovery.mentionedEquipment) {
+                session.discovery.mentionedEquipment = equipmentMatch[1];
+                log('📝 V81: Equipment extracted', { equipment: equipmentMatch[1] });
+            }
+            
+            // Build discovery context summary for LLM
+            const discoveryContext = [];
+            if (session.discovery.mentionedTechName) {
+                discoveryContext.push(`Tech mentioned: ${session.discovery.mentionedTechName}`);
+            }
+            if (session.discovery.previousVisitTime) {
+                discoveryContext.push(`Previous visit: ${session.discovery.previousVisitTime}`);
+            }
+            if (session.discovery.mentionedEquipment) {
+                discoveryContext.push(`Equipment: ${session.discovery.mentionedEquipment}`);
+            }
+            if (discoveryContext.length > 0) {
+                session.discovery.contextSummary = discoveryContext.join(', ');
+                log('📝 V81: Discovery context built', { context: session.discovery.contextSummary });
+            }
+            // ═══════════════════════════════════════════════════════════════════════
             
             // Detect if caller described an issue (service request)
             const issueKeywords = /not (cooling|heating|working)|broken|leaking|won't (turn on|start)|making noise|stopped|no (air|heat|cold)|issues?|problem/i;

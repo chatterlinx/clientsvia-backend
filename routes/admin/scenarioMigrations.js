@@ -199,6 +199,131 @@ router.post('/fix-callback-scenario', authenticateJWT, async (req, res) => {
 });
 
 // ============================================================================
+// POST /fix-filler-words
+// Remove meaning-carrying words from filler word lists
+// ============================================================================
+router.post('/fix-filler-words', authenticateJWT, async (req, res) => {
+    console.log('\n============================================================');
+    console.log('🔧 RUNNING: Fix Filler Words (Remove Meaningful Words)');
+    console.log('============================================================\n');
+    
+    // V81: Comprehensive list of words that should NEVER be stripped as fillers
+    const WORDS_TO_REMOVE = [
+        // TIME-RELATED (scheduling info!)
+        'today', 'tomorrow', 'now', 'asap', 'urgent', 'emergency',
+        'right away', 'immediately', 'tonight', 'morning', 'afternoon', 'evening',
+        
+        // QUESTION-BREAKING (stripping these breaks questions!)
+        'you know',    // "Do you know my name?" → "do my name?" BROKEN!
+        'like',        // "I'd like to schedule" → "i'd to schedule" BROKEN!
+        'i mean',      // "I mean it's really hot" → loses emphasis
+        
+        // CONTEXT-BREAKING (stripping these loses info!)
+        'you guys',    // "you guys were here last week" → loses the subject
+        
+        // POLITENESS (should be preserved for tone)
+        'please', 'thanks', 'thank you',
+        
+        // EMPHASIS (carries meaning)
+        'actually', 'basically', 'really', 'very'
+    ];
+    
+    const results = {
+        success: false,
+        templatesUpdated: 0,
+        wordsRemoved: {},
+        errors: []
+    };
+    
+    try {
+        const templates = await GlobalInstantResponseTemplate.find({});
+        console.log(`📋 Found ${templates.length} templates to check\n`);
+        
+        for (const template of templates) {
+            let templateModified = false;
+            const changes = [];
+            
+            // Check template-level fillerWords
+            if (template.fillerWords && template.fillerWords.length > 0) {
+                const originalCount = template.fillerWords.length;
+                const filtered = template.fillerWords.filter(word => 
+                    !WORDS_TO_REMOVE.includes(word.toLowerCase())
+                );
+                const removedCount = originalCount - filtered.length;
+                
+                if (removedCount > 0) {
+                    const removed = template.fillerWords.filter(word => 
+                        WORDS_TO_REMOVE.includes(word.toLowerCase())
+                    );
+                    changes.push(`Template-level: removed ${removedCount} words (${removed.join(', ')})`);
+                    template.fillerWords = filtered;
+                    templateModified = true;
+                    
+                    // Track removed words
+                    removed.forEach(w => {
+                        results.wordsRemoved[w] = (results.wordsRemoved[w] || 0) + 1;
+                    });
+                }
+            }
+            
+            // Check category-level fillerWords
+            if (template.categories && template.categories.length > 0) {
+                for (const category of template.categories) {
+                    if (category.fillerWords && category.fillerWords.length > 0) {
+                        const originalCount = category.fillerWords.length;
+                        const filtered = category.fillerWords.filter(word =>
+                            !WORDS_TO_REMOVE.includes(word.toLowerCase())
+                        );
+                        const removedCount = originalCount - filtered.length;
+                        
+                        if (removedCount > 0) {
+                            const removed = category.fillerWords.filter(word =>
+                                WORDS_TO_REMOVE.includes(word.toLowerCase())
+                            );
+                            changes.push(`Category "${category.name || category.categoryId}": removed ${removedCount} words (${removed.join(', ')})`);
+                            category.fillerWords = filtered;
+                            templateModified = true;
+                            
+                            // Track removed words
+                            removed.forEach(w => {
+                                results.wordsRemoved[w] = (results.wordsRemoved[w] || 0) + 1;
+                            });
+                        }
+                    }
+                }
+            }
+            
+            if (templateModified) {
+                await template.save();
+                results.templatesUpdated++;
+                console.log(`📝 UPDATED: ${template.name || template._id}`);
+                changes.forEach(c => console.log(`   - ${c}`));
+            }
+        }
+        
+        results.success = true;
+        
+        console.log('\n============================================================');
+        console.log(`✅ COMPLETE: Updated ${results.templatesUpdated} templates`);
+        console.log('============================================================\n');
+        
+        logger.info('[SCENARIO MIGRATION] Filler words fix completed', results);
+        
+        res.json({
+            success: true,
+            message: 'Filler words fix applied successfully',
+            results
+        });
+        
+    } catch (error) {
+        console.error('❌ Migration failed:', error);
+        results.errors.push(error.message);
+        logger.error('[SCENARIO MIGRATION] Filler words fix failed', { error: error.message });
+        res.status(500).json(results);
+    }
+});
+
+// ============================================================================
 // GET /status - Check current scenario configuration
 // ============================================================================
 router.get('/status', authenticateJWT, async (req, res) => {
