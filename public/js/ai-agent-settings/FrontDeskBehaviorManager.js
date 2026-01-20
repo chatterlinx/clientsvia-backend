@@ -4376,6 +4376,33 @@ Sean → Shawn, Shaun`;
             const zipsText = getVal('.slot-unitNeverAskZips');
             slotData.unitNeverAskZips = zipsText ? zipsText.split(',').map(z => z.trim()).filter(z => /^\d{5}$/.test(z)) : [];
         }
+        
+        // V72: SERVICE AREA VALIDATION options
+        if (el.querySelector('.slot-serviceAreaEnabled')) slotData.serviceAreaEnabled = getChecked('.slot-serviceAreaEnabled');
+        if (el.querySelector('.slot-servicedZipCodes')) {
+            const zipsText = getVal('.slot-servicedZipCodes');
+            slotData.servicedZipCodes = zipsText ? zipsText.split(',').map(z => z.trim()).filter(z => /^\d{5}$/.test(z)) : [];
+        }
+        if (el.querySelector('.slot-servicedCities')) {
+            const citiesText = getVal('.slot-servicedCities');
+            slotData.servicedCities = citiesText ? citiesText.split(',').map(c => c.trim()).filter(c => c) : [];
+        }
+        if (el.querySelector('.slot-radiusCoverageEnabled')) slotData.radiusCoverageEnabled = getChecked('.slot-radiusCoverageEnabled');
+        if (el.querySelector('.slot-centerLat')) {
+            const lat = parseFloat(el.querySelector('.slot-centerLat')?.value);
+            if (!isNaN(lat)) slotData.centerLat = lat;
+        }
+        if (el.querySelector('.slot-centerLng')) {
+            const lng = parseFloat(el.querySelector('.slot-centerLng')?.value);
+            if (!isNaN(lng)) slotData.centerLng = lng;
+        }
+        if (el.querySelector('.slot-radiusMiles')) {
+            const radius = parseInt(el.querySelector('.slot-radiusMiles')?.value);
+            if (!isNaN(radius)) slotData.radiusMiles = radius;
+        }
+        if (el.querySelector('.slot-inAreaResponse')) slotData.inAreaResponse = getVal('.slot-inAreaResponse') || '';
+        if (el.querySelector('.slot-outOfAreaResponse')) slotData.outOfAreaResponse = getVal('.slot-outOfAreaResponse') || '';
+        if (el.querySelector('.slot-serviceAreaSummary')) slotData.serviceAreaSummary = getVal('.slot-serviceAreaSummary') || '';
 
         // EMAIL options
         if (el.querySelector('.slot-spellOutEmail')) slotData.spellOutEmail = getCheckedDefault('.slot-spellOutEmail', true);
@@ -4675,6 +4702,103 @@ Sean → Shawn, Shaun`;
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- V72: Service Area Validation -->
+                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #30363d;">
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px;">
+                            <span style="font-size: 11px; color: #da3633; font-weight: 600;">📍 Service Area Validation:</span>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;" title="Check if address is within your service area before proceeding">
+                                <input type="checkbox" class="slot-serviceAreaEnabled" data-index="${index}" ${slot.serviceAreaEnabled ? 'checked' : ''} style="accent-color: #da3633;" onchange="window.frontDeskManager.toggleServiceAreaOptions(${index}, this.checked)">
+                                <span style="font-size: 12px; color: #c9d1d9;">Enable service area validation</span>
+                            </label>
+                        </div>
+                        <div class="service-area-options" style="display: ${slot.serviceAreaEnabled ? 'flex' : 'none'}; flex-direction: column; gap: 10px; padding: 10px; background: #0d1117; border-radius: 4px; border: 1px solid #da3633;">
+                            
+                            <!-- ZIP Codes -->
+                            <div>
+                                <label style="font-size: 11px; color: #da3633; display: block; margin-bottom: 4px; font-weight: 600;">ZIP Codes We Service (comma-separated):</label>
+                                <textarea class="slot-servicedZipCodes" data-index="${index}" rows="2" 
+                                    placeholder="33901, 33903, 33904, 33905, 33907, 33908, 33909, 33912, 33913, 33916, 33919"
+                                    style="width: 100%; padding: 6px 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px; resize: vertical;">${(slot.servicedZipCodes || []).join(', ')}</textarea>
+                            </div>
+                            
+                            <!-- Cities -->
+                            <div>
+                                <label style="font-size: 11px; color: #da3633; display: block; margin-bottom: 4px; font-weight: 600;">Cities We Service (comma-separated):</label>
+                                <input type="text" class="slot-servicedCities" data-index="${index}" 
+                                    value="${(slot.servicedCities || []).join(', ')}"
+                                    placeholder="Fort Myers, Cape Coral, Naples, Bonita Springs, Estero"
+                                    style="width: 100%; padding: 6px 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                            </div>
+                            
+                            <!-- Radius-based coverage -->
+                            <div style="padding: 8px; background: #161b22; border-radius: 4px; border: 1px dashed #30363d;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                        <input type="checkbox" class="slot-radiusCoverageEnabled" data-index="${index}" ${slot.radiusCoverageEnabled ? 'checked' : ''} style="accent-color: #da3633;">
+                                        <span style="font-size: 12px; color: #c9d1d9; font-weight: 600;">🗺️ Use radius coverage (auto-check cities with Google Maps)</span>
+                                    </label>
+                                </div>
+                                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                    <div style="flex: 1; min-width: 120px;">
+                                        <label style="font-size: 10px; color: #8b949e; display: block; margin-bottom: 2px;">Center Latitude:</label>
+                                        <input type="number" step="0.0001" class="slot-centerLat" data-index="${index}" 
+                                            value="${slot.centerLat || ''}"
+                                            placeholder="26.6406"
+                                            style="width: 100%; padding: 4px 6px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                    </div>
+                                    <div style="flex: 1; min-width: 120px;">
+                                        <label style="font-size: 10px; color: #8b949e; display: block; margin-bottom: 2px;">Center Longitude:</label>
+                                        <input type="number" step="0.0001" class="slot-centerLng" data-index="${index}" 
+                                            value="${slot.centerLng || ''}"
+                                            placeholder="-81.8723"
+                                            style="width: 100%; padding: 4px 6px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                    </div>
+                                    <div style="flex: 1; min-width: 80px;">
+                                        <label style="font-size: 10px; color: #8b949e; display: block; margin-bottom: 2px;">Radius (miles):</label>
+                                        <input type="number" class="slot-radiusMiles" data-index="${index}" 
+                                            value="${slot.radiusMiles || 25}"
+                                            placeholder="25"
+                                            style="width: 100%; padding: 4px 6px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                    </div>
+                                </div>
+                                <div style="font-size: 10px; color: #6e7681; margin-top: 6px;">
+                                    💡 Tip: Find your coordinates on Google Maps → Right-click your location → Copy coordinates
+                                </div>
+                            </div>
+                            
+                            <!-- Responses -->
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                <div style="flex: 1; min-width: 200px;">
+                                    <label style="font-size: 10px; color: #8b949e; display: block; margin-bottom: 2px;">✅ In service area response:</label>
+                                    <input type="text" class="slot-inAreaResponse" data-index="${index}" 
+                                        value="${slot.inAreaResponse || 'Great! We do service {city}. Let me help you get scheduled.'}"
+                                        placeholder="Great! We do service {city}."
+                                        style="width: 100%; padding: 4px 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                </div>
+                                <div style="flex: 1; min-width: 200px;">
+                                    <label style="font-size: 10px; color: #8b949e; display: block; margin-bottom: 2px;">❌ Out of area response:</label>
+                                    <input type="text" class="slot-outOfAreaResponse" data-index="${index}" 
+                                        value="${slot.outOfAreaResponse || "I'm sorry, we don't service {area}. We cover {serviceAreaSummary}."}"
+                                        placeholder="I'm sorry, we don't service {area}."
+                                        style="width: 100%; padding: 4px 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                </div>
+                            </div>
+                            
+                            <!-- Service Area Summary -->
+                            <div>
+                                <label style="font-size: 10px; color: #8b949e; display: block; margin-bottom: 2px;">Service area summary (used in responses):</label>
+                                <input type="text" class="slot-serviceAreaSummary" data-index="${index}" 
+                                    value="${slot.serviceAreaSummary || ''}"
+                                    placeholder="Fort Myers, Cape Coral, Naples, and surrounding areas"
+                                    style="width: 100%; padding: 4px 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                            </div>
+                            
+                            <div style="font-size: 10px; color: #6e7681; font-style: italic;">
+                                📍 When caller gives address or asks "Do you service {city}?", agent checks against your ZIP codes and radius. Use {city}, {area}, {serviceAreaSummary} in responses.
+                            </div>
+                        </div>
+                    </div>
 
                     ${this.renderMidCallRulesEditor(slot)}
                 </div>
@@ -4867,6 +4991,19 @@ Sean → Shawn, Shaun`;
         }
         
         console.log(`[FRONT DESK] Unit detection mode changed to '${mode}' for slot ${index}`);
+    }
+    
+    // V72: Toggle service area options visibility
+    toggleServiceAreaOptions(index, enabled) {
+        const slotContainer = document.querySelector(`.slot-serviceAreaEnabled[data-index="${index}"]`)?.closest('.booking-slot');
+        if (!slotContainer) return;
+        
+        const serviceAreaOptions = slotContainer.querySelector('.service-area-options');
+        if (serviceAreaOptions) {
+            serviceAreaOptions.style.display = enabled ? 'flex' : 'none';
+        }
+        
+        console.log(`[FRONT DESK] Service area validation ${enabled ? 'enabled' : 'disabled'} for slot ${index}`);
     }
     
     getDefaultBookingSlots() {
