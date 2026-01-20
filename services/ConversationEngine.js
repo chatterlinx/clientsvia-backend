@@ -846,19 +846,39 @@ function extractExplicitNamePartsFromText(text) {
     const raw = text.trim();
     if (!raw) return null;
 
+    // Pattern 1: "last name is [name]" or "my last name is [name]"
     const lastNameMatch = raw.match(/(?:my\s+)?last\s+name\s+(?:is\s+)?([A-Za-z][A-Za-z'\-]{1,})\b/i);
     if (lastNameMatch?.[1]) {
         return { last: lastNameMatch[1], matchedPattern: 'last_name' };
     }
 
+    // Pattern 2: "first name is [name]" or "my first name is [name]"
     const firstNameMatch = raw.match(/(?:my\s+)?first\s+name\s+(?:is\s+)?([A-Za-z][A-Za-z'\-]{1,})\b/i);
     if (firstNameMatch?.[1]) {
         return { first: firstNameMatch[1], matchedPattern: 'first_name' };
     }
 
+    // Pattern 3: "this is [first] [last]" - full name
     const fullNameMatch = raw.match(/\bthis\s+is\s+([A-Za-z][A-Za-z'\-]{1,})\s+([A-Za-z][A-Za-z'\-]{1,})\b/i);
     if (fullNameMatch?.[1] && fullNameMatch?.[2]) {
         return { first: fullNameMatch[1], last: fullNameMatch[2], matchedPattern: 'this_is_full' };
+    }
+
+    // Pattern 4: "that's [name]" or "it's [name]" - common response to "what's your last name?"
+    // V80 FIX: Handles "That's Walter", "It's Walter", "That is Walter"
+    const thatsNameMatch = raw.match(/^(?:that'?s?|it'?s?|thats?)\s+([A-Za-z][A-Za-z'\-]{1,})\b\.?$/i);
+    if (thatsNameMatch?.[1]) {
+        // When user says "that's [name]" after being asked for last name, it IS the last name
+        return { last: thatsNameMatch[1], matchedPattern: 'thats_name' };
+    }
+
+    // Pattern 5: Just a single name word (after stripping common prefixes)
+    // Handles: "Walter", "walter.", "It's Walter", "Yeah, Walter"
+    // V80 FIX: Extract the actual name from common response patterns
+    const singleNameMatch = raw.match(/^(?:(?:it'?s?|that'?s?|yeah|yes|sure)[,.\s]*)?([A-Za-z][A-Za-z'\-]{1,})\.?$/i);
+    if (singleNameMatch?.[1]) {
+        // Return as a generic name - context will determine if it's first or last
+        return { name: singleNameMatch[1], matchedPattern: 'single_name' };
     }
 
     return null;
@@ -5757,6 +5777,18 @@ async function processTurn({
                                 extractedNamePart = explicitParts.first;
                             } else if (explicitParts.first && explicitParts.last) {
                                 extractedNamePart = needsLastName ? explicitParts.last : explicitParts.first;
+                            }
+                            // V80 FIX: Handle generic "name" property (single word responses like "Walter")
+                            // When user responds with just "Walter" after being asked for last name, use it
+                            else if (explicitParts.name) {
+                                // Use the extracted name for whatever part is missing
+                                extractedNamePart = explicitParts.name;
+                                log('📝 V80: Extracted single-word name response', {
+                                    name: explicitParts.name,
+                                    needsLastName,
+                                    willUseAs: needsLastName ? 'LAST_NAME' : 'FIRST_NAME',
+                                    matchedPattern: explicitParts.matchedPattern
+                                });
                             }
                         }
                     }
