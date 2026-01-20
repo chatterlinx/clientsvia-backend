@@ -1133,23 +1133,19 @@ const globalInstantResponseTemplateSchema = new Schema({
     fillerWords: {
         type: [String],
         default: [
-            // Pure interjections (add no meaning)
-            'um', 'uh', 'erm', 'er', 'hmm', 'mm',
-            // Greeting prefixes (ONLY when at start)
-            'hi', 'hey', 'hello', 'yo'
+            // V84 FIX: ONLY pure interjections that add NO semantic meaning
+            // Keep this list MINIMAL - aggressive removal destroys meaning!
+            'um', 'uh', 'erm', 'er', 'hmm', 'mm', 'ah', 'oh'
             // ════════════════════════════════════════════════════════════════════
-            // V38 FIX: REMOVED 'like', 'you know', 'i mean'
+            // V84 FIX: REMOVED GREETINGS - 'hi', 'hey', 'hello', 'yo'
             // ════════════════════════════════════════════════════════════════════
-            // These words BREAK questions when removed:
-            // - "Do you know my name?" → "do my name?" (BROKEN!)
-            // - "I'd like to schedule" → "i'd to schedule" (BROKEN!)
-            // - "I mean it's really hot" → "it's really hot" (loses emphasis)
+            // These are NOT fillers, they're polite greetings!
+            // - "Hi, my name is Mark" → ", my name is mark" (BROKEN!)
+            // Removing greetings creates malformed sentences starting with commas.
             // ════════════════════════════════════════════════════════════════════
-            // V37 FIX: REMOVED 'please', 'thanks', 'thank you', 'basically', 'actually'
-            // These words carry MEANING and should NOT be removed:
-            // - "yes please" → confirmation with politeness
-            // - "actually, my name is..." → correction intent
-            // - "thanks for calling" → meaningful greeting
+            // V38 FIX: REMOVED 'like', 'you know', 'i mean' - break questions
+            // V37 FIX: REMOVED 'please', 'thanks', 'actually' - carry meaning
+            // ════════════════════════════════════════════════════════════════════
         ],
         trim: true
         // Each word is lowercased and trimmed

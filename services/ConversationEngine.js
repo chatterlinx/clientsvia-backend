@@ -333,7 +333,27 @@ function __testHandleNameSlotTurn({
         const isPartialName = !extractedName.includes(' ');
         const alreadyAskedForMissingPart = nameMeta.askedMissingPartOnce === true;
 
-        if (askFullNameEnabled && isPartialName) {
+        // ════════════════════════════════════════════════════════════════════════
+        // V84 FIX: LAST NAME CAPTURE
+        // ════════════════════════════════════════════════════════════════════════
+        // When we already asked "what's your last name?" and user responds with
+        // a single name like "Gonzales", we need to COMBINE it with the first name,
+        // NOT replace the first name!
+        // 
+        // BEFORE (BUG): "Mark" → ask last name → "Gonzales" → name = "Gonzales" ❌
+        // AFTER (FIX):  "Mark" → ask last name → "Gonzales" → name = "Mark Gonzales" ✅
+        // ════════════════════════════════════════════════════════════════════════
+        if (alreadyAskedForMissingPart && isPartialName && (currentSlots.partialName || nameMeta.first)) {
+            // This is the ANSWER to "what's your last name?" - combine with first name
+            const firstName = nameMeta.first || currentSlots.partialName || '';
+            const lastName = extractedName;
+            currentSlots.name = `${firstName} ${lastName}`.trim();
+            setExtractedSlotIfChanged('name', currentSlots.name);
+            nameMeta.last = lastName;
+            nameMeta.first = firstName;
+            // Clear partialName since we now have full name
+            delete currentSlots.partialName;
+        } else if (askFullNameEnabled && isPartialName && !alreadyAskedForMissingPart) {
             currentSlots.partialName = extractedName;
             setExtractedSlotIfChanged('partialName', extractedName);
         } else if (askMissingNamePart && isPartialName && !alreadyAskedForMissingPart) {
@@ -4092,6 +4112,93 @@ async function processTurn({
             const confirmPending = getConfirmPendingSlot();
             if (confirmPending && !CONFIRMABLE_SLOTS.includes(confirmPending.slot)) {
                 confirmPending.meta.pendingConfirm = false;
+            }
+
+            // ═══════════════════════════════════════════════════════════════════
+            // V84 FIX: READ-BACK DURING BOOKING
+            // ═══════════════════════════════════════════════════════════════════
+            // User may ask "what address do you have?" or "do you have an address?"
+            // even while we're still collecting other slots. Instead of LLM fallback
+            // (which takes 3-5 seconds), instantly read back the collected value.
+            // ═══════════════════════════════════════════════════════════════════
+            const asksAboutSlotInBooking = (() => {
+                const lowerText = (userText || '').toLowerCase();
+                
+                // "do you have [X]?" / "what [X] do you have?" / "what is my [X]?"
+                const addressPatterns = [
+                    /\b(what|which).*\b(address|location).*\b(have|got|on file)\b/i,
+                    /\bdo you have\b.*\b(an?\s+)?address\b/i,
+                    /\baddress\b.*\bfor me\b/i,
+                    /\bwhat('?s?|is)?\s+(my|the)\s+address\b/i,
+                    /\bmy\s+address\s*\??$/i
+                ];
+                const namePatterns = [
+                    /\b(what|which).*\bname\b.*\b(have|got|on file)\b/i,
+                    /\bdo you have\b.*\b(a\s+)?name\b/i,
+                    /\bwhat('?s?|is)?\s+(my|the)\s+name\b/i,
+                    /\bmy\s+name\s*\??$/i
+                ];
+                const phonePatterns = [
+                    /\b(what|which).*\b(phone|number)\b.*\b(have|got|on file)\b/i,
+                    /\bdo you have\b.*\b(a\s+)?(phone|number)\b/i,
+                    /\bwhat('?s?|is)?\s+(my|the)\s+(phone|number)\b/i,
+                    /\bmy\s+(phone|number)\s*\??$/i
+                ];
+                
+                if (addressPatterns.some(p => p.test(lowerText)) && currentSlots.address) {
+                    return { slot: 'address', value: currentSlots.address };
+                }
+                if (namePatterns.some(p => p.test(lowerText)) && currentSlots.name) {
+                    return { slot: 'name', value: currentSlots.name };
+                }
+                if (phonePatterns.some(p => p.test(lowerText)) && currentSlots.phone) {
+                    const digits = String(currentSlots.phone).replace(/\D/g, '');
+                    const cleaned = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+                    const friendlyPhone = cleaned.length === 10 
+                        ? `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`
+                        : currentSlots.phone;
+                    return { slot: 'phone', value: friendlyPhone };
+                }
+                return null;
+            })();
+            
+            if (asksAboutSlotInBooking) {
+                log('📋 V84: MID-BOOKING READ-BACK REQUEST', { 
+                    slot: asksAboutSlotInBooking.slot, 
+                    value: asksAboutSlotInBooking.value 
+                });
+                
+                let readBackReply = '';
+                switch (asksAboutSlotInBooking.slot) {
+                    case 'address':
+                        readBackReply = `I have ${asksAboutSlotInBooking.value} on file. Is that correct?`;
+                        break;
+                    case 'name':
+                        readBackReply = `The name I have is ${asksAboutSlotInBooking.value}. Is that right?`;
+                        break;
+                    case 'phone':
+                        readBackReply = `The phone number is ${asksAboutSlotInBooking.value}. Is that correct?`;
+                        break;
+                }
+                
+                // Return the read-back without going to LLM (fast response!)
+                aiResult = {
+                    reply: readBackReply,
+                    conversationMode: 'booking',
+                    filledSlots: currentSlots,
+                    signals: {},
+                    latencyMs: Date.now() - aiStartTime,
+                    tokensUsed: 0,  // No LLM cost!
+                    fromStateMachine: true,
+                    mode: 'BOOKING',
+                    debug: {
+                        source: 'MID_BOOKING_READ_BACK',
+                        slot: asksAboutSlotInBooking.slot,
+                        value: asksAboutSlotInBooking.value
+                    }
+                };
+                log('📋 V84: READ-BACK RESPONSE (instant, no LLM)', { reply: readBackReply });
+                break BOOKING_MODE;  // Exit booking block with this response
             }
 
             // ───────────────────────────────────────────────────────────────
