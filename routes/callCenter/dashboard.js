@@ -1078,4 +1078,358 @@ router.get('/:companyId/stats', authenticateJWT, async (req, res) => {
     }
 });
 
+// ============================================================================
+// PENDING REVIEW ENDPOINTS
+// ============================================================================
+
+// GET /api/call-center/:companyId/pending-review
+// Returns items needing human review (unknown callers, duplicates, unclassified)
+
+router.get('/:companyId/pending-review', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    const { type, limit = 100 } = req.query;
+    
+    try {
+        const companyObjId = new mongoose.Types.ObjectId(companyId);
+        const items = [];
+        
+        // Build filter based on type
+        let callFilter = { companyId: companyObjId, needsReview: { $ne: false } };
+        let customerFilter = { companyId: companyObjId, needsReview: { $ne: false } };
+        let vendorFilter = { companyId: companyObjId, needsReview: { $ne: false } };
+        
+        if (type === 'unknown') {
+            callFilter.$or = [
+                { callerName: { $in: [null, '', 'Unknown', 'Unknown Caller'] } },
+                { callerType: { $in: [null, '', 'unknown'] } }
+            ];
+        } else if (type === 'unclassified') {
+            callFilter.callerType = { $in: [null, '', 'unknown'] };
+        } else if (type === 'duplicate') {
+            callFilter['cardData.possibleDuplicate'] = true;
+        } else if (type === 'low_confidence') {
+            callFilter['aiExtracted.confidence'] = { $lt: 0.7 };
+        }
+        
+        // Get calls needing review
+        const calls = await CallSummary.find({
+            ...callFilter,
+            $or: [
+                { needsReview: true },
+                { callerType: { $in: [null, '', 'unknown'] } },
+                { callerName: { $in: [null, '', 'Unknown', 'Unknown Caller'] } },
+                { 'cardData.status': 'needs_review' }
+            ]
+        })
+            .sort({ createdAt: -1 })
+            .limit(parseInt(limit))
+            .lean();
+        
+        // Add type and review reason
+        for (const call of calls) {
+            let reviewReason = 'Needs classification';
+            
+            if (!call.callerName || call.callerName === 'Unknown' || call.callerName === 'Unknown Caller') {
+                reviewReason = 'Unknown caller name';
+            } else if (!call.callerType || call.callerType === 'unknown') {
+                reviewReason = 'Unclassified caller type';
+            } else if (call.cardData?.possibleDuplicate) {
+                reviewReason = 'Possible duplicate';
+            } else if (call.aiExtracted?.confidence && call.aiExtracted.confidence < 0.7) {
+                reviewReason = 'Low confidence classification';
+            }
+            
+            items.push({
+                ...call,
+                type: 'call',
+                reviewReason,
+                name: call.callerName || 'Unknown',
+                phone: call.phone || call.liveProgress?.slotsCollected?.phone
+            });
+        }
+        
+        // Get customers needing review (placeholder status, no name)
+        const customers = await Customer.find({
+            companyId: companyObjId,
+            $or: [
+                { status: 'placeholder' },
+                { 'name.full': { $in: [null, '', 'Unknown'] } },
+                { 'name.first': { $in: [null, ''] } },
+                { needsReview: true }
+            ]
+        })
+            .sort({ createdAt: -1 })
+            .limit(20)
+            .lean();
+        
+        for (const customer of customers) {
+            items.push({
+                ...customer,
+                type: 'customer',
+                reviewReason: customer.status === 'placeholder' ? 'Placeholder record' : 'Incomplete profile',
+                name: customer.name?.full || customer.name?.first || 'Unknown',
+                phone: customer.phoneNumbers?.[0]?.number
+            });
+        }
+        
+        // Find possible duplicate matches for items
+        for (const item of items) {
+            if (item.phone) {
+                const possibleMatches = await Customer.find({
+                    companyId: companyObjId,
+                    _id: { $ne: item._id },
+                    'phoneNumbers.number': item.phone,
+                    status: { $ne: 'placeholder' }
+                })
+                    .limit(3)
+                    .lean();
+                
+                if (possibleMatches.length > 0) {
+                    item.possibleMatches = possibleMatches.map(m => ({
+                        _id: m._id,
+                        name: m.name?.full || m.name?.first,
+                        phone: m.phoneNumbers?.[0]?.number
+                    }));
+                    if (!item.reviewReason.includes('duplicate')) {
+                        item.reviewReason = 'Possible duplicate';
+                    }
+                }
+            }
+        }
+        
+        // Sort by priority (duplicates first, then unknown, then others)
+        items.sort((a, b) => {
+            const priorityOrder = { 'Possible duplicate': 0, 'Unknown caller name': 1, 'Unclassified caller type': 2 };
+            return (priorityOrder[a.reviewReason] ?? 3) - (priorityOrder[b.reviewReason] ?? 3);
+        });
+        
+        logger.info('[CALL CENTER] Pending review loaded', { 
+            companyId, 
+            totalItems: items.length,
+            calls: calls.length,
+            customers: customers.length
+        });
+        
+        res.json({
+            success: true,
+            data: items.slice(0, parseInt(limit)),
+            total: items.length
+        });
+        
+    } catch (error) {
+        logger.error('[CALL CENTER] Pending review load failed', { companyId, error: error.message });
+        res.status(500).json({ success: false, message: 'Failed to load pending reviews', error: error.message });
+    }
+});
+
+// GET /api/call-center/:companyId/pending-review/count
+// Returns just the count (lightweight for badge updates)
+
+router.get('/:companyId/pending-review/count', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+        const companyObjId = new mongoose.Types.ObjectId(companyId);
+        
+        const [callCount, customerCount] = await Promise.all([
+            CallSummary.countDocuments({
+                companyId: companyObjId,
+                needsReview: { $ne: false },
+                $or: [
+                    { needsReview: true },
+                    { callerType: { $in: [null, '', 'unknown'] } },
+                    { callerName: { $in: [null, '', 'Unknown', 'Unknown Caller'] } },
+                    { 'cardData.status': 'needs_review' }
+                ]
+            }),
+            Customer.countDocuments({
+                companyId: companyObjId,
+                $or: [
+                    { status: 'placeholder' },
+                    { 'name.full': { $in: [null, '', 'Unknown'] } },
+                    { needsReview: true }
+                ]
+            })
+        ]);
+        
+        res.json({
+            success: true,
+            count: callCount + customerCount,
+            breakdown: { calls: callCount, customers: customerCount }
+        });
+        
+    } catch (error) {
+        logger.error('[CALL CENTER] Pending count failed', { companyId, error: error.message });
+        res.status(500).json({ success: false, message: 'Failed to get pending count', error: error.message });
+    }
+});
+
+// POST /api/call-center/:companyId/pending-review/mark-all-reviewed
+// Mark all pending items as reviewed
+
+router.post('/:companyId/pending-review/mark-all-reviewed', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+        const companyObjId = new mongoose.Types.ObjectId(companyId);
+        const reviewedAt = new Date();
+        const reviewedBy = req.user?._id || req.user?.id;
+        
+        const [callsUpdated, customersUpdated] = await Promise.all([
+            CallSummary.updateMany(
+                {
+                    companyId: companyObjId,
+                    $or: [
+                        { needsReview: true },
+                        { callerType: { $in: [null, '', 'unknown'] } },
+                        { callerName: { $in: [null, '', 'Unknown', 'Unknown Caller'] } }
+                    ]
+                },
+                {
+                    $set: {
+                        needsReview: false,
+                        reviewedAt,
+                        reviewedBy
+                    }
+                }
+            ),
+            Customer.updateMany(
+                {
+                    companyId: companyObjId,
+                    $or: [
+                        { status: 'placeholder' },
+                        { needsReview: true }
+                    ]
+                },
+                {
+                    $set: {
+                        needsReview: false,
+                        reviewedAt,
+                        reviewedBy
+                    }
+                }
+            )
+        ]);
+        
+        logger.info('[CALL CENTER] All items marked as reviewed', { 
+            companyId, 
+            callsUpdated: callsUpdated.modifiedCount,
+            customersUpdated: customersUpdated.modifiedCount
+        });
+        
+        res.json({
+            success: true,
+            message: 'All items marked as reviewed',
+            updated: {
+                calls: callsUpdated.modifiedCount,
+                customers: customersUpdated.modifiedCount
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[CALL CENTER] Mark all reviewed failed', { companyId, error: error.message });
+        res.status(500).json({ success: false, message: 'Failed to mark all reviewed', error: error.message });
+    }
+});
+
+// POST /api/call-center/:companyId/customer/:customerId/merge
+// Merge one customer record into another
+
+router.post('/:companyId/customer/:customerId/merge', authenticateJWT, async (req, res) => {
+    const { companyId, customerId } = req.params;
+    const { targetId } = req.body;
+    
+    if (!targetId) {
+        return res.status(400).json({ success: false, message: 'targetId is required' });
+    }
+    
+    try {
+        const companyObjId = new mongoose.Types.ObjectId(companyId);
+        const sourceObjId = new mongoose.Types.ObjectId(customerId);
+        const targetObjId = new mongoose.Types.ObjectId(targetId);
+        
+        // Get both records
+        const [source, target] = await Promise.all([
+            Customer.findOne({ _id: sourceObjId, companyId: companyObjId }).lean(),
+            Customer.findOne({ _id: targetObjId, companyId: companyObjId })
+        ]);
+        
+        if (!source || !target) {
+            return res.status(404).json({ success: false, message: 'One or both customers not found' });
+        }
+        
+        // Merge phone numbers (add any new ones)
+        if (source.phoneNumbers?.length) {
+            for (const phone of source.phoneNumbers) {
+                const exists = target.phoneNumbers?.some(p => p.number === phone.number);
+                if (!exists) {
+                    target.phoneNumbers = target.phoneNumbers || [];
+                    target.phoneNumbers.push(phone);
+                }
+            }
+        }
+        
+        // Merge addresses (add any new ones)
+        if (source.addresses?.length) {
+            for (const addr of source.addresses) {
+                const exists = target.addresses?.some(a => 
+                    a.street === addr.street && a.city === addr.city
+                );
+                if (!exists) {
+                    target.addresses = target.addresses || [];
+                    target.addresses.push(addr);
+                }
+            }
+        }
+        
+        // Merge AI notes
+        if (source.aiNotes?.length) {
+            target.aiNotes = target.aiNotes || [];
+            target.aiNotes.push(...source.aiNotes);
+        }
+        
+        // Update all call summaries to point to target
+        await CallSummary.updateMany(
+            { companyId: companyObjId, customerId: sourceObjId },
+            { $set: { customerId: targetObjId } }
+        );
+        
+        // Save merged target
+        target.mergedFrom = target.mergedFrom || [];
+        target.mergedFrom.push({
+            customerId: sourceObjId,
+            mergedAt: new Date(),
+            mergedBy: req.user?._id || req.user?.id
+        });
+        await target.save();
+        
+        // Soft delete source
+        await Customer.findByIdAndUpdate(sourceObjId, {
+            $set: {
+                status: 'merged',
+                mergedInto: targetObjId,
+                mergedAt: new Date()
+            }
+        });
+        
+        logger.info('[CALL CENTER] Customers merged', { 
+            companyId, 
+            sourceId: customerId, 
+            targetId,
+            sourceName: source.name?.full,
+            targetName: target.name?.full
+        });
+        
+        res.json({
+            success: true,
+            message: 'Records merged successfully',
+            mergedInto: target
+        });
+        
+    } catch (error) {
+        logger.error('[CALL CENTER] Customer merge failed', { companyId, customerId, targetId, error: error.message });
+        res.status(500).json({ success: false, message: 'Failed to merge customers', error: error.message });
+    }
+});
+
 module.exports = router;

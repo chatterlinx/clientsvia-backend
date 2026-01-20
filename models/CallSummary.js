@@ -582,6 +582,15 @@ const CallSummarySchema = new mongoose.Schema({
   },
   
   /**
+   * Does this call need human review?
+   * Set to true for unknown callers, low confidence, unclassified, etc.
+   */
+  needsReview: {
+    type: Boolean,
+    default: null
+  },
+  
+  /**
    * When was it reviewed?
    */
   reviewedAt: { 

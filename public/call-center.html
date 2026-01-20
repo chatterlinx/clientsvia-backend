@@ -211,6 +211,16 @@
             border-radius: 10px;
         }
         
+        .nav-item-badge.pending-badge {
+            background: var(--accent-yellow);
+            color: var(--bg-primary);
+            animation: pulse-badge 2s infinite;
+        }
+        
+        .nav-item.has-items {
+            color: var(--accent-yellow);
+        }
+        
         /* ═══════════════════════════════════════════════════════════════════════════
            HEADER
            ═══════════════════════════════════════════════════════════════════════════ */
@@ -358,6 +368,33 @@
             color: var(--accent-cyan);
             background: var(--bg-card);
             border-bottom: 2px solid var(--accent-cyan);
+        }
+        
+        .tab-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            background: var(--accent-red);
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: pulse-badge 2s infinite;
+        }
+        
+        @keyframes pulse-badge {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            50% { transform: scale(1.05); box-shadow: 0 0 0 4px rgba(239, 68, 68, 0); }
+        }
+        
+        .tab[data-tab="pending"].has-items {
+            color: var(--accent-yellow);
         }
         
         .tab-panel {
@@ -1273,6 +1310,15 @@
             
             <nav class="sidebar-nav">
                 <div class="nav-section">
+                    <div class="nav-section-title">Action Required</div>
+                    <a class="nav-item" data-tab="pending" style="position: relative;">
+                        <span class="nav-item-icon">📋</span>
+                        Pending Review
+                        <span class="nav-item-badge pending-badge" id="sidebar-pending-badge" style="display: none;">0</span>
+                    </a>
+                </div>
+                
+                <div class="nav-section">
                     <div class="nav-section-title">Call Management</div>
                     <a class="nav-item active" data-tab="calls">
                         <span class="nav-item-icon">📞</span>
@@ -1336,6 +1382,10 @@
             
             <!-- Tabs -->
             <div class="tabs">
+                <button class="tab" data-tab="pending" style="position: relative;">
+                    📋 Pending Review
+                    <span id="pending-review-badge" class="tab-badge" style="display: none;">0</span>
+                </button>
                 <button class="tab active" data-tab="calls">📞 Recent Calls</button>
                 <button class="tab" data-tab="customers">👥 Customers</button>
                 <button class="tab" data-tab="vendors">🏪 Vendors</button>
@@ -1344,6 +1394,43 @@
             </div>
             
             <!-- Tab Panels -->
+            
+            <!-- PENDING REVIEW PANEL -->
+            <div id="pending-panel" class="tab-panel">
+                <div class="pending-review-header" style="margin-bottom: var(--space-lg); padding: var(--space-lg); background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(239, 68, 68, 0.05)); border: 1px solid var(--accent-yellow); border-radius: 12px;">
+                    <div style="display: flex; align-items: center; gap: var(--space-md); margin-bottom: var(--space-sm);">
+                        <span style="font-size: 24px;">📋</span>
+                        <h3 style="margin: 0; color: var(--accent-yellow);">Pending Review Queue</h3>
+                    </div>
+                    <p style="color: var(--text-secondary); margin: 0; font-size: 14px;">
+                        Calls that need human review: merge with existing profile, mark as spam, edit details, or delete. 
+                        Clear this queue to keep your data clean!
+                    </p>
+                </div>
+                
+                <!-- Pending Review Filters -->
+                <div class="search-bar" style="margin-bottom: var(--space-lg);">
+                    <select class="filter-select" id="pending-type-filter" style="min-width: 160px;">
+                        <option value="">All Types</option>
+                        <option value="unknown">Unknown Callers</option>
+                        <option value="unclassified">Unclassified</option>
+                        <option value="duplicate">Possible Duplicates</option>
+                        <option value="low_confidence">Low Confidence</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="markAllReviewed()" style="margin-left: auto;">
+                        ✓ Mark All Reviewed
+                    </button>
+                </div>
+                
+                <!-- Pending Review List -->
+                <div class="calls-container" id="pending-container">
+                    <div class="loading-container">
+                        <div class="loading-spinner"></div>
+                        <p style="margin-top: 16px;">Loading pending reviews...</p>
+                    </div>
+                </div>
+            </div>
+            
             <div id="calls-panel" class="tab-panel active">
                 <!-- Search & Filters -->
                 <div class="search-bar">
@@ -1997,6 +2084,9 @@
             // Load today's stats
             await loadTodayStats();
             
+            // Load pending review count (for badge)
+            await loadPendingCount();
+            
             // Load initial calls
             await loadCalls();
             
@@ -2111,6 +2201,299 @@
             } catch (err) {
                 console.error('Failed to load customers:', err);
                 showEmptyState('customers-container', 'Error loading customers', err.message);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // PENDING REVIEW FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        async function loadPendingReviews(filters = {}) {
+            const container = document.getElementById('pending-container');
+            container.innerHTML = `
+                <div class="loading-container">
+                    <div class="loading-spinner"></div>
+                    <p style="margin-top: 16px;">Loading pending reviews...</p>
+                </div>
+            `;
+            
+            try {
+                const params = new URLSearchParams({ limit: 100, ...filters });
+                const res = await apiCall(`/api/call-center/${currentCompanyId}/pending-review?${params}`);
+                const items = res.data || [];
+                
+                // Update badge count
+                updatePendingBadge(items.length);
+                
+                if (items.length === 0) {
+                    showEmptyState('pending-container', '✅ All Clear!', 'No pending reviews. Great job keeping your data clean!');
+                    return;
+                }
+                
+                container.innerHTML = items.map(item => renderPendingCard(item)).join('');
+                
+            } catch (err) {
+                console.error('Failed to load pending reviews:', err);
+                showEmptyState('pending-container', 'Error loading reviews', err.message);
+            }
+        }
+        
+        function updatePendingBadge(count) {
+            const badge = document.getElementById('pending-review-badge');
+            const sidebarBadge = document.getElementById('sidebar-pending-badge');
+            const tab = document.querySelector('.tab[data-tab="pending"]');
+            const sidebarNav = document.querySelector('.nav-item[data-tab="pending"]');
+            
+            const displayCount = count > 99 ? '99+' : count;
+            
+            if (count > 0) {
+                if (badge) {
+                    badge.textContent = displayCount;
+                    badge.style.display = 'flex';
+                }
+                if (sidebarBadge) {
+                    sidebarBadge.textContent = displayCount;
+                    sidebarBadge.style.display = 'inline-flex';
+                }
+                if (tab) tab.classList.add('has-items');
+                if (sidebarNav) sidebarNav.classList.add('has-items');
+            } else {
+                if (badge) badge.style.display = 'none';
+                if (sidebarBadge) sidebarBadge.style.display = 'none';
+                if (tab) tab.classList.remove('has-items');
+                if (sidebarNav) sidebarNav.classList.remove('has-items');
+            }
+        }
+        
+        // Load just the pending count (lightweight, for badge updates)
+        async function loadPendingCount() {
+            try {
+                const res = await apiCall(`/api/call-center/${currentCompanyId}/pending-review/count`);
+                updatePendingBadge(res.count || 0);
+            } catch (err) {
+                console.error('Failed to load pending count:', err);
+            }
+        }
+        
+        function renderPendingCard(item) {
+            const isCall = item.type === 'call';
+            const isCustomer = item.type === 'customer';
+            const isVendor = item.type === 'vendor';
+            
+            const name = item.name || item.callerName || 'Unknown';
+            const phone = item.phone || item.phoneNumbers?.[0]?.number || '';
+            const reason = item.reviewReason || 'Needs classification';
+            const initials = getInitials(name);
+            const time = item.createdAt ? formatTime(item.createdAt) : '';
+            
+            // Color based on review reason
+            let reasonColor = 'var(--accent-yellow)';
+            let reasonIcon = '⚠️';
+            if (item.reviewReason?.includes('duplicate')) {
+                reasonColor = 'var(--accent-purple)';
+                reasonIcon = '🔄';
+            } else if (item.reviewReason?.includes('spam')) {
+                reasonColor = 'var(--accent-red)';
+                reasonIcon = '🚫';
+            } else if (item.reviewReason?.includes('unknown')) {
+                reasonColor = 'var(--accent-yellow)';
+                reasonIcon = '❓';
+            }
+            
+            return `
+                <div class="call-card pending-card" data-id="${item._id}" data-type="${item.type}" 
+                     style="border-left: 4px solid ${reasonColor};">
+                    <div class="call-card-header">
+                        <div class="call-card-customer">
+                            <div class="customer-avatar">${initials}</div>
+                            <div class="customer-info">
+                                <h3>${name}</h3>
+                                <p>${formatPhone(phone)} ${time ? '• ' + time : ''}</p>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="background: ${reasonColor}22; color: ${reasonColor}; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 500;">
+                                ${reasonIcon} ${reason}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    ${item.possibleMatches?.length > 0 ? `
+                    <div style="margin: 12px 0; padding: 12px; background: var(--bg-hover); border-radius: 8px;">
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">Possible matches:</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            ${item.possibleMatches.slice(0, 3).map(m => `
+                                <button class="btn btn-secondary" style="font-size: 12px; padding: 4px 8px;" 
+                                        onclick="mergeWith('${item._id}', '${m._id}', '${item.type}')">
+                                    Merge with "${m.name || m.callerName || formatPhone(m.phone)}"
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
+                    
+                    <div class="call-card-actions" style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                        ${isCall ? `
+                            <button class="btn btn-primary" onclick="classifyCall('${item._id}', 'customer')">
+                                👤 Customer
+                            </button>
+                            <button class="btn btn-secondary" onclick="classifyCall('${item._id}', 'vendor')">
+                                🏪 Vendor
+                            </button>
+                        ` : `
+                            <button class="btn btn-primary" onclick="editProfile('${item._id}', '${item.type}')">
+                                ✏️ Edit
+                            </button>
+                            ${isCustomer ? `
+                                <button class="btn btn-secondary" onclick="convertToVendor('${item._id}')">
+                                    → Vendor
+                                </button>
+                            ` : `
+                                <button class="btn btn-secondary" onclick="convertToCustomer('${item._id}')">
+                                    → Customer
+                                </button>
+                            `}
+                        `}
+                        <button class="btn btn-secondary" onclick="markAsSpam('${item._id}', '${item.type}')" 
+                                style="color: var(--accent-red);">
+                            🚫 Spam
+                        </button>
+                        <button class="btn btn-secondary" onclick="deletePending('${item._id}', '${item.type}')" 
+                                style="color: var(--text-muted);">
+                            🗑️ Delete
+                        </button>
+                        <button class="btn btn-secondary" onclick="markReviewed('${item._id}', '${item.type}')"
+                                style="margin-left: auto;">
+                            ✓ Reviewed
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Pending Review Actions
+        async function classifyCall(id, type) {
+            try {
+                await apiCall(`/api/call-center/${currentCompanyId}/call/${id}/reclassify`, {
+                    method: 'POST',
+                    body: JSON.stringify({ callerType: type })
+                });
+                showToast(`Call classified as ${type}`, 'success');
+                loadPendingReviews();
+            } catch (err) {
+                showToast('Failed to classify: ' + err.message, 'error');
+            }
+        }
+        
+        async function mergeWith(sourceId, targetId, type) {
+            if (!confirm('Merge these records? This will combine their history.')) return;
+            try {
+                await apiCall(`/api/call-center/${currentCompanyId}/${type}/${sourceId}/merge`, {
+                    method: 'POST',
+                    body: JSON.stringify({ targetId })
+                });
+                showToast('Records merged successfully', 'success');
+                loadPendingReviews();
+            } catch (err) {
+                showToast('Failed to merge: ' + err.message, 'error');
+            }
+        }
+        
+        async function convertToVendor(customerId) {
+            try {
+                await apiCall(`/api/call-center/${currentCompanyId}/customer/${customerId}/convert-to-vendor`, {
+                    method: 'POST',
+                    body: JSON.stringify({ vendorType: 'other' })
+                });
+                showToast('Converted to vendor', 'success');
+                loadPendingReviews();
+            } catch (err) {
+                showToast('Failed to convert: ' + err.message, 'error');
+            }
+        }
+        
+        async function convertToCustomer(vendorId) {
+            try {
+                await apiCall(`/api/call-center/${currentCompanyId}/vendor/${vendorId}/convert-to-customer`, {
+                    method: 'POST',
+                    body: JSON.stringify({ category: 'residential' })
+                });
+                showToast('Converted to customer', 'success');
+                loadPendingReviews();
+            } catch (err) {
+                showToast('Failed to convert: ' + err.message, 'error');
+            }
+        }
+        
+        async function markAsSpam(id, type) {
+            if (!confirm('Mark as spam? This will block future calls from this number.')) return;
+            try {
+                const endpoint = type === 'call' 
+                    ? `/api/call-center/${currentCompanyId}/call/${id}/reclassify`
+                    : `/api/call-center/${currentCompanyId}/${type}/${id}`;
+                    
+                await apiCall(endpoint, {
+                    method: type === 'call' ? 'POST' : 'PATCH',
+                    body: JSON.stringify(type === 'call' ? { callerType: 'spam' } : { markAsSpam: true })
+                });
+                showToast('Marked as spam and blocked', 'success');
+                loadPendingReviews();
+            } catch (err) {
+                showToast('Failed to mark as spam: ' + err.message, 'error');
+            }
+        }
+        
+        async function deletePending(id, type) {
+            if (!confirm('Delete this record? This cannot be undone.')) return;
+            try {
+                await apiCall(`/api/call-center/${currentCompanyId}/${type}/${id}`, {
+                    method: 'DELETE'
+                });
+                showToast('Deleted', 'success');
+                loadPendingReviews();
+            } catch (err) {
+                showToast('Failed to delete: ' + err.message, 'error');
+            }
+        }
+        
+        async function markReviewed(id, type) {
+            try {
+                const endpoint = type === 'call' 
+                    ? `/api/call-center/${currentCompanyId}/call/${id}/card`
+                    : `/api/call-center/${currentCompanyId}/${type}/${id}`;
+                    
+                await apiCall(endpoint, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ needsReview: false, reviewedAt: new Date().toISOString() })
+                });
+                showToast('Marked as reviewed', 'success');
+                loadPendingReviews();
+            } catch (err) {
+                showToast('Failed to update: ' + err.message, 'error');
+            }
+        }
+        
+        async function markAllReviewed() {
+            if (!confirm('Mark all items as reviewed?')) return;
+            try {
+                await apiCall(`/api/call-center/${currentCompanyId}/pending-review/mark-all-reviewed`, {
+                    method: 'POST'
+                });
+                showToast('All items marked as reviewed', 'success');
+                loadPendingReviews();
+            } catch (err) {
+                showToast('Failed to mark all: ' + err.message, 'error');
+            }
+        }
+        
+        function editProfile(id, type) {
+            // Open edit modal based on type
+            if (type === 'customer') {
+                viewCustomer(id);
+            } else if (type === 'vendor') {
+                viewVendor({ _id: id });
+            } else {
+                viewCall(id);
             }
         }
         
@@ -2328,6 +2711,8 @@
             // Refresh button
             document.getElementById('refresh-btn').addEventListener('click', async () => {
                 await loadTodayStats();
+                await loadPendingCount(); // Always refresh pending count
+                if (currentTab === 'pending') await loadPendingReviews();
                 if (currentTab === 'calls') await loadCalls();
                 if (currentTab === 'customers') await loadCustomers();
                 if (currentTab === 'vendors') {
@@ -2344,6 +2729,10 @@
             document.getElementById('tier-filter').addEventListener('change', async (e) => {
                 const tier = e.target.value;
                 await loadCalls(tier ? { routingTier: tier } : {});
+            });
+            
+            document.getElementById('pending-type-filter').addEventListener('change', async (e) => {
+                await loadPendingReviews({ type: e.target.value });
             });
             
             // Search (debounced)
@@ -2388,6 +2777,7 @@
             });
             
             // Load data for the tab
+            if (tab === 'pending') loadPendingReviews();
             if (tab === 'calls') loadCalls();
             if (tab === 'customers') loadCustomers();
             if (tab === 'vendors') {

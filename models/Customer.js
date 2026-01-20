@@ -169,11 +169,27 @@ const customerSchema = new Schema({
     // ═══════════════════════════════════════════════════════════════════════════
     status: {
         type: String,
-        enum: ['active', 'inactive', 'blocked', 'vip'],
+        enum: ['active', 'inactive', 'blocked', 'vip', 'placeholder', 'merged'],
         default: 'active'
     },
     
     tags: [{ type: String, trim: true }], // Custom tags: "VIP", "Difficult", "Referral source"
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // REVIEW STATUS
+    // ═══════════════════════════════════════════════════════════════════════════
+    needsReview: { type: Boolean, default: null },
+    reviewedAt: { type: Date },
+    reviewedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    
+    // For merged records
+    mergedInto: { type: Schema.Types.ObjectId, ref: 'Customer' },
+    mergedAt: { type: Date },
+    mergedFrom: [{
+        customerId: { type: Schema.Types.ObjectId, ref: 'Customer' },
+        mergedAt: { type: Date },
+        mergedBy: { type: Schema.Types.ObjectId, ref: 'User' }
+    }],
     
     // ═══════════════════════════════════════════════════════════════════════════
     // TIMESTAMPS
