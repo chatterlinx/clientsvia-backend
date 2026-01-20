@@ -1290,6 +1290,71 @@ router.post('/:companyId/test-emotion', authenticateJWT, async (req, res) => {
 });
 
 // ============================================================================
+// V73: GEOCODE ENDPOINT - Convert address to lat/lng for service area radius
+// ============================================================================
+router.get('/geocode', authenticateJWT, async (req, res) => {
+    try {
+        const { address } = req.query;
+        
+        if (!address) {
+            return res.status(400).json({ success: false, error: 'Address is required' });
+        }
+        
+        const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+        if (!GOOGLE_MAPS_API_KEY) {
+            return res.status(500).json({ 
+                success: false, 
+                error: 'Google Maps API key not configured. Please add GOOGLE_MAPS_API_KEY to environment.' 
+            });
+        }
+        
+        const axios = require('axios');
+        const response = await axios.get('https://maps.googleapis.com/maps/api/geocode/json', {
+            params: {
+                address: address,
+                key: GOOGLE_MAPS_API_KEY
+            },
+            timeout: 5000
+        });
+        
+        if (response.data.status === 'OK' && response.data.results?.length > 0) {
+            const result = response.data.results[0];
+            const location = result.geometry?.location;
+            
+            if (location?.lat && location?.lng) {
+                logger.info('[GEOCODE] ✅ Address geocoded successfully', {
+                    address,
+                    lat: location.lat,
+                    lng: location.lng
+                });
+                
+                return res.json({
+                    success: true,
+                    lat: location.lat,
+                    lng: location.lng,
+                    formattedAddress: result.formatted_address,
+                    city: result.address_components?.find(c => c.types.includes('locality'))?.long_name,
+                    state: result.address_components?.find(c => c.types.includes('administrative_area_level_1'))?.short_name
+                });
+            }
+        }
+        
+        logger.warn('[GEOCODE] ❌ Address not found', { address, status: response.data.status });
+        return res.json({ 
+            success: false, 
+            error: 'Address not found. Try a more specific address.' 
+        });
+        
+    } catch (error) {
+        logger.error('[GEOCODE] Error:', error.message);
+        return res.status(500).json({ 
+            success: false, 
+            error: 'Geocoding failed: ' + error.message 
+        });
+    }
+});
+
+// ============================================================================
 // HELPER: Deep merge objects
 // ============================================================================
 function deepMerge(target, source) {

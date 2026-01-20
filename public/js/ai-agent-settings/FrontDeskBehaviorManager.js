@@ -4388,6 +4388,7 @@ Sean → Shawn, Shaun`;
             slotData.servicedCities = citiesText ? citiesText.split(',').map(c => c.trim()).filter(c => c) : [];
         }
         if (el.querySelector('.slot-radiusCoverageEnabled')) slotData.radiusCoverageEnabled = getChecked('.slot-radiusCoverageEnabled');
+        if (el.querySelector('.slot-centerAddress')) slotData.centerAddress = getVal('.slot-centerAddress') || '';
         if (el.querySelector('.slot-centerLat')) {
             const lat = parseFloat(el.querySelector('.slot-centerLat')?.value);
             if (!isNaN(lat)) slotData.centerLat = lat;
@@ -4731,39 +4732,60 @@ Sean → Shawn, Shaun`;
                                     style="width: 100%; padding: 6px 8px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
                             </div>
                             
-                            <!-- Radius-based coverage -->
-                            <div style="padding: 8px; background: #161b22; border-radius: 4px; border: 1px dashed #30363d;">
+                            <!-- Radius-based coverage (OPTIONAL) -->
+                            <div style="padding: 10px; background: #161b22; border-radius: 4px; border: 1px dashed #30363d;">
                                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                                     <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                                        <input type="checkbox" class="slot-radiusCoverageEnabled" data-index="${index}" ${slot.radiusCoverageEnabled ? 'checked' : ''} style="accent-color: #da3633;">
-                                        <span style="font-size: 12px; color: #c9d1d9; font-weight: 600;">🗺️ Use radius coverage (auto-check cities with Google Maps)</span>
+                                        <input type="checkbox" class="slot-radiusCoverageEnabled" data-index="${index}" ${slot.radiusCoverageEnabled ? 'checked' : ''} style="accent-color: #da3633;" onchange="window.frontDeskManager.toggleRadiusOptions(${index}, this.checked)">
+                                        <span style="font-size: 12px; color: #c9d1d9; font-weight: 600;">🗺️ OPTIONAL: Use radius coverage</span>
                                     </label>
                                 </div>
-                                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                                    <div style="flex: 1; min-width: 120px;">
-                                        <label style="font-size: 10px; color: #8b949e; display: block; margin-bottom: 2px;">Center Latitude:</label>
-                                        <input type="number" step="0.0001" class="slot-centerLat" data-index="${index}" 
-                                            value="${slot.centerLat || ''}"
-                                            placeholder="26.6406"
-                                            style="width: 100%; padding: 4px 6px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
-                                    </div>
-                                    <div style="flex: 1; min-width: 120px;">
-                                        <label style="font-size: 10px; color: #8b949e; display: block; margin-bottom: 2px;">Center Longitude:</label>
-                                        <input type="number" step="0.0001" class="slot-centerLng" data-index="${index}" 
-                                            value="${slot.centerLng || ''}"
-                                            placeholder="-81.8723"
-                                            style="width: 100%; padding: 4px 6px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
-                                    </div>
-                                    <div style="flex: 1; min-width: 80px;">
-                                        <label style="font-size: 10px; color: #8b949e; display: block; margin-bottom: 2px;">Radius (miles):</label>
-                                        <input type="number" class="slot-radiusMiles" data-index="${index}" 
-                                            value="${slot.radiusMiles || 25}"
-                                            placeholder="25"
-                                            style="width: 100%; padding: 4px 6px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
-                                    </div>
+                                <div style="font-size: 10px; color: #8b949e; margin-bottom: 8px; padding: 6px; background: #0d1117; border-radius: 4px;">
+                                    💡 <strong>When to use radius:</strong> If callers ask "Do you service [city]?" and you want to auto-check if that city is within X miles of your shop.<br>
+                                    ⚠️ <strong>Not needed if:</strong> Your service area is different from your shop location — just use ZIP codes and cities above.
                                 </div>
-                                <div style="font-size: 10px; color: #6e7681; margin-top: 6px;">
-                                    💡 Tip: Find your coordinates on Google Maps → Right-click your location → Copy coordinates
+                                <div class="radius-options" style="display: ${slot.radiusCoverageEnabled ? 'flex' : 'none'}; flex-direction: column; gap: 8px;">
+                                    <!-- Center Address (user-friendly) -->
+                                    <div>
+                                        <label style="font-size: 10px; color: #8b949e; display: block; margin-bottom: 2px;">📍 Shop/Center Address:</label>
+                                        <div style="display: flex; gap: 6px;">
+                                            <input type="text" class="slot-centerAddress" data-index="${index}" 
+                                                value="${slot.centerAddress || ''}"
+                                                placeholder="123 Main St, Fort Myers FL 33901"
+                                                style="flex: 1; padding: 6px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                            <button type="button" class="geocode-btn" data-index="${index}"
+                                                onclick="window.frontDeskManager.geocodeCenterAddress(${index})"
+                                                style="padding: 6px 12px; background: #238636; border: none; border-radius: 4px; color: white; font-size: 11px; cursor: pointer; white-space: nowrap;">
+                                                📍 Get Coordinates
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Coordinates (auto-filled or manual) -->
+                                    <div style="display: flex; gap: 10px; flex-wrap: wrap; padding: 8px; background: #0d1117; border-radius: 4px;">
+                                        <div style="flex: 1; min-width: 100px;">
+                                            <label style="font-size: 10px; color: #6e7681; display: block; margin-bottom: 2px;">Latitude:</label>
+                                            <input type="number" step="0.0001" class="slot-centerLat" data-index="${index}" 
+                                                value="${slot.centerLat || ''}"
+                                                placeholder="26.6406"
+                                                style="width: 100%; padding: 4px 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                        </div>
+                                        <div style="flex: 1; min-width: 100px;">
+                                            <label style="font-size: 10px; color: #6e7681; display: block; margin-bottom: 2px;">Longitude:</label>
+                                            <input type="number" step="0.0001" class="slot-centerLng" data-index="${index}" 
+                                                value="${slot.centerLng || ''}"
+                                                placeholder="-81.8723"
+                                                style="width: 100%; padding: 4px 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                        </div>
+                                        <div style="flex: 1; min-width: 80px;">
+                                            <label style="font-size: 10px; color: #6e7681; display: block; margin-bottom: 2px;">Radius (miles):</label>
+                                            <input type="number" class="slot-radiusMiles" data-index="${index}" 
+                                                value="${slot.radiusMiles || 25}"
+                                                placeholder="25"
+                                                style="width: 100%; padding: 4px 6px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 11px;">
+                                        </div>
+                                    </div>
+                                    <div id="geocode-status-${index}" style="font-size: 10px; color: #6e7681; display: none;"></div>
                                 </div>
                             </div>
                             
@@ -5004,6 +5026,92 @@ Sean → Shawn, Shaun`;
         }
         
         console.log(`[FRONT DESK] Service area validation ${enabled ? 'enabled' : 'disabled'} for slot ${index}`);
+    }
+    
+    // V73: Toggle radius options visibility
+    toggleRadiusOptions(index, enabled) {
+        const slotContainer = document.querySelector(`.slot-radiusCoverageEnabled[data-index="${index}"]`)?.closest('.booking-slot');
+        if (!slotContainer) return;
+        
+        const radiusOptions = slotContainer.querySelector('.radius-options');
+        if (radiusOptions) {
+            radiusOptions.style.display = enabled ? 'flex' : 'none';
+        }
+        
+        console.log(`[FRONT DESK] Radius coverage ${enabled ? 'enabled' : 'disabled'} for slot ${index}`);
+    }
+    
+    // V73: Geocode center address to get coordinates
+    async geocodeCenterAddress(index) {
+        const slotContainer = document.querySelector(`.slot-centerAddress[data-index="${index}"]`)?.closest('.booking-slot');
+        if (!slotContainer) return;
+        
+        const addressInput = slotContainer.querySelector('.slot-centerAddress');
+        const latInput = slotContainer.querySelector('.slot-centerLat');
+        const lngInput = slotContainer.querySelector('.slot-centerLng');
+        const statusEl = slotContainer.querySelector(`#geocode-status-${index}`);
+        const btn = slotContainer.querySelector('.geocode-btn');
+        
+        const address = addressInput?.value?.trim();
+        if (!address) {
+            if (statusEl) {
+                statusEl.style.display = 'block';
+                statusEl.style.color = '#da3633';
+                statusEl.textContent = '❌ Please enter an address first';
+            }
+            return;
+        }
+        
+        // Show loading state
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = '⏳ Looking up...';
+        }
+        if (statusEl) {
+            statusEl.style.display = 'block';
+            statusEl.style.color = '#8b949e';
+            statusEl.textContent = '🔍 Looking up address...';
+        }
+        
+        try {
+            // Call our backend geocode endpoint
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+            const response = await fetch(`/api/admin/front-desk-behavior/geocode?address=${encodeURIComponent(address)}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Geocode failed: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.lat && data.lng) {
+                // Fill in coordinates
+                if (latInput) latInput.value = data.lat;
+                if (lngInput) lngInput.value = data.lng;
+                
+                if (statusEl) {
+                    statusEl.style.color = '#238636';
+                    statusEl.textContent = `✅ Found: ${data.formattedAddress || address} (${data.lat}, ${data.lng})`;
+                }
+                
+                console.log(`[FRONT DESK] Geocoded "${address}" to ${data.lat}, ${data.lng}`);
+            } else {
+                throw new Error(data.error || 'No coordinates found');
+            }
+        } catch (error) {
+            console.error('[FRONT DESK] Geocode error:', error);
+            if (statusEl) {
+                statusEl.style.color = '#da3633';
+                statusEl.textContent = `❌ Could not find address. Try a more specific address or enter coordinates manually.`;
+            }
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '📍 Get Coordinates';
+            }
+        }
     }
     
     getDefaultBookingSlots() {
