@@ -244,7 +244,7 @@ async function appendError({ callId, companyId, source, error }) {
 // ADD TRANSCRIPT
 // ============================================================================
 
-async function addTranscript({ callId, companyId, speaker, turn, text, confidence, source }) {
+async function addTranscript({ callId, companyId, speaker, turn, text, confidence, source, tokensUsed }) {
   try {
     const rec = await BlackBoxRecording.findOne(
       { callId, companyId },
@@ -279,7 +279,8 @@ async function addTranscript({ callId, companyId, speaker, turn, text, confidenc
               turn,
               t,
               text,
-              source: source || 'UNKNOWN'
+              source: source || 'UNKNOWN',
+              tokensUsed: tokensUsed || 0  // V76: Token cost tracking
             }
           }
         }

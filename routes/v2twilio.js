@@ -3405,14 +3405,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         tokensUsed    // V2: Token count for cost tracking
       ).catch(() => {});
       
-      // Add to transcript with source tracking
+      // Add to transcript with source tracking and token cost
       BlackBoxLogger.addTranscript({
         callId: callSid,
         companyId: companyID,
         speaker: 'agent',
         turn: turnCount,
         text: responseText,
-        source: `${matchSource}:${tier}`  // V2: Combined source:tier
+        source: `${matchSource}:${tier}`,  // V2: Combined source:tier
+        tokensUsed: tokensUsed || 0         // V76: Token cost tracking
       }).catch(() => {});
       
       // V2: Log tier-specific events with detailed tracking
