@@ -1284,38 +1284,63 @@ const companySchema = new mongoose.Schema({
                 // Only accept Deepgram result if confidence is above this (0-100%)
                 deepgramAcceptThreshold: { type: Number, default: 80, min: 50, max: 100 }
             },
-            // CONNECTION RECOVERY MESSAGES - When connection is choppy/lost
-            // 🚨 UI-CONTROLLED - Replaces hardcoded error messages in v2twilio.js
+            // CONNECTION RECOVERY MESSAGES - When audio is unclear
+            // 🚨 UI-CONTROLLED - Multiple variants for natural sound (random selection)
+            // V69: Changed from single strings to arrays for random variant selection
             recoveryMessages: {
-                // When connection seems choppy
-                choppyConnection: {
-                    type: String,
-                    default: "I'm sorry, the connection seems a bit choppy. Could you repeat that?",
-                    trim: true
+                // When audio is unclear (formerly "choppy" - more human-like phrases)
+                audioUnclear: {
+                    type: [String],
+                    default: [
+                        "I can hear you, just not clearly. Mind saying that again?",
+                        "Sounds like the line cut out for a second. Can you repeat that for me?",
+                        "I'm here — the audio broke up a bit. Say that one more time?",
+                        "I caught part of that, but not all. Can you repeat it for me?",
+                        "Say that again for me?",
+                        "One more time?",
+                        "Sorry, didn't catch that — repeat it?"
+                    ]
                 },
                 // When connection cuts out briefly
                 connectionCutOut: {
-                    type: String,
-                    default: "Sorry, the connection cut out for a second. What can I help you with?",
-                    trim: true
+                    type: [String],
+                    default: [
+                        "Sorry, the connection cut out for a second. What can I help you with?",
+                        "The line dropped for a moment there. What were you saying?",
+                        "I lost you for a second. Go ahead?"
+                    ]
                 },
                 // When caller returns after silence
                 silenceRecovery: {
-                    type: String,
-                    default: "I'm here — go ahead, I'm listening. How can I help you today?",
-                    trim: true
+                    type: [String],
+                    default: [
+                        "I'm here — go ahead, I'm listening.",
+                        "Still here! What can I help you with?",
+                        "I'm listening — go ahead."
+                    ]
                 },
-                // General error recovery
+                // General "didn't understand" recovery
                 generalError: {
-                    type: String,
-                    default: "I'm sorry, I missed that. Could you say that again?",
-                    trim: true
+                    type: [String],
+                    default: [
+                        "I missed that. Could you say that again?",
+                        "Say that one more time for me?",
+                        "One more time?",
+                        "Didn't quite catch that — repeat it?"
+                    ]
                 },
                 // When transferring due to technical issues
                 technicalTransfer: {
+                    type: [String],
+                    default: [
+                        "I'm having some technical difficulties. Let me connect you to our team.",
+                        "Let me get someone on the line who can help you better."
+                    ]
+                },
+                // LEGACY: Keep choppyConnection for backward compat (maps to audioUnclear)
+                choppyConnection: {
                     type: String,
-                    default: "I'm having some technical difficulties. Let me connect you to our team.",
-                    trim: true
+                    default: "I can hear you, just not clearly. Mind saying that again?"
                 }
             },
             // FRUSTRATION DETECTION - Escalate immediately on emotional keywords

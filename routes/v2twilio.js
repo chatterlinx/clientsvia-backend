@@ -75,6 +75,72 @@ async function getRedis() {
     return null;
   }
 }
+
+// ============================================================================
+// V69: RECOVERY MESSAGE HELPER - Human-like random variant selection
+// ============================================================================
+// Instead of robotic "connection is choppy", use natural phrases like:
+// - "I can hear you, just not clearly. Mind saying that again?"
+// - "Say that again for me?"
+// - "One more time?"
+// ============================================================================
+function getRecoveryMessage(company, type = 'audioUnclear') {
+  const recoveryConfig = company?.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
+  
+  // V69: Default human-like variants (no "choppy" language)
+  const defaults = {
+    audioUnclear: [
+      "I can hear you, just not clearly. Mind saying that again?",
+      "Sounds like the line cut out for a second. Can you repeat that for me?",
+      "I'm here — the audio broke up a bit. Say that one more time?",
+      "I caught part of that, but not all. Can you repeat it for me?",
+      "Say that again for me?",
+      "One more time?",
+      "Sorry, didn't catch that — repeat it?"
+    ],
+    connectionCutOut: [
+      "Sorry, the connection cut out for a second. What can I help you with?",
+      "The line dropped for a moment there. What were you saying?",
+      "I lost you for a second. Go ahead?"
+    ],
+    silenceRecovery: [
+      "I'm here — go ahead, I'm listening.",
+      "Still here! What can I help you with?",
+      "I'm listening — go ahead."
+    ],
+    generalError: [
+      "I missed that. Could you say that again?",
+      "Say that one more time for me?",
+      "One more time?",
+      "Didn't quite catch that — repeat it?"
+    ],
+    technicalTransfer: [
+      "I'm having some technical difficulties. Let me connect you to our team.",
+      "Let me get someone on the line who can help you better."
+    ]
+  };
+  
+  // Get variants - prefer UI config, fall back to defaults
+  let variants = recoveryConfig[type];
+  
+  // Handle legacy choppyConnection → audioUnclear mapping
+  if (type === 'choppyConnection' || type === 'audioUnclear') {
+    variants = recoveryConfig.audioUnclear || recoveryConfig.choppyConnection || defaults.audioUnclear;
+  }
+  
+  // If variants is a string (legacy), wrap in array
+  if (typeof variants === 'string') {
+    variants = [variants];
+  }
+  
+  // If still no variants, use defaults
+  if (!Array.isArray(variants) || variants.length === 0) {
+    variants = defaults[type] || defaults.generalError;
+  }
+  
+  // Random selection for natural sound
+  return variants[Math.floor(Math.random() * variants.length)];
+}
 const { stripMarkdown, cleanTextForTTS } = require('../utils/textUtils');
 // Legacy personality system removed - using modern AI Agent Logic responseCategories
 
@@ -1352,10 +1418,9 @@ router.post('/voice', async (req, res) => {
       
       // 🚫 NEVER HANG UP - Blame connection, not caller
       logger.debug(`[GATHER FALLBACK] No speech detected - prompting again`);
-      // 🚨 UI-CONTROLLED: Use recovery message from database
-      const choppyMsg = company.aiAgentSettings?.llm0Controls?.recoveryMessages?.choppyConnection 
-        || "I'm sorry, the connection seems a bit choppy. Could you repeat that?";
-      twiml.say(choppyMsg);
+      // V69: Use random human-like recovery message
+      const recoveryMsg = getRecoveryMessage(company, 'audioUnclear');
+      twiml.say({ voice: 'Polly.Matthew' }, recoveryMsg);
       // Redirect back to continue listening
       twiml.redirect(`https://${req.get('host')}/api/twilio/${company._id}/voice`);
       
@@ -1393,10 +1458,9 @@ router.post('/voice', async (req, res) => {
       gather.say(escapeTwiML(fallbackGreeting));
       
       // 🚫 NEVER HANG UP - Blame connection, not caller
-      // 🚨 UI-CONTROLLED: Use recovery message from database
-      const errorRecovery = company.aiAgentSettings?.llm0Controls?.recoveryMessages?.choppyConnection 
-        || "I'm sorry, the connection seems a bit choppy. Could you repeat that?";
-      twiml.say(errorRecovery);
+      // V69: Use random human-like recovery message
+      const errorRecovery = getRecoveryMessage(company, 'audioUnclear');
+      twiml.say({ voice: 'Polly.Matthew' }, errorRecovery);
       twiml.redirect(`https://${req.get('host')}/api/twilio/${company._id}/voice`);
     }
 
@@ -1552,14 +1616,15 @@ router.post('/handle-speech', async (req, res) => {
       ...(company.aiAgentSettings?.llm0Controls?.lowConfidenceHandling || {})
     };
     
-    // 🚨 UI-CONTROLLED: Get recovery messages from database
+    // V69: Recovery messages now use getRecoveryMessage() for random variants
+    // This object is kept for backward compat but uses the helper internally
     const recoveryMessages = {
-      choppyConnection: "I'm sorry, the connection seems a bit choppy. Could you repeat that?",
-      connectionCutOut: "Sorry, the connection cut out for a second. What can I help you with?",
-      silenceRecovery: "I'm here — go ahead, I'm listening. How can I help you today?",
-      generalError: "I'm sorry, I missed that. Could you say that again?",
-      technicalTransfer: "I'm having some technical difficulties. Let me connect you to our team.",
-      ...(company.aiAgentSettings?.llm0Controls?.recoveryMessages || {})
+      get audioUnclear() { return getRecoveryMessage(company, 'audioUnclear'); },
+      get choppyConnection() { return getRecoveryMessage(company, 'audioUnclear'); }, // Legacy alias
+      get connectionCutOut() { return getRecoveryMessage(company, 'connectionCutOut'); },
+      get silenceRecovery() { return getRecoveryMessage(company, 'silenceRecovery'); },
+      get generalError() { return getRecoveryMessage(company, 'generalError'); },
+      get technicalTransfer() { return getRecoveryMessage(company, 'technicalTransfer'); }
     };
     
     // Convert 0-1 confidence to 0-100 for comparison
@@ -3114,7 +3179,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 recoveryAction = 'BOOKING';
               } else if (currentStep === 'ASK_TIME' || currentStep === 'time') {
                 const timeQ = HybridReceptionistLLM.getSlotPrompt('time', frontDeskConfig);
-                recoveryText = `Sorry about that, the line was choppy. ${timeQ}`;
+                recoveryText = `Sorry about that — ${timeQ}`;
                 recoveryAction = 'BOOKING';
               } else {
                 recoveryText = recoveryMsgs.generalError || "I'm sorry, I missed that. Could you say that again?";
@@ -3188,9 +3253,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       });
       
       // CONTEXT-AWARE recovery - blame connection, respect booking state!
-      // 🚨 UI-CONTROLLED: Use recovery message from database
-      const errorRecoveryMsgs = company?.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
-      let errorRecoveryText = errorRecoveryMsgs.choppyConnection || "I'm sorry, the connection isn't great. What can I help you with?";
+      // V69: Use random human-like recovery message
+      let errorRecoveryText = getRecoveryMessage(company, 'audioUnclear');
       let errorRecoveryAction = 'DISCOVERY';
       
       // 🚨 Use UI-configured questions for error recovery
@@ -3205,7 +3269,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           errorRecoveryAction = 'BOOKING';
         } else if (currentStep === 'ASK_ADDRESS' || currentStep === 'address') {
           const addressQ = HybridReceptionistLLM.getSlotPrompt('address', frontDeskConfig);
-          errorRecoveryText = `The line was a bit choppy. ${addressQ}`;
+          errorRecoveryText = `Sorry about that — ${addressQ}`;
           errorRecoveryAction = 'BOOKING';
         } else if (currentStep === 'ASK_PHONE' || currentStep === 'phone') {
           const phoneQ = HybridReceptionistLLM.getSlotPrompt('phone', frontDeskConfig);
@@ -3842,10 +3906,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }
       
       // Prompt caller instead of hanging up
-      // 🚨 UI-CONTROLLED: Use recovery message from database
-      const choppyPrompt = company?.aiAgentSettings?.llm0Controls?.recoveryMessages?.choppyConnection 
-        || "I'm sorry, the connection seems choppy. Are you still there?";
-      twiml.say(choppyPrompt);
+      // V69: Use random human-like recovery message
+      const recoveryPrompt = getRecoveryMessage(company, 'silenceRecovery');
+      twiml.say({ voice: 'Polly.Matthew' }, recoveryPrompt);
       twiml.redirect(`/api/twilio/v2-agent-respond/${companyID}`);
     }
     
