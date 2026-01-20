@@ -868,7 +868,7 @@ router.post('/voice', async (req, res) => {
       
       // Play test greeting
       twiml.say({
-        voice: 'alice',
+        voice: 'Polly.Matthew',
         language: 'en-US'
       }, greeting);
       
@@ -888,7 +888,7 @@ router.post('/voice', async (req, res) => {
       logger.info(`🎙️ [NOTIFICATION CENTER] Playing greeting: "${greeting.substring(0, 80)}..."`);
       
       twiml.say({
-        voice: 'alice',
+        voice: 'Polly.Matthew',
         language: 'en-US'
       }, greeting);
       
@@ -1001,7 +1001,7 @@ router.post('/voice', async (req, res) => {
         logger.info(`[NOT LIVE] Playing pre-activation message: "${preActivationMessage.substring(0, 100)}..."`);
         
         twiml.say({
-            voice: 'alice',
+            voice: 'Polly.Matthew',
             language: 'en-US'
         }, escapeTwiML(preActivationMessage));
         
@@ -2090,12 +2090,12 @@ router.post('/handle-speech', async (req, res) => {
       } catch (err) {
         logger.error('ElevenLabs synthesis failed, falling back to native TTS:', err.message);
         // Use Twilio's enhanced TTS with voice settings to maintain consistency
-        const voice = company.aiSettings?.twilioVoice || 'alice';
+        const voice = company.aiSettings?.twilioVoice || 'Polly.Matthew';
         gather.say({ voice }, escapeTwiML(strippedAnswer));
       }
     } else {
       // Use consistent voice even when ElevenLabs is not configured
-      const voice = company.aiSettings?.twilioVoice || 'alice';
+      const voice = company.aiSettings?.twilioVoice || 'Polly.Matthew';
       gather.say({ voice }, escapeTwiML(strippedAnswer));
     }
 
@@ -3758,7 +3758,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           
           // Fallback to Twilio voice
           twiml.say({
-            voice: result.controlFlags?.tone === 'robotic' ? 'Polly.Joanna' : 'alice'
+            voice: result.controlFlags?.tone === 'robotic' ? 'Polly.Joanna' : 'Polly.Matthew'
           }, escapeTwiML(responseText));
         }
       } else {
@@ -3780,7 +3780,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         }
         
         twiml.say({
-          voice: result.controlFlags?.tone === 'robotic' ? 'Polly.Joanna' : 'alice'
+          voice: result.controlFlags?.tone === 'robotic' ? 'Polly.Joanna' : 'Polly.Matthew'
         }, escapeTwiML(responseText));
       }
       
@@ -4774,7 +4774,7 @@ router.post('/voice-test', async (req, res) => {
         const twiml = new VoiceResponse();
         
         twiml.say({
-            voice: 'alice',
+            voice: 'Polly.Matthew',
             language: 'en-US'
         }, greeting);
         
