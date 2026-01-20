@@ -69,6 +69,10 @@ class SpamFilterManager {
     async init() {
         console.log(`🎯 [SPAM FILTER] Init called - starting load...`);
         await this.load();
+        
+        // Start auto-refresh ONCE after initial load
+        this.startAutoRefresh();
+        console.log(`⏰ [SPAM FILTER] Auto-refresh started (60s interval)`);
     }
 
     /**
@@ -115,8 +119,8 @@ class SpamFilterManager {
 
             console.log(`✅ [SPAM FILTER] CHECKPOINT 5: Dashboard loaded successfully`);
 
-            // Start auto-refresh
-            this.startAutoRefresh();
+            // NOTE: Auto-refresh is started in init(), not here
+            // This prevents interval stacking on every load()
 
         } catch (error) {
             console.error(`❌ [SPAM FILTER] ERROR loading dashboard:`, error);
@@ -834,6 +838,12 @@ class SpamFilterManager {
      * ────────────────────────────────────────────────────────────────────────
      */
     startAutoRefresh() {
+        // CRITICAL FIX: Clear existing interval first to prevent stacking
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+            this.refreshInterval = null;
+        }
+        
         // Refresh every 60 seconds
         this.refreshInterval = setInterval(() => {
             console.log('🔄 [SPAM FILTER] Auto-refreshing...');
