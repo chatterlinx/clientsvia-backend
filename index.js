@@ -483,6 +483,59 @@ function registerRoutes(routes) {
     app.use('/api/admin/triage-presets', routes.triagePresetsRoutes); // 🎯 Dynamic Triage Presets per Trade
     app.use('/api/admin/scenario-diagnostics', routes.scenarioDiagnosticsRoutes); // 🔍 Scenario Diagnostics (proof layer)
     app.use('/api/admin/scenario-migrations', require('./routes/admin/scenarioMigrations')); // 🔧 Scenario Migrations (fix matching issues)
+    
+    // V75 TEMPORARY: Direct migration endpoint (no auth required)
+    app.get('/run-callback-fix', async (req, res) => {
+        if (req.query.key !== 'penguin-air-fix-2026') {
+            return res.status(403).json({ error: 'Invalid key' });
+        }
+        const GlobalInstantResponseTemplate = require('./models/GlobalInstantResponseTemplate');
+        const TEMPLATE_ID = '68fb535130d19aec696d8123';
+        
+        const results = { success: false, changes: [] };
+        try {
+            const template = await GlobalInstantResponseTemplate.findById(TEMPLATE_ID);
+            if (!template) return res.status(404).json({ error: 'Template not found' });
+            
+            const NEW_NEGATIVES = ['you guys were here', 'was here last week', 'come back out', 'same technician', 'same tech', 'look up my records', 'look up my account', 'follow up', 'warranty issue', 'his name was', 'her name was', 'the guy who', 'technician was here', 'tech was here'];
+            const NEW_TRIGGERS = ['you guys were here', 'was here last week', 'come back out', 'come back again', 'same technician', 'same tech', 'the tech who came', 'look up my records', 'problem is back', 'not working again', 'acting up again', 'his name was'];
+            
+            for (const cat of template.categories || []) {
+                for (const sc of cat.scenarios || []) {
+                    const name = (sc.name || '').toLowerCase();
+                    if (name.includes('not sure what they need')) {
+                        const existingNeg = new Set((sc.negativeTriggers || []).map(t => t.toLowerCase()));
+                        for (const n of NEW_NEGATIVES) {
+                            if (!existingNeg.has(n.toLowerCase())) {
+                                sc.negativeTriggers = sc.negativeTriggers || [];
+                                sc.negativeTriggers.push(n);
+                                results.changes.push(`Added negative: "${n}" to "Not Sure"`);
+                            }
+                        }
+                    }
+                    if (name.includes('follow-up') || name.includes('follow up') || name.includes('callback')) {
+                        const existingTrig = new Set((sc.triggers || []).map(t => t.toLowerCase()));
+                        for (const t of NEW_TRIGGERS) {
+                            if (!existingTrig.has(t.toLowerCase())) {
+                                sc.triggers = sc.triggers || [];
+                                sc.triggers.push(t);
+                                results.changes.push(`Added trigger: "${t}" to "Follow-Up"`);
+                            }
+                        }
+                        sc.priority = Math.max(sc.priority || 0, 8);
+                    }
+                }
+            }
+            
+            await template.save();
+            results.success = true;
+            results.message = `Applied ${results.changes.length} changes`;
+            res.json(results);
+        } catch (error) {
+            results.error = error.message;
+            res.status(500).json(results);
+        }
+    });
     app.use('/api/admin', require('./routes/admin/configAudit')); // 🧾 Config Audit Log (append-only) - read endpoint
     // callFlowRoutes REMOVED Dec 2025 - use Mission Control (call-flow-engine) instead
     // V1 LLM Console API removed - 2025-11-08 (use V2 instead)
