@@ -497,6 +497,484 @@ router.post('/:companyId/vendors', authenticateJWT, async (req, res) => {
 });
 
 // ============================================================================
+// PATCH /api/call-center/:companyId/customer/:customerId
+// ============================================================================
+// Update customer profile (move to commercial, edit, mark spam)
+
+router.patch('/:companyId/customer/:customerId', authenticateJWT, async (req, res) => {
+    const { companyId, customerId } = req.params;
+    const updates = req.body;
+    
+    try {
+        const allowedFields = [
+            'name.first', 'name.last', 'name.full', 'name.nickname',
+            'status', 'tags', 'preferences.preferredTechnicianName',
+            'preferences.preferredTimeWindow', 'preferences.specialInstructions'
+        ];
+        
+        const updateObj = {};
+        
+        // Handle category transfer (residential ↔ commercial)
+        if (updates.category) {
+            if (updates.category === 'commercial') {
+                updateObj.$addToSet = { tags: 'commercial' };
+                updateObj.$pull = { tags: 'residential' };
+            } else if (updates.category === 'residential') {
+                updateObj.$addToSet = { tags: 'residential' };
+                updateObj.$pull = { tags: 'commercial' };
+            } else if (updates.category === 'vip') {
+                updateObj.$addToSet = { tags: 'vip' };
+            }
+        }
+        
+        // Handle spam marking
+        if (updates.markAsSpam === true) {
+            updateObj.$set = updateObj.$set || {};
+            updateObj.$set.status = 'blocked';
+            updateObj.$addToSet = updateObj.$addToSet || {};
+            updateObj.$addToSet.tags = 'spam';
+            
+            // Also add to company blacklist
+            try {
+                const Company = require('../../models/v2Company');
+                const phone = await Customer.findById(customerId).select('phoneNumbers').lean();
+                if (phone?.phoneNumbers?.[0]?.number) {
+                    await Company.updateOne(
+                        { _id: new mongoose.Types.ObjectId(companyId) },
+                        { $addToSet: { 'callFilteringConfig.blacklist': phone.phoneNumbers[0].number } }
+                    );
+                }
+            } catch (blacklistErr) {
+                logger.warn('[CALL CENTER] Failed to add to blacklist (non-fatal)', { error: blacklistErr.message });
+            }
+        }
+        
+        // Handle unmark spam
+        if (updates.markAsSpam === false) {
+            updateObj.$set = updateObj.$set || {};
+            updateObj.$set.status = 'active';
+            updateObj.$pull = updateObj.$pull || {};
+            updateObj.$pull.tags = 'spam';
+        }
+        
+        // Handle regular field updates
+        for (const [key, value] of Object.entries(updates)) {
+            if (allowedFields.includes(key)) {
+                updateObj.$set = updateObj.$set || {};
+                updateObj.$set[key] = value;
+            }
+        }
+        
+        if (Object.keys(updateObj).length === 0) {
+            return res.status(400).json({ success: false, message: 'No valid updates provided' });
+        }
+        
+        const customer = await Customer.findOneAndUpdate(
+            { _id: new mongoose.Types.ObjectId(customerId), companyId: new mongoose.Types.ObjectId(companyId) },
+            updateObj,
+            { new: true }
+        ).lean();
+        
+        if (!customer) {
+            return res.status(404).json({ success: false, message: 'Customer not found' });
+        }
+        
+        logger.info('[CALL CENTER] Customer updated', { 
+            companyId, 
+            customerId, 
+            updates: Object.keys(updates),
+            newCategory: updates.category || null,
+            markedSpam: updates.markAsSpam || null
+        });
+        
+        res.json({ success: true, customer });
+        
+    } catch (error) {
+        logger.error('[CALL CENTER] Customer update failed', { companyId, customerId, error: error.message });
+        res.status(500).json({ success: false, message: 'Failed to update customer', error: error.message });
+    }
+});
+
+// ============================================================================
+// DELETE /api/call-center/:companyId/customer/:customerId
+// ============================================================================
+// Delete customer (soft delete - marks as inactive)
+
+router.delete('/:companyId/customer/:customerId', authenticateJWT, async (req, res) => {
+    const { companyId, customerId } = req.params;
+    const { permanent } = req.query;
+    
+    try {
+        if (permanent === 'true') {
+            // Hard delete (admin only, use with caution)
+            await Customer.deleteOne({
+                _id: new mongoose.Types.ObjectId(customerId),
+                companyId: new mongoose.Types.ObjectId(companyId)
+            });
+            
+            logger.warn('[CALL CENTER] Customer PERMANENTLY deleted', { companyId, customerId });
+            
+            res.json({ success: true, message: 'Customer permanently deleted' });
+        } else {
+            // Soft delete (recommended)
+            const customer = await Customer.findOneAndUpdate(
+                { _id: new mongoose.Types.ObjectId(customerId), companyId: new mongoose.Types.ObjectId(companyId) },
+                { 
+                    $set: { 
+                        status: 'inactive',
+                        deletedAt: new Date()
+                    },
+                    $addToSet: { tags: 'deleted' }
+                },
+                { new: true }
+            ).lean();
+            
+            if (!customer) {
+                return res.status(404).json({ success: false, message: 'Customer not found' });
+            }
+            
+            logger.info('[CALL CENTER] Customer soft deleted', { companyId, customerId });
+            
+            res.json({ success: true, message: 'Customer marked as inactive', customer });
+        }
+        
+    } catch (error) {
+        logger.error('[CALL CENTER] Customer delete failed', { companyId, customerId, error: error.message });
+        res.status(500).json({ success: false, message: 'Failed to delete customer', error: error.message });
+    }
+});
+
+// ============================================================================
+// POST /api/call-center/:companyId/customer/:customerId/convert-to-vendor
+// ============================================================================
+// Convert a customer to a vendor (e.g., they're actually a supply house)
+
+router.post('/:companyId/customer/:customerId/convert-to-vendor', authenticateJWT, async (req, res) => {
+    const { companyId, customerId } = req.params;
+    const { vendorType = 'other', keepCustomerRecord = false } = req.body;
+    
+    try {
+        // Get customer data
+        const customer = await Customer.findOne({
+            _id: new mongoose.Types.ObjectId(customerId),
+            companyId: new mongoose.Types.ObjectId(companyId)
+        }).lean();
+        
+        if (!customer) {
+            return res.status(404).json({ success: false, message: 'Customer not found' });
+        }
+        
+        // Create vendor from customer data
+        const vendor = await Vendor.create({
+            companyId: new mongoose.Types.ObjectId(companyId),
+            name: customer.name?.full || customer.name?.first || 'Converted Vendor',
+            type: vendorType,
+            phoneNumbers: customer.phoneNumbers || [],
+            email: customer.emails?.[0]?.address || null,
+            address: customer.addresses?.[0] ? {
+                street: customer.addresses[0].street,
+                city: customer.addresses[0].city,
+                state: customer.addresses[0].state,
+                zip: customer.addresses[0].zip
+            } : null,
+            notes: `Converted from customer record on ${new Date().toISOString()}`,
+            aliases: [
+                customer.name?.first?.toLowerCase(),
+                customer.name?.full?.toLowerCase()
+            ].filter(Boolean)
+        });
+        
+        // Update related call summaries to point to vendor
+        await CallSummary.updateMany(
+            { companyId: new mongoose.Types.ObjectId(companyId), customerId: new mongoose.Types.ObjectId(customerId) },
+            { 
+                $set: { 
+                    callerType: 'vendor',
+                    callerSubType: vendorType,
+                    vendorId: vendor._id
+                },
+                $unset: { customerId: 1 }
+            }
+        );
+        
+        // Handle original customer record
+        if (!keepCustomerRecord) {
+            await Customer.findByIdAndUpdate(customerId, {
+                $set: { 
+                    status: 'inactive',
+                    convertedToVendorId: vendor._id,
+                    convertedAt: new Date()
+                },
+                $addToSet: { tags: 'converted-to-vendor' }
+            });
+        }
+        
+        logger.info('[CALL CENTER] Customer converted to vendor', { 
+            companyId, 
+            customerId, 
+            vendorId: vendor._id,
+            vendorType
+        });
+        
+        res.json({ 
+            success: true, 
+            message: 'Customer converted to vendor',
+            vendor,
+            originalCustomerId: customerId
+        });
+        
+    } catch (error) {
+        logger.error('[CALL CENTER] Customer to vendor conversion failed', { companyId, customerId, error: error.message });
+        res.status(500).json({ success: false, message: 'Failed to convert customer', error: error.message });
+    }
+});
+
+// ============================================================================
+// PATCH /api/call-center/:companyId/vendor/:vendorId
+// ============================================================================
+// Update vendor profile
+
+router.patch('/:companyId/vendor/:vendorId', authenticateJWT, async (req, res) => {
+    const { companyId, vendorId } = req.params;
+    const updates = req.body;
+    
+    try {
+        const allowedFields = [
+            'name', 'type', 'aliases', 'phoneNumbers', 'email', 'website',
+            'address', 'contacts', 'account', 'aiInstructions', 'status', 'tags', 'notes'
+        ];
+        
+        const updateObj = { $set: {} };
+        
+        for (const [key, value] of Object.entries(updates)) {
+            if (allowedFields.includes(key)) {
+                updateObj.$set[key] = value;
+            }
+        }
+        
+        // Handle spam marking
+        if (updates.markAsSpam === true) {
+            updateObj.$set.status = 'blocked';
+            updateObj.$addToSet = { tags: 'spam' };
+        }
+        
+        if (Object.keys(updateObj.$set).length === 0 && !updateObj.$addToSet) {
+            return res.status(400).json({ success: false, message: 'No valid updates provided' });
+        }
+        
+        const vendor = await Vendor.findOneAndUpdate(
+            { _id: new mongoose.Types.ObjectId(vendorId), companyId: new mongoose.Types.ObjectId(companyId) },
+            updateObj,
+            { new: true }
+        ).lean();
+        
+        if (!vendor) {
+            return res.status(404).json({ success: false, message: 'Vendor not found' });
+        }
+        
+        logger.info('[CALL CENTER] Vendor updated', { companyId, vendorId, updates: Object.keys(updates) });
+        
+        res.json({ success: true, vendor });
+        
+    } catch (error) {
+        logger.error('[CALL CENTER] Vendor update failed', { companyId, vendorId, error: error.message });
+        res.status(500).json({ success: false, message: 'Failed to update vendor', error: error.message });
+    }
+});
+
+// ============================================================================
+// DELETE /api/call-center/:companyId/vendor/:vendorId
+// ============================================================================
+// Delete vendor
+
+router.delete('/:companyId/vendor/:vendorId', authenticateJWT, async (req, res) => {
+    const { companyId, vendorId } = req.params;
+    const { permanent } = req.query;
+    
+    try {
+        if (permanent === 'true') {
+            await Vendor.deleteOne({
+                _id: new mongoose.Types.ObjectId(vendorId),
+                companyId: new mongoose.Types.ObjectId(companyId)
+            });
+            
+            logger.warn('[CALL CENTER] Vendor PERMANENTLY deleted', { companyId, vendorId });
+            
+            res.json({ success: true, message: 'Vendor permanently deleted' });
+        } else {
+            const vendor = await Vendor.findOneAndUpdate(
+                { _id: new mongoose.Types.ObjectId(vendorId), companyId: new mongoose.Types.ObjectId(companyId) },
+                { $set: { status: 'inactive' } },
+                { new: true }
+            ).lean();
+            
+            if (!vendor) {
+                return res.status(404).json({ success: false, message: 'Vendor not found' });
+            }
+            
+            logger.info('[CALL CENTER] Vendor soft deleted', { companyId, vendorId });
+            
+            res.json({ success: true, message: 'Vendor marked as inactive', vendor });
+        }
+        
+    } catch (error) {
+        logger.error('[CALL CENTER] Vendor delete failed', { companyId, vendorId, error: error.message });
+        res.status(500).json({ success: false, message: 'Failed to delete vendor', error: error.message });
+    }
+});
+
+// ============================================================================
+// POST /api/call-center/:companyId/vendor/:vendorId/convert-to-customer
+// ============================================================================
+// Convert a vendor to a customer (e.g., they're actually a residential customer)
+
+router.post('/:companyId/vendor/:vendorId/convert-to-customer', authenticateJWT, async (req, res) => {
+    const { companyId, vendorId } = req.params;
+    const { category = 'residential', keepVendorRecord = false } = req.body;
+    
+    try {
+        // Get vendor data
+        const vendor = await Vendor.findOne({
+            _id: new mongoose.Types.ObjectId(vendorId),
+            companyId: new mongoose.Types.ObjectId(companyId)
+        }).lean();
+        
+        if (!vendor) {
+            return res.status(404).json({ success: false, message: 'Vendor not found' });
+        }
+        
+        // Create customer from vendor data
+        const customer = await Customer.create({
+            companyId: new mongoose.Types.ObjectId(companyId),
+            name: {
+                full: vendor.name,
+                first: vendor.name.split(' ')[0],
+                last: vendor.name.split(' ').slice(1).join(' ') || null
+            },
+            phoneNumbers: vendor.phoneNumbers || [],
+            emails: vendor.email ? [{ address: vendor.email, isPrimary: true }] : [],
+            addresses: vendor.address ? [{
+                street: vendor.address.street,
+                city: vendor.address.city,
+                state: vendor.address.state,
+                zip: vendor.address.zip,
+                isPrimary: true
+            }] : [],
+            tags: [category],
+            aiNotes: [{
+                note: `Converted from vendor record on ${new Date().toISOString()}`,
+                source: 'system',
+                createdAt: new Date()
+            }]
+        });
+        
+        // Update related call summaries
+        await CallSummary.updateMany(
+            { companyId: new mongoose.Types.ObjectId(companyId), vendorId: new mongoose.Types.ObjectId(vendorId) },
+            { 
+                $set: { 
+                    callerType: 'customer',
+                    callerSubType: category,
+                    customerId: customer._id
+                },
+                $unset: { vendorId: 1 }
+            }
+        );
+        
+        // Handle original vendor record
+        if (!keepVendorRecord) {
+            await Vendor.findByIdAndUpdate(vendorId, {
+                $set: { 
+                    status: 'inactive',
+                    convertedToCustomerId: customer._id
+                }
+            });
+        }
+        
+        logger.info('[CALL CENTER] Vendor converted to customer', { 
+            companyId, 
+            vendorId, 
+            customerId: customer._id,
+            category
+        });
+        
+        res.json({ 
+            success: true, 
+            message: 'Vendor converted to customer',
+            customer,
+            originalVendorId: vendorId
+        });
+        
+    } catch (error) {
+        logger.error('[CALL CENTER] Vendor to customer conversion failed', { companyId, vendorId, error: error.message });
+        res.status(500).json({ success: false, message: 'Failed to convert vendor', error: error.message });
+    }
+});
+
+// ============================================================================
+// POST /api/call-center/:companyId/call/:callId/reclassify
+// ============================================================================
+// Reclassify a call (change caller type/subtype)
+
+router.post('/:companyId/call/:callId/reclassify', authenticateJWT, async (req, res) => {
+    const { companyId, callId } = req.params;
+    const { callerType, callerSubType, customerId, vendorId } = req.body;
+    
+    try {
+        const updateObj = {};
+        
+        if (callerType) updateObj.callerType = callerType;
+        if (callerSubType) updateObj.callerSubType = callerSubType;
+        if (customerId) {
+            updateObj.customerId = new mongoose.Types.ObjectId(customerId);
+            updateObj.vendorId = null;
+        }
+        if (vendorId) {
+            updateObj.vendorId = new mongoose.Types.ObjectId(vendorId);
+            updateObj.customerId = null;
+        }
+        
+        // Update card color based on new type
+        if (callerType === 'vendor') {
+            updateObj['cardData.color'] = callerSubType === 'delivery' ? 'orange' : 'yellow';
+        } else if (callerSubType === 'commercial') {
+            updateObj['cardData.color'] = 'blue';
+        } else {
+            updateObj['cardData.color'] = 'green';
+        }
+        
+        const call = await CallSummary.findOneAndUpdate(
+            {
+                companyId: new mongoose.Types.ObjectId(companyId),
+                $or: [
+                    { _id: mongoose.Types.ObjectId.isValid(callId) ? new mongoose.Types.ObjectId(callId) : null },
+                    { callId: callId }
+                ]
+            },
+            { $set: updateObj },
+            { new: true }
+        ).lean();
+        
+        if (!call) {
+            return res.status(404).json({ success: false, message: 'Call not found' });
+        }
+        
+        logger.info('[CALL CENTER] Call reclassified', { 
+            companyId, 
+            callId, 
+            newType: callerType,
+            newSubType: callerSubType
+        });
+        
+        res.json({ success: true, call });
+        
+    } catch (error) {
+        logger.error('[CALL CENTER] Call reclassify failed', { companyId, callId, error: error.message });
+        res.status(500).json({ success: false, message: 'Failed to reclassify call', error: error.message });
+    }
+});
+
+// ============================================================================
 // POST /api/call-center/:companyId/vendors/seed
 // ============================================================================
 // Seed common vendors (UPS, FedEx, Tropic Supply, etc.)
