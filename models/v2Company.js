@@ -240,6 +240,136 @@ const companySchema = new mongoose.Schema({
         regionKeywordsExclude: { type: [String], default: [] }
     },
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V70: SERVICE AREA VALIDATION
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Validates if caller's address is within company's service area.
+    // Used both for "do you service my area?" questions AND during booking.
+    // ═══════════════════════════════════════════════════════════════════════════
+    serviceAreaConfig: {
+        // Master toggle - enable/disable service area checking
+        enabled: { type: Boolean, default: false },
+        
+        // ═══════════════════════════════════════════════════════════════
+        // SERVICE AREA DEFINITION - Multiple ways to define coverage
+        // ═══════════════════════════════════════════════════════════════
+        
+        // ZIP codes we service (most precise)
+        // Example: ['33901', '33903', '33904', '33905', '33907', '33908', '33909', '33912', '33913', '33916', '33919']
+        servicedZipCodes: {
+            type: [String],
+            default: []
+        },
+        
+        // Cities we service (for display and fuzzy matching)
+        // Example: ['Fort Myers', 'Cape Coral', 'Naples', 'Bonita Springs', 'Estero']
+        servicedCities: {
+            type: [String],
+            default: []
+        },
+        
+        // Counties we service (broader coverage)
+        // Example: ['Lee County', 'Collier County']
+        servicedCounties: {
+            type: [String],
+            default: []
+        },
+        
+        // State restriction (optional - most companies are single-state)
+        // Example: 'FL', 'TX', 'CA'
+        servicedState: { type: String, uppercase: true, default: null },
+        
+        // Radius-based coverage (for Google Maps validation)
+        radiusCoverage: {
+            enabled: { type: Boolean, default: false },
+            // Center point (company address or service hub)
+            centerLat: { type: Number, default: null },
+            centerLng: { type: Number, default: null },
+            // Service radius in miles
+            radiusMiles: { type: Number, default: 30 }
+        },
+        
+        // ═══════════════════════════════════════════════════════════════
+        // VALIDATION BEHAVIOR - When to check and how strict
+        // ═══════════════════════════════════════════════════════════════
+        
+        // When to validate service area
+        validateOn: {
+            type: String,
+            enum: [
+                'address_collected',     // Check when address is given (during booking)
+                'zip_mentioned',         // Check when ZIP code is mentioned (anytime)
+                'city_mentioned',        // Check when city is mentioned (anytime)
+                'explicit_question',     // Only when caller asks "do you service X?"
+                'all'                    // Check all of the above
+            ],
+            default: 'all'
+        },
+        
+        // How strict to be with matching
+        matchStrictness: {
+            type: String,
+            enum: [
+                'exact',    // Must match exactly (ZIP in list, city exact match)
+                'fuzzy',    // Allow typos, abbreviations (Ft. Myers = Fort Myers)
+                'generous'  // Include nearby areas, partial matches
+            ],
+            default: 'fuzzy'
+        },
+        
+        // ═══════════════════════════════════════════════════════════════
+        // RESPONSES - What to say when in/out of service area
+        // ═══════════════════════════════════════════════════════════════
+        
+        // When caller IS in service area
+        inAreaResponse: {
+            type: String,
+            default: "Great news! We do service {city}. Let me help you get scheduled."
+        },
+        
+        // When caller is NOT in service area
+        outOfAreaResponse: {
+            type: String,
+            default: "I'm sorry, we don't currently service {area}. We cover {serviceAreaSummary}. Is there anything else I can help you with?"
+        },
+        
+        // When we can't determine the area (unclear address)
+        unclearAreaResponse: {
+            type: String,
+            default: "Just to make sure we can help you — what city or ZIP code is the service address in?"
+        },
+        
+        // Offer referral when out of area? (for partner companies)
+        offerReferral: { type: Boolean, default: false },
+        referralResponse: {
+            type: String,
+            default: "While we don't service that area, I can give you the number for a trusted company that does. Would that help?"
+        },
+        referralCompanyName: { type: String, default: null },
+        referralCompanyPhone: { type: String, default: null },
+        
+        // ═══════════════════════════════════════════════════════════════
+        // EDGE CASES - Borders and special zones
+        // ═══════════════════════════════════════════════════════════════
+        
+        // ZIP codes on the border (maybe we service, check with office)
+        borderlineZipCodes: {
+            type: [String],
+            default: []
+        },
+        borderlineResponse: {
+            type: String,
+            default: "That area is right on the edge of our service area. Let me have someone from the office confirm and call you back. Can I get your phone number?"
+        },
+        
+        // Display-friendly summary of service area
+        // Example: "Fort Myers, Cape Coral, Naples, and surrounding areas"
+        serviceAreaSummary: {
+            type: String,
+            default: null
+        }
+    },
+    
     // Legacy/detailed fields (now optional - filled in Overview tab)
     ownerName: { type: String, trim: true, default: null }, // Removed required validation
     ownerEmail: { type: String, trim: true, default: null, lowercase: true }, // Removed required validation
