@@ -72,7 +72,7 @@ const BlackBoxLogger = require('./BlackBoxLogger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V81-SMART-DISCOVERY-CONTEXT';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V82-CALLID-FIX';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -5252,7 +5252,7 @@ async function processTurn({
                     
                     // 📦 BLACK BOX: Log common first names check for diagnostics
                     await BlackBoxLogger.logEvent({
-                        callId,
+                        callId: session._id?.toString(),
                         companyId,
                         type: 'NAME_DETECTION_CHECK',
                         turn: session.metrics?.totalTurns || 0,
@@ -6152,7 +6152,7 @@ async function processTurn({
                     
                     // 📦 BLACK BOX: Log spelling variant ANSWERED
                     await BlackBoxLogger.logEvent({
-                        callId,
+                        callId: session._id?.toString(),
                         companyId,
                         type: 'SPELLING_VARIANT_ANSWERED',
                         turn: session.metrics?.totalTurns || 0,
@@ -6306,7 +6306,7 @@ async function processTurn({
                         
                         // 📦 BLACK BOX: Log spelling variant config status
                         await BlackBoxLogger.logEvent({
-                            callId,
+                            callId: session._id?.toString(),
                             companyId,
                             type: 'SPELLING_VARIANT_CHECK',
                             turn: session.metrics?.totalTurns || 0,
@@ -6368,7 +6368,7 @@ async function processTurn({
                                 
                                 // 📦 BLACK BOX: Log spelling variant ASKED
                                 await BlackBoxLogger.logEvent({
-                                    callId,
+                                    callId: session._id?.toString(),
                                     companyId,
                                     type: 'SPELLING_VARIANT_ASKED',
                                     turn: session.metrics?.totalTurns || 0,
@@ -7394,7 +7394,7 @@ async function processTurn({
                         });
                         // Log to Black Box for diagnostics
                         await BlackBoxLogger.logEvent({
-                            callId,
+                            callId: session._id?.toString(),
                             companyId,
                             type: 'ADDRESS_VALIDATION_SKIPPED',
                             data: {
