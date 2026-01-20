@@ -707,6 +707,249 @@ const wiringRegistryV1 = {
     },
 
     // =========================================================================
+    // TAB: LLM-0 CONTROLS (AI Behavior Configuration)
+    // =========================================================================
+    {
+      id: "tab.llm0Controls",
+      type: "TAB",
+      label: "LLM-0 Controls",
+      description: "Fine-tune AI conversation behavior - thresholds, spam detection, knowledge priorities",
+      expectedDbPaths: [
+        "company.aiAgentLogic.thresholds",
+        "company.aiAgentLogic.memorySettings",
+        "company.aiAgentLogic.fallbackBehavior",
+        "company.aiAgentLogic.knowledgeSourcePriorities"
+      ],
+      expectedConsumers: ["ConversationEngine", "LLMDiscoveryEngine", "HybridReceptionistLLM"],
+      expectedTraceKeys: ["trace.llm0.loaded", "trace.llm0.threshold.applied"],
+      children: [
+        "llm0.thresholds",
+        "llm0.memorySettings",
+        "llm0.spamFilter",
+        "llm0.knowledgePriorities"
+      ]
+    },
+
+    {
+      id: "llm0.thresholds",
+      type: "SECTION",
+      label: "Confidence Thresholds",
+      parentId: "tab.llm0Controls",
+      description: "Tier-1/Tier-2/Tier-3 confidence cutoffs",
+      expectedDbPaths: [
+        "company.aiAgentLogic.thresholds.tier1",
+        "company.aiAgentLogic.thresholds.tier2",
+        "company.aiAgentLogic.thresholds.tier3"
+      ],
+      expectedConsumers: ["HybridScenarioSelector", "LLMDiscoveryEngine"],
+      runtimeMethod: "evaluateConfidence()",
+      expectedTraceKeys: ["trace.threshold.tier1", "trace.threshold.tier2", "trace.threshold.tier3"],
+      requiredFields: []
+    },
+
+    {
+      id: "llm0.memorySettings",
+      type: "SECTION",
+      label: "Memory Settings",
+      parentId: "tab.llm0Controls",
+      description: "Conversation history retention and context",
+      expectedDbPaths: ["company.aiAgentLogic.memorySettings"],
+      expectedConsumers: ["ConversationEngine", "SessionService"],
+      expectedTraceKeys: ["trace.memory.loaded"],
+      requiredFields: []
+    },
+
+    {
+      id: "llm0.spamFilter",
+      type: "SECTION",
+      label: "Mid-Conversation Spam Detection",
+      parentId: "tab.llm0Controls",
+      description: "Telemarketer phrase detection DURING conversation (different from Company Profile pre-call spam)",
+      expectedDbPaths: ["company.aiAgentLogic.spamFilter"],
+      expectedConsumers: ["LLM0ControlsLoader"],
+      runtimeMethod: "isSpamPhrase()",
+      expectedTraceKeys: ["trace.midConvoSpam.detected"],
+      requiredFields: [],
+      note: "⚠️ DIFFERENT from Company Profile → Spam Filter (pre-call blocking)"
+    },
+
+    {
+      id: "llm0.knowledgePriorities",
+      type: "SECTION",
+      label: "Knowledge Source Priorities",
+      parentId: "tab.llm0Controls",
+      description: "Priority order: scenarios > templates > LLM fallback",
+      expectedDbPaths: ["company.aiAgentLogic.knowledgeSourcePriorities"],
+      expectedConsumers: ["LLMDiscoveryEngine"],
+      expectedTraceKeys: ["trace.knowledge.priorityApplied"],
+      requiredFields: []
+    },
+
+    // =========================================================================
+    // SUBSYSTEM: 3-TIER INTELLIGENCE (Scenario Matching Cascade)
+    // =========================================================================
+    {
+      id: "subsystem.3tier",
+      type: "INFRASTRUCTURE",
+      label: "3-Tier Intelligence System",
+      description: "Scenario matching cascade: Tier-1 (rules) → Tier-2 (semantic) → Tier-3 (LLM fallback)",
+      expectedDbPaths: [],
+      expectedConsumers: ["HybridScenarioSelector", "LLMDiscoveryEngine", "Tier3LLMFallback"],
+      expectedTraceKeys: [
+        "trace.tier1.matched",
+        "trace.tier2.matched",
+        "trace.tier3.fallback"
+      ],
+      children: [
+        "tier.tier1",
+        "tier.tier2",
+        "tier.tier3"
+      ],
+      critical: true
+    },
+
+    {
+      id: "tier.tier1",
+      type: "SECTION",
+      label: "Tier-1: Rule-Based Matching",
+      parentId: "subsystem.3tier",
+      description: "Exact keyword/trigger matching - FREE, instant (0 tokens)",
+      expectedDbPaths: ["GlobalInstantResponseTemplate.categories[].scenarios[].triggers"],
+      expectedConsumers: ["HybridScenarioSelector"],
+      runtimeMethod: "matchTier1()",
+      expectedTraceKeys: ["trace.tier1.matched", "CHECKPOINT 9c"],
+      requiredFields: ["triggers"],
+      cost: "FREE",
+      latency: "<10ms"
+    },
+
+    {
+      id: "tier.tier2",
+      type: "SECTION",
+      label: "Tier-2: Semantic Matching",
+      parentId: "subsystem.3tier",
+      description: "Embedding similarity matching - FREE, fast",
+      expectedDbPaths: [],
+      expectedConsumers: ["LLMDiscoveryEngine"],
+      runtimeMethod: "matchTier2()",
+      expectedTraceKeys: ["trace.tier2.matched"],
+      requiredFields: [],
+      cost: "FREE",
+      latency: "<100ms"
+    },
+
+    {
+      id: "tier.tier3",
+      type: "SECTION",
+      label: "Tier-3: LLM Fallback",
+      parentId: "subsystem.3tier",
+      description: "OpenAI LLM fallback for edge cases - COSTS TOKENS",
+      expectedDbPaths: [],
+      expectedConsumers: ["Tier3LLMFallback", "HybridReceptionistLLM"],
+      runtimeMethod: "invokeLLM()",
+      expectedTraceKeys: ["trace.tier3.fallback", "trace.llm.tokens"],
+      requiredFields: [],
+      cost: "$0.01-0.05 per call",
+      latency: "1-3 seconds"
+    },
+
+    // =========================================================================
+    // SUBSYSTEM: SLOT EXTRACTION (Booking Data Collection)
+    // =========================================================================
+    {
+      id: "subsystem.slotExtraction",
+      type: "INFRASTRUCTURE",
+      label: "Slot Extraction Services",
+      description: "Name, Phone, Address, Time extraction from caller speech",
+      expectedDbPaths: [
+        "company.aiAgentSettings.frontDeskBehavior.bookingSlots"
+      ],
+      expectedConsumers: ["ConversationEngine", "BookingStateMachine"],
+      expectedTraceKeys: ["CHECKPOINT 8", "trace.slot.extracted"],
+      children: [
+        "slot.name",
+        "slot.phone",
+        "slot.address",
+        "slot.time"
+      ]
+    },
+
+    {
+      id: "slot.name",
+      type: "SECTION",
+      label: "Name Extraction",
+      parentId: "subsystem.slotExtraction",
+      description: "First/last name detection with smart common names list",
+      expectedDbPaths: ["GlobalInstantResponseTemplate.commonFirstNames"],
+      expectedConsumers: ["ConversationEngine"],
+      utilityFile: "utils/nameExtraction.js",
+      expectedTraceKeys: ["trace.name.extracted", "trace.name.partial"],
+      requiredFields: [],
+      stopWords: ["probably", "maybe", "air conditioner", "what", "who"]
+    },
+
+    {
+      id: "slot.phone",
+      type: "SECTION",
+      label: "Phone Extraction",
+      parentId: "subsystem.slotExtraction",
+      description: "Phone number detection with caller ID prioritization",
+      expectedDbPaths: [],
+      expectedConsumers: ["ConversationEngine"],
+      utilityFile: "utils/phoneExtraction.js",
+      expectedTraceKeys: ["trace.phone.extracted", "trace.phone.callerIdUsed"],
+      runtimeBehavior: "Offers caller ID first: 'Is {callerPhone} a good number?'"
+    },
+
+    {
+      id: "slot.address",
+      type: "SECTION",
+      label: "Address Extraction & Validation",
+      parentId: "subsystem.slotExtraction",
+      description: "Google Maps Address Validation API integration",
+      expectedDbPaths: [],
+      expectedConsumers: ["ConversationEngine", "AddressValidationService"],
+      utilityFile: "services/AddressValidationService.js",
+      expectedTraceKeys: ["trace.address.extracted", "trace.address.validated", "trace.address.unitNeeded"],
+      envRequired: "GOOGLE_MAPS_API_KEY",
+      features: [
+        "Background validation while conversation continues",
+        "Smart unit detection for apartments/condos",
+        "Gate code detection for gated communities",
+        "Commercial building type identification",
+        "Equipment access prompts"
+      ]
+    },
+
+    {
+      id: "slot.time",
+      type: "SECTION",
+      label: "Time Extraction",
+      parentId: "subsystem.slotExtraction",
+      description: "Date/time parsing for appointments",
+      expectedDbPaths: [],
+      expectedConsumers: ["ConversationEngine"],
+      expectedTraceKeys: ["trace.time.extracted"],
+      requiredFields: []
+    },
+
+    // =========================================================================
+    // SUBSYSTEM: BOOKING INTERRUPTION (Mid-Booking Questions)
+    // =========================================================================
+    {
+      id: "subsystem.bookingInterruption",
+      type: "INFRASTRUCTURE",
+      label: "Booking Interruption Handler",
+      description: "Handles off-topic questions during booking flow",
+      expectedDbPaths: [
+        "company.aiAgentSettings.frontDeskBehavior.bookingInterruption"
+      ],
+      expectedConsumers: ["ConversationEngine", "HybridReceptionistLLM"],
+      expectedTraceKeys: ["trace.interruption.detected", "trace.interruption.answered", "trace.interruption.returned"],
+      runtimeBehavior: "Caller asks question → AI answers briefly → Returns to current slot"
+    },
+
+    // =========================================================================
     // TAB: WIRING (Developer Tool)
     // =========================================================================
     {

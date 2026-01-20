@@ -2640,7 +2640,7 @@
             // Load saved state from localStorage
             const savedState = JSON.parse(localStorage.getItem('roadmapState') || '{}');
             
-            // Roadmap data structure
+            // Roadmap data structure - UPDATED Jan 19, 2026
             const roadmap = {
                 phases: [
                     {
@@ -2654,9 +2654,10 @@
                         items: [
                             { id: 'tts-cache', name: 'TTS caching for common phrases', status: savedState['tts-cache'] || 'todo', priority: 'high', need: 'Cache greetings, slot questions, confirmations' },
                             { id: 'latency-mask', name: 'Latency masking', status: savedState['latency-mask'] || 'todo', priority: 'high', need: '"One moment" filler audio during LLM' },
-                            { id: 'redis-cache', name: 'Redis caching optimized', status: savedState['redis-cache'] || 'partial', priority: 'med', need: 'Scenario pool, company config pre-loaded' },
-                            { id: 'scenario-coverage', name: '90%+ tier-1 scenario coverage', status: savedState['scenario-coverage'] || 'todo', priority: 'high', need: 'Add triggers until 90% match without LLM' },
-                            { id: 'prewarm-tts', name: 'Pre-warm next TTS', status: savedState['prewarm-tts'] || 'todo', priority: 'med', need: 'Predict likely next response, pre-generate' }
+                            { id: 'redis-cache', name: 'Redis company config caching', status: savedState['redis-cache'] || 'done', priority: 'med', need: 'Company config cached in Redis with 5min TTL' },
+                            { id: 'scenario-coverage', name: '90%+ tier-1 scenario coverage', status: savedState['scenario-coverage'] || 'partial', priority: 'high', need: 'Add triggers until 90% match without LLM' },
+                            { id: 'prewarm-tts', name: 'Pre-warm next TTS', status: savedState['prewarm-tts'] || 'todo', priority: 'med', need: 'Predict likely next response, pre-generate' },
+                            { id: 'llm-timeout', name: 'LLM timeout optimized', status: savedState['llm-timeout'] || 'done', priority: 'high', need: 'LLM0 timeout at 6s, ConversationEngine at 8s' }
                         ]
                     },
                     {
@@ -2666,11 +2667,13 @@
                         target: 'Zero crashes, graceful degradation',
                         timeline: 'Week 1-2',
                         items: [
-                            { id: 'error-handling', name: 'Error handling all paths', status: savedState['error-handling'] || 'partial', priority: 'high', need: 'Every code path has try/catch + recovery' },
-                            { id: 'graceful-degrade', name: 'Graceful degradation', status: savedState['graceful-degrade'] || 'partial', priority: 'med', need: 'Never hang up, always give helpful response' },
+                            { id: 'error-handling', name: 'Error handling all paths', status: savedState['error-handling'] || 'done', priority: 'high', need: 'Every code path has try/catch + recovery' },
+                            { id: 'graceful-degrade', name: 'Graceful degradation', status: savedState['graceful-degrade'] || 'done', priority: 'med', need: 'Never hang up, always give helpful response' },
+                            { id: 'null-safety', name: 'Null-safety throughout', status: savedState['null-safety'] || 'done', priority: 'high', need: 'All aiResult?.prop, session?.mode etc' },
                             { id: 'staging-env', name: 'Staging environment', status: savedState['staging-env'] || 'todo', priority: 'med', need: 'Test on staging before production deploy' },
                             { id: 'smoke-tests', name: 'Automated smoke tests', status: savedState['smoke-tests'] || 'todo', priority: 'med', need: 'Test critical flows before every deploy' },
-                            { id: 'error-alerting', name: 'Error alerting', status: savedState['error-alerting'] || 'todo', priority: 'med', need: 'Slack/email notification on production errors' }
+                            { id: 'error-alerting', name: 'Error alerting', status: savedState['error-alerting'] || 'todo', priority: 'med', need: 'Slack/email notification on production errors' },
+                            { id: 'spam-filter-fix', name: 'Spam filter infinite loop fix', status: savedState['spam-filter-fix'] || 'done', priority: 'high', need: 'setInterval cleared before new one' }
                         ]
                     },
                     {
@@ -2680,11 +2683,14 @@
                         target: 'Human-like conversations',
                         timeline: 'Week 2-3',
                         items: [
-                            { id: 'name-detection', name: 'Smart name detection', status: savedState['name-detection'] || 'partial', priority: 'high', need: 'commonFirstNames list wired, first/last detection' },
-                            { id: 'phone-confirm', name: 'Natural phone confirmation', status: savedState['phone-confirm'] || 'done', priority: 'med', need: '"that\'s a good number" understood' },
-                            { id: 'scenario-matching', name: 'High-confidence scenario matching', status: savedState['scenario-matching'] || 'partial', priority: 'high', need: 'Tier-1 short-circuit working' },
+                            { id: 'name-detection', name: 'Smart name detection', status: savedState['name-detection'] || 'done', priority: 'high', need: 'Stop words: probably, air conditioner, what' },
+                            { id: 'phone-confirm', name: 'Natural phone confirmation', status: savedState['phone-confirm'] || 'done', priority: 'med', need: '"that is a good number" understood + caller ID first' },
+                            { id: 'scenario-matching', name: 'High-confidence scenario matching', status: savedState['scenario-matching'] || 'done', priority: 'high', need: 'Tier-1 short-circuit at 80%+ confidence' },
                             { id: 'interruption-handling', name: 'Mid-booking interruption handling', status: savedState['interruption-handling'] || 'partial', priority: 'med', need: 'Answer questions, return to slot' },
-                            { id: 'empathy-control', name: 'Empathy language control', status: savedState['empathy-control'] || 'done', priority: 'low', need: 'forbiddenPhrases configured' }
+                            { id: 'empathy-control', name: 'Empathy language control', status: savedState['empathy-control'] || 'done', priority: 'low', need: 'forbiddenPhrases configured' },
+                            { id: 'filler-words', name: 'Safe filler word removal', status: savedState['filler-words'] || 'done', priority: 'high', need: 'Kept: please, thanks, actually, you know' },
+                            { id: 'json-leak-fix', name: 'JSON leak to TTS fixed', status: savedState['json-leak-fix'] || 'done', priority: 'high', need: 'parsed.response handled correctly' },
+                            { id: 'post-booking-readback', name: 'Post-booking read-back', status: savedState['post-booking-readback'] || 'done', priority: 'med', need: '"What name/phone/address do you have?" works' }
                         ]
                     },
                     {
@@ -2697,21 +2703,39 @@
                             { id: 'booking-prompts', name: 'Booking prompts UI-controlled', status: savedState['booking-prompts'] || 'done', priority: 'high', need: 'All slot questions from UI' },
                             { id: 'transfer-calls', name: 'Transfer Calls tab functional', status: savedState['transfer-calls'] || 'done', priority: 'med', need: 'Company switchboard working' },
                             { id: 'call-protection', name: 'Call Protection (Edge Cases) UI', status: savedState['call-protection'] || 'done', priority: 'med', need: 'Spam/escalation rules in UI' },
-                            { id: 'behavior-rules', name: 'Behavior rules UI', status: savedState['behavior-rules'] || 'partial', priority: 'med', need: 'Tone, style settings exposed' },
-                            { id: 'blackbox-roadmap', name: 'Black Box Roadmap tab', status: 'done', priority: 'low', need: 'This tab!' }
+                            { id: 'behavior-rules', name: 'Behavior rules UI', status: savedState['behavior-rules'] || 'done', priority: 'med', need: 'Tone, style settings exposed' },
+                            { id: 'blackbox-roadmap', name: 'Black Box Roadmap tab', status: 'done', priority: 'low', need: 'This tab!' },
+                            { id: 'fallback-nuked', name: 'Legacy fallback system removed', status: savedState['fallback-nuked'] || 'done', priority: 'med', need: 'connectionMessages.voice.fallback nuked' },
+                            { id: 'company-profile-audit', name: 'Company Profile tabs audited', status: savedState['company-profile-audit'] || 'done', priority: 'med', need: 'All tabs verified: Overview→Spam Filter' },
+                            { id: 'wiring-registry', name: 'Wiring registry complete', status: savedState['wiring-registry'] || 'done', priority: 'med', need: 'LLM-0, 3-Tier, Slots documented' }
                         ]
                     },
                     {
                         id: 'integrations',
                         name: 'Integrations',
                         icon: '🔗',
-                        target: 'Calendar + SMS working',
+                        target: 'Calendar + SMS + Maps working',
                         timeline: 'Week 3-4',
                         items: [
                             { id: 'gcal-integration', name: 'Google Calendar integration', status: savedState['gcal-integration'] || 'todo', priority: 'high', need: 'Real-time availability, booking creation' },
                             { id: 'sms-confirm', name: 'SMS confirmations', status: savedState['sms-confirm'] || 'todo', priority: 'high', need: 'Booking confirmation texts' },
-                            { id: 'customer-lookup', name: 'Customer recognition', status: savedState['customer-lookup'] || 'partial', priority: 'med', need: 'Phone number → customer context' },
+                            { id: 'customer-lookup', name: 'Customer recognition', status: savedState['customer-lookup'] || 'done', priority: 'med', need: 'Phone number → customer context' },
+                            { id: 'address-validation', name: 'Google Maps Address Validation', status: savedState['address-validation'] || 'done', priority: 'high', need: 'Unit detection, gate code, building type' },
                             { id: 'webhook-events', name: 'Webhook events', status: savedState['webhook-events'] || 'todo', priority: 'low', need: 'Post call events to external systems' }
+                        ]
+                    },
+                    {
+                        id: 'architecture',
+                        name: 'Architecture & Documentation',
+                        icon: '📐',
+                        target: 'World-class enterprise code',
+                        timeline: 'Ongoing',
+                        items: [
+                            { id: 'mongoose-keys', name: 'Mongoose map keys fixed', status: savedState['mongoose-keys'] || 'done', priority: 'high', need: 'Dots replaced with colons in all keys' },
+                            { id: 'legacy-cleanup', name: 'Legacy code removed', status: savedState['legacy-cleanup'] || 'done', priority: 'med', need: 'Phantom services, unused tabs deleted' },
+                            { id: 'wiring-docs', name: 'Wiring registry documented', status: savedState['wiring-docs'] || 'done', priority: 'med', need: 'wiringRegistry.v1.js complete' },
+                            { id: 'company-profile-docs', name: 'Company Profile ↔ Runtime mapped', status: savedState['company-profile-docs'] || 'done', priority: 'med', need: '_companyProfileConfig section added' },
+                            { id: 'multi-tenant-safe', name: 'Multi-tenant safety verified', status: savedState['multi-tenant-safe'] || 'done', priority: 'high', need: 'All settings per-company, no hardcoding' }
                         ]
                     }
                 ]
