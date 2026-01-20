@@ -66,12 +66,13 @@ const { detectConfirmationRequest } = require('../utils/confirmationRequest');
 const { findFirstMatchingRule, recordRuleFired } = require('../utils/slotMidCallRules');
 const { classifyServiceUrgency } = require('../utils/serviceUrgency');
 const { resolveBookingPrompt } = require('./PromptResolver');
+const BlackBoxLogger = require('./BlackBoxLogger');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V41-DYNAMIC-FLOW-ENGINE';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V42-BLACKBOX-LOGGER-FIX';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
