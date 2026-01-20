@@ -170,40 +170,6 @@ router.patch('/:companyId/connection-messages/config', async (req, res) => {
                 }
                 company.connectionMessages.voice.realtime.text = voice.realtime.text;
             }
-            
-            // Update intelligent fallback settings
-            if (voice.fallback) {
-                if (!company.connectionMessages.voice.fallback) {
-                    company.connectionMessages.voice.fallback = {};
-                }
-                if (voice.fallback.enabled !== undefined) {
-                    company.connectionMessages.voice.fallback.enabled = voice.fallback.enabled;
-                }
-                if (voice.fallback.voiceMessage !== undefined) {
-                    company.connectionMessages.voice.fallback.voiceMessage = voice.fallback.voiceMessage;
-                }
-                if (voice.fallback.smsEnabled !== undefined) {
-                    company.connectionMessages.voice.fallback.smsEnabled = voice.fallback.smsEnabled;
-                }
-                if (voice.fallback.smsMessage !== undefined) {
-                    company.connectionMessages.voice.fallback.smsMessage = voice.fallback.smsMessage;
-                }
-                if (voice.fallback.notifyAdmin !== undefined) {
-                    company.connectionMessages.voice.fallback.notifyAdmin = voice.fallback.notifyAdmin;
-                }
-                if (voice.fallback.adminNotificationMethod) {
-                    company.connectionMessages.voice.fallback.adminNotificationMethod = voice.fallback.adminNotificationMethod;
-                }
-                if (voice.fallback.adminPhone !== undefined) {
-                    company.connectionMessages.voice.fallback.adminPhone = voice.fallback.adminPhone;
-                }
-                if (voice.fallback.adminEmail !== undefined) {
-                    company.connectionMessages.voice.fallback.adminEmail = voice.fallback.adminEmail;
-                }
-                if (voice.fallback.adminSmsMessage !== undefined) {
-                    company.connectionMessages.voice.fallback.adminSmsMessage = voice.fallback.adminSmsMessage;
-                }
-            }
         }
 
         // Update SMS settings
@@ -586,18 +552,6 @@ function getDefaultConfig() {
             realtime: {
                 text: 'Thank you for calling. Please wait a moment while we connect you...',
                 voiceId: null
-            },
-            // Infrastructure Failure Fallback (Hybrid Approach)
-            // 🔥 NO generic voice fallback - goes straight to transfer + SMS + alert
-            fallback: {
-                enabled: true,
-                smsEnabled: true,
-                smsMessage: "We're experiencing technical issues and are connecting you to our team. Thank you for your patience.",
-                notifyAdmin: true,
-                adminNotificationMethod: 'both', // sms | email | both - ALWAYS notify ops
-                adminPhone: null, // Custom admin phone for notifications
-                adminEmail: null, // Custom admin email for notifications
-                adminSmsMessage: "⚠️ FALLBACK ALERT: Greeting fallback occurred in {companyname} ({companyid}). Please check the Messages & Greetings settings immediately."
             }
         },
         sms: {

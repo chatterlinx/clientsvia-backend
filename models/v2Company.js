@@ -88,34 +88,6 @@ const connectionMessagesSchema = new mongoose.Schema({
         realtime: {
             text: { type: String, trim: true, default: 'Thank you for calling. Please wait a moment while we connect you...' },
             voiceId: { type: String, trim: true, default: null }
-        },
-        
-        // Intelligent Fallback System
-        fallback: {
-            enabled: { type: Boolean, default: true },
-            // Voice fallback (ElevenLabs TTS)
-            voiceMessage: { 
-                type: String, 
-                trim: true, 
-                default: "We're experiencing technical difficulties. Please hold while we connect you to our team." 
-            },
-            // SMS fallback (text customer)
-            smsEnabled: { type: Boolean, default: true },
-            smsMessage: { 
-                type: String, 
-                trim: true, 
-                default: "Sorry, our voice system missed your call. How can we help you?" 
-            },
-            // Admin notification
-            notifyAdmin: { type: Boolean, default: true },
-            adminNotificationMethod: { type: String, enum: ['sms', 'email', 'both'], default: 'sms' },
-            adminPhone: { type: String, trim: true, default: null }, // Custom admin phone for notifications
-            adminEmail: { type: String, trim: true, default: null }, // Custom admin email for notifications
-            adminSmsMessage: {
-                type: String,
-                trim: true,
-                default: "⚠️ FALLBACK ALERT: Greeting fallback occurred in {companyname} ({companyid}). Please check the Messages & Greetings settings immediately."
-            }
         }
     },
     

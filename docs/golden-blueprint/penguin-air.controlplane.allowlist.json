@@ -51,16 +51,7 @@
       "connectionMessages.voice.text",
       "connectionMessages.voice.enabled",
       "connectionMessages.voice.realtime.text",
-      "connectionMessages.voice.realtime.enabled",
-      "connectionMessages.voice.fallback.enabled",
-      "connectionMessages.voice.fallback.voiceMessage",
-      "connectionMessages.voice.fallback.smsEnabled",
-      "connectionMessages.voice.fallback.smsMessage",
-      "connectionMessages.voice.fallback.notifyAdmin",
-      "connectionMessages.voice.fallback.adminNotificationMethod",
-      "connectionMessages.voice.fallback.adminPhone",
-      "connectionMessages.voice.fallback.adminEmail",
-      "connectionMessages.voice.fallback.adminSmsMessage"
+      "connectionMessages.voice.realtime.enabled"
     ],
     
     "callExperience": [

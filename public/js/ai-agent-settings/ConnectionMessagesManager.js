@@ -240,9 +240,6 @@ class ConnectionMessagesManager {
                     </div>
 
                 </div>
-
-                <!-- Intelligent Fallback System -->
-                ${this.renderFallbackSection(voice.fallback)}
             </div>
         `;
     }
@@ -401,151 +398,6 @@ class ConnectionMessagesManager {
         `;
     }
 
-    /**
-     * Render intelligent fallback system
-     */
-    renderFallbackSection(fallback) {
-        const fallbackConfig = fallback || {};
-        const enabled = fallbackConfig.enabled !== false; // Default: enabled
-        const smsEnabled = fallbackConfig.smsEnabled !== false; // Default: enabled
-        const notifyAdmin = fallbackConfig.notifyAdmin !== false; // Default: enabled
-        const adminMethod = fallbackConfig.adminNotificationMethod || 'sms';
-
-        return `
-            <div style="margin-top: 32px; padding: 24px; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border: 2px solid #ffc107; border-radius: 12px;">
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <span style="font-size: 32px;">🛡️</span>
-                    <div>
-                        <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: #856404;">
-                            Intelligent Fallback System
-                        </h4>
-                        <p style="margin: 4px 0 0 0; font-size: 13px; color: #856404;">
-                            Emergency backup when primary greeting fails
-                        </p>
-                    </div>
-                </div>
-
-                <div style="margin-bottom: 16px;">
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                        <input type="checkbox" id="fallback-enabled" ${enabled ? 'checked' : ''} style="width: 20px; height: 20px;">
-                        <span style="font-weight: 600; font-size: 14px; color: #495057;">Enable Intelligent Fallback</span>
-                    </label>
-                </div>
-
-                <div id="fallback-config" style="${enabled ? '' : 'opacity: 0.5; pointer-events: none;'}">
-                    
-                    <!-- Voice Fallback Message -->
-                    <div style="background: white; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
-                        <h5 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 700; color: #495057;">
-                            <i class="fas fa-microphone" style="color: #339af0;"></i>
-                            Voice Fallback (ElevenLabs TTS)
-                        </h5>
-                        <p style="margin: 0 0 10px 0; font-size: 12px; color: #6c757d;">
-                            What the AI should say if the primary greeting fails:
-                        </p>
-                        <textarea id="fallback-voice-message" 
-                            style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 13px; min-height: 90px; resize: vertical; font-family: inherit;"
-                            placeholder="We're experiencing technical difficulties. Please hold while we connect you to our team...">${fallbackConfig.voiceMessage || "We're experiencing technical difficulties. Please hold while we connect you to our team."}</textarea>
-                        <p style="margin: 6px 0 0 0; font-size: 11px; color: #6c757d;">
-                            Available variables: <code>{companyname}</code>
-                        </p>
-                    </div>
-
-                    <!-- SMS Customer Notification -->
-                    <div style="background: white; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
-                        <div style="margin-bottom: 10px;">
-                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                                <input type="checkbox" id="fallback-sms-enabled" ${smsEnabled ? 'checked' : ''} style="width: 18px; height: 18px;">
-                                <span style="font-weight: 700; font-size: 14px; color: #495057;">
-                                    <i class="fas fa-sms" style="color: #28a745;"></i>
-                                    Text Customer via SMS
-                                </span>
-                            </label>
-                        </div>
-                        <div id="fallback-sms-config" style="${smsEnabled ? '' : 'opacity: 0.5; pointer-events: none;'}">
-                            <p style="margin: 0 0 10px 0; font-size: 12px; color: #6c757d;">
-                                Send an apology text to the customer when fallback is triggered:
-                            </p>
-                            <textarea id="fallback-sms-message" 
-                                style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 13px; min-height: 80px; resize: vertical; font-family: inherit;"
-                                placeholder="Sorry, our voice system missed your call. How can we help you?">${fallbackConfig.smsMessage || "Sorry, our voice system missed your call. How can we help you?"}</textarea>
-                            <p style="margin: 6px 0 0 0; font-size: 11px; color: #6c757d;">
-                                💡 This helps maintain customer trust when technical issues occur
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- Admin Notification -->
-                    <div style="background: white; padding: 16px; border-radius: 8px;">
-                        <div style="margin-bottom: 10px;">
-                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                                <input type="checkbox" id="fallback-notify-admin" ${notifyAdmin ? 'checked' : ''} style="width: 18px; height: 18px;">
-                                <span style="font-weight: 700; font-size: 14px; color: #495057;">
-                                    <i class="fas fa-bell" style="color: #dc3545;"></i>
-                                    Alert Admin
-                                </span>
-                            </label>
-                        </div>
-                        <div id="fallback-admin-config" style="${notifyAdmin ? '' : 'opacity: 0.5; pointer-events: none;'}">
-                            
-                            <!-- Admin Contact Information -->
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
-                                <div>
-                                    <label style="font-size: 12px; font-weight: 600; color: #495057; display: block; margin-bottom: 4px;">
-                                        📱 Admin Phone:
-                                    </label>
-                                    <input type="tel" id="fallback-admin-phone" 
-                                        style="width: 100%; padding: 8px 10px; border: 2px solid #e9ecef; border-radius: 6px; font-size: 13px; font-family: inherit;"
-                                        placeholder="+1234567890"
-                                        value="${fallbackConfig.adminPhone || ''}">
-                                </div>
-                                <div>
-                                    <label style="font-size: 12px; font-weight: 600; color: #495057; display: block; margin-bottom: 4px;">
-                                        📧 Admin Email:
-                                    </label>
-                                    <input type="email" id="fallback-admin-email" 
-                                        style="width: 100%; padding: 8px 10px; border: 2px solid #e9ecef; border-radius: 6px; font-size: 13px; font-family: inherit;"
-                                        placeholder="admin@company.com"
-                                        value="${fallbackConfig.adminEmail || ''}">
-                                </div>
-                            </div>
-
-                            <!-- Notification Method -->
-                            <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: 600; color: #495057;">
-                                Notification Method:
-                            </p>
-                            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 8px 14px; border: 2px solid #e9ecef; border-radius: 6px; flex: 1; background: ${adminMethod === 'sms' ? '#e7f5ff' : 'white'};">
-                                    <input type="radio" name="admin-method" value="sms" ${adminMethod === 'sms' ? 'checked' : ''}>
-                                    <span style="font-size: 12px; font-weight: 600;">📱 SMS</span>
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 8px 14px; border: 2px solid #e9ecef; border-radius: 6px; flex: 1; background: ${adminMethod === 'email' ? '#e7f5ff' : 'white'};">
-                                    <input type="radio" name="admin-method" value="email" ${adminMethod === 'email' ? 'checked' : ''}>
-                                    <span style="font-size: 12px; font-weight: 600;">📧 Email</span>
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 8px 14px; border: 2px solid #e9ecef; border-radius: 6px; flex: 1; background: ${adminMethod === 'both' ? '#e7f5ff' : 'white'};">
-                                    <input type="radio" name="admin-method" value="both" ${adminMethod === 'both' ? 'checked' : ''}>
-                                    <span style="font-size: 12px; font-weight: 600;">📱📧 Both</span>
-                                </label>
-                            </div>
-
-                            <!-- Admin SMS Message (Customizable) -->
-                            <label style="font-size: 12px; font-weight: 600; color: #495057; display: block; margin-bottom: 4px;">
-                                Admin Alert Message:
-                            </label>
-                            <textarea id="fallback-admin-sms-message" 
-                                style="width: 100%; padding: 10px 12px; border: 2px solid #e9ecef; border-radius: 6px; font-size: 12px; min-height: 70px; resize: vertical; font-family: inherit;"
-                                placeholder="⚠️ FALLBACK ALERT: Greeting fallback occurred in {companyname} ({companyid}). Please check settings.">${fallbackConfig.adminSmsMessage || "⚠️ FALLBACK ALERT: Greeting fallback occurred in {companyname} ({companyid}). Please check the Messages & Greetings settings immediately."}</textarea>
-                            <p style="margin: 6px 0 0 0; font-size: 11px; color: #6c757d;">
-                                💡 Available variables: <code>{companyname}</code>, <code>{companyid}</code>, and all Variables from the Variables tab
-                            </p>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-        `;
-    }
 
     /**
      * Render SMS content
@@ -687,49 +539,6 @@ class ConnectionMessagesManager {
         }
 
         // Fallback enabled checkbox
-        const fallbackEnabled = document.getElementById('fallback-enabled');
-        if (fallbackEnabled) {
-            fallbackEnabled.addEventListener('change', (e) => {
-                const config = document.getElementById('fallback-config');
-                if (e.target.checked) {
-                    config.style.opacity = '1';
-                    config.style.pointerEvents = 'auto';
-                } else {
-                    config.style.opacity = '0.5';
-                    config.style.pointerEvents = 'none';
-                }
-            });
-        }
-
-        // Fallback SMS enabled checkbox
-        const fallbackSmsEnabled = document.getElementById('fallback-sms-enabled');
-        if (fallbackSmsEnabled) {
-            fallbackSmsEnabled.addEventListener('change', (e) => {
-                const config = document.getElementById('fallback-sms-config');
-                if (e.target.checked) {
-                    config.style.opacity = '1';
-                    config.style.pointerEvents = 'auto';
-                } else {
-                    config.style.opacity = '0.5';
-                    config.style.pointerEvents = 'none';
-                }
-            });
-        }
-
-        // Fallback admin notification checkbox
-        const fallbackNotifyAdmin = document.getElementById('fallback-notify-admin');
-        if (fallbackNotifyAdmin) {
-            fallbackNotifyAdmin.addEventListener('change', (e) => {
-                const config = document.getElementById('fallback-admin-config');
-                if (e.target.checked) {
-                    config.style.opacity = '1';
-                    config.style.pointerEvents = 'auto';
-                } else {
-                    config.style.opacity = '0.5';
-                    config.style.pointerEvents = 'none';
-                }
-            });
-        }
     }
 
     /**
@@ -910,32 +719,10 @@ class ConnectionMessagesManager {
                 console.log('🔍 [SAVE DEBUG] Realtime text field value:', document.getElementById('realtime-text')?.value);
                 console.log('🔍 [SAVE DEBUG] Final realtime text:', realtimeText);
 
-                // Collect intelligent fallback settings
-                const fallbackEnabled = document.getElementById('fallback-enabled')?.checked ?? true;
-                const fallbackVoiceMessage = document.getElementById('fallback-voice-message')?.value || this.config?.voice?.fallback?.voiceMessage || '';
-                const fallbackSmsEnabled = document.getElementById('fallback-sms-enabled')?.checked ?? true;
-                const fallbackSmsMessage = document.getElementById('fallback-sms-message')?.value || this.config?.voice?.fallback?.smsMessage || '';
-                const fallbackNotifyAdmin = document.getElementById('fallback-notify-admin')?.checked ?? true;
-                const fallbackAdminMethod = document.querySelector('input[name="admin-method"]:checked')?.value || 'sms';
-                const fallbackAdminPhone = document.getElementById('fallback-admin-phone')?.value || '';
-                const fallbackAdminEmail = document.getElementById('fallback-admin-email')?.value || '';
-                const fallbackAdminSmsMessage = document.getElementById('fallback-admin-sms-message')?.value || this.config?.voice?.fallback?.adminSmsMessage || '';
-
                 data.voice = {
                     mode,
                     text: realtimeText,  // CRITICAL: Send as voice.text (primary field)
-                    realtime: { text: realtimeText },  // Keep for backwards compatibility
-                    fallback: {
-                        enabled: fallbackEnabled,
-                        voiceMessage: fallbackVoiceMessage,
-                        smsEnabled: fallbackSmsEnabled,
-                        smsMessage: fallbackSmsMessage,
-                        notifyAdmin: fallbackNotifyAdmin,
-                        adminNotificationMethod: fallbackAdminMethod,
-                        adminPhone: fallbackAdminPhone,
-                        adminEmail: fallbackAdminEmail,
-                        adminSmsMessage: fallbackAdminSmsMessage
-                    }
+                    realtime: { text: realtimeText }  // Keep for backwards compatibility
                 };
             } else if (this.currentChannel === 'sms') {
                 const enabled = document.getElementById('sms-enabled')?.checked;

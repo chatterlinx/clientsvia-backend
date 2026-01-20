@@ -5,7 +5,7 @@
  * 
  * Comprehensive diagnostic endpoint for AI Agent Settings tab
  * Provides deep visibility into:
- * - Greeting system status and fallback chain
+ * - Greeting system status and configuration
  * - Last call details and what actually happened
  * - Data path verification (ensure data is where it should be)
  * - Configuration conflicts and recommendations
@@ -142,9 +142,9 @@ function analyzeGreetingSystem(company) {
         activeText = 'Greeting disabled - going straight to AI';
         activeMode = 'disabled';
     } else {
-        activeSource = 'FALLBACK_SYSTEM';
-        activeText = voiceConfig?.fallback?.voiceMessage || 'Using fallback greeting';
-        activeMode = 'fallback';
+        activeSource = 'NOT_CONFIGURED';
+        activeText = 'No greeting configured - using system default';
+        activeMode = 'unconfigured';
     }
 
     // Build status chain (NEW SYSTEM ONLY - NO LEGACY!)
@@ -156,13 +156,6 @@ function analyzeGreetingSystem(company) {
             mode: mode || 'NOT_SET',
             active: activeSource.includes('connectionMessages'),
             preview: activeText ? `${activeText.substring(0, 60)  }...` : null
-        },
-        {
-            priority: 2,
-            source: 'Fallback System',
-            status: voiceConfig?.fallback?.enabled ? 'ENABLED' : 'DISABLED',
-            active: activeMode === 'fallback',
-            preview: voiceConfig?.fallback?.voiceMessage ? `${voiceConfig.fallback.voiceMessage.substring(0, 60)  }...` : null
         }
     ];
 
@@ -234,14 +227,6 @@ function verifyDataPaths(company) {
         exists: Boolean(company.connectionMessages?.voice?.prerecorded?.activeFileUrl),
         status: company.connectionMessages?.voice?.prerecorded?.activeFileUrl ? 'OK' : 'NOT_SET',
         value: company.connectionMessages?.voice?.prerecorded?.activeFileName || null
-    });
-
-    // Check fallback system
-    checks.push({
-        path: 'connectionMessages.voice.fallback.enabled',
-        exists: company.connectionMessages?.voice?.fallback?.enabled !== undefined,
-        status: company.connectionMessages?.voice?.fallback?.enabled ? 'ENABLED' : 'DISABLED',
-        value: company.connectionMessages?.voice?.fallback?.enabled
     });
 
     // Check aiAgentSettings (legacy, but still used for voiceSettings)

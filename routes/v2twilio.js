@@ -2009,8 +2009,7 @@ router.post('/handle-speech', async (req, res) => {
       logger.debug(`[LEGACY WARNING] Using legacy handle-speech endpoint - should migrate to V2`);
       
       answerObj = {
-        text: company.connectionMessages?.voice?.fallbackMessage || 
-              "I'm connecting you to our team.",  // 🔥 Neutral transfer message, no generic empathy
+        text: "I'm connecting you to our team.",  // 🔥 Neutral transfer message, no generic empathy
         escalate: true
       };
       
@@ -2027,8 +2026,7 @@ router.post('/handle-speech', async (req, res) => {
       logger.error(`[AI ERROR] [ERROR] AI processing failed: ${err.message}`);
       logger.error(`[AI Processing Error for CallSid: ${callSid}]`, err.message, err.stack);
       // 🔥 NO FALLBACK TEXT - Transfer to human on AI error
-      const fallback = company.connectionMessages?.voice?.fallbackMessage || "I'm connecting you to our team.";
-      answerObj = { text: fallback, escalate: true };
+      answerObj = { text: "I'm connecting you to our team.", escalate: true };
     }
 
     // Generate TTS and respond immediately - using configurable speech detection settings
