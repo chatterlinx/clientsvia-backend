@@ -874,6 +874,64 @@ const wiringRegistryV1 = {
   ],
 
   // =========================================================================
+  // COMPANY PROFILE CROSS-REFERENCE (Don't forget these exist!)
+  // =========================================================================
+  // These settings live in Company Profile page, NOT Control Plane.
+  // They affect runtime but are configured elsewhere.
+  // =========================================================================
+  _companyProfileConfig: {
+    // TAB: OVERVIEW
+    "profile.overview": {
+      description: "Company basic info - name, phone, email, address",
+      dbPath: "company.companyName, company.businessPhone, company.address",
+      usedBy: ["FrontlineScriptBuilder", "ResponseRenderer"],
+      configuredIn: "Company Profile → Overview tab"
+    },
+    
+    // TAB: CONFIGURATION
+    "profile.twilio": {
+      description: "Twilio credentials - accountSid, authToken, phone numbers",
+      dbPath: "company.twilioConfig",
+      usedBy: ["v2twilio.js"],
+      configuredIn: "Company Profile → Configuration tab"
+    },
+    "profile.accountStatus": {
+      description: "Account status - active/call_forward/suspended",
+      dbPath: "company.accountStatus.status",
+      usedBy: ["v2twilio.js (call entry)"],
+      configuredIn: "Company Profile → Configuration tab",
+      runtimeBehavior: "Checked on EVERY incoming call before AI answers"
+    },
+    
+    // TAB: AI VOICE SETTINGS
+    "profile.voiceSettings": {
+      description: "ElevenLabs TTS - voice ID, stability, model",
+      dbPath: "company.aiAgentSettings.voiceSettings",
+      usedBy: ["v2elevenLabsService", "v2AIAgentRuntime"],
+      configuredIn: "Company Profile → AI Voice Settings tab"
+    },
+    
+    // TAB: AI AGENT SETTINGS → Messages & Greetings
+    "profile.connectionMessages": {
+      description: "Initial greeting message - prerecorded or realtime TTS",
+      dbPath: "company.connectionMessages.voice",
+      usedBy: ["v2twilio.js (greeting)"],
+      configuredIn: "Company Profile → AI Agent Settings → Messages & Greetings"
+    },
+    
+    // TAB: SPAM FILTER
+    // ⚠️ PRE-CALL FILTERING - Different from LLM-0 spamFilter!
+    "profile.spamFilter": {
+      description: "Pre-call spam blocking - blacklist, whitelist, detection",
+      dbPath: "company.callFilteringConfig",
+      usedBy: ["SmartCallFilter.checkCall()"],
+      configuredIn: "Company Profile → Spam Filter tab",
+      runtimeBehavior: "Checked on EVERY incoming call BEFORE AI answers",
+      notSameAs: "Control Plane → LLM-0 Controls → spamFilter (mid-conversation)"
+    }
+  },
+
+  // =========================================================================
   // REMOVED ITEMS (Audit Jan 2026)
   // =========================================================================
   _removed: {
