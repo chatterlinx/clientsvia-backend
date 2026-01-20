@@ -299,6 +299,179 @@ async function addTranscript({ callId, companyId, speaker, turn, text, confidenc
 }
 
 // ============================================================================
+// LOG BOOKING DIAGNOSTIC - What was done vs. what was missed
+// ============================================================================
+
+/**
+ * Log a comprehensive diagnostic checklist at end of booking
+ * Shows what features were used vs. missed for debugging
+ */
+async function logBookingDiagnostic({ callId, companyId, filledSlots, addressConfig, sessionMeta }) {
+  try {
+    const checklist = [];
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NAME COLLECTION
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (filledSlots?.name) {
+      checklist.push({ 
+        item: 'Name collected', 
+        status: 'done', 
+        value: filledSlots.name,
+        details: null
+      });
+      
+      // Check if spelling was confirmed (Mark vs Marc)
+      if (sessionMeta?.nameSpellingConfirmed) {
+        checklist.push({ item: 'Name spelling confirmed', status: 'done', value: sessionMeta.nameSpelling });
+      } else {
+        checklist.push({ 
+          item: 'Name spelling NOT confirmed', 
+          status: 'missed',
+          value: filledSlots.name,
+          suggestion: 'Enable "Confirm spelling" in Booking Prompts → Name slot'
+        });
+      }
+    } else {
+      checklist.push({ item: 'Name collection', status: 'missed', suggestion: 'Name slot not configured or not collected' });
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PHONE COLLECTION
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (filledSlots?.phone) {
+      checklist.push({ item: 'Phone collected', status: 'done', value: filledSlots.phone });
+      if (sessionMeta?.phoneFromCallerId) {
+        checklist.push({ item: 'Phone from caller ID', status: 'done', value: 'Used caller ID' });
+      }
+    } else {
+      checklist.push({ item: 'Phone collection', status: 'missed' });
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ADDRESS COLLECTION & VALIDATION
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (filledSlots?.address) {
+      checklist.push({ item: 'Address collected', status: 'done', value: filledSlots.address });
+      
+      // Google Maps Validation
+      if (addressConfig?.useGoogleMapsValidation) {
+        if (sessionMeta?.googleMapsValidated) {
+          checklist.push({ 
+            item: 'Google Maps validation', 
+            status: 'done',
+            value: sessionMeta.googleMapsNormalized || filledSlots.address
+          });
+        } else {
+          checklist.push({ 
+            item: 'Google Maps validation FAILED', 
+            status: 'warning',
+            suggestion: 'Check API key or address format'
+          });
+        }
+      } else {
+        checklist.push({ 
+          item: 'Google Maps validation DISABLED', 
+          status: 'missed',
+          suggestion: 'Enable: Front Desk → Booking Prompts → Address → "Enable Google Maps validation"'
+        });
+      }
+      
+      // Unit Number Detection
+      if (sessionMeta?.unitNumberAsked) {
+        checklist.push({ 
+          item: 'Unit/Apt number asked', 
+          status: 'done',
+          value: sessionMeta.unitNumber || 'Caller said N/A'
+        });
+      } else if (addressConfig?.unitNumberMode === 'smart' || addressConfig?.unitNumberMode === 'always') {
+        checklist.push({ 
+          item: 'Unit number NOT asked', 
+          status: 'missed',
+          suggestion: 'Google Maps validation needed for smart unit detection'
+        });
+      }
+      
+      // Gate Code Detection
+      if (sessionMeta?.gateCodeAsked) {
+        checklist.push({ 
+          item: 'Gate code asked', 
+          status: 'done',
+          value: sessionMeta.gateCode || 'Caller provided none'
+        });
+      } else {
+        checklist.push({ 
+          item: 'Gate code NOT asked', 
+          status: 'info',
+          suggestion: 'Gated community detection requires Google Maps validation'
+        });
+      }
+      
+      // Equipment Access
+      if (sessionMeta?.equipmentAccessAsked) {
+        checklist.push({ item: 'Equipment access asked', status: 'done' });
+      } else {
+        checklist.push({ 
+          item: 'Equipment access NOT asked', 
+          status: 'info',
+          suggestion: 'Enable in Address slot settings if needed'
+        });
+      }
+    } else {
+      checklist.push({ item: 'Address collection', status: 'missed' });
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // TIME COLLECTION
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (filledSlots?.time) {
+      checklist.push({ item: 'Time/Date collected', status: 'done', value: filledSlots.time });
+    } else {
+      checklist.push({ item: 'Time/Date collection', status: 'missed' });
+    }
+    
+    // Count stats
+    const doneCount = checklist.filter(c => c.status === 'done').length;
+    const missedCount = checklist.filter(c => c.status === 'missed').length;
+    const warningCount = checklist.filter(c => c.status === 'warning').length;
+    
+    // Log to Black Box
+    await logEvent({
+      callId,
+      companyId,
+      type: 'BOOKING_DIAGNOSTIC',
+      data: {
+        checklist,
+        summary: {
+          done: doneCount,
+          missed: missedCount,
+          warnings: warningCount,
+          total: checklist.length
+        },
+        filledSlots,
+        configUsed: {
+          googleMapsValidation: addressConfig?.useGoogleMapsValidation || false,
+          unitNumberMode: addressConfig?.unitNumberMode || 'never',
+          nameSpellingConfirm: addressConfig?.nameSpellingConfirm || false
+        }
+      }
+    });
+    
+    logger.info('[BLACK BOX] 📋 Booking diagnostic logged', {
+      callId,
+      done: doneCount,
+      missed: missedCount
+    });
+    
+    return { checklist, done: doneCount, missed: missedCount };
+    
+  } catch (error) {
+    logger.error('[BLACK BOX] Failed to log booking diagnostic', { callId, error: error.message });
+    return null;
+  }
+}
+
+// ============================================================================
 // FINALIZE CALL - Compute summary + visualizations
 // ============================================================================
 
@@ -1526,6 +1699,9 @@ module.exports = {
   appendError,
   addTranscript,
   finalizeCall,
+  
+  // Diagnostics
+  logBookingDiagnostic,
   
   // Quick log helpers
   QuickLog,

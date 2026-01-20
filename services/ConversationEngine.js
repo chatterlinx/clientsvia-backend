@@ -7227,6 +7227,31 @@ async function processTurn({
                     let googleMapsConfirmNeeded = false;
                     let unitDetectionResult = null;
                     
+                    // V66: Log when Google Maps validation is DISABLED so user knows why
+                    if (!addressSlotConfig?.useGoogleMapsValidation) {
+                        log('🗺️ GOOGLE MAPS: DISABLED - Enable in UI: Booking Prompts → Address → "Enable Google Maps validation"', {
+                            addressSlotConfig: {
+                                useGoogleMapsValidation: addressSlotConfig?.useGoogleMapsValidation,
+                                unitNumberMode: addressSlotConfig?.unitNumberMode,
+                                addressConfirmLevel: addressSlotConfig?.addressConfirmLevel
+                            }
+                        });
+                        // Log to Black Box for diagnostics
+                        await BlackBoxLogger.logEvent({
+                            callId,
+                            companyId,
+                            type: 'ADDRESS_VALIDATION_SKIPPED',
+                            data: {
+                                reason: 'disabled_in_config',
+                                howToEnable: 'Go to Control Plane → Front Desk → Booking Prompts → Address slot → Enable "Google Maps validation"',
+                                addressCollected: extractedThisTurn.address,
+                                unitDetectionSkipped: true,
+                                gateCodeDetectionSkipped: true,
+                                buildingTypeDetectionSkipped: true
+                            }
+                        }).catch(() => {});
+                    }
+                    
                     if (addressSlotConfig?.useGoogleMapsValidation) {
                         try {
                             log('🗺️ GOOGLE MAPS: Validating address...', { raw: extractedThisTurn.address });
