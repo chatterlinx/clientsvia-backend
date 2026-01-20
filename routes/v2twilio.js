@@ -3457,6 +3457,82 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         ).catch(() => {});
       }
       
+      // ═══════════════════════════════════════════════════════════════════
+      // V77: CALLER CLASSIFICATION (First 2 turns only)
+      // ═══════════════════════════════════════════════════════════════════
+      // Detect if caller is customer, vendor, commercial, etc.
+      // Updates CallSummary.cardData for Call Center dashboard
+      // ═══════════════════════════════════════════════════════════════════
+      if (turnCount <= 2 && speechResult) {
+        try {
+          const { classifyCaller, buildCardData } = require('../services/CallerClassificationService');
+          
+          const classification = await classifyCaller({
+            companyId: companyID,
+            phone: fromNumber,
+            userText: speechResult,
+            existingClassification: callState?.callerClassification || null,
+            customerLookupResult: callState?.customerContext ? {
+              customer: { _id: callState.customerId, name: callState.customerContext },
+              isReturning: callState.isReturning
+            } : null
+          });
+          
+          // Update call state
+          callState.callerClassification = classification;
+          if (classification.type === 'vendor') {
+            callState.callerType = 'vendor';
+            callState.vendorId = classification.vendorId;
+          }
+          
+          // Update CallSummary with classification and card data
+          if (classification.type && classification.confidence > 0.5) {
+            const cardData = buildCardData(classification, {
+              summary: result.debug?.discoveryIssue || null,
+              intent: result.debug?.intent || null,
+              urgency: result.debug?.urgency || 'normal',
+              outcome: null
+            });
+            
+            const CallSummary = require('../models/CallSummary');
+            await CallSummary.updateOne(
+              { $or: [{ callId: callSid }, { twilioCallSid: callSid }] },
+              {
+                $set: {
+                  callerType: classification.type,
+                  callerSubType: classification.subType,
+                  vendorId: classification.vendorId || null,
+                  'cardData.headline': cardData.headline,
+                  'cardData.brief': cardData.brief,
+                  'cardData.color': cardData.color,
+                  'cardData.tags': cardData.tags,
+                  'cardData.vendorType': cardData.vendorType,
+                  'cardData.reference': cardData.reference,
+                  'cardData.linkedCustomerName': cardData.linkedCustomerName,
+                  'aiExtracted.intent': classification.detectedInfo?.intent || null,
+                  'aiExtracted.poNumber': classification.detectedInfo?.poNumber || null,
+                  'aiExtracted.relatedCustomerName': classification.detectedInfo?.customerName || null
+                }
+              }
+            ).catch(() => {});
+            
+            logger.info('[CALLER CLASSIFICATION] 🏷️ Caller classified', {
+              callSid,
+              type: classification.type,
+              subType: classification.subType,
+              vendorName: classification.vendorName || null,
+              confidence: classification.confidence
+            });
+          }
+        } catch (classifyErr) {
+          // Non-blocking
+          logger.debug('[CALLER CLASSIFICATION] Classification failed (non-fatal)', { 
+            callSid, 
+            error: classifyErr.message 
+          });
+        }
+      }
+      
       if (result.shouldTransfer) {
         BlackBoxLogger.QuickLog.transferInitiated(
           callSid, companyID, turnCount,

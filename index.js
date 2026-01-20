@@ -501,6 +501,7 @@ function registerRoutes(routes) {
     app.use('/api/debug', require('./routes/api/debug')); // 🔍 Debug API - Session inspection for troubleshooting
     app.use('/api/openai-health', require('./routes/api/openai-health')); // 🏥 OpenAI Health - ACTUALLY tests if OpenAI API works
     app.use('/api/admin/call-center', require('./routes/admin/callCenter')); // 📞 Call Center Module V2 (Call History, Customers, Analytics)
+    app.use('/api/call-center', require('./routes/callCenter/dashboard')); // 📊 V77: Call Center Dashboard (Kanban Board)
     app.use('/api/admin/wiring-status', require('./routes/admin/wiringRoutes')); // 🔌 Wiring Tab - Single Source of Truth (Enterprise Visibility)
     app.use('/api/admin/front-desk', require('./routes/admin/frontDeskVerification')); // ✅ V57: Front Desk Deep Verification
     app.use('/api/v2global/admin', routes.v2GlobalAdminRoutes); // V2 Global Admin Dashboard
