@@ -334,9 +334,12 @@ const BlackBoxRecordingSchema = new Schema({
       turn: Number,
       t: Number,        // ms offset
       text: String,
-      source: {
-        type: String,
-        enum: ['FRONTLINE', 'TRIAGE', 'TIER3', 'LLM_FALLBACK', 'BEHAVIOR', 'BAILOUT', 'GREETING']
+      // V83: Changed to plain String to support composite values like "SCENARIO_MATCHED:tier1"
+      source: String,
+      // V83: Token tracking for cost analysis
+      tokensUsed: {
+        type: Number,
+        default: 0
       }
     }]
   },

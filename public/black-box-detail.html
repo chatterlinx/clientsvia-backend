@@ -1735,9 +1735,17 @@
                 return;
             }
             
-            // V76: Calculate token costs (GPT-4o-mini rates: $0.15/1M input, $0.60/1M output)
+            // V76/V83: Calculate token costs (GPT-4o-mini rates: $0.15/1M input, $0.60/1M output)
+            // First try transcript agentTurns (new recordings), then fall back to events (old recordings)
             const tokenRate = 0.60 / 1000000; // $0.60 per 1M output tokens
-            const totalTokens = agentTurns.reduce((sum, t) => sum + (t.tokensUsed || 0), 0);
+            let totalTokens = agentTurns.reduce((sum, t) => sum + (t.tokensUsed || 0), 0);
+            
+            // V83 FIX: Fallback to events for older recordings that don't have tokensUsed in transcript
+            if (totalTokens === 0 && recording.events?.length > 0) {
+                totalTokens = recording.events
+                    .filter(e => e.data?.tokensUsed > 0)
+                    .reduce((sum, e) => sum + (e.data.tokensUsed || 0), 0);
+            }
             const totalCost = totalTokens * tokenRate;
             const avgLatency = recording.performance?.avgResponseLatency || 0;
             const projectedCost1k = totalCost * 1000;
