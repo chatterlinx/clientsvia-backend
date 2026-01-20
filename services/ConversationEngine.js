@@ -5179,6 +5179,23 @@ async function processTurn({
                         path: 'V33_FIX_BOOKING_MODE_INIT'
                     });
                     
+                    // 📦 BLACK BOX: Log common first names check for diagnostics
+                    await BlackBoxLogger.logEvent({
+                        callId,
+                        companyId,
+                        type: 'NAME_DETECTION_CHECK',
+                        turn: session.metrics?.totalTurns || 0,
+                        data: {
+                            name: partialName,
+                            commonFirstNamesLoaded: commonFirstNames.length,
+                            isInList: isInList,
+                            decision: isCommonFirstName ? 'FIRST_NAME' : 'LAST_NAME',
+                            reason: listIsEmpty ? 'list_empty_fallback' : (isInList ? 'found_in_900_names' : 'not_in_list'),
+                            howToFix: !isInList && commonFirstNames.length > 0 ? 
+                                `Add "${partialName}" to Common First Names in Front Desk Behavior UI` : null
+                        }
+                    }).catch(() => {});
+                    
                     if (isCommonFirstName) {
                         nameMeta.first = partialName;
                         nameMeta.assumedSingleTokenAs = 'first';
@@ -6050,6 +6067,21 @@ async function processTurn({
                     
                     log('📝 V51 SPELLING VARIANT: User chose', { chosenName, userText });
                     
+                    // 📦 BLACK BOX: Log spelling variant ANSWERED
+                    await BlackBoxLogger.logEvent({
+                        callId,
+                        companyId,
+                        type: 'SPELLING_VARIANT_ANSWERED',
+                        turn: session.metrics?.totalTurns || 0,
+                        data: {
+                            userResponse: userText,
+                            chosenSpelling: chosenName,
+                            optionA: variant.optionA,
+                            optionB: variant.optionB,
+                            result: 'SUCCESS'
+                        }
+                    }).catch(() => {});
+                    
                     // Now proceed to ask for last name or move on
                     if (askFullName) {
                         nameMeta.askedMissingPartOnce = true;
@@ -6189,6 +6221,31 @@ async function processTurn({
                             precomputedMapKeys: spellingConfig.precomputedVariantMap ? Object.keys(spellingConfig.precomputedVariantMap).slice(0, 10) : []
                         });
                         
+                        // 📦 BLACK BOX: Log spelling variant config status
+                        await BlackBoxLogger.logEvent({
+                            callId,
+                            companyId,
+                            type: 'SPELLING_VARIANT_CHECK',
+                            turn: session.metrics?.totalTurns || 0,
+                            data: {
+                                name: extractedName,
+                                globalEnabled: globalSpellingEnabled,
+                                slotLevelEnabled: slotLevelSpellingEnabledV67,
+                                effectiveEnabled: spellingEnabled,
+                                willCheck: shouldCheckSpelling,
+                                reason: !spellingEnabled ? 
+                                    (!globalSpellingEnabled ? 'GLOBAL_DISABLED' : 'SLOT_DISABLED') :
+                                    (nameMeta.askedSpellingVariant ? 'ALREADY_ASKED' : 
+                                    (spellingAsksThisCall >= maxSpellingAsks ? 'MAX_ASKS_REACHED' : 
+                                    (nameMeta.assumedSingleTokenAs !== 'first' ? 'NOT_FIRST_NAME' : 'WILL_CHECK'))),
+                                howToEnable: !globalSpellingEnabled ? 
+                                    'Front Desk Behavior → Booking Prompts → Name Spelling Variants → Enable' :
+                                    (!slotLevelSpellingEnabledV67 ? 'Booking Slot Editor → Name → Enable "Confirm spelling variants (Mark/Marc)"' : null),
+                                hasVariantGroups: !!(spellingConfig.variantGroups),
+                                variantGroupsSample: spellingConfig.variantGroups ? Object.keys(spellingConfig.variantGroups).slice(0, 5) : []
+                            }
+                        }).catch(() => {});
+                        
                         if (shouldCheckSpelling) {
                             const commonFirstNames = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
                             // V67 FIX: Pass slot-level enabled flag to override global disabled
@@ -6225,6 +6282,22 @@ async function processTurn({
                                     optionB: variant.optionB,
                                     script: finalReply
                                 });
+                                
+                                // 📦 BLACK BOX: Log spelling variant ASKED
+                                await BlackBoxLogger.logEvent({
+                                    callId,
+                                    companyId,
+                                    type: 'SPELLING_VARIANT_ASKED',
+                                    turn: session.metrics?.totalTurns || 0,
+                                    data: {
+                                        name: extractedName,
+                                        optionA: variant.optionA,
+                                        optionB: variant.optionB,
+                                        letterA: variant.letterA,
+                                        letterB: variant.letterB,
+                                        prompt: finalReply
+                                    }
+                                }).catch(() => {});
                             } else {
                                 // No variant found, proceed with normal confirm
                                 nameMeta.askedSpellingVariant = true; // V48 FIX: Mark as checked
