@@ -4112,6 +4112,11 @@ Sean → Shawn, Shaun`;
                     <div style="font-size: 12px; color: #8b949e; margin-top: 2px;">Configure the slot comfortably. This editor is the source of truth.</div>
                 </div>
                 <div style="display:flex; gap: 10px;">
+                    <button id="fdb-slot-editor-copy"
+                        style="padding: 10px 14px; background: #1f6feb; border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 800; display: flex; align-items: center; gap: 6px;"
+                        title="Copy all slot settings as JSON for debugging">
+                        📋 Copy Settings
+                    </button>
                     <button id="fdb-slot-editor-cancel"
                         style="padding: 10px 14px; background: #21262d; border: 1px solid #30363d; border-radius: 8px; color: #c9d1d9; cursor: pointer; font-weight: 800;">
                         Cancel
@@ -4136,6 +4141,30 @@ Sean → Shawn, Shaun`;
         const close = () => this.closeBookingSlotEditorModal();
         overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
         panel.querySelector('#fdb-slot-editor-cancel')?.addEventListener('click', close);
+
+        // Wire copy settings button
+        panel.querySelector('#fdb-slot-editor-copy')?.addEventListener('click', () => {
+            try {
+                const currentSlot = this.collectBookingSlotFromEditor(panel);
+                const formattedJson = JSON.stringify(currentSlot, null, 2);
+                navigator.clipboard.writeText(formattedJson).then(() => {
+                    const btn = panel.querySelector('#fdb-slot-editor-copy');
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = '✅ Copied!';
+                    btn.style.background = '#238636';
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.style.background = '#1f6feb';
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Copy failed:', err);
+                    alert('Copy failed. Check console for details.');
+                });
+            } catch (e) {
+                console.error('[FRONT DESK] ❌ Copy settings failed', e);
+                alert(`Copy failed: ${e.message}`);
+            }
+        });
 
         // Wire type change inside modal
         const typeEl = panel.querySelector('#fdb-slot-editor-type');

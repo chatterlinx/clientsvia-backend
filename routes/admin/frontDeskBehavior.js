@@ -1023,15 +1023,21 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             hasCommonFirstNames: !!savedCommonFirstNames
         });
         
-        // Clear Redis cache
+        // Clear Redis cache so runtime picks up new config immediately
         try {
-            const redis = require('../../config/redis');
-            if (redis?.client) {
-                await redis.client.del(`company:${companyId}`);
-                await redis.client.del(`company:${companyId}:frontDeskBehavior`);
+            const { redisClient } = require('../../db');
+            if (redisClient && typeof redisClient.del === 'function') {
+                await redisClient.del(`company:${companyId}`);
+                await redisClient.del(`company:${companyId}:frontDeskBehavior`);
+                logger.info('[FRONT DESK BEHAVIOR] ✅ Redis cache cleared for company', { companyId });
+            } else {
+                logger.debug('[FRONT DESK BEHAVIOR] Redis client not available for cache clear');
             }
         } catch (cacheErr) {
-            logger.debug('[FRONT DESK BEHAVIOR] Cache clear failed (non-critical)');
+            logger.warn('[FRONT DESK BEHAVIOR] ⚠️ Redis cache clear failed (config will refresh in 60s)', { 
+                error: cacheErr.message,
+                companyId 
+            });
         }
 
         // Immutable config audit: AFTER snapshot (company-scoped)
