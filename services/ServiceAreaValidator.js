@@ -2,10 +2,15 @@
 // SERVICE AREA VALIDATOR - Check if address is within company's coverage
 // ============================================================================
 // V70: Validates caller addresses against company's service area config
+// V71: Added Google Maps geocoding for city → coordinates → radius check
 // Supports: ZIP codes, cities, counties, state, radius-based coverage
 // ============================================================================
 
 const logger = require('../utils/logger');
+const axios = require('axios');
+
+// Google Maps API key from environment
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
 // Common city name variations for fuzzy matching
 const CITY_ALIASES = {
@@ -73,6 +78,207 @@ function calculateDistanceMiles(lat1, lng1, lat2, lng2) {
         Math.sin(dLng/2) * Math.sin(dLng/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
+}
+
+/**
+ * V71: Geocode a city/address to get lat/lng using Google Maps
+ * This allows "Do you service Cape Coral?" to be checked against radius
+ * 
+ * @param {string} location - City name, ZIP code, or address
+ * @param {string} state - Optional state to narrow results (e.g., 'FL')
+ * @returns {Promise<{lat: number, lng: number, formattedAddress: string} | null>}
+ */
+async function geocodeLocation(location, state = null) {
+    if (!location || !GOOGLE_MAPS_API_KEY) {
+        logger.debug('[SERVICE AREA] Cannot geocode - missing location or API key', {
+            hasLocation: !!location,
+            hasApiKey: !!GOOGLE_MAPS_API_KEY
+        });
+        return null;
+    }
+    
+    try {
+        // Add state to query for better accuracy
+        const query = state ? `${location}, ${state}` : location;
+        
+        const response = await axios.get('https://maps.googleapis.com/maps/api/geocode/json', {
+            params: {
+                address: query,
+                key: GOOGLE_MAPS_API_KEY
+            },
+            timeout: 3000 // 3 second timeout
+        });
+        
+        if (response.data.status === 'OK' && response.data.results?.length > 0) {
+            const result = response.data.results[0];
+            const location = result.geometry?.location;
+            
+            if (location?.lat && location?.lng) {
+                logger.debug('[SERVICE AREA] ✅ Geocoded location', {
+                    query,
+                    lat: location.lat,
+                    lng: location.lng,
+                    formattedAddress: result.formatted_address
+                });
+                
+                return {
+                    lat: location.lat,
+                    lng: location.lng,
+                    formattedAddress: result.formatted_address,
+                    // Extract city from address components
+                    city: result.address_components?.find(c => c.types.includes('locality'))?.long_name,
+                    county: result.address_components?.find(c => c.types.includes('administrative_area_level_2'))?.long_name,
+                    state: result.address_components?.find(c => c.types.includes('administrative_area_level_1'))?.short_name
+                };
+            }
+        }
+        
+        logger.debug('[SERVICE AREA] ❌ Geocoding returned no results', {
+            query,
+            status: response.data.status
+        });
+        return null;
+        
+    } catch (error) {
+        logger.warn('[SERVICE AREA] Geocoding failed', {
+            location,
+            error: error.message
+        });
+        return null;
+    }
+}
+
+/**
+ * V71: Smart service area check - geocodes city names to check against radius
+ * Use this when caller asks "Do you service Cape Coral?" (city name only)
+ * 
+ * @param {string} cityOrLocation - City name, ZIP, or partial address
+ * @param {Object} config - Company's serviceAreaConfig
+ * @returns {Promise<Object>} Same format as validateServiceArea
+ */
+async function smartServiceAreaCheck(cityOrLocation, config) {
+    if (!config?.enabled) {
+        return {
+            inServiceArea: true,
+            confidence: 'high',
+            reason: 'SERVICE_AREA_CHECK_DISABLED',
+            details: { message: 'Service area validation is not enabled' }
+        };
+    }
+    
+    const normalizedInput = normalizeCity(cityOrLocation);
+    
+    // STEP 1: Quick check against city list (no API call needed)
+    if (config.servicedCities?.length > 0) {
+        const normalizedCities = config.servicedCities.map(c => normalizeCity(c));
+        if (normalizedCities.includes(normalizedInput)) {
+            return {
+                inServiceArea: true,
+                confidence: 'high',
+                reason: 'CITY_IN_LIST',
+                details: { city: cityOrLocation, matchedCity: cityOrLocation }
+            };
+        }
+    }
+    
+    // STEP 2: Check if it's a ZIP code
+    const zip = extractZipCode(cityOrLocation);
+    if (zip) {
+        if (config.servicedZipCodes?.includes(zip)) {
+            return {
+                inServiceArea: true,
+                confidence: 'high',
+                reason: 'ZIP_IN_LIST',
+                details: { zipCode: zip }
+            };
+        }
+        if (config.borderlineZipCodes?.includes(zip)) {
+            return {
+                inServiceArea: 'borderline',
+                confidence: 'medium',
+                reason: 'BORDERLINE_ZIP',
+                details: { zipCode: zip }
+            };
+        }
+        // ZIP not in list - definite no (unless we geocode and check radius)
+    }
+    
+    // STEP 3: Geocode and check against radius (if radius is configured)
+    if (config.radiusCoverage?.enabled && 
+        config.radiusCoverage.centerLat && 
+        config.radiusCoverage.centerLng) {
+        
+        const geocoded = await geocodeLocation(cityOrLocation, config.servicedState);
+        
+        if (geocoded?.lat && geocoded?.lng) {
+            const distance = calculateDistanceMiles(
+                config.radiusCoverage.centerLat,
+                config.radiusCoverage.centerLng,
+                geocoded.lat,
+                geocoded.lng
+            );
+            
+            const isWithinRadius = distance <= config.radiusCoverage.radiusMiles;
+            
+            logger.info('[SERVICE AREA] 🗺️ Geocode + radius check', {
+                location: cityOrLocation,
+                geocodedCity: geocoded.city,
+                distance: Math.round(distance * 10) / 10,
+                radiusMiles: config.radiusCoverage.radiusMiles,
+                isWithinRadius
+            });
+            
+            if (isWithinRadius) {
+                return {
+                    inServiceArea: true,
+                    confidence: 'high',
+                    reason: 'WITHIN_RADIUS',
+                    details: {
+                        city: geocoded.city || cityOrLocation,
+                        distanceMiles: Math.round(distance * 10) / 10,
+                        maxRadiusMiles: config.radiusCoverage.radiusMiles,
+                        geocodedAddress: geocoded.formattedAddress
+                    }
+                };
+            } else {
+                return {
+                    inServiceArea: false,
+                    confidence: 'high',
+                    reason: 'OUTSIDE_RADIUS',
+                    details: {
+                        city: geocoded.city || cityOrLocation,
+                        distanceMiles: Math.round(distance * 10) / 10,
+                        maxRadiusMiles: config.radiusCoverage.radiusMiles,
+                        serviceAreaSummary: config.serviceAreaSummary
+                    }
+                };
+            }
+        }
+    }
+    
+    // STEP 4: ZIP not in list and no radius to check
+    if (zip && config.servicedZipCodes?.length > 0) {
+        return {
+            inServiceArea: false,
+            confidence: 'high',
+            reason: 'ZIP_NOT_IN_LIST',
+            details: {
+                zipCode: zip,
+                serviceAreaSummary: config.serviceAreaSummary
+            }
+        };
+    }
+    
+    // STEP 5: Couldn't determine - ask for more info
+    return {
+        inServiceArea: 'unknown',
+        confidence: 'low',
+        reason: 'COULD_NOT_VERIFY',
+        details: {
+            location: cityOrLocation,
+            message: 'Could not verify service area - need ZIP code or more details'
+        }
+    };
 }
 
 /**
@@ -393,6 +599,8 @@ function detectServiceAreaQuestion(text, config) {
 
 module.exports = {
     validateServiceArea,
+    smartServiceAreaCheck,  // V71: Geocodes cities to check against radius
+    geocodeLocation,        // V71: Get lat/lng for a location
     generateResponse,
     detectServiceAreaQuestion,
     extractZipCode,
