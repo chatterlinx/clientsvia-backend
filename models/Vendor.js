@@ -1,491 +1,389 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
- * VENDOR MODEL
- * ═══════════════════════════════════════════════════════════════════════════
- * 
- * Part of: Call Center Module V2
- * Created: December 2, 2025
+ * ============================================================================
+ * VENDOR MODEL - Supply Houses, Delivery Services, Partners
+ * ============================================================================
  * 
  * PURPOSE:
- * ─────────────────────────────────────────────────────────────────────────────
- * Track non-customer contacts: suppliers, vendors, delivery drivers, etc.
+ * Track non-customer callers who interact with the business:
+ * - Supply houses (Tropic Supply, Johnstone, Carrier)
+ * - Delivery services (UPS, FedEx, USPS, local couriers)
+ * - Partners (warranty companies, inspectors, property managers)
  * 
- * Examples:
- * - Supply houses calling about parts orders
- * - Delivery drivers calling about packages
- * - Equipment reps calling about warranties
- * - Parts distributors with order updates
+ * MULTI-TENANT: Always scoped by companyId.
  * 
- * These are B2B operational calls, NOT customer service calls.
+ * USE CASES:
+ * 1. "Tropic Supply - your motor for Johnson is ready, PO# 123"
+ *    → AI extracts vendor, links to customer, creates pickup card
  * 
- * ═══════════════════════════════════════════════════════════════════════════
+ * 2. "UPS, package for Penguin Air, need signature"
+ *    → AI logs delivery, asks for ETA, creates delivery card
+ * 
+ * 3. "This is the warranty company calling about claim #456"
+ *    → AI logs, links to customer, creates follow-up card
+ * 
+ * ============================================================================
  */
 
 const mongoose = require('mongoose');
-const logger = require('../utils/logger');
+const { Schema } = mongoose;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// VENDOR TYPES
-// ═══════════════════════════════════════════════════════════════════════════
-
-const VENDOR_TYPES = {
-  SUPPLY_HOUSE: 'supply_house',
-  PARTS_DISTRIBUTOR: 'parts_distributor',
-  EQUIPMENT_MANUFACTURER: 'equipment_manufacturer',
-  DELIVERY_SERVICE: 'delivery_service',
-  WHOLESALER: 'wholesaler',
-  CONTRACTOR: 'contractor',
-  UTILITY_COMPANY: 'utility_company',
-  INSPECTOR: 'inspector',
-  OTHER: 'other'
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SCHEMA
-// ═══════════════════════════════════════════════════════════════════════════
-
-const VendorSchema = new mongoose.Schema({
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // IDENTITY (Multi-tenant)
-  // ─────────────────────────────────────────────────────────────────────────
-  
-  companyId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'v2Company', 
-    required: [true, 'companyId is required for multi-tenant isolation'],
-    index: true 
-  },
-  
-  /**
-   * Human-readable vendor ID
-   * Format: "VEND-{timestamp}"
-   */
-  vendorId: { 
-    type: String, 
-    unique: true,
-    sparse: true
-  },
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // BUSINESS INFORMATION
-  // ─────────────────────────────────────────────────────────────────────────
-  
-  /**
-   * Vendor company name
-   * e.g., "Johnstone Supply", "FedEx", "Carrier Corporation"
-   */
-  businessName: { 
-    type: String, 
-    required: [true, 'businessName is required'],
-    trim: true,
-    maxLength: 200
-  },
-  
-  /**
-   * Type of vendor
-   */
-  vendorType: { 
-    type: String, 
-    enum: Object.values(VENDOR_TYPES),
-    default: VENDOR_TYPES.OTHER,
-    index: true
-  },
-  
-  /**
-   * Your account number with this vendor
-   */
-  accountNumber: { 
-    type: String, 
-    trim: true,
-    maxLength: 50
-  },
-  
-  /**
-   * Main phone number
-   */
-  phone: { 
-    type: String,
-    index: true
-  },
-  
-  /**
-   * Secondary/alternate phones
-   */
-  secondaryPhones: {
-    type: [String],
-    default: []
-  },
-  
-  /**
-   * Email address
-   */
-  email: { 
-    type: String,
-    lowercase: true,
-    trim: true
-  },
-  
-  /**
-   * Website
-   */
-  website: { 
-    type: String,
-    trim: true
-  },
-  
-  /**
-   * Physical address
-   */
-  address: {
-    street: { type: String, trim: true },
-    city: { type: String, trim: true },
-    state: { type: String, trim: true, uppercase: true, maxLength: 2 },
-    zip: { type: String, trim: true }
-  },
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // CONTACTS (People at this vendor)
-  // ─────────────────────────────────────────────────────────────────────────
-  
-  /**
-   * Known contacts at this vendor
-   * e.g., "John at the counter", "Maria in accounting"
-   */
-  contacts: [{
-    name: { type: String, maxLength: 100, required: true },
-    role: { type: String, maxLength: 100 },  // "Sales Rep", "Driver", "Accounts"
-    phone: { type: String },
-    email: { type: String, lowercase: true },
-    extension: { type: String, maxLength: 10 },
+// --- Sub-schema for Contact Person ---
+const vendorContactSchema = new Schema({
+    name: { type: String, trim: true },
+    role: { type: String, trim: true }, // "Counter Rep", "Driver", "Account Manager"
+    phone: { type: String, trim: true },
+    email: { type: String, trim: true, lowercase: true },
     isPrimary: { type: Boolean, default: false },
-    notes: { type: String, maxLength: 200 }
-  }],
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // BUSINESS DETAILS
-  // ─────────────────────────────────────────────────────────────────────────
-  
-  /**
-   * Business hours (for pickup scheduling)
-   */
-  businessHours: {
-    monday: { open: String, close: String },
-    tuesday: { open: String, close: String },
-    wednesday: { open: String, close: String },
-    thursday: { open: String, close: String },
-    friday: { open: String, close: String },
-    saturday: { open: String, close: String },
-    sunday: { open: String, close: String },
-    notes: { type: String, maxLength: 200 }  // "Closed for lunch 12-1"
-  },
-  
-  /**
-   * Payment terms with this vendor
-   */
-  paymentTerms: {
-    type: String,
-    enum: ['cod', 'net_15', 'net_30', 'net_45', 'net_60', 'credit_card', 'account'],
-    default: 'account'
-  },
-  
-  /**
-   * Discount or special pricing
-   */
-  discountInfo: { 
-    type: String, 
-    maxLength: 200 
-  },
-  
-  /**
-   * Delivery days (if they deliver)
-   */
-  deliveryDays: [{
-    type: String,
-    enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-  }],
-  
-  /**
-   * Minimum order amount
-   */
-  minimumOrder: { 
-    type: Number, 
-    min: 0 
-  },
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // TRACKING
-  // ─────────────────────────────────────────────────────────────────────────
-  
-  /**
-   * How many calls from this vendor
-   */
-  totalCalls: { 
-    type: Number, 
-    default: 0,
-    min: 0
-  },
-  
-  /**
-   * Last call from this vendor
-   */
-  lastCallAt: { 
-    type: Date,
-    index: true
-  },
-  
-  /**
-   * First contact with this vendor
-   */
-  firstContactAt: { 
-    type: Date,
-    default: Date.now
-  },
-  
-  /**
-   * Is this vendor currently active?
-   */
-  isActive: { 
-    type: Boolean, 
-    default: true,
-    index: true
-  },
-  
-  /**
-   * Special notes
-   */
-  notes: { 
-    type: String, 
-    maxLength: 2000 
-  },
-  
-  /**
-   * Tags for organization
-   */
-  tags: [{
-    type: String,
-    maxLength: 50
-  }]
-  
-}, {
-  timestamps: true,
-  collection: 'vendors'
+    notes: { type: String, trim: true }
+}, { _id: true });
+
+// --- Sub-schema for Account Info ---
+const vendorAccountSchema = new Schema({
+    accountNumber: { type: String, trim: true },
+    creditLimit: { type: Number },
+    paymentTerms: { type: String, trim: true }, // "Net 30", "COD", "Credit Card"
+    taxExempt: { type: Boolean, default: false },
+    taxExemptNumber: { type: String, trim: true },
+    notes: { type: String, trim: true }
+}, { _id: false });
+
+// --- Main Vendor Schema ---
+const vendorSchema = new Schema({
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MULTI-TENANT ISOLATION (Required)
+    // ═══════════════════════════════════════════════════════════════════════════
+    companyId: { 
+        type: Schema.Types.ObjectId, 
+        ref: 'v2Company', 
+        required: true,
+        index: true
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // VENDOR IDENTITY
+    // ═══════════════════════════════════════════════════════════════════════════
+    name: { 
+        type: String, 
+        trim: true, 
+        required: true 
+    },
+    
+    type: {
+        type: String,
+        enum: [
+            'supply_house',      // Parts suppliers (Tropic Supply, Johnstone)
+            'delivery',          // Delivery services (UPS, FedEx, USPS)
+            'manufacturer',      // Equipment manufacturers (Carrier, Trane)
+            'warranty',          // Warranty companies
+            'inspector',         // City inspectors, code enforcement
+            'property_manager',  // Property management companies
+            'contractor',        // Sub-contractors, partners
+            'utility',           // FPL, gas company
+            'other'
+        ],
+        default: 'other'
+    },
+    
+    // Common aliases (for AI recognition)
+    aliases: [{
+        type: String,
+        trim: true,
+        lowercase: true
+    }], // ["tropic", "tropic supply", "tropical supply"]
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CONTACT INFORMATION
+    // ═══════════════════════════════════════════════════════════════════════════
+    phoneNumbers: [{
+        number: { type: String, trim: true, required: true },
+        label: { type: String, trim: true, default: 'Main' }, // Main, Parts Counter, Delivery
+        isPrimary: { type: Boolean, default: false }
+    }],
+    
+    email: { type: String, trim: true, lowercase: true },
+    website: { type: String, trim: true },
+    
+    address: {
+        street: { type: String, trim: true },
+        city: { type: String, trim: true },
+        state: { type: String, trim: true },
+        zip: { type: String, trim: true }
+    },
+    
+    // Individual contacts at the vendor
+    contacts: [vendorContactSchema],
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ACCOUNT & BUSINESS INFO
+    // ═══════════════════════════════════════════════════════════════════════════
+    account: { type: vendorAccountSchema, default: () => ({}) },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // AI RECOGNITION
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Phrases the AI uses to identify this vendor
+    recognitionPhrases: [{
+        type: String,
+        trim: true,
+        lowercase: true
+    }], // ["this is tropic supply", "calling from tropic", "tropic supply calling"]
+    
+    // Default handling instructions for AI
+    aiInstructions: {
+        defaultGreeting: { type: String, trim: true },
+        // "Hi! Thanks for calling. What's the update?"
+        
+        askForPONumber: { type: Boolean, default: true },
+        askForCustomerName: { type: Boolean, default: true },
+        askForPartDescription: { type: Boolean, default: true },
+        askForETA: { type: Boolean, default: false }, // For delivery
+        
+        customQuestions: [{
+            question: { type: String, trim: true },
+            required: { type: Boolean, default: false }
+        }]
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RELATIONSHIP METRICS
+    // ═══════════════════════════════════════════════════════════════════════════
+    metrics: {
+        totalCalls: { type: Number, default: 0 },
+        lastCallAt: { type: Date },
+        totalOrders: { type: Number, default: 0 },
+        totalSpend: { type: Number, default: 0 }
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STATUS & NOTES
+    // ═══════════════════════════════════════════════════════════════════════════
+    status: {
+        type: String,
+        enum: ['active', 'inactive', 'blocked'],
+        default: 'active'
+    },
+    
+    tags: [{ type: String, trim: true }], // "preferred", "local", "24-hour"
+    
+    notes: { type: String, trim: true },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // TIMESTAMPS
+    // ═══════════════════════════════════════════════════════════════════════════
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now }
+    
+}, { 
+    timestamps: true,
+    collection: 'vendors'
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
 // INDEXES
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
 
-// Compound index for company + phone lookup
-VendorSchema.index({ companyId: 1, phone: 1 }, { name: 'idx_company_phone' });
-VendorSchema.index({ companyId: 1, secondaryPhones: 1 }, { name: 'idx_company_secondary_phones' });
-VendorSchema.index({ companyId: 1, vendorType: 1 }, { name: 'idx_company_type' });
-VendorSchema.index({ companyId: 1, businessName: 1 }, { name: 'idx_company_name' });
+// Primary lookup: company + phone
+vendorSchema.index({ companyId: 1, 'phoneNumbers.number': 1 });
 
-// Text search
-VendorSchema.index(
-  { businessName: 'text', notes: 'text', 'contacts.name': 'text' },
-  { name: 'idx_vendor_text_search' }
-);
+// Lookup by name
+vendorSchema.index({ companyId: 1, name: 1 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// PRE-SAVE HOOKS
-// ═══════════════════════════════════════════════════════════════════════════
+// Lookup by type
+vendorSchema.index({ companyId: 1, type: 1 });
 
-VendorSchema.pre('save', function(next) {
-  // Generate vendorId if not set
-  if (!this.vendorId) {
-    const timestamp = Date.now().toString(36).toUpperCase();
-    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-    this.vendorId = `VEND-${timestamp}${random}`;
-    logger.debug('[VENDOR] Generated vendorId:', { vendorId: this.vendorId });
-  }
-  
-  // Normalize phone
-  if (this.phone && !this.phone.startsWith('+')) {
-    const digits = this.phone.replace(/\D/g, '');
-    if (digits.length === 10) {
-      this.phone = `+1${digits}`;
-    } else if (digits.length === 11 && digits.startsWith('1')) {
-      this.phone = `+${digits}`;
-    }
-  }
-  
-  next();
-});
+// Text search on name and aliases
+vendorSchema.index({ companyId: 1, name: 'text', aliases: 'text' });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
 // STATIC METHODS
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Find vendor by phone (company-scoped)
+ * Find vendor by phone number
  */
-VendorSchema.statics.findByPhone = async function(companyId, phone) {
-  if (!companyId || !phone) return null;
-  
-  // Normalize phone
-  let normalizedPhone = phone;
-  if (!phone.startsWith('+')) {
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length === 10) {
-      normalizedPhone = `+1${digits}`;
-    } else if (digits.length === 11 && digits.startsWith('1')) {
-      normalizedPhone = `+${digits}`;
-    }
-  }
-  
-  // Check primary phone
-  let vendor = await this.findOne({ companyId, phone: normalizedPhone }).lean();
-  
-  // Check secondary phones
-  if (!vendor) {
-    vendor = await this.findOne({ 
-      companyId, 
-      secondaryPhones: normalizedPhone 
-    }).lean();
-  }
-  
-  return vendor;
-};
-
-/**
- * Get or create vendor by phone
- * Returns existing vendor or creates placeholder
- */
-VendorSchema.statics.getOrCreateByPhone = async function(companyId, phone, callerName = null) {
-  if (!companyId || !phone) {
-    throw new Error('companyId and phone are required');
-  }
-  
-  // Normalize phone
-  let normalizedPhone = phone;
-  if (!phone.startsWith('+')) {
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length === 10) {
-      normalizedPhone = `+1${digits}`;
-    } else if (digits.length === 11 && digits.startsWith('1')) {
-      normalizedPhone = `+${digits}`;
-    }
-  }
-  
-  // Try to find existing
-  let vendor = await this.findByPhone(companyId, normalizedPhone);
-  
-  if (vendor) {
-    // Update last call
-    await this.findByIdAndUpdate(vendor._id, {
-      $set: { lastCallAt: new Date() },
-      $inc: { totalCalls: 1 }
+vendorSchema.statics.findByPhone = async function(companyId, phone) {
+    const normalized = phone.replace(/\D/g, '');
+    return this.findOne({
+        companyId,
+        'phoneNumbers.number': { $regex: normalized.slice(-10) }
     });
-    return { vendor, isNew: false };
-  }
-  
-  // Create new vendor placeholder
-  const newVendor = await this.create({
-    companyId,
-    phone: normalizedPhone,
-    businessName: callerName || 'Unknown Vendor',
-    vendorType: VENDOR_TYPES.OTHER,
-    lastCallAt: new Date()
-  });
-  
-  logger.info('[VENDOR] New vendor created', {
-    vendorId: newVendor.vendorId,
-    companyId,
-    phone: normalizedPhone
-  });
-  
-  return { vendor: newVendor, isNew: true };
 };
 
 /**
- * Search vendors
+ * Find vendor by name or alias (fuzzy)
  */
-VendorSchema.statics.search = async function(companyId, criteria = {}, options = {}) {
-  const {
-    query,
-    vendorType,
-    isActive = true,
-    tags
-  } = criteria;
-  
-  const {
-    page = 1,
-    limit = 50,
-    sort = { businessName: 1 }
-  } = options;
-  
-  const mongoQuery = { companyId };
-  
-  if (typeof isActive === 'boolean') {
-    mongoQuery.isActive = isActive;
-  }
-  
-  if (vendorType) {
-    mongoQuery.vendorType = vendorType;
-  }
-  
-  if (tags && tags.length > 0) {
-    mongoQuery.tags = { $all: tags };
-  }
-  
-  if (query) {
-    mongoQuery.$or = [
-      { businessName: { $regex: query, $options: 'i' } },
-      { phone: { $regex: query, $options: 'i' } },
-      { 'contacts.name': { $regex: query, $options: 'i' } },
-      { accountNumber: { $regex: query, $options: 'i' } }
-    ];
-  }
-  
-  const skip = (page - 1) * Math.min(limit, 100);
-  const actualLimit = Math.min(limit, 100);
-  
-  const [vendors, total] = await Promise.all([
-    this.find(mongoQuery)
-      .sort(sort)
-      .skip(skip)
-      .limit(actualLimit)
-      .lean(),
-    this.countDocuments(mongoQuery)
-  ]);
-  
-  return {
-    vendors,
-    total,
-    page,
-    limit: actualLimit,
-    pages: Math.ceil(total / actualLimit)
-  };
+vendorSchema.statics.findByNameOrAlias = async function(companyId, searchTerm) {
+    const normalized = searchTerm.toLowerCase().trim();
+    
+    // Exact match first
+    let vendor = await this.findOne({
+        companyId,
+        $or: [
+            { name: { $regex: normalized, $options: 'i' } },
+            { aliases: normalized }
+        ]
+    });
+    
+    if (vendor) return vendor;
+    
+    // Try recognition phrases
+    vendor = await this.findOne({
+        companyId,
+        recognitionPhrases: { $elemMatch: { $regex: normalized, $options: 'i' } }
+    });
+    
+    return vendor;
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
+/**
+ * Find or create vendor from call context
+ */
+vendorSchema.statics.findOrCreateFromCall = async function(companyId, { phone, name, type }) {
+    // Try to find by phone first
+    let vendor = await this.findByPhone(companyId, phone);
+    
+    if (vendor) {
+        // Update last call time
+        vendor.metrics.totalCalls = (vendor.metrics.totalCalls || 0) + 1;
+        vendor.metrics.lastCallAt = new Date();
+        await vendor.save();
+        return { vendor, isNew: false };
+    }
+    
+    // Try by name
+    if (name) {
+        vendor = await this.findByNameOrAlias(companyId, name);
+        if (vendor) {
+            // Add this phone number
+            if (phone && !vendor.phoneNumbers.some(p => p.number.includes(phone.slice(-10)))) {
+                vendor.phoneNumbers.push({ number: phone, label: 'Unknown', isPrimary: false });
+            }
+            vendor.metrics.totalCalls = (vendor.metrics.totalCalls || 0) + 1;
+            vendor.metrics.lastCallAt = new Date();
+            await vendor.save();
+            return { vendor, isNew: false };
+        }
+    }
+    
+    // Create new vendor
+    vendor = await this.create({
+        companyId,
+        name: name || 'Unknown Vendor',
+        type: type || 'other',
+        phoneNumbers: phone ? [{ number: phone, label: 'Main', isPrimary: true }] : [],
+        metrics: {
+            totalCalls: 1,
+            lastCallAt: new Date()
+        }
+    });
+    
+    return { vendor, isNew: true };
+};
+
+/**
+ * Get common vendors (supply houses, delivery) for quick recognition
+ */
+vendorSchema.statics.getCommonVendors = async function(companyId) {
+    return this.find({
+        companyId,
+        status: 'active',
+        type: { $in: ['supply_house', 'delivery', 'manufacturer'] }
+    })
+        .select('name aliases recognitionPhrases type phoneNumbers')
+        .lean();
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // INSTANCE METHODS
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Add a contact to this vendor
+ * Get the primary phone number
  */
-VendorSchema.methods.addContact = async function(contactData) {
-  this.contacts.push(contactData);
-  await this.save();
-  return this;
+vendorSchema.methods.getPrimaryPhone = function() {
+    const primary = this.phoneNumbers.find(p => p.isPrimary);
+    return primary?.number || this.phoneNumbers[0]?.number || null;
 };
 
 /**
- * Get primary contact
+ * Get primary contact person
  */
-VendorSchema.methods.getPrimaryContact = function() {
-  return this.contacts.find(c => c.isPrimary) || this.contacts[0] || null;
+vendorSchema.methods.getPrimaryContact = function() {
+    return this.contacts.find(c => c.isPrimary) || this.contacts[0] || null;
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
+/**
+ * Check if text matches this vendor
+ */
+vendorSchema.methods.matchesText = function(text) {
+    const normalized = text.toLowerCase();
+    
+    // Check name
+    if (normalized.includes(this.name.toLowerCase())) return true;
+    
+    // Check aliases
+    for (const alias of this.aliases || []) {
+        if (normalized.includes(alias)) return true;
+    }
+    
+    // Check recognition phrases
+    for (const phrase of this.recognitionPhrases || []) {
+        if (normalized.includes(phrase)) return true;
+    }
+    
+    return false;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PRE-BUILT VENDOR TEMPLATES (for seeding)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+vendorSchema.statics.COMMON_VENDORS = {
+    DELIVERY: [
+        { name: 'UPS', type: 'delivery', aliases: ['ups', 'united parcel'], recognitionPhrases: ['ups delivery', 'this is ups', 'calling from ups'] },
+        { name: 'FedEx', type: 'delivery', aliases: ['fedex', 'federal express'], recognitionPhrases: ['fedex delivery', 'this is fedex', 'calling from fedex'] },
+        { name: 'USPS', type: 'delivery', aliases: ['usps', 'postal service', 'post office'], recognitionPhrases: ['postal service', 'this is usps'] },
+        { name: 'Amazon', type: 'delivery', aliases: ['amazon'], recognitionPhrases: ['amazon delivery', 'delivery from amazon'] }
+    ],
+    SUPPLY_HOUSES: [
+        { name: 'Tropic Supply', type: 'supply_house', aliases: ['tropic', 'tropical supply'], recognitionPhrases: ['tropic supply calling', 'this is tropic'] },
+        { name: 'Johnstone Supply', type: 'supply_house', aliases: ['johnstone'], recognitionPhrases: ['johnstone supply calling', 'this is johnstone'] },
+        { name: 'Ferguson', type: 'supply_house', aliases: ['ferguson'], recognitionPhrases: ['ferguson calling', 'this is ferguson'] },
+        { name: 'Carrier Enterprise', type: 'supply_house', aliases: ['carrier', 'ce'], recognitionPhrases: ['carrier enterprise calling'] },
+        { name: 'Gemaire', type: 'supply_house', aliases: ['gemaire'], recognitionPhrases: ['gemaire calling', 'this is gemaire'] }
+    ]
+};
+
+/**
+ * Seed common vendors for a company
+ */
+vendorSchema.statics.seedCommonVendors = async function(companyId) {
+    const created = [];
+    
+    for (const vendor of [...this.COMMON_VENDORS.DELIVERY, ...this.COMMON_VENDORS.SUPPLY_HOUSES]) {
+        const existing = await this.findOne({ companyId, name: vendor.name });
+        if (!existing) {
+            const newVendor = await this.create({
+                companyId,
+                ...vendor,
+                aiInstructions: {
+                    askForPONumber: vendor.type === 'supply_house',
+                    askForCustomerName: vendor.type === 'supply_house',
+                    askForPartDescription: vendor.type === 'supply_house',
+                    askForETA: vendor.type === 'delivery'
+                }
+            });
+            created.push(newVendor.name);
+        }
+    }
+    
+    return created;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // EXPORT
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
 
-const Vendor = mongoose.model('Vendor', VendorSchema);
+const Vendor = mongoose.model('Vendor', vendorSchema);
 
 module.exports = Vendor;
-module.exports.VENDOR_TYPES = VENDOR_TYPES;
-

@@ -614,6 +614,272 @@ const CallSummarySchema = new mongoose.Schema({
   },
   
   // ─────────────────────────────────────────────────────────────────────────
+  // V77: CALL CENTER CARD DATA (Dashboard Display)
+  // ─────────────────────────────────────────────────────────────────────────
+  // This data powers the Call Center Kanban dashboard cards.
+  // Each call becomes a card with headline, brief description, tags, etc.
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  /**
+   * Caller classification for directory organization
+   */
+  callerType: {
+    type: String,
+    enum: ['customer', 'vendor', 'prospect', 'unknown'],
+    default: 'customer',
+    index: true
+  },
+  
+  /**
+   * Sub-classification for more granular organization
+   */
+  callerSubType: {
+    type: String,
+    enum: [
+      'residential',       // Residential customer
+      'commercial',        // Commercial/business customer
+      'delivery',          // UPS, FedEx, etc.
+      'supply_house',      // Parts suppliers
+      'warranty',          // Warranty companies
+      'property_manager',  // Property management
+      'inspector',         // City inspectors
+      'other'
+    ],
+    default: 'residential'
+  },
+  
+  /**
+   * Reference to Vendor document (if caller is vendor)
+   */
+  vendorId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Vendor',
+    sparse: true
+  },
+  
+  /**
+   * Card display data for Call Center dashboard
+   */
+  cardData: {
+    /**
+     * Card headline (auto-generated or manual)
+     * Example: "Mrs. Johnson - AC Repair"
+     */
+    headline: {
+      type: String,
+      maxLength: 100
+    },
+    
+    /**
+     * Brief description (1-2 lines)
+     * Example: "AC not cooling, thermostat blank"
+     */
+    brief: {
+      type: String,
+      maxLength: 200
+    },
+    
+    /**
+     * Priority level
+     */
+    priority: {
+      type: String,
+      enum: ['urgent', 'high', 'normal', 'low'],
+      default: 'normal'
+    },
+    
+    /**
+     * Card status for Kanban columns
+     */
+    status: {
+      type: String,
+      enum: ['needs_action', 'in_progress', 'scheduled', 'completed', 'archived'],
+      default: 'needs_action',
+      index: true
+    },
+    
+    /**
+     * Tags for filtering/grouping
+     */
+    tags: [{
+      type: String,
+      maxLength: 30
+    }],
+    
+    /**
+     * Card color (auto-set based on type or manual)
+     */
+    color: {
+      type: String,
+      enum: ['green', 'blue', 'red', 'yellow', 'orange', 'gray', 'purple'],
+      default: 'green'
+    },
+    
+    // === VENDOR-SPECIFIC FIELDS ===
+    
+    /**
+     * Vendor type (for vendor calls)
+     */
+    vendorType: {
+      type: String,
+      enum: ['delivery', 'supply', 'warranty', 'other']
+    },
+    
+    /**
+     * Reference number (PO#, tracking#, claim#)
+     */
+    reference: {
+      type: String,
+      maxLength: 50
+    },
+    
+    /**
+     * Linked customer (e.g., "this part is for Johnson")
+     */
+    linkedCustomerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Customer',
+      sparse: true
+    },
+    
+    /**
+     * Linked customer name (denormalized for display)
+     */
+    linkedCustomerName: {
+      type: String,
+      maxLength: 100
+    },
+    
+    /**
+     * Delivery ETA (for delivery calls)
+     */
+    deliveryEta: {
+      type: Date
+    },
+    
+    /**
+     * Part description (for supply house calls)
+     */
+    partDescription: {
+      type: String,
+      maxLength: 200
+    },
+    
+    // === ASSIGNMENT ===
+    
+    /**
+     * Assigned team member
+     */
+    assignedTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TeamMember',
+      sparse: true
+    },
+    
+    /**
+     * Assigned team member name (denormalized)
+     */
+    assignedToName: {
+      type: String,
+      maxLength: 100
+    },
+    
+    /**
+     * When was it assigned
+     */
+    assignedAt: {
+      type: Date
+    },
+    
+    /**
+     * Due date (for callbacks, follow-ups)
+     */
+    dueAt: {
+      type: Date
+    },
+    
+    /**
+     * Is this card pinned (stays at top)
+     */
+    pinned: {
+      type: Boolean,
+      default: false
+    }
+  },
+  
+  /**
+   * AI-extracted information from the call
+   */
+  aiExtracted: {
+    /**
+     * Primary intent detected
+     */
+    intent: {
+      type: String,
+      enum: ['booking', 'callback', 'inquiry', 'complaint', 'vendor_notification', 'delivery', 'other'],
+      default: 'inquiry'
+    },
+    
+    /**
+     * Urgency level
+     */
+    urgency: {
+      type: String,
+      enum: ['emergency', 'urgent', 'normal', 'low'],
+      default: 'normal'
+    },
+    
+    /**
+     * Caller sentiment
+     */
+    sentiment: {
+      type: String,
+      enum: ['positive', 'neutral', 'frustrated', 'angry'],
+      default: 'neutral'
+    },
+    
+    /**
+     * Extracted PO number (for vendor calls)
+     */
+    poNumber: {
+      type: String,
+      maxLength: 50
+    },
+    
+    /**
+     * Extracted part description
+     */
+    partDescription: {
+      type: String,
+      maxLength: 200
+    },
+    
+    /**
+     * Extracted customer name mentioned (for vendor calls)
+     */
+    relatedCustomerName: {
+      type: String,
+      maxLength: 100
+    },
+    
+    /**
+     * Extracted tracking number
+     */
+    trackingNumber: {
+      type: String,
+      maxLength: 50
+    },
+    
+    /**
+     * Keywords/topics extracted
+     */
+    keywords: [{
+      type: String,
+      maxLength: 50
+    }]
+  },
+  
+  // ─────────────────────────────────────────────────────────────────────────
   // CONSENT TRACKING (Compliance)
   // ─────────────────────────────────────────────────────────────────────────
   

@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Call Center Dashboard | ClientVia</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Dark theme - Sleek & Professional */
+            --bg-primary: #0a0e14;
+            --bg-secondary: #0f1419;
+            --bg-card: #141b22;
+            --bg-hover: #1a242d;
+            --border: #1e2832;
+            --border-light: #2a3540;
+            
+            /* Text */
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            
+            /* Accents */
+            --accent-green: #3fb950;
+            --accent-blue: #58a6ff;
+            --accent-red: #f85149;
+            --accent-yellow: #d29922;
+            --accent-orange: #db6d28;
+            --accent-purple: #a371f7;
+            --accent-gray: #6e7681;
+            
+            /* Card colors */
+            --card-green: linear-gradient(135deg, rgba(63, 185, 80, 0.15) 0%, rgba(63, 185, 80, 0.05) 100%);
+            --card-blue: linear-gradient(135deg, rgba(88, 166, 255, 0.15) 0%, rgba(88, 166, 255, 0.05) 100%);
+            --card-red: linear-gradient(135deg, rgba(248, 81, 73, 0.15) 0%, rgba(248, 81, 73, 0.05) 100%);
+            --card-yellow: linear-gradient(135deg, rgba(210, 153, 34, 0.15) 0%, rgba(210, 153, 34, 0.05) 100%);
+            --card-orange: linear-gradient(135deg, rgba(219, 109, 40, 0.15) 0%, rgba(219, 109, 40, 0.05) 100%);
+            --card-gray: linear-gradient(135deg, rgba(110, 118, 129, 0.15) 0%, rgba(110, 118, 129, 0.05) 100%);
+            
+            /* Spacing */
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════
+           HEADER
+           ═══════════════════════════════════════════════════════════════════ */
+        
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--accent-blue);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .logo span {
+            color: var(--text-primary);
+        }
+        
+        .company-select {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            font-family: inherit;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .header-stats {
+            display: flex;
+            gap: 24px;
+        }
+        
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent-green);
+        }
+        
+        .stat-value.urgent {
+            color: var(--accent-red);
+        }
+        
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+        
+        .btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--border-light);
+        }
+        
+        .btn-primary {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #4c9aed;
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════
+           NAV TABS
+           ═══════════════════════════════════════════════════════════════════ */
+        
+        .nav-tabs {
+            display: flex;
+            gap: 4px;
+            padding: 12px 24px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .nav-tab {
+            padding: 10px 18px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            background: transparent;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .nav-tab:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        
+        .nav-tab.active {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+        
+        .nav-tab .badge {
+            background: var(--accent-red);
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════
+           KANBAN BOARD
+           ═══════════════════════════════════════════════════════════════════ */
+        
+        .kanban-container {
+            padding: 20px 24px;
+            height: calc(100vh - 140px);
+            overflow-x: auto;
+        }
+        
+        .kanban-board {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(300px, 1fr));
+            gap: 20px;
+            min-width: 1200px;
+            height: 100%;
+        }
+        
+        .kanban-column {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            display: flex;
+            flex-direction: column;
+            max-height: 100%;
+        }
+        
+        .column-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .column-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .column-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+        
+        .column-icon.red { background: rgba(248, 81, 73, 0.2); }
+        .column-icon.blue { background: rgba(88, 166, 255, 0.2); }
+        .column-icon.green { background: rgba(63, 185, 80, 0.2); }
+        .column-icon.yellow { background: rgba(210, 153, 34, 0.2); }
+        
+        .column-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .column-count {
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 12px;
+        }
+        
+        .column-cards {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════
+           CARDS
+           ═══════════════════════════════════════════════════════════════════ */
+        
+        .card {
+            background: var(--card-green);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 14px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            position: relative;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            border-color: var(--border-light);
+        }
+        
+        .card.green { background: var(--card-green); border-left: 3px solid var(--accent-green); }
+        .card.blue { background: var(--card-blue); border-left: 3px solid var(--accent-blue); }
+        .card.red { background: var(--card-red); border-left: 3px solid var(--accent-red); }
+        .card.yellow { background: var(--card-yellow); border-left: 3px solid var(--accent-yellow); }
+        .card.orange { background: var(--card-orange); border-left: 3px solid var(--accent-orange); }
+        .card.gray { background: var(--card-gray); border-left: 3px solid var(--accent-gray); }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+        
+        .card-type {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+        
+        .card-type .icon {
+            font-size: 14px;
+        }
+        
+        .card-time {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .card-headline {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .card-headline .pin {
+            color: var(--accent-yellow);
+        }
+        
+        .card-brief {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            margin-bottom: 12px;
+        }
+        
+        .card-reference {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--accent-yellow);
+            background: rgba(210, 153, 34, 0.1);
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+        
+        .card-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        
+        .tag {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background: var(--bg-card);
+            color: var(--text-secondary);
+        }
+        
+        .tag.callback { background: rgba(248, 81, 73, 0.2); color: var(--accent-red); }
+        .tag.urgent { background: rgba(248, 81, 73, 0.2); color: var(--accent-red); }
+        .tag.parts-ready { background: rgba(210, 153, 34, 0.2); color: var(--accent-yellow); }
+        .tag.returning { background: rgba(88, 166, 255, 0.2); color: var(--accent-blue); }
+        .tag.commercial { background: rgba(163, 113, 247, 0.2); color: var(--accent-purple); }
+        .tag.vip { background: rgba(163, 113, 247, 0.2); color: var(--accent-purple); }
+        
+        .card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+        
+        .card-actions {
+            display: flex;
+            gap: 6px;
+        }
+        
+        .card-action {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: var(--bg-card);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+        }
+        
+        .card-action:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        
+        .card-action.call:hover {
+            background: rgba(63, 185, 80, 0.2);
+            color: var(--accent-green);
+        }
+        
+        .card-assigned {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        
+        .card-assigned .avatar {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            color: white;
+            font-size: 10px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════
+           EMPTY STATES
+           ═══════════════════════════════════════════════════════════════════ */
+        
+        .empty-column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+            text-align: center;
+        }
+        
+        .empty-column .icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+        
+        .empty-column .text {
+            font-size: 13px;
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════
+           DIRECTORIES PANEL
+           ═══════════════════════════════════════════════════════════════════ */
+        
+        .directories-panel {
+            display: none;
+            padding: 20px 24px;
+        }
+        
+        .directories-panel.active {
+            display: block;
+        }
+        
+        .directory-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+        
+        .directory-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+        
+        .directory-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .directory-title {
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .directory-title .icon {
+            font-size: 18px;
+        }
+        
+        .directory-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .directory-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        
+        .directory-item:hover {
+            background: var(--bg-hover);
+        }
+        
+        .directory-item:last-child {
+            border-bottom: none;
+        }
+        
+        .directory-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .directory-avatar.blue { background: var(--accent-blue); }
+        .directory-avatar.yellow { background: var(--accent-yellow); }
+        .directory-avatar.orange { background: var(--accent-orange); }
+        
+        .directory-info {
+            flex: 1;
+        }
+        
+        .directory-name {
+            font-weight: 500;
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+        
+        .directory-meta {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        
+        .directory-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: var(--bg-card);
+            color: var(--text-secondary);
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════
+           LOADING & ANIMATIONS
+           ═══════════════════════════════════════════════════════════════════ */
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .loading {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--accent-green);
+        }
+        
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════
+           MODAL
+           ═══════════════════════════════════════════════════════════════════ */
+        
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+        
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+        
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        
+        .modal-footer {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════
+           RESPONSIVE
+           ═══════════════════════════════════════════════════════════════════ */
+        
+        @media (max-width: 1200px) {
+            .kanban-board {
+                grid-template-columns: repeat(2, minmax(300px, 1fr));
+            }
+            
+            .directory-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+            
+            .header-stats {
+                order: 3;
+                width: 100%;
+                justify-content: space-around;
+            }
+            
+            .kanban-board {
+                grid-template-columns: 1fr;
+            }
+            
+            .directory-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- ═══════════════════════════════════════════════════════════════════
+         HEADER
+         ═══════════════════════════════════════════════════════════════════ -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">
+                📞 <span>Call Center</span>
+            </div>
+            <select class="company-select" id="companySelect">
+                <option value="">Loading companies...</option>
+            </select>
+        </div>
+        
+        <div class="header-stats">
+            <div class="stat-item">
+                <div class="stat-value urgent" id="statNeedsAction">0</div>
+                <div class="stat-label">Needs Action</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="statToday">0</div>
+                <div class="stat-label">Today's Jobs</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="statCallsToday">0</div>
+                <div class="stat-label">Calls Today</div>
+            </div>
+            <div class="stat-item">
+                <div class="live-indicator">
+                    <span class="live-dot"></span>
+                    <span>LIVE</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="header-actions">
+            <button class="btn" onclick="refreshData()">
+                🔄 Refresh
+            </button>
+            <button class="btn btn-primary" onclick="showNewCallModal()">
+                ➕ New Call
+            </button>
+        </div>
+    </header>
+    
+    <!-- ═══════════════════════════════════════════════════════════════════
+         NAV TABS
+         ═══════════════════════════════════════════════════════════════════ -->
+    <nav class="nav-tabs">
+        <button class="nav-tab active" data-tab="dashboard" onclick="switchTab('dashboard')">
+            📊 Dashboard
+            <span class="badge" id="badgeNeedsAction">0</span>
+        </button>
+        <button class="nav-tab" data-tab="customers" onclick="switchTab('customers')">
+            👥 Customers
+        </button>
+        <button class="nav-tab" data-tab="vendors" onclick="switchTab('vendors')">
+            🏪 Vendors
+        </button>
+        <button class="nav-tab" data-tab="history" onclick="switchTab('history')">
+            📜 Call History
+        </button>
+    </nav>
+    
+    <!-- ═══════════════════════════════════════════════════════════════════
+         KANBAN BOARD (Dashboard Tab)
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="kanban-container" id="tabDashboard">
+        <div class="kanban-board">
+            <!-- Column 1: Needs Action -->
+            <div class="kanban-column">
+                <div class="column-header">
+                    <div class="column-title">
+                        <div class="column-icon red">🔴</div>
+                        <span class="column-name">Needs Action</span>
+                    </div>
+                    <span class="column-count" id="countNeedsAction">0</span>
+                </div>
+                <div class="column-cards" id="colNeedsAction">
+                    <div class="empty-column">
+                        <div class="icon">✨</div>
+                        <div class="text">All caught up!</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Column 2: Today's Jobs -->
+            <div class="kanban-column">
+                <div class="column-header">
+                    <div class="column-title">
+                        <div class="column-icon blue">📅</div>
+                        <span class="column-name">Today's Jobs</span>
+                    </div>
+                    <span class="column-count" id="countToday">0</span>
+                </div>
+                <div class="column-cards" id="colToday">
+                    <div class="empty-column">
+                        <div class="icon">📅</div>
+                        <div class="text">No jobs scheduled today</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Column 3: Recent Calls -->
+            <div class="kanban-column">
+                <div class="column-header">
+                    <div class="column-title">
+                        <div class="column-icon green">📞</div>
+                        <span class="column-name">Recent Calls</span>
+                    </div>
+                    <span class="column-count" id="countRecent">0</span>
+                </div>
+                <div class="column-cards" id="colRecent">
+                    <div class="empty-column">
+                        <div class="icon">📞</div>
+                        <div class="text">No recent calls</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Column 4: Vendor Notes -->
+            <div class="kanban-column">
+                <div class="column-header">
+                    <div class="column-title">
+                        <div class="column-icon yellow">📦</div>
+                        <span class="column-name">Vendor Notes</span>
+                    </div>
+                    <span class="column-count" id="countVendor">0</span>
+                </div>
+                <div class="column-cards" id="colVendor">
+                    <div class="empty-column">
+                        <div class="icon">📦</div>
+                        <div class="text">No vendor messages</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ═══════════════════════════════════════════════════════════════════
+         DIRECTORIES (Customers/Vendors Tabs)
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="directories-panel" id="tabCustomers">
+        <div class="directory-grid">
+            <div class="directory-section">
+                <div class="directory-header">
+                    <div class="directory-title">
+                        <span class="icon">🏠</span>
+                        Residential Customers
+                    </div>
+                    <span class="directory-badge" id="countResidential">0</span>
+                </div>
+                <div class="directory-list" id="listResidential">
+                    <div class="empty-column">
+                        <div class="text">No residential customers yet</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="directory-section">
+                <div class="directory-header">
+                    <div class="directory-title">
+                        <span class="icon">🏢</span>
+                        Commercial Customers
+                    </div>
+                    <span class="directory-badge" id="countCommercial">0</span>
+                </div>
+                <div class="directory-list" id="listCommercial">
+                    <div class="empty-column">
+                        <div class="text">No commercial customers yet</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="directory-section">
+                <div class="directory-header">
+                    <div class="directory-title">
+                        <span class="icon">⭐</span>
+                        Recent / VIP
+                    </div>
+                    <span class="directory-badge" id="countVIP">0</span>
+                </div>
+                <div class="directory-list" id="listVIP">
+                    <div class="empty-column">
+                        <div class="text">No VIP customers</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="directories-panel" id="tabVendors">
+        <div class="directory-grid">
+            <div class="directory-section">
+                <div class="directory-header">
+                    <div class="directory-title">
+                        <span class="icon">🔧</span>
+                        Supply Houses
+                    </div>
+                    <span class="directory-badge" id="countSupply">0</span>
+                </div>
+                <div class="directory-list" id="listSupply">
+                    <div class="empty-column">
+                        <div class="text">No supply houses</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="directory-section">
+                <div class="directory-header">
+                    <div class="directory-title">
+                        <span class="icon">🚚</span>
+                        Delivery Services
+                    </div>
+                    <span class="directory-badge" id="countDelivery">0</span>
+                </div>
+                <div class="directory-list" id="listDelivery">
+                    <div class="empty-column">
+                        <div class="text">No delivery services</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="directory-section">
+                <div class="directory-header">
+                    <div class="directory-title">
+                        <span class="icon">🤝</span>
+                        Other Partners
+                    </div>
+                    <span class="directory-badge" id="countPartners">0</span>
+                </div>
+                <div class="directory-list" id="listPartners">
+                    <div class="empty-column">
+                        <div class="text">No other partners</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="directories-panel" id="tabHistory">
+        <p style="color: var(--text-secondary); text-align: center; padding: 40px;">
+            📜 Full call history coming soon...
+        </p>
+    </div>
+    
+    <!-- ═══════════════════════════════════════════════════════════════════
+         CARD DETAIL MODAL
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="cardModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">Call Details</h3>
+                <button class="modal-close" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Dynamic content -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal()">Close</button>
+                <button class="btn btn-primary" onclick="completeCard()">✓ Mark Complete</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ═══════════════════════════════════════════════════════════════════
+         JAVASCRIPT
+         ═══════════════════════════════════════════════════════════════════ -->
+    <script>
+        // State
+        let companyId = localStorage.getItem('selectedCompanyId') || '';
+        let dashboardData = { needsAction: [], today: [], recent: [], vendor: [] };
+        let refreshInterval = null;
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // INITIALIZATION
+        // ═══════════════════════════════════════════════════════════════════
+        
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadCompanies();
+            if (companyId) {
+                document.getElementById('companySelect').value = companyId;
+                await loadDashboard();
+            }
+            
+            // Auto-refresh every 30 seconds
+            refreshInterval = setInterval(refreshData, 30000);
+        });
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // COMPANY LOADING
+        // ═══════════════════════════════════════════════════════════════════
+        
+        async function loadCompanies() {
+            try {
+                const res = await fetch('/api/v2-companies', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+                });
+                const data = await res.json();
+                
+                const select = document.getElementById('companySelect');
+                select.innerHTML = '<option value="">Select company...</option>';
+                
+                (data.companies || []).forEach(company => {
+                    const option = document.createElement('option');
+                    option.value = company._id;
+                    option.textContent = company.companyName || company.name;
+                    select.appendChild(option);
+                });
+                
+                select.addEventListener('change', async (e) => {
+                    companyId = e.target.value;
+                    localStorage.setItem('selectedCompanyId', companyId);
+                    if (companyId) {
+                        await loadDashboard();
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Failed to load companies:', error);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // DASHBOARD LOADING
+        // ═══════════════════════════════════════════════════════════════════
+        
+        async function loadDashboard() {
+            if (!companyId) return;
+            
+            try {
+                // Load calls with card data
+                const res = await fetch(`/api/call-center/${companyId}/dashboard`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+                });
+                
+                if (!res.ok) {
+                    // Fallback to legacy endpoint
+                    await loadLegacyDashboard();
+                    return;
+                }
+                
+                dashboardData = await res.json();
+                renderDashboard();
+                
+            } catch (error) {
+                console.error('Failed to load dashboard:', error);
+                // Fallback
+                await loadLegacyDashboard();
+            }
+        }
+        
+        async function loadLegacyDashboard() {
+            // Fallback to loading from regular call summaries
+            try {
+                const res = await fetch(`/api/call-center/${companyId}/calls?limit=50`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+                });
+                
+                const data = await res.json();
+                const calls = data.calls || [];
+                
+                // Categorize calls
+                dashboardData = {
+                    needsAction: calls.filter(c => 
+                        c.cardData?.status === 'needs_action' || 
+                        (!c.cardData && c.outcome !== 'completed' && c.outcome !== 'booked')
+                    ),
+                    today: calls.filter(c => 
+                        c.cardData?.status === 'scheduled' || 
+                        c.outcome === 'booked'
+                    ),
+                    recent: calls.filter(c => 
+                        c.callerType === 'customer' || !c.callerType
+                    ).slice(0, 10),
+                    vendor: calls.filter(c => 
+                        c.callerType === 'vendor'
+                    )
+                };
+                
+                renderDashboard();
+                
+            } catch (error) {
+                console.error('Failed to load legacy dashboard:', error);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // RENDERING
+        // ═══════════════════════════════════════════════════════════════════
+        
+        function renderDashboard() {
+            // Update stats
+            const needsActionCount = dashboardData.needsAction?.length || 0;
+            const todayCount = dashboardData.today?.length || 0;
+            const recentCount = dashboardData.recent?.length || 0;
+            const vendorCount = dashboardData.vendor?.length || 0;
+            
+            document.getElementById('statNeedsAction').textContent = needsActionCount;
+            document.getElementById('statToday').textContent = todayCount;
+            document.getElementById('statCallsToday').textContent = recentCount;
+            document.getElementById('badgeNeedsAction').textContent = needsActionCount;
+            
+            document.getElementById('countNeedsAction').textContent = needsActionCount;
+            document.getElementById('countToday').textContent = todayCount;
+            document.getElementById('countRecent').textContent = recentCount;
+            document.getElementById('countVendor').textContent = vendorCount;
+            
+            // Render columns
+            renderColumn('colNeedsAction', dashboardData.needsAction, 'No urgent items');
+            renderColumn('colToday', dashboardData.today, 'No jobs scheduled');
+            renderColumn('colRecent', dashboardData.recent, 'No recent calls');
+            renderColumn('colVendor', dashboardData.vendor, 'No vendor messages');
+        }
+        
+        function renderColumn(containerId, items, emptyText) {
+            const container = document.getElementById(containerId);
+            
+            if (!items || items.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-column">
+                        <div class="icon">✨</div>
+                        <div class="text">${emptyText}</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = items.map(item => renderCard(item)).join('');
+        }
+        
+        function renderCard(call) {
+            const cardData = call.cardData || {};
+            const color = cardData.color || getColorFromType(call);
+            const headline = cardData.headline || call.callerName || formatPhone(call.from);
+            const brief = cardData.brief || call.summary || '';
+            const tags = cardData.tags || [];
+            const time = formatTime(call.createdAt);
+            const typeIcon = getTypeIcon(call.callerType, call.callerSubType);
+            const typeLabel = getTypeLabel(call.callerType, call.callerSubType);
+            
+            return `
+                <div class="card ${color}" onclick="openCard('${call._id || call.callId}')">
+                    <div class="card-header">
+                        <div class="card-type">
+                            <span class="icon">${typeIcon}</span>
+                            ${typeLabel}
+                        </div>
+                        <span class="card-time">${time}</span>
+                    </div>
+                    <div class="card-headline">
+                        ${cardData.pinned ? '<span class="pin">📌</span>' : ''}
+                        ${headline}
+                    </div>
+                    ${brief ? `<div class="card-brief">${brief}</div>` : ''}
+                    ${cardData.reference ? `<div class="card-reference">${cardData.reference}</div>` : ''}
+                    ${tags.length > 0 ? `
+                        <div class="card-tags">
+                            ${tags.map(tag => `<span class="tag ${tag}">${tag}</span>`).join('')}
+                        </div>
+                    ` : ''}
+                    <div class="card-footer">
+                        <div class="card-actions">
+                            <button class="card-action call" onclick="event.stopPropagation(); callBack('${call.from}')" title="Call back">
+                                📞
+                            </button>
+                            <button class="card-action" onclick="event.stopPropagation(); assignCard('${call._id}')" title="Assign">
+                                👤
+                            </button>
+                            <button class="card-action" onclick="event.stopPropagation(); pinCard('${call._id}')" title="Pin">
+                                📌
+                            </button>
+                        </div>
+                        ${cardData.assignedToName ? `
+                            <div class="card-assigned">
+                                <span class="avatar">${cardData.assignedToName.charAt(0)}</span>
+                                ${cardData.assignedToName}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // HELPERS
+        // ═══════════════════════════════════════════════════════════════════
+        
+        function getColorFromType(call) {
+            if (call.callerType === 'vendor') {
+                return call.callerSubType === 'delivery' ? 'orange' : 'yellow';
+            }
+            if (call.callerSubType === 'commercial') return 'blue';
+            if (call.cardData?.priority === 'urgent') return 'red';
+            return 'green';
+        }
+        
+        function getTypeIcon(type, subType) {
+            if (type === 'vendor') {
+                if (subType === 'delivery') return '🚚';
+                if (subType === 'supply_house') return '🔧';
+                return '🏪';
+            }
+            if (subType === 'commercial') return '🏢';
+            return '🏠';
+        }
+        
+        function getTypeLabel(type, subType) {
+            if (type === 'vendor') {
+                if (subType === 'delivery') return 'Delivery';
+                if (subType === 'supply_house') return 'Supply';
+                return 'Vendor';
+            }
+            if (subType === 'commercial') return 'Commercial';
+            return 'Residential';
+        }
+        
+        function formatPhone(phone) {
+            if (!phone) return 'Unknown';
+            const digits = phone.replace(/\D/g, '');
+            if (digits.length === 10) {
+                return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+            }
+            if (digits.length === 11) {
+                return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+            }
+            return phone;
+        }
+        
+        function formatTime(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diff = now - date;
+            
+            if (diff < 60000) return 'Just now';
+            if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+            if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+            
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // ACTIONS
+        // ═══════════════════════════════════════════════════════════════════
+        
+        function switchTab(tabName) {
+            // Update nav tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.tab === tabName);
+            });
+            
+            // Show/hide panels
+            document.getElementById('tabDashboard').style.display = tabName === 'dashboard' ? 'block' : 'none';
+            document.getElementById('tabCustomers').classList.toggle('active', tabName === 'customers');
+            document.getElementById('tabVendors').classList.toggle('active', tabName === 'vendors');
+            document.getElementById('tabHistory').classList.toggle('active', tabName === 'history');
+            
+            // Load data for directories if needed
+            if (tabName === 'customers') loadCustomers();
+            if (tabName === 'vendors') loadVendors();
+        }
+        
+        async function refreshData() {
+            await loadDashboard();
+        }
+        
+        function openCard(callId) {
+            // Show modal with call details
+            const modal = document.getElementById('cardModal');
+            const body = document.getElementById('modalBody');
+            
+            body.innerHTML = `<p>Loading call ${callId}...</p>`;
+            modal.classList.add('active');
+            
+            // Load full call details
+            loadCallDetails(callId);
+        }
+        
+        async function loadCallDetails(callId) {
+            try {
+                const res = await fetch(`/api/call-center/${companyId}/call/${callId}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+                });
+                
+                const call = await res.json();
+                
+                document.getElementById('modalTitle').textContent = call.cardData?.headline || 'Call Details';
+                document.getElementById('modalBody').innerHTML = `
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <div>
+                            <strong>From:</strong> ${formatPhone(call.from)}
+                        </div>
+                        <div>
+                            <strong>Date:</strong> ${new Date(call.createdAt).toLocaleString()}
+                        </div>
+                        <div>
+                            <strong>Duration:</strong> ${call.duration || 0} seconds
+                        </div>
+                        <div>
+                            <strong>Summary:</strong><br>
+                            ${call.summary || call.cardData?.brief || 'No summary available'}
+                        </div>
+                        ${call.cardData?.reference ? `
+                            <div>
+                                <strong>Reference:</strong> ${call.cardData.reference}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+                
+            } catch (error) {
+                document.getElementById('modalBody').innerHTML = `
+                    <p style="color: var(--accent-red);">Failed to load call details</p>
+                `;
+            }
+        }
+        
+        function closeModal() {
+            document.getElementById('cardModal').classList.remove('active');
+        }
+        
+        function callBack(phone) {
+            if (phone) {
+                window.open(`tel:${phone}`, '_self');
+            }
+        }
+        
+        function assignCard(callId) {
+            alert('Assignment feature coming soon!');
+        }
+        
+        function pinCard(callId) {
+            alert('Pin feature coming soon!');
+        }
+        
+        function completeCard() {
+            alert('Complete feature coming soon!');
+            closeModal();
+        }
+        
+        function showNewCallModal() {
+            alert('New call logging coming soon!');
+        }
+        
+        async function loadCustomers() {
+            // Load customer directories
+            try {
+                const res = await fetch(`/api/call-center/${companyId}/customers`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+                });
+                const data = await res.json();
+                
+                // Render customer lists...
+                console.log('Customers loaded:', data);
+                
+            } catch (error) {
+                console.error('Failed to load customers:', error);
+            }
+        }
+        
+        async function loadVendors() {
+            // Load vendor directories
+            try {
+                const res = await fetch(`/api/call-center/${companyId}/vendors`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+                });
+                const data = await res.json();
+                
+                // Render vendor lists...
+                console.log('Vendors loaded:', data);
+                
+            } catch (error) {
+                console.error('Failed to load vendors:', error);
+            }
+        }
+    </script>
+</body>
+</html>
