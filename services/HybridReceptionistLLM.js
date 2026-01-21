@@ -30,7 +30,15 @@ const { callLLM0 } = require('./llmRegistry');
 const TriageContextProvider = require('./TriageContextProvider');
 const STTProfile = require('../models/STTProfile');
 const BookingScriptEngine = require('./BookingScriptEngine');
-const { resolveBookingPrompt } = require('./PromptResolver');
+// PromptResolver REMOVED Jan 2026 - nuked (static packs = maintenance overhead)
+// Simple inline resolver - reads directly from bookingPromptsMap
+const getBookingPrompt = (company, key) => {
+    const map = company?.aiAgentSettings?.frontDeskBehavior?.bookingPromptsMap;
+    if (!map) return '';
+    // Support both Map and Object
+    if (typeof map.get === 'function') return map.get(key) || '';
+    return map[key] || '';
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 🎯 VERSION BANNER - This log PROVES the new code is deployed
@@ -631,11 +639,11 @@ class HybridReceptionistLLM {
                     prohibitPhrases: 'booking:universal:interruption:prohibit_phrases'
                 };
                 const promptTexts = {
-                    systemHeader: resolveBookingPrompt(company, promptKeys.systemHeader, { tradeKey: 'universal' }) || '',
-                    ackWithName: resolveBookingPrompt(company, promptKeys.ackWithName, { tradeKey: 'universal' }) || '',
-                    ackShort: resolveBookingPrompt(company, promptKeys.ackShort, { tradeKey: 'universal' }) || '',
-                    genericAck: resolveBookingPrompt(company, promptKeys.genericAck, { tradeKey: 'universal' }) || '',
-                    prohibitPhrases: resolveBookingPrompt(company, promptKeys.prohibitPhrases, { tradeKey: 'universal' }) || ''
+                    systemHeader: getBookingPrompt(company, promptKeys.systemHeader) || '',
+                    ackWithName: getBookingPrompt(company, promptKeys.ackWithName) || '',
+                    ackShort: getBookingPrompt(company, promptKeys.ackShort) || '',
+                    genericAck: getBookingPrompt(company, promptKeys.genericAck) || '',
+                    prohibitPhrases: getBookingPrompt(company, promptKeys.prohibitPhrases) || ''
                 };
 
                 const prohibitPhrases = parsePromptList(promptTexts.prohibitPhrases);
@@ -881,10 +889,10 @@ class HybridReceptionistLLM {
                     prohibitPhrases: 'booking:universal:interruption:prohibit_phrases'
                 };
                 const promptTexts = {
-                    ackWithName: resolveBookingPrompt(company, promptKeys.ackWithName, { tradeKey: 'universal' }) || '',
-                    ackShort: resolveBookingPrompt(company, promptKeys.ackShort, { tradeKey: 'universal' }) || '',
-                    genericAck: resolveBookingPrompt(company, promptKeys.genericAck, { tradeKey: 'universal' }) || '',
-                    prohibitPhrases: resolveBookingPrompt(company, promptKeys.prohibitPhrases, { tradeKey: 'universal' }) || ''
+                    ackWithName: getBookingPrompt(company, promptKeys.ackWithName) || '',
+                    ackShort: getBookingPrompt(company, promptKeys.ackShort) || '',
+                    genericAck: getBookingPrompt(company, promptKeys.genericAck) || '',
+                    prohibitPhrases: getBookingPrompt(company, promptKeys.prohibitPhrases) || ''
                 };
                 const prohibitPhrases = parsePromptList(promptTexts.prohibitPhrases);
 

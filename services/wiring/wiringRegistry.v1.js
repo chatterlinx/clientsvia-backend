@@ -109,7 +109,7 @@ const wiringRegistryV1 = {
         "frontDesk.discoveryConsent",
         "frontDesk.vocabulary",
         "frontDesk.bookingPrompts",
-        "frontDesk.promptPacks",
+        // "frontDesk.promptPacks" REMOVED Jan 2026
         "frontDesk.promptGuards",
         "frontDesk.emotions",
         "frontDesk.frustration",
@@ -230,20 +230,7 @@ const wiringRegistryV1 = {
       }
     },
 
-    // SECTION: Prompt Packs (Hybrid defaults)
-    {
-      id: "frontDesk.promptPacks",
-      type: "SECTION",
-      label: "Prompt Packs",
-      parentId: "tab.frontDesk",
-      description: "Trade-scoped prompt packs (explicit selection only)",
-      expectedDbPaths: [
-        "company.aiAgentSettings.frontDeskBehavior.promptPacks"
-      ],
-      expectedConsumers: ["FrontlineScriptBuilder", "ConversationEngine"],
-      expectedTraceKeys: [],
-      requiredFields: []
-    },
+    // SECTION: Prompt Packs REMOVED Jan 2026 - nuked (static packs = maintenance overhead)
 
     // SECTION: Prompt Guards
     {

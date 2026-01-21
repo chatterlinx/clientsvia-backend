@@ -65,7 +65,7 @@ const { detectBookingClarification } = require('../utils/bookingClarification');
 const { detectConfirmationRequest } = require('../utils/confirmationRequest');
 const { findFirstMatchingRule, recordRuleFired } = require('../utils/slotMidCallRules');
 const { classifyServiceUrgency } = require('../utils/serviceUrgency');
-const { resolveBookingPrompt } = require('./PromptResolver');
+// PromptResolver REMOVED Jan 2026 - nuked (static packs = maintenance overhead)
 const BlackBoxLogger = require('./BlackBoxLogger');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2372,8 +2372,8 @@ async function processTurn({
             killSwitches = null,
             // V68: Add spelling variant debug for troubleshooting
             spellingVariantDebug = null,
-            promptGuards = null,
-            promptPacks = null
+            promptGuards = null
+            // promptPacks REMOVED Jan 2026
         } = truth;
 
         // Always return required shape, with nulls if missing.
@@ -2444,8 +2444,8 @@ async function processTurn({
             
             // V68: Spelling variant debug info for troubleshooting
             spellingVariantDebug: spellingVariantDebug || null,
-            promptGuards: promptGuards || null,
-            promptPacks: promptPacks || null
+            promptGuards: promptGuards || null
+            // promptPacks REMOVED Jan 2026
         };
     }
 
@@ -10416,43 +10416,7 @@ async function processTurn({
                         : 'unknown';
 
             const promptGuardState = session.memory?.promptGuards || {};
-            const promptPacksConfig = company.aiAgentSettings?.frontDeskBehavior?.promptPacks || {};
-            const promptPacksSelected = promptPacksConfig.selectedByTrade || {};
-            const promptPacksHistory = Array.isArray(promptPacksConfig.history) ? promptPacksConfig.history : [];
-            const lastUpgrade = promptPacksHistory[promptPacksHistory.length - 1] || null;
-            const packTradeKey = normalizeTradeKey(company.trade || company.tradeType || 'universal');
-            const bookingPromptsMap = company.aiAgentSettings?.frontDeskBehavior?.bookingPromptsMap || {};
-            const bookingPromptEntries = typeof bookingPromptsMap.get === 'function'
-                ? Array.from(bookingPromptsMap.entries())
-                : Object.entries(bookingPromptsMap || {});
-            const tradePrefix = `booking.${packTradeKey}.`;
-            const overridesCount = bookingPromptEntries.filter(([key, value]) => {
-                if (!key || typeof key !== 'string') return false;
-                if (!key.startsWith(tradePrefix)) return false;
-                return typeof value === 'string' && value.trim().length > 0;
-            }).length;
-            const missingCount = Array.isArray(promptGuardState.missingPrompts)
-                ? promptGuardState.missingPrompts.length
-                : 0;
-            const promptPacksSnapshot = {
-                activeTradeKeys: Object.keys(promptPacksSelected || {}),
-                selectedByTrade: promptPacksSelected,
-                migratedKeysCount: promptPacksConfig.migration?.migratedKeysCount || 0,
-                migrationStatus: promptPacksConfig.migration?.status || 'not_started',
-                legacyKeysRemaining: promptPacksConfig.migration?.legacyKeysRemaining ?? null,
-                tradeKey: packTradeKey || null,
-                overridesCount,
-                missingCount,
-                fallbackCount: missingCount,
-                lastUpgrade: lastUpgrade
-                    ? {
-                        tradeKey: lastUpgrade.tradeKey || null,
-                        from: lastUpgrade.fromPack || null,
-                        to: lastUpgrade.toPack || null,
-                        changedAt: lastUpgrade.changedAt || null
-                    }
-                    : null
-            };
+            // promptPacks snapshot REMOVED Jan 2026 - nuked (static packs = maintenance overhead)
             response.debug = {
                 engineVersion: ENGINE_VERSION,
                 channel,
@@ -10547,8 +10511,8 @@ async function processTurn({
                             ? promptGuardState.missingPrompts.map(p => p?.key).filter(Boolean)
                             : [],
                         lastMissingPromptKey: promptGuardState.lastMissingPromptKey || null
-                    },
-                    promptPacks: promptPacksSnapshot
+                    }
+                    // promptPacks REMOVED Jan 2026
                 },
                 // ════════════════════════════════════════════════════════════════
                 // 🧠 V41: DYNAMIC FLOW TRACE - What the flow engine decided
@@ -10658,8 +10622,8 @@ async function processTurn({
                 killSwitches,
                 // V68: Include spelling variant debug data
                 spellingVariantDebug: spellingVariantDebugData,
-                promptGuards: promptGuardsSnapshot,
-                promptPacks: promptPacksSnapshot
+                promptGuards: promptGuardsSnapshot
+                // promptPacks REMOVED Jan 2026
             });
         }
         

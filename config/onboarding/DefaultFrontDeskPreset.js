@@ -15,7 +15,7 @@
  */
 
 const logger = require('../../utils/logger');
-const { getPromptPackRegistry } = require('../promptPacks');
+// promptPacks REMOVED Jan 2026 - nuked
 
 // ═══════════════════════════════════════════════════════════════════════════
 // UNIVERSAL BOOKING SLOTS PRESET
@@ -356,25 +356,7 @@ const DEFAULT_PROMPT_GUARDS = {
     missingPromptFallbackKey: 'booking:universal:guardrails:missing_prompt_fallback'
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// DEFAULT PROMPT PACK SELECTION (explicit; no magic defaults)
-// ═══════════════════════════════════════════════════════════════════════════
-const DEFAULT_PROMPT_PACKS = {
-    enabled: true,
-    selectedByTrade: {
-        universal: 'universal_v1'
-    },
-    migration: {
-        status: 'not_started',
-        appliedAt: null,
-        appliedBy: null,
-        notes: null,
-        migratedKeysCount: 0,
-        conflictsCount: 0,
-        legacyKeysRemaining: 0
-    },
-    history: []
-};
+// DEFAULT_PROMPT_PACKS REMOVED Jan 2026 - nuked (static packs = maintenance overhead)
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DEFAULT DISCOVERY & CONSENT
@@ -471,12 +453,7 @@ const TRADE_PRESETS = {
 function getPresetForTrade(tradeKey = 'universal') {
     const normalizedKey = (tradeKey || 'universal').toLowerCase().trim();
     const tradePreset = TRADE_PRESETS[normalizedKey] || TRADE_PRESETS.universal;
-    const promptPackRegistry = getPromptPackRegistry();
-    const promptPackSelections = { ...DEFAULT_PROMPT_PACKS.selectedByTrade };
-    const tradePackOptions = promptPackRegistry.byTrade?.[normalizedKey] || [];
-    if (tradePackOptions.length > 0) {
-        promptPackSelections[normalizedKey] = tradePackOptions[0];
-    }
+    // promptPacks logic REMOVED Jan 2026
     
     logger.info('[ONBOARDING PRESET] Loading preset for trade:', {
         requestedTrade: tradeKey,
@@ -524,11 +501,7 @@ function getPresetForTrade(tradeKey = 'universal') {
         // Prompt guardrails
         promptGuards: DEFAULT_PROMPT_GUARDS,
 
-        // Prompt packs (explicit defaults)
-        promptPacks: {
-            ...DEFAULT_PROMPT_PACKS,
-            selectedByTrade: promptPackSelections
-        },
+        // promptPacks REMOVED Jan 2026
 
         // V77: Off-rails recovery protocol (resume booking after interrupts)
         offRailsRecovery: DEFAULT_OFF_RAILS_RECOVERY,
@@ -566,7 +539,7 @@ module.exports = {
     DEFAULT_SERVICE_FLOW,
     DEFAULT_BOOKING_PROMPTS_MAP,
     DEFAULT_PROMPT_GUARDS,
-    DEFAULT_PROMPT_PACKS,
+    // DEFAULT_PROMPT_PACKS REMOVED Jan 2026
     DEFAULT_OFF_RAILS_RECOVERY,
     DEFAULT_BOOKING_INTERRUPTION,
     TRADE_PRESETS

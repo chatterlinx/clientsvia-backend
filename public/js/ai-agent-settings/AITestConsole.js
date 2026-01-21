@@ -3122,7 +3122,8 @@ ${separator}`;
         const templateRefs = snap?.templateReferences || lastDebug?.templateReferences || lastDebugEntry?.templateReferences || [];
         const templateRefsCount = Array.isArray(templateRefs) ? templateRefs.length : 0;
         const templateWiringStatus = templateRefsCount > 0 ? `✅ (${templateRefsCount})` : '❌ (none)';
-        const packTrace = snap?.promptPacks || lastDebug?.v22BlackBox?.promptPacks || null;
+        // promptPacks REMOVED Jan 2026
+        const packTrace = null;
         const guardTrace = snap?.promptGuards || lastDebug?.v22BlackBox?.promptGuards || null;
         const confirmBackTrace = Array.isArray(snap?.booking?.confirmBackTrace) ? snap.booking.confirmBackTrace : [];
         const packTrade = packTrace?.tradeKey || 'unknown';

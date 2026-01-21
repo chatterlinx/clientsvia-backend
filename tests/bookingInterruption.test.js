@@ -27,11 +27,8 @@ function buildCompany(overrides = {}) {
           'booking.universal.interruption.prohibit_phrases':
             'I understand it can be confusing\nI know this is frustrating'
         },
-        forbiddenPhrases: [],
-        promptPacks: {
-          enabled: true,
-          selectedByTrade: { universal: 'universal_v1' }
-        }
+        forbiddenPhrases: []
+        // promptPacks REMOVED Jan 2026
       }
     }
   };

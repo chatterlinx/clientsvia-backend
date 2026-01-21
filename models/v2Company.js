@@ -2384,6 +2384,7 @@ const companySchema = new mongoose.Schema({
                 missingPromptFallbackKey: { type: String, trim: true, default: 'booking:universal:guardrails:missing_prompt_fallback' }
             },
 
+            // ⚠️ DEPRECATED Jan 2026 - promptPacks REMOVED (kept for backward compat)
             promptPacks: {
                 enabled: { type: Boolean, default: true },
                 selectedByTrade: {

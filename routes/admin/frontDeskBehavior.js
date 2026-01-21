@@ -22,8 +22,7 @@ const v2Company = require('../../models/v2Company');
 const { authenticateJWT } = require('../../middleware/auth');
 const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
 const { DEFAULT_FRONT_DESK_CONFIG } = require('../../config/frontDeskPrompt');
-const { getPromptPackRegistry } = require('../../config/promptPacks');
-const { getLegacyPromptKeyMap } = require('../../config/promptPacks/migrationMap.v1');
+// promptPacks REMOVED Jan 2026 - nuked (static packs = maintenance overhead)
 const ConfigAuditService = require('../../services/ConfigAuditService');
 const { computeEffectiveConfigVersion } = require('../../utils/effectiveConfigVersion');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
@@ -68,12 +67,7 @@ const UI_DEFAULTS = {
         // V83 FIX: Use colons instead of dots - Mongoose Maps don't allow dots in keys
         missingPromptFallbackKey: 'booking:universal:guardrails:missing_prompt_fallback'
     },
-    promptPacks: {
-        enabled: true,
-        selectedByTrade: {
-            universal: 'universal_v1'
-        }
-    },
+    // promptPacks REMOVED Jan 2026
     bookingInterruption: {
         enabled: true,
         oneSlotPerTurn: true,
@@ -449,7 +443,7 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
         res.json({
             success: true,
             meta: {
-                promptPackRegistry: getPromptPackRegistry()
+                // promptPackRegistry REMOVED Jan 2026
             },
             data: {
                 enabled: config.enabled,
@@ -476,7 +470,7 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 bookingPromptsMap: config.bookingPromptsMap,
                 serviceFlow: config.serviceFlow,
                 promptGuards: config.promptGuards,
-                promptPacks: config.promptPacks,
+                // promptPacks REMOVED Jan 2026
                 emotionResponses: config.emotionResponses,
                 frustrationTriggers: config.frustrationTriggers,
                 escalation: config.escalation,
@@ -612,9 +606,7 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             updateObj['aiAgentSettings.frontDeskBehavior.promptGuards'] = updates.promptGuards;
         }
 
-        if (updates.promptPacks) {
-            updateObj['aiAgentSettings.frontDeskBehavior.promptPacks'] = updates.promptPacks;
-        }
+        // promptPacks update REMOVED Jan 2026
         
         if (updates.emotionResponses) {
             Object.entries(updates.emotionResponses).forEach(([emotion, settings]) => {
