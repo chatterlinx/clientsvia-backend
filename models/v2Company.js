@@ -2156,42 +2156,13 @@ const companySchema = new mongoose.Schema({
             },
 
             // ═══════════════════════════════════════════════════════════════
-            // BOOKING CONTRACT V2 (Slot Library + Slot Groups)
-            // Feature-flagged. Does NOT affect runtime unless enabled.
-            // - slotLibrary defines WHAT can be collected (questions + validation)
-            // - slotGroups defines WHEN a subset becomes active (based on session.flags)
+            // ☢️ DEPRECATED: BOOKING CONTRACT V2 (Slot Library + Slot Groups)
+            // Nuked Jan 2026 - Beta feature never wired to runtime
+            // Kept for data compatibility only. DO NOT USE.
             // ═══════════════════════════════════════════════════════════════
             bookingContractV2Enabled: { type: Boolean, default: false },
-            slotLibrary: {
-                type: [{
-                    id: { type: String, required: true, trim: true },            // stable key (UI)
-                    label: { type: String, trim: true, default: '' },
-                    type: { type: String, trim: true, default: 'text' },          // name|phone|address|email|time|datetime|custom|text...
-                    question: { type: String, trim: true, default: '' },
-                    required: { type: Boolean, default: false },
-                    confirmBack: { type: Boolean, default: false },
-                    confirmPrompt: { type: String, trim: true, default: '' },
-                    validation: { type: String, trim: true, default: null },
-                    enumOptions: { type: [String], default: [] },
-                    order: { type: Number, default: 0 },
-                    // Per-type options (UI-owned). We store flexible keys to avoid schema churn.
-                    typeOptions: { type: mongoose.Schema.Types.Mixed, default: {} }
-                }],
-                default: []
-            },
-            slotGroups: {
-                type: [{
-                    id: { type: String, required: true, trim: true },            // stable key (UI)
-                    label: { type: String, trim: true, default: '' },
-                    enabled: { type: Boolean, default: true },
-                    order: { type: Number, default: 0 },                          // lower = higher priority
-                    isDefault: { type: Boolean, default: false },                 // base group (always-on)
-                    // Match conditions against session.flags (Dynamic Flow set_flag)
-                    when: { type: mongoose.Schema.Types.Mixed, default: {} },     // { accountType: "commercial" }
-                    slots: { type: [String], default: [] }                        // slotLibrary ids in desired order
-                }],
-                default: []
-            },
+            slotLibrary: { type: [mongoose.Schema.Types.Mixed], default: [] },
+            slotGroups: { type: [mongoose.Schema.Types.Mixed], default: [] },
             
             // ═══════════════════════════════════════════════════════════════
             // 🆕 COMMON FIRST NAMES - UI-Configurable Name Recognition

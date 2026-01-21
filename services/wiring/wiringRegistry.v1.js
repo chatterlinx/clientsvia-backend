@@ -201,7 +201,7 @@ const wiringRegistryV1 = {
       requiredFields: []
     },
 
-    // SECTION: Booking Prompts (V2)
+    // SECTION: Booking Prompts
     {
       id: "frontDesk.bookingPrompts",
       type: "SECTION",
@@ -214,20 +214,16 @@ const wiringRegistryV1 = {
       ],
       expectedCompiledPaths: [
         "runtimeSlots.source",
-        "runtimeSlots.slotCount",
-        "bookingContractV2.enabled"
+        "runtimeSlots.slotCount"
+        // ☢️ NUKED: bookingContractV2.enabled - Jan 2026
       ],
       expectedConsumers: ["BookingStateMachine", "ConversationEngine"],
       expectedTraceKeys: [
         "trace.booking.slotRequested",
         "CHECKPOINT 8"
       ],
-      requiredFields: ["id", "type", "question"],
-      criticalIssue: {
-        id: "BOOKING_NOT_COMPILED",
-        description: "Slots defined but bookingContractV2.enabled = false",
-        checkField: "bookingContractV2.enabled"
-      }
+      requiredFields: ["id", "type", "question"]
+      // ☢️ NUKED: criticalIssue for bookingContractV2 - Jan 2026
     },
 
     // SECTION: Prompt Packs REMOVED Jan 2026 - nuked (static packs = maintenance overhead)

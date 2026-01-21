@@ -157,7 +157,7 @@ async function loadAllRoutes() {
         routes.scenarioValidateRoutes = await loadRouteWithTimeout('./routes/company/scenarioValidate', 'scenarioValidateRoutes'); // 🔍 Scenario Validate (Red/Yellow/Green quality report)
         routes.platformSnapshotRoutes = await loadRouteWithTimeout('./routes/company/platformSnapshot', 'platformSnapshotRoutes'); // 📄 Platform Snapshot (Enterprise Introspection - Single Source of Truth)
         routes.rawCompanyDataRoutes = await loadRouteWithTimeout('./routes/company/rawCompanyData', 'rawCompanyDataRoutes'); // 🔍 Raw Company Data (DB Echo for Truth Report)
-        routes.bookingContractV2Routes = await loadRouteWithTimeout('./routes/company/bookingContractV2', 'bookingContractV2Routes'); // 🧾 Booking Contract V2 (Slot Library + Slot Groups)
+        // ☢️ NUKED: bookingContractV2Routes - Beta feature never wired to runtime (Jan 2026)
         routes.runtimeTruthRoutes = await loadRouteWithTimeout('./routes/company/runtimeTruth', 'runtimeTruthRoutes'); // 🎯 Runtime Truth (THE Single Source of All Runtime Behavior)
         routes.runtimePatchRoutes = await loadRouteWithTimeout('./routes/company/runtimePatch', 'runtimePatchRoutes'); // 📝 Runtime Patch (Safe JSON Patch Import with Allowlist)
         routes.kpiSummaryRoutes = await loadRouteWithTimeout('./routes/company/kpiSummary', 'kpiSummaryRoutes'); // 📊 KPI Summary (Booking completion, containment, durations)
@@ -524,7 +524,7 @@ function registerRoutes(routes) {
     app.use('/api/company/:companyId/control-plane', routes.controlPlaneEffectiveRoutes); // ⚡ Control Plane: /effective, /raw, /migrate, /save
     app.use('/api/company/:companyId/platform-snapshot', routes.platformSnapshotRoutes); // 📄 Platform Snapshot (Enterprise Introspection - Single Source of Truth)
     app.use('/api/company/:companyId/raw', routes.rawCompanyDataRoutes); // 🔍 Raw Company Data (DB Echo for Truth Report)
-    app.use('/api/company/:companyId/booking-contract-v2', routes.bookingContractV2Routes); // 🧾 Booking Contract V2 (Slot Library + Slot Groups)
+    // ☢️ NUKED: booking-contract-v2 endpoint - Beta feature never wired to runtime (Jan 2026)
     app.use('/api/company/:companyId/runtime-truth', routes.runtimeTruthRoutes); // 🎯 Runtime Truth (THE Single Source of All Runtime Behavior)
     app.use('/api/company/:companyId/runtime-patch', routes.runtimePatchRoutes); // 📝 Runtime Patch (Safe JSON Patch Import with Allowlist)
     app.use('/api/company/:companyId/kpi', routes.kpiSummaryRoutes); // 📊 KPI Summary (Booking completion, containment, durations)

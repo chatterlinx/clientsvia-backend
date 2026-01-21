@@ -34,7 +34,7 @@ const { unifyConfig } = require('../../utils/configUnifier');
 const { substitutePlaceholders } = require('../../utils/placeholderStandard');
 const { validateScenarioQuality, QUALITY_REQUIREMENTS } = require('../../utils/scenarioEnforcement');
 const logger = require('../../utils/logger');
-const BookingContractCompiler = require('../../services/BookingContractCompiler');
+// ☢️ NUKED: BookingContractCompiler - Booking Contract V2 removed Jan 2026
 const BookingScriptEngine = require('../../services/BookingScriptEngine');
 const { computeEffectiveConfigVersion } = require('../../utils/effectiveConfigVersion');
 
@@ -421,22 +421,8 @@ router.get('/', async (req, res) => {
         // ═══════════════════════════════════════════════════════════════════════
         // BUILD BOOKING CONFIG
         // ═══════════════════════════════════════════════════════════════════════
-        const bookingV2Enabled = frontDeskBehavior.bookingContractV2Enabled === true;
-        const bookingV2Library = Array.isArray(frontDeskBehavior.slotLibrary) ? frontDeskBehavior.slotLibrary : [];
-        const bookingV2Groups = Array.isArray(frontDeskBehavior.slotGroups) ? frontDeskBehavior.slotGroups : [];
-        const bookingV2PreviewFlags = {};
-        const bookingV2CompiledPreview = (bookingV2Enabled && bookingV2Library.length > 0 && bookingV2Groups.length > 0)
-            ? BookingContractCompiler.compileBookingSlots({ slotLibrary: bookingV2Library, slotGroups: bookingV2Groups, contextFlags: bookingV2PreviewFlags })
-            : null;
-
-        // Enterprise guardrail: default group should exist so preview {} never shows 0 "by design"
-        // A "default group" is either explicitly isDefault=true or a group with empty when:{} (matches all).
-        const bookingV2DefaultGroupExists = Array.isArray(bookingV2Groups) && bookingV2Groups.some(g => {
-            if (!g || g.enabled === false) return false;
-            const when = g.when;
-            const whenIsEmptyObject = when && typeof when === 'object' && !Array.isArray(when) && Object.keys(when).length === 0;
-            return g.isDefault === true || whenIsEmptyObject;
-        });
+        // ☢️ NUKED: Booking Contract V2 (slotLibrary, slotGroups, compiler) - Jan 2026
+        // Booking slots are wired directly via bookingSlots without V2 compilation layer
         
         const booking = {
             enabled: controlPlane.booking.enabled,
@@ -465,21 +451,7 @@ router.get('/', async (req, res) => {
                 consentYesWordsSample: v22Consent.consentYesWords.slice(0, 5)
             },
 
-            // Booking Contract V2 (feature-flagged; compiler preview uses empty flags)
-            bookingContractV2: {
-                enabled: bookingV2Enabled,
-                slotLibraryCount: bookingV2Library.length,
-                slotGroupsCount: bookingV2Groups.length,
-                compiledPreview: bookingV2CompiledPreview ? {
-                    hash: bookingV2CompiledPreview.hash,
-                    compilePreviewFlagsUsed: bookingV2CompiledPreview.contextFlags || bookingV2PreviewFlags,
-                    defaultGroupExists: bookingV2DefaultGroupExists,
-                    matchingGroupIds: bookingV2CompiledPreview.matchingGroupIds,
-                    activatedGroupId: (bookingV2CompiledPreview.matchingGroupIds && bookingV2CompiledPreview.matchingGroupIds[0]) || null,
-                    activeSlotIdsOrdered: bookingV2CompiledPreview.activeSlotIdsOrdered,
-                    missingSlotRefs: bookingV2CompiledPreview.missingSlotRefs
-                } : null
-            }
+            // ☢️ NUKED: bookingContractV2 section removed Jan 2026
         };
 
         // What runtime will actually use for booking slots (single entry point)
@@ -590,18 +562,7 @@ router.get('/', async (req, res) => {
                         : 0
                 },
 
-                // Contract V2 status (feature-flagged)
-                bookingContractV2: {
-                    enabled: frontDeskBehavior.bookingContractV2Enabled === true,
-                    slotLibraryCount: Array.isArray(frontDeskBehavior.slotLibrary) ? frontDeskBehavior.slotLibrary.length : 0,
-                    slotGroupsCount: Array.isArray(frontDeskBehavior.slotGroups) ? frontDeskBehavior.slotGroups.length : 0,
-                    compiledPreviewHash: bookingV2CompiledPreview?.hash || null,
-                    compiledPreviewActiveCount: bookingV2CompiledPreview?.activeSlotIdsOrdered?.length || 0,
-                    compiledPreviewMissingRefsCount: bookingV2CompiledPreview?.missingSlotRefs?.length || 0,
-                    compilePreviewFlagsUsed: bookingV2CompiledPreview?.contextFlags || bookingV2PreviewFlags,
-                    defaultGroupExists: bookingV2DefaultGroupExists,
-                    activatedGroupId: (bookingV2CompiledPreview?.matchingGroupIds && bookingV2CompiledPreview.matchingGroupIds[0]) || null
-                },
+                // ☢️ NUKED: bookingContractV2 section removed Jan 2026
 
                 // Vendor / Supplier handling (runtime fast-path exists)
                 vendorHandling: {
@@ -919,32 +880,7 @@ router.get('/', async (req, res) => {
             issues.push({ severity: 'WARNING', area: 'flows', message: 'No dynamic flows enabled - scenarios will reply but not coordinate', fix: 'Enable at least one flow in dynamicFlows' });
         }
 
-        // Booking Contract V2 health (feature-flagged)
-        if (booking.bookingContractV2?.enabled) {
-            const compiledPreview = booking.bookingContractV2.compiledPreview;
-            if (!compiledPreview) {
-                issues.push({
-                    severity: 'ERROR',
-                    area: 'bookingContractV2',
-                    message: 'Booking Contract V2 enabled but no slotLibrary/slotGroups configured',
-                    fix: 'Add slotLibrary + slotGroups (or disable bookingContractV2Enabled)'
-                });
-            } else if ((compiledPreview.activeSlotIdsOrdered || []).length === 0) {
-                issues.push({
-                    severity: 'ERROR',
-                    area: 'bookingContractV2',
-                    message: 'Booking Contract V2 enabled but compiled active slots is empty',
-                    fix: 'Ensure at least one enabled slotGroup matches flags and includes slot IDs present in slotLibrary'
-                });
-            } else if ((compiledPreview.missingSlotRefs || []).length > 0) {
-                issues.push({
-                    severity: 'ERROR',
-                    area: 'bookingContractV2',
-                    message: 'Booking Contract V2 compiled slots reference missing slotLibrary IDs',
-                    fix: `Fix slotGroups.slots to reference valid slotLibrary ids (missing: ${(compiledPreview.missingSlotRefs || []).slice(0, 5).join(', ')})`
-                });
-            }
-        }
+        // ☢️ NUKED: Booking Contract V2 health check removed Jan 2026
         
         const unknownScenarioItems = scenarios.filter(s => s.scenarioType === 'UNKNOWN');
         const unknownScenarios = unknownScenarioItems.length;

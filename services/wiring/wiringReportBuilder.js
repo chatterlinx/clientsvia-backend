@@ -194,17 +194,15 @@ function checkBookingContract(companyDoc) {
     const slotsWithQuestion = bookingSlots.filter(s => s.question || s.prompt);
     const missingQuestion = bookingSlots.filter(s => !s.question && !s.prompt);
     
-    // Check bookingContractV2 status (if it exists)
-    const contractV2 = frontDesk.bookingContractV2 || {};
-    const isCompiled = contractV2.enabled === true;
+    // ☢️ NUKED: bookingContractV2 check removed Jan 2026 - never wired to runtime
+    // Booking slots are wired directly without the V2 compilation layer
     
     const status = {
         definedSlotCount: bookingSlots.length,
         slotsWithQuestion: slotsWithQuestion.length,
         slotsMissingQuestion: missingQuestion.length,
         bookingEnabled,
-        contractV2Enabled: isCompiled,
-        runtimeConfigured: slotsWithQuestion.length > 0 && isCompiled
+        runtimeConfigured: slotsWithQuestion.length > 0
     };
     
     if (!bookingEnabled && bookingSlots.length === 0) {
@@ -213,16 +211,6 @@ function checkBookingContract(companyDoc) {
             status: 'DISABLED',
             health: 'GRAY',
             message: 'Booking not enabled'
-        };
-    }
-    
-    if (bookingSlots.length > 0 && !isCompiled) {
-        return {
-            ...status,
-            status: 'NOT_COMPILED',
-            health: 'YELLOW',
-            message: `${bookingSlots.length} slots defined but bookingContractV2 not compiled`,
-            fix: 'Run booking contract compilation'
         };
     }
     
@@ -236,11 +224,20 @@ function checkBookingContract(companyDoc) {
         };
     }
     
+    if (slotsWithQuestion.length === 0) {
+        return {
+            ...status,
+            status: 'PARTIAL',
+            health: 'YELLOW',
+            message: 'No booking slots with questions configured'
+        };
+    }
+    
     return {
         ...status,
         status: 'WIRED',
         health: 'GREEN',
-        message: `${bookingSlots.length} slots configured and compiled`
+        message: `${bookingSlots.length} slots configured`
     };
 }
 

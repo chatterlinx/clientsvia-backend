@@ -17,7 +17,7 @@
  */
 
 const logger = require('../utils/logger');
-const BookingContractCompiler = require('./BookingContractCompiler');
+// ☢️ NUKED: BookingContractCompiler - Booking Contract V2 removed Jan 2026
 
 // V59: Import centralized preset - NO duplicate hardcoded defaults
 const { DEFAULT_BOOKING_SLOTS } = require('../config/onboarding/DefaultFrontDeskPreset');
@@ -258,38 +258,7 @@ function getBookingSlotsFromCompany(company, options = {}) {
     
     const frontDesk = company?.aiAgentSettings?.frontDeskBehavior || {};
 
-    // Priority 0 (feature-flagged): Booking Contract V2 (slotLibrary + slotGroups)
-    // This compiles into the legacy bookingSlots format so the rest of runtime remains stable.
-    const contextFlags = options?.contextFlags && typeof options.contextFlags === 'object' ? options.contextFlags : {};
-    const v2Enabled = frontDesk.bookingContractV2Enabled === true;
-    const v2Library = frontDesk.slotLibrary;
-    const v2Groups = frontDesk.slotGroups;
-    const v2HasConfig = Array.isArray(v2Library) && v2Library.length > 0 && Array.isArray(v2Groups) && v2Groups.length > 0;
-
-    if (v2Enabled && v2HasConfig) {
-        const { compiled, legacySlots } = BookingContractCompiler.compileToLegacyBookingSlots({
-            slotLibrary: v2Library,
-            slotGroups: v2Groups,
-            contextFlags
-        });
-
-        logger.info('[BOOKING ENGINE] ✅ Using Booking Contract V2 (compiled to legacy slots)', {
-            companyId: company._id,
-            v2GroupCount: v2Groups.length,
-            v2LibraryCount: v2Library.length,
-            compiledHash: compiled.hash,
-            compiledActiveCount: compiled.activeSlotsOrdered.length,
-            legacySlotCount: legacySlots.length
-        });
-
-        const slots = normalizeBookingSlots(legacySlots);
-        const isConfigured = slots.length > 0;
-        return {
-            slots,
-            isConfigured,
-            source: isConfigured ? 'frontDeskBehavior.bookingContractV2 (compiled)' : 'NOT_CONFIGURED'
-        };
-    }
+    // ☢️ NUKED: Booking Contract V2 path removed Jan 2026 - was never wired to production
 
     // Priority 1: New standard path (UI saves here)
     let rawSlots = frontDesk.bookingSlots;

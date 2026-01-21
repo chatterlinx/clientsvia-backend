@@ -454,10 +454,7 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 personality: config.personality,
                 // 🚨 Dynamic booking slots (new system)
                 bookingSlots: config.bookingSlots || null,
-                // 🧾 Booking Contract V2 (feature-flagged; stored per-company)
-                bookingContractV2Enabled: saved.bookingContractV2Enabled === true,
-                slotLibrary: saved.slotLibrary || [],
-                slotGroups: saved.slotGroups || [],
+                // ☢️ NUKED: bookingContractV2Enabled, slotLibrary, slotGroups - Jan 2026
                 // 🏷️ Vendor / Supplier Handling (Call Center directory)
                 vendorHandling: config.vendorHandling || null,
                 // 📦 Unit of Work (UoW)
@@ -697,16 +694,7 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             }
         }
 
-        // 🧾 Booking Contract V2 (feature-flagged)
-        if (updates.bookingContractV2Enabled !== undefined) {
-            updateObj['aiAgentSettings.frontDeskBehavior.bookingContractV2Enabled'] = updates.bookingContractV2Enabled === true;
-        }
-        if (updates.slotLibrary !== undefined) {
-            updateObj['aiAgentSettings.frontDeskBehavior.slotLibrary'] = Array.isArray(updates.slotLibrary) ? updates.slotLibrary : [];
-        }
-        if (updates.slotGroups !== undefined) {
-            updateObj['aiAgentSettings.frontDeskBehavior.slotGroups'] = Array.isArray(updates.slotGroups) ? updates.slotGroups : [];
-        }
+        // ☢️ NUKED: bookingContractV2Enabled, slotLibrary, slotGroups save logic - Jan 2026
         
         // Save booking templates
         if (updates.bookingTemplates) {
