@@ -4263,11 +4263,6 @@
                 
                 // Store in localStorage for persistence
                 localStorage.setItem('currentCompanyId', companyId);
-        
-        // ========= AUTH TOKEN HELPER (must be defined early for calendar/SMS init) =========
-        function getAuthToken(){
-            return localStorage.getItem("adminToken") || localStorage.getItem("token") || "";
-        }
                 
                 // Start fetching company data immediately
                 
@@ -4319,6 +4314,13 @@
                 }
             }
         });
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // AUTH TOKEN HELPER (must be defined early for calendar/SMS init)
+        // ════════════════════════════════════════════════════════════════════════════════
+        function getAuthToken(){
+            return localStorage.getItem("adminToken") || localStorage.getItem("token") || "";
+        }
         
         // ════════════════════════════════════════════════════════════════════════════════
         // GOOGLE CALENDAR INTEGRATION - V88 (Jan 2026)
