@@ -4263,6 +4263,11 @@
                 
                 // Store in localStorage for persistence
                 localStorage.setItem('currentCompanyId', companyId);
+        
+        // ========= AUTH TOKEN HELPER (must be defined early for calendar/SMS init) =========
+        function getAuthToken(){
+            return localStorage.getItem("adminToken") || localStorage.getItem("token") || "";
+        }
                 
                 // Start fetching company data immediately
                 
@@ -4864,9 +4869,7 @@
             return qp || window.companyId || window.currentCompanyId || localStorage.getItem('currentCompanyId') || null;
         }
 
-        function getAuthToken(){
-            return localStorage.getItem("adminToken") || localStorage.getItem("token") || "";
-        }
+        // getAuthToken() defined earlier (line ~4266) for calendar/SMS init
 
         function setStatus(text, kind){
             const el = document.getElementById("cv-cp-status");
