@@ -87,7 +87,7 @@ async function sendViaEmailGateway(phone, message, carrier = 'verizon') {
         // SMS via email should be plain text, no HTML, and short subject
         const result = await emailClient.send({
             to: emailAddress,
-            subject: '', // Many gateways ignore subject or prepend it
+            subject: 'SMS', // Carriers may ignore or include subject
             body: message.substring(0, 160) // SMS character limit
         });
         
