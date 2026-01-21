@@ -19,6 +19,7 @@ const mongoose = require('mongoose');
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const BlackBoxRecording = require('../../models/BlackBoxRecording');
 const logger = require('../../utils/logger');
+const ScenarioSuggestionEngine = require('../../services/ScenarioSuggestionEngine');
 
 // ============================================================================
 // MIDDLEWARE
@@ -126,11 +127,13 @@ router.get('/call/:callId', async (req, res) => {
     
     // Generate engineering snapshot
     const snapshot = generateEngineeringSnapshot(recording);
+    const scenarioSuggestions = ScenarioSuggestionEngine.suggestFromEvents(recording.events || []);
     
     res.json({
       success: true,
       recording,
-      snapshot
+      snapshot,
+      scenarioSuggestions
     });
     
   } catch (error) {
@@ -614,6 +617,7 @@ Performance:
 - ttsTotalMs: ${recording.performance?.ttsTotalMs || 0}
 ${formatLatencyAnalysis(recording.performance?.latencyAnalysis)}
 ${formatResponseSourceAudit(recording.events || [])}
+${formatScenarioSuggestions(recording.events || [])}
 Key Timeline:
 `;
 
@@ -744,6 +748,60 @@ Key Timeline:
   }
   
   return snapshot;
+}
+
+// ============================================================================
+// HELPER: Scenario Suggestions (Per-Call, Deterministic)
+// ============================================================================
+
+function formatScenarioSuggestions(events) {
+  try {
+    const result = ScenarioSuggestionEngine.suggestFromEvents(events || [], { maxSuggestions: 6 });
+    if (!result?.available) {
+      return `
+Scenario Suggestions:
+- (Unavailable)
+`;
+    }
+
+    const suggestions = result.suggestions || [];
+    if (suggestions.length === 0) {
+      return `
+Scenario Suggestions:
+- None detected for this call.
+`;
+    }
+
+    const lines = suggestions.map((s, idx) => {
+      const examples = (s.examples || []).map(e => `"${e}"`).join(', ');
+      const triggers = (s.triggers || []).slice(0, 6).map(t => `"${t}"`).join(', ');
+      const negatives = (s.negativeTriggers || []).slice(0, 6).map(t => `"${t}"`).join(', ');
+      const evidence = s.evidence || {};
+
+      return `  ${idx + 1}. ${s.suggestedScenarioName}
+     - intent: ${s.intentLabel} (${s.intentKey})
+     - recommendedTier: ${s.recommendedTier}
+     - evidence: count=${evidence.count || 0}, tier3Count=${evidence.tier3Count || 0}, avgTier3LatencyMs=${evidence.avgTier3LatencyMs || 0}
+     - exampleUtterances: ${examples || '(none)'}
+     - triggerIdeas: ${triggers || '(none)'}
+     - negativeTriggerIdeas: ${negatives || '(none)'}
+     - responseGoal: ${s.responseGoal || 'N/A'}`;
+    }).join('\n');
+
+    return `
+Scenario Suggestions:
+- summary: ${result.summary?.message || ''}
+- gapsDetected: ${result.summary?.totalGaps || 0}
+- tier3Fallbacks: ${result.summary?.totalTier3Fallbacks || 0}
+- topSuggestions:
+${lines}
+`;
+  } catch (error) {
+    return `
+Scenario Suggestions:
+- (Failed to generate: ${error.message})
+`;
+  }
 }
 
 // ============================================================================
