@@ -1834,10 +1834,19 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
             log('📅 Creating Google Calendar event...');
             try {
                 // Determine appointment time
-                // For now, we'll use the preference capture time window
-                // In future with real-time availability, this will be the confirmed slot
+                // V88: Use confirmed calendar slot if available
                 let appointmentTime = null;
-                if (slots.time?.confirmedSlot) {
+                const bookingMeta = session?.booking?.meta?.time || {};
+                
+                if (bookingMeta.calendarSlot?.start) {
+                    // Real-time confirmed slot from calendar
+                    appointmentTime = new Date(bookingMeta.calendarSlot.start);
+                    log('📅 Using confirmed calendar slot', { start: appointmentTime });
+                } else if (session?.booking?.confirmedSlot?.start) {
+                    // Alternative location for confirmed slot
+                    appointmentTime = new Date(session.booking.confirmedSlot.start);
+                    log('📅 Using session confirmed slot', { start: appointmentTime });
+                } else if (slots.time?.confirmedSlot) {
                     appointmentTime = new Date(slots.time.confirmedSlot);
                 } else {
                     // Use next available business day at 9 AM as placeholder
@@ -2121,6 +2130,86 @@ const ConsentDetector = {
         return true;
     }
 };
+
+/**
+ * Parse user's selection from offered time slots (V88 Google Calendar)
+ * Handles: "the first one", "tomorrow", "2pm", "Monday at 10", etc.
+ * @param {string} userText - User's response
+ * @param {Array} offeredSlots - Previously offered slots [{start, end, display}]
+ * @returns {Object|null} Selected slot or null if no match
+ */
+function parseSlotSelection(userText, offeredSlots) {
+    if (!userText || !offeredSlots || offeredSlots.length === 0) return null;
+    
+    const lower = userText.toLowerCase().trim();
+    
+    // Ordinal selection: "the first one", "second", "number 3"
+    const ordinalMap = {
+        'first': 0, '1st': 0, 'one': 0, 'first one': 0, 'option 1': 0, 'number 1': 0,
+        'second': 1, '2nd': 1, 'two': 1, 'second one': 1, 'option 2': 1, 'number 2': 1,
+        'third': 2, '3rd': 2, 'three': 2, 'third one': 2, 'option 3': 2, 'number 3': 2,
+        'last': offeredSlots.length - 1, 'last one': offeredSlots.length - 1
+    };
+    
+    for (const [phrase, index] of Object.entries(ordinalMap)) {
+        if (lower.includes(phrase) && offeredSlots[index]) {
+            return offeredSlots[index];
+        }
+    }
+    
+    // Day matching: "today", "tomorrow", "monday"
+    const dayKeywords = {
+        'today': 'today',
+        'tomorrow': 'tomorrow',
+        'monday': 'monday', 'tuesday': 'tuesday', 'wednesday': 'wednesday',
+        'thursday': 'thursday', 'friday': 'friday', 'saturday': 'saturday', 'sunday': 'sunday'
+    };
+    
+    for (const [keyword, dayPart] of Object.entries(dayKeywords)) {
+        if (lower.includes(keyword)) {
+            const match = offeredSlots.find(s => 
+                s.display.toLowerCase().includes(dayPart)
+            );
+            if (match) return match;
+        }
+    }
+    
+    // Time matching: "10am", "2pm", "at 3", "3 o'clock"
+    const timeMatch = lower.match(/\b(\d{1,2})\s*(am|pm|:\d{2})?\b/);
+    if (timeMatch) {
+        const hour = parseInt(timeMatch[1]);
+        const isPm = timeMatch[2] === 'pm' || (hour < 7 && !timeMatch[2]); // Assume PM for 1-6 without am/pm
+        const searchHour = isPm && hour < 12 ? hour + 12 : hour;
+        
+        const match = offeredSlots.find(s => {
+            const slotHour = s.start.getHours();
+            return slotHour === searchHour || slotHour === hour;
+        });
+        if (match) return match;
+    }
+    
+    // Generic affirmative for single slot
+    if (offeredSlots.length === 1) {
+        const affirmatives = ['yes', 'yeah', 'sure', 'ok', 'okay', 'sounds good', 'that works', 'perfect', 'great'];
+        if (affirmatives.some(a => lower.includes(a))) {
+            return offeredSlots[0];
+        }
+    }
+    
+    // Direct display match
+    for (const slot of offeredSlots) {
+        const displayLower = slot.display.toLowerCase();
+        // Check if the user repeated part of the display text
+        const displayParts = displayLower.split(/\s+at\s+|\s+/);
+        for (const part of displayParts) {
+            if (part.length > 3 && lower.includes(part)) {
+                return slot;
+            }
+        }
+    }
+    
+    return null;
+}
 
 /**
  * Programmatic slot extraction helpers
@@ -8232,53 +8321,141 @@ async function processTurn({
                 }
                 // Handle ASAP / today / tomorrow / morning / afternoon responses
                 // V34 FIX: Better time handling that feels like real booking
+                // V88: Real-time Google Calendar availability checking
                 else if (session.booking.activeSlot === 'time' && !currentSlots.time) {
                     const userTextLower = userText.toLowerCase().trim();
                     
-                    // Day preference detection
-                    const wantsToday = /\b(today|asap|as soon as possible|soonest|earliest|first available|urgent|emergency|right away|immediately|now)\b/i.test(userTextLower);
-                    const wantsTomorrow = /\b(tomorrow|next day)\b/i.test(userTextLower);
-                    const wantsThisWeek = /\b(this week|whenever|any day|flexible)\b/i.test(userTextLower);
-                    
-                    // Time window detection
-                    const wantsMorning = /\b(morning|am|before noon|8|9|10|11)\b/i.test(userTextLower) && !/good morning/i.test(userTextLower);
-                    const wantsAfternoon = /\b(afternoon|pm|after noon|evening|12|1|2|3|4)\b/i.test(userTextLower) && !/good afternoon/i.test(userTextLower);
-                    
-                    // Build the time string that feels real
-                    let dayPart = '';
-                    let windowPart = '';
-                    
-                    if (wantsToday) dayPart = 'today';
-                    else if (wantsTomorrow) dayPart = 'tomorrow';
-                    else if (wantsThisWeek) dayPart = 'this week';
-                    
-                    if (wantsMorning) windowPart = 'morning';
-                    else if (wantsAfternoon) windowPart = 'afternoon';
-                    
-                    // V34 FIX: Build a realistic time string
-                    if (dayPart || windowPart) {
-                        if (dayPart && windowPart) {
-                            currentSlots.time = `${dayPart} ${windowPart}`;
-                        } else if (dayPart) {
-                            currentSlots.time = dayPart;
+                    // Check if user is selecting from offered slots (V88)
+                    if (session.booking.offeredSlots && session.booking.offeredSlots.length > 0) {
+                        // User is selecting from previously offered slots
+                        const slotSelection = parseSlotSelection(userTextLower, session.booking.offeredSlots);
+                        if (slotSelection) {
+                            log('📅 TIME: User selected slot', { selection: slotSelection.display });
+                            currentSlots.time = slotSelection.display;
+                            session.booking.confirmedSlot = slotSelection;
+                            timeMeta.confirmed = true;
+                            timeMeta.calendarSlot = slotSelection;
+                            session.booking.offeredSlots = null; // Clear offered slots
+                            finalReply = `Perfect, I've got you down for ${slotSelection.display}. `;
                         } else {
-                            currentSlots.time = windowPart;
+                            // User said something that doesn't match offered slots
+                            // Re-offer or ask again
+                            const slotList = session.booking.offeredSlots.map(s => s.display).join(', or ');
+                            finalReply = `I have ${slotList} available. Which works best for you?`;
+                            nextSlotId = 'time';
                         }
-                        timeMeta.confirmed = true;
+                    } else {
+                        // Day preference detection
+                        const wantsToday = /\b(today|asap|as soon as possible|soonest|earliest|first available|urgent|emergency|right away|immediately|now)\b/i.test(userTextLower);
+                        const wantsTomorrow = /\b(tomorrow|next day)\b/i.test(userTextLower);
+                        const wantsThisWeek = /\b(this week|whenever|any day|flexible)\b/i.test(userTextLower);
                         
-                        // V34: More natural response based on what they said
-                        if (wantsToday && (wantsMorning || wantsAfternoon)) {
-                            finalReply = `Perfect, I'll get you in for ${currentSlots.time}. `;
-                        } else if (wantsToday) {
-                            finalReply = `Perfect, I'll get someone out today as soon as possible. `;
-                            currentSlots.time = 'today ASAP';
-                        } else if (wantsTomorrow) {
-                            finalReply = `Perfect, ${currentSlots.time} works. `;
+                        // Time window detection
+                        const wantsMorning = /\b(morning|am|before noon|8|9|10|11)\b/i.test(userTextLower) && !/good morning/i.test(userTextLower);
+                        const wantsAfternoon = /\b(afternoon|pm|after noon|evening|12|1|2|3|4)\b/i.test(userTextLower) && !/good afternoon/i.test(userTextLower);
+                        
+                        // Build preference strings
+                        let dayPart = '';
+                        let windowPart = '';
+                        
+                        if (wantsToday) dayPart = 'today';
+                        else if (wantsTomorrow) dayPart = 'tomorrow';
+                        else if (wantsThisWeek) dayPart = 'asap';
+                        else dayPart = 'asap'; // Default
+                        
+                        if (wantsMorning) windowPart = 'morning';
+                        else if (wantsAfternoon) windowPart = 'afternoon';
+                        else windowPart = 'anytime';
+                        
+                        // ═══════════════════════════════════════════════════════════════════
+                        // V88: CHECK GOOGLE CALENDAR FOR REAL-TIME AVAILABILITY
+                        // ═══════════════════════════════════════════════════════════════════
+                        const calendarConfig = company?.googleCalendar;
+                        const calendarEnabled = calendarConfig?.enabled && calendarConfig?.connected;
+                        
+                        if (calendarEnabled) {
+                            log('📅 TIME: Checking real-time availability', { dayPart, windowPart });
+                            
+                            try {
+                                const availResult = await GoogleCalendarService.findAvailableSlots(
+                                    company._id.toString(),
+                                    {
+                                        dayPreference: dayPart,
+                                        timePreference: windowPart,
+                                        durationMinutes: calendarConfig.settings?.defaultDurationMinutes || 60,
+                                        maxSlots: 3
+                                    }
+                                );
+                                
+                                if (!availResult.fallback && availResult.slots.length > 0) {
+                                    // We have real availability - offer the slots
+                                    session.booking.offeredSlots = availResult.slots;
+                                    finalReply = availResult.message;
+                                    nextSlotId = 'time';
+                                    log('📅 TIME: Offered real slots', { 
+                                        count: availResult.slots.length,
+                                        slots: availResult.slots.map(s => s.display)
+                                    });
+                                } else {
+                                    // Calendar unavailable or no slots - fall back to preference capture
+                                    log('📅 TIME: Calendar fallback', { 
+                                        reason: availResult.error || 'no slots',
+                                        fallback: availResult.fallback
+                                    });
+                                    
+                                    // Store preference and continue
+                                    if (dayPart && windowPart && windowPart !== 'anytime') {
+                                        currentSlots.time = `${dayPart} ${windowPart}`;
+                                    } else if (dayPart) {
+                                        currentSlots.time = dayPart === 'asap' ? 'ASAP' : dayPart;
+                                    } else {
+                                        currentSlots.time = windowPart;
+                                    }
+                                    timeMeta.confirmed = true;
+                                    timeMeta.calendarFallback = true;
+                                    
+                                    // Use fallback message from calendar settings or default
+                                    const fallbackMsg = calendarConfig.settings?.fallbackMessage || 
+                                        "I'll note your preference and we'll confirm the exact time.";
+                                    finalReply = `Got it, ${currentSlots.time}. ${fallbackMsg} `;
+                                }
+                            } catch (calendarErr) {
+                                log('📅 TIME: Calendar error, using preference capture', { error: calendarErr.message });
+                                // Fall through to preference capture
+                                if (dayPart || windowPart !== 'anytime') {
+                                    currentSlots.time = dayPart || windowPart;
+                                    timeMeta.confirmed = true;
+                                    finalReply = `Got it, ${currentSlots.time}. I'll note that and we'll confirm the time. `;
+                                }
+                            }
                         } else {
-                            finalReply = `Perfect, ${currentSlots.time} works. `;
+                            // No calendar connected - use preference capture mode
+                            // V34 FIX: Build a realistic time string
+                            if (dayPart || windowPart !== 'anytime') {
+                                if (dayPart && windowPart && windowPart !== 'anytime') {
+                                    currentSlots.time = `${dayPart} ${windowPart}`;
+                                } else if (dayPart) {
+                                    currentSlots.time = dayPart === 'asap' ? 'today ASAP' : dayPart;
+                                } else {
+                                    currentSlots.time = windowPart;
+                                }
+                                timeMeta.confirmed = true;
+                                
+                                // V34: More natural response based on what they said
+                                if (wantsToday && (wantsMorning || wantsAfternoon)) {
+                                    finalReply = `Perfect, I'll get you in for ${currentSlots.time}. `;
+                                } else if (wantsToday) {
+                                    finalReply = `Perfect, I'll get someone out today as soon as possible. `;
+                                    currentSlots.time = 'today ASAP';
+                                } else if (wantsTomorrow) {
+                                    finalReply = `Perfect, ${currentSlots.time} works. `;
+                                } else {
+                                    finalReply = `Perfect, ${currentSlots.time} works. `;
+                                }
+                                
+                                log('⏰ TIME: Accepted (no calendar)', { time: currentSlots.time, dayPart, windowPart });
+                            }
                         }
-                        
-                        log('⏰ TIME: Accepted', { time: currentSlots.time, dayPart, windowPart });
                     }
                 }
                 else if (extractedThisTurn?.time && !timeMeta.confirmed) {

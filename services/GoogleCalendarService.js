@@ -462,6 +462,256 @@ async function findNextAvailableSlot(companyId, {
     }
 }
 
+/**
+ * Find multiple available slots for a given day or range
+ * Returns human-friendly slot descriptions
+ * @param {string} companyId
+ * @param {Object} options
+ * @param {string} options.dayPreference - 'today', 'tomorrow', 'asap', or specific date
+ * @param {string} options.timePreference - 'morning', 'afternoon', 'anytime'
+ * @param {number} options.durationMinutes - Required duration
+ * @param {number} options.maxSlots - Max slots to return
+ * @returns {Object} { slots: [], message, fallback }
+ */
+async function findAvailableSlots(companyId, {
+    dayPreference = 'asap',
+    timePreference = 'anytime',
+    durationMinutes = 60,
+    maxSlots = 3
+}) {
+    try {
+        const { client, company, calendarId, error } = await getOAuth2ClientForCompany(companyId);
+        
+        if (!client) {
+            return { 
+                slots: [], 
+                error: error || 'Calendar not connected', 
+                fallback: true,
+                message: "I'll note your preference and we'll confirm the time."
+            };
+        }
+        
+        const settings = company?.googleCalendar?.settings || {};
+        const bufferMinutes = settings.bufferMinutes || 60;
+        const timezone = company?.timezone || 'America/New_York';
+        
+        // Determine search range based on preference
+        const now = new Date();
+        let searchStart = new Date(now.getTime() + bufferMinutes * 60 * 1000);
+        let searchEnd;
+        
+        if (dayPreference === 'today') {
+            // Today only - end of day
+            searchEnd = new Date(now);
+            searchEnd.setHours(23, 59, 59, 999);
+        } else if (dayPreference === 'tomorrow') {
+            // Tomorrow only
+            searchStart = new Date(now);
+            searchStart.setDate(searchStart.getDate() + 1);
+            searchStart.setHours(0, 0, 0, 0);
+            searchEnd = new Date(searchStart);
+            searchEnd.setHours(23, 59, 59, 999);
+        } else {
+            // ASAP - search next 5 days
+            searchEnd = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+        }
+        
+        // Define working hours (use company settings or defaults)
+        const workingHours = {
+            start: 8, // 8 AM
+            end: 17   // 5 PM
+        };
+        
+        // Adjust search based on time preference
+        if (timePreference === 'morning') {
+            // 8 AM - 12 PM
+            workingHours.end = 12;
+        } else if (timePreference === 'afternoon') {
+            // 12 PM - 5 PM
+            workingHours.start = 12;
+        }
+        
+        const calendar = google.calendar({ version: 'v3', auth: client });
+        
+        // Get busy times
+        const response = await calendar.freebusy.query({
+            requestBody: {
+                timeMin: searchStart.toISOString(),
+                timeMax: searchEnd.toISOString(),
+                items: [{ id: calendarId }]
+            }
+        });
+        
+        const busySlots = response.data.calendars?.[calendarId]?.busy || [];
+        
+        // Find available slots within working hours
+        const availableSlots = [];
+        let currentDay = new Date(searchStart);
+        
+        while (currentDay < searchEnd && availableSlots.length < maxSlots) {
+            // Skip weekends
+            if (currentDay.getDay() === 0 || currentDay.getDay() === 6) {
+                currentDay.setDate(currentDay.getDate() + 1);
+                currentDay.setHours(workingHours.start, 0, 0, 0);
+                continue;
+            }
+            
+            // Set to start of working hours for this day
+            const dayStart = new Date(currentDay);
+            dayStart.setHours(workingHours.start, 0, 0, 0);
+            
+            const dayEnd = new Date(currentDay);
+            dayEnd.setHours(workingHours.end, 0, 0, 0);
+            
+            // Start from current time if it's today
+            let slotStart = dayStart;
+            if (dayStart < searchStart) {
+                slotStart = new Date(searchStart);
+            }
+            
+            // Try slots throughout the day
+            while (slotStart < dayEnd && availableSlots.length < maxSlots) {
+                const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60 * 1000);
+                
+                if (slotEnd > dayEnd) break;
+                
+                // Check if this slot conflicts with any busy time
+                const hasConflict = busySlots.some(busy => {
+                    const busyStart = new Date(busy.start);
+                    const busyEnd = new Date(busy.end);
+                    return slotStart < busyEnd && slotEnd > busyStart;
+                });
+                
+                if (!hasConflict) {
+                    availableSlots.push({
+                        start: new Date(slotStart),
+                        end: new Date(slotEnd),
+                        display: formatSlotForDisplay(slotStart, timezone)
+                    });
+                    // Skip to next slot (don't overlap)
+                    slotStart = new Date(slotEnd.getTime() + 30 * 60 * 1000); // 30 min gap
+                } else {
+                    // Move to end of this busy slot
+                    const overlappingBusy = busySlots.find(busy => {
+                        const busyStart = new Date(busy.start);
+                        const busyEnd = new Date(busy.end);
+                        return slotStart < busyEnd && slotEnd > busyStart;
+                    });
+                    if (overlappingBusy) {
+                        slotStart = new Date(overlappingBusy.end);
+                    } else {
+                        slotStart = new Date(slotStart.getTime() + 30 * 60 * 1000);
+                    }
+                }
+            }
+            
+            // Move to next day
+            currentDay.setDate(currentDay.getDate() + 1);
+            currentDay.setHours(workingHours.start, 0, 0, 0);
+        }
+        
+        if (availableSlots.length === 0) {
+            return {
+                slots: [],
+                message: "I couldn't find any open slots in that timeframe. Would you like me to note your preference and have someone call you back to schedule?",
+                fallback: true
+            };
+        }
+        
+        // Build human-readable message
+        let message;
+        if (availableSlots.length === 1) {
+            message = `I have ${availableSlots[0].display} available. Does that work for you?`;
+        } else {
+            const slotList = availableSlots.map(s => s.display).join(', or ');
+            message = `I have a few openings: ${slotList}. Which works best?`;
+        }
+        
+        return {
+            slots: availableSlots,
+            message,
+            fallback: false
+        };
+    } catch (err) {
+        logger.error('[GOOGLE CALENDAR] ❌ Find available slots failed', { 
+            companyId, 
+            error: err.message 
+        });
+        return { 
+            slots: [], 
+            error: err.message, 
+            fallback: true,
+            message: "I'll note your preference and we'll confirm the time."
+        };
+    }
+}
+
+/**
+ * Format a slot time for display in conversation
+ */
+function formatSlotForDisplay(date, timezone = 'America/New_York') {
+    const options = {
+        weekday: 'long',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: timezone
+    };
+    
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const dateStr = date.toLocaleDateString('en-US', { weekday: 'long', timeZone: timezone });
+    const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: timezone });
+    
+    // Check if it's today or tomorrow for friendlier messaging
+    if (date.toDateString() === now.toDateString()) {
+        return `today at ${timeStr}`;
+    } else if (date.toDateString() === tomorrow.toDateString()) {
+        return `tomorrow at ${timeStr}`;
+    } else {
+        return `${dateStr} at ${timeStr}`;
+    }
+}
+
+/**
+ * Confirm a specific slot and create the event
+ * @param {string} companyId
+ * @param {Object} slot - The selected slot { start, end }
+ * @param {Object} bookingData - Customer and service details
+ */
+async function confirmSlot(companyId, slot, bookingData) {
+    // Verify slot is still available
+    const availCheck = await checkAvailability(companyId, {
+        startDate: slot.start,
+        endDate: slot.end
+    });
+    
+    if (availCheck.fallback) {
+        return {
+            success: false,
+            error: 'Could not verify availability',
+            fallback: true
+        };
+    }
+    
+    if (!availCheck.available) {
+        return {
+            success: false,
+            error: 'That slot was just taken. Let me find another option.',
+            slotTaken: true
+        };
+    }
+    
+    // Create the event
+    return await createBookingEvent(companyId, {
+        ...bookingData,
+        startTime: slot.start,
+        endTime: slot.end
+    });
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // EVENT CREATION
 // ════════════════════════════════════════════════════════════════════════════════
@@ -671,6 +921,8 @@ module.exports = {
     // Availability
     checkAvailability,
     findNextAvailableSlot,
+    findAvailableSlots,    // V88: Multi-slot finder with working hours
+    confirmSlot,           // V88: Verify + create in one call
     
     // Events
     createBookingEvent,
