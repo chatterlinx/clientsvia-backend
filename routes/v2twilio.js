@@ -141,7 +141,7 @@ function getRecoveryMessage(company, type = 'audioUnclear') {
   // Random selection for natural sound
   return variants[Math.floor(Math.random() * variants.length)];
 }
-const { stripMarkdown, cleanTextForTTS } = require('../utils/textUtils');
+const { stripMarkdown, cleanTextForTTS, enforceVoiceResponseLength } = require('../utils/textUtils');
 // Legacy personality system removed - using modern AI Agent Logic responseCategories
 
 // ============================================================================
@@ -2438,6 +2438,29 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
   const { companyID } = req.params;
   
   // ═══════════════════════════════════════════════════════════════════════════
+  // V86 P2: ACCURATE GATHER_TIMEOUT LOGGING
+  // ═══════════════════════════════════════════════════════════════════════════
+  // This is the REAL timeout - when Twilio's Gather completes with NO speech.
+  // Previously this was logged prematurely in TwiML building.
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (!speechResult || speechResult.trim().length === 0) {
+    logger.info('[TWILIO GATHER] Real timeout - no caller speech detected');
+    
+    if (BlackBoxLogger) {
+      BlackBoxLogger.logEvent({
+        callId: callSid,
+        companyId: companyID,
+        type: 'GATHER_TIMEOUT_ACTUAL',
+        data: {
+          reason: 'Twilio Gather completed with no speech',
+          confidence: req.body.Confidence,
+          timestamp: new Date().toISOString()
+        }
+      }).catch(() => {});
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
   // 🎤 STT INTELLIGENCE - Apply preprocessing (fillers, corrections, impossible)
   // ═══════════════════════════════════════════════════════════════════════════
   // This is where the STT Intelligence UI settings actually get applied!
@@ -3796,6 +3819,36 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         });
       }
       
+      // ════════════════════════════════════════════════════════════════════════
+      // V86 P1: ENFORCE SHORT VOICE RESPONSES
+      // ════════════════════════════════════════════════════════════════════════
+      // Long chatty responses cause:
+      // - Longer TTS generation (scales with length)
+      // - Dead air while playing
+      // - Caller can't interrupt (if bargeIn=false)
+      // 
+      // Pattern: "Ack + Question" (1-2 sentences max, under 180 chars)
+      // ════════════════════════════════════════════════════════════════════════
+      const originalLength = responseText.length;
+      responseText = enforceVoiceResponseLength(responseText, 180, true);
+      
+      if (responseText.length < originalLength) {
+        logger.info(`[V86 SHORT RESPONSE] Truncated: ${originalLength} → ${responseText.length} chars`);
+        
+        if (BlackBoxLogger) {
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'RESPONSE_TRUNCATED_FOR_SPEED',
+            data: {
+              originalLength,
+              truncatedLength: responseText.length,
+              reason: 'V86 short voice response policy'
+            }
+          }).catch(() => {});
+        }
+      }
+      
       logger.info('🔍 V2 VOICE CHECK: Response text:', responseText);
       logger.info('🔍 V2 VOICE CHECK: Will use ElevenLabs:', Boolean(elevenLabsVoice && responseText));
       
@@ -3967,22 +4020,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       
       gather.say('');
       
-      // 🚫 NEVER HANG UP - If caller is silent, prompt them
-      // 📼 BLACK BOX: Log gather timeout
-      if (BlackBoxLogger) {
-        BlackBoxLogger.logEvent({
-          callId: callState?.CallSid || callState?.callId,
-          companyId: companyID,
-          type: 'GATHER_TIMEOUT',
-          turn: turnCount,
-          data: {
-            reason: 'No speech detected after response',
-            nextAction: 'prompting_again'
-          }
-        }).catch(() => {});
-      }
+      // 🚫 NEVER HANG UP - If caller is silent, prompt them with fallback
+      // NOTE: The actual GATHER_TIMEOUT is detected at the START of v2-agent-respond
+      // when SpeechResult is empty. This is just the fallback TwiML setup.
       
-      // Prompt caller instead of hanging up
       // V69: Use random human-like recovery message
       const recoveryPrompt = getRecoveryMessage(company, 'silenceRecovery');
       twiml.say({ voice: 'Polly.Matthew' }, recoveryPrompt);

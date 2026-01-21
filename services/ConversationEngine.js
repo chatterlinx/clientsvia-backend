@@ -3758,11 +3758,168 @@ async function processTurn({
             const aiStartTime = Date.now();
             
         // ═══════════════════════════════════════════════════════════════════════
+        // V86 P0: UNIVERSAL META INTENT INTERCEPTOR
+        // ═══════════════════════════════════════════════════════════════════════
+        // These intents MUST resolve Tier-1 (instant, no LLM) regardless of mode:
+        // - "repeat that" / "say that again" / "I didn't hear you"
+        // - "what address do you have?" / "do you have an address for me?"
+        // - "what number is that?" / "repeat the phone number"
+        // - "can you confirm" / "read that back"
+        //
+        // This runs BEFORE mode-specific handlers to catch all cases.
+        // ═══════════════════════════════════════════════════════════════════════
+        const metaIntentCheck = (() => {
+            const lowerText = (userText || '').toLowerCase().trim();
+            if (!lowerText) return null;
+            
+            // === REPEAT / DIDN'T HEAR ===
+            const repeatPatterns = [
+                /\brepeat\b.*\b(that|it|please)\b/i,
+                /\bsay\b.*\b(again|that again)\b/i,
+                /\bdidn'?t\b.*\b(hear|catch|get)\b.*\b(that|you)\b/i,
+                /\bi\s+(didn'?t|couldn'?t)\b.*\bhear\b/i,
+                /\b(what|huh)\s*\?\s*$/i,
+                /\b(sorry|pardon)\b.*\bwhat\b/i,
+                /\bone more time\b/i,
+                /\bcome again\b/i
+            ];
+            
+            // === CONFIRM / READ BACK ===
+            const confirmPatterns = [
+                /\b(can you|could you)\b.*\b(confirm|read back)\b/i,
+                /\b(read|say)\b.*\bback\b.*\b(to me)?\b/i,
+                /\blet me\b.*\b(make sure|verify|confirm)\b/i
+            ];
+            
+            // === WHAT ADDRESS/PHONE DO YOU HAVE ===
+            const addressQueryPatterns = [
+                /\b(do you have|what)\b.*\baddress\b.*\b(for me|on file)?\b/i,
+                /\baddress\b.*\b(do you|you)\b.*\bhave\b/i,
+                /\bwhat\b.*\baddress\b.*\bhave\b/i
+            ];
+            const phoneQueryPatterns = [
+                /\b(do you have|what)\b.*\b(phone|number)\b.*\b(for me|on file)?\b/i,
+                /\b(phone|number)\b.*\b(do you|you)\b.*\bhave\b/i,
+                /\bwhat\b.*\b(number|phone)\b.*\bhave\b/i,
+                /\bwhat\b.*\bnumber\b.*\b(is that|again)\b/i
+            ];
+            const nameQueryPatterns = [
+                /\b(do you have|what)\b.*\bname\b.*\b(for me|on file)?\b/i,
+                /\bname\b.*\b(do you|you)\b.*\bhave\b/i,
+                /\bwhat\b.*\bname\b.*\bhave\b/i
+            ];
+            
+            // Check patterns
+            if (repeatPatterns.some(p => p.test(lowerText))) {
+                return { intent: 'REPEAT_LAST', patterns: 'repeat' };
+            }
+            if (confirmPatterns.some(p => p.test(lowerText))) {
+                return { intent: 'CONFIRM_INFO', patterns: 'confirm' };
+            }
+            if (addressQueryPatterns.some(p => p.test(lowerText)) && currentSlots.address) {
+                return { intent: 'QUERY_ADDRESS', value: currentSlots.address };
+            }
+            if (phoneQueryPatterns.some(p => p.test(lowerText)) && (currentSlots.phone || session._callerPhone)) {
+                return { intent: 'QUERY_PHONE', value: currentSlots.phone || session._callerPhone };
+            }
+            if (nameQueryPatterns.some(p => p.test(lowerText)) && currentSlots.name) {
+                return { intent: 'QUERY_NAME', value: currentSlots.name };
+            }
+            
+            return null;
+        })();
+        
+        if (metaIntentCheck) {
+            log('🚀 V86: META INTENT INTERCEPTED (Tier-1, no LLM)', metaIntentCheck);
+            
+            let metaReply = '';
+            switch (metaIntentCheck.intent) {
+                case 'REPEAT_LAST':
+                    // Get last agent response from session
+                    const lastResponse = session.conversationHistory?.slice(-2)?.[0]?.content ||
+                                        session.lastAgentResponse ||
+                                        "I'm here to help - what would you like to know?";
+                    metaReply = lastResponse;
+                    break;
+                    
+                case 'CONFIRM_INFO':
+                    // Read back all collected info
+                    const parts = [];
+                    if (currentSlots.name) parts.push(`name: ${currentSlots.name}`);
+                    if (currentSlots.phone) parts.push(`phone: ${currentSlots.phone}`);
+                    if (currentSlots.address) parts.push(`address: ${currentSlots.address}`);
+                    if (currentSlots.time) parts.push(`time: ${currentSlots.time}`);
+                    metaReply = parts.length > 0 
+                        ? `Sure! I have: ${parts.join(', ')}. Is that correct?`
+                        : "I don't have any information saved yet. What would you like to provide?";
+                    break;
+                    
+                case 'QUERY_ADDRESS':
+                    metaReply = `The address I have is ${metaIntentCheck.value}. Is that correct?`;
+                    break;
+                    
+                case 'QUERY_PHONE':
+                    const digits = String(metaIntentCheck.value).replace(/\D/g, '');
+                    const cleanPhone = digits.length >= 10 
+                        ? `${digits.slice(-10, -7)}-${digits.slice(-7, -4)}-${digits.slice(-4)}`
+                        : metaIntentCheck.value;
+                    metaReply = `The number I have is ${cleanPhone}. Is that correct?`;
+                    break;
+                    
+                case 'QUERY_NAME':
+                    metaReply = `The name I have is ${metaIntentCheck.value}. Is that correct?`;
+                    break;
+            }
+            
+            if (metaReply) {
+                aiResult = {
+                    reply: metaReply,
+                    conversationMode: session.mode || 'DISCOVERY',
+                    filledSlots: currentSlots,
+                    signals: {},
+                    latencyMs: Date.now() - aiStartTime,
+                    tokensUsed: 0,  // No LLM cost - instant Tier-1!
+                    fromStateMachine: true,
+                    mode: session.mode || 'DISCOVERY',
+                    debug: {
+                        source: 'META_INTENT_TIER1',
+                        intent: metaIntentCheck.intent,
+                        interceptedAt: 'UNIVERSAL_HANDLER'
+                    }
+                };
+                
+                // Log to Black Box
+                if (BlackBoxLogger) {
+                    BlackBoxLogger.logEvent({
+                        callId: session._id?.toString(),
+                        companyId,
+                        type: 'META_INTENT_TIER1',
+                        data: {
+                            intent: metaIntentCheck.intent,
+                            pattern: metaIntentCheck.patterns || null,
+                            value: metaIntentCheck.value || null,
+                            reply: metaReply,
+                            latencyMs: Date.now() - aiStartTime
+                        }
+                    }).catch(() => {});
+                }
+                
+                log('🚀 V86: META INTENT RESPONSE (instant)', { intent: metaIntentCheck.intent, reply: metaReply });
+                // Skip to response building
+            }
+        }
+            
+        // ═══════════════════════════════════════════════════════════════════════
         // CONSENT DETECTION - Check if caller explicitly wants to book
         // ═══════════════════════════════════════════════════════════════════════
-        const consentCheck = ConsentDetector.checkForConsent(userText, company, session);
+        // V86: Skip if meta intent already handled
+        if (aiResult) {
+            log('⏭️ V86: Skipping consent detection - meta intent already handled');
+        }
         
-        if (consentCheck.hasConsent && !session.booking.consentGiven) {
+        const consentCheck = !aiResult ? ConsentDetector.checkForConsent(userText, company, session) : { hasConsent: false };
+        
+        if (!aiResult && consentCheck.hasConsent && !session.booking.consentGiven) {
             // 🎯 CONSENT GIVEN - Transition to BOOKING mode
             session.booking.consentGiven = true;
             session.booking.consentPhrase = consentCheck.matchedPhrase;
