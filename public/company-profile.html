@@ -487,6 +487,171 @@
                                     </div>
                                 </div>
                                 
+                                <!-- ════════════════════════════════════════════════════════════════════════════════
+                                     GOOGLE CALENDAR INTEGRATION - V88 (Jan 2026)
+                                     Real-time availability checking + automatic appointment booking
+                                     ════════════════════════════════════════════════════════════════════════════════ -->
+                                <div class="config-block mt-6" id="google-calendar-section">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <h3 class="font-semibold text-gray-700">
+                                            <i class="fab fa-google text-blue-600 mr-2"></i>Google Calendar Integration
+                                            <span class="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Real-time Scheduling</span>
+                                        </h3>
+                                        <button type="button" id="gc-refresh-status" class="text-gray-500 hover:text-gray-700 text-sm">
+                                            <i class="fas fa-sync-alt"></i>
+                                        </button>
+                                    </div>
+                                    <p class="text-sm text-gray-500 mb-4">Connect your Google Calendar to enable real-time availability checking and automatic appointment creation.</p>
+                                    
+                                    <!-- Connection Status -->
+                                    <div id="gc-status-panel" class="mb-4">
+                                        <div id="gc-loading" class="text-center py-6 text-gray-500">
+                                            <i class="fas fa-spinner fa-spin mr-2"></i>Checking calendar status...
+                                        </div>
+                                        
+                                        <!-- Not Configured (Platform level) -->
+                                        <div id="gc-not-configured" class="hidden bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                            <div class="flex items-start">
+                                                <div class="flex-shrink-0">
+                                                    <i class="fas fa-info-circle text-gray-400 text-xl"></i>
+                                                </div>
+                                                <div class="ml-3">
+                                                    <h4 class="text-sm font-medium text-gray-800">Calendar Integration Not Configured</h4>
+                                                    <p class="mt-1 text-sm text-gray-600">Google Calendar integration is not configured on this platform. Contact your administrator.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Not Connected -->
+                                        <div id="gc-not-connected" class="hidden bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                            <div class="flex items-start">
+                                                <div class="flex-shrink-0">
+                                                    <i class="fas fa-calendar-times text-yellow-500 text-xl"></i>
+                                                </div>
+                                                <div class="ml-3 flex-grow">
+                                                    <h4 class="text-sm font-medium text-gray-800">Calendar Not Connected</h4>
+                                                    <p class="mt-1 text-sm text-gray-600">Connect your Google Calendar to enable real-time availability checking.</p>
+                                                    <button type="button" id="gc-connect-btn" class="mt-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                                        <i class="fab fa-google mr-2"></i>Connect Google Calendar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Connected -->
+                                        <div id="gc-connected" class="hidden bg-green-50 border border-green-200 rounded-lg p-4">
+                                            <div class="flex items-start">
+                                                <div class="flex-shrink-0">
+                                                    <i class="fas fa-calendar-check text-green-500 text-xl"></i>
+                                                </div>
+                                                <div class="ml-3 flex-grow">
+                                                    <h4 class="text-sm font-medium text-gray-800">Calendar Connected</h4>
+                                                    <div class="mt-1 text-sm text-gray-600">
+                                                        <p><strong>Calendar:</strong> <span id="gc-calendar-name">-</span></p>
+                                                        <p><strong>Account:</strong> <span id="gc-calendar-email">-</span></p>
+                                                        <p><strong>Connected:</strong> <span id="gc-connected-at">-</span></p>
+                                                    </div>
+                                                    <div class="mt-3 flex items-center space-x-3">
+                                                        <button type="button" id="gc-test-btn" class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                                                            <i class="fas fa-vial mr-1"></i>Test Connection
+                                                        </button>
+                                                        <button type="button" id="gc-disconnect-btn" class="inline-flex items-center px-3 py-1.5 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50">
+                                                            <i class="fas fa-unlink mr-1"></i>Disconnect
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div class="flex-shrink-0 ml-3">
+                                                    <label class="relative inline-flex items-center cursor-pointer">
+                                                        <input type="checkbox" id="gc-enabled-toggle" class="sr-only peer">
+                                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                                        <span class="ml-2 text-sm font-medium text-gray-700">Enabled</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Error State -->
+                                        <div id="gc-error" class="hidden bg-red-50 border border-red-200 rounded-lg p-4">
+                                            <div class="flex items-start">
+                                                <div class="flex-shrink-0">
+                                                    <i class="fas fa-exclamation-triangle text-red-500 text-xl"></i>
+                                                </div>
+                                                <div class="ml-3">
+                                                    <h4 class="text-sm font-medium text-red-800">Connection Error</h4>
+                                                    <p class="mt-1 text-sm text-red-700" id="gc-error-message">-</p>
+                                                    <button type="button" id="gc-reconnect-btn" class="mt-2 text-sm text-red-700 hover:text-red-900 underline">
+                                                        Try reconnecting
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Calendar Settings (shown only when connected) -->
+                                    <div id="gc-settings-panel" class="hidden border-t border-gray-200 pt-4 mt-4">
+                                        <h4 class="text-sm font-semibold text-gray-700 mb-3">
+                                            <i class="fas fa-cog mr-2"></i>Booking Settings
+                                        </h4>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="form-label">Buffer Before First Slot (minutes)</label>
+                                                <input type="number" id="gc-buffer-minutes" class="form-input" value="60" min="0" max="480">
+                                                <p class="text-xs text-gray-500 mt-1">Minimum time before earliest available appointment</p>
+                                            </div>
+                                            <div>
+                                                <label class="form-label">Default Appointment Duration (minutes)</label>
+                                                <input type="number" id="gc-duration-minutes" class="form-input" value="60" min="15" max="480" step="15">
+                                                <p class="text-xs text-gray-500 mt-1">How long each appointment blocks on calendar</p>
+                                            </div>
+                                            <div>
+                                                <label class="form-label">Max Days Ahead</label>
+                                                <input type="number" id="gc-max-days" class="form-input" value="30" min="1" max="90">
+                                                <p class="text-xs text-gray-500 mt-1">How far in advance customers can book</p>
+                                            </div>
+                                            <div>
+                                                <label class="form-label">Fallback Mode</label>
+                                                <select id="gc-fallback-mode" class="form-input">
+                                                    <option value="preference_capture">Capture preference & confirm later</option>
+                                                    <option value="transfer_to_human">Transfer to human</option>
+                                                    <option value="error_message">Show error message</option>
+                                                </select>
+                                                <p class="text-xs text-gray-500 mt-1">What to do if calendar is unavailable</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mt-4 space-y-3">
+                                            <div class="flex items-center">
+                                                <input type="checkbox" id="gc-include-phone" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" checked>
+                                                <label for="gc-include-phone" class="ml-2 text-sm text-gray-700">Include customer phone in calendar event</label>
+                                            </div>
+                                            <div class="flex items-center">
+                                                <input type="checkbox" id="gc-include-address" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" checked>
+                                                <label for="gc-include-address" class="ml-2 text-sm text-gray-700">Include customer address in calendar event</label>
+                                            </div>
+                                            <div class="flex items-center">
+                                                <input type="checkbox" id="gc-include-notes" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" checked>
+                                                <label for="gc-include-notes" class="ml-2 text-sm text-gray-700">Include service notes in calendar event</label>
+                                            </div>
+                                            <div class="flex items-center">
+                                                <input type="checkbox" id="gc-send-invite" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                                                <label for="gc-send-invite" class="ml-2 text-sm text-gray-700">Send calendar invite to customer (requires email)</label>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mt-4">
+                                            <label class="form-label">Event Title Template</label>
+                                            <input type="text" id="gc-event-title" class="form-input wider-textbox" value="{serviceType} - {customerName}" placeholder="{serviceType} - {customerName}">
+                                            <p class="text-xs text-gray-500 mt-1">Placeholders: {customerName}, {serviceType}, {companyName}</p>
+                                        </div>
+                                        
+                                        <div class="mt-4 flex justify-end">
+                                            <button type="button" id="gc-save-settings-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150">
+                                                <i class="fas fa-save mr-2"></i>Save Calendar Settings
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
                                 <div class="mt-8 pt-5 border-t border-gray-200">
                                     <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
                                         <i class="fas fa-save mr-2"></i>Save Configuration
@@ -3935,6 +4100,38 @@
                     } else {
                     }
                 }, 100);
+                
+                // Initialize Google Calendar after short delay
+                setTimeout(() => {
+                    if (typeof initGoogleCalendar === 'function') {
+                        initGoogleCalendar(companyId);
+                    }
+                }, 200);
+                
+                // Check for Google Calendar OAuth callback params
+                const gcSuccess = urlParams.get('gcSuccess');
+                const gcError = urlParams.get('gcError');
+                const gcEmail = urlParams.get('gcEmail');
+                
+                if (gcSuccess === 'true') {
+                    // Show success notification
+                    setTimeout(() => {
+                        alert(`✅ Google Calendar connected successfully!\n\nAccount: ${gcEmail || 'Unknown'}\n\nYour AI receptionist can now check real-time availability and create appointments.`);
+                        // Clean URL
+                        window.history.replaceState({}, '', `?id=${companyId}`);
+                        // Refresh calendar status
+                        if (typeof initGoogleCalendar === 'function') {
+                            initGoogleCalendar(companyId);
+                        }
+                    }, 500);
+                } else if (gcError) {
+                    // Show error notification
+                    setTimeout(() => {
+                        alert(`❌ Google Calendar connection failed:\n\n${decodeURIComponent(gcError)}\n\nPlease try again.`);
+                        // Clean URL
+                        window.history.replaceState({}, '', `?id=${companyId}`);
+                    }, 500);
+                }
             } else {
                 const container = document.querySelector('.profile-container');
                 if (container) {
@@ -3942,6 +4139,246 @@
                 }
             }
         });
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // GOOGLE CALENDAR INTEGRATION - V88 (Jan 2026)
+        // ════════════════════════════════════════════════════════════════════════════════
+        
+        async function initGoogleCalendar(companyId) {
+            console.log('📅 [GOOGLE CALENDAR] Initializing...');
+            
+            const loadingEl = document.getElementById('gc-loading');
+            const notConfiguredEl = document.getElementById('gc-not-configured');
+            const notConnectedEl = document.getElementById('gc-not-connected');
+            const connectedEl = document.getElementById('gc-connected');
+            const errorEl = document.getElementById('gc-error');
+            const settingsPanel = document.getElementById('gc-settings-panel');
+            
+            // Helper to hide all states
+            function hideAllStates() {
+                loadingEl?.classList.add('hidden');
+                notConfiguredEl?.classList.add('hidden');
+                notConnectedEl?.classList.add('hidden');
+                connectedEl?.classList.add('hidden');
+                errorEl?.classList.add('hidden');
+                settingsPanel?.classList.add('hidden');
+            }
+            
+            try {
+                const token = localStorage.getItem('authToken');
+                const response = await fetch(`/api/company/${companyId}/google-calendar/status`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+                console.log('📅 [GOOGLE CALENDAR] Status:', data);
+                
+                hideAllStates();
+                
+                if (!data.success) {
+                    errorEl?.classList.remove('hidden');
+                    document.getElementById('gc-error-message').textContent = data.error || 'Unknown error';
+                    return;
+                }
+                
+                if (!data.platformConfigured) {
+                    notConfiguredEl?.classList.remove('hidden');
+                    return;
+                }
+                
+                if (!data.connected) {
+                    notConnectedEl?.classList.remove('hidden');
+                } else {
+                    connectedEl?.classList.remove('hidden');
+                    settingsPanel?.classList.remove('hidden');
+                    
+                    // Populate connected info
+                    document.getElementById('gc-calendar-name').textContent = data.calendarName || 'Primary Calendar';
+                    document.getElementById('gc-calendar-email').textContent = data.calendarEmail || '-';
+                    document.getElementById('gc-connected-at').textContent = data.connectedAt 
+                        ? new Date(data.connectedAt).toLocaleDateString() 
+                        : '-';
+                    
+                    // Set enabled toggle
+                    const enabledToggle = document.getElementById('gc-enabled-toggle');
+                    if (enabledToggle) enabledToggle.checked = data.enabled !== false;
+                    
+                    // Populate settings
+                    const settings = data.settings || {};
+                    document.getElementById('gc-buffer-minutes').value = settings.bufferMinutes || 60;
+                    document.getElementById('gc-duration-minutes').value = settings.defaultDurationMinutes || 60;
+                    document.getElementById('gc-max-days').value = settings.maxBookingDaysAhead || 30;
+                    document.getElementById('gc-fallback-mode').value = settings.fallbackMode || 'preference_capture';
+                    document.getElementById('gc-include-phone').checked = settings.includeCustomerPhone !== false;
+                    document.getElementById('gc-include-address').checked = settings.includeCustomerAddress !== false;
+                    document.getElementById('gc-include-notes').checked = settings.includeServiceNotes !== false;
+                    document.getElementById('gc-send-invite').checked = settings.sendCustomerInvite === true;
+                    document.getElementById('gc-event-title').value = settings.eventTitleTemplate || '{serviceType} - {customerName}';
+                    
+                    // Show error badge if there are errors
+                    if (data.consecutiveErrors > 0) {
+                        console.warn('📅 [GOOGLE CALENDAR] Has errors:', data.lastError);
+                    }
+                }
+            } catch (err) {
+                console.error('📅 [GOOGLE CALENDAR] Init error:', err);
+                hideAllStates();
+                errorEl?.classList.remove('hidden');
+                document.getElementById('gc-error-message').textContent = err.message;
+            }
+            
+            // Wire up event handlers
+            wireGoogleCalendarHandlers(companyId);
+        }
+        
+        function wireGoogleCalendarHandlers(companyId) {
+            const token = localStorage.getItem('authToken');
+            
+            // Connect button
+            document.getElementById('gc-connect-btn')?.addEventListener('click', async () => {
+                try {
+                    const response = await fetch(`/api/company/${companyId}/google-calendar/auth-url`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success && data.authUrl) {
+                        // Redirect to Google OAuth
+                        window.location.href = data.authUrl;
+                    } else {
+                        alert('Failed to generate authorization URL: ' + (data.error || 'Unknown error'));
+                    }
+                } catch (err) {
+                    alert('Error connecting to calendar: ' + err.message);
+                }
+            });
+            
+            // Reconnect button (in error state)
+            document.getElementById('gc-reconnect-btn')?.addEventListener('click', async () => {
+                document.getElementById('gc-connect-btn')?.click();
+            });
+            
+            // Disconnect button
+            document.getElementById('gc-disconnect-btn')?.addEventListener('click', async () => {
+                if (!confirm('Are you sure you want to disconnect Google Calendar? The AI will switch to preference capture mode.')) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/api/company/${companyId}/google-calendar/disconnect`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        alert('Calendar disconnected successfully');
+                        initGoogleCalendar(companyId);
+                    } else {
+                        alert('Failed to disconnect: ' + (data.error || 'Unknown error'));
+                    }
+                } catch (err) {
+                    alert('Error disconnecting: ' + err.message);
+                }
+            });
+            
+            // Test button
+            document.getElementById('gc-test-btn')?.addEventListener('click', async () => {
+                const btn = document.getElementById('gc-test-btn');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Testing...';
+                btn.disabled = true;
+                
+                try {
+                    const response = await fetch(`/api/company/${companyId}/google-calendar/test`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        alert(`✅ Connection successful!\n\nCalendar: ${data.calendarName}\nTimezone: ${data.timezone}`);
+                    } else {
+                        alert('❌ Connection test failed: ' + (data.error || 'Unknown error'));
+                    }
+                } catch (err) {
+                    alert('Error testing connection: ' + err.message);
+                } finally {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            });
+            
+            // Enabled toggle
+            document.getElementById('gc-enabled-toggle')?.addEventListener('change', async (e) => {
+                try {
+                    const response = await fetch(`/api/company/${companyId}/google-calendar/toggle`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ enabled: e.target.checked })
+                    });
+                    const data = await response.json();
+                    
+                    if (!data.success) {
+                        e.target.checked = !e.target.checked; // Revert
+                        alert('Failed to toggle: ' + (data.error || 'Unknown error'));
+                    }
+                } catch (err) {
+                    e.target.checked = !e.target.checked; // Revert
+                    alert('Error: ' + err.message);
+                }
+            });
+            
+            // Save settings button
+            document.getElementById('gc-save-settings-btn')?.addEventListener('click', async () => {
+                const btn = document.getElementById('gc-save-settings-btn');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+                btn.disabled = true;
+                
+                try {
+                    const settings = {
+                        bufferMinutes: parseInt(document.getElementById('gc-buffer-minutes').value) || 60,
+                        defaultDurationMinutes: parseInt(document.getElementById('gc-duration-minutes').value) || 60,
+                        maxBookingDaysAhead: parseInt(document.getElementById('gc-max-days').value) || 30,
+                        fallbackMode: document.getElementById('gc-fallback-mode').value,
+                        includeCustomerPhone: document.getElementById('gc-include-phone').checked,
+                        includeCustomerAddress: document.getElementById('gc-include-address').checked,
+                        includeServiceNotes: document.getElementById('gc-include-notes').checked,
+                        sendCustomerInvite: document.getElementById('gc-send-invite').checked,
+                        eventTitleTemplate: document.getElementById('gc-event-title').value
+                    };
+                    
+                    const response = await fetch(`/api/company/${companyId}/google-calendar/settings`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ settings })
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        alert('✅ Calendar settings saved!');
+                    } else {
+                        alert('Failed to save: ' + (data.error || 'Unknown error'));
+                    }
+                } catch (err) {
+                    alert('Error saving settings: ' + err.message);
+                } finally {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            });
+            
+            // Refresh button
+            document.getElementById('gc-refresh-status')?.addEventListener('click', () => {
+                initGoogleCalendar(companyId);
+            });
+        }
     </script>
     
     <!-- =========================================================

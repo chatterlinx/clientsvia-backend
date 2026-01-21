@@ -142,6 +142,88 @@ const elevenLabsSettingsSchema = new mongoose.Schema({
     modelId: { type: String, trim: true, default: null }
 }, { _id: false });
 
+// ════════════════════════════════════════════════════════════════════════════════
+// GOOGLE CALENDAR INTEGRATION - V88 (Jan 2026)
+// ════════════════════════════════════════════════════════════════════════════════
+// Enables real-time availability checking and automatic appointment creation.
+// OAuth2 tokens are stored encrypted per-company (multi-tenant safe).
+// ════════════════════════════════════════════════════════════════════════════════
+const googleCalendarSchema = new mongoose.Schema({
+    // Connection status
+    enabled: { type: Boolean, default: false },
+    connected: { type: Boolean, default: false },
+    connectedAt: { type: Date, default: null },
+    connectedBy: { type: String, trim: true, default: null }, // Admin email who connected
+    
+    // OAuth2 tokens (encrypted at rest)
+    accessToken: { type: String, default: null, select: false }, // Don't include in normal queries
+    refreshToken: { type: String, default: null, select: false },
+    tokenExpiresAt: { type: Date, default: null },
+    scope: { type: String, default: 'https://www.googleapis.com/auth/calendar' },
+    
+    // Calendar selection
+    calendarId: { type: String, trim: true, default: 'primary' }, // Which calendar to use
+    calendarName: { type: String, trim: true, default: null }, // Display name
+    calendarEmail: { type: String, trim: true, default: null }, // Google account email
+    
+    // Booking settings
+    settings: {
+        // Time buffer before first available slot (minutes)
+        bufferMinutes: { type: Number, default: 60 },
+        
+        // Minimum appointment duration (minutes)
+        defaultDurationMinutes: { type: Number, default: 60 },
+        
+        // How far ahead can customers book (days)
+        maxBookingDaysAhead: { type: Number, default: 30 },
+        
+        // Working hours (override company operating hours if set)
+        useCompanyHours: { type: Boolean, default: true },
+        customWorkingHours: {
+            type: [{
+                day: { type: String, enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] },
+                enabled: { type: Boolean, default: true },
+                startTime: { type: String, default: '08:00' }, // 24h format
+                endTime: { type: String, default: '17:00' }
+            }],
+            default: []
+        },
+        
+        // What to include in calendar event
+        includeCustomerPhone: { type: Boolean, default: true },
+        includeCustomerAddress: { type: Boolean, default: true },
+        includeServiceNotes: { type: Boolean, default: true },
+        
+        // Event title template (placeholders: {customerName}, {serviceType}, {companyName})
+        eventTitleTemplate: { type: String, default: '{serviceType} - {customerName}' },
+        
+        // Event description template
+        eventDescriptionTemplate: { 
+            type: String, 
+            default: 'Customer: {customerName}\nPhone: {customerPhone}\nAddress: {customerAddress}\n\nService: {serviceType}\nNotes: {serviceNotes}\n\nBooked via {companyName} AI Receptionist'
+        },
+        
+        // Send calendar invite to customer email
+        sendCustomerInvite: { type: Boolean, default: false },
+        
+        // Fallback when calendar is unavailable
+        fallbackMode: { 
+            type: String, 
+            enum: ['preference_capture', 'transfer_to_human', 'error_message'],
+            default: 'preference_capture'
+        },
+        fallbackMessage: {
+            type: String,
+            default: "I'll note your preferred time and someone will confirm your appointment shortly."
+        }
+    },
+    
+    // Error tracking
+    lastError: { type: String, default: null },
+    lastErrorAt: { type: Date, default: null },
+    consecutiveErrors: { type: Number, default: 0 }
+}, { _id: false });
+
 // V2 DELETED: Legacy aiSettingsSchema - replaced by aiAgentSettings system
 // All AI configuration now handled through aiAgentSettings field with 100% in-house system
 const daysOfWeekForOperatingHours = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -439,6 +521,12 @@ const companySchema = new mongoose.Schema({
     twilioConfig: { type: twilioConfigSchema, default: () => ({}) },
     connectionMessages: { type: connectionMessagesSchema, default: () => ({}) },
     smsSettings: { type: smsSettingsSchema, default: () => ({}) },
+    
+    // ════════════════════════════════════════════════════════════════════════════════
+    // GOOGLE CALENDAR INTEGRATION - Real-time availability + automatic booking
+    // ════════════════════════════════════════════════════════════════════════════════
+    googleCalendar: { type: googleCalendarSchema, default: () => ({}) },
+    
     // V2 DELETED: Legacy integrations field - HighLevel and Google OAuth eliminated 
     // REMOVED: Legacy aiSettings field - replaced by aiAgentSettings system
     agentSetup: { type: agentSetupSchema, default: () => ({}) },

@@ -226,6 +226,10 @@ async function loadAllRoutes() {
         // V2 Twilio Control Center & Connection Messages (AI Agent Settings tab)
         routes.v2TwilioControlRoutes = await loadRouteWithTimeout('./routes/company/v2twilioControl', 'v2TwilioControlRoutes');
         routes.v2ConnectionMessagesRoutes = await loadRouteWithTimeout('./routes/company/v2connectionMessages', 'v2ConnectionMessagesRoutes');
+        
+        // 📅 Google Calendar Integration (V88 - Jan 2026)
+        routes.googleCalendarRoutes = await loadRouteWithTimeout('./routes/company/googleCalendar', 'googleCalendarRoutes');
+        routes.googleCalendarCallbackRoutes = await loadRouteWithTimeout('./routes/api/googleCalendarCallback', 'googleCalendarCallbackRoutes');
         routes.v2TTSRoutes = await loadRouteWithTimeout('./routes/company/v2tts', 'v2TTSRoutes');
         routes.v2AIAgentDiagnosticsRoutes = await loadRouteWithTimeout('./routes/company/v2aiAgentDiagnostics', 'v2AIAgentDiagnosticsRoutes');
         // v2AIKnowledgebaseRoutes REMOVED Dec 2025 - always showed zeros, Black Box is better
@@ -538,6 +542,11 @@ function registerRoutes(routes) {
     app.use('/api/company/:companyId/trade-key', require('./routes/company/tradeKey')); // 🏷️ Trade Key (Onboarding) - explicit read/write
     app.use('/api/company', routes.v2TwilioControlRoutes); // V2: Twilio Control Center (AI Agent Settings - Dashboard tab)
     app.use('/api/company', routes.v2ConnectionMessagesRoutes); // V2: Connection Messages (AI Agent Settings - Messages & Greetings tab)
+    
+    // 📅 Google Calendar Integration (V88 - Jan 2026)
+    app.use('/api/company/:companyId/google-calendar', routes.googleCalendarRoutes); // 📅 Google Calendar (OAuth, availability, events)
+    app.use('/api/integrations/google-calendar', routes.googleCalendarCallbackRoutes); // 📅 Google Calendar OAuth Callback
+    
     app.use('/api/company', routes.v2TTSRoutes); // V2: Text-to-Speech for voice testing and preview (AI Voice Settings tab)
     app.use('/api/company', routes.v2AIAgentDiagnosticsRoutes); // V2: System Diagnostics (AI Agent Settings - copy/paste for debugging)
     // v2AIKnowledgebaseRoutes REMOVED Dec 2025 - nuked

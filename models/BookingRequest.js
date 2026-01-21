@@ -126,10 +126,18 @@ const bookingRequestSchema = new mongoose.Schema({
     finalScriptUsed: { type: String, default: null, trim: true },
     
     // ═══════════════════════════════════════════════════════════════════════
-    // INTEGRATION FIELDS (Future Use)
+    // INTEGRATION FIELDS
     // ═══════════════════════════════════════════════════════════════════════
     caseId: { type: String, default: null, trim: true },           // Generated case ID
-    externalBookingId: { type: String, default: null, trim: true }, // Calendar system ID
+    externalBookingId: { type: String, default: null, trim: true }, // Generic calendar system ID
+    
+    // Google Calendar Integration (V88 - Jan 2026)
+    calendarEventId: { type: String, default: null, trim: true },   // Google Calendar event ID
+    calendarEventLink: { type: String, default: null, trim: true }, // Link to edit/view event
+    calendarEventStart: { type: Date, default: null },              // Scheduled start time
+    calendarEventEnd: { type: Date, default: null },                // Scheduled end time
+    calendarCreatedAt: { type: Date, default: null },               // When calendar event was created
+    
     webhookSent: { type: Boolean, default: false },
     webhookSentAt: { type: Date, default: null },
     webhookResponse: { type: mongoose.Schema.Types.Mixed, default: null },

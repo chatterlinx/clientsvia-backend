@@ -47,6 +47,7 @@ const ConversationStateMachine = require('./ConversationStateMachine');
 const LLMDiscoveryEngine = require('./LLMDiscoveryEngine');
 const AddressValidationService = require('./AddressValidationService');
 const DynamicFlowEngine = require('./DynamicFlowEngine');
+const GoogleCalendarService = require('./GoogleCalendarService');
 const logger = require('../utils/logger');
 const { parseSpellingVariantPrompt, parseSpellingVariantResponse } = require('../utils/nameSpellingVariant');
 const { extractName: extractNameDeterministic, isTradeContextSentence } = require('../utils/nameExtraction');
@@ -1821,6 +1822,75 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
             status: bookingRequest.status,
             outcomeMode: outcomeMode
         });
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // 📅 GOOGLE CALENDAR INTEGRATION - V88 (Jan 2026)
+        // Create calendar event if calendar is connected and enabled
+        // ═══════════════════════════════════════════════════════════════════
+        let calendarResult = null;
+        const calendarConfig = company.googleCalendar;
+        
+        if (calendarConfig?.enabled && calendarConfig?.connected) {
+            log('📅 Creating Google Calendar event...');
+            try {
+                // Determine appointment time
+                // For now, we'll use the preference capture time window
+                // In future with real-time availability, this will be the confirmed slot
+                let appointmentTime = null;
+                if (slots.time?.confirmedSlot) {
+                    appointmentTime = new Date(slots.time.confirmedSlot);
+                } else {
+                    // Use next available business day at 9 AM as placeholder
+                    // The real time will be confirmed by human
+                    const tomorrow = new Date();
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    tomorrow.setHours(9, 0, 0, 0);
+                    // Skip weekends
+                    while (tomorrow.getDay() === 0 || tomorrow.getDay() === 6) {
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                    }
+                    appointmentTime = tomorrow;
+                }
+                
+                calendarResult = await GoogleCalendarService.createBookingEvent(
+                    company._id.toString(),
+                    {
+                        customerName: bookingSlots.name?.full || `${bookingSlots.name?.first || ''} ${bookingSlots.name?.last || ''}`.trim() || 'Customer',
+                        customerPhone: bookingSlots.phone || metadata.callerPhone || null,
+                        customerEmail: slots.email || null, // If email was collected
+                        customerAddress: bookingSlots.address?.full || null,
+                        serviceType: metadata.serviceType || session.discovery?.issue || 'Service Call',
+                        serviceNotes: session.discovery?.summary || session.discoverySummary || null,
+                        startTime: appointmentTime
+                    }
+                );
+                
+                if (calendarResult.success) {
+                    log('📅 ✅ Calendar event created', {
+                        eventId: calendarResult.eventId,
+                        start: calendarResult.start
+                    });
+                    
+                    // Store calendar event reference in booking request
+                    bookingRequest.calendarEventId = calendarResult.eventId;
+                    bookingRequest.calendarEventLink = calendarResult.eventLink;
+                    bookingRequest.calendarEventStart = calendarResult.start;
+                    bookingRequest.calendarEventEnd = calendarResult.end;
+                    bookingRequest.calendarCreatedAt = new Date();
+                    await bookingRequest.save();
+                } else {
+                    log('📅 ⚠️ Calendar event creation failed (will use fallback)', {
+                        error: calendarResult.error,
+                        fallback: calendarResult.fallback
+                    });
+                }
+            } catch (calendarError) {
+                log('📅 ❌ Calendar integration error (continuing without calendar)', {
+                    error: calendarError.message
+                });
+                // Don't fail the booking - just continue without calendar event
+            }
+        }
         
         // Get the final script
         let finalScript;
