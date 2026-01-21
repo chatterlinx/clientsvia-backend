@@ -4340,7 +4340,7 @@
             }
             
             try {
-                const token = localStorage.getItem('authToken');
+                const token = getAuthToken(); // Use consistent token retrieval
                 const response = await fetch(`/api/company/${companyId}/google-calendar/status`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -4407,7 +4407,7 @@
         }
         
         function wireGoogleCalendarHandlers(companyId) {
-            const token = localStorage.getItem('authToken');
+            const token = getAuthToken();
             
             // Connect button
             document.getElementById('gc-connect-btn')?.addEventListener('click', async () => {
@@ -4560,7 +4560,7 @@
         // ════════════════════════════════════════════════════════════════════════════════
         
         async function initSMSNotifications(companyId) {
-            const token = localStorage.getItem('authToken');
+            const token = getAuthToken();
             
             // Show loading
             document.getElementById('sms-loading').classList.remove('hidden');
@@ -4644,7 +4644,7 @@
             
             // Master toggle
             document.getElementById('sms-master-toggle')?.addEventListener('change', async (e) => {
-                const token = localStorage.getItem('authToken');
+                const token = getAuthToken();
                 const enabled = e.target.checked;
                 
                 try {
@@ -4673,7 +4673,7 @@
             
             // Save settings button
             document.getElementById('sms-save-settings-btn')?.addEventListener('click', async () => {
-                const token = localStorage.getItem('authToken');
+                const token = getAuthToken();
                 const btn = document.getElementById('sms-save-settings-btn');
                 const originalText = btn.innerHTML;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
@@ -4728,7 +4728,7 @@
                 const phone = prompt('Enter phone number to send test SMS (10 digits):');
                 if (!phone) return;
                 
-                const token = localStorage.getItem('authToken');
+                const token = getAuthToken();
                 
                 try {
                     const response = await fetch(`/api/company/${companyId}/sms-notifications/test`, {
