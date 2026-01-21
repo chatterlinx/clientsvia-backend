@@ -75,6 +75,36 @@ class STTHintsBuilder {
                 'service', 'repair', 'maintenance', 'problem', 'issue'
             ];
             
+            // ═══════════════════════════════════════════════════════════════════
+            // V87: COMMON FIRST NAMES FOR STT ACCURACY
+            // ═══════════════════════════════════════════════════════════════════
+            // Without these, STT mishears names like "Dustin" → "question"
+            // These are the TOP 100 most common US first names (male + female)
+            // No need to maintain per-company employee lists!
+            // ═══════════════════════════════════════════════════════════════════
+            const commonNames = [
+                // Top male names
+                'James', 'John', 'Robert', 'Michael', 'David', 'William', 'Richard', 'Joseph',
+                'Thomas', 'Christopher', 'Charles', 'Daniel', 'Matthew', 'Anthony', 'Mark',
+                'Donald', 'Steven', 'Paul', 'Andrew', 'Joshua', 'Kenneth', 'Kevin', 'Brian',
+                'George', 'Timothy', 'Ronald', 'Edward', 'Jason', 'Jeffrey', 'Ryan',
+                'Jacob', 'Gary', 'Nicholas', 'Eric', 'Jonathan', 'Stephen', 'Larry', 'Justin',
+                'Scott', 'Brandon', 'Benjamin', 'Samuel', 'Raymond', 'Gregory', 'Frank',
+                'Alexander', 'Patrick', 'Jack', 'Dennis', 'Jerry', 'Tyler', 'Aaron', 'Jose',
+                'Adam', 'Nathan', 'Zachary', 'Henry', 'Douglas', 'Peter', 'Kyle',
+                // Commonly misheard names (like Dustin → question)
+                'Dustin', 'Austin', 'Martin', 'Colin', 'Gavin', 'Devin', 'Kevin',
+                'Colton', 'Preston', 'Tristan', 'Christian', 'Sebastian', 'Julian',
+                // Top female names
+                'Mary', 'Patricia', 'Jennifer', 'Linda', 'Barbara', 'Elizabeth', 'Susan',
+                'Jessica', 'Sarah', 'Karen', 'Lisa', 'Nancy', 'Betty', 'Margaret', 'Sandra',
+                'Ashley', 'Kimberly', 'Emily', 'Donna', 'Michelle', 'Dorothy', 'Carol',
+                'Amanda', 'Melissa', 'Deborah', 'Stephanie', 'Rebecca', 'Sharon', 'Laura',
+                'Cynthia', 'Kathleen', 'Amy', 'Angela', 'Shirley', 'Anna', 'Brenda',
+                'Pamela', 'Emma', 'Nicole', 'Helen', 'Samantha', 'Katherine', 'Christine',
+                'Debra', 'Rachel', 'Carolyn', 'Janet', 'Catherine', 'Maria', 'Heather'
+            ];
+            
             // 🏠 Add address-related hints for booking flow
             // These help STT recognize street addresses, numbers, and common words
             const addressHints = [
@@ -101,8 +131,9 @@ class STTHintsBuilder {
                 'repair', 'maintenance', 'tune up', 'fix', 'broken', 'not working'
             ];
             
-            // Merge and deduplicate (include address hints for booking flow)
-            const allHints = [...new Set([...hints, ...defaultHints, ...addressHints])];
+            // Merge and deduplicate (include address hints + common names for booking flow)
+            // V87: commonNames added to prevent "Dustin" → "question" mishearing
+            const allHints = [...new Set([...hints, ...defaultHints, ...addressHints, ...commonNames])];
             
             // Build string with Twilio limit (1000 chars)
             let hintsString = '';
