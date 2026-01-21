@@ -82,7 +82,7 @@ const smsNotificationsSchema = new mongoose.Schema({
         enabled: { type: Boolean, default: true },
         template: {
             type: String,
-            default: `Hi {customerName}! Your appointment with {companyName} is confirmed for {appointmentTime}. Address: {customerAddress}. Questions? Chat with us: {chatLink}`
+            default: `Hi {customerName}! Your appointment with {companyName} is confirmed for {appointmentTime}. Address: {customerAddress}. We look forward to helping you! Reply HELP for assistance.`
         },
         // Include action links
         includeRescheduleLink: { type: Boolean, default: false },
@@ -96,7 +96,7 @@ const smsNotificationsSchema = new mongoose.Schema({
         enabled: { type: Boolean, default: true },
         template: {
             type: String,
-            default: `Reminder: Your appointment with {companyName} is tomorrow at {appointmentTime}. We'll see you at {customerAddress}. Reply C to confirm or R to reschedule.`
+            default: `Reminder: Hi {customerName}, your appointment with {companyName} is tomorrow at {appointmentTime}. Address: {customerAddress}. Please call us if you need to reschedule.`
         }
     },
     
@@ -107,7 +107,7 @@ const smsNotificationsSchema = new mongoose.Schema({
         enabled: { type: Boolean, default: false },
         template: {
             type: String,
-            default: `{companyName} reminder: Your technician will arrive in about 1 hour. Please ensure access to the property. Questions? Call us at {companyPhone}.`
+            default: `Heads up, {customerName}! Your technician from {companyName} will arrive in about 1 hour for your {appointmentTime} appointment. Please ensure clear access to the service area.`
         }
     },
     
@@ -119,7 +119,7 @@ const smsNotificationsSchema = new mongoose.Schema({
         sendTime: { type: String, default: '08:00' }, // 24h format
         template: {
             type: String,
-            default: `Good morning! Just a reminder: {companyName} has you scheduled for today at {appointmentTime}. We look forward to serving you!`
+            default: `Good morning {customerName}! Just a reminder: {companyName} has you scheduled for today at {appointmentTime}. We look forward to serving you!`
         }
     },
     

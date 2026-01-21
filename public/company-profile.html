@@ -804,8 +804,8 @@
                                                 </label>
                                             </div>
                                             <p class="text-xs text-gray-500 mb-2">Sent immediately when a booking is completed</p>
-                                            <textarea id="sms-confirmation-template" class="w-full p-2 text-sm border border-gray-300 rounded-md" rows="3" placeholder="Hi {customerName}! Your appointment with {companyName} is confirmed..."></textarea>
-                                            <p class="text-xs text-gray-400 mt-1">Placeholders: {customerName}, {companyName}, {appointmentTime}, {customerAddress}, {serviceType}</p>
+                                            <textarea id="sms-confirmation-template" class="w-full p-2 text-sm border border-gray-300 rounded-md" rows="3">Hi {customerName}! Your appointment with {companyName} is confirmed for {appointmentTime}. Address: {customerAddress}. We look forward to helping you! Reply HELP for assistance.</textarea>
+                                            <p class="text-xs text-gray-400 mt-1">Placeholders: {customerName}, {companyName}, {appointmentTime}, {customerAddress}, {serviceType}, {chatLink}</p>
                                         </div>
                                         
                                         <!-- 24h Reminder -->
@@ -820,7 +820,7 @@
                                                 </label>
                                             </div>
                                             <p class="text-xs text-gray-500 mb-2">Sent 24 hours before the appointment</p>
-                                            <textarea id="sms-reminder24h-template" class="w-full p-2 text-sm border border-gray-300 rounded-md" rows="3" placeholder="Reminder: Your appointment with {companyName} is tomorrow..."></textarea>
+                                            <textarea id="sms-reminder24h-template" class="w-full p-2 text-sm border border-gray-300 rounded-md" rows="3">Reminder: Hi {customerName}, your appointment with {companyName} is tomorrow at {appointmentTime}. Address: {customerAddress}. Please call us if you need to reschedule.</textarea>
                                         </div>
                                         
                                         <!-- 1h Reminder -->
@@ -835,7 +835,7 @@
                                                 </label>
                                             </div>
                                             <p class="text-xs text-gray-500 mb-2">Sent 1 hour before the appointment</p>
-                                            <textarea id="sms-reminder1h-template" class="w-full p-2 text-sm border border-gray-300 rounded-md" rows="3" placeholder="{companyName} reminder: Your technician will arrive in about 1 hour..."></textarea>
+                                            <textarea id="sms-reminder1h-template" class="w-full p-2 text-sm border border-gray-300 rounded-md" rows="3">Heads up, {customerName}! Your technician from {companyName} will arrive in about 1 hour for your {appointmentTime} appointment. Please ensure clear access to the service area.</textarea>
                                         </div>
                                         
                                         <!-- Quiet Hours -->
@@ -4716,17 +4716,24 @@
                 if (settingsData.success) {
                     const s = settingsData.settings;
                     
+                    // Default templates (professional copy)
+                    const DEFAULTS = {
+                        confirmation: `Hi {customerName}! Your appointment with {companyName} is confirmed for {appointmentTime}. Address: {customerAddress}. We look forward to helping you! Reply HELP for assistance.`,
+                        reminder24h: `Reminder: Hi {customerName}, your appointment with {companyName} is tomorrow at {appointmentTime}. Address: {customerAddress}. Please call us if you need to reschedule.`,
+                        reminder1h: `Heads up, {customerName}! Your technician from {companyName} will arrive in about 1 hour for your {appointmentTime} appointment. Please ensure clear access to the service area.`
+                    };
+                    
                     // Confirmation
                     document.getElementById('sms-confirmation-enabled').checked = s.confirmation?.enabled !== false;
-                    document.getElementById('sms-confirmation-template').value = s.confirmation?.template || '';
+                    document.getElementById('sms-confirmation-template').value = s.confirmation?.template || DEFAULTS.confirmation;
                     
                     // 24h reminder
                     document.getElementById('sms-reminder24h-enabled').checked = s.reminder24h?.enabled !== false;
-                    document.getElementById('sms-reminder24h-template').value = s.reminder24h?.template || '';
+                    document.getElementById('sms-reminder24h-template').value = s.reminder24h?.template || DEFAULTS.reminder24h;
                     
                     // 1h reminder
                     document.getElementById('sms-reminder1h-enabled').checked = s.reminder1h?.enabled || false;
-                    document.getElementById('sms-reminder1h-template').value = s.reminder1h?.template || '';
+                    document.getElementById('sms-reminder1h-template').value = s.reminder1h?.template || DEFAULTS.reminder1h;
                     
                     // Quiet hours
                     document.getElementById('sms-quiet-hours-enabled').checked = s.quietHours?.enabled !== false;
