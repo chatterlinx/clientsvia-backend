@@ -4879,6 +4879,7 @@
                 const message = document.getElementById('sms-gateway-message').value.trim();
                 const resultEl = document.getElementById('sms-gateway-result');
                 const btn = document.getElementById('sms-gateway-send-btn');
+                const token = getAuthToken(); // Get token in scope
                 
                 if (!phone) {
                     resultEl.innerHTML = '<span class="text-red-600">❌ Enter phone number</span>';
