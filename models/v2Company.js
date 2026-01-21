@@ -82,7 +82,7 @@ const smsNotificationsSchema = new mongoose.Schema({
         enabled: { type: Boolean, default: true },
         template: {
             type: String,
-            default: `Hi {customerName}! Your appointment with {companyName} is confirmed for {appointmentTime}. Address: {customerAddress}. Reply HELP for assistance or STOP to unsubscribe.`
+            default: `Hi {customerName}! Your appointment with {companyName} is confirmed for {appointmentTime}. Address: {customerAddress}. Questions? Chat with us: {chatLink}`
         },
         // Include action links
         includeRescheduleLink: { type: Boolean, default: false },

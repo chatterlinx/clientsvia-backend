@@ -116,6 +116,9 @@ async function sendViaEmailGateway(phone, message, carrier = 'verizon') {
 // TEMPLATE PLACEHOLDERS
 // ════════════════════════════════════════════════════════════════════════════════
 
+// Chat link base URL
+const CHAT_BASE_URL = process.env.CHAT_BASE_URL || 'https://cv-backend-va.onrender.com/customer-chat.html';
+
 const PLACEHOLDERS = {
     '{customerName}': (data) => data.customerName || 'Valued Customer',
     '{customerFirstName}': (data) => data.customerName?.split(' ')[0] || 'there',
@@ -130,7 +133,9 @@ const PLACEHOLDERS = {
     '{eta}': (data) => data.eta || '30',
     '{rescheduleLink}': (data) => data.rescheduleLink || '',
     '{cancelLink}': (data) => data.cancelLink || '',
-    '{bookingId}': (data) => data.bookingId || ''
+    '{bookingId}': (data) => data.bookingId || '',
+    // V89: Chat link for customer web chat
+    '{chatLink}': (data) => data.companyId ? `${CHAT_BASE_URL}?c=${data.companyId}` : ''
 };
 
 /**
@@ -699,7 +704,9 @@ function buildTemplateData(company, booking) {
         companyPhone: company.companyPhone || company.businessPhone || '',
         appointmentTime: booking.calendarEventStart || booking.slots?.time?.confirmedSlot || booking.slots?.time,
         serviceType: booking.serviceType || booking.issue || 'service',
-        bookingId: booking._id?.toString() || ''
+        bookingId: booking._id?.toString() || '',
+        // V89: Include companyId for chat link placeholder
+        companyId: company._id?.toString() || ''
     };
 }
 
