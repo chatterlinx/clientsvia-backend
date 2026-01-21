@@ -230,6 +230,9 @@ async function loadAllRoutes() {
         // 📅 Google Calendar Integration (V88 - Jan 2026)
         routes.googleCalendarRoutes = await loadRouteWithTimeout('./routes/company/googleCalendar', 'googleCalendarRoutes');
         routes.googleCalendarCallbackRoutes = await loadRouteWithTimeout('./routes/api/googleCalendarCallback', 'googleCalendarCallbackRoutes');
+        
+        // 📱 SMS Notifications (V88 - Jan 2026)
+        routes.smsNotificationsRoutes = await loadRouteWithTimeout('./routes/company/smsNotifications', 'smsNotificationsRoutes');
         routes.v2TTSRoutes = await loadRouteWithTimeout('./routes/company/v2tts', 'v2TTSRoutes');
         routes.v2AIAgentDiagnosticsRoutes = await loadRouteWithTimeout('./routes/company/v2aiAgentDiagnostics', 'v2AIAgentDiagnosticsRoutes');
         // v2AIKnowledgebaseRoutes REMOVED Dec 2025 - always showed zeros, Black Box is better
@@ -546,6 +549,9 @@ function registerRoutes(routes) {
     // 📅 Google Calendar Integration (V88 - Jan 2026)
     app.use('/api/company/:companyId/google-calendar', routes.googleCalendarRoutes); // 📅 Google Calendar (OAuth, availability, events)
     app.use('/api/integrations/google-calendar', routes.googleCalendarCallbackRoutes); // 📅 Google Calendar OAuth Callback
+    
+    // 📱 SMS Notifications (V88 - Jan 2026)
+    app.use('/api/company/:companyId/sms-notifications', routes.smsNotificationsRoutes); // 📱 SMS confirmations & reminders
     
     app.use('/api/company', routes.v2TTSRoutes); // V2: Text-to-Speech for voice testing and preview (AI Voice Settings tab)
     app.use('/api/company', routes.v2AIAgentDiagnosticsRoutes); // V2: System Diagnostics (AI Agent Settings - copy/paste for debugging)
@@ -1020,6 +1026,17 @@ async function startServer() {
                 } catch (error) {
                     console.error('[Post-Startup] ❌ Failed to start LLM Learning Worker:', error.message);
                     // Non-blocking: server continues even if worker fails to start
+                }
+                
+                // 📱 V88: Start SMS Reminder Processor Job
+                try {
+                    console.log('[Post-Startup] 📱 Starting SMS Reminder Processor...');
+                    const { startSMSReminderJob } = require('./jobs/smsReminderProcessor');
+                    startSMSReminderJob();
+                    console.log('[Post-Startup] ✅ SMS Reminder Processor started (runs every 5 minutes)');
+                } catch (error) {
+                    console.error('[Post-Startup] ❌ Failed to start SMS Reminder Processor:', error.message);
+                    // Non-blocking: server continues even if job fails to start
                 }
             }, 10000); // Wait 10 seconds after server starts to begin health checks
             

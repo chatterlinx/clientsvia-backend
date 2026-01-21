@@ -652,6 +652,142 @@
                                     </div>
                                 </div>
                                 
+                                <!-- ════════════════════════════════════════════════════════════════════════════════
+                                     SMS NOTIFICATIONS - V88 (Jan 2026)
+                                     Booking confirmations and appointment reminders via SMS
+                                     ════════════════════════════════════════════════════════════════════════════════ -->
+                                <div class="config-block mt-6" id="sms-notifications-section">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <h3 class="font-semibold text-gray-700">
+                                            <i class="fas fa-sms text-green-600 mr-2"></i>SMS Notifications
+                                            <span class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Booking Confirmations</span>
+                                        </h3>
+                                        <div class="flex items-center space-x-3">
+                                            <button type="button" id="sms-refresh-status" class="text-gray-500 hover:text-gray-700 text-sm">
+                                                <i class="fas fa-sync-alt"></i>
+                                            </button>
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" id="sms-master-toggle" class="sr-only peer">
+                                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                                                <span class="ml-2 text-sm font-medium text-gray-700">Enabled</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <p class="text-sm text-gray-500 mb-4">Send automatic SMS confirmations when bookings complete and reminders before appointments.</p>
+                                    
+                                    <!-- Status Panel -->
+                                    <div id="sms-status-panel" class="mb-4">
+                                        <div id="sms-loading" class="text-center py-4 text-gray-500">
+                                            <i class="fas fa-spinner fa-spin mr-2"></i>Loading SMS status...
+                                        </div>
+                                        
+                                        <!-- No Twilio Credentials -->
+                                        <div id="sms-no-twilio" class="hidden bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                            <div class="flex items-start">
+                                                <i class="fas fa-exclamation-triangle text-yellow-500 text-xl mt-1"></i>
+                                                <div class="ml-3">
+                                                    <h4 class="text-sm font-medium text-gray-800">Twilio Credentials Required</h4>
+                                                    <p class="mt-1 text-sm text-gray-600">SMS notifications require Twilio credentials. Configure them in the Twilio Configuration section above.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Ready -->
+                                        <div id="sms-ready" class="hidden bg-green-50 border border-green-200 rounded-lg p-4">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-start">
+                                                    <i class="fas fa-check-circle text-green-500 text-xl"></i>
+                                                    <div class="ml-3">
+                                                        <h4 class="text-sm font-medium text-gray-800">SMS Notifications Ready</h4>
+                                                        <p class="mt-1 text-sm text-gray-600">
+                                                            <span id="sms-stats-sent">0</span> sent (last 30 days) · 
+                                                            <span id="sms-stats-pending">0</span> pending
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <button type="button" id="sms-test-btn" class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                                                    <i class="fas fa-paper-plane mr-1"></i>Send Test
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- SMS Settings (shown when enabled) -->
+                                    <div id="sms-settings-panel" class="hidden border-t border-gray-200 pt-4 mt-4 space-y-4">
+                                        
+                                        <!-- Confirmation SMS -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <h4 class="text-sm font-semibold text-gray-700">
+                                                    <i class="fas fa-check mr-2 text-green-600"></i>Booking Confirmation
+                                                </h4>
+                                                <label class="relative inline-flex items-center cursor-pointer">
+                                                    <input type="checkbox" id="sms-confirmation-enabled" class="sr-only peer" checked>
+                                                    <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
+                                                </label>
+                                            </div>
+                                            <p class="text-xs text-gray-500 mb-2">Sent immediately when a booking is completed</p>
+                                            <textarea id="sms-confirmation-template" class="w-full p-2 text-sm border border-gray-300 rounded-md" rows="3" placeholder="Hi {customerName}! Your appointment with {companyName} is confirmed..."></textarea>
+                                            <p class="text-xs text-gray-400 mt-1">Placeholders: {customerName}, {companyName}, {appointmentTime}, {customerAddress}, {serviceType}</p>
+                                        </div>
+                                        
+                                        <!-- 24h Reminder -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <h4 class="text-sm font-semibold text-gray-700">
+                                                    <i class="fas fa-clock mr-2 text-blue-600"></i>24-Hour Reminder
+                                                </h4>
+                                                <label class="relative inline-flex items-center cursor-pointer">
+                                                    <input type="checkbox" id="sms-reminder24h-enabled" class="sr-only peer" checked>
+                                                    <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
+                                                </label>
+                                            </div>
+                                            <p class="text-xs text-gray-500 mb-2">Sent 24 hours before the appointment</p>
+                                            <textarea id="sms-reminder24h-template" class="w-full p-2 text-sm border border-gray-300 rounded-md" rows="3" placeholder="Reminder: Your appointment with {companyName} is tomorrow..."></textarea>
+                                        </div>
+                                        
+                                        <!-- 1h Reminder -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <h4 class="text-sm font-semibold text-gray-700">
+                                                    <i class="fas fa-bell mr-2 text-orange-600"></i>1-Hour Reminder
+                                                </h4>
+                                                <label class="relative inline-flex items-center cursor-pointer">
+                                                    <input type="checkbox" id="sms-reminder1h-enabled" class="sr-only peer">
+                                                    <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div>
+                                                </label>
+                                            </div>
+                                            <p class="text-xs text-gray-500 mb-2">Sent 1 hour before the appointment</p>
+                                            <textarea id="sms-reminder1h-template" class="w-full p-2 text-sm border border-gray-300 rounded-md" rows="3" placeholder="{companyName} reminder: Your technician will arrive in about 1 hour..."></textarea>
+                                        </div>
+                                        
+                                        <!-- Quiet Hours -->
+                                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <h4 class="text-sm font-semibold text-gray-700">
+                                                    <i class="fas fa-moon mr-2 text-indigo-600"></i>Quiet Hours
+                                                </h4>
+                                                <label class="relative inline-flex items-center cursor-pointer">
+                                                    <input type="checkbox" id="sms-quiet-hours-enabled" class="sr-only peer" checked>
+                                                    <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-500"></div>
+                                                </label>
+                                            </div>
+                                            <p class="text-xs text-gray-500 mb-2">Don't send SMS during these hours (messages will be queued)</p>
+                                            <div class="flex items-center space-x-2">
+                                                <input type="time" id="sms-quiet-start" class="p-1 text-sm border border-gray-300 rounded" value="21:00">
+                                                <span class="text-gray-500">to</span>
+                                                <input type="time" id="sms-quiet-end" class="p-1 text-sm border border-gray-300 rounded" value="08:00">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="flex justify-end">
+                                            <button type="button" id="sms-save-settings-btn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150">
+                                                <i class="fas fa-save mr-2"></i>Save SMS Settings
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
                                 <div class="mt-8 pt-5 border-t border-gray-200">
                                     <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
                                         <i class="fas fa-save mr-2"></i>Save Configuration
@@ -4377,6 +4513,205 @@
             // Refresh button
             document.getElementById('gc-refresh-status')?.addEventListener('click', () => {
                 initGoogleCalendar(companyId);
+            });
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // SMS NOTIFICATIONS - V88 (Jan 2026)
+        // ════════════════════════════════════════════════════════════════════════════════
+        
+        async function initSMSNotifications(companyId) {
+            const token = localStorage.getItem('authToken');
+            
+            // Show loading
+            document.getElementById('sms-loading').classList.remove('hidden');
+            document.getElementById('sms-no-twilio').classList.add('hidden');
+            document.getElementById('sms-ready').classList.add('hidden');
+            document.getElementById('sms-settings-panel').classList.add('hidden');
+            
+            try {
+                const response = await fetch(`/api/company/${companyId}/sms-notifications/status`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                
+                document.getElementById('sms-loading').classList.add('hidden');
+                
+                if (!data.hasTwilioCredentials) {
+                    document.getElementById('sms-no-twilio').classList.remove('hidden');
+                    return;
+                }
+                
+                document.getElementById('sms-ready').classList.remove('hidden');
+                
+                // Set master toggle
+                document.getElementById('sms-master-toggle').checked = data.enabled;
+                
+                // Show/hide settings based on enabled state
+                if (data.enabled) {
+                    document.getElementById('sms-settings-panel').classList.remove('hidden');
+                }
+                
+                // Load full settings
+                const settingsRes = await fetch(`/api/company/${companyId}/sms-notifications/settings`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const settingsData = await settingsRes.json();
+                
+                if (settingsData.success) {
+                    const s = settingsData.settings;
+                    
+                    // Confirmation
+                    document.getElementById('sms-confirmation-enabled').checked = s.confirmation?.enabled !== false;
+                    document.getElementById('sms-confirmation-template').value = s.confirmation?.template || '';
+                    
+                    // 24h reminder
+                    document.getElementById('sms-reminder24h-enabled').checked = s.reminder24h?.enabled !== false;
+                    document.getElementById('sms-reminder24h-template').value = s.reminder24h?.template || '';
+                    
+                    // 1h reminder
+                    document.getElementById('sms-reminder1h-enabled').checked = s.reminder1h?.enabled || false;
+                    document.getElementById('sms-reminder1h-template').value = s.reminder1h?.template || '';
+                    
+                    // Quiet hours
+                    document.getElementById('sms-quiet-hours-enabled').checked = s.quietHours?.enabled !== false;
+                    document.getElementById('sms-quiet-start').value = s.quietHours?.startTime || '21:00';
+                    document.getElementById('sms-quiet-end').value = s.quietHours?.endTime || '08:00';
+                }
+                
+                // Load stats
+                const statsRes = await fetch(`/api/company/${companyId}/sms-notifications/stats`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const statsData = await statsRes.json();
+                
+                if (statsData.success) {
+                    document.getElementById('sms-stats-sent').textContent = statsData.stats.sent || 0;
+                    document.getElementById('sms-stats-pending').textContent = statsData.stats.pending || 0;
+                }
+                
+            } catch (err) {
+                document.getElementById('sms-loading').classList.add('hidden');
+                console.error('Failed to load SMS status:', err);
+            }
+        }
+        
+        // Initialize SMS Notifications when Configuration tab loads
+        if (companyId) {
+            initSMSNotifications(companyId);
+            
+            // Master toggle
+            document.getElementById('sms-master-toggle')?.addEventListener('change', async (e) => {
+                const token = localStorage.getItem('authToken');
+                const enabled = e.target.checked;
+                
+                try {
+                    const response = await fetch(`/api/company/${companyId}/sms-notifications/toggle`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ enabled })
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        if (enabled) {
+                            document.getElementById('sms-settings-panel').classList.remove('hidden');
+                        } else {
+                            document.getElementById('sms-settings-panel').classList.add('hidden');
+                        }
+                    }
+                } catch (err) {
+                    console.error('Failed to toggle SMS:', err);
+                    e.target.checked = !enabled; // Revert
+                }
+            });
+            
+            // Save settings button
+            document.getElementById('sms-save-settings-btn')?.addEventListener('click', async () => {
+                const token = localStorage.getItem('authToken');
+                const btn = document.getElementById('sms-save-settings-btn');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+                btn.disabled = true;
+                
+                try {
+                    const settings = {
+                        confirmation: {
+                            enabled: document.getElementById('sms-confirmation-enabled').checked,
+                            template: document.getElementById('sms-confirmation-template').value
+                        },
+                        reminder24h: {
+                            enabled: document.getElementById('sms-reminder24h-enabled').checked,
+                            template: document.getElementById('sms-reminder24h-template').value
+                        },
+                        reminder1h: {
+                            enabled: document.getElementById('sms-reminder1h-enabled').checked,
+                            template: document.getElementById('sms-reminder1h-template').value
+                        },
+                        quietHours: {
+                            enabled: document.getElementById('sms-quiet-hours-enabled').checked,
+                            startTime: document.getElementById('sms-quiet-start').value,
+                            endTime: document.getElementById('sms-quiet-end').value
+                        }
+                    };
+                    
+                    const response = await fetch(`/api/company/${companyId}/sms-notifications/settings`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ settings })
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        alert('✅ SMS settings saved!');
+                    } else {
+                        alert('Failed to save: ' + (data.error || 'Unknown error'));
+                    }
+                } catch (err) {
+                    alert('Error saving settings: ' + err.message);
+                } finally {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            });
+            
+            // Test SMS button
+            document.getElementById('sms-test-btn')?.addEventListener('click', async () => {
+                const phone = prompt('Enter phone number to send test SMS (10 digits):');
+                if (!phone) return;
+                
+                const token = localStorage.getItem('authToken');
+                
+                try {
+                    const response = await fetch(`/api/company/${companyId}/sms-notifications/test`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ toPhone: phone, messageType: 'confirmation' })
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        alert('✅ Test SMS sent!\n\nMessage:\n' + data.messageSent);
+                    } else {
+                        alert('Failed to send test: ' + (data.error || 'Unknown error'));
+                    }
+                } catch (err) {
+                    alert('Error sending test: ' + err.message);
+                }
+            });
+            
+            // Refresh button
+            document.getElementById('sms-refresh-status')?.addEventListener('click', () => {
+                initSMSNotifications(companyId);
             });
         }
     </script>

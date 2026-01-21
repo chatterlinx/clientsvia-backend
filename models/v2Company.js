@@ -65,6 +65,124 @@ const smsSettingsSchema = new mongoose.Schema({
     appointmentReminders: { type: Boolean, default: false }
 }, { _id: false });
 
+// ════════════════════════════════════════════════════════════════════════════════
+// SMS NOTIFICATIONS - V88 (Jan 2026)
+// ════════════════════════════════════════════════════════════════════════════════
+// Automatic booking confirmations and appointment reminders via SMS.
+// Fully UI-configurable templates with placeholders.
+// ════════════════════════════════════════════════════════════════════════════════
+const smsNotificationsSchema = new mongoose.Schema({
+    // Master toggle
+    enabled: { type: Boolean, default: false },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BOOKING CONFIRMATION - Sent immediately after booking completes
+    // ═══════════════════════════════════════════════════════════════════════════
+    confirmation: {
+        enabled: { type: Boolean, default: true },
+        template: {
+            type: String,
+            default: `Hi {customerName}! Your appointment with {companyName} is confirmed for {appointmentTime}. Address: {customerAddress}. Reply HELP for assistance or STOP to unsubscribe.`
+        },
+        // Include action links
+        includeRescheduleLink: { type: Boolean, default: false },
+        includeCancelLink: { type: Boolean, default: false }
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // REMINDER - 24 HOURS BEFORE
+    // ═══════════════════════════════════════════════════════════════════════════
+    reminder24h: {
+        enabled: { type: Boolean, default: true },
+        template: {
+            type: String,
+            default: `Reminder: Your appointment with {companyName} is tomorrow at {appointmentTime}. We'll see you at {customerAddress}. Reply C to confirm or R to reschedule.`
+        }
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // REMINDER - 1 HOUR BEFORE
+    // ═══════════════════════════════════════════════════════════════════════════
+    reminder1h: {
+        enabled: { type: Boolean, default: false },
+        template: {
+            type: String,
+            default: `{companyName} reminder: Your technician will arrive in about 1 hour. Please ensure access to the property. Questions? Call us at {companyPhone}.`
+        }
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // REMINDER - DAY OF (Morning)
+    // ═══════════════════════════════════════════════════════════════════════════
+    reminderDayOf: {
+        enabled: { type: Boolean, default: false },
+        sendTime: { type: String, default: '08:00' }, // 24h format
+        template: {
+            type: String,
+            default: `Good morning! Just a reminder: {companyName} has you scheduled for today at {appointmentTime}. We look forward to serving you!`
+        }
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ON-THE-WAY NOTIFICATION (manually triggered or GPS-based future)
+    // ═══════════════════════════════════════════════════════════════════════════
+    onTheWay: {
+        enabled: { type: Boolean, default: false },
+        template: {
+            type: String,
+            default: `{companyName} update: Your technician {technicianName} is on the way and should arrive in approximately {eta} minutes.`
+        }
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COMPLETION/FOLLOW-UP (after service)
+    // ═══════════════════════════════════════════════════════════════════════════
+    followUp: {
+        enabled: { type: Boolean, default: false },
+        delayHours: { type: Number, default: 2 }, // Hours after appointment
+        template: {
+            type: String,
+            default: `Thank you for choosing {companyName}! We hope everything is working great. If you have any questions or feedback, please reply to this message or call {companyPhone}.`
+        }
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RESCHEDULE/CANCEL LINKS
+    // ═══════════════════════════════════════════════════════════════════════════
+    links: {
+        // Base URL for action links (company's booking portal)
+        rescheduleUrl: { type: String, default: null, trim: true },
+        cancelUrl: { type: String, default: null, trim: true },
+        // Use short URL service
+        useShortUrls: { type: Boolean, default: true }
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // REPLY HANDLING
+    // ═══════════════════════════════════════════════════════════════════════════
+    replyHandling: {
+        // What to do when customer replies
+        enabled: { type: Boolean, default: true },
+        // Keywords that trigger actions
+        confirmKeywords: { type: [String], default: ['C', 'CONFIRM', 'YES', 'Y'] },
+        rescheduleKeywords: { type: [String], default: ['R', 'RESCHEDULE', 'CHANGE'] },
+        cancelKeywords: { type: [String], default: ['CANCEL', 'X'] },
+        // Auto-response when we detect keyword
+        confirmResponse: { type: String, default: 'Thanks for confirming! We\'ll see you at your scheduled time.' },
+        rescheduleResponse: { type: String, default: 'No problem! Please call {companyPhone} to reschedule your appointment.' },
+        cancelResponse: { type: String, default: 'Your appointment has been cancelled. Call {companyPhone} if you need to reschedule.' }
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // QUIET HOURS (don't send during these times)
+    // ═══════════════════════════════════════════════════════════════════════════
+    quietHours: {
+        enabled: { type: Boolean, default: true },
+        startTime: { type: String, default: '21:00' }, // 9 PM
+        endTime: { type: String, default: '08:00' }    // 8 AM
+    }
+}, { _id: false });
+
 // --- Sub-schema for Connection Messages (AI Agent Settings - Messages & Greetings tab) ---
 const connectionMessagesSchema = new mongoose.Schema({
     // Voice Connection Message
@@ -521,6 +639,11 @@ const companySchema = new mongoose.Schema({
     twilioConfig: { type: twilioConfigSchema, default: () => ({}) },
     connectionMessages: { type: connectionMessagesSchema, default: () => ({}) },
     smsSettings: { type: smsSettingsSchema, default: () => ({}) },
+    
+    // ════════════════════════════════════════════════════════════════════════════════
+    // SMS NOTIFICATIONS - Booking confirmations + Appointment reminders
+    // ════════════════════════════════════════════════════════════════════════════════
+    smsNotifications: { type: smsNotificationsSchema, default: () => ({}) },
     
     // ════════════════════════════════════════════════════════════════════════════════
     // GOOGLE CALENDAR INTEGRATION - Real-time availability + automatic booking

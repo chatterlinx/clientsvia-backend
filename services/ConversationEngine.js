@@ -48,6 +48,7 @@ const LLMDiscoveryEngine = require('./LLMDiscoveryEngine');
 const AddressValidationService = require('./AddressValidationService');
 const DynamicFlowEngine = require('./DynamicFlowEngine');
 const GoogleCalendarService = require('./GoogleCalendarService');
+const SMSNotificationService = require('./SMSNotificationService');
 const logger = require('../utils/logger');
 const { parseSpellingVariantPrompt, parseSpellingVariantResponse } = require('../utils/nameSpellingVariant');
 const { extractName: extractNameDeterministic, isTradeContextSentence } = require('../utils/nameExtraction');
@@ -1930,6 +1931,47 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
             useAsapVariant,
             scriptPreview: populatedScript.substring(0, 100)
         });
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // 📱 SMS NOTIFICATIONS - V88 (Jan 2026)
+        // Send confirmation SMS and schedule reminders (non-blocking)
+        // ═══════════════════════════════════════════════════════════════════
+        (async () => {
+            try {
+                // Send confirmation SMS
+                const confirmResult = await SMSNotificationService.sendBookingConfirmation(
+                    company._id.toString(),
+                    bookingRequest
+                );
+                
+                if (confirmResult.success && !confirmResult.skipped) {
+                    log('📱 ✅ Confirmation SMS sent', { messageId: confirmResult.messageId });
+                } else if (confirmResult.scheduled) {
+                    log('📱 ⏰ Confirmation SMS scheduled (quiet hours)', { 
+                        scheduledFor: confirmResult.scheduledFor 
+                    });
+                }
+                
+                // Schedule reminders if we have an appointment time
+                if (bookingRequest.calendarEventStart || bookingSlots.time?.confirmedSlot) {
+                    const reminderResult = await SMSNotificationService.scheduleReminders(
+                        company._id.toString(),
+                        bookingRequest
+                    );
+                    
+                    if (reminderResult.success) {
+                        log('📱 ✅ Reminders scheduled', { 
+                            reminders: reminderResult.scheduled 
+                        });
+                    }
+                }
+            } catch (smsErr) {
+                // Don't fail booking if SMS fails
+                log('📱 ⚠️ SMS notification error (non-blocking)', { 
+                    error: smsErr.message 
+                });
+            }
+        })();
         
         return {
             success: true,

@@ -142,6 +142,14 @@ const bookingRequestSchema = new mongoose.Schema({
     webhookSentAt: { type: Date, default: null },
     webhookResponse: { type: mongoose.Schema.Types.Mixed, default: null },
     
+    // SMS Confirmation Tracking (V88 - Jan 2026)
+    smsConfirmation: {
+        sent: { type: Boolean, default: false },
+        sentAt: { type: Date, default: null },
+        messageId: { type: String, default: null },
+        error: { type: String, default: null }
+    },
+    
     // ═══════════════════════════════════════════════════════════════════════
     // CALL METADATA
     // ═══════════════════════════════════════════════════════════════════════
