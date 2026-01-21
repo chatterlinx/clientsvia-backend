@@ -233,6 +233,9 @@ async function loadAllRoutes() {
         
         // 📱 SMS Notifications (V88 - Jan 2026)
         routes.smsNotificationsRoutes = await loadRouteWithTimeout('./routes/company/smsNotifications', 'smsNotificationsRoutes');
+        
+        // 💬 Public Chat (V89 - Jan 2026) - Customer-facing web chat
+        routes.publicChatRoutes = await loadRouteWithTimeout('./routes/api/publicChat', 'publicChatRoutes');
         routes.v2TTSRoutes = await loadRouteWithTimeout('./routes/company/v2tts', 'v2TTSRoutes');
         routes.v2AIAgentDiagnosticsRoutes = await loadRouteWithTimeout('./routes/company/v2aiAgentDiagnostics', 'v2AIAgentDiagnosticsRoutes');
         // v2AIKnowledgebaseRoutes REMOVED Dec 2025 - always showed zeros, Black Box is better
@@ -552,6 +555,9 @@ function registerRoutes(routes) {
     
     // 📱 SMS Notifications (V88 - Jan 2026)
     app.use('/api/company/:companyId/sms-notifications', routes.smsNotificationsRoutes); // 📱 SMS confirmations & reminders
+    
+    // 💬 Public Chat (V89 - Jan 2026) - No auth required, customer-facing
+    app.use('/api/public-chat', routes.publicChatRoutes); // 💬 Web chat for customers
     
     app.use('/api/company', routes.v2TTSRoutes); // V2: Text-to-Speech for voice testing and preview (AI Voice Settings tab)
     app.use('/api/company', routes.v2AIAgentDiagnosticsRoutes); // V2: System Diagnostics (AI Agent Settings - copy/paste for debugging)
