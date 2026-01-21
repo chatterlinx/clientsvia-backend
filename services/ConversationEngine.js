@@ -3553,39 +3553,54 @@ async function processTurn({
                 
             if (extractedName) {
                 const isPartialName = !extractedName.includes(' ');
-                const alreadyAskedForMissingPart = session.askedForMissingNamePart === true;
+                const alreadyAskedForMissingPart = session.askedForMissingNamePart === true || 
+                    session.booking?.meta?.name?.askedMissingPartOnce === true;
 
-                // Full-name mode: always capture single-token as PARTIAL (never discard)
-                if (askFullNameEnabled && isPartialName) {
+                // ════════════════════════════════════════════════════════════════════════
+                // V85 FIX: LAST NAME CAPTURE
+                // ════════════════════════════════════════════════════════════════════════
+                // When we already have a partialName AND get another partial name,
+                // this is the LAST NAME response - combine them!
+                // 
+                // BEFORE (BUG): "Mark" → ask last name → "Gonzales" → partialName = "Gonzales" ❌
+                // AFTER (FIX):  "Mark" → ask last name → "Gonzales" → name = "Mark Gonzales" ✅
+                // ════════════════════════════════════════════════════════════════════════
+                if (currentSlots.partialName && isPartialName) {
+                    // We already have first name, this must be last name
+                    const partialLower = currentSlots.partialName.toLowerCase();
+                    const extractedLower = extractedName.toLowerCase();
+                    
+                    if (partialLower === extractedLower) {
+                        // Same name repeated - just promote to full name
+                        currentSlots.name = currentSlots.partialName;
+                        log('📝 V85: Same name repeated, promoting partial', { name: currentSlots.name });
+                    } else {
+                        // Different names - combine as first + last
+                        currentSlots.name = `${currentSlots.partialName} ${extractedName}`;
+                        log('📝 V85: LAST NAME CAPTURED - Combined first + last', { 
+                            first: currentSlots.partialName, 
+                            last: extractedName,
+                            fullName: currentSlots.name 
+                        });
+                    }
+                    delete currentSlots.partialName;
+                    setExtractedSlotIfChanged('name', currentSlots.name);
+                }
+                // Full-name mode: capture FIRST single-token as PARTIAL (only if no partial yet)
+                else if (askFullNameEnabled && isPartialName && !currentSlots.partialName) {
                     currentSlots.partialName = extractedName;
                     setExtractedSlotIfChanged('partialName', extractedName);
                     log('📝 PARTIAL NAME: askFullName enabled, captured first name only', {
                         partialName: extractedName
                     });
-                } else if (askMissingNamePart && isPartialName && !alreadyAskedForMissingPart) {
+                } else if (askMissingNamePart && isPartialName && !alreadyAskedForMissingPart && !currentSlots.partialName) {
                     // Store partial, let AI ask for full name
                     currentSlots.partialName = extractedName;
                     setExtractedSlotIfChanged('partialName', extractedName);
                     log('Partial name detected (will ask for full)', { partialName: extractedName });
                 } else {
-                    // Accept name as-is
-                    if (currentSlots.partialName && isPartialName) {
-                        // V37 FIX: Don't merge if extracted name is same as partial (prevents "Mark Mark")
-                        const partialLower = currentSlots.partialName.toLowerCase();
-                        const extractedLower = extractedName.toLowerCase();
-                        if (partialLower === extractedLower) {
-                            // Same name repeated - just keep the partial, don't duplicate
-                            currentSlots.name = currentSlots.partialName;
-                            log('📝 V37: Same name repeated, not duplicating', { name: currentSlots.name });
-                        } else {
-                            // Different names - merge as first + last
-                            currentSlots.name = `${currentSlots.partialName} ${extractedName}`;
-                            log('📝 V37: Merging partial + new as full name', { name: currentSlots.name });
-                        }
-                        delete currentSlots.partialName;
-                    } else {
-                        currentSlots.name = extractedName;
-                    }
+                    // Accept name as-is (either full name or single name when askFullName is OFF)
+                    currentSlots.name = extractedName;
                     setExtractedSlotIfChanged('name', currentSlots.name);
                     log('Name extracted', { name: currentSlots.name });
                 }
@@ -4115,11 +4130,14 @@ async function processTurn({
             }
 
             // ═══════════════════════════════════════════════════════════════════
-            // V84 FIX: READ-BACK DURING BOOKING
+            // V85 FIX: READ-BACK DURING BOOKING (ENHANCED)
             // ═══════════════════════════════════════════════════════════════════
             // User may ask "what address do you have?" or "do you have an address?"
             // even while we're still collecting other slots. Instead of LLM fallback
             // (which takes 3-5 seconds), instantly read back the collected value.
+            //
+            // V85: Also handles "what number is that again?" for caller ID repeat
+            // when phone hasn't been confirmed yet but was offered.
             // ═══════════════════════════════════════════════════════════════════
             const asksAboutSlotInBooking = (() => {
                 const lowerText = (userText || '').toLowerCase();
@@ -4142,7 +4160,12 @@ async function processTurn({
                     /\b(what|which).*\b(phone|number)\b.*\b(have|got|on file)\b/i,
                     /\bdo you have\b.*\b(a\s+)?(phone|number)\b/i,
                     /\bwhat('?s?|is)?\s+(my|the)\s+(phone|number)\b/i,
-                    /\bmy\s+(phone|number)\s*\??$/i
+                    /\bmy\s+(phone|number)\s*\??$/i,
+                    // V85: "what number is that again?" / "repeat the number" / "what number?"
+                    /\bwhat\s+number\b.*\b(again|that)\b/i,
+                    /\brepeat\b.*\b(the\s+)?number\b/i,
+                    /\bnumber\b.*\bagain\b/i,
+                    /\bwhat\s+(is|was)\s+(that|the)\s+number\b/i
                 ];
                 
                 if (addressPatterns.some(p => p.test(lowerText)) && currentSlots.address) {
@@ -4151,21 +4174,39 @@ async function processTurn({
                 if (namePatterns.some(p => p.test(lowerText)) && currentSlots.name) {
                     return { slot: 'name', value: currentSlots.name };
                 }
-                if (phonePatterns.some(p => p.test(lowerText)) && currentSlots.phone) {
-                    const digits = String(currentSlots.phone).replace(/\D/g, '');
-                    const cleaned = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
-                    const friendlyPhone = cleaned.length === 10 
-                        ? `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`
-                        : currentSlots.phone;
-                    return { slot: 'phone', value: friendlyPhone };
+                
+                // Phone patterns - check saved phone OR offered caller ID
+                if (phonePatterns.some(p => p.test(lowerText))) {
+                    // First check if phone is already saved
+                    if (currentSlots.phone) {
+                        const digits = String(currentSlots.phone).replace(/\D/g, '');
+                        const cleaned = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+                        const friendlyPhone = cleaned.length === 10 
+                            ? `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`
+                            : currentSlots.phone;
+                        return { slot: 'phone', value: friendlyPhone, isCallerID: false };
+                    }
+                    
+                    // V85: Check if we offered a caller ID that hasn't been confirmed yet
+                    // The caller ID should be in session.callerId or phoneMeta
+                    const offeredCallerId = phoneMeta?.offeredNumber || session?.callerId || callerId;
+                    if (offeredCallerId) {
+                        const digits = String(offeredCallerId).replace(/\D/g, '');
+                        const cleaned = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+                        const friendlyPhone = cleaned.length === 10 
+                            ? `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`
+                            : offeredCallerId;
+                        return { slot: 'phone', value: friendlyPhone, isCallerID: true };
+                    }
                 }
                 return null;
             })();
             
             if (asksAboutSlotInBooking) {
-                log('📋 V84: MID-BOOKING READ-BACK REQUEST', { 
+                log('📋 V85: MID-BOOKING READ-BACK REQUEST', { 
                     slot: asksAboutSlotInBooking.slot, 
-                    value: asksAboutSlotInBooking.value 
+                    value: asksAboutSlotInBooking.value,
+                    isCallerID: asksAboutSlotInBooking.isCallerID || false
                 });
                 
                 let readBackReply = '';
@@ -4177,7 +4218,12 @@ async function processTurn({
                         readBackReply = `The name I have is ${asksAboutSlotInBooking.value}. Is that right?`;
                         break;
                     case 'phone':
-                        readBackReply = `The phone number is ${asksAboutSlotInBooking.value}. Is that correct?`;
+                        // V85: Different response for caller ID vs saved phone
+                        if (asksAboutSlotInBooking.isCallerID) {
+                            readBackReply = `The number I see you're calling from is ${asksAboutSlotInBooking.value}. Would you like me to use that number?`;
+                        } else {
+                            readBackReply = `The phone number I have is ${asksAboutSlotInBooking.value}. Is that correct?`;
+                        }
                         break;
                 }
                 
@@ -4194,10 +4240,11 @@ async function processTurn({
                     debug: {
                         source: 'MID_BOOKING_READ_BACK',
                         slot: asksAboutSlotInBooking.slot,
-                        value: asksAboutSlotInBooking.value
+                        value: asksAboutSlotInBooking.value,
+                        isCallerID: asksAboutSlotInBooking.isCallerID || false
                     }
                 };
-                log('📋 V84: READ-BACK RESPONSE (instant, no LLM)', { reply: readBackReply });
+                log('📋 V85: READ-BACK RESPONSE (instant, no LLM)', { reply: readBackReply });
                 break BOOKING_MODE;  // Exit booking block with this response
             }
 
