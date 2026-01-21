@@ -23,7 +23,7 @@ const v2Company = require('../../models/v2Company');
 const ScheduledSMS = require('../../models/ScheduledSMS');
 const smsClient = require('../../clients/smsClient');
 const { authenticateJWT } = require('../../middleware/auth');
-const { roleCheck } = require('../../middleware/rbac');
+const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
 const logger = require('../../utils/logger');
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -31,7 +31,6 @@ const logger = require('../../utils/logger');
 // ════════════════════════════════════════════════════════════════════════════════
 
 router.use(authenticateJWT);
-router.use(roleCheck(['admin', 'owner']));
 
 // ════════════════════════════════════════════════════════════════════════════════
 // STATUS & CONFIGURATION
@@ -41,7 +40,7 @@ router.use(roleCheck(['admin', 'owner']));
  * GET /api/company/:companyId/sms-notifications/status
  * Get SMS notification configuration status
  */
-router.get('/status', async (req, res) => {
+router.get('/status', requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -98,7 +97,7 @@ router.get('/status', async (req, res) => {
  * GET /api/company/:companyId/sms-notifications/settings
  * Get full SMS notification settings
  */
-router.get('/settings', async (req, res) => {
+router.get('/settings', requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -129,7 +128,7 @@ router.get('/settings', async (req, res) => {
  * POST /api/company/:companyId/sms-notifications/settings
  * Update SMS notification settings
  */
-router.post('/settings', async (req, res) => {
+router.post('/settings', requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
     try {
         const { companyId } = req.params;
         const { settings } = req.body;
@@ -262,7 +261,7 @@ router.post('/settings', async (req, res) => {
  * POST /api/company/:companyId/sms-notifications/toggle
  * Enable/disable SMS notifications
  */
-router.post('/toggle', async (req, res) => {
+router.post('/toggle', requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
     try {
         const { companyId } = req.params;
         const { enabled } = req.body;
@@ -303,7 +302,7 @@ router.post('/toggle', async (req, res) => {
  * GET /api/company/:companyId/sms-notifications/stats
  * Get SMS notification statistics
  */
-router.get('/stats', async (req, res) => {
+router.get('/stats', requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
     try {
         const { companyId } = req.params;
         const days = parseInt(req.query.days) || 30;
@@ -327,7 +326,7 @@ router.get('/stats', async (req, res) => {
  * GET /api/company/:companyId/sms-notifications/pending
  * Get pending scheduled messages
  */
-router.get('/pending', async (req, res) => {
+router.get('/pending', requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
     try {
         const { companyId } = req.params;
         const limit = parseInt(req.query.limit) || 50;
@@ -365,7 +364,7 @@ router.get('/pending', async (req, res) => {
  * POST /api/company/:companyId/sms-notifications/test
  * Send a test SMS
  */
-router.post('/test', async (req, res) => {
+router.post('/test', requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
     try {
         const { companyId } = req.params;
         const { toPhone, messageType } = req.body;
@@ -439,7 +438,7 @@ router.post('/test', async (req, res) => {
  * DELETE /api/company/:companyId/sms-notifications/:smsId
  * Cancel a scheduled SMS
  */
-router.delete('/:smsId', async (req, res) => {
+router.delete('/:smsId', requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
     try {
         const { companyId, smsId } = req.params;
         
@@ -484,7 +483,7 @@ router.delete('/:smsId', async (req, res) => {
  * POST /api/company/:companyId/sms-notifications/cancel-booking/:bookingId
  * Cancel all pending SMS for a booking
  */
-router.post('/cancel-booking/:bookingId', async (req, res) => {
+router.post('/cancel-booking/:bookingId', requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
     try {
         const { companyId, bookingId } = req.params;
         const { reason } = req.body;

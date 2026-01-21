@@ -24,16 +24,15 @@ const router = express.Router({ mergeParams: true });
 const GoogleCalendarService = require('../../services/GoogleCalendarService');
 const v2Company = require('../../models/v2Company');
 const { authenticateJWT } = require('../../middleware/auth');
-const { roleCheck } = require('../../middleware/rbac');
+const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
 const logger = require('../../utils/logger');
 
 // ════════════════════════════════════════════════════════════════════════════════
 // MIDDLEWARE
 // ════════════════════════════════════════════════════════════════════════════════
 
-// Require authentication and admin role for all routes
+// Require authentication for all routes (permission checked per-route)
 router.use(authenticateJWT);
-router.use(roleCheck(['admin', 'owner']));
 
 // ════════════════════════════════════════════════════════════════════════════════
 // STATUS & CONFIGURATION
@@ -43,7 +42,7 @@ router.use(roleCheck(['admin', 'owner']));
  * GET /api/company/:companyId/google-calendar/status
  * Get current calendar connection status and settings
  */
-router.get('/status', async (req, res) => {
+router.get('/status', requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -76,7 +75,7 @@ router.get('/status', async (req, res) => {
  * GET /api/company/:companyId/google-calendar/auth-url
  * Get OAuth2 authorization URL for connecting calendar
  */
-router.get('/auth-url', async (req, res) => {
+router.get('/auth-url', requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -115,7 +114,7 @@ router.get('/auth-url', async (req, res) => {
  * POST /api/company/:companyId/google-calendar/disconnect
  * Disconnect calendar from company
  */
-router.post('/disconnect', async (req, res) => {
+router.post('/disconnect', requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -140,7 +139,7 @@ router.post('/disconnect', async (req, res) => {
  * GET /api/company/:companyId/google-calendar/test
  * Test calendar connection
  */
-router.get('/test', async (req, res) => {
+router.get('/test', requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -167,7 +166,7 @@ router.get('/test', async (req, res) => {
  * POST /api/company/:companyId/google-calendar/settings
  * Update calendar settings
  */
-router.post('/settings', async (req, res) => {
+router.post('/settings', requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
     try {
         const { companyId } = req.params;
         const { settings } = req.body;
@@ -237,7 +236,7 @@ router.post('/settings', async (req, res) => {
  * POST /api/company/:companyId/google-calendar/toggle
  * Enable/disable calendar integration (without disconnecting)
  */
-router.post('/toggle', async (req, res) => {
+router.post('/toggle', requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
     try {
         const { companyId } = req.params;
         const { enabled } = req.body;
@@ -279,7 +278,7 @@ router.post('/toggle', async (req, res) => {
  * Check availability for a time range
  * Query params: startDate, endDate (ISO strings)
  */
-router.get('/availability', async (req, res) => {
+router.get('/availability', requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
     try {
         const { companyId } = req.params;
         const { startDate, endDate } = req.query;
@@ -314,7 +313,7 @@ router.get('/availability', async (req, res) => {
  * Find next available slot
  * Query params: durationMinutes (optional), searchFrom (optional ISO string)
  */
-router.get('/next-slot', async (req, res) => {
+router.get('/next-slot', requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
     try {
         const { companyId } = req.params;
         const { durationMinutes, searchFrom, maxDaysAhead } = req.query;
@@ -346,7 +345,7 @@ router.get('/next-slot', async (req, res) => {
  * POST /api/company/:companyId/google-calendar/create-event
  * Manually create a test event (for admin testing)
  */
-router.post('/create-event', async (req, res) => {
+router.post('/create-event', requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
     try {
         const { companyId } = req.params;
         const { 
