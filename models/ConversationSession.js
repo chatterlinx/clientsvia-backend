@@ -528,6 +528,10 @@ conversationSessionSchema.methods.addTurn = function(role, content, metadata = {
     this.metrics.totalTurns = this.turns.length;
     this.lastActivityAt = new Date();
     
+    // V87 CRITICAL: Mark 'turns' as modified!
+    // Mongoose subdocument arrays don't auto-detect push() changes.
+    this.markModified('turns');
+    
     if (metadata.responseSource === 'llm') {
         this.metrics.llmTurns = (this.metrics.llmTurns || 0) + 1;
     } else if (metadata.responseSource === 'template' || metadata.responseSource === 'triage') {

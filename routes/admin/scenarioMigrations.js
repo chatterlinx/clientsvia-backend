@@ -207,8 +207,22 @@ router.post('/fix-filler-words', authenticateJWT, async (req, res) => {
     console.log('🔧 RUNNING: Fix Filler Words (Remove Meaningful Words)');
     console.log('============================================================\n');
     
-    // V81: Comprehensive list of words that should NEVER be stripped as fillers
+    // V87: Comprehensive list of words that should NEVER be stripped as fillers
     const WORDS_TO_REMOVE = [
+        // ════════════════════════════════════════════════════════════════════
+        // GREETINGS (V87 FIX - stripping these creates malformed sentences!)
+        // "Hi, my name is Mark" → ", my name is mark" BROKEN!
+        // ════════════════════════════════════════════════════════════════════
+        'hi', 'hey', 'hello', 'yo',
+        
+        // ════════════════════════════════════════════════════════════════════
+        // CONVERSATIONAL WORDS (V87 FIX - carry semantic meaning!)
+        // ════════════════════════════════════════════════════════════════════
+        'well',        // "Well, the technician was here" → loses context
+        'so',          // "So I called about..." → loses connective
+        'okay', 'ok',  // "Okay, my address is..." → loses acknowledgment
+        'yes', 'yeah', // "Yes, I need help" → loses affirmation
+        
         // TIME-RELATED (scheduling info!)
         'today', 'tomorrow', 'now', 'asap', 'urgent', 'emergency',
         'right away', 'immediately', 'tonight', 'morning', 'afternoon', 'evening',
@@ -373,6 +387,120 @@ router.get('/status', authenticateJWT, async (req, res) => {
     } catch (error) {
         logger.error('[SCENARIO MIGRATION] Status check failed', { error: error.message });
         res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================================================
+// GET /run-filler-fix/:secretKey
+// TEMPORARY BYPASS - Run filler word migration without auth
+// DELETE AFTER USE IN PRODUCTION
+// ============================================================================
+router.get('/run-filler-fix/:secretKey', async (req, res) => {
+    const { secretKey } = req.params;
+    
+    // Simple secret key validation
+    if (secretKey !== 'clientsvia-v87-filler-fix-2026') {
+        return res.status(401).json({ error: 'Invalid secret key' });
+    }
+    
+    console.log('\n============================================================');
+    console.log('🔧 RUNNING: V87 Filler Word Fix (Unauthenticated Bypass)');
+    console.log('============================================================\n');
+    
+    // V87: All words that should NEVER be stripped
+    const WORDS_TO_REMOVE = [
+        'hi', 'hey', 'hello', 'yo',
+        'well', 'so', 'okay', 'ok', 'yes', 'yeah',
+        'today', 'tomorrow', 'now', 'asap', 'urgent', 'emergency',
+        'right away', 'immediately', 'tonight', 'morning', 'afternoon', 'evening',
+        'you know', 'like', 'i mean', 'you guys',
+        'please', 'thanks', 'thank you',
+        'actually', 'basically', 'really', 'very'
+    ];
+    
+    const results = {
+        success: false,
+        templatesUpdated: 0,
+        wordsRemoved: {},
+        errors: []
+    };
+    
+    try {
+        const templates = await GlobalInstantResponseTemplate.find({});
+        console.log(`📋 Found ${templates.length} templates to check\n`);
+        
+        for (const template of templates) {
+            let templateModified = false;
+            const changes = [];
+            
+            // Check template-level fillerWords
+            if (template.fillerWords && template.fillerWords.length > 0) {
+                const originalCount = template.fillerWords.length;
+                const filtered = template.fillerWords.filter(word => 
+                    !WORDS_TO_REMOVE.includes(word.toLowerCase())
+                );
+                const removedCount = originalCount - filtered.length;
+                
+                if (removedCount > 0) {
+                    const removed = template.fillerWords.filter(word => 
+                        WORDS_TO_REMOVE.includes(word.toLowerCase())
+                    );
+                    changes.push(`Template-level: removed ${removedCount} words (${removed.join(', ')})`);
+                    template.fillerWords = filtered;
+                    templateModified = true;
+                    
+                    removed.forEach(w => {
+                        results.wordsRemoved[w] = (results.wordsRemoved[w] || 0) + 1;
+                    });
+                }
+            }
+            
+            // Check category-level fillerWords
+            if (template.categories && template.categories.length > 0) {
+                for (const category of template.categories) {
+                    if (category.fillerWords && category.fillerWords.length > 0) {
+                        const originalCount = category.fillerWords.length;
+                        const filtered = category.fillerWords.filter(word =>
+                            !WORDS_TO_REMOVE.includes(word.toLowerCase())
+                        );
+                        const removedCount = originalCount - filtered.length;
+                        
+                        if (removedCount > 0) {
+                            const removed = category.fillerWords.filter(word =>
+                                WORDS_TO_REMOVE.includes(word.toLowerCase())
+                            );
+                            changes.push(`Category "${category.name || category.categoryId}": removed ${removedCount} words (${removed.join(', ')})`);
+                            category.fillerWords = filtered;
+                            templateModified = true;
+                            
+                            removed.forEach(w => {
+                                results.wordsRemoved[w] = (results.wordsRemoved[w] || 0) + 1;
+                            });
+                        }
+                    }
+                }
+            }
+            
+            if (templateModified) {
+                template.markModified('fillerWords');
+                template.markModified('categories');
+                await template.save();
+                results.templatesUpdated++;
+                console.log(`📝 UPDATED: ${template.name || template._id}`);
+                changes.forEach(c => console.log(`   - ${c}`));
+            }
+        }
+        
+        results.success = true;
+        console.log(`\n✅ Migration complete. Updated ${results.templatesUpdated} templates.`);
+        console.log('Words removed:', results.wordsRemoved);
+        
+        res.json(results);
+        
+    } catch (error) {
+        logger.error('[FILLER FIX] Migration failed', { error: error.message });
+        results.errors.push(error.message);
+        res.status(500).json(results);
     }
 });
 

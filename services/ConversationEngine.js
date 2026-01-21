@@ -9950,6 +9950,14 @@ async function processTurn({
             factsCount: Object.keys(session.memory.facts).length
         });
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V87 CRITICAL FIX: Mark 'turns' as modified!
+        // Mongoose subdocument arrays don't auto-detect push() changes.
+        // Without this, conversation history is NEVER SAVED!
+        // ═══════════════════════════════════════════════════════════════════════
+        session.markModified('turns');
+        session.markModified('runningSummary');
+        
         // Persist all session changes
         session.markModified('booking');
         session.markModified('conversationMemory');
