@@ -76,34 +76,29 @@ class STTHintsBuilder {
             ];
             
             // ═══════════════════════════════════════════════════════════════════
-            // V87: COMMON FIRST NAMES FOR STT ACCURACY
+            // V87.3: USE EXISTING 908 COMMON FIRST NAMES (NO DUPLICATION!)
             // ═══════════════════════════════════════════════════════════════════
-            // Without these, STT mishears names like "Dustin" → "question"
-            // These are the TOP 100 most common US first names (male + female)
-            // No need to maintain per-company employee lists!
+            // The company already has ~908 common first names at:
+            // company.aiAgentSettings.frontDeskBehavior.commonFirstNames
+            // 
+            // Without these in STT hints, Twilio mishears:
+            // - "Dustin" → "question"
+            // - "Mark" → "bark"
+            //
+            // Twilio limit is 1000 chars, so we take the first ~150 names
+            // (average 6 chars + comma = ~7 chars per name = ~150 names max)
             // ═══════════════════════════════════════════════════════════════════
-            const commonNames = [
-                // Top male names
-                'James', 'John', 'Robert', 'Michael', 'David', 'William', 'Richard', 'Joseph',
-                'Thomas', 'Christopher', 'Charles', 'Daniel', 'Matthew', 'Anthony', 'Mark',
-                'Donald', 'Steven', 'Paul', 'Andrew', 'Joshua', 'Kenneth', 'Kevin', 'Brian',
-                'George', 'Timothy', 'Ronald', 'Edward', 'Jason', 'Jeffrey', 'Ryan',
-                'Jacob', 'Gary', 'Nicholas', 'Eric', 'Jonathan', 'Stephen', 'Larry', 'Justin',
-                'Scott', 'Brandon', 'Benjamin', 'Samuel', 'Raymond', 'Gregory', 'Frank',
-                'Alexander', 'Patrick', 'Jack', 'Dennis', 'Jerry', 'Tyler', 'Aaron', 'Jose',
-                'Adam', 'Nathan', 'Zachary', 'Henry', 'Douglas', 'Peter', 'Kyle',
-                // Commonly misheard names (like Dustin → question)
-                'Dustin', 'Austin', 'Martin', 'Colin', 'Gavin', 'Devin', 'Kevin',
-                'Colton', 'Preston', 'Tristan', 'Christian', 'Sebastian', 'Julian',
-                // Top female names
-                'Mary', 'Patricia', 'Jennifer', 'Linda', 'Barbara', 'Elizabeth', 'Susan',
-                'Jessica', 'Sarah', 'Karen', 'Lisa', 'Nancy', 'Betty', 'Margaret', 'Sandra',
-                'Ashley', 'Kimberly', 'Emily', 'Donna', 'Michelle', 'Dorothy', 'Carol',
-                'Amanda', 'Melissa', 'Deborah', 'Stephanie', 'Rebecca', 'Sharon', 'Laura',
-                'Cynthia', 'Kathleen', 'Amy', 'Angela', 'Shirley', 'Anna', 'Brenda',
-                'Pamela', 'Emma', 'Nicole', 'Helen', 'Samantha', 'Katherine', 'Christine',
-                'Debra', 'Rachel', 'Carolyn', 'Janet', 'Catherine', 'Maria', 'Heather'
-            ];
+            const commonFirstNames = company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+            
+            // Take first 150 names (Twilio has 1000 char limit for hints)
+            // Names are already sorted by popularity in the 908 list
+            const commonNames = commonFirstNames.slice(0, 150);
+            
+            logger.debug('[STT HINTS] Loaded common first names for STT accuracy', {
+                totalInCompany: commonFirstNames.length,
+                usedForHints: commonNames.length,
+                sample: commonNames.slice(0, 10).join(', ')
+            });
             
             // 🏠 Add address-related hints for booking flow
             // These help STT recognize street addresses, numbers, and common words
