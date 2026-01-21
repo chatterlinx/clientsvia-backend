@@ -4480,18 +4480,18 @@
             { id: '11', emoji: '🔴', name: 'Tomato' }
         ];
         
-        // Default color mappings
+        // Default color mappings with schedules
         const DEFAULT_COLOR_MAPPINGS = [
-            { serviceType: 'service', colorId: '7', label: 'Service Call' },
-            { serviceType: 'repair', colorId: '11', label: 'Repair' },
-            { serviceType: 'emergency', colorId: '4', label: 'Emergency' },
-            { serviceType: 'maintenance', colorId: '10', label: 'Maintenance' },
-            { serviceType: 'estimate', colorId: '5', label: 'Estimate' },
-            { serviceType: 'sales', colorId: '9', label: 'Sales' },
-            { serviceType: 'consultation', colorId: '3', label: 'Consultation' },
-            { serviceType: 'installation', colorId: '2', label: 'Installation' },
-            { serviceType: 'inspection', colorId: '6', label: 'Inspection' },
-            { serviceType: 'other', colorId: '8', label: 'Other' }
+            { serviceType: 'service', colorId: '7', label: 'Service Call', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true } },
+            { serviceType: 'repair', colorId: '11', label: 'Repair', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true } },
+            { serviceType: 'emergency', colorId: '4', label: 'Emergency', schedule: { days: ['mon','tue','wed','thu','fri','sat','sun'], startTime: '00:00', endTime: '23:59', closedHolidays: false } },
+            { serviceType: 'maintenance', colorId: '10', label: 'Maintenance', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true } },
+            { serviceType: 'estimate', colorId: '5', label: 'Estimate', schedule: { days: ['mon','tue','wed','thu','fri','sat'], startTime: '09:00', endTime: '18:00', closedHolidays: true } },
+            { serviceType: 'sales', colorId: '9', label: 'Sales', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '09:00', endTime: '17:00', closedHolidays: true } },
+            { serviceType: 'consultation', colorId: '3', label: 'Consultation', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '09:00', endTime: '17:00', closedHolidays: true } },
+            { serviceType: 'installation', colorId: '2', label: 'Installation', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '07:00', endTime: '16:00', closedHolidays: true } },
+            { serviceType: 'inspection', colorId: '6', label: 'Inspection', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true } },
+            { serviceType: 'other', colorId: '8', label: 'Other', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true } }
         ];
         
         function renderColorMappings(mappings) {
@@ -4505,17 +4505,70 @@
                     `<option value="${c.id}" ${c.id === item.colorId ? 'selected' : ''}>${c.emoji} ${c.name}</option>`
                 ).join('');
                 
+                // Schedule defaults
+                const schedule = item.schedule || { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true };
+                const allDays = ['mon','tue','wed','thu','fri','sat','sun'];
+                const dayLabels = { mon: 'M', tue: 'T', wed: 'W', thu: 'Th', fri: 'F', sat: 'Sa', sun: 'Su' };
+                
+                const dayCheckboxes = allDays.map(d => `
+                    <label class="inline-flex items-center cursor-pointer" title="${d}">
+                        <input type="checkbox" class="gc-day-check w-3 h-3" data-day="${d}" ${schedule.days?.includes(d) ? 'checked' : ''}>
+                        <span class="text-[10px] ml-0.5 ${schedule.days?.includes(d) ? 'text-gray-700' : 'text-gray-400'}">${dayLabels[d]}</span>
+                    </label>
+                `).join('');
+                
                 return `
-                    <div class="gc-color-row flex items-center gap-2 py-1" data-service-type="${item.serviceType}">
-                        <input type="text" class="gc-service-name form-input text-xs text-gray-600 w-28 py-1" value="${item.serviceType}" placeholder="type">
-                        <select class="gc-color-select form-input text-sm py-1 w-36">${colorOptions}</select>
-                        <input type="text" class="gc-color-label form-input text-sm py-1 flex-1" value="${item.label || item.serviceType}" placeholder="Display Label">
-                        <button type="button" class="gc-delete-row text-red-500 hover:text-red-700 text-xs px-2" title="Delete">
-                            <i class="fas fa-trash"></i>
-                        </button>
+                    <div class="gc-color-row border border-gray-200 rounded-lg p-2 mb-2 bg-white" data-service-type="${item.serviceType}">
+                        <div class="flex items-center gap-2">
+                            <input type="text" class="gc-service-name form-input text-xs text-gray-600 w-24 py-1" value="${item.serviceType}" placeholder="type">
+                            <select class="gc-color-select form-input text-sm py-1 w-32">${colorOptions}</select>
+                            <input type="text" class="gc-color-label form-input text-sm py-1 flex-1" value="${item.label || item.serviceType}" placeholder="Display Label">
+                            <button type="button" class="gc-toggle-schedule text-gray-500 hover:text-gray-700 text-xs px-1" title="Edit Schedule">
+                                <i class="fas fa-clock"></i>
+                            </button>
+                            <button type="button" class="gc-delete-row text-red-500 hover:text-red-700 text-xs px-1" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="gc-schedule-panel hidden mt-2 pt-2 border-t border-gray-100">
+                            <div class="flex flex-wrap items-center gap-3">
+                                <div class="flex items-center gap-1 text-xs">
+                                    <span class="text-gray-500">Days:</span>
+                                    ${dayCheckboxes}
+                                </div>
+                                <div class="flex items-center gap-1 text-xs">
+                                    <span class="text-gray-500">Hours:</span>
+                                    <input type="time" class="gc-start-time form-input text-xs py-0.5 w-20" value="${schedule.startTime || '08:00'}">
+                                    <span class="text-gray-400">-</span>
+                                    <input type="time" class="gc-end-time form-input text-xs py-0.5 w-20" value="${schedule.endTime || '17:00'}">
+                                </div>
+                                <label class="inline-flex items-center text-xs cursor-pointer">
+                                    <input type="checkbox" class="gc-closed-holidays w-3 h-3" ${schedule.closedHolidays !== false ? 'checked' : ''}>
+                                    <span class="ml-1 text-gray-600">Closed holidays</span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 `;
             }).join('');
+            
+            // Wire toggle schedule panels
+            container.querySelectorAll('.gc-toggle-schedule').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const row = e.target.closest('.gc-color-row');
+                    const panel = row?.querySelector('.gc-schedule-panel');
+                    if (panel) {
+                        panel.classList.toggle('hidden');
+                        // Change icon
+                        const icon = btn.querySelector('i');
+                        if (panel.classList.contains('hidden')) {
+                            icon.className = 'fas fa-clock';
+                        } else {
+                            icon.className = 'fas fa-clock text-purple-600';
+                        }
+                    }
+                });
+            });
             
             // Wire delete buttons
             container.querySelectorAll('.gc-delete-row').forEach(btn => {
@@ -4545,23 +4598,69 @@
                     return;
                 }
                 
-                // Add new row
+                // Add new row with schedule
                 const container = document.getElementById('gc-color-mappings');
                 const colorOptions = GC_COLOR_OPTIONS.map(c => 
                     `<option value="${c.id}">${c.emoji} ${c.name}</option>`
                 ).join('');
                 
+                const allDays = ['mon','tue','wed','thu','fri','sat','sun'];
+                const dayLabels = { mon: 'M', tue: 'T', wed: 'W', thu: 'Th', fri: 'F', sat: 'Sa', sun: 'Su' };
+                const defaultDays = ['mon','tue','wed','thu','fri'];
+                
+                const dayCheckboxes = allDays.map(d => `
+                    <label class="inline-flex items-center cursor-pointer" title="${d}">
+                        <input type="checkbox" class="gc-day-check w-3 h-3" data-day="${d}" ${defaultDays.includes(d) ? 'checked' : ''}>
+                        <span class="text-[10px] ml-0.5 ${defaultDays.includes(d) ? 'text-gray-700' : 'text-gray-400'}">${dayLabels[d]}</span>
+                    </label>
+                `).join('');
+                
                 const newRow = document.createElement('div');
-                newRow.className = 'gc-color-row flex items-center gap-2 py-1';
+                newRow.className = 'gc-color-row border border-gray-200 rounded-lg p-2 mb-2 bg-white';
                 newRow.dataset.serviceType = newType;
                 newRow.innerHTML = `
-                    <input type="text" class="gc-service-name form-input text-xs text-gray-600 w-28 py-1" value="${newType}" placeholder="type">
-                    <select class="gc-color-select form-input text-sm py-1 w-36">${colorOptions}</select>
-                    <input type="text" class="gc-color-label form-input text-sm py-1 flex-1" value="${newType}" placeholder="Display Label">
-                    <button type="button" class="gc-delete-row text-red-500 hover:text-red-700 text-xs px-2" title="Delete">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <input type="text" class="gc-service-name form-input text-xs text-gray-600 w-24 py-1" value="${newType}" placeholder="type">
+                        <select class="gc-color-select form-input text-sm py-1 w-32">${colorOptions}</select>
+                        <input type="text" class="gc-color-label form-input text-sm py-1 flex-1" value="${newType}" placeholder="Display Label">
+                        <button type="button" class="gc-toggle-schedule text-gray-500 hover:text-gray-700 text-xs px-1" title="Edit Schedule">
+                            <i class="fas fa-clock"></i>
+                        </button>
+                        <button type="button" class="gc-delete-row text-red-500 hover:text-red-700 text-xs px-1" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="gc-schedule-panel hidden mt-2 pt-2 border-t border-gray-100">
+                        <div class="flex flex-wrap items-center gap-3">
+                            <div class="flex items-center gap-1 text-xs">
+                                <span class="text-gray-500">Days:</span>
+                                ${dayCheckboxes}
+                            </div>
+                            <div class="flex items-center gap-1 text-xs">
+                                <span class="text-gray-500">Hours:</span>
+                                <input type="time" class="gc-start-time form-input text-xs py-0.5 w-20" value="08:00">
+                                <span class="text-gray-400">-</span>
+                                <input type="time" class="gc-end-time form-input text-xs py-0.5 w-20" value="17:00">
+                            </div>
+                            <label class="inline-flex items-center text-xs cursor-pointer">
+                                <input type="checkbox" class="gc-closed-holidays w-3 h-3" checked>
+                                <span class="ml-1 text-gray-600">Closed holidays</span>
+                            </label>
+                        </div>
+                    </div>
                 `;
+                
+                // Wire toggle schedule
+                newRow.querySelector('.gc-toggle-schedule').addEventListener('click', () => {
+                    const panel = newRow.querySelector('.gc-schedule-panel');
+                    const icon = newRow.querySelector('.gc-toggle-schedule i');
+                    panel.classList.toggle('hidden');
+                    if (panel.classList.contains('hidden')) {
+                        icon.className = 'fas fa-clock';
+                    } else {
+                        icon.className = 'fas fa-clock text-purple-600';
+                    }
+                });
                 
                 // Wire delete button
                 newRow.querySelector('.gc-delete-row').addEventListener('click', () => {
@@ -4683,14 +4782,27 @@
                 btn.disabled = true;
                 
                 try {
-                    // Gather color mappings from UI (now with editable service names)
+                    // Gather color mappings from UI (now with editable service names + schedules)
                     const colorMappings = [];
                     document.querySelectorAll('#gc-color-mappings .gc-color-row').forEach(row => {
                         const serviceType = row.querySelector('.gc-service-name')?.value?.trim().toLowerCase().replace(/\s+/g, '_') || row.dataset.serviceType;
                         const colorId = row.querySelector('.gc-color-select')?.value || '7';
                         const label = row.querySelector('.gc-color-label')?.value || serviceType;
+                        
+                        // Gather schedule data
+                        const days = [];
+                        row.querySelectorAll('.gc-day-check:checked').forEach(cb => {
+                            days.push(cb.dataset.day);
+                        });
+                        const schedule = {
+                            days: days.length > 0 ? days : ['mon','tue','wed','thu','fri'],
+                            startTime: row.querySelector('.gc-start-time')?.value || '08:00',
+                            endTime: row.querySelector('.gc-end-time')?.value || '17:00',
+                            closedHolidays: row.querySelector('.gc-closed-holidays')?.checked !== false
+                        };
+                        
                         if (serviceType) {
-                            colorMappings.push({ serviceType, colorId, label });
+                            colorMappings.push({ serviceType, colorId, label, schedule });
                         }
                     });
                     
