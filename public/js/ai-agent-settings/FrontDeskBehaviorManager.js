@@ -2571,6 +2571,17 @@ Sean → Shawn, Shaun"
                     </button>
                 </div>
                 
+                <!-- Search Box -->
+                <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
+                    <div style="position: relative; flex: 1;">
+                        <input type="text" id="fdb-search-first-name" 
+                            placeholder="🔍 Search names (e.g., Dustin, Mark, Sarah...)" 
+                            style="width: 100%; padding: 8px 12px 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.875rem;"
+                            oninput="window.frontDeskManager.searchFirstNames(this.value)">
+                    </div>
+                    <span id="fdb-search-result" style="color: #8b949e; font-size: 0.75rem; min-width: 100px;"></span>
+                </div>
+                
                 <div id="common-first-names-container" style="display: flex; flex-wrap: wrap; gap: 8px; max-height: 200px; overflow-y: auto; padding: 12px; background: #0d1117; border-radius: 6px; border: 1px solid #30363d;">
                     ${this.renderCommonFirstNameTags()}
                 </div>
@@ -3699,6 +3710,67 @@ Sean → Shawn, Shaun`;
         });
     }
     
+    /**
+     * Search through common first names and highlight/filter results
+     * @param {string} query - Search query
+     */
+    searchFirstNames(query) {
+        const container = document.getElementById('common-first-names-container');
+        const resultEl = document.getElementById('fdb-search-result');
+        const tags = container?.querySelectorAll('.first-name-tag');
+        const names = this.config.commonFirstNames || [];
+        
+        if (!query || query.trim() === '') {
+            // Show all names, reset highlighting
+            tags?.forEach(tag => {
+                tag.style.display = 'inline-flex';
+                tag.style.background = '#21262d';
+                tag.style.borderColor = '#30363d';
+            });
+            if (resultEl) resultEl.textContent = '';
+            return;
+        }
+        
+        const searchLower = query.toLowerCase().trim();
+        let matchCount = 0;
+        let exactMatch = false;
+        
+        tags?.forEach((tag, idx) => {
+            const name = names[idx]?.toLowerCase() || '';
+            const isMatch = name.includes(searchLower);
+            const isExact = name === searchLower;
+            
+            if (isMatch) {
+                matchCount++;
+                tag.style.display = 'inline-flex';
+                // Highlight: green for exact match, yellow for partial
+                if (isExact) {
+                    exactMatch = true;
+                    tag.style.background = '#238636';
+                    tag.style.borderColor = '#3fb950';
+                    tag.style.color = '#ffffff';
+                } else {
+                    tag.style.background = '#634c1e';
+                    tag.style.borderColor = '#f0883e';
+                    tag.style.color = '#f0883e';
+                }
+            } else {
+                tag.style.display = 'none';
+            }
+        });
+        
+        // Show result message
+        if (resultEl) {
+            if (matchCount === 0) {
+                resultEl.innerHTML = '<span style="color: #f85149;">❌ Not found</span>';
+            } else if (exactMatch) {
+                resultEl.innerHTML = `<span style="color: #3fb950;">✅ Found "${query}"</span>`;
+            } else {
+                resultEl.innerHTML = `<span style="color: #f0883e;">🔶 ${matchCount} partial match${matchCount > 1 ? 'es' : ''}</span>`;
+            }
+        }
+    }
+    
     updateCommonFirstNamesDisplay() {
         const container = document.getElementById('common-first-names-container');
         if (container) {
@@ -3709,6 +3781,11 @@ Sean → Shawn, Shaun`;
         if (countEl) {
             countEl.textContent = `${(this.config.commonFirstNames || []).length} names`;
         }
+        // Clear search box and results when list is updated
+        const searchInput = document.getElementById('fdb-search-first-name');
+        const resultEl = document.getElementById('fdb-search-result');
+        if (searchInput) searchInput.value = '';
+        if (resultEl) resultEl.textContent = '';
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
