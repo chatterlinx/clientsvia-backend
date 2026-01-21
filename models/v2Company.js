@@ -1155,11 +1155,12 @@ const companySchema = new mongoose.Schema({
                 default: 0
             },
             speechDetection: {
+                // V87: Lowered from 3s to 1.5s - 3s creates guaranteed dead air floor!
                 speechTimeout: {
                     type: Number,
                     min: 1,
                     max: 10,
-                    default: 3
+                    default: 1.5
                 },
                 initialTimeout: {
                     type: Number,
@@ -1188,7 +1189,8 @@ const companySchema = new mongoose.Schema({
             // "Natural Flow Mode" is a preset that optimizes for conversation timing
             callExperience: {
                 // === Response Timing ===
-                speechTimeout: { type: Number, default: 3, min: 1, max: 5 },       // Wait after caller stops
+                // V87: Lowered from 3.0 to 1.5s - 3s creates guaranteed dead air floor!
+                speechTimeout: { type: Number, default: 1.5, min: 1, max: 5 },     // Wait after caller stops
                 endSilenceTimeout: { type: Number, default: 2.0, min: 0.5, max: 3 }, // Extra silence detection
                 initialTimeout: { type: Number, default: 5, min: 3, max: 15 },     // Wait for caller to start
                 
@@ -4308,14 +4310,14 @@ const companySchema = new mongoose.Schema({
                     // Speech Timeout: How long to wait (in seconds) after caller stops talking
                     // before considering their input complete
                     // Range: 1-10 seconds
-                    // - Lower (1-3s) = Faster responses, but may cut off pauses
+                    // - Lower (1-2s) = Faster responses, but may cut off pauses
                     // - Higher (7-10s) = Allows long pauses, but feels slower
-                    // - Recommended: 3-5s for most businesses
+                    // - V87: Lowered default from 3s to 1.5s for faster perceived response
                     speechTimeout: {
                         type: Number,
                         min: 1,
                         max: 10,
-                        default: 3 // Optimized for natural conversation flow
+                        default: 1.5 // V87: Optimized for speed - was 3.0
                     },
                     
                     // Initial Timeout: How long to wait for ANY speech to start (in seconds)

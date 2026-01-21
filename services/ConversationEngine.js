@@ -1451,6 +1451,40 @@ function stripFillerWords(userText, company, template) {
     // Clean up extra whitespace
     cleaned = cleaned.replace(/\s+/g, ' ').trim();
     
+    // ════════════════════════════════════════════════════════════════════════
+    // V87 P1: FIX STT PUNCTUATION CORRUPTION
+    // ════════════════════════════════════════════════════════════════════════
+    // After filler removal, we can have broken punctuation patterns like:
+    // - ", and ," (orphaned commas with just conjunctions)
+    // - ", , ," (multiple adjacent commas)
+    // - ".. ." (adjacent periods)
+    // - Leading punctuation at start of text
+    // This step normalizes grammar while preserving natural sentence structure.
+    // ════════════════════════════════════════════════════════════════════════
+    
+    // Remove duplicate consecutive punctuation (, , or . . or , .)
+    cleaned = cleaned.replace(/,\s*,+/g, ',');
+    cleaned = cleaned.replace(/\.\s*\.+/g, '.');
+    cleaned = cleaned.replace(/[,;]\s*\./g, '.');
+    cleaned = cleaned.replace(/\.\s*,/g, '.');
+    
+    // Remove comma-only fragments (", and ,")
+    cleaned = cleaned.replace(/,\s*(and|or|but)\s*,/gi, ' $1');
+    
+    // Remove comma after conjunction only (", and" at start → "and")
+    cleaned = cleaned.replace(/^,\s*/g, '');
+    
+    // Remove trailing comma before period
+    cleaned = cleaned.replace(/,\s*\./g, '.');
+    
+    // Remove double spaces again after punctuation cleanup
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    
+    // Capitalize first letter if it exists
+    if (cleaned.length > 0) {
+        cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    }
+    
     // Log if fillers were removed
     if (removed.length > 0) {
         console.log('[FILLER] 🔇 Stripped filler words:', {
@@ -3756,6 +3790,84 @@ async function processTurn({
         // Scenario tools retrieval result (only set in DISCOVERY/SUPPORT turns; used for debugSnapshot)
         let scenarioRetrieval = null;
             const aiStartTime = Date.now();
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V87 P0 CRITICAL: SILENCE/EMPTY INPUT GATE - NEVER Tier-3!
+        // ═══════════════════════════════════════════════════════════════════════
+        // When caller doesn't say anything (timeout, silence, background noise),
+        // use a DETERMINISTIC prompt instead of expensive LLM.
+        // This saves 3-5s latency + token cost on every silence event!
+        // ═══════════════════════════════════════════════════════════════════════
+        const isEmptyInput = !userText || userText.trim() === '' || userText === '[silence]';
+        
+        if (isEmptyInput) {
+            log('🔇 V87: EMPTY/SILENCE INPUT DETECTED - Using deterministic prompt (NO Tier-3!)');
+            
+            // Get UI-configured silence prompts or use smart defaults
+            const silenceConfig = company.aiAgentSettings?.voiceSettings?.silenceHandling || {};
+            const silencePrompts = silenceConfig.silencePrompts || [
+                "Are you still there?",
+                "I'm still here whenever you're ready.",
+                "Take your time - I'm listening.",
+                "Hello? Can you hear me?"
+            ];
+            
+            // Rotate through silence prompts based on turn count
+            const silenceCount = session.metrics?.silenceCount || 0;
+            const silenceReply = silencePrompts[silenceCount % silencePrompts.length];
+            
+            // Track silence count for escalation
+            session.metrics = session.metrics || {};
+            session.metrics.silenceCount = silenceCount + 1;
+            
+            // If too many consecutive silences, offer transfer
+            const maxSilences = silenceConfig.maxSilencesBeforeTransfer || 3;
+            let finalSilenceReply = silenceReply;
+            
+            if (silenceCount >= maxSilences - 1) {
+                finalSilenceReply = silenceConfig.transferPrompt || 
+                    "I'm having trouble hearing you. Would you like me to transfer you to someone who can help?";
+            }
+            
+            aiResult = {
+                reply: finalSilenceReply,
+                conversationMode: session.mode || 'DISCOVERY',
+                filledSlots: currentSlots,
+                signals: { isSilence: true },
+                latencyMs: Date.now() - aiStartTime,
+                tokensUsed: 0,  // NO LLM cost!
+                fromStateMachine: true,
+                matchSource: 'SILENCE_HANDLER',
+                tier: 'tier1',
+                mode: session.mode || 'DISCOVERY',
+                debug: {
+                    source: 'SILENCE_DETERMINISTIC',
+                    silenceCount: silenceCount + 1,
+                    maxSilences
+                }
+            };
+            
+            // Log to Black Box
+            if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                    callId: session._id?.toString(),
+                    companyId,
+                    type: 'SILENCE_HANDLED_TIER1',
+                    data: {
+                        silenceCount: silenceCount + 1,
+                        maxSilences,
+                        reply: finalSilenceReply,
+                        latencyMs: Date.now() - aiStartTime
+                    }
+                }).catch(() => {});
+            }
+            
+            log('🔇 V87: SILENCE RESPONSE (instant, no LLM)', { 
+                silenceCount: silenceCount + 1, 
+                reply: finalSilenceReply 
+            });
+            // Skip all other processing - go directly to response building
+        }
             
         // ═══════════════════════════════════════════════════════════════════════
         // V86 P0: UNIVERSAL META INTENT INTERCEPTOR
@@ -3767,8 +3879,9 @@ async function processTurn({
         // - "can you confirm" / "read that back"
         //
         // This runs BEFORE mode-specific handlers to catch all cases.
+        // V87: Skip if silence handler already handled this turn
         // ═══════════════════════════════════════════════════════════════════════
-        const metaIntentCheck = (() => {
+        const metaIntentCheck = aiResult ? null : (() => {
             const lowerText = (userText || '').toLowerCase().trim();
             if (!lowerText) return null;
             
@@ -3809,6 +3922,30 @@ async function processTurn({
                 /\bwhat\b.*\bname\b.*\bhave\b/i
             ];
             
+            // === V87 P0: SERVICE HISTORY / TECHNICIAN IDENTITY ===
+            // "who was the technician" / "who came out" / "last visit"
+            // These MUST be Tier-1 - don't waste 4s on LLM!
+            const techIdentityPatterns = [
+                /\bwho\b.*\b(was|is)\b.*\b(the\s+)?(tech|technician|guy|person|man|woman)\b/i,
+                /\bwho\b.*\b(came|came out|was here|was out|showed up)\b/i,
+                /\b(tech|technician)\b.*\bname\b/i,
+                /\bname\s+of\b.*\b(tech|technician)\b/i,
+                /\bwho\b.*\bsent\b/i,
+                /\blast\b.*\b(visit|service|appointment|time)\b/i,
+                /\bwhen\b.*\b(were you|was someone|did someone)\b.*\b(here|out)\b/i
+            ];
+            
+            // === V87 P0: YOU DIDN'T ANSWER / REPAIR BEHAVIOR ===
+            // Caller is frustrated - need fast deterministic recovery
+            const repairPatterns = [
+                /\byou\b.*\bdidn'?t\b.*\b(answer|respond|help|listen)\b/i,
+                /\bthat'?s\b.*\bnot\b.*\b(what i|what I)\b.*\b(asked|said|meant)\b/i,
+                /\blisten\b.*\b(to me|to what)\b/i,
+                /\bi\s+(just\s+)?(asked|said|told)\b/i,
+                /\bcan you\b.*\b(hear|understand)\b.*\bme\b/i,
+                /\byou'?re\b.*\bnot\b.*\b(listening|hearing|understanding)\b/i
+            ];
+            
             // Check patterns
             if (repeatPatterns.some(p => p.test(lowerText))) {
                 return { intent: 'REPEAT_LAST', patterns: 'repeat' };
@@ -3824,6 +3961,28 @@ async function processTurn({
             }
             if (nameQueryPatterns.some(p => p.test(lowerText)) && currentSlots.name) {
                 return { intent: 'QUERY_NAME', value: currentSlots.name };
+            }
+            
+            // V87 P0: Technician identity / service history
+            if (techIdentityPatterns.some(p => p.test(lowerText))) {
+                // Check if we have any tech info from discovery or customer context
+                const techName = session.discovery?.mentionedTechName || 
+                                customerContext?.history?.lastTechnicianName ||
+                                null;
+                const lastVisit = session.discovery?.previousVisitTime || 
+                                 customerContext?.history?.recentVisits?.[0]?.date ||
+                                 null;
+                return { 
+                    intent: 'QUERY_TECH_HISTORY', 
+                    techName, 
+                    lastVisit,
+                    patterns: 'tech_identity' 
+                };
+            }
+            
+            // V87 P0: Repair behavior - caller frustrated with agent
+            if (repairPatterns.some(p => p.test(lowerText))) {
+                return { intent: 'REPAIR_CONVERSATION', patterns: 'repair' };
             }
             
             return null;
@@ -3868,6 +4027,27 @@ async function processTurn({
                     
                 case 'QUERY_NAME':
                     metaReply = `The name I have is ${metaIntentCheck.value}. Is that correct?`;
+                    break;
+                    
+                case 'QUERY_TECH_HISTORY':
+                    // V87 P0: Handle technician identity / service history queries
+                    if (metaIntentCheck.techName) {
+                        metaReply = `Based on the notes, it looks like ${metaIntentCheck.techName} was the technician.`;
+                        if (metaIntentCheck.lastVisit) {
+                            metaReply += ` They were out on ${metaIntentCheck.lastVisit}.`;
+                        }
+                        metaReply += ` How can I help you today?`;
+                    } else {
+                        // No tech info available - acknowledge and pivot to helping
+                        metaReply = "I don't have specific technician information in front of me right now. " +
+                                   "Let me help you with what you need today - are you looking to schedule a follow-up service?";
+                    }
+                    break;
+                    
+                case 'REPAIR_CONVERSATION':
+                    // V87 P0: Repair behavior - acknowledge frustration and try again
+                    metaReply = "I apologize for any confusion. Let me make sure I understand - " +
+                               "what specifically can I help you with right now?";
                     break;
             }
             
