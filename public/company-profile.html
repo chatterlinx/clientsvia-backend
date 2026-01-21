@@ -644,6 +644,44 @@
                                             <p class="text-xs text-gray-500 mt-1">Placeholders: {customerName}, {serviceType}, {companyName}</p>
                                         </div>
                                         
+                                        <!-- ═══════════════════════════════════════════════════════════════════════════
+                                             EVENT COLORS - V89 (Jan 2026)
+                                             Color-code calendar events by service type
+                                             ═══════════════════════════════════════════════════════════════════════════ -->
+                                        <div class="mt-6 border-t border-gray-200 pt-4">
+                                            <div class="flex items-center justify-between mb-3">
+                                                <h4 class="text-sm font-semibold text-gray-700">
+                                                    <i class="fas fa-palette mr-2 text-purple-600"></i>Event Colors (Tags)
+                                                </h4>
+                                                <div class="flex items-center">
+                                                    <input type="checkbox" id="gc-colors-enabled" class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" checked>
+                                                    <label for="gc-colors-enabled" class="ml-2 text-sm text-gray-700">Enable color-coding</label>
+                                                </div>
+                                            </div>
+                                            <p class="text-xs text-gray-500 mb-3">Color events automatically based on service type. AI detects intent (repair, maintenance, estimate, etc.) and applies the matching color.</p>
+                                            
+                                            <div id="gc-color-mappings" class="space-y-2">
+                                                <!-- Color mappings will be populated by JavaScript -->
+                                            </div>
+                                            
+                                            <div class="mt-3 flex items-center">
+                                                <label class="text-sm text-gray-700 mr-2">Default color (when type unknown):</label>
+                                                <select id="gc-default-color" class="form-input w-auto text-sm">
+                                                    <option value="1">🟪 Lavender</option>
+                                                    <option value="2">🟩 Sage</option>
+                                                    <option value="3">🟣 Grape</option>
+                                                    <option value="4">🩷 Flamingo</option>
+                                                    <option value="5">🟨 Banana</option>
+                                                    <option value="6">🟧 Tangerine</option>
+                                                    <option value="7" selected>🩵 Peacock</option>
+                                                    <option value="8">⬜ Graphite</option>
+                                                    <option value="9">🟦 Blueberry</option>
+                                                    <option value="10">💚 Basil</option>
+                                                    <option value="11">🔴 Tomato</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
                                         <div class="mt-4 flex justify-end">
                                             <button type="button" id="gc-save-settings-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150">
                                                 <i class="fas fa-save mr-2"></i>Save Calendar Settings
@@ -4397,6 +4435,12 @@
                     document.getElementById('gc-send-invite').checked = settings.sendCustomerInvite === true;
                     document.getElementById('gc-event-title').value = settings.eventTitleTemplate || '{serviceType} - {customerName}';
                     
+                    // Populate event color settings
+                    const eventColors = data.eventColors || {};
+                    document.getElementById('gc-colors-enabled').checked = eventColors.enabled !== false;
+                    document.getElementById('gc-default-color').value = eventColors.defaultColorId || '7';
+                    renderColorMappings(eventColors.colorMapping);
+                    
                     // Show error badge if there are errors
                     if (data.consecutiveErrors > 0) {
                         console.warn('📅 [GOOGLE CALENDAR] Has errors:', data.lastError);
@@ -4411,6 +4455,56 @@
             
             // Wire up event handlers
             wireGoogleCalendarHandlers(companyId);
+        }
+        
+        // Color emoji map for Google Calendar colors
+        const GC_COLOR_OPTIONS = [
+            { id: '1', emoji: '🟪', name: 'Lavender' },
+            { id: '2', emoji: '🟩', name: 'Sage' },
+            { id: '3', emoji: '🟣', name: 'Grape' },
+            { id: '4', emoji: '🩷', name: 'Flamingo' },
+            { id: '5', emoji: '🟨', name: 'Banana' },
+            { id: '6', emoji: '🟧', name: 'Tangerine' },
+            { id: '7', emoji: '🩵', name: 'Peacock' },
+            { id: '8', emoji: '⬜', name: 'Graphite' },
+            { id: '9', emoji: '🟦', name: 'Blueberry' },
+            { id: '10', emoji: '💚', name: 'Basil' },
+            { id: '11', emoji: '🔴', name: 'Tomato' }
+        ];
+        
+        // Default color mappings
+        const DEFAULT_COLOR_MAPPINGS = [
+            { serviceType: 'service', colorId: '7', label: 'Service Call' },
+            { serviceType: 'repair', colorId: '11', label: 'Repair' },
+            { serviceType: 'emergency', colorId: '4', label: 'Emergency' },
+            { serviceType: 'maintenance', colorId: '10', label: 'Maintenance' },
+            { serviceType: 'estimate', colorId: '5', label: 'Estimate' },
+            { serviceType: 'sales', colorId: '9', label: 'Sales' },
+            { serviceType: 'consultation', colorId: '3', label: 'Consultation' },
+            { serviceType: 'installation', colorId: '2', label: 'Installation' },
+            { serviceType: 'inspection', colorId: '6', label: 'Inspection' },
+            { serviceType: 'other', colorId: '8', label: 'Other' }
+        ];
+        
+        function renderColorMappings(mappings) {
+            const container = document.getElementById('gc-color-mappings');
+            if (!container) return;
+            
+            const data = mappings && mappings.length > 0 ? mappings : DEFAULT_COLOR_MAPPINGS;
+            
+            container.innerHTML = data.map(item => {
+                const colorOptions = GC_COLOR_OPTIONS.map(c => 
+                    `<option value="${c.id}" ${c.id === item.colorId ? 'selected' : ''}>${c.emoji} ${c.name}</option>`
+                ).join('');
+                
+                return `
+                    <div class="gc-color-row flex items-center gap-2 py-1" data-service-type="${item.serviceType}">
+                        <span class="text-xs text-gray-500 w-24 capitalize">${item.serviceType}</span>
+                        <select class="gc-color-select form-input text-sm py-1 w-36">${colorOptions}</select>
+                        <input type="text" class="gc-color-label form-input text-sm py-1 flex-1" value="${item.label || item.serviceType}" placeholder="Label">
+                    </div>
+                `;
+            }).join('');
         }
         
         function wireGoogleCalendarHandlers(companyId) {
@@ -4521,6 +4615,15 @@
                 btn.disabled = true;
                 
                 try {
+                    // Gather color mappings from UI
+                    const colorMappings = [];
+                    document.querySelectorAll('#gc-color-mappings .gc-color-row').forEach(row => {
+                        const serviceType = row.dataset.serviceType;
+                        const colorId = row.querySelector('.gc-color-select')?.value || '7';
+                        const label = row.querySelector('.gc-color-label')?.value || serviceType;
+                        colorMappings.push({ serviceType, colorId, label });
+                    });
+                    
                     const settings = {
                         bufferMinutes: parseInt(document.getElementById('gc-buffer-minutes').value) || 60,
                         defaultDurationMinutes: parseInt(document.getElementById('gc-duration-minutes').value) || 60,
@@ -4533,13 +4636,19 @@
                         eventTitleTemplate: document.getElementById('gc-event-title').value
                     };
                     
+                    const eventColors = {
+                        enabled: document.getElementById('gc-colors-enabled').checked,
+                        colorMapping: colorMappings,
+                        defaultColorId: document.getElementById('gc-default-color').value
+                    };
+                    
                     const response = await fetch(`/api/company/${companyId}/google-calendar/settings`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ settings })
+                        body: JSON.stringify({ settings, eventColors })
                     });
                     const data = await response.json();
                     

@@ -336,6 +336,46 @@ const googleCalendarSchema = new mongoose.Schema({
         }
     },
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EVENT COLOR/TAGS - V89 (Jan 2026)
+    // Google Calendar colorId: 1=Lavender, 2=Sage, 3=Grape, 4=Flamingo, 5=Banana,
+    // 6=Tangerine, 7=Peacock, 8=Graphite, 9=Blueberry, 10=Basil, 11=Tomato
+    // ═══════════════════════════════════════════════════════════════════════════
+    eventColors: {
+        // Enable color-coding by service type
+        enabled: { type: Boolean, default: true },
+        
+        // Map service types to Google Calendar colors
+        // AI determines serviceType from conversation (repair, maintenance, estimate, etc.)
+        colorMapping: {
+            type: [{
+                serviceType: { 
+                    type: String, 
+                    enum: ['service', 'repair', 'emergency', 'maintenance', 'estimate', 'sales', 'consultation', 'installation', 'inspection', 'other'],
+                    required: true
+                },
+                colorId: { type: String, default: '1' }, // Google Calendar colorId (1-11)
+                label: { type: String, trim: true }, // Display label for UI
+                description: { type: String, trim: true } // Optional description
+            }],
+            default: [
+                { serviceType: 'service', colorId: '7', label: 'Service Call', description: 'General service request' },
+                { serviceType: 'repair', colorId: '11', label: 'Repair', description: 'Equipment repair (urgent)' },
+                { serviceType: 'emergency', colorId: '4', label: 'Emergency', description: 'Emergency/same-day service' },
+                { serviceType: 'maintenance', colorId: '10', label: 'Maintenance', description: 'Scheduled maintenance/tune-up' },
+                { serviceType: 'estimate', colorId: '5', label: 'Estimate', description: 'Quote/estimate visit' },
+                { serviceType: 'sales', colorId: '9', label: 'Sales', description: 'Sales consultation' },
+                { serviceType: 'consultation', colorId: '3', label: 'Consultation', description: 'General consultation' },
+                { serviceType: 'installation', colorId: '2', label: 'Installation', description: 'New installation' },
+                { serviceType: 'inspection', colorId: '6', label: 'Inspection', description: 'System inspection' },
+                { serviceType: 'other', colorId: '8', label: 'Other', description: 'Uncategorized' }
+            ]
+        },
+        
+        // Default color when service type can't be determined
+        defaultColorId: { type: String, default: '7' } // Peacock (teal)
+    },
+    
     // Error tracking
     lastError: { type: String, default: null },
     lastErrorAt: { type: Date, default: null },

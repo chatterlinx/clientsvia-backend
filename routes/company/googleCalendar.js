@@ -164,45 +164,65 @@ router.get('/test', requirePermission(PERMISSIONS.CONFIG_READ), async (req, res)
 
 /**
  * POST /api/company/:companyId/google-calendar/settings
- * Update calendar settings
+ * Update calendar settings and event colors
  */
 router.post('/settings', requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
     try {
         const { companyId } = req.params;
-        const { settings } = req.body;
+        const { settings, eventColors } = req.body;
         
-        if (!settings || typeof settings !== 'object') {
-            return res.status(400).json({
-                success: false,
-                error: 'Settings object required'
-            });
-        }
+        // Build update object
+        const updateObj = {};
         
-        // Validate settings
-        const validSettings = {};
-        const allowedFields = [
-            'bufferMinutes',
-            'defaultDurationMinutes',
-            'maxBookingDaysAhead',
-            'useCompanyHours',
-            'customWorkingHours',
-            'includeCustomerPhone',
-            'includeCustomerAddress',
-            'includeServiceNotes',
-            'eventTitleTemplate',
-            'eventDescriptionTemplate',
-            'sendCustomerInvite',
-            'fallbackMode',
-            'fallbackMessage'
-        ];
-        
-        for (const key of allowedFields) {
-            if (settings[key] !== undefined) {
-                validSettings[`googleCalendar.settings.${key}`] = settings[key];
+        // Handle settings
+        if (settings && typeof settings === 'object') {
+            const allowedFields = [
+                'bufferMinutes',
+                'defaultDurationMinutes',
+                'maxBookingDaysAhead',
+                'useCompanyHours',
+                'customWorkingHours',
+                'includeCustomerPhone',
+                'includeCustomerAddress',
+                'includeServiceNotes',
+                'eventTitleTemplate',
+                'eventDescriptionTemplate',
+                'sendCustomerInvite',
+                'fallbackMode',
+                'fallbackMessage'
+            ];
+            
+            for (const key of allowedFields) {
+                if (settings[key] !== undefined) {
+                    updateObj[`googleCalendar.settings.${key}`] = settings[key];
+                }
             }
         }
         
-        if (Object.keys(validSettings).length === 0) {
+        // Handle event colors (V89)
+        if (eventColors && typeof eventColors === 'object') {
+            if (eventColors.enabled !== undefined) {
+                updateObj['googleCalendar.eventColors.enabled'] = eventColors.enabled;
+            }
+            if (eventColors.defaultColorId !== undefined) {
+                updateObj['googleCalendar.eventColors.defaultColorId'] = eventColors.defaultColorId;
+            }
+            if (Array.isArray(eventColors.colorMapping)) {
+                // Validate color mappings
+                const validMappings = eventColors.colorMapping.filter(m => 
+                    m.serviceType && typeof m.serviceType === 'string' &&
+                    m.colorId && typeof m.colorId === 'string'
+                ).map(m => ({
+                    serviceType: m.serviceType,
+                    colorId: m.colorId,
+                    label: m.label || m.serviceType,
+                    description: m.description || ''
+                }));
+                updateObj['googleCalendar.eventColors.colorMapping'] = validMappings;
+            }
+        }
+        
+        if (Object.keys(updateObj).length === 0) {
             return res.status(400).json({
                 success: false,
                 error: 'No valid settings provided'
@@ -211,12 +231,13 @@ router.post('/settings', requirePermission(PERMISSIONS.CONFIG_WRITE), async (req
         
         await v2Company.updateOne(
             { _id: companyId },
-            { $set: validSettings }
+            { $set: updateObj }
         );
         
         logger.info('[GOOGLE CALENDAR API] Settings updated', { 
             companyId,
-            updatedFields: Object.keys(validSettings)
+            updatedFields: Object.keys(updateObj),
+            hasEventColors: !!eventColors
         });
         
         res.json({

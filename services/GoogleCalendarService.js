@@ -766,10 +766,35 @@ async function createBookingEvent(companyId, bookingData) {
             .replace('{serviceNotes}', settings.includeServiceNotes !== false ? (bookingData.serviceNotes || 'None') : '[Hidden]')
             .replace('{companyName}', companyName);
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // DETERMINE EVENT COLOR based on service type
+        // Google Calendar colorId: 1=Lavender, 2=Sage, 3=Grape, 4=Flamingo, 5=Banana,
+        // 6=Tangerine, 7=Peacock, 8=Graphite, 9=Blueberry, 10=Basil, 11=Tomato
+        // ═══════════════════════════════════════════════════════════════════════════
+        let colorId = null;
+        const eventColors = gcSettings?.eventColors;
+        if (eventColors?.enabled !== false) {
+            const serviceType = (bookingData.serviceType || 'service').toLowerCase();
+            const colorMapping = eventColors?.colorMapping || [];
+            
+            // Find color for this service type
+            const matchedColor = colorMapping.find(c => c.serviceType === serviceType);
+            colorId = matchedColor?.colorId || eventColors?.defaultColorId || '7'; // Default: Peacock
+            
+            logger.debug('[GOOGLE CALENDAR] Event color determined', {
+                companyId,
+                serviceType,
+                colorId,
+                colorLabel: matchedColor?.label || 'Default'
+            });
+        }
+        
         // Build event object
         const event = {
             summary: title,
             description: description,
+            // Apply color if enabled
+            ...(colorId && { colorId: colorId }),
             start: {
                 dateTime: startTime.toISOString(),
                 timeZone: company?.timezone || 'America/New_York'
@@ -801,6 +826,7 @@ async function createBookingEvent(companyId, bookingData) {
                     source: 'clientsvia_ai_receptionist',
                     companyId: companyId,
                     customerPhone: bookingData.customerPhone || '',
+                    serviceType: bookingData.serviceType || 'service',
                     bookedAt: new Date().toISOString()
                 }
             }
@@ -816,6 +842,8 @@ async function createBookingEvent(companyId, bookingData) {
             companyId,
             eventId: response.data.id,
             title,
+            colorId: colorId || 'none',
+            serviceType: bookingData.serviceType || 'service',
             start: startTime.toISOString()
         });
         
@@ -825,6 +853,8 @@ async function createBookingEvent(companyId, bookingData) {
             eventLink: response.data.htmlLink,
             start: startTime,
             end: endTime,
+            colorId: colorId,
+            serviceType: bookingData.serviceType || 'service',
             fallback: false
         };
     } catch (err) {
@@ -867,6 +897,7 @@ async function getStatus(companyId) {
             calendarName: gc.calendarName,
             calendarEmail: gc.calendarEmail,
             settings: gc.settings || {},
+            eventColors: gc.eventColors || {}, // V89: Include event color settings
             lastError: gc.lastError,
             lastErrorAt: gc.lastErrorAt,
             consecutiveErrors: gc.consecutiveErrors || 0,
