@@ -664,6 +664,14 @@
                                                 <!-- Color mappings will be populated by JavaScript -->
                                             </div>
                                             
+                                            <!-- Add New Service Type -->
+                                            <div class="mt-3 flex items-center gap-2">
+                                                <input type="text" id="gc-new-service-type" class="form-input text-sm py-1 w-32" placeholder="new type...">
+                                                <button type="button" id="gc-add-service-type" class="text-xs bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded">
+                                                    <i class="fas fa-plus mr-1"></i>Add
+                                                </button>
+                                            </div>
+                                            
                                             <div class="mt-3 flex items-center">
                                                 <label class="text-sm text-gray-700 mr-2">Default color (when type unknown):</label>
                                                 <select id="gc-default-color" class="form-input w-auto text-sm">
@@ -4499,12 +4507,72 @@
                 
                 return `
                     <div class="gc-color-row flex items-center gap-2 py-1" data-service-type="${item.serviceType}">
-                        <span class="text-xs text-gray-500 w-24 capitalize">${item.serviceType}</span>
+                        <input type="text" class="gc-service-name form-input text-xs text-gray-600 w-28 py-1" value="${item.serviceType}" placeholder="type">
                         <select class="gc-color-select form-input text-sm py-1 w-36">${colorOptions}</select>
-                        <input type="text" class="gc-color-label form-input text-sm py-1 flex-1" value="${item.label || item.serviceType}" placeholder="Label">
+                        <input type="text" class="gc-color-label form-input text-sm py-1 flex-1" value="${item.label || item.serviceType}" placeholder="Display Label">
+                        <button type="button" class="gc-delete-row text-red-500 hover:text-red-700 text-xs px-2" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
                     </div>
                 `;
             }).join('');
+            
+            // Wire delete buttons
+            container.querySelectorAll('.gc-delete-row').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const row = e.target.closest('.gc-color-row');
+                    if (row && confirm('Delete this service type?')) {
+                        row.remove();
+                    }
+                });
+            });
+        }
+        
+        function wireAddServiceTypeButton() {
+            document.getElementById('gc-add-service-type')?.addEventListener('click', () => {
+                const input = document.getElementById('gc-new-service-type');
+                const newType = input.value.trim().toLowerCase().replace(/\s+/g, '_');
+                
+                if (!newType) {
+                    alert('Enter a service type name');
+                    return;
+                }
+                
+                // Check if already exists
+                const existing = document.querySelector(`.gc-color-row[data-service-type="${newType}"]`);
+                if (existing) {
+                    alert('This service type already exists');
+                    return;
+                }
+                
+                // Add new row
+                const container = document.getElementById('gc-color-mappings');
+                const colorOptions = GC_COLOR_OPTIONS.map(c => 
+                    `<option value="${c.id}">${c.emoji} ${c.name}</option>`
+                ).join('');
+                
+                const newRow = document.createElement('div');
+                newRow.className = 'gc-color-row flex items-center gap-2 py-1';
+                newRow.dataset.serviceType = newType;
+                newRow.innerHTML = `
+                    <input type="text" class="gc-service-name form-input text-xs text-gray-600 w-28 py-1" value="${newType}" placeholder="type">
+                    <select class="gc-color-select form-input text-sm py-1 w-36">${colorOptions}</select>
+                    <input type="text" class="gc-color-label form-input text-sm py-1 flex-1" value="${newType}" placeholder="Display Label">
+                    <button type="button" class="gc-delete-row text-red-500 hover:text-red-700 text-xs px-2" title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                `;
+                
+                // Wire delete button
+                newRow.querySelector('.gc-delete-row').addEventListener('click', () => {
+                    if (confirm('Delete this service type?')) {
+                        newRow.remove();
+                    }
+                });
+                
+                container.appendChild(newRow);
+                input.value = '';
+            });
         }
         
         function wireGoogleCalendarHandlers(companyId) {
@@ -4615,13 +4683,15 @@
                 btn.disabled = true;
                 
                 try {
-                    // Gather color mappings from UI
+                    // Gather color mappings from UI (now with editable service names)
                     const colorMappings = [];
                     document.querySelectorAll('#gc-color-mappings .gc-color-row').forEach(row => {
-                        const serviceType = row.dataset.serviceType;
+                        const serviceType = row.querySelector('.gc-service-name')?.value?.trim().toLowerCase().replace(/\s+/g, '_') || row.dataset.serviceType;
                         const colorId = row.querySelector('.gc-color-select')?.value || '7';
                         const label = row.querySelector('.gc-color-label')?.value || serviceType;
-                        colorMappings.push({ serviceType, colorId, label });
+                        if (serviceType) {
+                            colorMappings.push({ serviceType, colorId, label });
+                        }
                     });
                     
                     const settings = {
@@ -4669,6 +4739,9 @@
             document.getElementById('gc-refresh-status')?.addEventListener('click', () => {
                 initGoogleCalendar(companyId);
             });
+            
+            // Add service type button
+            wireAddServiceTypeButton();
         }
         
         // ════════════════════════════════════════════════════════════════════════════════
