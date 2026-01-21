@@ -1432,7 +1432,8 @@ RULES:
 10. Keep responses under 2 sentences
 11. NEVER make up, assume, or hallucinate data (times, dates, prices, etc.) - ONLY use what caller explicitly said
 12. If NEED list is not empty, keep collecting - do NOT confirm appointment until ALL required slots are filled
-${forbidden ? `13. Never say: ${forbidden}` : ''}
+13. ⚠️ CRITICAL: NEVER say "let me check the schedule/availability/calendar" - you do NOT have calendar access. Instead say: "I can get you scheduled - what day works best for you?" or "Let me get your info and we'll confirm the earliest available time"
+${forbidden ? `14. Never say: ${forbidden}` : ''}
 ${lastAgentResponse ? `- You just said: "${lastAgentResponse.substring(0, 40)}..." - don't repeat` : ''}
 
 Examples:

@@ -1414,7 +1414,7 @@ function stripFillerWords(userText, company, template) {
         'is', 'are', 'was', 'were', 'be', 'been', 'being',
         'have', 'has', 'had', 'do', 'does', 'did',
         'can', 'could', 'will', 'would', 'should', 'may', 'might', 'must',
-        'need', 'want', 'get', 'got',
+        'need', 'want', 'get', 'got', 'like',  // V88: "like" = "want" in "I like somebody here"
         'know', 'think', 'say', 'tell', 'ask', 'call',
         
         // Confirmations (critical for consent detection)
@@ -3985,6 +3985,30 @@ async function processTurn({
                 return { intent: 'REPAIR_CONVERSATION', patterns: 'repair' };
             }
             
+            // V88 P0: ASAP/URGENCY SCHEDULING - PREFERENCE CAPTURE (no fake schedule lookup!)
+            // Intercept "as soon as possible" / "urgent" / "need someone today" BEFORE LLM
+            // LLM tends to say "let me check our schedule" which is deceptive if no calendar
+            const urgencyPatterns = [
+                /\bas\s+soon\s+as\s+possible\b/i,
+                /\basap\b/i,
+                /\bi\s+(want|need|like)\s+(somebody|someone|a\s+tech)/i,
+                /\bsend\s+(somebody|someone|a\s+tech)/i,
+                /\bget\s+(somebody|someone|a\s+tech)\s+(here|out)/i,
+                /\bsomebody\s+here\b/i,
+                /\bsomeone\s+here\b/i,
+                /\bright\s+(away|now)\b/i,
+                /\bimmediately\b/i,
+                /\btoday\s+if\s+possible\b/i,
+                /\bearliest\s+(available|time|slot)\b/i,
+                /\bfirst\s+available\b/i,
+                /\bnext\s+available\b/i,
+                /\bsoonest\b/i
+            ];
+            
+            if (urgencyPatterns.some(p => p.test(lowerText))) {
+                return { intent: 'URGENCY_SCHEDULING', patterns: 'asap' };
+            }
+            
             return null;
         })();
         
@@ -4048,6 +4072,21 @@ async function processTurn({
                     // V87 P0: Repair behavior - acknowledge frustration and try again
                     metaReply = "I apologize for any confusion. Let me make sure I understand - " +
                                "what specifically can I help you with right now?";
+                    break;
+                    
+                case 'URGENCY_SCHEDULING':
+                    // V88 P0: ASAP/Urgency scheduling - PREFERENCE CAPTURE (no fake schedule lookup!)
+                    // This is critical: NEVER say "let me check the schedule" without real calendar access
+                    // Instead, capture their preference and explain we'll confirm the earliest time
+                    
+                    // Mark that we've captured ASAP preference
+                    currentSlots.time = 'ASAP';
+                    session.collectedSlots = { ...(session.collectedSlots || {}), time: 'ASAP' };
+                    
+                    // Provide a honest, helpful response that doesn't claim to check a schedule we don't have
+                    metaReply = "I understand you need this as soon as possible. " +
+                               "I'll note ASAP and we'll get you the earliest available appointment. " +
+                               "Let me get your information to confirm.";
                     break;
             }
             
