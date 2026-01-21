@@ -400,8 +400,10 @@
         
         const CONFIG = {
             companyId: null,
+            bookingId: null, // If coming from SMS confirmation
             sessionId: null,
             companyName: 'Business',
+            customerName: null, // Loaded from booking
             messages: []
         };
         
@@ -424,9 +426,10 @@
         // ════════════════════════════════════════════════════════════════════════════════
         
         async function init() {
-            // Get company ID from URL
+            // Get company ID and optional booking ID from URL
             const urlParams = new URLSearchParams(window.location.search);
             CONFIG.companyId = urlParams.get('c') || urlParams.get('company') || urlParams.get('id');
+            CONFIG.bookingId = urlParams.get('b') || urlParams.get('booking'); // From SMS confirmation
             
             // Also check path: /customer-chat/COMPANY_ID
             if (!CONFIG.companyId) {
@@ -440,12 +443,19 @@
             }
             
             // Get or create session ID (persist across page reloads)
-            CONFIG.sessionId = localStorage.getItem(`chat_session_${CONFIG.companyId}`) || generateSessionId();
-            localStorage.setItem(`chat_session_${CONFIG.companyId}`, CONFIG.sessionId);
+            // If booking ID provided, use it as part of session key for continuity
+            const sessionKey = CONFIG.bookingId 
+                ? `chat_session_${CONFIG.companyId}_${CONFIG.bookingId}`
+                : `chat_session_${CONFIG.companyId}`;
+            CONFIG.sessionId = localStorage.getItem(sessionKey) || generateSessionId();
+            localStorage.setItem(sessionKey, CONFIG.sessionId);
             
             try {
-                // Fetch company info
-                const response = await fetch(`/api/public-chat/${CONFIG.companyId}/info`);
+                // Fetch company info (include booking ID if from SMS)
+                const infoUrl = CONFIG.bookingId 
+                    ? `/api/public-chat/${CONFIG.companyId}/info?booking=${CONFIG.bookingId}&session=${CONFIG.sessionId}`
+                    : `/api/public-chat/${CONFIG.companyId}/info?session=${CONFIG.sessionId}`;
+                const response = await fetch(infoUrl);
                 const data = await response.json();
                 
                 if (!data.success) {
@@ -455,6 +465,7 @@
                 
                 // Update UI with company info
                 CONFIG.companyName = data.companyName;
+                CONFIG.customerName = data.customerName; // From booking if available
                 elements.companyName.textContent = data.companyName;
                 elements.companyAvatar.textContent = data.companyName.charAt(0).toUpperCase();
                 document.title = `Chat with ${data.companyName}`;
@@ -470,9 +481,17 @@
                     elements.welcomeMessage.style.display = 'none';
                 }
                 
-                // Show greeting if no messages
+                // Show personalized greeting if customer name known, or generic greeting
                 if (!data.messages || data.messages.length === 0) {
-                    const greeting = data.greeting || `Hi! How can I help you today?`;
+                    let greeting;
+                    if (data.customerName && data.appointmentInfo) {
+                        // Personalized greeting with booking context
+                        greeting = `Hi ${data.customerName.split(' ')[0]}! I see you have an appointment scheduled for ${data.appointmentInfo}. How can I help you today?`;
+                    } else if (data.customerName) {
+                        greeting = `Hi ${data.customerName.split(' ')[0]}! Thanks for reaching out. How can I help you?`;
+                    } else {
+                        greeting = data.greeting || `Hi! Thanks for reaching out to ${data.companyName}. How can I help you today?`;
+                    }
                     setTimeout(() => {
                         addMessage(greeting, 'agent');
                         elements.welcomeMessage.style.display = 'none';
@@ -547,6 +566,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         sessionId: CONFIG.sessionId,
+                        bookingId: CONFIG.bookingId, // Include for context
                         message: text
                     })
                 });

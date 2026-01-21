@@ -22,6 +22,7 @@ const express = require('express');
 const router = express.Router();
 const v2Company = require('../../models/v2Company');
 const ConversationSession = require('../../models/ConversationSession');
+const BookingRequest = require('../../models/BookingRequest');
 const logger = require('../../utils/logger');
 
 // Rate limiting map (simple in-memory, replace with Redis for production scale)
@@ -51,11 +52,13 @@ function checkRateLimit(ip) {
 /**
  * GET /api/public-chat/:companyId/info
  * Get company info for chat UI (no auth required)
+ * If booking ID provided, also returns customer context
  */
 router.get('/:companyId/info', async (req, res) => {
     try {
         const { companyId } = req.params;
         const sessionId = req.query.session;
+        const bookingId = req.query.booking;
         
         // Validate company ID format
         if (!companyId || !/^[a-f0-9]{24}$/i.test(companyId)) {
@@ -88,6 +91,63 @@ router.get('/:companyId/info', async (req, res) => {
         const greeting = company.aiAgentSettings?.frontDeskBehavior?.greetingMessage ||
             `Hi! Thanks for reaching out to ${company.companyName}. How can I help you today?`;
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // LOAD BOOKING CONTEXT (if booking ID provided from SMS link)
+        // ═══════════════════════════════════════════════════════════════════════════
+        let customerName = null;
+        let appointmentInfo = null;
+        let bookingContext = null;
+        
+        if (bookingId && /^[a-f0-9]{24}$/i.test(bookingId)) {
+            try {
+                const booking = await BookingRequest.findOne({
+                    _id: bookingId,
+                    companyId: companyId // Security: must match company
+                }).select('slots calendarEventStart serviceType issue').lean();
+                
+                if (booking) {
+                    // Extract customer name
+                    customerName = booking.slots?.name?.full ||
+                        `${booking.slots?.name?.first || ''} ${booking.slots?.name?.last || ''}`.trim() ||
+                        null;
+                    
+                    // Format appointment info
+                    if (booking.calendarEventStart || booking.slots?.time) {
+                        const apptDate = new Date(booking.calendarEventStart || booking.slots?.time);
+                        if (!isNaN(apptDate.getTime())) {
+                            appointmentInfo = apptDate.toLocaleDateString('en-US', {
+                                weekday: 'long',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit'
+                            });
+                        }
+                    }
+                    
+                    // Full booking context for AI
+                    bookingContext = {
+                        customerName,
+                        customerPhone: booking.slots?.phone,
+                        customerAddress: booking.slots?.address?.full || booking.slots?.address,
+                        appointmentTime: appointmentInfo,
+                        serviceType: booking.serviceType || booking.issue || 'service appointment'
+                    };
+                    
+                    logger.info('[PUBLIC CHAT] Booking context loaded', { 
+                        companyId,
+                        bookingId,
+                        customerName
+                    });
+                }
+            } catch (bookingErr) {
+                logger.warn('[PUBLIC CHAT] Could not load booking', { 
+                    bookingId,
+                    error: bookingErr.message 
+                });
+            }
+        }
+        
         // Load existing session messages if session ID provided
         let messages = [];
         if (sessionId) {
@@ -106,7 +166,8 @@ router.get('/:companyId/info', async (req, res) => {
         
         logger.info('[PUBLIC CHAT] Company info requested', { 
             companyId,
-            companyName: company.companyName
+            companyName: company.companyName,
+            hasBookingContext: !!bookingContext
         });
         
         res.json({
@@ -114,7 +175,10 @@ router.get('/:companyId/info', async (req, res) => {
             companyName: company.companyName,
             greeting,
             messages,
-            // Future: could add primaryColor, logo, etc.
+            // V89: Customer context from booking (if available)
+            customerName,
+            appointmentInfo,
+            bookingContext
         });
         
     } catch (err) {
@@ -137,7 +201,7 @@ router.get('/:companyId/info', async (req, res) => {
 router.post('/:companyId/message', async (req, res) => {
     try {
         const { companyId } = req.params;
-        const { sessionId, message } = req.body;
+        const { sessionId, bookingId, message } = req.body;
         const clientIP = req.ip || req.connection.remoteAddress;
         
         // Rate limiting
@@ -187,6 +251,33 @@ router.post('/:companyId/message', async (req, res) => {
             });
         }
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // LOAD BOOKING CONTEXT (if booking ID provided)
+        // ═══════════════════════════════════════════════════════════════════════════
+        let bookingContext = null;
+        if (bookingId && /^[a-f0-9]{24}$/i.test(bookingId)) {
+            try {
+                const booking = await BookingRequest.findOne({
+                    _id: bookingId,
+                    companyId: companyId
+                }).select('slots calendarEventStart serviceType issue').lean();
+                
+                if (booking) {
+                    bookingContext = {
+                        bookingId: booking._id.toString(),
+                        customerName: booking.slots?.name?.full ||
+                            `${booking.slots?.name?.first || ''} ${booking.slots?.name?.last || ''}`.trim(),
+                        customerPhone: booking.slots?.phone,
+                        customerAddress: booking.slots?.address?.full || booking.slots?.address,
+                        appointmentTime: booking.calendarEventStart || booking.slots?.time,
+                        serviceType: booking.serviceType || booking.issue || 'service'
+                    };
+                }
+            } catch (bookingErr) {
+                logger.warn('[PUBLIC CHAT] Could not load booking for message', { bookingId });
+            }
+        }
+        
         // Find or create conversation session
         let session = await ConversationSession.findOne({
             companyId,
@@ -200,11 +291,19 @@ router.post('/:companyId/message', async (req, res) => {
                 status: 'active',
                 metadata: {
                     webChatSessionId: sessionId,
+                    bookingId: bookingId || null,
                     clientIP: clientIP,
-                    startedAt: new Date()
+                    startedAt: new Date(),
+                    // Store booking context for AI to reference
+                    bookingContext: bookingContext
                 },
                 turns: []
             });
+        } else if (bookingContext && !session.metadata?.bookingContext) {
+            // Update existing session with booking context if not already set
+            session.metadata = session.metadata || {};
+            session.metadata.bookingContext = bookingContext;
+            session.markModified('metadata');
         }
         
         // Add user message to session
@@ -229,15 +328,30 @@ router.post('/:companyId/message', async (req, res) => {
             // Import ConversationEngine
             const ConversationEngine = require('../../services/ConversationEngine');
             
+            // Build context for AI (include booking info if available)
+            const customerContext = bookingContext ? {
+                isReturningCustomer: true,
+                customerName: bookingContext.customerName,
+                customerPhone: bookingContext.customerPhone,
+                customerAddress: bookingContext.customerAddress,
+                currentBooking: {
+                    appointmentTime: bookingContext.appointmentTime,
+                    serviceType: bookingContext.serviceType
+                }
+            } : null;
+            
             // Process the message through the AI
             const result = await ConversationEngine.processTurn({
                 userText: message.trim(),
                 session: session,
                 company: company,
+                customerContext: customerContext, // Pass booking context to AI
                 metadata: {
                     channel: 'web_chat',
                     sessionId: sessionId,
-                    clientIP: clientIP
+                    bookingId: bookingId || null,
+                    clientIP: clientIP,
+                    hasBookingContext: !!bookingContext
                 }
             });
             
@@ -250,8 +364,13 @@ router.post('/:companyId/message', async (req, res) => {
                 sessionId
             });
             
-            // Fallback response
-            aiResponse = `Thanks for your message! Our team at ${company.companyName} will get back to you shortly. Is there anything specific I can help you with in the meantime?`;
+            // Fallback response (personalized if we have customer name)
+            if (bookingContext?.customerName) {
+                const firstName = bookingContext.customerName.split(' ')[0];
+                aiResponse = `Thanks for your message, ${firstName}! Let me look into that for you. Is there anything specific about your appointment I can help with?`;
+            } else {
+                aiResponse = `Thanks for your message! Our team at ${company.companyName} will get back to you shortly. Is there anything specific I can help you with in the meantime?`;
+            }
         }
         
         // Add AI response to session

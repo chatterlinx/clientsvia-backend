@@ -134,8 +134,14 @@ const PLACEHOLDERS = {
     '{rescheduleLink}': (data) => data.rescheduleLink || '',
     '{cancelLink}': (data) => data.cancelLink || '',
     '{bookingId}': (data) => data.bookingId || '',
-    // V89: Chat link for customer web chat
-    '{chatLink}': (data) => data.companyId ? `${CHAT_BASE_URL}?c=${data.companyId}` : ''
+    // V89: Chat link for customer web chat (includes booking ID for context)
+    '{chatLink}': (data) => {
+        if (!data.companyId) return '';
+        let url = `${CHAT_BASE_URL}?c=${data.companyId}`;
+        // Include booking ID so AI knows who's chatting
+        if (data.bookingId) url += `&b=${data.bookingId}`;
+        return url;
+    }
 };
 
 /**
