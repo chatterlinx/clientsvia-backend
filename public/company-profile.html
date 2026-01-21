@@ -4597,7 +4597,10 @@
         }
         
         // Initialize SMS Notifications when Configuration tab loads
-        if (companyId) {
+        function initSMSNotificationsUI() {
+            const companyId = window.companyId || window.currentCompanyId || new URLSearchParams(window.location.search).get('id');
+            if (!companyId) return;
+            
             initSMSNotifications(companyId);
             
             // Master toggle
@@ -4714,6 +4717,9 @@
                 initSMSNotifications(companyId);
             });
         }
+        
+        // Initialize SMS UI after DOM is ready and companyId is set
+        setTimeout(initSMSNotificationsUI, 500);
     </script>
     
     <!-- =========================================================
