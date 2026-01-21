@@ -24,9 +24,93 @@
 
 const logger = require('../utils/logger');
 const smsClient = require('../clients/smsClient');
+const emailClient = require('../clients/emailClient');
 const v2Company = require('../models/v2Company');
 const ScheduledSMS = require('../models/ScheduledSMS');
 const BookingRequest = require('../models/BookingRequest');
+
+// ════════════════════════════════════════════════════════════════════════════════
+// EMAIL-TO-SMS CARRIER GATEWAYS
+// ════════════════════════════════════════════════════════════════════════════════
+// When Twilio A2P isn't set up, we can send SMS via email-to-SMS gateways
+
+const CARRIER_GATEWAYS = {
+    'verizon': 'vtext.com',
+    'att': 'txt.att.net',
+    'tmobile': 'tmomail.net',
+    'sprint': 'messaging.sprintpcs.com',
+    'uscellular': 'email.uscc.net',
+    'metropcs': 'mymetropcs.com',
+    'boost': 'sms.myboostmobile.com',
+    'cricket': 'sms.cricketwireless.net',
+    'virgin': 'vmobl.com',
+    'google_fi': 'msg.fi.google.com'
+};
+
+/**
+ * Send SMS via email-to-SMS gateway (fallback when Twilio isn't available)
+ * @param {string} phone - Phone number (10 digits)
+ * @param {string} message - SMS message
+ * @param {string} carrier - Carrier name (verizon, att, tmobile, etc.)
+ * @returns {Object} { success, method, error? }
+ */
+async function sendViaEmailGateway(phone, message, carrier = 'verizon') {
+    const log = (msg, data = {}) => logger.info(`[SMS VIA EMAIL] ${msg}`, data);
+    
+    try {
+        // Normalize phone to 10 digits
+        const digits = phone.replace(/\D/g, '');
+        const phone10 = digits.length === 11 && digits.startsWith('1') 
+            ? digits.substring(1) 
+            : digits;
+        
+        if (phone10.length !== 10) {
+            return { success: false, error: `Invalid phone number: ${phone}` };
+        }
+        
+        // Get gateway domain
+        const gateway = CARRIER_GATEWAYS[carrier.toLowerCase()];
+        if (!gateway) {
+            return { success: false, error: `Unknown carrier: ${carrier}. Use: ${Object.keys(CARRIER_GATEWAYS).join(', ')}` };
+        }
+        
+        // Build email address
+        const emailAddress = `${phone10}@${gateway}`;
+        
+        log('Sending via email gateway', { 
+            phone: phone10.substring(0, 6) + '****',
+            carrier,
+            gateway 
+        });
+        
+        // Send via email client
+        // SMS via email should be plain text, no HTML, and short subject
+        const result = await emailClient.send({
+            to: emailAddress,
+            subject: '', // Many gateways ignore subject or prepend it
+            body: message.substring(0, 160) // SMS character limit
+        });
+        
+        if (result.success) {
+            log('✅ Sent via email gateway', { 
+                messageId: result.messageId,
+                carrier 
+            });
+            return { 
+                success: true, 
+                method: 'email_gateway',
+                carrier,
+                messageId: result.messageId 
+            };
+        } else {
+            return { success: false, error: result.error };
+        }
+        
+    } catch (err) {
+        logger.error('[SMS VIA EMAIL] ❌ Failed', { error: err.message });
+        return { success: false, error: err.message };
+    }
+}
 
 // ════════════════════════════════════════════════════════════════════════════════
 // TEMPLATE PLACEHOLDERS
@@ -643,6 +727,14 @@ async function getPendingMessages(companyId, limit = 50) {
 // EXPORTS
 // ════════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Quick test: Send SMS via email gateway
+ * Use this when Twilio A2P isn't set up yet
+ */
+async function sendTestViaEmail(phone, message, carrier = 'verizon') {
+    return sendViaEmailGateway(phone, message, carrier);
+}
+
 module.exports = {
     // Sending
     sendBookingConfirmation,
@@ -659,5 +751,10 @@ module.exports = {
     
     // Stats
     getStats,
-    getPendingMessages
+    getPendingMessages,
+    
+    // Email-to-SMS fallback (when Twilio A2P not ready)
+    sendViaEmailGateway,
+    sendTestViaEmail,
+    CARRIER_GATEWAYS
 };

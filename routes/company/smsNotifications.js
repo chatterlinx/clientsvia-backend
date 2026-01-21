@@ -361,6 +361,49 @@ router.get('/pending', requirePermission(PERMISSIONS.CONFIG_READ), async (req, r
 // ════════════════════════════════════════════════════════════════════════════════
 
 /**
+ * POST /api/company/:companyId/sms-notifications/test-email-gateway
+ * Send a test SMS via email-to-SMS gateway (when Twilio A2P not ready)
+ */
+router.post('/test-email-gateway', requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
+    try {
+        const { toPhone, message, carrier } = req.body;
+        
+        if (!toPhone) {
+            return res.status(400).json({
+                success: false,
+                error: 'toPhone required (10-digit number)'
+            });
+        }
+        
+        const testMessage = message || 'Test SMS from ClientsVia AI Receptionist. If you received this, email-to-SMS is working!';
+        const carrierName = carrier || 'verizon';
+        
+        logger.info('[SMS VIA EMAIL] Test requested', { 
+            toPhone: toPhone.substring(0, 6) + '****',
+            carrier: carrierName
+        });
+        
+        const result = await SMSNotificationService.sendTestViaEmail(
+            toPhone,
+            testMessage,
+            carrierName
+        );
+        
+        res.json({
+            success: result.success,
+            method: 'email_gateway',
+            carrier: carrierName,
+            messageId: result.messageId,
+            error: result.error,
+            availableCarriers: Object.keys(SMSNotificationService.CARRIER_GATEWAYS)
+        });
+    } catch (err) {
+        logger.error('[SMS VIA EMAIL] Test failed', { error: err.message });
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
  * POST /api/company/:companyId/sms-notifications/test
  * Send a test SMS
  */
