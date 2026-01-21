@@ -4878,6 +4878,14 @@
             if (savedGatewayPhone) document.getElementById('sms-gateway-phone').value = savedGatewayPhone;
             if (savedGatewayCarrier) document.getElementById('sms-gateway-carrier').value = savedGatewayCarrier;
             
+            // Auto-save phone and carrier as user types/changes
+            document.getElementById('sms-gateway-phone')?.addEventListener('input', (e) => {
+                localStorage.setItem('sms_gateway_test_phone', e.target.value.trim());
+            });
+            document.getElementById('sms-gateway-carrier')?.addEventListener('change', (e) => {
+                localStorage.setItem('sms_gateway_test_carrier', e.target.value);
+            });
+            
             document.getElementById('sms-gateway-send-btn')?.addEventListener('click', async () => {
                 const phone = document.getElementById('sms-gateway-phone').value.trim();
                 const carrier = document.getElementById('sms-gateway-carrier').value;
@@ -4885,10 +4893,6 @@
                 const resultEl = document.getElementById('sms-gateway-result');
                 const btn = document.getElementById('sms-gateway-send-btn');
                 const token = getAuthToken(); // Get token in scope
-                
-                // Save for next time
-                localStorage.setItem('sms_gateway_test_phone', phone);
-                localStorage.setItem('sms_gateway_test_carrier', carrier);
                 
                 if (!phone) {
                     resultEl.innerHTML = '<span class="text-red-600">❌ Enter phone number</span>';
