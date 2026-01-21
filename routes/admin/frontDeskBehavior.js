@@ -529,7 +529,9 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
     try {
         const { companyId } = req.params;
         const updates = req.body;
-        const legacyPromptKeyMap = getLegacyPromptKeyMap();
+        // promptPacks migration map REMOVED Jan 2026 - just use empty object
+        // normalizePromptKey will still convert dots to colons without the map
+        const legacyPromptKeyMap = {};
         
         logger.info('[FRONT DESK BEHAVIOR] Updating config', {
             companyId,
