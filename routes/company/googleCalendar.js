@@ -408,4 +408,58 @@ router.post('/create-event', requirePermission(PERMISSIONS.CONFIG_WRITE), async 
     }
 });
 
+// ════════════════════════════════════════════════════════════════════════════════
+// CALENDAR VIEW - List events for Call Center dashboard
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/company/:companyId/google-calendar/events
+ * List calendar events for a date range (used by Call Center Calendar tab)
+ */
+router.get('/events', requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { start, end } = req.query;
+        
+        if (!start || !end) {
+            return res.status(400).json({
+                success: false,
+                error: 'start and end query parameters required (ISO date strings)'
+            });
+        }
+        
+        const company = await v2Company.findById(companyId).select('googleCalendar').lean();
+        
+        if (!company?.googleCalendar?.accessToken) {
+            return res.json({
+                success: false,
+                connected: false,
+                error: 'Google Calendar not connected',
+                events: []
+            });
+        }
+        
+        // List events from Google Calendar
+        const events = await GoogleCalendarService.listEvents(companyId, {
+            timeMin: new Date(start).toISOString(),
+            timeMax: new Date(end).toISOString(),
+            maxResults: 250,
+            singleEvents: true,
+            orderBy: 'startTime'
+        });
+        
+        res.json({
+            success: true,
+            events: events || [],
+            count: events?.length || 0
+        });
+    } catch (err) {
+        logger.error('[GOOGLE CALENDAR API] List events failed', { 
+            companyId: req.params.companyId,
+            error: err.message 
+        });
+        res.status(500).json({ success: false, error: err.message, events: [] });
+    }
+});
+
 module.exports = router;

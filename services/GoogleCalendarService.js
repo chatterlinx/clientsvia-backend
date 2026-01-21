@@ -939,6 +939,53 @@ async function testConnection(companyId) {
     }
 }
 
+/**
+ * ════════════════════════════════════════════════════════════════════════════════
+ * LIST EVENTS - For Call Center calendar view
+ * ════════════════════════════════════════════════════════════════════════════════
+ */
+async function listEvents(companyId, options = {}) {
+    try {
+        const { client, calendarId, error } = await getOAuth2ClientForCompany(companyId);
+        
+        if (!client) {
+            logger.warn('[GOOGLE CALENDAR] Cannot list events - not connected', { companyId });
+            return [];
+        }
+        
+        const calendar = google.calendar({ version: 'v3', auth: client });
+        
+        const response = await calendar.events.list({
+            calendarId,
+            timeMin: options.timeMin,
+            timeMax: options.timeMax,
+            maxResults: options.maxResults || 100,
+            singleEvents: options.singleEvents !== false,
+            orderBy: options.orderBy || 'startTime'
+        });
+        
+        logger.info('[GOOGLE CALENDAR] Listed events', { 
+            companyId, 
+            count: response.data.items?.length || 0,
+            timeRange: `${options.timeMin} to ${options.timeMax}`
+        });
+        
+        return response.data.items || [];
+    } catch (err) {
+        logger.error('[GOOGLE CALENDAR] Failed to list events', { 
+            companyId, 
+            error: err.message 
+        });
+        
+        // If token expired, try to refresh
+        if (err.code === 401 || err.message?.includes('invalid_grant')) {
+            await handleTokenError(companyId, err);
+        }
+        
+        return [];
+    }
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // EXPORTS
 // ════════════════════════════════════════════════════════════════════════════════
@@ -957,6 +1004,7 @@ module.exports = {
     
     // Events
     createBookingEvent,
+    listEvents,            // V88: For Call Center calendar view
     
     // Status
     getStatus,

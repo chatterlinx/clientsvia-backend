@@ -1387,6 +1387,7 @@
                     <span id="pending-review-badge" class="tab-badge" style="display: none;">0</span>
                 </button>
                 <button class="tab active" data-tab="calls">📞 Recent Calls</button>
+                <button class="tab" data-tab="calendar">📅 Calendar</button>
                 <button class="tab" data-tab="customers">👥 Customers</button>
                 <button class="tab" data-tab="vendors">🏪 Vendors</button>
                 <button class="tab" data-tab="search">🔍 Search</button>
@@ -1459,6 +1460,67 @@
                         <div class="loading-spinner"></div>
                         <p style="margin-top: 16px;">Loading calls...</p>
                     </div>
+                </div>
+            </div>
+            
+            <!-- CALENDAR PANEL -->
+            <div id="calendar-panel" class="tab-panel">
+                <!-- Calendar Header -->
+                <div class="calendar-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-lg); padding: var(--space-md); background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color);">
+                    <div style="display: flex; align-items: center; gap: var(--space-md);">
+                        <button class="btn btn-secondary" id="cal-prev" style="padding: 8px 12px;">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <h3 id="cal-month-year" style="margin: 0; min-width: 180px; text-align: center;">January 2026</h3>
+                        <button class="btn btn-secondary" id="cal-next" style="padding: 8px 12px;">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                        <button class="btn btn-secondary" id="cal-today" style="margin-left: var(--space-md);">Today</button>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: var(--space-sm);">
+                        <button class="btn btn-secondary cal-view-btn active" data-view="month">Month</button>
+                        <button class="btn btn-secondary cal-view-btn" data-view="week">Week</button>
+                        <button class="btn btn-secondary cal-view-btn" data-view="day">Day</button>
+                    </div>
+                </div>
+                
+                <!-- Calendar Grid -->
+                <div id="calendar-container" style="background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden;">
+                    <!-- Day Headers -->
+                    <div class="cal-day-headers" style="display: grid; grid-template-columns: repeat(7, 1fr); background: var(--bg-hover); border-bottom: 1px solid var(--border-color);">
+                        <div style="padding: 12px; text-align: center; font-weight: 600; color: var(--text-secondary);">Sun</div>
+                        <div style="padding: 12px; text-align: center; font-weight: 600; color: var(--text-secondary);">Mon</div>
+                        <div style="padding: 12px; text-align: center; font-weight: 600; color: var(--text-secondary);">Tue</div>
+                        <div style="padding: 12px; text-align: center; font-weight: 600; color: var(--text-secondary);">Wed</div>
+                        <div style="padding: 12px; text-align: center; font-weight: 600; color: var(--text-secondary);">Thu</div>
+                        <div style="padding: 12px; text-align: center; font-weight: 600; color: var(--text-secondary);">Fri</div>
+                        <div style="padding: 12px; text-align: center; font-weight: 600; color: var(--text-secondary);">Sat</div>
+                    </div>
+                    <!-- Calendar Days Grid -->
+                    <div id="cal-grid" style="display: grid; grid-template-columns: repeat(7, 1fr); min-height: 500px;">
+                        <!-- Days will be populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <!-- Day Detail Sidebar (shows when clicking a day) -->
+                <div id="cal-day-detail" style="display: none; margin-top: var(--space-lg); background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); padding: var(--space-lg);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-md);">
+                        <h4 id="cal-detail-date" style="margin: 0;">January 21, 2026</h4>
+                        <button class="btn btn-secondary" onclick="document.getElementById('cal-day-detail').style.display='none'">✕ Close</button>
+                    </div>
+                    <div id="cal-detail-events" style="display: flex; flex-direction: column; gap: var(--space-sm);">
+                        <!-- Events for selected day will appear here -->
+                    </div>
+                </div>
+                
+                <!-- No Calendar Connected State -->
+                <div id="cal-not-connected" style="display: none; text-align: center; padding: 60px 20px;">
+                    <div style="font-size: 48px; margin-bottom: var(--space-md);">📅</div>
+                    <h3 style="margin-bottom: var(--space-sm);">Google Calendar Not Connected</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: var(--space-lg);">Connect your Google Calendar in Company Profile to see appointments here.</p>
+                    <a href="company-profile.html?id=${companyId}#configuration" class="btn btn-primary">
+                        <i class="fas fa-link mr-2"></i>Connect Calendar
+                    </a>
                 </div>
             </div>
             
@@ -2780,11 +2842,201 @@
             if (tab === 'pending') loadPendingReviews();
             if (tab === 'calls') loadCalls();
             if (tab === 'customers') loadCustomers();
+            if (tab === 'calendar') loadCalendar();
             if (tab === 'vendors') {
                 loadVendorStats();
                 switchVendorTab(currentVendorSubtab);
             }
             if (tab === 'analytics') loadAnalytics();
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CALENDAR FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        let calendarDate = new Date();
+        let calendarEvents = [];
+        let calendarView = 'month';
+        
+        async function loadCalendar() {
+            const container = document.getElementById('calendar-container');
+            const notConnected = document.getElementById('cal-not-connected');
+            
+            try {
+                // Check if calendar is connected
+                const statusRes = await apiCall(`/api/company/${currentCompanyId}/google-calendar/status`);
+                
+                if (!statusRes.connected) {
+                    container.style.display = 'none';
+                    notConnected.style.display = 'block';
+                    // Fix the link
+                    notConnected.querySelector('a').href = `company-profile.html?id=${currentCompanyId}#configuration`;
+                    return;
+                }
+                
+                container.style.display = 'block';
+                notConnected.style.display = 'none';
+                
+                // Load events for current month
+                await loadCalendarEvents();
+                renderCalendar();
+                wireCalendarControls();
+                
+            } catch (err) {
+                console.error('Calendar load error:', err);
+                container.style.display = 'none';
+                notConnected.style.display = 'block';
+            }
+        }
+        
+        async function loadCalendarEvents() {
+            const start = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1);
+            const end = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 0);
+            
+            try {
+                const res = await apiCall(`/api/company/${currentCompanyId}/google-calendar/events?start=${start.toISOString()}&end=${end.toISOString()}`);
+                calendarEvents = res.events || [];
+            } catch (err) {
+                console.error('Failed to load calendar events:', err);
+                calendarEvents = [];
+            }
+        }
+        
+        function renderCalendar() {
+            const grid = document.getElementById('cal-grid');
+            const monthYear = document.getElementById('cal-month-year');
+            
+            const year = calendarDate.getFullYear();
+            const month = calendarDate.getMonth();
+            
+            // Update header
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            monthYear.textContent = `${monthNames[month]} ${year}`;
+            
+            // Get first day of month and total days
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const today = new Date();
+            
+            // Build grid
+            let html = '';
+            
+            // Empty cells before first day
+            for (let i = 0; i < firstDay; i++) {
+                html += `<div class="cal-day empty" style="min-height: 100px; background: var(--bg-hover); border: 1px solid var(--border-color);"></div>`;
+            }
+            
+            // Days of month
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
+                const dayEvents = calendarEvents.filter(e => e.start?.dateTime?.startsWith(dateStr) || e.start?.date === dateStr);
+                
+                html += `
+                    <div class="cal-day" data-date="${dateStr}" onclick="showDayDetail('${dateStr}')" 
+                         style="min-height: 100px; padding: 8px; border: 1px solid var(--border-color); cursor: pointer; transition: background 0.2s; ${isToday ? 'background: rgba(59, 130, 246, 0.1);' : ''}"
+                         onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='${isToday ? 'rgba(59, 130, 246, 0.1)' : ''}'">
+                        <div style="font-weight: ${isToday ? '700' : '500'}; color: ${isToday ? 'var(--accent-blue)' : 'var(--text-primary)'}; margin-bottom: 4px;">
+                            ${day}
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 2px; font-size: 11px;">
+                            ${dayEvents.slice(0, 3).map(e => {
+                                const color = getEventColor(e.colorId);
+                                const time = e.start?.dateTime ? new Date(e.start.dateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'All day';
+                                return `<div style="background: ${color}; color: white; padding: 2px 4px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${e.summary}">${time} ${e.summary || 'Appointment'}</div>`;
+                            }).join('')}
+                            ${dayEvents.length > 3 ? `<div style="color: var(--text-muted); font-size: 10px;">+${dayEvents.length - 3} more</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Empty cells after last day
+            const totalCells = firstDay + daysInMonth;
+            const remaining = 7 - (totalCells % 7);
+            if (remaining < 7) {
+                for (let i = 0; i < remaining; i++) {
+                    html += `<div class="cal-day empty" style="min-height: 100px; background: var(--bg-hover); border: 1px solid var(--border-color);"></div>`;
+                }
+            }
+            
+            grid.innerHTML = html;
+        }
+        
+        function getEventColor(colorId) {
+            const colors = {
+                '1': '#7986cb', '2': '#33b679', '3': '#8e24aa', '4': '#e67c73',
+                '5': '#f6c026', '6': '#f5511d', '7': '#039be5', '8': '#616161',
+                '9': '#3f51b5', '10': '#0b8043', '11': '#d60000'
+            };
+            return colors[colorId] || '#039be5';
+        }
+        
+        function showDayDetail(dateStr) {
+            const detail = document.getElementById('cal-day-detail');
+            const dateEl = document.getElementById('cal-detail-date');
+            const eventsEl = document.getElementById('cal-detail-events');
+            
+            const date = new Date(dateStr + 'T12:00:00');
+            dateEl.textContent = date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            
+            const dayEvents = calendarEvents.filter(e => e.start?.dateTime?.startsWith(dateStr) || e.start?.date === dateStr);
+            
+            if (dayEvents.length === 0) {
+                eventsEl.innerHTML = `<div style="color: var(--text-muted); padding: 20px; text-align: center;">No appointments scheduled</div>`;
+            } else {
+                eventsEl.innerHTML = dayEvents.map(e => {
+                    const color = getEventColor(e.colorId);
+                    const time = e.start?.dateTime ? new Date(e.start.dateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'All day';
+                    const endTime = e.end?.dateTime ? new Date(e.end.dateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+                    return `
+                        <div style="display: flex; gap: var(--space-md); padding: var(--space-md); background: var(--bg-hover); border-radius: 8px; border-left: 4px solid ${color};">
+                            <div style="min-width: 80px; color: var(--text-secondary); font-size: 13px;">${time}${endTime ? ' - ' + endTime : ''}</div>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600;">${e.summary || 'Appointment'}</div>
+                                ${e.description ? `<div style="color: var(--text-secondary); font-size: 13px; margin-top: 4px; white-space: pre-wrap;">${e.description}</div>` : ''}
+                                ${e.location ? `<div style="color: var(--text-muted); font-size: 12px; margin-top: 4px;"><i class="fas fa-map-marker-alt mr-1"></i>${e.location}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            detail.style.display = 'block';
+        }
+        
+        function wireCalendarControls() {
+            // Only wire once
+            if (document.getElementById('cal-prev').dataset.wired) return;
+            document.getElementById('cal-prev').dataset.wired = 'true';
+            
+            document.getElementById('cal-prev').addEventListener('click', async () => {
+                calendarDate.setMonth(calendarDate.getMonth() - 1);
+                await loadCalendarEvents();
+                renderCalendar();
+            });
+            
+            document.getElementById('cal-next').addEventListener('click', async () => {
+                calendarDate.setMonth(calendarDate.getMonth() + 1);
+                await loadCalendarEvents();
+                renderCalendar();
+            });
+            
+            document.getElementById('cal-today').addEventListener('click', async () => {
+                calendarDate = new Date();
+                await loadCalendarEvents();
+                renderCalendar();
+            });
+            
+            // View switcher (future enhancement)
+            document.querySelectorAll('.cal-view-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.cal-view-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    calendarView = btn.dataset.view;
+                    // Future: implement week/day views
+                });
+            });
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
