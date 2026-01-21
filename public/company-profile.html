@@ -4520,13 +4520,13 @@
                 return `
                     <div class="gc-color-row border border-gray-200 rounded-lg p-2 mb-2 bg-white" data-service-type="${item.serviceType}">
                         <div class="flex items-center gap-2">
-                            <input type="text" class="gc-service-name form-input text-xs text-gray-600 w-24 py-1" value="${item.serviceType}" placeholder="type">
-                            <select class="gc-color-select form-input text-sm py-1 w-32">${colorOptions}</select>
-                            <input type="text" class="gc-color-label form-input text-sm py-1 flex-1" value="${item.label || item.serviceType}" placeholder="Display Label">
-                            <button type="button" class="gc-toggle-schedule text-gray-500 hover:text-gray-700 text-xs px-1" title="Edit Schedule">
+                            <input type="text" class="gc-service-name form-input text-sm text-gray-700 w-32 py-1 font-medium capitalize" value="${item.serviceType}" placeholder="service type">
+                            <select class="gc-color-select form-input text-sm py-1 w-36">${colorOptions}</select>
+                            <div class="flex-1"></div>
+                            <button type="button" class="gc-toggle-schedule text-gray-500 hover:text-gray-700 text-sm px-2" title="Edit Schedule">
                                 <i class="fas fa-clock"></i>
                             </button>
-                            <button type="button" class="gc-delete-row text-red-500 hover:text-red-700 text-xs px-1" title="Delete">
+                            <button type="button" class="gc-delete-row text-red-500 hover:text-red-700 text-sm px-2" title="Delete">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -4620,13 +4620,13 @@
                 newRow.dataset.serviceType = newType;
                 newRow.innerHTML = `
                     <div class="flex items-center gap-2">
-                        <input type="text" class="gc-service-name form-input text-xs text-gray-600 w-24 py-1" value="${newType}" placeholder="type">
-                        <select class="gc-color-select form-input text-sm py-1 w-32">${colorOptions}</select>
-                        <input type="text" class="gc-color-label form-input text-sm py-1 flex-1" value="${newType}" placeholder="Display Label">
-                        <button type="button" class="gc-toggle-schedule text-gray-500 hover:text-gray-700 text-xs px-1" title="Edit Schedule">
+                        <input type="text" class="gc-service-name form-input text-sm text-gray-700 w-32 py-1 font-medium capitalize" value="${newType}" placeholder="service type">
+                        <select class="gc-color-select form-input text-sm py-1 w-36">${colorOptions}</select>
+                        <div class="flex-1"></div>
+                        <button type="button" class="gc-toggle-schedule text-gray-500 hover:text-gray-700 text-sm px-2" title="Edit Schedule">
                             <i class="fas fa-clock"></i>
                         </button>
-                        <button type="button" class="gc-delete-row text-red-500 hover:text-red-700 text-xs px-1" title="Delete">
+                        <button type="button" class="gc-delete-row text-red-500 hover:text-red-700 text-sm px-2" title="Delete">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
@@ -4782,12 +4782,11 @@
                 btn.disabled = true;
                 
                 try {
-                    // Gather color mappings from UI (now with editable service names + schedules)
+                    // Gather color mappings from UI (service type + color + schedule)
                     const colorMappings = [];
                     document.querySelectorAll('#gc-color-mappings .gc-color-row').forEach(row => {
                         const serviceType = row.querySelector('.gc-service-name')?.value?.trim().toLowerCase().replace(/\s+/g, '_') || row.dataset.serviceType;
                         const colorId = row.querySelector('.gc-color-select')?.value || '7';
-                        const label = row.querySelector('.gc-color-label')?.value || serviceType;
                         
                         // Gather schedule data
                         const days = [];
@@ -4802,6 +4801,8 @@
                         };
                         
                         if (serviceType) {
+                            // Label is derived from service type (capitalized)
+                            const label = serviceType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
                             colorMappings.push({ serviceType, colorId, label, schedule });
                         }
                     });
