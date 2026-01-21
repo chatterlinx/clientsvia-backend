@@ -418,6 +418,22 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
         const aiModel = pick(b.aiModel, b.provider?.aiModel, 'eleven_turbo_v2_5');
         const outputFormat = pick(b.outputFormat, b.provider?.outputFormat, 'mp3_44100_128');
         const streamingLatency = Number(pick(b.streamingLatency, b.provider?.streamingLatency, 0));
+        
+        // ═══════════════════════════════════════════════════════════════════════════════════
+        // V85: SPEECH DETECTION SETTINGS (CRITICAL FOR RESPONSE SPEED!)
+        // These control how fast the AI responds to callers.
+        // speechTimeout: 3 (default) → 1.5 saves 1.5 seconds PER TURN!
+        // bargeIn: true → Callers can interrupt, feels 2s faster
+        // ═══════════════════════════════════════════════════════════════════════════════════
+        const speechDetection = {
+            speechTimeout: Number(pick(b.speechDetection?.speechTimeout, 3)),
+            initialTimeout: Number(pick(b.speechDetection?.initialTimeout, 5)),
+            bargeIn: Boolean(pick(b.speechDetection?.bargeIn, false)),
+            enhancedRecognition: Boolean(pick(b.speechDetection?.enhancedRecognition, true)),
+            speechModel: pick(b.speechDetection?.speechModel, 'phone_call')
+        };
+        
+        logger.info('🚀 [SAVE] Speech detection settings:', speechDetection);
 
         logger.info(`🔍 [SAVE-3] Normalized values:`, {
             apiSource,
@@ -482,6 +498,8 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             aiModel,
             outputFormat,
             streamingLatency,
+            // V85: Speech detection settings (critical for response speed!)
+            speechDetection,
             enabled: true,
             lastUpdated: new Date(),
             version: '2.0'

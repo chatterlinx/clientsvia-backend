@@ -804,6 +804,97 @@
                                 </div>
                             </div>
 
+                            <!-- 🚀 SPEECH DETECTION SETTINGS (V85) -->
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="border-b border-gray-200 bg-gray-50 px-6 py-4 rounded-t-lg">
+                                    <h3 class="text-lg font-medium text-gray-800 flex items-center">
+                                        <i class="fas fa-tachometer-alt mr-2 text-red-600"></i>Call Response Timing
+                                        <span class="ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">CRITICAL FOR SPEED</span>
+                                    </h3>
+                                    <p class="text-sm text-gray-600 mt-1">Controls how fast the AI responds to callers. Lower values = faster responses.</p>
+                                </div>
+                                
+                                <div class="p-6">
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <!-- Left Column: Timing -->
+                                        <div class="space-y-4">
+                                            <h4 class="text-md font-semibold text-gray-700 border-b pb-2">Response Timing</h4>
+                                            
+                                            <!-- Speech Timeout -->
+                                            <div>
+                                                <label for="speech-timeout" class="form-label flex items-center justify-between">
+                                                    Speech Timeout
+                                                    <span id="speech-timeout-value" class="text-sm font-bold text-red-600">3s</span>
+                                                </label>
+                                                <input type="range" id="speech-timeout" name="speechTimeout" 
+                                                       class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                                       value="3" min="1" max="5" step="0.5" 
+                                                       oninput="document.getElementById('speech-timeout-value').textContent = this.value + 's'">
+                                                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                                    <span>Fast (1s)</span>
+                                                    <span>Slow (5s)</span>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-1">
+                                                    <strong>How long to wait after caller stops talking.</strong><br>
+                                                    Lower = faster responses, but may cut off pauses.<br>
+                                                    <span class="text-green-600 font-semibold">Recommended: 1.5-2s for natural conversation</span>
+                                                </p>
+                                            </div>
+
+                                            <!-- Initial Timeout -->
+                                            <div>
+                                                <label for="initial-timeout" class="form-label flex items-center justify-between">
+                                                    Initial Wait
+                                                    <span id="initial-timeout-value" class="text-sm text-gray-500">5s</span>
+                                                </label>
+                                                <input type="range" id="initial-timeout" name="initialTimeout" 
+                                                       class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                                       value="5" min="3" max="15" step="1"
+                                                       oninput="document.getElementById('initial-timeout-value').textContent = this.value + 's'">
+                                                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                                    <span>Short (3s)</span>
+                                                    <span>Long (15s)</span>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-1">How long to wait for caller to START speaking after greeting.</p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Right Column: Interruption -->
+                                        <div class="space-y-4">
+                                            <h4 class="text-md font-semibold text-gray-700 border-b pb-2">Caller Interruption</h4>
+                                            
+                                            <!-- Barge-In Toggle -->
+                                            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                                <div class="flex items-center justify-between">
+                                                    <div>
+                                                        <label for="barge-in-toggle" class="font-semibold text-gray-800">Allow Caller to Interrupt</label>
+                                                        <p class="text-sm text-gray-600">Let callers speak over the AI (barge-in)</p>
+                                                    </div>
+                                                    <label class="relative inline-flex items-center cursor-pointer">
+                                                        <input type="checkbox" id="barge-in-toggle" name="bargeIn" class="sr-only peer">
+                                                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                                                    </label>
+                                                </div>
+                                                <p class="text-xs text-yellow-700 mt-2">
+                                                    <i class="fas fa-lightbulb mr-1"></i>
+                                                    <strong>Recommended: ON</strong> — Makes conversations feel more natural. Callers don't have to wait for AI to finish.
+                                                </p>
+                                            </div>
+
+                                            <!-- Speed Info Box -->
+                                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                                <h5 class="font-semibold text-blue-800 mb-2"><i class="fas fa-info-circle mr-1"></i>Latency Impact</h5>
+                                                <ul class="text-sm text-blue-700 space-y-1">
+                                                    <li>• <strong>Speech Timeout 3s → 1.5s</strong> = Save 1.5s per turn</li>
+                                                    <li>• <strong>Barge-In ON</strong> = Perceived 2s faster</li>
+                                                    <li>• Combined: <strong>~3.5s faster per response</strong></li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Test & Preview -->
                             <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
                                 <div class="border-b border-gray-200 bg-gray-50 px-6 py-4 rounded-t-lg">

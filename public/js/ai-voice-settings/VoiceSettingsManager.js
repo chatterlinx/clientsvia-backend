@@ -221,6 +221,39 @@ class VoiceSettingsManager {
             speakerBoost.checked = this.currentSettings.speakerBoost || false;
         }
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V85: SPEECH DETECTION SETTINGS (Critical for response speed!)
+        // ═══════════════════════════════════════════════════════════════════════
+        const speechDetection = this.currentSettings.speechDetection || {};
+        
+        // Speech Timeout slider
+        const speechTimeoutSlider = document.getElementById('speech-timeout');
+        const speechTimeoutValue = document.getElementById('speech-timeout-value');
+        if (speechTimeoutSlider) {
+            speechTimeoutSlider.value = speechDetection.speechTimeout || 3;
+            if (speechTimeoutValue) {
+                speechTimeoutValue.textContent = `${speechTimeoutSlider.value}s`;
+            }
+        }
+        
+        // Initial Timeout slider
+        const initialTimeoutSlider = document.getElementById('initial-timeout');
+        const initialTimeoutValue = document.getElementById('initial-timeout-value');
+        if (initialTimeoutSlider) {
+            initialTimeoutSlider.value = speechDetection.initialTimeout || 5;
+            if (initialTimeoutValue) {
+                initialTimeoutValue.textContent = `${initialTimeoutSlider.value}s`;
+            }
+        }
+        
+        // Barge-In toggle
+        const bargeInToggle = document.getElementById('barge-in-toggle');
+        if (bargeInToggle) {
+            bargeInToggle.checked = speechDetection.bargeIn || false;
+        }
+        
+        console.log('🎤 [VOICE MANAGER] Loaded speech detection settings:', speechDetection);
+        
         // Update API source toggle and API key
         const useOwnApiToggle = document.getElementById('useOwnApiKey');
         const apiKeyInput = document.getElementById('elevenlabsApiKey');
@@ -649,8 +682,21 @@ class VoiceSettingsManager {
                 aiModel: document.getElementById('voice-model')?.value || 'eleven_turbo_v2_5',
                 outputFormat: document.getElementById('voice-format')?.value || 'mp3_44100_128',
                 streamingLatency: parseInt(document.getElementById('voice-latency')?.value || 0),
-                apiSource: useOwnApi ? 'own' : 'clientsvia'
+                apiSource: useOwnApi ? 'own' : 'clientsvia',
+                
+                // ═══════════════════════════════════════════════════════════════════════
+                // V85: SPEECH DETECTION SETTINGS (Critical for response speed!)
+                // ═══════════════════════════════════════════════════════════════════════
+                speechDetection: {
+                    speechTimeout: parseFloat(document.getElementById('speech-timeout')?.value || 3),
+                    initialTimeout: parseInt(document.getElementById('initial-timeout')?.value || 5),
+                    bargeIn: document.getElementById('barge-in-toggle')?.checked || false,
+                    enhancedRecognition: true,
+                    speechModel: 'phone_call'
+                }
             };
+            
+            console.log('🚀 [VOICE MANAGER] Saving speech detection:', settings.speechDetection);
             
             // If using own API, get and validate the API key
             if (useOwnApi) {
