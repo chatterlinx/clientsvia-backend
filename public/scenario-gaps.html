@@ -980,7 +980,7 @@
             
             try {
                 const token = getAuthToken();
-                await fetch(`/api/admin/scenario-gaps/${companyId}/gaps/dismiss`, {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/gaps/dismiss`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -992,11 +992,39 @@
                     })
                 });
                 
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.details || err.error || `HTTP ${response.status}`);
+                }
+                
                 showToast('Gap dismissed', 'success');
                 loadGaps();
                 
             } catch (error) {
                 console.error('Error dismissing gap:', error);
+                showToast(`Failed to dismiss: ${error.message}`, 'error');
+            }
+        }
+        
+        // Helper: Look up gap by ID and call dismissGap
+        function dismissGapById(gapId) {
+            const gap = currentGaps.find(g => g.id === gapId);
+            if (gap) {
+                dismissGap(gap);
+            } else {
+                console.error('Gap not found:', gapId);
+                showToast('Gap not found', 'error');
+            }
+        }
+        
+        // Helper: Look up gap by ID and open modal
+        function openCreateModalById(gapId) {
+            const gap = currentGaps.find(g => g.id === gapId);
+            if (gap) {
+                openCreateModal(gap);
+            } else {
+                console.error('Gap not found:', gapId);
+                showToast('Gap not found', 'error');
             }
         }
         
@@ -1061,9 +1089,11 @@
         
         function renderGapCard(gap) {
             const examples = gap.examples.slice(0, 3).map(e => `<div class="gap-example">${escapeHtml(e.text)}</div>`).join('');
+            // Use gap.id as a safe key to look up from currentGaps array
+            const gapId = gap.id;
             
             return `
-                <div class="gap-card ${gap.priority}">
+                <div class="gap-card ${gap.priority}" data-gap-id="${escapeHtml(gapId)}">
                     <div class="gap-header">
                         <div class="gap-phrase">
                             <i class="fas fa-comment-dots"></i>
@@ -1088,13 +1118,13 @@
                     </div>
                     
                     <div class="gap-actions">
-                        <button class="btn btn-primary" onclick='openCreateModal(${JSON.stringify(gap).replace(/'/g, "\\'")})'>
+                        <button class="btn btn-primary" onclick="openCreateModalById('${escapeHtml(gapId)}')">
                             <i class="fas fa-magic"></i> Auto-Create Scenario
                         </button>
                         <button class="btn btn-secondary" onclick="viewCalls('${gap.callIds?.[0] || ''}')">
                             <i class="fas fa-eye"></i> View Calls
                         </button>
-                        <button class="btn btn-ghost" onclick='dismissGap(${JSON.stringify(gap).replace(/'/g, "\\'")})'>
+                        <button class="btn btn-ghost" onclick="dismissGapById('${escapeHtml(gapId)}')">
                             <i class="fas fa-times"></i> Dismiss
                         </button>
                     </div>

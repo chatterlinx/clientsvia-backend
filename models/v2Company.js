@@ -4984,6 +4984,17 @@ const companySchema = new mongoose.Schema({
             totalBlocked: { type: Number, default: 0 },                     // Lifetime block count
             lastBlockedAt: { type: Date, default: null }                    // Most recent block timestamp
         }
+    },
+    
+    // ============================================================================
+    // 🗃️ METADATA - Flexible storage for system features
+    // ============================================================================
+    // PURPOSE: Store arbitrary data that doesn't warrant dedicated schema fields
+    // EXAMPLES: dismissedScenarioGaps, featureFlags, migrationState
+    // ============================================================================
+    metadata: { 
+        type: mongoose.Schema.Types.Mixed, 
+        default: {} 
     }
 }, { timestamps: true });
 
