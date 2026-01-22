@@ -4395,8 +4395,9 @@ async function processTurn({
                 /\bhow\s+soon\s+can\s+you\b/i,
                 /\bhow\s+fast\s+can\s+you\b/i,
                 /\bhow\s+quickly\s+can\s+you\b/i,
-                /\bwhat'?s\s+the\s+(earliest|soonest)\b/i,
-                /\bwhen'?s\s+the\s+(earliest|soonest)\b/i,
+                /\bwhat(?:'s|\s+is)\s+the\s+(earliest|soonest)\b/i,
+                /\bwhen(?:'s|\s+is)\s+the\s+(earliest|soonest)\b/i,
+                /\b(earliest|soonest)\s+you\s+have\b/i,
                 /\bfirst\s+available\b/i,
                 /\bnext\s+available\b/i,
                 /\bsoonest\b/i

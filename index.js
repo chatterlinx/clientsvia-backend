@@ -474,7 +474,7 @@ function registerRoutes(routes) {
             'please', 'thanks', 'thank you', 'actually', 'basically', 'really', 'very'
         ];
         
-        const results = { templatesUpdated: 0, wordsRemoved: {} };
+        const results = { templatesUpdated: 0, wordsRemoved: {}, categoriesCleaned: 0 };
         try {
             const templates = await GlobalInstantResponseTemplate.find({});
             for (const template of templates) {
@@ -483,23 +483,47 @@ function registerRoutes(routes) {
                 // Check template.fillerWords
                 if (template.fillerWords?.length > 0) {
                     const before = template.fillerWords.length;
+                    const removed = template.fillerWords.filter(w => WORDS_TO_REMOVE.includes(w.toLowerCase()));
                     template.fillerWords = template.fillerWords.filter(w => !WORDS_TO_REMOVE.includes(w.toLowerCase()));
-                    if (template.fillerWords.length < before) modified = true;
+                    if (removed.length > 0) {
+                        modified = true;
+                        removed.forEach(w => { results.wordsRemoved[w] = (results.wordsRemoved[w] || 0) + 1; });
+                    }
                 }
                 
                 // Check template.nlpConfig.fillerWords
                 if (template.nlpConfig?.fillerWords?.length > 0) {
-                    const before = template.nlpConfig.fillerWords.length;
+                    const removed = template.nlpConfig.fillerWords.filter(w => WORDS_TO_REMOVE.includes(w.toLowerCase()));
                     template.nlpConfig.fillerWords = template.nlpConfig.fillerWords.filter(w => !WORDS_TO_REMOVE.includes(w.toLowerCase()));
-                    if (template.nlpConfig.fillerWords.length < before) modified = true;
+                    if (removed.length > 0) {
+                        modified = true;
+                        removed.forEach(w => { results.wordsRemoved[w] = (results.wordsRemoved[w] || 0) + 1; });
+                    }
+                }
+                
+                // V88 FIX: Check CATEGORY-level fillerWords (this is where "you guys" lives!)
+                if (template.categories?.length > 0) {
+                    for (const category of template.categories) {
+                        if (category.fillerWords?.length > 0) {
+                            const removed = category.fillerWords.filter(w => WORDS_TO_REMOVE.includes(w.toLowerCase()));
+                            category.fillerWords = category.fillerWords.filter(w => !WORDS_TO_REMOVE.includes(w.toLowerCase()));
+                            if (removed.length > 0) {
+                                modified = true;
+                                results.categoriesCleaned++;
+                                removed.forEach(w => { results.wordsRemoved[w] = (results.wordsRemoved[w] || 0) + 1; });
+                            }
+                        }
+                    }
                 }
                 
                 if (modified) {
+                    template.markModified('categories');
+                    template.markModified('nlpConfig');
                     await template.save();
                     results.templatesUpdated++;
                 }
             }
-            res.json({ success: true, ...results, message: 'Filler words cleaned from templates' });
+            res.json({ success: true, ...results, message: 'Filler words cleaned from templates AND categories' });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
         }
