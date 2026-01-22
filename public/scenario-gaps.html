@@ -840,9 +840,21 @@
             
             try {
                 const token = localStorage.getItem('token');
+                
+                // Check if token exists
+                if (!token) {
+                    showError('Not logged in. Please log in from the Control Plane first, then click the Gaps tab again.');
+                    return;
+                }
+                
                 const response = await fetch(`/api/admin/scenario-gaps/${companyId}/gaps?days=${selectedDays}&minCalls=2`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                
+                if (response.status === 401) {
+                    showError('Session expired. Please log in again from the Control Plane.');
+                    return;
+                }
                 
                 if (!response.ok) throw new Error('Failed to load gaps');
                 
