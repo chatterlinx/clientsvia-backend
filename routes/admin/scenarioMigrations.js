@@ -431,13 +431,14 @@ router.get('/run-filler-fix/:secretKey', async (req, res) => {
     console.log('🔧 RUNNING: V87 Filler Word Fix (Unauthenticated Bypass)');
     console.log('============================================================\n');
     
-    // V87: All words that should NEVER be stripped
+    // V88: All words that should NEVER be stripped (sync with POST /fix-filler-words)
     const WORDS_TO_REMOVE = [
         'hi', 'hey', 'hello', 'yo',
         'well', 'so', 'okay', 'ok', 'yes', 'yeah',
         'today', 'tomorrow', 'now', 'asap', 'urgent', 'emergency',
         'right away', 'immediately', 'tonight', 'morning', 'afternoon', 'evening',
         'you know', 'like', 'i mean', 'you guys',
+        'there',       // V88: "There's nothing happening" → "'s nothing happening" BROKEN!
         'please', 'thanks', 'thank you',
         'actually', 'basically', 'really', 'very'
     ];
