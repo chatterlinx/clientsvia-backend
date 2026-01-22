@@ -410,6 +410,185 @@ router.get('/:companyId/customers/:customerId/calls',
 );
 
 /**
+ * GET /api/admin/call-center/:companyId/customers/:customerId/intelligence
+ * Get full AI intelligence data for a customer (AI Notes, Equipment, Preferences, History)
+ * 
+ * This is the ENTERPRISE customer knowledge endpoint - shows everything the AI
+ * has learned about this customer across all interactions.
+ */
+router.get('/:companyId/customers/:customerId/intelligence',
+  auditLog.logAccess('customer.intelligence_viewed'),
+  async (req, res) => {
+    try {
+      const { companyId, customerId } = req.params;
+      
+      // Load the customer record with all embedded data
+      const customer = await Customer.findOne({
+        _id: customerId,
+        companyId
+      }).lean();
+      
+      if (!customer) {
+        return res.status(404).json({ success: false, error: 'Customer not found' });
+      }
+      
+      // Get call history with transcripts
+      const calls = await CallSummary.find({
+        companyId,
+        $or: [
+          { customerId },
+          { phone: { $in: customer.phoneNumbers?.map(p => p.number) || [] } }
+        ]
+      })
+      .sort({ startedAt: -1 })
+      .limit(10)
+      .lean();
+      
+      // Format the intelligence response
+      const intelligence = {
+        customerId: customer._id.toString(),
+        
+        // === IDENTITY ===
+        identity: {
+          name: customer.name || {},
+          phoneNumbers: customer.phoneNumbers || [],
+          emails: customer.emails || [],
+          primaryAddress: customer.addresses?.find(a => a.isPrimary) || customer.addresses?.[0] || null,
+          allAddresses: customer.addresses || []
+        },
+        
+        // === AI ACCUMULATED NOTES ===
+        aiNotes: (customer.aiNotes || []).slice(0, 20).map(note => ({
+          note: note.note,
+          source: note.source,
+          createdAt: note.createdAt
+        })),
+        
+        // === EQUIPMENT ON FILE ===
+        equipment: (customer.equipment || []).map(eq => ({
+          type: eq.type,
+          brand: eq.brand,
+          model: eq.model,
+          serialNumber: eq.serialNumber,
+          installDate: eq.installDate,
+          warrantyExpires: eq.warrantyExpires,
+          warrantyStatus: eq.warrantyExpires ? 
+            (new Date(eq.warrantyExpires) > new Date() ? 'active' : 'expired') : 'unknown',
+          notes: eq.notes,
+          lastServiceDate: eq.lastServiceDate
+        })),
+        
+        // === PREFERENCES ===
+        preferences: {
+          preferredTechnicianName: customer.preferences?.preferredTechnicianName || null,
+          preferredTimeWindow: customer.preferences?.preferredTimeWindow || null,
+          preferredContactMethod: customer.preferences?.preferredContactMethod || 'phone',
+          communicationStyle: customer.preferences?.communicationStyle || null,
+          language: customer.preferences?.language || 'en',
+          specialInstructions: customer.preferences?.specialInstructions || null
+        },
+        
+        // === SERVICE VISIT HISTORY ===
+        visits: (customer.visits || []).slice(0, 10).map(visit => ({
+          date: visit.date,
+          technicianName: visit.technicianName,
+          issueDescription: visit.issueDescription,
+          resolution: visit.resolution,
+          notes: visit.notes,
+          wasCallback: visit.wasCallback,
+          customerRating: visit.customerRating,
+          invoiceAmount: visit.invoiceAmount
+        })),
+        
+        // === CALL HISTORY SUMMARY ===
+        callHistory: calls.map(call => ({
+          callId: call._id.toString(),
+          date: call.startedAt,
+          duration: call.durationSeconds,
+          outcome: call.outcome,
+          primaryIntent: call.primaryIntent,
+          summary: call.summary,
+          slots: call.collectedSlots || {},
+          tier: call.tierUsed || 'unknown',
+          blackBoxId: call.blackBoxRecordingId
+        })),
+        
+        // === RELATIONSHIP METRICS ===
+        metrics: {
+          totalCalls: customer.metrics?.totalCalls || calls.length,
+          totalAppointments: customer.metrics?.totalAppointments || 0,
+          completedAppointments: customer.metrics?.completedAppointments || 0,
+          canceledAppointments: customer.metrics?.canceledAppointments || 0,
+          noShowCount: customer.metrics?.noShowCount || 0,
+          averageRating: customer.metrics?.averageRating || null,
+          lifetimeValue: customer.metrics?.lifetimeValue || 0,
+          firstContactAt: customer.metrics?.firstContactAt || customer.createdAt,
+          lastContactAt: customer.metrics?.lastContactAt || customer.updatedAt
+        },
+        
+        // === CLASSIFICATION ===
+        classification: {
+          type: customer.type || 'customer',
+          accountType: customer.accountType || 'residential',
+          status: customer.status || 'active',
+          tags: customer.tags || []
+        },
+        
+        // === META ===
+        meta: {
+          createdAt: customer.createdAt,
+          updatedAt: customer.updatedAt,
+          dataCompleteness: calculateDataCompleteness(customer)
+        }
+      };
+      
+      logger.info('[CALL_CENTER] Customer intelligence loaded', {
+        customerId,
+        aiNotesCount: intelligence.aiNotes.length,
+        equipmentCount: intelligence.equipment.length,
+        visitsCount: intelligence.visits.length,
+        callsCount: intelligence.callHistory.length
+      });
+      
+      res.json({ success: true, data: intelligence });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error fetching customer intelligence', {
+        error: error.message,
+        customerId: req.params.customerId
+      });
+      res.status(500).json({ success: false, error: 'Failed to fetch customer intelligence' });
+    }
+  }
+);
+
+/**
+ * Calculate how complete a customer's data profile is
+ */
+function calculateDataCompleteness(customer) {
+  let score = 0;
+  let total = 10;
+  
+  if (customer.name?.full || customer.name?.first) score++;
+  if (customer.phoneNumbers?.length > 0) score++;
+  if (customer.emails?.length > 0) score++;
+  if (customer.addresses?.length > 0) score++;
+  if (customer.aiNotes?.length > 0) score++;
+  if (customer.equipment?.length > 0) score++;
+  if (customer.preferences?.preferredTimeWindow) score++;
+  if (customer.visits?.length > 0) score++;
+  if (customer.metrics?.totalCalls > 0) score++;
+  if (customer.metrics?.lifetimeValue > 0) score++;
+  
+  return {
+    score,
+    total,
+    percentage: Math.round((score / total) * 100),
+    level: score >= 8 ? 'excellent' : score >= 5 ? 'good' : score >= 3 ? 'partial' : 'minimal'
+  };
+}
+
+/**
  * PATCH /api/admin/call-center/:companyId/customers/:customerId
  * Update customer profile
  */

@@ -1798,6 +1798,7 @@
             
             <div class="modal-tabs">
                 <button class="modal-tab active" data-modal-tab="overview">Overview</button>
+                <button class="modal-tab" data-modal-tab="intelligence" style="background: linear-gradient(135deg, rgba(244,114,182,0.1), rgba(167,139,250,0.1)); border: 1px solid rgba(244,114,182,0.3);">🧠 AI Intelligence</button>
                 <button class="modal-tab" data-modal-tab="properties">Properties</button>
                 <button class="modal-tab" data-modal-tab="household">Household</button>
                 <button class="modal-tab" data-modal-tab="history">Call History</button>
@@ -1891,6 +1892,108 @@
                         <button class="action-btn" onclick="addHouseholdMember()">👤 Add Household Member</button>
                         <button class="action-btn" id="convert-commercial-btn" onclick="convertToCommercial()">🏢 Create Commercial Profile</button>
                         <button class="action-btn" onclick="linkAccount()">🔗 Link Account</button>
+                    </div>
+                </div>
+                
+                <!-- AI Intelligence Tab -->
+                <div class="modal-tab-panel" id="modal-panel-intelligence" style="display: none;">
+                    <div id="intelligence-loading" style="text-align: center; padding: 40px;">
+                        <div class="loading-spinner"></div>
+                        <p style="margin-top: 16px; color: var(--text-secondary);">Loading AI Intelligence...</p>
+                    </div>
+                    <div id="intelligence-content" style="display: none;">
+                        <!-- Data Completeness Score -->
+                        <div class="detail-section" style="background: linear-gradient(135deg, rgba(244,114,182,0.1), rgba(167,139,250,0.1)); border: 1px solid rgba(244,114,182,0.3);">
+                            <div class="detail-section-header">
+                                <span class="detail-section-title">📊 Customer Knowledge Score</span>
+                            </div>
+                            <div class="detail-section-content">
+                                <div style="display: flex; align-items: center; gap: 16px;">
+                                    <div id="intel-score-circle" style="width: 80px; height: 80px; border-radius: 50%; background: conic-gradient(var(--accent-cyan) 0%, var(--bg-card) 0%); display: flex; align-items: center; justify-content: center;">
+                                        <div style="width: 60px; height: 60px; border-radius: 50%; background: var(--bg-card); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700;" id="intel-score-value">0%</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 14px; color: var(--text-secondary);">Data completeness</div>
+                                        <div id="intel-score-level" style="font-size: 18px; font-weight: 600; color: var(--accent-cyan);">Loading...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- AI Notes Section -->
+                        <div class="detail-section">
+                            <div class="detail-section-header">
+                                <span class="detail-section-title">🧠 AI Learned Notes</span>
+                                <span id="intel-notes-count" style="font-size: 12px; color: var(--text-muted);">0 notes</span>
+                            </div>
+                            <div class="detail-section-content" id="intel-notes-list">
+                                <div style="color: var(--text-muted); font-style: italic;">No AI notes yet. Intelligence is gathered from conversations.</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Equipment Section -->
+                        <div class="detail-section">
+                            <div class="detail-section-header">
+                                <span class="detail-section-title">⚙️ Equipment on File</span>
+                                <span id="intel-equipment-count" style="font-size: 12px; color: var(--text-muted);">0 items</span>
+                            </div>
+                            <div class="detail-section-content" id="intel-equipment-list">
+                                <div style="color: var(--text-muted); font-style: italic;">No equipment recorded.</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Preferences Section -->
+                        <div class="detail-section">
+                            <div class="detail-section-header">
+                                <span class="detail-section-title">🎯 Customer Preferences</span>
+                            </div>
+                            <div class="detail-section-content" id="intel-preferences">
+                                <div class="detail-grid">
+                                    <div class="detail-item">
+                                        <span class="detail-label">Preferred Tech</span>
+                                        <span class="detail-value" id="intel-pref-tech">—</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Preferred Time</span>
+                                        <span class="detail-value" id="intel-pref-time">—</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Contact Method</span>
+                                        <span class="detail-value" id="intel-pref-contact">—</span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Comm. Style</span>
+                                        <span class="detail-value" id="intel-pref-style">—</span>
+                                    </div>
+                                </div>
+                                <div id="intel-special-instructions" style="margin-top: 12px; display: none;">
+                                    <span class="detail-label">Special Instructions</span>
+                                    <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; margin-top: 4px; color: var(--text-primary);"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Service Visits Section -->
+                        <div class="detail-section">
+                            <div class="detail-section-header">
+                                <span class="detail-section-title">🔧 Service Visit History</span>
+                                <span id="intel-visits-count" style="font-size: 12px; color: var(--text-muted);">0 visits</span>
+                            </div>
+                            <div class="detail-section-content" id="intel-visits-list">
+                                <div style="color: var(--text-muted); font-style: italic;">No service visits recorded.</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Call Summary Section -->
+                        <div class="detail-section">
+                            <div class="detail-section-header">
+                                <span class="detail-section-title">📞 Call History Summary</span>
+                                <span id="intel-calls-count" style="font-size: 12px; color: var(--text-muted);">0 calls</span>
+                            </div>
+                            <div class="detail-section-content" id="intel-calls-list">
+                                <div style="color: var(--text-muted); font-style: italic;">No calls recorded.</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -4062,6 +4165,207 @@
             document.querySelectorAll('.modal-tab-panel').forEach(el => {
                 el.style.display = el.id === `modal-panel-${tab}` ? 'block' : 'none';
             });
+            
+            // Load intelligence data when that tab is selected
+            if (tab === 'intelligence' && currentCustomer) {
+                loadCustomerIntelligence(currentCustomer._id);
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // AI INTELLIGENCE TAB FUNCTIONS
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        let customerIntelligenceCache = {};
+        
+        async function loadCustomerIntelligence(customerId) {
+            // Check cache first
+            if (customerIntelligenceCache[customerId]) {
+                renderIntelligence(customerIntelligenceCache[customerId]);
+                return;
+            }
+            
+            // Show loading
+            document.getElementById('intelligence-loading').style.display = 'block';
+            document.getElementById('intelligence-content').style.display = 'none';
+            
+            try {
+                const res = await apiCall(`/api/admin/call-center/${currentCompanyId}/customers/${customerId}/intelligence`);
+                const intel = res.data;
+                
+                // Cache it
+                customerIntelligenceCache[customerId] = intel;
+                
+                renderIntelligence(intel);
+                
+            } catch (err) {
+                console.error('Failed to load intelligence:', err);
+                document.getElementById('intelligence-loading').innerHTML = `
+                    <div style="color: var(--accent-red);">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 24px;"></i>
+                        <p style="margin-top: 12px;">Failed to load AI intelligence</p>
+                        <p style="font-size: 12px; color: var(--text-muted);">${err.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function renderIntelligence(intel) {
+            document.getElementById('intelligence-loading').style.display = 'none';
+            document.getElementById('intelligence-content').style.display = 'block';
+            
+            // === Data Completeness Score ===
+            const score = intel.meta?.dataCompleteness || { percentage: 0, level: 'minimal' };
+            document.getElementById('intel-score-value').textContent = `${score.percentage}%`;
+            document.getElementById('intel-score-circle').style.background = 
+                `conic-gradient(var(--accent-cyan) ${score.percentage}%, var(--bg-card) ${score.percentage}%)`;
+            document.getElementById('intel-score-level').textContent = 
+                score.level.charAt(0).toUpperCase() + score.level.slice(1);
+            
+            // Color based on level
+            const levelColors = { excellent: 'var(--accent-green)', good: 'var(--accent-cyan)', partial: 'var(--accent-yellow)', minimal: 'var(--text-muted)' };
+            document.getElementById('intel-score-level').style.color = levelColors[score.level] || 'var(--text-muted)';
+            
+            // === AI Notes ===
+            const notes = intel.aiNotes || [];
+            document.getElementById('intel-notes-count').textContent = `${notes.length} notes`;
+            if (notes.length > 0) {
+                document.getElementById('intel-notes-list').innerHTML = notes.map(note => `
+                    <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid var(--accent-purple);">
+                        <div style="color: var(--text-primary);">${escapeHtml(note.note)}</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                            ${note.source === 'ai_extracted' ? '🤖 AI Extracted' : note.source === 'manual' ? '✏️ Manual' : '⚙️ System'}
+                            • ${note.createdAt ? formatRelativeTime(note.createdAt) : 'Unknown date'}
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                document.getElementById('intel-notes-list').innerHTML = `
+                    <div style="color: var(--text-muted); font-style: italic; padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                        No AI notes yet. The AI learns about customers during conversations.
+                    </div>
+                `;
+            }
+            
+            // === Equipment ===
+            const equipment = intel.equipment || [];
+            document.getElementById('intel-equipment-count').textContent = `${equipment.length} items`;
+            if (equipment.length > 0) {
+                document.getElementById('intel-equipment-list').innerHTML = equipment.map(eq => `
+                    <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-weight: 600; color: var(--text-primary);">
+                                ⚙️ ${escapeHtml(eq.type || 'Equipment')}
+                                ${eq.brand ? ` - ${escapeHtml(eq.brand)}` : ''}
+                                ${eq.model ? ` ${escapeHtml(eq.model)}` : ''}
+                            </div>
+                            ${eq.warrantyStatus ? `
+                                <span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; ${eq.warrantyStatus === 'active' ? 'background: rgba(52,211,153,0.2); color: var(--accent-green);' : 'background: rgba(248,113,113,0.2); color: var(--accent-red);'}">
+                                    ${eq.warrantyStatus === 'active' ? '✓ Warranty Active' : '⚠ Warranty Expired'}
+                                </span>
+                            ` : ''}
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                            ${eq.serialNumber ? `S/N: ${escapeHtml(eq.serialNumber)} • ` : ''}
+                            ${eq.installDate ? `Installed: ${new Date(eq.installDate).toLocaleDateString()} • ` : ''}
+                            ${eq.lastServiceDate ? `Last Service: ${new Date(eq.lastServiceDate).toLocaleDateString()}` : ''}
+                        </div>
+                        ${eq.notes ? `<div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">${escapeHtml(eq.notes)}</div>` : ''}
+                    </div>
+                `).join('');
+            } else {
+                document.getElementById('intel-equipment-list').innerHTML = `
+                    <div style="color: var(--text-muted); font-style: italic; padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                        No equipment recorded. Equipment info is gathered during service calls.
+                    </div>
+                `;
+            }
+            
+            // === Preferences ===
+            const prefs = intel.preferences || {};
+            document.getElementById('intel-pref-tech').textContent = prefs.preferredTechnicianName || '—';
+            document.getElementById('intel-pref-time').textContent = prefs.preferredTimeWindow || '—';
+            document.getElementById('intel-pref-contact').textContent = prefs.preferredContactMethod ? 
+                prefs.preferredContactMethod.charAt(0).toUpperCase() + prefs.preferredContactMethod.slice(1) : '—';
+            document.getElementById('intel-pref-style').textContent = prefs.communicationStyle || '—';
+            
+            if (prefs.specialInstructions) {
+                const instrEl = document.getElementById('intel-special-instructions');
+                instrEl.style.display = 'block';
+                instrEl.querySelector('div').textContent = prefs.specialInstructions;
+            } else {
+                document.getElementById('intel-special-instructions').style.display = 'none';
+            }
+            
+            // === Service Visits ===
+            const visits = intel.visits || [];
+            document.getElementById('intel-visits-count').textContent = `${visits.length} visits`;
+            if (visits.length > 0) {
+                document.getElementById('intel-visits-list').innerHTML = visits.map(visit => `
+                    <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid var(--accent-green);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-weight: 600; color: var(--text-primary);">
+                                🔧 ${visit.date ? new Date(visit.date).toLocaleDateString() : 'Unknown date'}
+                                ${visit.technicianName ? ` • Tech: ${escapeHtml(visit.technicianName)}` : ''}
+                            </div>
+                            ${visit.customerRating ? `
+                                <span style="color: var(--accent-yellow);">${'⭐'.repeat(visit.customerRating)}</span>
+                            ` : ''}
+                        </div>
+                        ${visit.issueDescription ? `<div style="color: var(--text-secondary); margin-top: 4px;"><strong>Issue:</strong> ${escapeHtml(visit.issueDescription)}</div>` : ''}
+                        ${visit.resolution ? `<div style="color: var(--text-secondary); margin-top: 2px;"><strong>Resolution:</strong> ${escapeHtml(visit.resolution)}</div>` : ''}
+                        ${visit.notes ? `<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">${escapeHtml(visit.notes)}</div>` : ''}
+                        ${visit.wasCallback ? `<span style="font-size: 11px; background: rgba(251,191,36,0.2); color: var(--accent-yellow); padding: 2px 6px; border-radius: 4px;">🔄 Callback</span>` : ''}
+                        ${visit.invoiceAmount ? `<div style="font-size: 12px; color: var(--accent-green); margin-top: 4px;">💰 $${visit.invoiceAmount.toLocaleString()}</div>` : ''}
+                    </div>
+                `).join('');
+            } else {
+                document.getElementById('intel-visits-list').innerHTML = `
+                    <div style="color: var(--text-muted); font-style: italic; padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                        No service visits recorded.
+                    </div>
+                `;
+            }
+            
+            // === Call History ===
+            const calls = intel.callHistory || [];
+            document.getElementById('intel-calls-count').textContent = `${calls.length} calls`;
+            if (calls.length > 0) {
+                document.getElementById('intel-calls-list').innerHTML = calls.map(call => `
+                    <div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px; margin-bottom: 8px; cursor: pointer;" onclick="${call.blackBoxId ? `window.open('/black-box-detail.html?recordingId=${call.blackBoxId}', '_blank')` : ''}">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-weight: 500; color: var(--text-primary);">
+                                📞 ${call.date ? new Date(call.date).toLocaleString() : 'Unknown'}
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: ${call.outcome === 'completed' ? 'rgba(52,211,153,0.2)' : call.outcome === 'abandoned' ? 'rgba(248,113,113,0.2)' : 'rgba(148,163,184,0.2)'}; color: ${call.outcome === 'completed' ? 'var(--accent-green)' : call.outcome === 'abandoned' ? 'var(--accent-red)' : 'var(--text-muted)'};">
+                                    ${call.outcome || 'unknown'}
+                                </span>
+                                <span style="font-size: 11px; color: var(--text-muted);">
+                                    ${call.tier ? `Tier ${call.tier.replace('tier', '')}` : ''}
+                                </span>
+                            </div>
+                        </div>
+                        ${call.primaryIntent ? `<div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Intent: ${escapeHtml(call.primaryIntent)}</div>` : ''}
+                        ${call.summary ? `<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">${escapeHtml(call.summary.substring(0, 100))}${call.summary.length > 100 ? '...' : ''}</div>` : ''}
+                        ${call.duration ? `<div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Duration: ${Math.floor(call.duration / 60)}:${String(call.duration % 60).padStart(2, '0')}</div>` : ''}
+                        ${call.blackBoxId ? `<div style="font-size: 11px; color: var(--accent-cyan); margin-top: 4px;">🔍 Click to view transcript</div>` : ''}
+                    </div>
+                `).join('');
+            } else {
+                document.getElementById('intel-calls-list').innerHTML = `
+                    <div style="color: var(--text-muted); font-style: italic; padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                        No calls recorded.
+                    </div>
+                `;
+            }
+        }
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
         
         // Set up modal tab listeners
