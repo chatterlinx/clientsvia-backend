@@ -1341,6 +1341,7 @@ router.post('/voice', async (req, res) => {
         try {
           logger.debug(`[TTS START] ✅ Using ElevenLabs voice ${elevenLabsVoice} for initial greeting`);
           const ttsStartTime = Date.now();
+          const greetingText = cleanTextForTTS(stripMarkdown(initResult.greeting));
           
           // 📼 BLACK BOX: Log TTS started
           if (BlackBoxLogger) {
@@ -1349,12 +1350,12 @@ router.post('/voice', async (req, res) => {
               company._id,
               0,
               elevenLabsVoice,
-              initResult.greeting.length
+              greetingText.length
             ).catch(() => {});
           }
           
           const buffer = await synthesizeSpeech({
-            text: initResult.greeting,
+            text: greetingText,
             voiceId: elevenLabsVoice,
             stability: company.aiAgentSettings?.voiceSettings?.stability,
             similarity_boost: company.aiAgentSettings?.voiceSettings?.similarityBoost,
@@ -1389,7 +1390,7 @@ router.post('/voice', async (req, res) => {
             BlackBoxLogger.QuickLog.greetingSent(
               req.body.CallSid,
               company._id,
-              initResult.greeting,
+              greetingText,
               ttsTime
             ).catch(() => {}); // Fire and forget
           }
@@ -1407,13 +1408,13 @@ router.post('/voice', async (req, res) => {
             ).catch(() => {});
           }
           
-          gather.say(escapeTwiML(initResult.greeting));
+          gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(initResult.greeting))));
         }
       } else {
         // Fallback to Say if no voice or greeting
         logger.debug(`⚠️ Fallback to Twilio Say - Voice: ${elevenLabsVoice ? 'SET' : 'MISSING'}, Greeting: ${initResult.greeting ? 'SET' : 'MISSING'}`);
         const fallbackGreeting = initResult.greeting || "Configuration error - no greeting configured";
-        gather.say(escapeTwiML(fallbackGreeting));
+        gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(fallbackGreeting))));
       }
       
       // 🚫 NEVER HANG UP - Blame connection, not caller
@@ -1877,8 +1878,9 @@ router.post('/handle-speech', async (req, res) => {
 
       if (elevenLabsVoice) {
         try {
+          const retryMsgClean = cleanTextForTTS(stripMarkdown(retryMsg));
           const buffer = await synthesizeSpeech({
-            text: retryMsg,
+            text: retryMsgClean,
             voiceId: elevenLabsVoice,
             stability: company.aiAgentSettings?.voiceSettings?.stability,
             similarity_boost: company.aiAgentSettings?.voiceSettings?.similarityBoost,
@@ -1894,10 +1896,10 @@ router.post('/handle-speech', async (req, res) => {
           gather.play(audioUrl);
         } catch (err) {
           logger.error('[LOW CONFIDENCE] ElevenLabs TTS failed, falling back to <Say>:', err);
-          gather.say(escapeTwiML(retryMsg));
+          gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(retryMsg))));
         }
       } else {
-        gather.say(escapeTwiML(retryMsg));
+        gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(retryMsg))));
       }
 
       res.type('text/xml');
@@ -3849,6 +3851,14 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         }
       }
       
+      // ════════════════════════════════════════════════════════════════════════
+      // V86 P0: ALWAYS SANITIZE TEXT BEFORE TTS
+      // ════════════════════════════════════════════════════════════════════════
+      // Ensures we never speak UI artifacts like:
+      //   "What's your name 3?" / "Did I get that right 1?" / etc.
+      // Also normalizes phone/address pronunciation for voice.
+      responseText = cleanTextForTTS(stripMarkdown(responseText));
+
       logger.info('🔍 V2 VOICE CHECK: Response text:', responseText);
       logger.info('🔍 V2 VOICE CHECK: Will use ElevenLabs:', Boolean(elevenLabsVoice && responseText));
       

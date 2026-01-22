@@ -689,7 +689,14 @@ function getMissingConfigPrompt(configType, fieldName, context = {}) {
     // Return a safe generic prompt - but the error log above will alert us
     const safeDefaults = {
         // Slot questions
-        'slot_question': `What is your ${fieldName || 'information'}?`,
+        // IMPORTANT: Never surface "unknown" to callers ("What is your unknown?").
+        // This string is only a safety net when UI config is missing.
+        'slot_question': (() => {
+            const safeField = (fieldName && String(fieldName).toLowerCase() !== 'unknown')
+                ? fieldName
+                : 'information';
+            return `What is your ${safeField}?`;
+        })(),
         'firstNameQuestion': "And your first name?",
         'lastNameQuestion': "And your last name?",
         'phone_question': "What's a good callback number?",
@@ -2329,18 +2336,40 @@ function parseSlotSelection(userText, offeredSlots) {
         }
     }
     
-    // Time matching: "10am", "2pm", "at 3", "3 o'clock"
-    const timeMatch = lower.match(/\b(\d{1,2})\s*(am|pm|:\d{2})?\b/);
-    if (timeMatch) {
-        const hour = parseInt(timeMatch[1]);
-        const isPm = timeMatch[2] === 'pm' || (hour < 7 && !timeMatch[2]); // Assume PM for 1-6 without am/pm
-        const searchHour = isPm && hour < 12 ? hour + 12 : hour;
-        
-        const match = offeredSlots.find(s => {
-            const slotHour = s.start.getHours();
-            return slotHour === searchHour || slotHour === hour;
-        });
-        if (match) return match;
+    // Time matching (STRICT):
+    // Only treat something as a time if caller used:
+    // - explicit AM/PM (e.g., "10am", "2 pm")
+    // - a colon time (e.g., "12:15")
+    // - or a context word like "at/around/by" before the number
+    //
+    // This prevents catastrophic false positives from addresses like "12155..."
+    const explicitTimeMatch =
+        lower.match(/\b(\d{1,2})(?::(\d{2}))\s*(am|pm)?\b/) ||
+        lower.match(/\b(\d{1,2})\s*(am|pm)\b/) ||
+        lower.match(/\b(?:at|around|by)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/);
+
+    if (explicitTimeMatch) {
+        // Normalize capture groups across patterns
+        const hourStr = explicitTimeMatch[1];
+        const minuteStr = explicitTimeMatch[2] && /^\d{2}$/.test(explicitTimeMatch[2]) ? explicitTimeMatch[2] : null;
+        const periodStr = explicitTimeMatch[3] || explicitTimeMatch[2]; // handles pattern 2 where [2] is am/pm
+
+        const hour = parseInt(hourStr, 10);
+        if (Number.isFinite(hour) && hour >= 1 && hour <= 12) {
+            const period = periodStr ? String(periodStr).toLowerCase() : null;
+            const isPm = period === 'pm';
+            const searchHour = isPm && hour < 12 ? hour + 12 : (!isPm && hour === 12 ? 0 : hour);
+
+            const match = offeredSlots.find(s => {
+                const slotHour = s.start.getHours();
+                if (minuteStr) {
+                    const slotMin = s.start.getMinutes();
+                    return slotHour === searchHour && slotMin === parseInt(minuteStr, 10);
+                }
+                return slotHour === searchHour;
+            });
+            if (match) return match;
+        }
     }
     
     // Generic affirmative for single slot
@@ -8259,6 +8288,16 @@ async function processTurn({
                     if (addressSlotConfig?.useGoogleMapsValidation) {
                         try {
                             log('🗺️ GOOGLE MAPS: Validating address...', { raw: extractedThisTurn.address });
+                            try {
+                                await BlackBoxLogger.logEvent({
+                                    callId: session._id?.toString(),
+                                    companyId,
+                                    type: 'ADDRESS_VALIDATION_STARTED',
+                                    data: {
+                                        addressCollected: extractedThisTurn.address
+                                    }
+                                });
+                            } catch {}
                             googleMapsResult = await AddressValidationService.validateAddress(
                                 extractedThisTurn.address,
                                 { companyId, enabled: true }
@@ -8295,15 +8334,52 @@ async function processTurn({
                                     needsConfirm: googleMapsConfirmNeeded,
                                     unitDetection: unitDetectionResult
                                 });
+                                try {
+                                    await BlackBoxLogger.logEvent({
+                                        callId: session._id?.toString(),
+                                        companyId,
+                                        type: 'ADDRESS_VALIDATED',
+                                        data: {
+                                            raw: extractedThisTurn.address,
+                                            normalized: googleMapsResult.normalized,
+                                            confidence: googleMapsResult.confidence,
+                                            needsConfirm: googleMapsConfirmNeeded,
+                                            shouldAskUnit: unitDetectionResult?.shouldAsk || false,
+                                            placeId: googleMapsResult.placeId || null
+                                        }
+                                    });
+                                } catch {}
                             } else {
                                 log('🗺️ GOOGLE MAPS: Validation failed or skipped', {
                                     success: googleMapsResult?.success,
                                     validated: googleMapsResult?.validated,
                                     reason: googleMapsResult?.skipReason || googleMapsResult?.failReason
                                 });
+                                try {
+                                    await BlackBoxLogger.logEvent({
+                                        callId: session._id?.toString(),
+                                        companyId,
+                                        type: 'ADDRESS_VALIDATION_FAILED',
+                                        data: {
+                                            raw: extractedThisTurn.address,
+                                            reason: googleMapsResult?.skipReason || googleMapsResult?.failReason || 'unknown'
+                                        }
+                                    });
+                                } catch {}
                             }
                         } catch (gmError) {
                             log('🗺️ GOOGLE MAPS: Error during validation', { error: gmError.message });
+                            try {
+                                await BlackBoxLogger.logEvent({
+                                    callId: session._id?.toString(),
+                                    companyId,
+                                    type: 'ADDRESS_VALIDATION_ERROR',
+                                    data: {
+                                        raw: extractedThisTurn.address,
+                                        error: gmError.message
+                                    }
+                                });
+                            } catch {}
                             // Continue without Google Maps - don't block the conversation
                         }
                     }
@@ -8490,6 +8566,18 @@ async function processTurn({
                         const slotSelection = parseSlotSelection(userTextLower, session.booking.offeredSlots);
                         if (slotSelection) {
                             log('📅 TIME: User selected slot', { selection: slotSelection.display });
+                            try {
+                                await BlackBoxLogger.logEvent({
+                                    callId: session._id?.toString(),
+                                    companyId,
+                                    type: 'TIME_SLOT_SELECTED',
+                                    data: {
+                                        userText: userTextLower.substring(0, 160),
+                                        selected: slotSelection.display,
+                                        offered: session.booking.offeredSlots.map(s => s.display).slice(0, 5)
+                                    }
+                                });
+                            } catch {}
                             currentSlots.time = slotSelection.display;
                             session.booking.confirmedSlot = slotSelection;
                             timeMeta.confirmed = true;
@@ -8502,6 +8590,18 @@ async function processTurn({
                             const slotList = session.booking.offeredSlots.map(s => s.display).join(', or ');
                             finalReply = `I have ${slotList} available. Which works best for you?`;
                             nextSlotId = 'time';
+                            try {
+                                await BlackBoxLogger.logEvent({
+                                    callId: session._id?.toString(),
+                                    companyId,
+                                    type: 'TIME_SLOT_SELECTION_NO_MATCH',
+                                    data: {
+                                        userText: userTextLower.substring(0, 160),
+                                        offered: session.booking.offeredSlots.map(s => s.display).slice(0, 5),
+                                        action: 're_offer'
+                                    }
+                                });
+                            } catch {}
                         }
                     } else {
                         // Day preference detection
@@ -8509,9 +8609,34 @@ async function processTurn({
                         const wantsTomorrow = /\b(tomorrow|next day)\b/i.test(userTextLower);
                         const wantsThisWeek = /\b(this week|whenever|any day|flexible)\b/i.test(userTextLower);
                         
-                        // Time window detection
-                        const wantsMorning = /\b(morning|am|before noon|8|9|10|11)\b/i.test(userTextLower) && !/good morning/i.test(userTextLower);
-                        const wantsAfternoon = /\b(afternoon|pm|after noon|evening|12|1|2|3|4)\b/i.test(userTextLower) && !/good afternoon/i.test(userTextLower);
+                        // Time window detection (STRICT)
+                        // Do NOT use raw digits here — it creates false positives from addresses/suite numbers.
+                        const wantsMorning = /\b(morning|am|before noon)\b/i.test(userTextLower) && !/good morning/i.test(userTextLower);
+                        const wantsAfternoon = /\b(afternoon|pm|after noon|evening)\b/i.test(userTextLower) && !/good afternoon/i.test(userTextLower);
+                        
+                        // If caller didn't express ANY scheduling preference, do NOT default to "ASAP".
+                        // Re-ask the configured time question instead.
+                        const detectedTimePreference = wantsToday || wantsTomorrow || wantsThisWeek || wantsMorning || wantsAfternoon;
+                        if (!detectedTimePreference) {
+                            const timeQuestion = timeSlotConfig?.question || getMissingConfigPrompt('slot_question', 'time');
+                            finalReply = String(timeQuestion).trim();
+                            nextSlotId = 'time';
+                            log('⏰ TIME: No preference detected, re-asking time question');
+                            try {
+                                await BlackBoxLogger.logEvent({
+                                    callId: session._id?.toString(),
+                                    companyId,
+                                    type: 'TIME_PREFERENCE_NOT_DETECTED',
+                                    data: {
+                                        userText: userTextLower.substring(0, 160),
+                                        action: 'reask_time_question'
+                                    }
+                                });
+                            } catch {}
+                            // Stop here; do not proceed into calendar or preference capture.
+                            // (This prevents booking flow from "making up" a time.)
+                            // eslint-disable-next-line no-lone-blocks
+                        } else {
                         
                         // Build preference strings
                         let dayPart = '';
@@ -8520,7 +8645,10 @@ async function processTurn({
                         if (wantsToday) dayPart = 'today';
                         else if (wantsTomorrow) dayPart = 'tomorrow';
                         else if (wantsThisWeek) dayPart = 'asap';
-                        else dayPart = 'asap'; // Default
+                        // If caller specified a time window (morning/afternoon) but no day,
+                        // default to "asap" for day preference. This is reasonable and
+                        // avoids passing an empty dayPreference into calendar logic.
+                        if (!dayPart) dayPart = 'asap';
                         
                         if (wantsMorning) windowPart = 'morning';
                         else if (wantsAfternoon) windowPart = 'afternoon';
@@ -8555,6 +8683,19 @@ async function processTurn({
                                         count: availResult.slots.length,
                                         slots: availResult.slots.map(s => s.display)
                                     });
+                                    try {
+                                        await BlackBoxLogger.logEvent({
+                                            callId: session._id?.toString(),
+                                            companyId,
+                                            type: 'CALENDAR_SLOTS_OFFERED',
+                                            data: {
+                                                dayPart,
+                                                windowPart,
+                                                slots: availResult.slots.map(s => s.display).slice(0, 5),
+                                                fallback: false
+                                            }
+                                        });
+                                    } catch {}
                                 } else {
                                     // Calendar unavailable or no slots - fall back to preference capture
                                     log('📅 TIME: Calendar fallback', { 
@@ -8577,6 +8718,19 @@ async function processTurn({
                                     const fallbackMsg = calendarConfig.settings?.fallbackMessage || 
                                         "I'll note your preference and we'll confirm the exact time.";
                                     finalReply = `Got it, ${currentSlots.time}. ${fallbackMsg} `;
+                                    try {
+                                        await BlackBoxLogger.logEvent({
+                                            callId: session._id?.toString(),
+                                            companyId,
+                                            type: 'CALENDAR_FALLBACK_USED',
+                                            data: {
+                                                reason: availResult.error || 'no slots',
+                                                dayPart,
+                                                windowPart,
+                                                storedTime: currentSlots.time
+                                            }
+                                        });
+                                    } catch {}
                                 }
                             } catch (calendarErr) {
                                 log('📅 TIME: Calendar error, using preference capture', { error: calendarErr.message });
@@ -8585,6 +8739,19 @@ async function processTurn({
                                     currentSlots.time = dayPart || windowPart;
                                     timeMeta.confirmed = true;
                                     finalReply = `Got it, ${currentSlots.time}. I'll note that and we'll confirm the time. `;
+                                    try {
+                                        await BlackBoxLogger.logEvent({
+                                            callId: session._id?.toString(),
+                                            companyId,
+                                            type: 'CALENDAR_ERROR_FALLBACK',
+                                            data: {
+                                                error: calendarErr.message,
+                                                dayPart,
+                                                windowPart,
+                                                storedTime: currentSlots.time
+                                            }
+                                        });
+                                    } catch {}
                                 }
                             }
                         } else {
@@ -8613,8 +8780,22 @@ async function processTurn({
                                 }
                                 
                                 log('⏰ TIME: Accepted (no calendar)', { time: currentSlots.time, dayPart, windowPart });
+                                try {
+                                    await BlackBoxLogger.logEvent({
+                                        callId: session._id?.toString(),
+                                        companyId,
+                                        type: 'TIME_PREFERENCE_CAPTURED',
+                                        data: {
+                                            dayPart,
+                                            windowPart,
+                                            storedTime: currentSlots.time,
+                                            calendarEnabled: false
+                                        }
+                                    });
+                                } catch {}
                             }
                         }
+                      }
                     }
                 }
                 else if (extractedThisTurn?.time && !timeMeta.confirmed) {
