@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scenario Gaps - ClientsVia AI Intelligence</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-pink: #f472b6;
+            --accent-purple: #a78bfa;
+            --accent-blue: #60a5fa;
+            --accent-green: #34d399;
+            --accent-yellow: #fbbf24;
+            --accent-red: #f87171;
+            --border-color: #334155;
+            --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+        
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, #2d1f4e 100%);
+            border-bottom: 1px solid var(--border-color);
+            padding: 20px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .header-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent-pink), var(--accent-purple));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        
+        .header-title h1 {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-pink), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .header-title p {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .period-selector {
+            display: flex;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 4px;
+        }
+        
+        .period-btn {
+            padding: 8px 16px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .period-btn.active {
+            background: var(--accent-purple);
+            color: white;
+        }
+        
+        .refresh-btn {
+            padding: 10px 20px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        
+        .refresh-btn:hover {
+            background: var(--bg-secondary);
+            border-color: var(--accent-purple);
+        }
+        
+        /* Main Content */
+        .main-content {
+            padding: 32px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        /* Summary Cards */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+        
+        .summary-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+        }
+        
+        .summary-card.highlight {
+            border-color: var(--accent-pink);
+            background: linear-gradient(135deg, rgba(244, 114, 182, 0.1) 0%, rgba(167, 139, 250, 0.1) 100%);
+        }
+        
+        .summary-value {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .summary-value.pink { color: var(--accent-pink); }
+        .summary-value.purple { color: var(--accent-purple); }
+        .summary-value.green { color: var(--accent-green); }
+        .summary-value.yellow { color: var(--accent-yellow); }
+        .summary-value.blue { color: var(--accent-blue); }
+        
+        .summary-label {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        
+        /* Priority Sections */
+        .priority-section {
+            margin-bottom: 32px;
+        }
+        
+        .priority-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .priority-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .priority-badge.high {
+            background: rgba(248, 113, 113, 0.2);
+            color: var(--accent-red);
+        }
+        
+        .priority-badge.medium {
+            background: rgba(251, 191, 36, 0.2);
+            color: var(--accent-yellow);
+        }
+        
+        .priority-badge.low {
+            background: rgba(148, 163, 184, 0.2);
+            color: var(--text-secondary);
+        }
+        
+        .priority-count {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+        
+        /* Gap Cards */
+        .gaps-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .gap-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            transition: all 0.3s;
+        }
+        
+        .gap-card:hover {
+            border-color: var(--accent-purple);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .gap-card.high {
+            border-left: 4px solid var(--accent-red);
+        }
+        
+        .gap-card.medium {
+            border-left: 4px solid var(--accent-yellow);
+        }
+        
+        .gap-card.low {
+            border-left: 4px solid var(--text-muted);
+        }
+        
+        .gap-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+        
+        .gap-phrase {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .gap-phrase i {
+            color: var(--accent-pink);
+        }
+        
+        .gap-stats {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+        
+        .gap-stat {
+            text-align: center;
+        }
+        
+        .gap-stat-value {
+            font-size: 20px;
+            font-weight: 700;
+        }
+        
+        .gap-stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+        
+        .gap-examples {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .gap-examples-title {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        
+        .gap-example {
+            color: var(--text-secondary);
+            font-size: 14px;
+            padding: 4px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .gap-example:last-child {
+            border-bottom: none;
+        }
+        
+        .gap-example::before {
+            content: '"';
+            color: var(--accent-purple);
+        }
+        
+        .gap-example::after {
+            content: '"';
+            color: var(--accent-purple);
+        }
+        
+        .gap-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+            border: none;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-pink), var(--accent-purple));
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(244, 114, 182, 0.4);
+        }
+        
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+        
+        .btn-secondary:hover {
+            border-color: var(--accent-purple);
+        }
+        
+        .btn-ghost {
+            background: none;
+            color: var(--text-muted);
+        }
+        
+        .btn-ghost:hover {
+            color: var(--text-primary);
+        }
+        
+        /* Savings Badge */
+        .savings-badge {
+            background: rgba(52, 211, 153, 0.15);
+            color: var(--accent-green);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 64px 32px;
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            border: 1px dashed var(--border-color);
+        }
+        
+        .empty-state i {
+            font-size: 64px;
+            color: var(--accent-green);
+            margin-bottom: 24px;
+        }
+        
+        .empty-state h3 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        
+        .empty-state p {
+            color: var(--text-secondary);
+        }
+        
+        /* Loading State */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 64px;
+        }
+        
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--bg-tertiary);
+            border-top-color: var(--accent-pink);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+        }
+        
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .modal {
+            background: var(--bg-secondary);
+            border-radius: 20px;
+            width: 90%;
+            max-width: 700px;
+            max-height: 90vh;
+            overflow: auto;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .modal-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h2 {
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .modal-header h2 i {
+            color: var(--accent-pink);
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 8px;
+        }
+        
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+        
+        .modal-body {
+            padding: 24px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+        
+        .form-label .badge {
+            font-size: 10px;
+            background: var(--accent-purple);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: 8px;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.2);
+        }
+        
+        .form-input::placeholder {
+            color: var(--text-muted);
+        }
+        
+        .form-textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        
+        .triggers-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        .trigger-tag {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .trigger-tag button {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 0;
+            font-size: 14px;
+        }
+        
+        .trigger-tag button:hover {
+            color: var(--accent-red);
+        }
+        
+        .modal-footer {
+            padding: 24px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+        
+        /* Advanced Settings Accordion */
+        .advanced-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 20px;
+            padding: 12px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+        }
+        
+        .advanced-toggle:hover {
+            color: var(--text-secondary);
+        }
+        
+        .advanced-content {
+            display: none;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .advanced-content.show {
+            display: block;
+        }
+        
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: var(--shadow-lg);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1001;
+        }
+        
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        .toast.success {
+            border-color: var(--accent-green);
+        }
+        
+        .toast.error {
+            border-color: var(--accent-red);
+        }
+        
+        .toast i {
+            font-size: 20px;
+        }
+        
+        .toast.success i { color: var(--accent-green); }
+        .toast.error i { color: var(--accent-red); }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <div class="header-icon">🎯</div>
+            <div class="header-title">
+                <h1>Scenario Gaps</h1>
+                <p id="company-name">Loading...</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="period-selector">
+                <button class="period-btn" data-days="7">7 Days</button>
+                <button class="period-btn active" data-days="14">14 Days</button>
+                <button class="period-btn" data-days="30">30 Days</button>
+            </div>
+            <button class="refresh-btn" onclick="loadGaps()">
+                <i class="fas fa-sync-alt"></i>
+                Refresh
+            </button>
+        </div>
+    </header>
+    
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Summary Cards -->
+        <div class="summary-grid" id="summary-grid">
+            <div class="summary-card">
+                <div class="summary-value pink" id="total-tier3">--</div>
+                <div class="summary-label">Tier 3 Calls</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-value purple" id="unique-gaps">--</div>
+                <div class="summary-label">Unique Gaps</div>
+            </div>
+            <div class="summary-card highlight">
+                <div class="summary-value green" id="potential-savings">--</div>
+                <div class="summary-label">Est. Weekly Savings</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-value yellow" id="high-priority">--</div>
+                <div class="summary-label">High Priority</div>
+            </div>
+        </div>
+        
+        <!-- Gaps Content -->
+        <div id="gaps-content">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p style="margin-top: 16px; color: var(--text-secondary);">Analyzing call patterns...</p>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Create Scenario Modal -->
+    <div class="modal-overlay" id="create-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-magic"></i> Create Scenario</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Scenario Name <span class="badge">AI Suggested</span></label>
+                    <input type="text" class="form-input" id="scenario-name" placeholder="e.g., Duct Cleaning Price">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Category</label>
+                    <select class="form-input" id="scenario-category">
+                        <option value="FAQ">FAQ</option>
+                        <option value="Pricing">Pricing</option>
+                        <option value="Hours">Hours</option>
+                        <option value="Service Area">Service Area</option>
+                        <option value="Emergency">Emergency</option>
+                        <option value="Warranty">Warranty</option>
+                        <option value="Booking">Booking</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Triggers (phrases that match this scenario) <span class="badge">AI Suggested</span></label>
+                    <input type="text" class="form-input" id="trigger-input" placeholder="Type and press Enter to add">
+                    <div class="triggers-list" id="triggers-list"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Quick Reply <span class="badge">AI Suggested</span></label>
+                    <textarea class="form-input form-textarea" id="scenario-reply" placeholder="The response the AI will give. Use {placeholders} for values like {price}"></textarea>
+                </div>
+                
+                <div class="advanced-toggle" onclick="toggleAdvanced()">
+                    <i class="fas fa-chevron-right" id="advanced-icon"></i>
+                    <span>Advanced Settings (30+ options - usually not needed)</span>
+                </div>
+                
+                <div class="advanced-content" id="advanced-content">
+                    <div class="form-group">
+                        <label class="form-label">Negative Triggers (phrases that should NOT match)</label>
+                        <input type="text" class="form-input" id="negative-trigger-input" placeholder="Type and press Enter to add">
+                        <div class="triggers-list" id="negative-triggers-list"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Full Reply (longer version, optional)</label>
+                        <textarea class="form-input form-textarea" id="scenario-full-reply" placeholder="Extended response for when caller needs more detail"></textarea>
+                    </div>
+                    
+                    <p style="color: var(--text-muted); font-size: 12px; margin-top: 16px;">
+                        <i class="fas fa-info-circle"></i> 
+                        More settings available in Control Plane → Data & Config → Scenarios after creation.
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="createScenario()" id="create-btn">
+                    <i class="fas fa-magic"></i> Create Scenario
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast -->
+    <div class="toast" id="toast">
+        <i class="fas fa-check-circle"></i>
+        <span id="toast-message">Success!</span>
+    </div>
+    
+    <script>
+        // ========================================
+        // STATE
+        // ========================================
+        let companyId = null;
+        let currentGaps = [];
+        let currentGap = null;
+        let triggers = [];
+        let negativeTriggers = [];
+        let selectedDays = 14;
+        
+        // ========================================
+        // INIT
+        // ========================================
+        document.addEventListener('DOMContentLoaded', () => {
+            // Get company ID from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            companyId = urlParams.get('companyId');
+            
+            if (!companyId) {
+                showError('No company ID provided');
+                return;
+            }
+            
+            // Setup period buttons
+            document.querySelectorAll('.period-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    selectedDays = parseInt(btn.dataset.days);
+                    loadGaps();
+                });
+            });
+            
+            // Setup trigger input
+            document.getElementById('trigger-input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addTrigger(e.target.value);
+                    e.target.value = '';
+                }
+            });
+            
+            document.getElementById('negative-trigger-input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addNegativeTrigger(e.target.value);
+                    e.target.value = '';
+                }
+            });
+            
+            loadGaps();
+        });
+        
+        // ========================================
+        // API CALLS
+        // ========================================
+        async function loadGaps() {
+            document.getElementById('gaps-content').innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p style="margin-top: 16px; color: var(--text-secondary);">Analyzing call patterns...</p>
+                </div>
+            `;
+            
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/gaps?days=${selectedDays}&minCalls=2`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load gaps');
+                
+                const data = await response.json();
+                
+                document.getElementById('company-name').textContent = data.companyName || 'Company';
+                currentGaps = data.gaps || [];
+                
+                renderSummary(data.summary);
+                renderGaps(data.gaps);
+                
+            } catch (error) {
+                console.error('Error loading gaps:', error);
+                showError('Failed to load scenario gaps');
+            }
+        }
+        
+        async function generatePreview(gap) {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(
+                    `/api/admin/scenario-gaps/${companyId}/gaps/preview?representative=${encodeURIComponent(gap.representative)}&examples=${encodeURIComponent(JSON.stringify(gap.examples))}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+                
+                if (!response.ok) throw new Error('Failed to generate preview');
+                
+                const data = await response.json();
+                return data.preview;
+                
+            } catch (error) {
+                console.error('Error generating preview:', error);
+                return null;
+            }
+        }
+        
+        async function createScenario() {
+            const btn = document.getElementById('create-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+            
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/gaps/create`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        representative: currentGap.representative,
+                        examples: currentGap.examples,
+                        name: document.getElementById('scenario-name').value,
+                        category: document.getElementById('scenario-category').value,
+                        triggers: triggers,
+                        negativeTriggers: negativeTriggers,
+                        quickReply: document.getElementById('scenario-reply').value,
+                        fullReply: document.getElementById('scenario-full-reply').value || null
+                    })
+                });
+                
+                if (!response.ok) throw new Error('Failed to create scenario');
+                
+                const data = await response.json();
+                
+                closeModal();
+                showToast('Scenario created successfully!', 'success');
+                
+                // Reload gaps
+                loadGaps();
+                
+            } catch (error) {
+                console.error('Error creating scenario:', error);
+                showToast('Failed to create scenario', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-magic"></i> Create Scenario';
+            }
+        }
+        
+        async function dismissGap(gap) {
+            if (!confirm('Dismiss this gap? It won\'t appear in future analyses.')) return;
+            
+            try {
+                const token = localStorage.getItem('token');
+                await fetch(`/api/admin/scenario-gaps/${companyId}/gaps/dismiss`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        representative: gap.representative,
+                        reason: 'User dismissed'
+                    })
+                });
+                
+                showToast('Gap dismissed', 'success');
+                loadGaps();
+                
+            } catch (error) {
+                console.error('Error dismissing gap:', error);
+            }
+        }
+        
+        // ========================================
+        // RENDERING
+        // ========================================
+        function renderSummary(summary) {
+            document.getElementById('total-tier3').textContent = summary.totalTier3Calls || 0;
+            document.getElementById('unique-gaps').textContent = summary.uniqueGaps || 0;
+            document.getElementById('potential-savings').textContent = `$${summary.potentialSavings?.toFixed(2) || '0.00'}`;
+            document.getElementById('high-priority').textContent = summary.highPriorityCount || 0;
+        }
+        
+        function renderGaps(gaps) {
+            const container = document.getElementById('gaps-content');
+            
+            if (!gaps || gaps.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-check-circle"></i>
+                        <h3>All Caught Up!</h3>
+                        <p>No significant scenario gaps detected in the last ${selectedDays} days.<br>Your scenarios are handling calls well!</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const highPriority = gaps.filter(g => g.priority === 'high');
+            const mediumPriority = gaps.filter(g => g.priority === 'medium');
+            const lowPriority = gaps.filter(g => g.priority === 'low');
+            
+            let html = '';
+            
+            if (highPriority.length > 0) {
+                html += renderPrioritySection('high', highPriority, '🔴 High Priority', 'Asked 5+ times');
+            }
+            
+            if (mediumPriority.length > 0) {
+                html += renderPrioritySection('medium', mediumPriority, '🟡 Medium Priority', 'Asked 3-4 times');
+            }
+            
+            if (lowPriority.length > 0) {
+                html += renderPrioritySection('low', lowPriority, '⚪ Low Priority', 'Asked 2 times');
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        function renderPrioritySection(priority, gaps, title, subtitle) {
+            return `
+                <div class="priority-section">
+                    <div class="priority-header">
+                        <span class="priority-badge ${priority}">${title}</span>
+                        <span class="priority-count">${subtitle}</span>
+                    </div>
+                    <div class="gaps-grid">
+                        ${gaps.map(gap => renderGapCard(gap)).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderGapCard(gap) {
+            const examples = gap.examples.slice(0, 3).map(e => `<div class="gap-example">${escapeHtml(e.text)}</div>`).join('');
+            
+            return `
+                <div class="gap-card ${gap.priority}">
+                    <div class="gap-header">
+                        <div class="gap-phrase">
+                            <i class="fas fa-comment-dots"></i>
+                            "${escapeHtml(gap.representative)}"
+                        </div>
+                        <div class="gap-stats">
+                            <div class="gap-stat">
+                                <div class="gap-stat-value" style="color: var(--accent-pink)">${gap.callCount}</div>
+                                <div class="gap-stat-label">Calls</div>
+                            </div>
+                            <div class="gap-stat">
+                                <div class="gap-stat-value" style="color: var(--accent-purple)">${gap.totalTokens || '--'}</div>
+                                <div class="gap-stat-label">Tokens</div>
+                            </div>
+                            <span class="savings-badge">Save ~$${gap.savings?.weeklyCostSaved?.toFixed(2) || '0'}/wk</span>
+                        </div>
+                    </div>
+                    
+                    <div class="gap-examples">
+                        <div class="gap-examples-title">Examples from calls</div>
+                        ${examples}
+                    </div>
+                    
+                    <div class="gap-actions">
+                        <button class="btn btn-primary" onclick='openCreateModal(${JSON.stringify(gap).replace(/'/g, "\\'")})'>
+                            <i class="fas fa-magic"></i> Auto-Create Scenario
+                        </button>
+                        <button class="btn btn-secondary" onclick="viewCalls('${gap.callIds?.[0] || ''}')">
+                            <i class="fas fa-eye"></i> View Calls
+                        </button>
+                        <button class="btn btn-ghost" onclick='dismissGap(${JSON.stringify(gap).replace(/'/g, "\\'")})'>
+                            <i class="fas fa-times"></i> Dismiss
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // ========================================
+        // MODAL
+        // ========================================
+        async function openCreateModal(gap) {
+            currentGap = gap;
+            triggers = [];
+            negativeTriggers = [];
+            
+            // Show modal with loading state
+            document.getElementById('create-modal').classList.add('active');
+            document.getElementById('scenario-name').value = 'Loading...';
+            document.getElementById('scenario-reply').value = 'Generating AI suggestion...';
+            
+            // Generate AI preview
+            const preview = await generatePreview(gap);
+            
+            if (preview) {
+                document.getElementById('scenario-name').value = preview.name || '';
+                document.getElementById('scenario-category').value = preview.category || 'FAQ';
+                document.getElementById('scenario-reply').value = preview.quickReply || '';
+                document.getElementById('scenario-full-reply').value = preview.fullReply || '';
+                
+                // Set triggers
+                triggers = preview.triggers || [gap.representative];
+                renderTriggers();
+                
+                negativeTriggers = preview.negativeTriggers || [];
+                renderNegativeTriggers();
+            } else {
+                // Fallback
+                document.getElementById('scenario-name').value = gap.representative.substring(0, 50);
+                document.getElementById('scenario-reply').value = '';
+                triggers = gap.examples.slice(0, 5).map(e => e.text.toLowerCase());
+                renderTriggers();
+            }
+        }
+        
+        function closeModal() {
+            document.getElementById('create-modal').classList.remove('active');
+            currentGap = null;
+        }
+        
+        function toggleAdvanced() {
+            const content = document.getElementById('advanced-content');
+            const icon = document.getElementById('advanced-icon');
+            content.classList.toggle('show');
+            icon.style.transform = content.classList.contains('show') ? 'rotate(90deg)' : '';
+        }
+        
+        // ========================================
+        // TRIGGERS
+        // ========================================
+        function addTrigger(text) {
+            text = text.trim().toLowerCase();
+            if (text && !triggers.includes(text)) {
+                triggers.push(text);
+                renderTriggers();
+            }
+        }
+        
+        function removeTrigger(index) {
+            triggers.splice(index, 1);
+            renderTriggers();
+        }
+        
+        function renderTriggers() {
+            const list = document.getElementById('triggers-list');
+            list.innerHTML = triggers.map((t, i) => `
+                <span class="trigger-tag">
+                    ${escapeHtml(t)}
+                    <button onclick="removeTrigger(${i})">&times;</button>
+                </span>
+            `).join('');
+        }
+        
+        function addNegativeTrigger(text) {
+            text = text.trim().toLowerCase();
+            if (text && !negativeTriggers.includes(text)) {
+                negativeTriggers.push(text);
+                renderNegativeTriggers();
+            }
+        }
+        
+        function removeNegativeTrigger(index) {
+            negativeTriggers.splice(index, 1);
+            renderNegativeTriggers();
+        }
+        
+        function renderNegativeTriggers() {
+            const list = document.getElementById('negative-triggers-list');
+            list.innerHTML = negativeTriggers.map((t, i) => `
+                <span class="trigger-tag" style="background: rgba(248, 113, 113, 0.2);">
+                    ${escapeHtml(t)}
+                    <button onclick="removeNegativeTrigger(${i})">&times;</button>
+                </span>
+            `).join('');
+        }
+        
+        // ========================================
+        // UTILS
+        // ========================================
+        function viewCalls(callId) {
+            if (callId) {
+                window.open(`/black-box-detail.html?recordingId=${callId}`, '_blank');
+            } else {
+                showToast('No call ID available', 'error');
+            }
+        }
+        
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const icon = toast.querySelector('i');
+            const text = document.getElementById('toast-message');
+            
+            toast.className = `toast ${type}`;
+            icon.className = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
+            text.textContent = message;
+            
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+        
+        function showError(message) {
+            document.getElementById('gaps-content').innerHTML = `
+                <div class="empty-state" style="border-color: var(--accent-red);">
+                    <i class="fas fa-exclamation-triangle" style="color: var(--accent-red);"></i>
+                    <h3>Error</h3>
+                    <p>${escapeHtml(message)}</p>
+                </div>
+            `;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

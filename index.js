@@ -565,6 +565,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/triage-presets', routes.triagePresetsRoutes); // 🎯 Dynamic Triage Presets per Trade
     app.use('/api/admin/scenario-diagnostics', routes.scenarioDiagnosticsRoutes); // 🔍 Scenario Diagnostics (proof layer)
     app.use('/api/admin/scenario-migrations', require('./routes/admin/scenarioMigrations')); // 🔧 Scenario Migrations (fix matching issues)
+    app.use('/api/admin/scenario-gaps', require('./routes/admin/scenarioGaps')); // 🎯 Scenario Gaps Detection & Auto-Create (V88)
     app.use('/api/admin', require('./routes/admin/configAudit')); // 🧾 Config Audit Log (append-only) - read endpoint
     // callFlowRoutes REMOVED Dec 2025 - use Mission Control (call-flow-engine) instead
     // V1 LLM Console API removed - 2025-11-08 (use V2 instead)

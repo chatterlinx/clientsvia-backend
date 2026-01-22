@@ -1155,6 +1155,11 @@
       <span>🔌 Wiring</span>
       <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('wiring')"></i>
     </button>
+    <button class="nav-tab" data-tab="scenario-gaps" onclick="openScenarioGaps(); return false;" style="color: #f472b6;">
+      <i class="fas fa-bullseye"></i>
+      <span>🎯 Gaps</span>
+      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('scenario-gaps')"></i>
+    </button>
     
     <div class="nav-divider"></div>
     
@@ -2480,6 +2485,14 @@
       window.open(`/call-center.html?companyId=${currentCompanyId}`, '_blank');
     }
     
+    function openScenarioGaps() {
+      if (!currentCompanyId) {
+        alert('No company ID found.');
+        return;
+      }
+      window.open(`/scenario-gaps.html?companyId=${currentCompanyId}`, '_blank');
+    }
+    
     function openBlackBox() {
       if (!currentCompanyId) {
         alert('No company ID found.');
@@ -2622,6 +2635,18 @@
             <li><strong>Schema Validation:</strong> Ensure data matches expected format</li>
           </ul>
           <p><strong>Warning:</strong> This is technical — use for debugging, not daily operations.</p>`
+      },
+      'scenario-gaps': {
+        title: '🎯 Scenario Gaps (AI Intelligence)',
+        content: `<p><strong>Purpose:</strong> Automatically detect missing scenarios from Tier 3 (LLM) fallback calls.</p>
+          <p><strong>How It Works:</strong></p>
+          <ul style="margin: 8px 0; padding-left: 20px;">
+            <li><strong>Analyzes Tier 3 calls:</strong> Finds patterns in calls that used expensive LLM fallback</li>
+            <li><strong>Groups similar phrases:</strong> Clusters caller questions by topic</li>
+            <li><strong>Prioritizes by impact:</strong> High priority = asked 5+ times, costing the most</li>
+            <li><strong>AI-generates scenarios:</strong> One-click creates scenario with triggers & response</li>
+          </ul>
+          <p><strong>Benefit:</strong> Convert expensive Tier 3 calls → FREE Tier 1 scenarios. Self-improving AI!</p>`
       },
       'legacy': {
         title: '📦 Legacy (Migration Audit)',
