@@ -74,7 +74,7 @@ const BlackBoxLogger = require('./BlackBoxLogger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V82-CALLID-FIX';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V88-DISCOVERY-FIX';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -9992,6 +9992,10 @@ async function processTurn({
                 session.discovery.contextSummary = discoveryContext.join(', ');
                 log('📝 V81: Discovery context built', { context: session.discovery.contextSummary });
             }
+            
+            // V88 FIX: CRITICAL - Must mark discovery as modified for Mongoose to persist!
+            // Without this, technician names, previous visits, and equipment are LOST!
+            session.markModified('discovery');
             // ═══════════════════════════════════════════════════════════════════════
             
             // Detect if caller described an issue (service request)
@@ -10004,6 +10008,7 @@ async function processTurn({
                 const issueMatch = userText.match(issueKeywords);
                 session.discovery.issue = userText.substring(0, 100); // First 100 chars as summary
                 session.discovery.issueCapturedAtTurn = discoveryTurnCount;
+                session.markModified('discovery'); // V88: Ensure persistence!
                 log('📝 V31: Issue captured from caller', { issue: session.discovery.issue });
             }
             
@@ -10541,6 +10546,7 @@ async function processTurn({
         // KEY FACTS STORAGE - For interrupt handling context
         // ═══════════════════════════════════════════════════════════════════
         // Store key facts from the conversation so interrupts don't lose context
+        // V88 FIX: Include technician name, previous visit, and equipment!
         session.keyFacts = session.keyFacts || [];
         
         // Add new facts from this turn
@@ -10557,9 +10563,28 @@ async function processTurn({
             session.keyFacts.push(`Address: ${currentSlots.address}`);
         }
         
-        // Keep only last 10 facts to prevent bloat
-        if (session.keyFacts.length > 10) {
-            session.keyFacts = session.keyFacts.slice(-10);
+        // ═══════════════════════════════════════════════════════════════════
+        // V88 FIX: ADD DISCOVERY CONTEXT TO KEY FACTS
+        // ═══════════════════════════════════════════════════════════════════
+        // These were being extracted but NOT passed to the LLM!
+        // Now the AI will know about technician names, previous visits, and equipment
+        // ═══════════════════════════════════════════════════════════════════
+        if (session.discovery?.mentionedTechName && !session.keyFacts.some(f => f.startsWith('Technician:'))) {
+            session.keyFacts.push(`Technician: ${session.discovery.mentionedTechName}`);
+            log('📝 V88: Added technician to keyFacts', { techName: session.discovery.mentionedTechName });
+        }
+        if (session.discovery?.previousVisitTime && !session.keyFacts.some(f => f.startsWith('Previous visit:'))) {
+            session.keyFacts.push(`Previous visit: ${session.discovery.previousVisitTime}`);
+            log('📝 V88: Added previous visit to keyFacts', { visitTime: session.discovery.previousVisitTime });
+        }
+        if (session.discovery?.mentionedEquipment && !session.keyFacts.some(f => f.startsWith('Equipment:'))) {
+            session.keyFacts.push(`Equipment: ${session.discovery.mentionedEquipment}`);
+            log('📝 V88: Added equipment to keyFacts', { equipment: session.discovery.mentionedEquipment });
+        }
+        
+        // Keep only last 15 facts to prevent bloat (increased from 10 for discovery context)
+        if (session.keyFacts.length > 15) {
+            session.keyFacts = session.keyFacts.slice(-15);
         }
         
         // Update legacy phase for backward compatibility

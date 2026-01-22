@@ -728,6 +728,13 @@ class HybridReceptionistLLM {
                     };
                 }
 
+                // ════════════════════════════════════════════════════════════════
+                // V88 FIX: Include keyFacts and discovery context so LLM can reference
+                // technician names, previous visits, equipment mentioned by caller
+                // ════════════════════════════════════════════════════════════════
+                const keyFacts = enterpriseContext.keyFacts || [];
+                const discoverySummary = enterpriseContext.discoverySummary || '';
+                
                 const contextPayload = {
                     callerMessage: userInput,
                     bookingMode: callContext.mode || 'BOOKING',
@@ -736,10 +743,19 @@ class HybridReceptionistLLM {
                     returnToQuestion,
                     allowEmpathyLanguage: interruptionCfg.allowEmpathyLanguage,
                     maxSentences: interruptionCfg.maxSentences,
-                    shortClarificationPatterns: interruptionCfg.shortClarificationPatterns
+                    shortClarificationPatterns: interruptionCfg.shortClarificationPatterns,
+                    // V88: Include discovery context for smart conversation!
+                    discoverySummary: discoverySummary,
+                    keyFacts: keyFacts
                 };
 
-                systemPrompt = `${promptTexts.systemHeader || ''}\n\nCONTEXT_JSON:\n${JSON.stringify(contextPayload, null, 2)}`.trim();
+                // Build prompt with key facts if available
+                let headerPrompt = promptTexts.systemHeader || '';
+                if (keyFacts.length > 0) {
+                    headerPrompt += `\n\n=== CONVERSATION CONTEXT ===\nThe caller has mentioned:\n${keyFacts.map(f => `• ${f}`).join('\n')}\n\nACKNOWLEDGE this context naturally when relevant. For example:\n- If they mentioned a technician, reference them: "I'll make a note that [tech name] was out before"\n- If they mentioned equipment, acknowledge it: "I'll let the tech know about your [equipment]"\n- If they mentioned a previous visit, reference it: "Since they were out [time], we'll follow up on that"\n===`;
+                }
+                
+                systemPrompt = `${headerPrompt}\n\nCONTEXT_JSON:\n${JSON.stringify(contextPayload, null, 2)}`.trim();
             } else if (isV22Discovery && enterpriseContext.customSystemPrompt) {
                 // ════════════════════════════════════════════════════════════════
                 // V22 DISCOVERY MODE: Use the custom prompt WITH scenario knowledge
