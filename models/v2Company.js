@@ -4649,7 +4649,7 @@ const companySchema = new mongoose.Schema({
     updatedAt: { type: Date, default: Date.now },
     
     // 🗑️ SOFT DELETE SYSTEM - Admin Cleanup Center
-    isDeleted: { type: Boolean, default: false, index: true },
+    isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
     deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'v2User', default: null },
     deleteReason: { type: String, trim: true, default: null },

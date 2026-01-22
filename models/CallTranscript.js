@@ -146,7 +146,7 @@ const CallTranscriptSchema = new mongoose.Schema({
    */
   archivedAt: { 
     type: Date,
-    index: true
+    // Index handled by TTL index below
   },
   
   /**

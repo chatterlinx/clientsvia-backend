@@ -768,7 +768,7 @@ class ErrorIntelligenceService {
 
                 // Related information
                 related: {
-                    errors: catalog.relatedErrors || [],
+                    errorCodes: catalog.relatedErrors || [],
                     commonCauses: catalog.commonCauses || [],
                     category: catalog.category || 'UNKNOWN',
                     customerFacing: catalog.customerFacing || false

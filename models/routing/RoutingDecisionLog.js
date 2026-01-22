@@ -146,8 +146,7 @@ const RoutingDecisionLogSchema = new Schema(
     // Metadata
     timestamp: {
       type: Date,
-      default: Date.now,
-      index: true
+      default: Date.now
     }
   },
   {

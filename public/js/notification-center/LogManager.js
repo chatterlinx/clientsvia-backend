@@ -509,6 +509,7 @@ class LogManager {
             
             // Build comprehensive debug report with ERROR INTELLIGENCE
             const intel = log.intelligence || {};
+            const relatedErrors = intel.related?.errorCodes || intel.related?.errors || [];
             const debugInfo = `
 ═══════════════════════════════════════════════════════
 🐛 CLIENTSVIA ALERT DEBUG REPORT
@@ -618,11 +619,11 @@ ${intel.related?.commonCauses?.length > 0 ? `
 ${intel.related.commonCauses.map(c => `  - ${c}`).join('\n')}
 ` : ''}
 
-${intel.related?.errors?.length > 0 ? `
+${relatedErrors.length > 0 ? `
 ═══════════════════════════════════════════════════════
 🔗 RELATED ERRORS
 ═══════════════════════════════════════════════════════
-${intel.related.errors.map(e => `  - ${e}`).join('\n')}
+${relatedErrors.map(e => `  - ${e}`).join('\n')}
 ` : ''}
 
 DELIVERY ATTEMPTS: ${log.deliveryAttempts?.length || 0}
@@ -755,12 +756,13 @@ Paste this report to your AI assistant for instant root cause analysis!
             }
             
             // Related Errors
-            if (intel.related?.errors && intel.related.errors.length > 0) {
+            const relatedErrors = intel.related?.errorCodes || intel.related?.errors || [];
+            if (relatedErrors.length > 0) {
                 guideHtml += `
                     <div class="bg-purple-50 border border-purple-200 p-4 rounded">
                         <h4 class="font-semibold text-purple-900 mb-2">🔗 Related Errors</h4>
                         <ul class="list-disc list-inside text-gray-800 space-y-1">
-                            ${intel.related.errors.map(err => `<li><code class="font-mono text-sm">${err}</code></li>`).join('')}
+                            ${relatedErrors.map(err => `<li><code class="font-mono text-sm">${err}</code></li>`).join('')}
                         </ul>
                     </div>
                 `;

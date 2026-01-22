@@ -31,8 +31,7 @@ const notificationRegistrySchema = new mongoose.Schema({
         type: String, 
         required: true, 
         unique: true,
-        uppercase: true,
-        index: true
+        uppercase: true
     }, // 'TWILIO_GREETING_FALLBACK', 'AI_MATCHING_FAILED', etc.
     
     description: String,  // Human-readable description
@@ -83,7 +82,7 @@ const notificationRegistrySchema = new mongoose.Schema({
     validation: {
         isValid: { type: Boolean, default: false },
         lastChecked: Date,
-        errors: [String],
+        errorMessages: [String],
         warnings: [String],
         
         checks: {
@@ -128,7 +127,7 @@ const notificationRegistrySchema = new mongoose.Schema({
         default: 'auto'  // 'auto' or developer name
     },
     
-    isActive: { type: Boolean, default: true, index: true },
+    isActive: { type: Boolean, default: true },
     isDeprecated: { type: Boolean, default: false },
     
     notes: String,
@@ -139,7 +138,6 @@ const notificationRegistrySchema = new mongoose.Schema({
 // INDEXES
 // ============================================================================
 
-notificationRegistrySchema.index({ code: 1 });
 notificationRegistrySchema.index({ 'config.severity': 1 });
 notificationRegistrySchema.index({ isActive: 1 });
 notificationRegistrySchema.index({ 'validation.isValid': 1 });
@@ -322,7 +320,7 @@ notificationRegistrySchema.methods.validateNotificationPoint = async function() 
     this.validation = {
         isValid,
         lastChecked: new Date(),
-        errors,
+        errorMessages: errors,
         warnings,
         checks
     };

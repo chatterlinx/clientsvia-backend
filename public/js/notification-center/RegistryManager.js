@@ -68,6 +68,7 @@ class RegistryManager {
     renderNotificationPoint(point) {
         const statusIcon = point.validation?.isValid ? '✅' : '❌';
         const statusColor = point.validation?.isValid ? 'text-green-600' : 'text-red-600';
+        const errorMessages = point.validation?.errorMessages || point.validation?.errors || [];
         
         return `
             <div class="p-4 border border-gray-200 rounded-lg hover:shadow-md transition">
@@ -85,9 +86,9 @@ class RegistryManager {
                             <span class="text-gray-600">Triggered: ${point.stats?.totalTriggered || 0} times</span>
                             <span class="text-gray-600">Last: ${this.nc.formatRelativeTime(point.stats?.lastTriggered)}</span>
                         </div>
-                        ${point.validation?.errors?.length > 0 ? `
+                        ${errorMessages.length > 0 ? `
                             <div class="mt-2 text-sm text-red-600">
-                                ${point.validation.errors.map(err => `<div>• ${err}</div>`).join('')}
+                                ${errorMessages.map(err => `<div>• ${err}</div>`).join('')}
                             </div>
                         ` : ''}
                     </div>

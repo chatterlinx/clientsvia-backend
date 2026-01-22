@@ -132,7 +132,7 @@ const notificationLogSchema = new mongoose.Schema({
         
         // Related information
         related: {
-            errors: [String],            // ['TWILIO_API_FAILURE', ...]
+            errorCodes: [String],        // ['TWILIO_API_FAILURE', ...]
             commonCauses: [String],      // ['Missing env vars', ...]
             category: String,            // 'EXTERNAL_SERVICE', 'INFRASTRUCTURE', etc.
             customerFacing: Boolean      // true if affects end users

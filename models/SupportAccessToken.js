@@ -18,7 +18,7 @@ const SupportAccessTokenSchema = new mongoose.Schema({
   // Lifecycle
   reason: { type: String, default: null, maxLength: 500 },
   createdAt: { type: Date, default: Date.now, index: true },
-  expiresAt: { type: Date, required: true, index: true },
+  expiresAt: { type: Date, required: true },
   revokedAt: { type: Date, default: null, index: true },
   revokedByUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   revokedByEmail: { type: String, default: null }

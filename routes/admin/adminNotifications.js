@@ -337,10 +337,11 @@ router.post('/registry/validate', authenticateJWT, requireRole('admin'), capture
             const results = [];
             for (const point of points) {
                 await point.validateNotificationPoint();
+                const errorMessages = point.validation?.errorMessages || point.validation?.errors || [];
                 results.push({
                     code: point.code,
                     isValid: point.validation.isValid,
-                    errors: point.validation.errors,
+                    errors: errorMessages,
                     warnings: point.validation.warnings
                 });
             }
