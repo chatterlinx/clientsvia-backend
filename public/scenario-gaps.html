@@ -51,6 +51,26 @@
             align-items: center;
             gap: 16px;
         }
+
+        .back-btn {
+            padding: 8px 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .back-btn:hover {
+            border-color: var(--accent-purple);
+            color: white;
+            transform: translateX(-1px);
+        }
         
         .header-icon {
             width: 48px;
@@ -647,6 +667,10 @@
     <!-- Header -->
     <header class="header">
         <div class="header-left">
+            <button class="back-btn" onclick="goBackToControlPlane()">
+                <i class="fas fa-arrow-left"></i>
+                Back to Control Plane
+            </button>
             <div class="header-icon">🎯</div>
             <div class="header-title">
                 <h1>Scenario Gaps</h1>
@@ -788,6 +812,16 @@
             return localStorage.getItem('adminToken')
                 || localStorage.getItem('token')
                 || sessionStorage.getItem('token');
+        }
+
+        function goBackToControlPlane() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const id = urlParams.get('companyId') || companyId;
+            if (id) {
+                window.location.href = `/control-plane-v2.html?companyId=${encodeURIComponent(id)}`;
+            } else {
+                window.location.href = '/control-plane-v2.html';
+            }
         }
         
         // ========================================
