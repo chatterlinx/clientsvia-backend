@@ -216,9 +216,10 @@ router.post('/fix-filler-words', authenticateJWT, async (req, res) => {
         'hi', 'hey', 'hello', 'yo',
         
         // ════════════════════════════════════════════════════════════════════
-        // CONVERSATIONAL WORDS (V87 FIX - carry semantic meaning!)
+        // CONVERSATIONAL WORDS (V87/V88 FIX - carry semantic meaning!)
+        // "Well, is that the earliest?" → ", is that the earliest?" BREAKS PATTERN MATCHING!
         // ════════════════════════════════════════════════════════════════════
-        'well',        // "Well, the technician was here" → loses context
+        'well',        // "Well, is that the earliest" → ", is that" BROKEN!
         'so',          // "So I called about..." → loses connective
         'okay', 'ok',  // "Okay, my address is..." → loses acknowledgment
         'yes', 'yeah', // "Yes, I need help" → loses affirmation

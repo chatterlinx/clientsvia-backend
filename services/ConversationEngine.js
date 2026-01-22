@@ -74,7 +74,7 @@ const BlackBoxLogger = require('./BlackBoxLogger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V88-DISCOVERY-FIX';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V88-CALENDAR-URGENCY';  // <-- CHANGE THIS EACH DEPLOY
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -4472,11 +4472,81 @@ async function processTurn({
                     break;
                     
                 case 'URGENCY_SCHEDULING':
-                    // V88 P0: ASAP/Urgency scheduling - PREFERENCE CAPTURE (no fake schedule lookup!)
-                    // This is critical: NEVER say "let me check the schedule" without real calendar access
-                    // Instead, capture their preference and explain we'll confirm the earliest time
+                    // V88 P1: ASAP/Urgency scheduling - CHECK REAL CALENDAR IF AVAILABLE!
+                    // If Google Calendar is connected, query for actual availability
+                    // If not connected, use preference capture (no fake "let me check")
                     
-                    // Mark that we've captured ASAP preference
+                    // Check if Google Calendar is connected
+                    const calConfig = company.googleCalendar;
+                    const calendarConnected = calConfig?.enabled && calConfig?.connected && calConfig?.accessToken;
+                    
+                    if (calendarConnected) {
+                        // REAL CALENDAR - Query for actual available slots!
+                        log('📅 URGENCY_SCHEDULING: Google Calendar connected - checking real availability');
+                        try {
+                            const urgencySlots = await GoogleCalendarService.findAvailableSlots(
+                                company._id.toString(),
+                                {
+                                    dayPreference: 'asap',
+                                    timePreference: 'anytime',
+                                    durationMinutes: calConfig.settings?.defaultDurationMinutes || 60,
+                                    maxSlots: 3,
+                                    serviceType: session.discovery?.detectedServiceType || 'service'
+                                }
+                            );
+                            
+                            if (urgencySlots.slots && urgencySlots.slots.length > 0) {
+                                // We have real availability! Offer the slots
+                                const slot1 = urgencySlots.slots[0];
+                                const slot2 = urgencySlots.slots[1];
+                                
+                                // Format time nicely
+                                const formatSlot = (s) => {
+                                    if (!s) return '';
+                                    const d = new Date(s.start);
+                                    const isToday = d.toDateString() === new Date().toDateString();
+                                    const isTomorrow = d.toDateString() === new Date(Date.now() + 86400000).toDateString();
+                                    const day = isToday ? 'today' : isTomorrow ? 'tomorrow' : d.toLocaleDateString('en-US', { weekday: 'long' });
+                                    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                                    return `${day} at ${time}`;
+                                };
+                                
+                                // Store offered slots in session for selection
+                                session.offeredTimeSlots = urgencySlots.slots;
+                                session.markModified('offeredTimeSlots');
+                                
+                                if (slot2) {
+                                    metaReply = `The earliest I have is ${formatSlot(slot1)}, or ${formatSlot(slot2)}. Which works better for you?`;
+                                } else {
+                                    metaReply = `The earliest I have available is ${formatSlot(slot1)}. Does that work for you?`;
+                                }
+                                
+                                log('📅 URGENCY_SCHEDULING: Offering real slots', { 
+                                    slot1: slot1.start, 
+                                    slot2: slot2?.start,
+                                    slotsOffered: urgencySlots.slots.length
+                                });
+                            } else {
+                                // Calendar connected but no slots found (fully booked or error)
+                                metaReply = urgencySlots.error || 
+                                    "I'm checking availability and it looks like we're pretty booked up today. " +
+                                    "Let me get your information and we'll find the earliest time that works.";
+                                currentSlots.time = 'ASAP';
+                                session.collectedSlots = { ...(session.collectedSlots || {}), time: 'ASAP' };
+                            }
+                        } catch (calError) {
+                            log('📅 URGENCY_SCHEDULING: Calendar query failed', { error: calError.message });
+                            // Fall back to preference capture
+                            metaReply = "I understand you need this as soon as possible. " +
+                                       "Let me get your information and we'll confirm the earliest available time.";
+                            currentSlots.time = 'ASAP';
+                            session.collectedSlots = { ...(session.collectedSlots || {}), time: 'ASAP' };
+                        }
+                        break;
+                    }
+                    
+                    // NO CALENDAR - Use preference capture (no fake schedule lookup!)
+                    log('📅 URGENCY_SCHEDULING: No calendar connected - using preference capture');
                     currentSlots.time = 'ASAP';
                     session.collectedSlots = { ...(session.collectedSlots || {}), time: 'ASAP' };
                     
