@@ -280,6 +280,28 @@ router.post('/fix-filler-words', authenticateJWT, async (req, res) => {
                 }
             }
             
+            // Check nlpConfig.fillerWords (V88: THIS IS WHERE "please" lives!)
+            if (template.nlpConfig && template.nlpConfig.fillerWords && template.nlpConfig.fillerWords.length > 0) {
+                const originalCount = template.nlpConfig.fillerWords.length;
+                const filtered = template.nlpConfig.fillerWords.filter(word =>
+                    !WORDS_TO_REMOVE.includes(word.toLowerCase())
+                );
+                const removedCount = originalCount - filtered.length;
+                
+                if (removedCount > 0) {
+                    const removed = template.nlpConfig.fillerWords.filter(word =>
+                        WORDS_TO_REMOVE.includes(word.toLowerCase())
+                    );
+                    changes.push(`nlpConfig.fillerWords: removed ${removedCount} words (${removed.join(', ')})`);
+                    template.nlpConfig.fillerWords = filtered;
+                    templateModified = true;
+                    
+                    removed.forEach(w => {
+                        results.wordsRemoved[w] = (results.wordsRemoved[w] || 0) + 1;
+                    });
+                }
+            }
+            
             // Check category-level fillerWords
             if (template.categories && template.categories.length > 0) {
                 for (const category of template.categories) {

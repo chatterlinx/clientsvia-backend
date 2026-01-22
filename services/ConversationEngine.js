@@ -2280,6 +2280,24 @@ function parseSlotSelection(userText, offeredSlots) {
     
     const lower = userText.toLowerCase().trim();
     
+    // V88 FIX: Handle "you just said it", "that's the earliest", "that one"
+    // These indicate user wants the first/most-recently-mentioned slot
+    const firstSlotConfirmations = [
+        'you just said', 'you said it', 'that\'s the earliest', 'the earliest',
+        'that one', 'that time', 'that works', 'let\'s do that', 'sounds good',
+        'perfect', 'yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'great'
+    ];
+    
+    // If only one slot offered, any confirmation selects it
+    if (offeredSlots.length === 1 && firstSlotConfirmations.some(p => lower.includes(p))) {
+        return offeredSlots[0];
+    }
+    
+    // "earliest" or "soonest" = first slot (slots are in chronological order)
+    if (/\b(earliest|soonest|first available)\b/.test(lower)) {
+        return offeredSlots[0];
+    }
+    
     // Ordinal selection: "the first one", "second", "number 3"
     const ordinalMap = {
         'first': 0, '1st': 0, 'one': 0, 'first one': 0, 'option 1': 0, 'number 1': 0,
@@ -3996,8 +4014,12 @@ async function processTurn({
                 });
             } else if (inBookingModeForName && askFullNameEnabled) {
                 // In booking mode with askFullName ON: keep as partial, will ask for last name
-                // Mark it as extracted so the safety net knows to handle it
-                extractedThisTurn.name = currentSlots.partialName;
+                // V88 FIX: Only set extractedThisTurn.partialName, NOT extractedThisTurn.name!
+                // Setting extractedThisTurn.name here was causing filledSlots to show
+                // name="Mark" even though we only have a partial name, which prevented
+                // the last name "Gonzales" from being combined properly.
+                extractedThisTurn.partialName = currentSlots.partialName;
+                // DO NOT set extractedThisTurn.name - that happens after we get the last name!
                 log('📝 PARTIAL NAME: askFullName is ON, will ask for last name', {
                     partialName: currentSlots.partialName
                 });

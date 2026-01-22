@@ -517,19 +517,46 @@ async function findAvailableSlots(companyId, {
         }
         
         // Define working hours (use company settings or defaults)
-        const workingHours = {
-            start: 8, // 8 AM
-            end: 17   // 5 PM
+        // IMPORTANT: These are in COMPANY's TIMEZONE, not UTC
+        const workingHoursLocal = {
+            start: 8, // 8 AM local
+            end: 17   // 5 PM local
         };
         
         // Adjust search based on time preference
         if (timePreference === 'morning') {
-            // 8 AM - 12 PM
-            workingHours.end = 12;
+            // 8 AM - 12 PM local
+            workingHoursLocal.end = 12;
         } else if (timePreference === 'afternoon') {
-            // 12 PM - 5 PM
-            workingHours.start = 12;
+            // 12 PM - 5 PM local
+            workingHoursLocal.start = 12;
         }
+        
+        // V88 FIX: Convert local working hours to UTC offset
+        // Server runs in UTC, so we need to offset working hours
+        const getTimezoneOffsetHours = (tz) => {
+            const now = new Date();
+            const utcStr = now.toLocaleString('en-US', { timeZone: 'UTC' });
+            const localStr = now.toLocaleString('en-US', { timeZone: tz });
+            const utcDate = new Date(utcStr);
+            const localDate = new Date(localStr);
+            return (utcDate - localDate) / (1000 * 60 * 60);
+        };
+        
+        const offsetHours = getTimezoneOffsetHours(timezone);
+        const workingHours = {
+            start: workingHoursLocal.start + offsetHours, // Convert to UTC hours
+            end: workingHoursLocal.end + offsetHours
+        };
+        
+        logger.debug('[GOOGLE CALENDAR] Working hours calculation', {
+            timezone,
+            localStart: workingHoursLocal.start,
+            localEnd: workingHoursLocal.end,
+            offsetHours,
+            utcStart: workingHours.start,
+            utcEnd: workingHours.end
+        });
         
         const calendar = google.calendar({ version: 'v3', auth: client });
         
