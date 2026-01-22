@@ -457,6 +457,54 @@ function registerRoutes(routes) {
     // EMERGENCY ROUTE - DELETE AFTER USE
     app.use('/api', require('./routes/emergency-enable'));
     
+    // V88: PUBLIC FILLER FIX MIGRATION - DELETE AFTER USE
+    // Bypasses auth to allow one-time migration run via browser
+    app.get('/api/run-filler-fix/:secretKey', async (req, res) => {
+        const { secretKey } = req.params;
+        if (secretKey !== 'clientsvia-v87-filler-fix-2026') {
+            return res.status(401).json({ error: 'Invalid secret key' });
+        }
+        
+        const GlobalInstantResponseTemplate = require('./models/GlobalInstantResponseTemplate');
+        const WORDS_TO_REMOVE = [
+            'hi', 'hey', 'hello', 'yo', 'well', 'so', 'okay', 'ok', 'yes', 'yeah',
+            'today', 'tomorrow', 'now', 'asap', 'urgent', 'emergency',
+            'right away', 'immediately', 'tonight', 'morning', 'afternoon', 'evening',
+            'you know', 'like', 'i mean', 'you guys', 'there',
+            'please', 'thanks', 'thank you', 'actually', 'basically', 'really', 'very'
+        ];
+        
+        const results = { templatesUpdated: 0, wordsRemoved: {} };
+        try {
+            const templates = await GlobalInstantResponseTemplate.find({});
+            for (const template of templates) {
+                let modified = false;
+                
+                // Check template.fillerWords
+                if (template.fillerWords?.length > 0) {
+                    const before = template.fillerWords.length;
+                    template.fillerWords = template.fillerWords.filter(w => !WORDS_TO_REMOVE.includes(w.toLowerCase()));
+                    if (template.fillerWords.length < before) modified = true;
+                }
+                
+                // Check template.nlpConfig.fillerWords
+                if (template.nlpConfig?.fillerWords?.length > 0) {
+                    const before = template.nlpConfig.fillerWords.length;
+                    template.nlpConfig.fillerWords = template.nlpConfig.fillerWords.filter(w => !WORDS_TO_REMOVE.includes(w.toLowerCase()));
+                    if (template.nlpConfig.fillerWords.length < before) modified = true;
+                }
+                
+                if (modified) {
+                    await template.save();
+                    results.templatesUpdated++;
+                }
+            }
+            res.json({ success: true, ...results, message: 'Filler words cleaned from templates' });
+        } catch (err) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+    
     // PUBLIC HEALTH/VERSION ROUTES - Must be before auth-protected routes
     app.use('/api', routes.healthRoutes); // SYSTEM: Health check + version endpoint (PUBLIC, no auth)
 
