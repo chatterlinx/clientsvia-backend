@@ -4589,17 +4589,24 @@
                                 </div>
                                 <div class="flex items-center gap-1 text-xs">
                                     <span class="text-gray-500" title="Minimum days in advance for booking">Advance booking:</span>
-                                    <select class="gc-advance-days form-input text-xs py-0.5 w-24">
-                                        <option value="0" ${rules.advanceBookingDays == 0 ? 'selected' : ''}>Same day OK</option>
-                                        <option value="1" ${rules.advanceBookingDays == 1 ? 'selected' : ''}>Next day+</option>
-                                        <option value="3" ${rules.advanceBookingDays == 3 ? 'selected' : ''}>3 days+</option>
-                                        <option value="7" ${rules.advanceBookingDays == 7 ? 'selected' : ''}>1 week+</option>
+                                    <select class="gc-advance-days form-input text-xs py-0.5 w-28">
+                                        <option value="0" ${rules.advanceBookingDays == 0 ? 'selected' : ''}>Same day</option>
+                                        <option value="1" ${rules.advanceBookingDays == 1 ? 'selected' : ''}>1 day</option>
+                                        <option value="2" ${rules.advanceBookingDays == 2 ? 'selected' : ''}>2 days</option>
+                                        <option value="3" ${rules.advanceBookingDays == 3 ? 'selected' : ''}>3 days</option>
+                                        <option value="4" ${rules.advanceBookingDays == 4 ? 'selected' : ''}>4 days</option>
+                                        <option value="5" ${rules.advanceBookingDays == 5 ? 'selected' : ''}>5 days</option>
+                                        <option value="6" ${rules.advanceBookingDays == 6 ? 'selected' : ''}>6 days</option>
+                                        <option value="7" ${rules.advanceBookingDays == 7 ? 'selected' : ''}>7 days</option>
+                                        <option value="8" ${rules.advanceBookingDays == 8 ? 'selected' : ''}>8 days</option>
+                                        <option value="9" ${rules.advanceBookingDays == 9 ? 'selected' : ''}>9 days</option>
+                                        <option value="10" ${rules.advanceBookingDays == 10 ? 'selected' : ''}>10 days</option>
+                                        <option value="11" ${rules.advanceBookingDays == 11 ? 'selected' : ''}>11 days</option>
+                                        <option value="12" ${rules.advanceBookingDays == 12 ? 'selected' : ''}>12 days</option>
+                                        <option value="13" ${rules.advanceBookingDays == 13 ? 'selected' : ''}>13 days</option>
+                                        <option value="14" ${rules.advanceBookingDays == 14 ? 'selected' : ''}>14 days</option>
                                     </select>
                                 </div>
-                                <label class="inline-flex items-center text-xs cursor-pointer" title="Allow same-day bookings">
-                                    <input type="checkbox" class="gc-same-day w-3 h-3" ${rules.sameDayAllowed !== false ? 'checked' : ''}>
-                                    <span class="ml-1 text-gray-600">Same-day</span>
-                                </label>
                             </div>
                         </div>
                     </div>
@@ -4726,17 +4733,24 @@
                             </div>
                             <div class="flex items-center gap-1 text-xs">
                                 <span class="text-gray-500" title="Minimum days in advance for booking">Advance booking:</span>
-                                <select class="gc-advance-days form-input text-xs py-0.5 w-24">
-                                    <option value="0" selected>Same day OK</option>
-                                    <option value="1">Next day+</option>
-                                    <option value="3">3 days+</option>
-                                    <option value="7">1 week+</option>
+                                <select class="gc-advance-days form-input text-xs py-0.5 w-28">
+                                    <option value="0" selected>Same day</option>
+                                    <option value="1">1 day</option>
+                                    <option value="2">2 days</option>
+                                    <option value="3">3 days</option>
+                                    <option value="4">4 days</option>
+                                    <option value="5">5 days</option>
+                                    <option value="6">6 days</option>
+                                    <option value="7">7 days</option>
+                                    <option value="8">8 days</option>
+                                    <option value="9">9 days</option>
+                                    <option value="10">10 days</option>
+                                    <option value="11">11 days</option>
+                                    <option value="12">12 days</option>
+                                    <option value="13">13 days</option>
+                                    <option value="14">14 days</option>
                                 </select>
                             </div>
-                            <label class="inline-flex items-center text-xs cursor-pointer" title="Allow same-day bookings">
-                                <input type="checkbox" class="gc-same-day w-3 h-3" checked>
-                                <span class="ml-1 text-gray-600">Same-day</span>
-                            </label>
                         </div>
                     </div>
                 `;
@@ -4891,12 +4905,13 @@
                             closedHolidays: row.querySelector('.gc-closed-holidays')?.checked !== false
                         };
                         
-                        // V88: Gather advanced scheduling rules
+                        // V88: Gather advanced scheduling rules (sameDayAllowed = advanceBookingDays === 0)
+                        const advanceDays = parseInt(row.querySelector('.gc-advance-days')?.value) || 0;
                         const schedulingRules = {
                             slotIntervalMinutes: parseInt(row.querySelector('.gc-slot-interval')?.value) || 60,
                             leadTimeMinutes: parseInt(row.querySelector('.gc-lead-time')?.value) || 60,
-                            advanceBookingDays: parseInt(row.querySelector('.gc-advance-days')?.value) || 0,
-                            sameDayAllowed: row.querySelector('.gc-same-day')?.checked !== false
+                            advanceBookingDays: advanceDays,
+                            sameDayAllowed: advanceDays === 0  // Same day = advanceBookingDays is 0
                         };
                         
                         if (serviceType) {
