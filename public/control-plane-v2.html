@@ -5444,8 +5444,8 @@
       document.querySelectorAll('.nav-tab').forEach(btn => {
         btn.addEventListener('click', (e) => {
           const tabId = btn.getAttribute('data-tab');
-          // Skip for Call Center (opens in new tab)
-          if (tabId === 'call-center') return;
+          // Skip tabs that open in new windows (they have their own onclick handlers)
+          if (tabId === 'call-center' || tabId === 'scenario-gaps') return;
           switchTab(tabId);
       });
     });
