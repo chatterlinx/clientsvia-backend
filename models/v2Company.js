@@ -347,6 +347,7 @@ const googleCalendarSchema = new mongoose.Schema({
         
         // Map service types to Google Calendar colors
         // AI determines serviceType from conversation (repair, maintenance, estimate, etc.)
+        // V88: Each service type now has its own scheduling rules
         colorMapping: {
             type: [{
                 serviceType: { 
@@ -356,19 +357,59 @@ const googleCalendarSchema = new mongoose.Schema({
                 },
                 colorId: { type: String, default: '1' }, // Google Calendar colorId (1-11)
                 label: { type: String, trim: true }, // Display label for UI
-                description: { type: String, trim: true } // Optional description
+                description: { type: String, trim: true }, // Optional description
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // V88: PER-SERVICE-TYPE SCHEDULING RULES
+                // These override global calendar settings for this specific service
+                // ═══════════════════════════════════════════════════════════════════
+                scheduling: {
+                    // Slot interval - time between appointments (minutes)
+                    // Example: 60 = appointments at 9:00, 10:00, 11:00
+                    // Example: 120 = appointments at 9:00, 11:00, 1:00
+                    slotIntervalMinutes: { type: Number, default: 60, min: 15, max: 480 },
+                    
+                    // Lead time - minimum hours from NOW before first available slot
+                    // This accounts for technician travel time
+                    // Example: Caller at 10am, leadTimeMinutes=120 → first slot at 12pm
+                    // Example: Emergency might be 60, Maintenance might be same-day not allowed
+                    leadTimeMinutes: { type: Number, default: 60, min: 0, max: 480 },
+                    
+                    // Advance booking - minimum DAYS in advance
+                    // 0 = same-day OK, 1 = next-day minimum, 7 = week out minimum
+                    // Example: Emergency = 0 (same day), Maintenance = 7 (week out)
+                    advanceBookingDays: { type: Number, default: 0, min: 0, max: 90 },
+                    
+                    // Same-day toggle (convenience - equivalent to advanceBookingDays > 0)
+                    sameDayAllowed: { type: Boolean, default: true },
+                    
+                    // Custom working hours for this service type (overrides global)
+                    // If not set, uses company's global calendar working hours
+                    useCustomHours: { type: Boolean, default: false },
+                    customHours: {
+                        startHour: { type: Number, default: 8, min: 0, max: 23 },  // 8 AM
+                        endHour: { type: Number, default: 17, min: 1, max: 24 }     // 5 PM
+                    },
+                    
+                    // Which days this service is available (bitmask or array)
+                    availableDays: {
+                        type: [String],
+                        enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+                        default: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+                    }
+                }
             }],
             default: [
-                { serviceType: 'service', colorId: '7', label: 'Service Call', description: 'General service request' },
-                { serviceType: 'repair', colorId: '11', label: 'Repair', description: 'Equipment repair (urgent)' },
-                { serviceType: 'emergency', colorId: '4', label: 'Emergency', description: 'Emergency/same-day service' },
-                { serviceType: 'maintenance', colorId: '10', label: 'Maintenance', description: 'Scheduled maintenance/tune-up' },
-                { serviceType: 'estimate', colorId: '5', label: 'Estimate', description: 'Quote/estimate visit' },
-                { serviceType: 'sales', colorId: '9', label: 'Sales', description: 'Sales consultation' },
-                { serviceType: 'consultation', colorId: '3', label: 'Consultation', description: 'General consultation' },
-                { serviceType: 'installation', colorId: '2', label: 'Installation', description: 'New installation' },
-                { serviceType: 'inspection', colorId: '6', label: 'Inspection', description: 'System inspection' },
-                { serviceType: 'other', colorId: '8', label: 'Other', description: 'Uncategorized' }
+                { serviceType: 'service', colorId: '7', label: 'Service Call', description: 'General service request', scheduling: { slotIntervalMinutes: 60, leadTimeMinutes: 60, advanceBookingDays: 0, sameDayAllowed: true } },
+                { serviceType: 'repair', colorId: '11', label: 'Repair', description: 'Equipment repair (urgent)', scheduling: { slotIntervalMinutes: 60, leadTimeMinutes: 60, advanceBookingDays: 0, sameDayAllowed: true } },
+                { serviceType: 'emergency', colorId: '4', label: 'Emergency', description: 'Emergency/same-day service', scheduling: { slotIntervalMinutes: 60, leadTimeMinutes: 30, advanceBookingDays: 0, sameDayAllowed: true } },
+                { serviceType: 'maintenance', colorId: '10', label: 'Maintenance', description: 'Scheduled maintenance/tune-up', scheduling: { slotIntervalMinutes: 120, leadTimeMinutes: 0, advanceBookingDays: 7, sameDayAllowed: false } },
+                { serviceType: 'estimate', colorId: '5', label: 'Estimate', description: 'Quote/estimate visit', scheduling: { slotIntervalMinutes: 60, leadTimeMinutes: 120, advanceBookingDays: 1, sameDayAllowed: false } },
+                { serviceType: 'sales', colorId: '9', label: 'Sales', description: 'Sales consultation', scheduling: { slotIntervalMinutes: 60, leadTimeMinutes: 120, advanceBookingDays: 1, sameDayAllowed: false } },
+                { serviceType: 'consultation', colorId: '3', label: 'Consultation', description: 'General consultation', scheduling: { slotIntervalMinutes: 60, leadTimeMinutes: 60, advanceBookingDays: 0, sameDayAllowed: true } },
+                { serviceType: 'installation', colorId: '2', label: 'Installation', description: 'New installation', scheduling: { slotIntervalMinutes: 180, leadTimeMinutes: 0, advanceBookingDays: 3, sameDayAllowed: false } },
+                { serviceType: 'inspection', colorId: '6', label: 'Inspection', description: 'System inspection', scheduling: { slotIntervalMinutes: 60, leadTimeMinutes: 60, advanceBookingDays: 1, sameDayAllowed: false } },
+                { serviceType: 'other', colorId: '8', label: 'Other', description: 'Uncategorized', scheduling: { slotIntervalMinutes: 60, leadTimeMinutes: 60, advanceBookingDays: 0, sameDayAllowed: true } }
             ]
         },
         

@@ -465,19 +465,22 @@ async function findNextAvailableSlot(companyId, {
 /**
  * Find multiple available slots for a given day or range
  * Returns human-friendly slot descriptions
+ * V88: Now supports per-service-type scheduling rules
  * @param {string} companyId
  * @param {Object} options
  * @param {string} options.dayPreference - 'today', 'tomorrow', 'asap', or specific date
  * @param {string} options.timePreference - 'morning', 'afternoon', 'anytime'
  * @param {number} options.durationMinutes - Required duration
  * @param {number} options.maxSlots - Max slots to return
+ * @param {string} options.serviceType - Service type for per-type scheduling rules
  * @returns {Object} { slots: [], message, fallback }
  */
 async function findAvailableSlots(companyId, {
     dayPreference = 'asap',
     timePreference = 'anytime',
     durationMinutes = 60,
-    maxSlots = 3
+    maxSlots = 3,
+    serviceType = 'service' // V88: Default to 'service' if not specified
 }) {
     try {
         const { client, company, calendarId, error } = await getOAuth2ClientForCompany(companyId);
@@ -492,52 +495,112 @@ async function findAvailableSlots(companyId, {
         }
         
         const settings = company?.googleCalendar?.settings || {};
-        const bufferMinutes = settings.bufferMinutes || 60;
         const timezone = company?.timezone || 'America/New_York';
         
-        // Determine search range based on preference
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V88: GET PER-SERVICE-TYPE SCHEDULING RULES
+        // Each service type (repair, maintenance, emergency, etc.) can have its own:
+        // - leadTimeMinutes: minimum time from NOW to first slot (technician travel)
+        // - advanceBookingDays: minimum days in advance (0 = same day OK)
+        // - slotIntervalMinutes: time between appointments
+        // - sameDayAllowed: convenience toggle
+        // - customHours: override working hours for this service type
+        // ═══════════════════════════════════════════════════════════════════════════
+        const eventColors = company?.googleCalendar?.eventColors || {};
+        const colorMapping = eventColors.colorMapping || [];
+        const serviceConfig = colorMapping.find(c => c.serviceType === serviceType) || {};
+        const serviceScheduling = serviceConfig.scheduling || {};
+        
+        // Apply per-service-type scheduling rules with fallbacks to global settings
+        const leadTimeMinutes = serviceScheduling.leadTimeMinutes ?? settings.bufferMinutes ?? 60;
+        const advanceBookingDays = serviceScheduling.advanceBookingDays ?? 0;
+        const sameDayAllowed = serviceScheduling.sameDayAllowed ?? true;
+        const slotIntervalMinutes = serviceScheduling.slotIntervalMinutes ?? durationMinutes ?? 60;
+        const useCustomHours = serviceScheduling.useCustomHours ?? false;
+        const customHours = serviceScheduling.customHours || { startHour: 8, endHour: 17 };
+        const availableDays = serviceScheduling.availableDays || ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+        
+        logger.info('[GOOGLE CALENDAR] Per-service scheduling rules applied', {
+            serviceType,
+            leadTimeMinutes,
+            advanceBookingDays,
+            sameDayAllowed,
+            slotIntervalMinutes,
+            useCustomHours,
+            availableDays: availableDays.join(',')
+        });
+        
+        // Determine search range based on preference AND service rules
         const now = new Date();
-        let searchStart = new Date(now.getTime() + bufferMinutes * 60 * 1000);
+        
+        // V88: Apply lead time (minimum time from now before first available)
+        // Example: If caller at 10am and leadTime=120min, first slot is at 12pm
+        let searchStart = new Date(now.getTime() + leadTimeMinutes * 60 * 1000);
+        
+        // V88: Apply advance booking days
+        // Example: If advanceBookingDays=7, first slot is 7 days from now
+        if (advanceBookingDays > 0) {
+            const minDate = new Date(now);
+            minDate.setDate(minDate.getDate() + advanceBookingDays);
+            minDate.setHours(0, 0, 0, 0);
+            if (minDate > searchStart) {
+                searchStart = minDate;
+            }
+        }
+        
+        // V88: If same-day not allowed and search starts today, push to tomorrow
+        if (!sameDayAllowed && searchStart.toDateString() === now.toDateString()) {
+            searchStart = new Date(now);
+            searchStart.setDate(searchStart.getDate() + 1);
+            searchStart.setHours(0, 0, 0, 0);
+        }
+        
         let searchEnd;
         
         if (dayPreference === 'today') {
-            // Today only - end of day
+            // Today only - but check if same-day is allowed for this service
+            if (!sameDayAllowed) {
+                return {
+                    slots: [],
+                    message: `Same-day appointments aren't available for ${serviceConfig.label || serviceType}. The earliest we can schedule is ${advanceBookingDays > 0 ? `${advanceBookingDays} days from now` : 'tomorrow'}. Would you like me to check availability for then?`,
+                    fallback: true,
+                    reason: 'same_day_not_allowed'
+                };
+            }
             searchEnd = new Date(now);
             searchEnd.setHours(23, 59, 59, 999);
         } else if (dayPreference === 'tomorrow') {
-            // Tomorrow only
             searchStart = new Date(now);
             searchStart.setDate(searchStart.getDate() + 1);
             searchStart.setHours(0, 0, 0, 0);
             searchEnd = new Date(searchStart);
             searchEnd.setHours(23, 59, 59, 999);
         } else {
-            // ASAP - search next 5 days
-            searchEnd = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+            // ASAP - search based on service type's booking window
+            const searchDays = Math.max(5, advanceBookingDays + 5);
+            searchEnd = new Date(now.getTime() + searchDays * 24 * 60 * 60 * 1000);
         }
         
-        // Define working hours (use company settings or defaults)
+        // Define working hours (use service-specific or company defaults)
         // IMPORTANT: These are in COMPANY's TIMEZONE, not UTC
         const workingHoursLocal = {
-            start: 8, // 8 AM local
-            end: 17   // 5 PM local
+            start: useCustomHours ? customHours.startHour : 8,
+            end: useCustomHours ? customHours.endHour : 17
         };
         
         // Adjust search based on time preference
         if (timePreference === 'morning') {
-            // 8 AM - 12 PM local
-            workingHoursLocal.end = 12;
+            workingHoursLocal.end = Math.min(workingHoursLocal.end, 12);
         } else if (timePreference === 'afternoon') {
-            // 12 PM - 5 PM local
-            workingHoursLocal.start = 12;
+            workingHoursLocal.start = Math.max(workingHoursLocal.start, 12);
         }
         
-        // V88 FIX: Convert local working hours to UTC offset
+        // V88: Convert local working hours to UTC offset
         // Server runs in UTC, so we need to offset working hours
         const getTimezoneOffsetHours = (tz) => {
-            const now = new Date();
-            const utcStr = now.toLocaleString('en-US', { timeZone: 'UTC' });
-            const localStr = now.toLocaleString('en-US', { timeZone: tz });
+            const nowForTz = new Date();
+            const utcStr = nowForTz.toLocaleString('en-US', { timeZone: 'UTC' });
+            const localStr = nowForTz.toLocaleString('en-US', { timeZone: tz });
             const utcDate = new Date(utcStr);
             const localDate = new Date(localStr);
             return (utcDate - localDate) / (1000 * 60 * 60);
@@ -545,11 +608,12 @@ async function findAvailableSlots(companyId, {
         
         const offsetHours = getTimezoneOffsetHours(timezone);
         const workingHours = {
-            start: workingHoursLocal.start + offsetHours, // Convert to UTC hours
+            start: workingHoursLocal.start + offsetHours,
             end: workingHoursLocal.end + offsetHours
         };
         
         logger.debug('[GOOGLE CALENDAR] Working hours calculation', {
+            serviceType,
             timezone,
             localStart: workingHoursLocal.start,
             localEnd: workingHoursLocal.end,
@@ -575,9 +639,13 @@ async function findAvailableSlots(companyId, {
         const availableSlots = [];
         let currentDay = new Date(searchStart);
         
+        // V88: Map day numbers to day names for availableDays check
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        
         while (currentDay < searchEnd && availableSlots.length < maxSlots) {
-            // Skip weekends
-            if (currentDay.getDay() === 0 || currentDay.getDay() === 6) {
+            // V88: Check if this day is available for this service type
+            const currentDayName = dayNames[currentDay.getDay()];
+            if (!availableDays.includes(currentDayName)) {
                 currentDay.setDate(currentDay.getDate() + 1);
                 currentDay.setHours(workingHours.start, 0, 0, 0);
                 continue;
@@ -596,7 +664,14 @@ async function findAvailableSlots(companyId, {
                 slotStart = new Date(searchStart);
             }
             
-            // Try slots throughout the day
+            // V88: Round slot start to nearest interval
+            // If slotIntervalMinutes=60 and it's 10:37, start at 11:00
+            const intervalMs = slotIntervalMinutes * 60 * 1000;
+            const slotStartMs = slotStart.getTime();
+            const roundedMs = Math.ceil(slotStartMs / intervalMs) * intervalMs;
+            slotStart = new Date(roundedMs);
+            
+            // Try slots throughout the day using service-specific interval
             while (slotStart < dayEnd && availableSlots.length < maxSlots) {
                 const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60 * 1000);
                 
@@ -613,21 +688,24 @@ async function findAvailableSlots(companyId, {
                     availableSlots.push({
                         start: new Date(slotStart),
                         end: new Date(slotEnd),
-                        display: formatSlotForDisplay(slotStart, timezone)
+                        display: formatSlotForDisplay(slotStart, timezone),
+                        serviceType: serviceType // V88: Include service type in slot
                     });
-                    // Skip to next slot (don't overlap)
-                    slotStart = new Date(slotEnd.getTime() + 30 * 60 * 1000); // 30 min gap
+                    // V88: Use service-specific slot interval instead of hardcoded 30 min
+                    slotStart = new Date(slotStart.getTime() + slotIntervalMinutes * 60 * 1000);
                 } else {
-                    // Move to end of this busy slot
+                    // Move to end of this busy slot, then round to next interval
                     const overlappingBusy = busySlots.find(busy => {
                         const busyStart = new Date(busy.start);
                         const busyEnd = new Date(busy.end);
                         return slotStart < busyEnd && slotEnd > busyStart;
                     });
                     if (overlappingBusy) {
-                        slotStart = new Date(overlappingBusy.end);
+                        const busyEndTime = new Date(overlappingBusy.end).getTime();
+                        const nextSlotMs = Math.ceil(busyEndTime / intervalMs) * intervalMs;
+                        slotStart = new Date(nextSlotMs);
                     } else {
-                        slotStart = new Date(slotStart.getTime() + 30 * 60 * 1000);
+                        slotStart = new Date(slotStart.getTime() + slotIntervalMinutes * 60 * 1000);
                     }
                 }
             }

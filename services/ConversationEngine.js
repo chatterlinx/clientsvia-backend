@@ -277,7 +277,16 @@ function __testHandleNameSlotTurn({
         }
 
         if (isNo) {
-            const correctionText = normalizedInput.replace(/^(no|nope|nah)[,\s]+/i, '').trim();
+            // Caller is correcting the captured name. Common forms:
+            // - "no, it's Mark Johnson"
+            // - "no it's Mark"
+            // - "no, actually it's Mark"
+            // We must strip the negation + filler prefixes before name extraction.
+            const correctionText = normalizedInput
+                .replace(/^(no|nope|nah)[,\s]+/i, '')
+                .replace(/^(actually|sorry|i mean)[,\s]+/i, '')
+                .replace(/^(it'?s|it is|its)[,\s]+/i, '')
+                .trim();
             const correctedName = SlotExtractors.extractName(correctionText, {
                 expectingName: true,
                 customStopWords: stopWordsEnabled ? customStopWords : []
@@ -2554,6 +2563,14 @@ const SlotExtractors = {
             /\burgent\b/,
             /\burgently\b/,
             /earliest\s+(?:appointment|available|time|slot)/,
+            // Preference questions that still clearly mean ASAP
+            /earliest\s+you\s+can/,
+            /soonest\s+you\s+can/,
+            /how\s+soon\s+can\s+you/,
+            /how\s+fast\s+can\s+you/,
+            /how\s+quickly\s+can\s+you/,
+            /what'?s\s+the\s+(earliest|soonest)/,
+            /when'?s\s+the\s+(earliest|soonest)/,
             /first\s+available/,
             /next\s+available/,
             /soonest\s+(?:appointment|available|time|slot)/,
@@ -4231,6 +4248,23 @@ async function processTurn({
         const metaIntentCheck = aiResult ? null : (() => {
             const lowerText = (userText || '').toLowerCase().trim();
             if (!lowerText) return null;
+
+            // === BOOKING CLARIFICATION (Tier-1) ===
+            // If caller says "what information?" while we're collecting booking slots,
+            // do NOT repeat the last response (which may be an acknowledgment) — instead
+            // repeat the CURRENT slot question from UI config.
+            const bookingClarifyPatterns = [
+                /\bwhat\s+information\b/i,
+                /\bwhat\s+info\b/i,
+                /\bwhat\s+do\s+you\s+need\b/i,
+                /\bwhat\s+are\s+you\s+asking\b/i,
+                /\basking\s+for\s+what\b/i,
+                /\binfo(rmation)?\s+about\s+what\b/i
+            ];
+            const isBookingMode = String(session?.mode || '').toUpperCase() === 'BOOKING';
+            if (isBookingMode && bookingClarifyPatterns.some(p => p.test(lowerText))) {
+                return { intent: 'CLARIFY_BOOKING_SLOT', patterns: 'booking_clarify' };
+            }
             
             // === REPEAT / DIDN'T HEAR ===
             const repeatPatterns = [
@@ -4347,6 +4381,13 @@ async function processTurn({
                 /\bimmediately\b/i,
                 /\btoday\s+if\s+possible\b/i,
                 /\bearliest\s+(available|time|slot)\b/i,
+                /\bearliest\s+you\s+can\b/i,
+                /\bsoonest\s+you\s+can\b/i,
+                /\bhow\s+soon\s+can\s+you\b/i,
+                /\bhow\s+fast\s+can\s+you\b/i,
+                /\bhow\s+quickly\s+can\s+you\b/i,
+                /\bwhat'?s\s+the\s+(earliest|soonest)\b/i,
+                /\bwhen'?s\s+the\s+(earliest|soonest)\b/i,
                 /\bfirst\s+available\b/i,
                 /\bnext\s+available\b/i,
                 /\bsoonest\b/i
@@ -4430,11 +4471,42 @@ async function processTurn({
                     currentSlots.time = 'ASAP';
                     session.collectedSlots = { ...(session.collectedSlots || {}), time: 'ASAP' };
                     
+                    // If we're ALREADY in booking mode, don't short-circuit the booking flow.
+                    // Let the deterministic booking handler advance to the next slot/confirmation.
+                    if (String(session?.mode || '').toUpperCase() === 'BOOKING') {
+                        metaReply = '';
+                        break;
+                    }
+
                     // Provide a honest, helpful response that doesn't claim to check a schedule we don't have
                     metaReply = "I understand you need this as soon as possible. " +
                                "I'll note ASAP and we'll get you the earliest available appointment. " +
                                "Let me get your information to confirm.";
                     break;
+
+                case 'CLARIFY_BOOKING_SLOT': {
+                    // Repeat the CURRENT slot question (UI-configured) based on active slot.
+                    // This prevents confusing loops like: "What is your information?"
+                    const bookingConfigSnap = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
+                    const bookingSlotsSnap = bookingConfigSnap.slots || [];
+
+                    const activeSlotId = session?.booking?.activeSlot || session?.booking?.currentSlotId || null;
+                    const activeSlotConfig = activeSlotId
+                        ? bookingSlotsSnap.find(s => (s.slotId || s.id || s.type) === activeSlotId || s.type === activeSlotId)
+                        : null;
+
+                    const askedCount = activeSlotId
+                        ? (session?.booking?.meta?.[activeSlotId]?.askedCount || 0)
+                        : 0;
+
+                    const question = (activeSlotConfig && activeSlotId)
+                        ? getSlotPromptVariant(activeSlotConfig, activeSlotId, askedCount)
+                        : null;
+
+                    // Repeat only the question (no new hardcoded wrapper text)
+                    metaReply = question || '';
+                    break;
+                }
             }
             
             if (metaReply) {
@@ -8661,7 +8733,29 @@ async function processTurn({
                         const calendarEnabled = calendarConfig?.enabled && calendarConfig?.connected;
                         
                         if (calendarEnabled) {
-                            log('📅 TIME: Checking real-time availability', { dayPart, windowPart });
+                            // V88: Detect service type from conversation for per-type scheduling rules
+                            // Order of priority: session.booking.serviceType > session.discovery.serviceType > detected from issue
+                            let detectedServiceType = session.booking?.serviceType || session.discovery?.serviceType || 'service';
+                            
+                            // If no service type set, try to detect from issue description
+                            if (detectedServiceType === 'service') {
+                                const issueText = (session.discovery?.issue || currentSlots.issue || '').toLowerCase();
+                                if (/\b(emergency|urgent|no heat|no cool|not working|broken|leak|flood)\b/i.test(issueText)) {
+                                    detectedServiceType = 'emergency';
+                                } else if (/\b(maintenance|tune[- ]?up|checkup|annual|seasonal)\b/i.test(issueText)) {
+                                    detectedServiceType = 'maintenance';
+                                } else if (/\b(estimate|quote|bid|price|cost|how much)\b/i.test(issueText)) {
+                                    detectedServiceType = 'estimate';
+                                } else if (/\b(repair|fix|broken|not working|stopped)\b/i.test(issueText)) {
+                                    detectedServiceType = 'repair';
+                                } else if (/\b(install|new unit|replacement|upgrade)\b/i.test(issueText)) {
+                                    detectedServiceType = 'installation';
+                                } else if (/\b(inspect|inspection|check|evaluate)\b/i.test(issueText)) {
+                                    detectedServiceType = 'inspection';
+                                }
+                            }
+                            
+                            log('📅 TIME: Checking real-time availability', { dayPart, windowPart, serviceType: detectedServiceType });
                             
                             try {
                                 const availResult = await GoogleCalendarService.findAvailableSlots(
@@ -8670,7 +8764,8 @@ async function processTurn({
                                         dayPreference: dayPart,
                                         timePreference: windowPart,
                                         durationMinutes: calendarConfig.settings?.defaultDurationMinutes || 60,
-                                        maxSlots: 3
+                                        maxSlots: 3,
+                                        serviceType: detectedServiceType // V88: Pass service type for per-type rules
                                     }
                                 );
                                 

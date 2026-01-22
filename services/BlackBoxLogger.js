@@ -1518,34 +1518,35 @@ const QuickLog = {
     logEvent({ callId, companyId, type: 'BOOKING_COMPLETE', turn, data: { collected } }),
     
   // === State Events ===
-  stateLoaded: (callId, companyId, turn, source, bookingModeLocked, bookingState, turnCount) =>
-    logEvent({ callId, companyId, type: 'STATE_LOADED', turn, data: { 
+  // NOTE: These must reflect the ACTUAL persisted booking mode/step; otherwise BlackBox traces become misleading.
+  stateLoaded: (callId, companyId, turn, source, bookingModeLocked, bookingState, currentBookingStep, turnCount) =>
+    logEvent({ callId, companyId, type: 'STATE_LOADED', turn, data: {
       source,  // 'REDIS', 'REDIS_EMPTY', 'MEMORY', 'ERROR'
       error: null,
       bookingModeLocked,
       bookingState,
-      currentBookingStep: null,
+      currentBookingStep: currentBookingStep || null,
       turnCount
     }}),
     
-  stateSaved: (callId, companyId, turn, result, bookingModeLocked, bookingState, bookingCollected) =>
-    logEvent({ callId, companyId, type: 'STATE_SAVED', turn, data: { 
+  stateSaved: (callId, companyId, turn, result, bookingModeLocked, bookingState, currentBookingStep, bookingCollected) =>
+    logEvent({ callId, companyId, type: 'STATE_SAVED', turn, data: {
       result,  // 'REDIS_OK', 'REDIS_ERROR', 'MEMORY_OK'
       error: null,
       bookingModeLocked,
       bookingState,
-      currentBookingStep: null,
+      currentBookingStep: currentBookingStep || null,
       bookingCollected
     }}),
     
   // === Routing Events ===
-  routingDecision: (callId, companyId, turn, llm0Enabled, reason, bookingModeLocked, path) =>
-    logEvent({ callId, companyId, type: 'ROUTING_DECISION', turn, data: { 
+  routingDecision: (callId, companyId, turn, llm0Enabled, reason, bookingModeLocked, bookingState, currentBookingStep, path) =>
+    logEvent({ callId, companyId, type: 'ROUTING_DECISION', turn, data: {
       llm0Enabled,
       reason,
       bookingModeLocked,
-      bookingState: null,
-      currentBookingStep: null,
+      bookingState: bookingState || null,
+      currentBookingStep: currentBookingStep || null,
       path  // 'HybridReceptionistLLM', 'StateMachine', 'BookingFlow'
     }}),
     
