@@ -8,10 +8,10 @@
  * one-click scenario creation with AI-generated triggers and responses.
  * 
  * ENDPOINTS:
- * GET  /:companyId/gaps          - Get all scenario gaps with priority ranking
- * GET  /:companyId/gaps/:gapId   - Get detailed gap analysis
- * POST /:companyId/gaps/:gapId/create - Auto-create scenario from gap
- * POST /:companyId/gaps/:gapId/dismiss - Dismiss a gap (won't show again)
+ * GET  /:companyId/gaps         - Get all scenario gaps with priority ranking
+ * GET  /:companyId/gaps/preview - Preview AI-generated scenario (query: representative, examples)
+ * POST /:companyId/gaps/create  - Auto-create scenario from gap
+ * POST /:companyId/gaps/dismiss - Dismiss a gap (won't show again)
  * 
  * FEATURES:
  * - Aggregates Tier 3 calls from past 7-30 days
@@ -290,6 +290,8 @@ router.get('/:companyId/gaps', async (req, res) => {
     const { companyId } = req.params;
     const { days = CONFIG.DEFAULT_DAYS_BACK, minCalls = CONFIG.MIN_CALLS_FOR_GAP } = req.query;
     
+    logger.info('[SCENARIO GAPS] Request received', { companyId, days, minCalls });
+    
     try {
         // Validate company
         const company = await Company.findById(companyId).lean();
@@ -406,12 +408,13 @@ router.get('/:companyId/gaps', async (req, res) => {
 });
 
 /**
- * GET /:companyId/gaps/:gapId/preview
+ * GET /:companyId/gaps/preview
  * 
  * Preview AI-generated scenario for a gap (without creating it)
+ * Query params: representative (required), examples (optional JSON array)
  */
-router.get('/:companyId/gaps/:gapId/preview', async (req, res) => {
-    const { companyId, gapId } = req.params;
+router.get('/:companyId/gaps/preview', async (req, res) => {
+    const { companyId } = req.params;
     const { representative, examples } = req.query;
     
     try {
