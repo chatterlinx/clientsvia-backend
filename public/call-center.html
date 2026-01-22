@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <style>
         /* ═══════════════════════════════════════════════════════════════════════════
@@ -1485,7 +1486,7 @@
                         <span style="color: var(--border-color);">|</span>
                         <!-- Last Sync Time -->
                         <div style="display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 13px;">
-                            <i class="fas fa-sync-alt" style="font-size: 11px;"></i>
+                            <span style="font-size: 11px;">🔄</span>
                             <span>Last sync:</span>
                             <span id="cal-last-sync" style="font-weight: 500;">--</span>
                         </div>
@@ -1495,8 +1496,8 @@
                         <span id="cal-event-count" style="font-size: 13px; color: var(--text-secondary);">0 events this month</span>
                         <!-- Refresh Button -->
                         <button class="btn btn-secondary" id="cal-refresh" style="padding: 6px 12px; font-size: 13px;">
-                            <i class="fas fa-sync-alt" id="cal-refresh-icon"></i>
-                            <span style="margin-left: 6px;">Refresh</span>
+                            <span id="cal-refresh-icon">🔄</span>
+                            <span style="margin-left: 4px;">Refresh</span>
                         </button>
                     </div>
                 </div>
@@ -1504,13 +1505,9 @@
                 <!-- Calendar Header -->
                 <div class="calendar-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-lg); padding: var(--space-md); background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color);">
                     <div style="display: flex; align-items: center; gap: var(--space-md);">
-                        <button class="btn btn-secondary" id="cal-prev" style="padding: 8px 12px;">
-                            <i class="fas fa-chevron-left"></i>
-                        </button>
+                        <button class="btn btn-secondary" id="cal-prev" style="padding: 8px 14px; font-size: 16px;">◀</button>
                         <h3 id="cal-month-year" style="margin: 0; min-width: 180px; text-align: center;">January 2026</h3>
-                        <button class="btn btn-secondary" id="cal-next" style="padding: 8px 12px;">
-                            <i class="fas fa-chevron-right"></i>
-                        </button>
+                        <button class="btn btn-secondary" id="cal-next" style="padding: 8px 14px; font-size: 16px;">▶</button>
                         <button class="btn btn-secondary" id="cal-today" style="margin-left: var(--space-md);">Today</button>
                     </div>
                     <div style="display: flex; align-items: center; gap: var(--space-sm);">
@@ -3142,8 +3139,9 @@
             
             // Refresh button
             document.getElementById('cal-refresh').addEventListener('click', async () => {
-                const icon = document.getElementById('cal-refresh-icon');
-                icon.style.animation = 'spin 1s linear infinite';
+                const btn = document.getElementById('cal-refresh');
+                btn.disabled = true;
+                btn.style.opacity = '0.6';
                 updateCalendarStatus('loading', 'Refreshing...');
                 
                 try {
@@ -3156,7 +3154,8 @@
                     updateCalendarStatus('offline');
                 }
                 
-                icon.style.animation = '';
+                btn.disabled = false;
+                btn.style.opacity = '1';
             });
             
             // View switcher (future enhancement)
