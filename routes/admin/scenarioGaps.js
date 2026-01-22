@@ -343,7 +343,7 @@ router.get('/:companyId/gaps', async (req, res) => {
                         tier3Phrases.push({
                             text: callerText,
                             tokens,
-                            callId: recording._id.toString(),
+                            callIds: [recording._id.toString()],  // Array for clustering
                             timestamp: event.ts || recording.createdAt
                         });
                     }
