@@ -27,6 +27,10 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 const mongoose = require('mongoose');
 
+// Authentication & Authorization
+const { authenticateJWT } = require('../../middleware/auth');
+const authorizeCompanyAccess = require('../../middleware/authorizeCompanyAccess');
+
 // Models
 const BlackBoxRecording = require('../../models/BlackBoxRecording');
 const Company = require('../../models/v2Company');
@@ -35,6 +39,11 @@ const GlobalInstantResponseTemplate = require('../../models/GlobalInstantRespons
 // Services
 const openaiClient = require('../../config/openai');
 const logger = require('../../utils/logger');
+
+// ============================================================================
+// MIDDLEWARE - All routes require authentication
+// ============================================================================
+router.use('/:companyId', authenticateJWT, authorizeCompanyAccess);
 
 // ============================================================================
 // CONFIGURATION
