@@ -783,6 +783,12 @@
         let triggers = [];
         let negativeTriggers = [];
         let selectedDays = 14;
+
+        function getAuthToken() {
+            return localStorage.getItem('adminToken')
+                || localStorage.getItem('token')
+                || sessionStorage.getItem('token');
+        }
         
         // ========================================
         // INIT
@@ -839,7 +845,7 @@
             `;
             
             try {
-                const token = localStorage.getItem('token');
+                const token = getAuthToken();
                 
                 // Check if token exists
                 if (!token) {
@@ -874,7 +880,7 @@
         
         async function generatePreview(gap) {
             try {
-                const token = localStorage.getItem('token');
+                const token = getAuthToken();
                 const response = await fetch(
                     `/api/admin/scenario-gaps/${companyId}/gaps/preview?representative=${encodeURIComponent(gap.representative)}&examples=${encodeURIComponent(JSON.stringify(gap.examples))}`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
@@ -897,7 +903,7 @@
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
             
             try {
-                const token = localStorage.getItem('token');
+                const token = getAuthToken();
                 const response = await fetch(`/api/admin/scenario-gaps/${companyId}/gaps/create`, {
                     method: 'POST',
                     headers: {
@@ -939,7 +945,7 @@
             if (!confirm('Dismiss this gap? It won\'t appear in future analyses.')) return;
             
             try {
-                const token = localStorage.getItem('token');
+                const token = getAuthToken();
                 await fetch(`/api/admin/scenario-gaps/${companyId}/gaps/dismiss`, {
                     method: 'POST',
                     headers: {
