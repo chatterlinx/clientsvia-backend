@@ -207,7 +207,7 @@ router.post('/fix-filler-words', authenticateJWT, async (req, res) => {
     console.log('🔧 RUNNING: Fix Filler Words (Remove Meaningful Words)');
     console.log('============================================================\n');
     
-    // V87: Comprehensive list of words that should NEVER be stripped as fillers
+    // V87/V88: Comprehensive list of words that should NEVER be stripped as fillers
     const WORDS_TO_REMOVE = [
         // ════════════════════════════════════════════════════════════════════
         // GREETINGS (V87 FIX - stripping these creates malformed sentences!)
@@ -234,6 +234,7 @@ router.post('/fix-filler-words', authenticateJWT, async (req, res) => {
         
         // CONTEXT-BREAKING (stripping these loses info!)
         'you guys',    // "you guys were here last week" → loses the subject
+        'there',       // V88 FIX: "There's nothing happening" → "'s nothing happening" BROKEN!
         
         // POLITENESS (should be preserved for tone)
         'please', 'thanks', 'thank you',

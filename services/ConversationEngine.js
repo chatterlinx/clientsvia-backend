@@ -1443,7 +1443,16 @@ function stripFillerWords(userText, company, template) {
         'what', 'when', 'where', 'why', 'how', 'which', 'who',
         
         // Numbers (critical for phone/address)
-        'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'zero'
+        'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'zero',
+        
+        // V88 FIX: Commonly mis-tagged as fillers but are NOT fillers
+        'there',   // "There's nothing happening" - existential pronoun, NOT a filler
+        'please',  // "Yes, please" - politeness marker, NOT a filler
+        'thanks',  // "Thanks" - gratitude expression, NOT a filler
+        'thank',   // "Thank you" - gratitude expression, NOT a filler
+        'hi',      // "Hi, I need help" - greeting, often has semantic meaning
+        'hello',   // "Hello, is this..." - greeting with semantic meaning
+        'well'     // "It's working well" - adverb, NOT a filler in most contexts
     ]);
     
     // Sort fillers by length (longest first) to handle multi-word fillers
@@ -4471,14 +4480,35 @@ async function processTurn({
                     currentSlots.time = 'ASAP';
                     session.collectedSlots = { ...(session.collectedSlots || {}), time: 'ASAP' };
                     
-                    // If we're ALREADY in booking mode, don't short-circuit the booking flow.
-                    // Let the deterministic booking handler advance to the next slot/confirmation.
+                    // If we're ALREADY in booking mode, check if all required slots are now filled
                     if (String(session?.mode || '').toUpperCase() === 'BOOKING') {
-                        metaReply = '';
+                        // V88 FIX: Check if setting time=ASAP completes all required slots
+                        const urgBookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
+                        const urgBookingSlots = urgBookingConfig.slots || [];
+                        const urgNextMissing = urgBookingSlots.find(slot => {
+                            const slotId = slot.slotId || slot.id || slot.type;
+                            const isCollected = currentSlots[slotId] || currentSlots[slot.type];
+                            return slot.required && !isCollected;
+                        });
+                        
+                        if (!urgNextMissing) {
+                            // ALL SLOTS FILLED! Acknowledge ASAP and confirm booking
+                            log('🚀 URGENCY_SCHEDULING: All slots now filled with time=ASAP, confirming booking');
+                            metaReply = "Got it, I'll get you the earliest available appointment. Let me confirm what I have: " +
+                                       `${currentSlots.name || 'your name'}, at ${currentSlots.address || 'your address'}, ` +
+                                       `phone ${currentSlots.phone || 'your number'}. Is all that correct?`;
+                            // Mark we're in confirmation phase
+                            session.booking = session.booking || {};
+                            session.booking.pendingFinalConfirm = true;
+                            session.markModified('booking');
+                        } else {
+                            // More slots needed - let booking flow handle it
+                            metaReply = '';
+                        }
                         break;
                     }
 
-                    // Provide a honest, helpful response that doesn't claim to check a schedule we don't have
+                    // Not in booking mode yet - provide intro response
                     metaReply = "I understand you need this as soon as possible. " +
                                "I'll note ASAP and we'll get you the earliest available appointment. " +
                                "Let me get your information to confirm.";
