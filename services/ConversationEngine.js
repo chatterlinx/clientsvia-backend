@@ -1828,8 +1828,20 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
         // 📅 GOOGLE CALENDAR INTEGRATION - V88 (Jan 2026)
         // Create calendar event if calendar is connected and enabled
         // ═══════════════════════════════════════════════════════════════════
+        // 📅 GOOGLE CALENDAR EVENT CREATION
+        // ═══════════════════════════════════════════════════════════════════
         let calendarResult = null;
         const calendarConfig = company.googleCalendar;
+        
+        // 🔍 BLACK BOX: Log calendar config check
+        await BlackBoxLogger.addEvent(session._id?.toString(), 'CALENDAR_CHECK', {
+            enabled: calendarConfig?.enabled || false,
+            connected: calendarConfig?.connected || false,
+            calendarId: calendarConfig?.calendarId || 'primary',
+            hasAccessToken: !!calendarConfig?.accessToken,
+            connectedAt: calendarConfig?.connectedAt || null,
+            willAttemptCreate: !!(calendarConfig?.enabled && calendarConfig?.connected)
+        });
         
         if (calendarConfig?.enabled && calendarConfig?.connected) {
             log('📅 Creating Google Calendar event...');
@@ -1837,18 +1849,22 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
                 // Determine appointment time
                 // V88: Use confirmed calendar slot if available
                 let appointmentTime = null;
+                let timeSource = 'fallback_next_business_day';
                 const bookingMeta = session?.booking?.meta?.time || {};
                 
                 if (bookingMeta.calendarSlot?.start) {
                     // Real-time confirmed slot from calendar
                     appointmentTime = new Date(bookingMeta.calendarSlot.start);
+                    timeSource = 'confirmed_calendar_slot';
                     log('📅 Using confirmed calendar slot', { start: appointmentTime });
                 } else if (session?.booking?.confirmedSlot?.start) {
                     // Alternative location for confirmed slot
                     appointmentTime = new Date(session.booking.confirmedSlot.start);
+                    timeSource = 'session_confirmed_slot';
                     log('📅 Using session confirmed slot', { start: appointmentTime });
                 } else if (slots.time?.confirmedSlot) {
                     appointmentTime = new Date(slots.time.confirmedSlot);
+                    timeSource = 'slots_confirmed_slot';
                 } else {
                     // Use next available business day at 9 AM as placeholder
                     // The real time will be confirmed by human
@@ -1862,23 +1878,50 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
                     appointmentTime = tomorrow;
                 }
                 
+                // Build event data
+                const eventData = {
+                    customerName: bookingSlots.name?.full || `${bookingSlots.name?.first || ''} ${bookingSlots.name?.last || ''}`.trim() || 'Customer',
+                    customerPhone: bookingSlots.phone || metadata.callerPhone || null,
+                    customerEmail: slots.email || null,
+                    customerAddress: bookingSlots.address?.full || null,
+                    serviceType: metadata.serviceType || session.discovery?.issue || 'Service Call',
+                    serviceNotes: session.discovery?.summary || session.discoverySummary || null,
+                    startTime: appointmentTime
+                };
+                
+                // 🔍 BLACK BOX: Log calendar event attempt
+                await BlackBoxLogger.addEvent(session._id?.toString(), 'CALENDAR_EVENT_ATTEMPT', {
+                    companyId: company._id.toString(),
+                    timeSource,
+                    appointmentTime: appointmentTime?.toISOString(),
+                    eventData: {
+                        customerName: eventData.customerName,
+                        customerPhone: eventData.customerPhone ? '***' + eventData.customerPhone.slice(-4) : null,
+                        customerAddress: eventData.customerAddress,
+                        serviceType: eventData.serviceType,
+                        hasNotes: !!eventData.serviceNotes
+                    }
+                });
+                
                 calendarResult = await GoogleCalendarService.createBookingEvent(
                     company._id.toString(),
-                    {
-                        customerName: bookingSlots.name?.full || `${bookingSlots.name?.first || ''} ${bookingSlots.name?.last || ''}`.trim() || 'Customer',
-                        customerPhone: bookingSlots.phone || metadata.callerPhone || null,
-                        customerEmail: slots.email || null, // If email was collected
-                        customerAddress: bookingSlots.address?.full || null,
-                        serviceType: metadata.serviceType || session.discovery?.issue || 'Service Call',
-                        serviceNotes: session.discovery?.summary || session.discoverySummary || null,
-                        startTime: appointmentTime
-                    }
+                    eventData
                 );
                 
                 if (calendarResult.success) {
                     log('📅 ✅ Calendar event created', {
                         eventId: calendarResult.eventId,
                         start: calendarResult.start
+                    });
+                    
+                    // 🔍 BLACK BOX: Log success
+                    await BlackBoxLogger.addEvent(session._id?.toString(), 'CALENDAR_EVENT_CREATED', {
+                        success: true,
+                        eventId: calendarResult.eventId,
+                        eventLink: calendarResult.eventLink,
+                        start: calendarResult.start,
+                        end: calendarResult.end,
+                        colorId: calendarResult.colorId
                     });
                     
                     // Store calendar event reference in booking request
@@ -1892,6 +1935,14 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
                     log('📅 ⚠️ Calendar event creation failed (will use fallback)', {
                         error: calendarResult.error,
                         fallback: calendarResult.fallback
+                    });
+                    
+                    // 🔍 BLACK BOX: Log failure
+                    await BlackBoxLogger.addEvent(session._id?.toString(), 'CALENDAR_EVENT_FAILED', {
+                        success: false,
+                        error: calendarResult.error,
+                        fallback: calendarResult.fallback,
+                        willContinueWithoutCalendar: true
                     });
                 }
             } catch (calendarError) {
@@ -1936,6 +1987,16 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
         // 📱 SMS NOTIFICATIONS - V88 (Jan 2026)
         // Send confirmation SMS and schedule reminders (non-blocking)
         // ═══════════════════════════════════════════════════════════════════
+        const smsConfig = company.smsNotifications;
+        
+        // 🔍 BLACK BOX: Log SMS config
+        BlackBoxLogger.addEvent(session._id?.toString(), 'SMS_CHECK', {
+            enabled: smsConfig?.enabled || false,
+            confirmationEnabled: smsConfig?.confirmation?.enabled || false,
+            hasTwilioCredentials: !!(company.twilioConfig?.accountSid),
+            customerPhone: bookingSlots.phone ? '***' + bookingSlots.phone.slice(-4) : null
+        }).catch(() => {});
+        
         (async () => {
             try {
                 // Send confirmation SMS
@@ -1946,10 +2007,20 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
                 
                 if (confirmResult.success && !confirmResult.skipped) {
                     log('📱 ✅ Confirmation SMS sent', { messageId: confirmResult.messageId });
+                    BlackBoxLogger.addEvent(session._id?.toString(), 'SMS_SENT', {
+                        type: 'confirmation', messageId: confirmResult.messageId
+                    }).catch(() => {});
                 } else if (confirmResult.scheduled) {
                     log('📱 ⏰ Confirmation SMS scheduled (quiet hours)', { 
                         scheduledFor: confirmResult.scheduledFor 
                     });
+                    BlackBoxLogger.addEvent(session._id?.toString(), 'SMS_SCHEDULED', {
+                        type: 'confirmation', scheduledFor: confirmResult.scheduledFor
+                    }).catch(() => {});
+                } else if (confirmResult.skipped) {
+                    BlackBoxLogger.addEvent(session._id?.toString(), 'SMS_SKIPPED', {
+                        reason: confirmResult.reason || 'disabled'
+                    }).catch(() => {});
                 }
                 
                 // Schedule reminders if we have an appointment time
@@ -1963,6 +2034,9 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
                         log('📱 ✅ Reminders scheduled', { 
                             reminders: reminderResult.scheduled 
                         });
+                        BlackBoxLogger.addEvent(session._id?.toString(), 'SMS_REMINDERS_SCHEDULED', {
+                            count: reminderResult.scheduled?.length || 0
+                        }).catch(() => {});
                     }
                 }
             } catch (smsErr) {
@@ -1970,8 +2044,29 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
                 log('📱 ⚠️ SMS notification error (non-blocking)', { 
                     error: smsErr.message 
                 });
+                BlackBoxLogger.addEvent(session._id?.toString(), 'SMS_ERROR', {
+                    error: smsErr.message
+                }).catch(() => {});
             }
         })();
+        
+        // 🔍 BLACK BOX: Final booking summary
+        await BlackBoxLogger.addEvent(session._id?.toString(), 'BOOKING_FINALIZED', {
+            success: true,
+            bookingRequestId: bookingRequest._id.toString(),
+            caseId: caseId,
+            status: bookingRequest.status,
+            outcomeMode: outcomeMode,
+            isAsap: isAsap,
+            calendarEventCreated: !!calendarResult?.success,
+            calendarEventId: calendarResult?.eventId || null,
+            slotsCollected: {
+                name: !!bookingSlots.name?.full || !!bookingSlots.name?.first,
+                phone: !!bookingSlots.phone,
+                address: !!bookingSlots.address?.full,
+                time: !!bookingSlots.time?.full || !!bookingSlots.time?.preference
+            }
+        });
         
         return {
             success: true,
