@@ -1237,6 +1237,15 @@
             to { transform: rotate(360deg); }
         }
         
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.1); }
+        }
+        
+        .cal-status-live { color: #22c55e !important; }
+        .cal-status-offline { color: #ef4444 !important; }
+        .cal-status-loading { color: #f59e0b !important; }
+        
         .empty-state {
             text-align: center;
             padding: var(--space-xl);
@@ -1465,6 +1474,33 @@
             
             <!-- CALENDAR PANEL -->
             <div id="calendar-panel" class="tab-panel">
+                <!-- Calendar Status Bar -->
+                <div id="cal-status-bar" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-md); padding: 12px 16px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="display: flex; align-items: center; gap: var(--space-md);">
+                        <!-- Live Status Indicator -->
+                        <div id="cal-live-status" style="display: flex; align-items: center; gap: 8px;">
+                            <span id="cal-status-dot" style="width: 10px; height: 10px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite;"></span>
+                            <span id="cal-status-text" style="font-weight: 600; color: #22c55e;">Live</span>
+                        </div>
+                        <span style="color: var(--border-color);">|</span>
+                        <!-- Last Sync Time -->
+                        <div style="display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 13px;">
+                            <i class="fas fa-sync-alt" style="font-size: 11px;"></i>
+                            <span>Last sync:</span>
+                            <span id="cal-last-sync" style="font-weight: 500;">--</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: var(--space-sm);">
+                        <!-- Event Count -->
+                        <span id="cal-event-count" style="font-size: 13px; color: var(--text-secondary);">0 events this month</span>
+                        <!-- Refresh Button -->
+                        <button class="btn btn-secondary" id="cal-refresh" style="padding: 6px 12px; font-size: 13px;">
+                            <i class="fas fa-sync-alt" id="cal-refresh-icon"></i>
+                            <span style="margin-left: 6px;">Refresh</span>
+                        </button>
+                    </div>
+                </div>
+                
                 <!-- Calendar Header -->
                 <div class="calendar-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-lg); padding: var(--space-md); background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color);">
                     <div style="display: flex; align-items: center; gap: var(--space-md);">
@@ -2857,10 +2893,65 @@
         let calendarDate = new Date();
         let calendarEvents = [];
         let calendarView = 'month';
+        let calendarLastSync = null;
+        
+        function updateCalendarStatus(status, message) {
+            const dot = document.getElementById('cal-status-dot');
+            const text = document.getElementById('cal-status-text');
+            const statusBar = document.getElementById('cal-status-bar');
+            
+            if (!dot || !text) return;
+            
+            switch(status) {
+                case 'live':
+                    dot.style.background = '#22c55e';
+                    dot.style.animation = 'pulse 2s infinite';
+                    text.textContent = 'Live';
+                    text.className = 'cal-status-live';
+                    statusBar.style.borderColor = 'var(--border-color)';
+                    break;
+                case 'offline':
+                    dot.style.background = '#ef4444';
+                    dot.style.animation = 'none';
+                    text.textContent = 'Offline';
+                    text.className = 'cal-status-offline';
+                    statusBar.style.borderColor = '#ef4444';
+                    break;
+                case 'loading':
+                    dot.style.background = '#f59e0b';
+                    dot.style.animation = 'pulse 1s infinite';
+                    text.textContent = message || 'Syncing...';
+                    text.className = 'cal-status-loading';
+                    break;
+            }
+        }
+        
+        function updateLastSyncTime() {
+            const el = document.getElementById('cal-last-sync');
+            if (!el) return;
+            
+            calendarLastSync = new Date();
+            const timeStr = calendarLastSync.toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            el.textContent = timeStr;
+        }
+        
+        function updateEventCount(count) {
+            const el = document.getElementById('cal-event-count');
+            if (el) {
+                el.textContent = `${count} event${count !== 1 ? 's' : ''} this month`;
+            }
+        }
         
         async function loadCalendar() {
             const container = document.getElementById('calendar-container');
             const notConnected = document.getElementById('cal-not-connected');
+            const statusBar = document.getElementById('cal-status-bar');
+            
+            updateCalendarStatus('loading', 'Connecting...');
             
             try {
                 // Check if calendar is connected
@@ -2868,6 +2959,7 @@
                 
                 if (!statusRes.connected) {
                     container.style.display = 'none';
+                    statusBar.style.display = 'none';
                     notConnected.style.display = 'block';
                     // Fix the link
                     notConnected.querySelector('a').href = `company-profile.html?id=${currentCompanyId}#configuration`;
@@ -2875,15 +2967,23 @@
                 }
                 
                 container.style.display = 'block';
+                statusBar.style.display = 'flex';
                 notConnected.style.display = 'none';
                 
                 // Load events for current month
+                updateCalendarStatus('loading', 'Fetching events...');
                 await loadCalendarEvents();
                 renderCalendar();
                 wireCalendarControls();
                 
+                // Update status
+                updateCalendarStatus('live');
+                updateLastSyncTime();
+                updateEventCount(calendarEvents.length);
+                
             } catch (err) {
                 console.error('Calendar load error:', err);
+                updateCalendarStatus('offline');
                 container.style.display = 'none';
                 notConnected.style.display = 'block';
             }
@@ -3012,20 +3112,51 @@
             
             document.getElementById('cal-prev').addEventListener('click', async () => {
                 calendarDate.setMonth(calendarDate.getMonth() - 1);
+                updateCalendarStatus('loading', 'Loading...');
                 await loadCalendarEvents();
                 renderCalendar();
+                updateCalendarStatus('live');
+                updateLastSyncTime();
+                updateEventCount(calendarEvents.length);
             });
             
             document.getElementById('cal-next').addEventListener('click', async () => {
                 calendarDate.setMonth(calendarDate.getMonth() + 1);
+                updateCalendarStatus('loading', 'Loading...');
                 await loadCalendarEvents();
                 renderCalendar();
+                updateCalendarStatus('live');
+                updateLastSyncTime();
+                updateEventCount(calendarEvents.length);
             });
             
             document.getElementById('cal-today').addEventListener('click', async () => {
                 calendarDate = new Date();
+                updateCalendarStatus('loading', 'Loading...');
                 await loadCalendarEvents();
                 renderCalendar();
+                updateCalendarStatus('live');
+                updateLastSyncTime();
+                updateEventCount(calendarEvents.length);
+            });
+            
+            // Refresh button
+            document.getElementById('cal-refresh').addEventListener('click', async () => {
+                const icon = document.getElementById('cal-refresh-icon');
+                icon.style.animation = 'spin 1s linear infinite';
+                updateCalendarStatus('loading', 'Refreshing...');
+                
+                try {
+                    await loadCalendarEvents();
+                    renderCalendar();
+                    updateCalendarStatus('live');
+                    updateLastSyncTime();
+                    updateEventCount(calendarEvents.length);
+                } catch (err) {
+                    updateCalendarStatus('offline');
+                }
+                
+                icon.style.animation = '';
             });
             
             // View switcher (future enhancement)
