@@ -466,6 +466,8 @@ function registerRoutes(routes) {
         }
         
         const GlobalInstantResponseTemplate = require('./models/GlobalInstantResponseTemplate');
+        const STTProfile = require('./models/STTProfile');
+        
         const WORDS_TO_REMOVE = [
             'hi', 'hey', 'hello', 'yo', 'well', 'so', 'okay', 'ok', 'yes', 'yeah',
             'today', 'tomorrow', 'now', 'asap', 'urgent', 'emergency',
@@ -474,15 +476,23 @@ function registerRoutes(routes) {
             'please', 'thanks', 'thank you', 'actually', 'basically', 'really', 'very'
         ];
         
-        const results = { templatesUpdated: 0, wordsRemoved: {}, categoriesCleaned: 0 };
+        const results = { 
+            templatesUpdated: 0, 
+            sttProfilesUpdated: 0,
+            wordsRemoved: {}, 
+            categoriesCleaned: 0 
+        };
+        
         try {
+            // ═══════════════════════════════════════════════════════════════════
+            // PART 1: Clean GlobalInstantResponseTemplate
+            // ═══════════════════════════════════════════════════════════════════
             const templates = await GlobalInstantResponseTemplate.find({});
             for (const template of templates) {
                 let modified = false;
                 
                 // Check template.fillerWords
                 if (template.fillerWords?.length > 0) {
-                    const before = template.fillerWords.length;
                     const removed = template.fillerWords.filter(w => WORDS_TO_REMOVE.includes(w.toLowerCase()));
                     template.fillerWords = template.fillerWords.filter(w => !WORDS_TO_REMOVE.includes(w.toLowerCase()));
                     if (removed.length > 0) {
@@ -501,7 +511,7 @@ function registerRoutes(routes) {
                     }
                 }
                 
-                // V88 FIX: Check CATEGORY-level fillerWords (this is where "you guys" lives!)
+                // Check CATEGORY-level fillerWords
                 if (template.categories?.length > 0) {
                     for (const category of template.categories) {
                         if (category.fillerWords?.length > 0) {
@@ -523,8 +533,48 @@ function registerRoutes(routes) {
                     results.templatesUpdated++;
                 }
             }
-            res.json({ success: true, ...results, message: 'Filler words cleaned from templates AND categories' });
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // PART 2: Clean STTProfile (THIS is where "you guys" actually lives!)
+            // ═══════════════════════════════════════════════════════════════════
+            const sttProfiles = await STTProfile.find({});
+            for (const profile of sttProfiles) {
+                let modified = false;
+                
+                // Check profile.fillers array
+                if (profile.fillers?.length > 0) {
+                    const originalCount = profile.fillers.length;
+                    const removed = profile.fillers.filter(f => 
+                        WORDS_TO_REMOVE.includes(f.phrase?.toLowerCase())
+                    );
+                    profile.fillers = profile.fillers.filter(f => 
+                        !WORDS_TO_REMOVE.includes(f.phrase?.toLowerCase())
+                    );
+                    
+                    if (removed.length > 0) {
+                        modified = true;
+                        removed.forEach(f => { 
+                            results.wordsRemoved[f.phrase] = (results.wordsRemoved[f.phrase] || 0) + 1; 
+                        });
+                        console.log(`[FILLER FIX] STTProfile ${profile.templateName}: removed ${removed.length} fillers:`, 
+                            removed.map(f => f.phrase));
+                    }
+                }
+                
+                if (modified) {
+                    profile.markModified('fillers');
+                    await profile.save();
+                    results.sttProfilesUpdated++;
+                }
+            }
+            
+            res.json({ 
+                success: true, 
+                ...results, 
+                message: 'Filler words cleaned from Templates, Categories, AND STTProfiles' 
+            });
         } catch (err) {
+            console.error('[FILLER FIX] Error:', err);
             res.status(500).json({ success: false, error: err.message });
         }
     });
