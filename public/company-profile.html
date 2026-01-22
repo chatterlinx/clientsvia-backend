@@ -4480,18 +4480,34 @@
             { id: '11', emoji: '🔴', name: 'Tomato' }
         ];
         
-        // Default color mappings with schedules
+        // Default color mappings with schedules + scheduling rules (V88)
         const DEFAULT_COLOR_MAPPINGS = [
-            { serviceType: 'service', colorId: '7', label: 'Service Call', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true } },
-            { serviceType: 'repair', colorId: '11', label: 'Repair', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true } },
-            { serviceType: 'emergency', colorId: '4', label: 'Emergency', schedule: { days: ['mon','tue','wed','thu','fri','sat','sun'], startTime: '00:00', endTime: '23:59', closedHolidays: false } },
-            { serviceType: 'maintenance', colorId: '10', label: 'Maintenance', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true } },
-            { serviceType: 'estimate', colorId: '5', label: 'Estimate', schedule: { days: ['mon','tue','wed','thu','fri','sat'], startTime: '09:00', endTime: '18:00', closedHolidays: true } },
-            { serviceType: 'sales', colorId: '9', label: 'Sales', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '09:00', endTime: '17:00', closedHolidays: true } },
+            { serviceType: 'service', colorId: '7', label: 'Service Call', 
+              schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true },
+              schedulingRules: { slotIntervalMinutes: 60, leadTimeMinutes: 60, advanceBookingDays: 0, sameDayAllowed: true } },
+            { serviceType: 'repair', colorId: '11', label: 'Repair', 
+              schedule: { days: ['mon','tue','wed','thu','fri','sat'], startTime: '08:00', endTime: '17:00', closedHolidays: true },
+              schedulingRules: { slotIntervalMinutes: 60, leadTimeMinutes: 60, advanceBookingDays: 0, sameDayAllowed: true } },
+            { serviceType: 'emergency', colorId: '4', label: 'Emergency', 
+              schedule: { days: ['mon','tue','wed','thu','fri','sat','sun'], startTime: '00:00', endTime: '23:59', closedHolidays: false },
+              schedulingRules: { slotIntervalMinutes: 60, leadTimeMinutes: 30, advanceBookingDays: 0, sameDayAllowed: true } },
+            { serviceType: 'maintenance', colorId: '10', label: 'Maintenance', 
+              schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true },
+              schedulingRules: { slotIntervalMinutes: 120, leadTimeMinutes: 0, advanceBookingDays: 7, sameDayAllowed: false } },
+            { serviceType: 'estimate', colorId: '5', label: 'Estimate', 
+              schedule: { days: ['mon','tue','wed','thu','fri','sat'], startTime: '09:00', endTime: '18:00', closedHolidays: true },
+              schedulingRules: { slotIntervalMinutes: 60, leadTimeMinutes: 120, advanceBookingDays: 1, sameDayAllowed: false } },
+            { serviceType: 'sales', colorId: '9', label: 'Sales', 
+              schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '09:00', endTime: '17:00', closedHolidays: true },
+              schedulingRules: { slotIntervalMinutes: 60, leadTimeMinutes: 60, advanceBookingDays: 0, sameDayAllowed: true } },
             { serviceType: 'consultation', colorId: '3', label: 'Consultation', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '09:00', endTime: '17:00', closedHolidays: true } },
             { serviceType: 'installation', colorId: '2', label: 'Installation', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '07:00', endTime: '16:00', closedHolidays: true } },
-            { serviceType: 'inspection', colorId: '6', label: 'Inspection', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true } },
-            { serviceType: 'other', colorId: '8', label: 'Other', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true } }
+            { serviceType: 'inspection', colorId: '6', label: 'Inspection', 
+              schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true },
+              schedulingRules: { slotIntervalMinutes: 60, leadTimeMinutes: 60, advanceBookingDays: 1, sameDayAllowed: false } },
+            { serviceType: 'other', colorId: '8', label: 'Other', 
+              schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true },
+              schedulingRules: { slotIntervalMinutes: 60, leadTimeMinutes: 60, advanceBookingDays: 0, sameDayAllowed: true } }
         ];
         
         function renderColorMappings(mappings) {
@@ -4505,8 +4521,9 @@
                     `<option value="${c.id}" ${c.id === item.colorId ? 'selected' : ''}>${c.emoji} ${c.name}</option>`
                 ).join('');
                 
-                // Schedule defaults
+                // Schedule defaults (V88: includes advanced scheduling rules)
                 const schedule = item.schedule || { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true };
+                const rules = item.schedulingRules || { slotIntervalMinutes: 60, leadTimeMinutes: 60, advanceBookingDays: 0, sameDayAllowed: true };
                 const allDays = ['mon','tue','wed','thu','fri','sat','sun'];
                 const dayLabels = { mon: 'M', tue: 'T', wed: 'W', thu: 'Th', fri: 'F', sat: 'Sa', sun: 'Su' };
                 
@@ -4531,7 +4548,8 @@
                             </button>
                         </div>
                         <div class="gc-schedule-panel hidden mt-2 pt-2 border-t border-gray-100">
-                            <div class="flex flex-wrap items-center gap-3">
+                            <!-- Row 1: Days and Hours -->
+                            <div class="flex flex-wrap items-center gap-3 mb-2">
                                 <div class="flex items-center gap-1 text-xs">
                                     <span class="text-gray-500">Days:</span>
                                     ${dayCheckboxes}
@@ -4545,6 +4563,42 @@
                                 <label class="inline-flex items-center text-xs cursor-pointer">
                                     <input type="checkbox" class="gc-closed-holidays w-3 h-3" ${schedule.closedHolidays !== false ? 'checked' : ''}>
                                     <span class="ml-1 text-gray-600">Closed holidays</span>
+                                </label>
+                            </div>
+                            <!-- Row 2: Advanced Scheduling Rules (V88) -->
+                            <div class="flex flex-wrap items-center gap-4 pt-2 border-t border-gray-100">
+                                <div class="flex items-center gap-1 text-xs">
+                                    <span class="text-gray-500" title="Time between appointments">Slot interval:</span>
+                                    <select class="gc-slot-interval form-input text-xs py-0.5 w-20">
+                                        <option value="30" ${rules.slotIntervalMinutes == 30 ? 'selected' : ''}>30 min</option>
+                                        <option value="60" ${rules.slotIntervalMinutes == 60 ? 'selected' : ''}>1 hr</option>
+                                        <option value="90" ${rules.slotIntervalMinutes == 90 ? 'selected' : ''}>1.5 hr</option>
+                                        <option value="120" ${rules.slotIntervalMinutes == 120 ? 'selected' : ''}>2 hr</option>
+                                        <option value="180" ${rules.slotIntervalMinutes == 180 ? 'selected' : ''}>3 hr</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center gap-1 text-xs">
+                                    <span class="text-gray-500" title="Minimum time from now to first slot (travel time)">Lead time:</span>
+                                    <select class="gc-lead-time form-input text-xs py-0.5 w-20">
+                                        <option value="0" ${rules.leadTimeMinutes == 0 ? 'selected' : ''}>None</option>
+                                        <option value="30" ${rules.leadTimeMinutes == 30 ? 'selected' : ''}>30 min</option>
+                                        <option value="60" ${rules.leadTimeMinutes == 60 ? 'selected' : ''}>1 hr</option>
+                                        <option value="120" ${rules.leadTimeMinutes == 120 ? 'selected' : ''}>2 hr</option>
+                                        <option value="240" ${rules.leadTimeMinutes == 240 ? 'selected' : ''}>4 hr</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center gap-1 text-xs">
+                                    <span class="text-gray-500" title="Minimum days in advance for booking">Advance booking:</span>
+                                    <select class="gc-advance-days form-input text-xs py-0.5 w-24">
+                                        <option value="0" ${rules.advanceBookingDays == 0 ? 'selected' : ''}>Same day OK</option>
+                                        <option value="1" ${rules.advanceBookingDays == 1 ? 'selected' : ''}>Next day+</option>
+                                        <option value="3" ${rules.advanceBookingDays == 3 ? 'selected' : ''}>3 days+</option>
+                                        <option value="7" ${rules.advanceBookingDays == 7 ? 'selected' : ''}>1 week+</option>
+                                    </select>
+                                </div>
+                                <label class="inline-flex items-center text-xs cursor-pointer" title="Allow same-day bookings">
+                                    <input type="checkbox" class="gc-same-day w-3 h-3" ${rules.sameDayAllowed !== false ? 'checked' : ''}>
+                                    <span class="ml-1 text-gray-600">Same-day</span>
                                 </label>
                             </div>
                         </div>
@@ -4631,7 +4685,8 @@
                         </button>
                     </div>
                     <div class="gc-schedule-panel hidden mt-2 pt-2 border-t border-gray-100">
-                        <div class="flex flex-wrap items-center gap-3">
+                        <!-- Row 1: Days and Hours -->
+                        <div class="flex flex-wrap items-center gap-3 mb-2">
                             <div class="flex items-center gap-1 text-xs">
                                 <span class="text-gray-500">Days:</span>
                                 ${dayCheckboxes}
@@ -4645,6 +4700,42 @@
                             <label class="inline-flex items-center text-xs cursor-pointer">
                                 <input type="checkbox" class="gc-closed-holidays w-3 h-3" checked>
                                 <span class="ml-1 text-gray-600">Closed holidays</span>
+                            </label>
+                        </div>
+                        <!-- Row 2: Advanced Scheduling Rules (V88) -->
+                        <div class="flex flex-wrap items-center gap-4 pt-2 border-t border-gray-100">
+                            <div class="flex items-center gap-1 text-xs">
+                                <span class="text-gray-500" title="Time between appointments">Slot interval:</span>
+                                <select class="gc-slot-interval form-input text-xs py-0.5 w-20">
+                                    <option value="30">30 min</option>
+                                    <option value="60" selected>1 hr</option>
+                                    <option value="90">1.5 hr</option>
+                                    <option value="120">2 hr</option>
+                                    <option value="180">3 hr</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-1 text-xs">
+                                <span class="text-gray-500" title="Minimum time from now to first slot (travel time)">Lead time:</span>
+                                <select class="gc-lead-time form-input text-xs py-0.5 w-20">
+                                    <option value="0">None</option>
+                                    <option value="30">30 min</option>
+                                    <option value="60" selected>1 hr</option>
+                                    <option value="120">2 hr</option>
+                                    <option value="240">4 hr</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-1 text-xs">
+                                <span class="text-gray-500" title="Minimum days in advance for booking">Advance booking:</span>
+                                <select class="gc-advance-days form-input text-xs py-0.5 w-24">
+                                    <option value="0" selected>Same day OK</option>
+                                    <option value="1">Next day+</option>
+                                    <option value="3">3 days+</option>
+                                    <option value="7">1 week+</option>
+                                </select>
+                            </div>
+                            <label class="inline-flex items-center text-xs cursor-pointer" title="Allow same-day bookings">
+                                <input type="checkbox" class="gc-same-day w-3 h-3" checked>
+                                <span class="ml-1 text-gray-600">Same-day</span>
                             </label>
                         </div>
                     </div>
@@ -4782,13 +4873,13 @@
                 btn.disabled = true;
                 
                 try {
-                    // Gather color mappings from UI (service type + color + schedule)
+                    // Gather color mappings from UI (service type + color + schedule + scheduling rules)
                     const colorMappings = [];
                     document.querySelectorAll('#gc-color-mappings .gc-color-row').forEach(row => {
                         const serviceType = row.querySelector('.gc-service-name')?.value?.trim().toLowerCase().replace(/\s+/g, '_') || row.dataset.serviceType;
                         const colorId = row.querySelector('.gc-color-select')?.value || '7';
                         
-                        // Gather schedule data
+                        // Gather schedule data (days/hours)
                         const days = [];
                         row.querySelectorAll('.gc-day-check:checked').forEach(cb => {
                             days.push(cb.dataset.day);
@@ -4800,10 +4891,18 @@
                             closedHolidays: row.querySelector('.gc-closed-holidays')?.checked !== false
                         };
                         
+                        // V88: Gather advanced scheduling rules
+                        const schedulingRules = {
+                            slotIntervalMinutes: parseInt(row.querySelector('.gc-slot-interval')?.value) || 60,
+                            leadTimeMinutes: parseInt(row.querySelector('.gc-lead-time')?.value) || 60,
+                            advanceBookingDays: parseInt(row.querySelector('.gc-advance-days')?.value) || 0,
+                            sameDayAllowed: row.querySelector('.gc-same-day')?.checked !== false
+                        };
+                        
                         if (serviceType) {
                             // Label is derived from service type (capitalized)
                             const label = serviceType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                            colorMappings.push({ serviceType, colorId, label, schedule });
+                            colorMappings.push({ serviceType, colorId, label, schedule, schedulingRules });
                         }
                     });
                     

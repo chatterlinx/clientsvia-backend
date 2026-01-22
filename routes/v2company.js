@@ -14,7 +14,7 @@ const redisNotReadyWarnings = new Set();
 
 function warnRedisNotReady(context, detail) {
     const label = context ? ` ${context}` : '';
-    const key = `${context || 'default'}:${detail || 'unknown'}`;
+    const key = context || 'default';
     if (!redisNotReadyWarnings.has(key)) {
         redisNotReadyWarnings.add(key);
         logger.warn(`⚠️ [CACHE${label}] Redis not ready, ${detail}`);
