@@ -47,7 +47,7 @@ const TONE_PRESETS = {
     empathetic_supportive: {
         name: 'Empathetic & Supportive',
         description: 'Extra patient, understanding, great for sensitive industries.',
-        style: 'Lead with empathy. Acknowledge concerns before problem-solving. Use phrases like "I understand how frustrating that must be" and "We\'re here for you."'
+        style: 'Lead with empathy. Acknowledge concerns before problem-solving. Use phrases like "I\'m sorry to hear that" and "We\'re here for you."'
     }
 };
 
@@ -666,7 +666,7 @@ RAMBLING CALLERS (let them finish, then summarize):
 • "Let me make sure I understood - you're dealing with [problem] at your [location]?"
 
 STORYTELLERS (need to feel heard):
-• "That sounds frustrating!" / "I can see why that's concerning."
+• "I'm sorry to hear that." / "I can see why that's concerning."
 • After they finish: "Thanks for explaining all that. Let me help you get this sorted out."
 
 APOLOGETIC CALLERS:

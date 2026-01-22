@@ -149,7 +149,7 @@ logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
 const DEFAULT_PROMPT_VARIANTS = {
     // Empathy variants for discovery (NOT booking prompts)
     empathy: [
-        "I understand how frustrating that can be.",
+        "I'm sorry to hear that.",
         "Sorry to hear that — let's get this sorted.",
         "I hear you — that sounds uncomfortable.",
         "Got it — we can definitely help with that."
@@ -568,7 +568,7 @@ function stripServiceEmpathyPreamble(reply, tradeKey, isServiceCall) {
         /^sorry to hear that[.,!\s-]*/i,
         /^i'?m sorry to hear that[.,!\s-]*/i,
         /^i'?m sorry you'?re dealing with that[.,!\s-]*/i,
-        /^that must be frustrating[.,!\s-]*/i
+        /^(that must be frustrating|i understand how frustrating)[.,!\s-]*/i
     ];
 
     let cleaned = reply.trim();
